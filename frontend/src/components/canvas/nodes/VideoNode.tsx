@@ -1,0 +1,406 @@
+"use client";
+
+import { memo, useState, useCallback, useRef, useEffect } from "react";
+import { Handle, Position } from "@xyflow/react";
+import { Tooltip, Popover } from "antd";
+import {
+  UploadOutlined,
+  VideoCameraOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  PauseCircleOutlined,
+  CaretRightOutlined,
+  CameraOutlined,
+} from "@ant-design/icons";
+import { useCanvasStore } from "@/stores/canvas-store";
+import { createImageNode } from "@/lib/node-defaults";
+import { useI18nStore } from "@/stores/i18n-store";
+import { apiUpload, BASE } from "@/lib/api";
+
+interface VideoNodeData {
+  label: string;
+  src: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  alt: string;
+}
+
+interface VideoNodeProps {
+  id: string;
+  data: VideoNodeData & { lockAspectRatio?: boolean };
+  selected?: boolean;
+}
+
+function formatTime(s: number): string {
+  if (!s || !isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function VideoNode({ id, data, selected }: VideoNodeProps) {
+  useI18nStore((s) => s.lang);
+  const t = useI18nStore((s) => s.t);
+  const [src, setSrc] = useState(data.src || "");
+  const [isDragOver, setIsDragOver] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const seekBarRef = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const addNodes = useCanvasStore((s) => s.addNodes);
+
+  useEffect(() => {
+    if (data.src && data.src !== src) setSrc(data.src);
+  }, [data.src]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play(); setPlaying(true); }
+    else { v.pause(); setPlaying(false); }
+  }, []);
+
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    const v = videoRef.current;
+    if (v && v.paused) {
+      v.play().then(() => setPlaying(true)).catch(() => {});
+    }
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    hoverTimerRef.current = setTimeout(() => {
+      const v = videoRef.current;
+      if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
+      hoverTimerRef.current = null;
+    }, 150);
+  }, []);
+
+  const onTimeUpdate = useCallback(() => {
+    if (seekingRef.current) return;
+    const v = videoRef.current;
+    if (v) setProgress(v.currentTime);
+  }, []);
+  const onLoadedMeta = useCallback(() => {
+    const v = videoRef.current;
+    if (v) setDuration(v.duration || 0);
+  }, []);
+
+  const seekingRef = useRef(false);
+
+  const seekTo = useCallback((clientX: number) => {
+    const v = videoRef.current;
+    const bar = seekBarRef.current;
+    if (!v || !bar || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    v.currentTime = pct * duration;
+    setProgress(pct * duration);
+  }, [duration]);
+
+  const handleSeekDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    seekingRef.current = true;
+    seekTo(e.clientX);
+    const onMove = (ev: PointerEvent) => { ev.preventDefault(); seekTo(ev.clientX); };
+    const onUp = () => {
+      seekingRef.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [seekTo]);
+
+  const captureFrame = useCallback(async (time: number | null) => {
+    const v = videoRef.current;
+    if (!v || !src) return;
+    try {
+      const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
+      const token = localStorage.getItem("noxrea-auth-token") || "";
+      const res = await fetch(`${BASE}/api/files/capture-frame`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: src, time: seekTime }),
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const imgUrl = json.data?.url;
+      if (!imgUrl) return;
+
+      const st = useCanvasStore.getState();
+      const cx = -st.viewport.x / st.viewport.zoom + (window.innerWidth / 2) / st.viewport.zoom;
+      const cy = -st.viewport.y / st.viewport.zoom + (window.innerHeight / 2) / st.viewport.zoom;
+      const THUMBNAIL_MAX = 360;
+      const nw = v.videoWidth, nh = v.videoHeight;
+      const shortSide = Math.min(nw, nh);
+      const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
+      const node = createImageNode({ x: cx - (nw * scale) / 2, y: cy - (nh * scale) / 2 }, imgUrl);
+      node.data.naturalWidth = nw;
+      node.data.naturalHeight = nh;
+      node.data.label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
+      node.style = { width: Math.round(nw * scale), height: Math.round(nh * scale) };
+      addNodes([node]);
+      setMenuOpen(false);
+    } catch (e) { console.error("Frame capture failed:", e); }
+  }, [src, data.alt, addNodes]);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith("video/")) return;
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const json = await apiUpload("/api/files/upload?category=videos", formData);
+        if (json.code === 200 && json.data?.url) {
+          const url = json.data.url;
+          setSrc(url);
+          const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+            const v = document.createElement("video");
+            v.preload = "metadata";
+            v.onloadedmetadata = () => resolve({ w: v.videoWidth, h: v.videoHeight });
+            v.onerror = () => resolve({ w: 0, h: 0 });
+            v.src = url;
+          });
+          const nw = dims.w || 1280;
+          const nh = dims.h || 720;
+          const THUMBNAIL_MAX = 360;
+          const titleH = 24;
+          const shortSide = Math.min(nw, nh);
+          const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
+          const displayW = Math.round(nw * scale);
+          const displayH = Math.round(nh * scale);
+          window.dispatchEvent(
+            new CustomEvent("node:update-data", {
+              detail: {
+                nodeId: id,
+                data: { ...data, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
+                style: { width: displayW, height: displayH + titleH },
+              },
+            })
+          );
+        }
+      } catch (e) { console.error("Video upload failed:", e); }
+    },
+    [id, data]
+  );
+
+  const handleReplace = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFile(file);
+    };
+    input.click();
+  }, [handleFile]);
+
+  const handleDownload = useCallback(async () => {
+    if (!src) return;
+    try {
+      const res = await fetch(src);
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = data.alt || "video.mp4";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch {}
+  }, [src, data.alt]);
+
+  const handleClear = useCallback(() => {
+    setSrc("");
+    window.dispatchEvent(
+      new CustomEvent("node:update-data", {
+        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: 400, height: 225 } },
+      })
+    );
+  }, [id, data]);
+
+  const hasVideo = src && src.length > 0;
+
+  return (
+    <div className="group relative w-full h-full flex flex-col">
+      <div className="flex items-center justify-between px-3 py-1 text-sm font-medium text-white/80">
+        <span className="truncate">
+          <VideoCameraOutlined className="mr-1" />
+          {hasVideo ? data.alt || data.label : t("video.node")}
+        </span>
+        <span className="text-white/30 text-xs">{data.naturalWidth || 320}×{data.naturalHeight || 180}</span>
+      </div>
+
+      <div
+        className={`
+          flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
+          ${selected ? "outline outline-1 outline-white/30 shadow-lg" : "outline outline-1 outline-white/10"}
+          ${isDragOver ? "outline-2 outline-white/50" : ""}
+        `}
+        style={{ background: hasVideo ? "transparent" : "var(--canvas-bg, #262626)" }}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
+        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }}
+        onDrop={(e) => {
+          e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) handleFile(file);
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {(data as any)._generating ? (
+          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-white/70 font-medium">{(data as any)._genStatus || "Generating"}...</span>
+            {(data as any)._genProgress != null && (
+              <div className="w-3/4 h-1 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(data as any)._genProgress}%` }} />
+              </div>
+            )}
+          </div>
+        ) : hasVideo ? (
+          <div className="w-full h-full relative">
+            <video
+              ref={videoRef}
+              src={src}
+              className="absolute inset-0 w-full h-full rounded-lg"
+              loop
+              muted={muted}
+              playsInline
+              onTimeUpdate={onTimeUpdate}
+              onLoadedMetadata={onLoadedMeta}
+              onEnded={() => setPlaying(false)}
+              onContextMenu={(e) => e.preventDefault()}
+            />
+            {/* Controls bar */}
+            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex items-center gap-2 px-2 ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
+              <button
+                className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+              >
+                {playing ? <PauseCircleOutlined style={{ fontSize: 22 }} /> : <CaretRightOutlined style={{ fontSize: 22 }} />}
+              </button>
+              <span className="text-sm text-white flex-shrink-0 tabular-nums min-w-[40px]">
+                {formatTime(progress)}
+              </span>
+              <div
+                ref={seekBarRef}
+                className="flex-1 h-[6px] bg-white/20 rounded-full cursor-pointer relative group/progress"
+                onPointerDown={handleSeekDown}
+              >
+                <div
+                  className="h-full bg-white rounded-full relative transition-[width] duration-75"
+                  style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
+                >
+                  <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
+                </div>
+              </div>
+              <span className="text-sm text-white flex-shrink-0 tabular-nums min-w-[40px] text-right">
+                {formatTime(duration)}
+              </span>
+              <button
+                className="w-6 h-6 flex items-center justify-center rounded text-white/60 hover:text-white transition-colors flex-shrink-0"
+                onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
+              >
+                {muted ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* Floating buttons */}
+            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/body:opacity-100 transition-opacity z-20">
+              <Tooltip title="Download">
+                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleDownload}>
+                  <DownloadOutlined />
+                </button>
+              </Tooltip>
+              <Popover
+                content={
+                  <div className="flex flex-col gap-0.5 py-1" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 160 }}>
+                    <button
+                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
+                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
+                      onClick={() => captureFrame(null)}
+                    >
+                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture current frame
+                    </button>
+                    <button
+                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
+                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
+                      onClick={() => captureFrame(0)}
+                    >
+                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture first frame
+                    </button>
+                    <button
+                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
+                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
+                      onClick={() => {
+                        const v = videoRef.current;
+                        captureFrame(v?.duration ? v.duration - 0.1 : 10);
+                      }}
+                    >
+                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture last frame
+                    </button>
+                  </div>
+                }
+                trigger="click"
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                placement="bottomRight"
+              >
+                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white">
+                  <CameraOutlined />
+                </button>
+              </Popover>
+              <Tooltip title="Replace video">
+                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleReplace}>
+                  <UploadOutlined />
+                </button>
+              </Tooltip>
+              <Tooltip title="Clear video">
+                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleClear}>
+                  <DeleteOutlined />
+                </button>
+              </Tooltip>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
+            <VideoCameraOutlined className="text-5xl" />
+            <span className="text-base text-center">{t("drop.video")}</span>
+            <button className="flex items-center gap-2 px-6 py-3 rounded-lg text-base text-white/70 hover:text-white hover:bg-white/10 transition-colors" onClick={handleReplace}>
+              <UploadOutlined className="text-lg" /> {t("upload")}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#13c2c2" }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#13c2c2" }} />
+    </div>
+  );
+}
+
+export default memo(VideoNode);

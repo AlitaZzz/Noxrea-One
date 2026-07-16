@@ -1,0 +1,178 @@
+import { create } from "zustand";
+import type { CanvasProject, ViewportState, BackgroundType, ThemeMode } from "@/lib/types";
+import { DEFAULT_VIEWPORT, DEFAULT_BACKGROUND, DEFAULT_THEME } from "@/lib/constants";
+import { api } from "@/lib/api";
+
+// ===== localStorage helpers (active project only) =====
+
+function loadLocalActiveId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("noxrea-canvas-active-project");
+}
+
+function saveLocalActiveId(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) localStorage.setItem("noxrea-canvas-active-project", id);
+  else localStorage.removeItem("noxrea-canvas-active-project");
+}
+
+// ===== API helpers =====
+
+interface ServerProject {
+  id: number;
+  name: string;
+  canvas_data: any;
+  updated_at: string;
+}
+
+async function fetchProjects(): Promise<CanvasProject[]> {
+  try {
+    const res = await api<ServerProject[]>("/api/canvas/projects");
+    if (res.code === 200 && res.data) {
+      return res.data.map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        createdAt: Date.now(),
+        updatedAt: new Date(p.updated_at).getTime(),
+        viewport: p.canvas_data?.viewport || DEFAULT_VIEWPORT,
+        background: p.canvas_data?.background || DEFAULT_BACKGROUND,
+        theme: p.canvas_data?.theme || DEFAULT_THEME,
+        minimapVisible: p.canvas_data?.minimapVisible ?? true,
+        snapToGrid: p.canvas_data?.snapToGrid || false,
+        nodes: p.canvas_data?.nodes || [],
+        edges: p.canvas_data?.edges || [],
+      }));
+    }
+  } catch { /* offline or error */ }
+  return [];
+}
+
+async function apiCreateProject(name: string): Promise<CanvasProject | null> {
+  try {
+    const res = await api<ServerProject>("/api/canvas/projects", {
+      method: "POST",
+      body: JSON.stringify({ name, canvas_data: { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] } }),
+    });
+    if (res.code === 200 && res.data) {
+      return {
+        id: String(res.data.id),
+        name: res.data.name,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        viewport: DEFAULT_VIEWPORT,
+        background: DEFAULT_BACKGROUND,
+        theme: DEFAULT_THEME,
+        nodes: [],
+        edges: [],
+      };
+    }
+  } catch { /* */ }
+  return null;
+}
+
+async function apiDeleteProject(projectId: string) {
+  try {
+    const id = parseInt(projectId, 10);
+    if (isNaN(id)) return;
+    await api(`/api/canvas/projects/${id}`, { method: "DELETE" });
+  } catch { /* */ }
+}
+
+// ===== Store =====
+
+interface ProjectState {
+  projects: CanvasProject[];
+  activeProjectId: string | null;
+
+  activeProject: () => CanvasProject | undefined;
+  createProject: (name?: string) => Promise<CanvasProject>;
+  renameProject: (id: string, name: string) => void;
+  deleteProject: (id: string) => void;
+  deleteProjects: (ids: string[]) => void;
+  setActiveProject: (id: string) => void;
+  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean) => void;
+  initialize: () => Promise<void>;
+}
+
+export const useProjectStore = create<ProjectState>((set, get) => ({
+  projects: [],
+  activeProjectId: null,
+
+  activeProject: () => {
+    const { projects, activeProjectId } = get();
+    return projects.find((p) => p.id === activeProjectId);
+  },
+
+  createProject: async (name) => {
+    const count = get().projects.length;
+    const projectName = name || `Project ${count + 1}`;
+    const project = await apiCreateProject(projectName);
+    if (project) {
+      set((s) => ({ projects: [...s.projects, project], activeProjectId: project.id }));
+      return project;
+    }
+    throw new Error("Failed to create project");
+  },
+
+  renameProject: (id, name) => {
+    set((s) => ({
+      projects: s.projects.map((p) => p.id === id ? { ...p, name, updatedAt: Date.now() } : p),
+    }));
+    const nid = parseInt(id, 10);
+    if (!isNaN(nid)) {
+      api(`/api/canvas/projects/${nid}`, {
+        method: "PUT", body: JSON.stringify({ name }),
+      }).catch(() => {});
+    }
+  },
+
+  deleteProject: (id) => {
+    apiDeleteProject(id).catch(() => {});
+    set((s) => {
+      const projects = s.projects.filter((p) => p.id !== id);
+      let { activeProjectId } = s;
+      if (activeProjectId === id) {
+        activeProjectId = projects.length > 0 ? projects[0].id : null;
+        saveLocalActiveId(activeProjectId);
+      }
+      return { projects, activeProjectId };
+    });
+  },
+
+  deleteProjects: (ids) => {
+    ids.forEach((id) => apiDeleteProject(id).catch(() => {}));
+    const idSet = new Set(ids);
+    set((s) => {
+      const projects = s.projects.filter((p) => !idSet.has(p.id));
+      let { activeProjectId } = s;
+      if (activeProjectId && idSet.has(activeProjectId)) {
+        activeProjectId = projects.length > 0 ? projects[0].id : null;
+        saveLocalActiveId(activeProjectId);
+      }
+      return { projects, activeProjectId };
+    });
+  },
+
+  setActiveProject: (id) => {
+    set({ activeProjectId: id });
+    saveLocalActiveId(id);
+  },
+
+  syncCanvasState: (id, nodes, edges, viewport, background, theme, minimapVisible, snapToGrid) => {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, nodes: nodes as any[], edges: edges as any[], viewport, background, theme, minimapVisible, snapToGrid, updatedAt: Date.now() } : p
+      ),
+    }));
+  },
+
+  initialize: async () => {
+    const projects = await fetchProjects();
+    let activeId: string | null = loadLocalActiveId();
+    if (projects.length > 0) {
+      const validId = activeId && projects.find((p) => p.id === activeId) ? activeId : projects[0].id;
+      activeId = validId;
+    }
+    set({ projects, activeProjectId: activeId });
+  },
+}));

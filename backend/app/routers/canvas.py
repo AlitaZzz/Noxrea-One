@@ -1,0 +1,84 @@
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.schemas.common import UnifiedResponse
+from app.schemas.canvas import (
+    CanvasProjectCreate,
+    CanvasProjectUpdate,
+    CanvasProjectOut,
+    CanvasProjectListItem,
+)
+from app.deps import get_db, get_current_user
+from app.crud import canvas as crud
+
+router = APIRouter(prefix="/api/canvas", tags=["canvas"])
+
+
+@router.get("/projects", response_model=UnifiedResponse[list[CanvasProjectListItem]])
+async def list_projects(
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    projects = await crud.get_projects(db, user.id)
+    return UnifiedResponse(
+        code=200,
+        data=[CanvasProjectListItem.model_validate(p) for p in projects],
+        msg="ok",
+    )
+
+
+@router.post("/projects", response_model=UnifiedResponse[CanvasProjectOut])
+async def create_project(
+    body: CanvasProjectCreate,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    project = await crud.create_project(db, user.id, body.name, body.canvas_data)
+    return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="created")
+
+
+@router.get("/projects/{project_id}", response_model=UnifiedResponse[CanvasProjectOut])
+async def get_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    project = await crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="ok")
+
+
+@router.put("/projects/{project_id}", response_model=UnifiedResponse[CanvasProjectOut])
+async def update_project(
+    project_id: int,
+    body: CanvasProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    project = await crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    project = await crud.update_project(db, project_id, body.name, body.canvas_data)
+    return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="updated")
+
+
+@router.delete("/projects/{project_id}", response_model=UnifiedResponse)
+async def delete_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    project = await crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    ok = await crud.delete_project(db, project_id)
+    return UnifiedResponse(code=200, msg="deleted")

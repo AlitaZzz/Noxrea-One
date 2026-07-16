@@ -1,0 +1,74 @@
+"use client";
+
+import { create } from "zustand";
+import { FontSizeOutlined, PictureOutlined, VideoCameraOutlined, CopyOutlined, SelectOutlined, ExpandOutlined } from "@ant-design/icons";
+import { useI18nStore } from "@/stores/i18n-store";
+import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
+
+interface CtxState {
+  x: number; y: number; visible: boolean;
+  show: (x: number, y: number) => void;
+  hide: () => void;
+}
+
+export const useCtxMenu = create<CtxState>((set) => ({
+  x: 0, y: 0, visible: false,
+  show: (x, y) => set({ x, y, visible: true }),
+  hide: () => set({ visible: false }),
+}));
+
+interface Props {
+  onAddText: () => void;
+  onAddImage: () => void;
+  onAddVideo: () => void;
+  onSelectAll: () => void;
+  onPaste: () => void;
+  onResetView: () => void;
+  hasClipboard: boolean;
+}
+
+export default function CanvasContextMenu(props: Props) {
+  const t = useI18nStore((s) => s.t);
+  const { x, y, visible, hide } = useCtxMenu();
+
+  if (!visible) return null;
+
+  return (
+    <>
+      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+      <div className="fixed inset-0 z-50" onClick={hide} onContextMenu={(e) => { e.preventDefault(); hide(); }} />
+      <div
+        className="fixed z-50 flex flex-col p-2 gap-0.5 rounded-lg shadow-xl"
+        style={{
+          left: Math.min(x, window.innerWidth - 180),
+          top: Math.min(y, window.innerHeight - 240),
+          background: "var(--canvas-bg)",
+          border: "1px solid var(--canvas-border)",
+          minWidth: 175,
+        }}
+      >
+        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("add.node")}</div>
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddText(); hide(); }}>
+          <FontSizeOutlined /> {t("text.node")}
+        </button>
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddImage(); hide(); }}>
+          <PictureOutlined /> {t("image.node")}
+        </button>
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddVideo(); hide(); }}>
+          <VideoCameraOutlined /> {t("video.node")}
+        </button>
+        <MenuDivider />
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onSelectAll(); hide(); }}>
+          <SelectOutlined /> {t("shortcuts.desc.selectall")}
+        </button>
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { if (props.hasClipboard) props.onPaste(); hide(); }}>
+          <CopyOutlined /> {t("shortcuts.desc.paste")}
+        </button>
+        <MenuDivider />
+        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onResetView(); hide(); }}>
+          <ExpandOutlined /> {t("fit")}
+        </button>
+      </div>
+    </>
+  );
+}

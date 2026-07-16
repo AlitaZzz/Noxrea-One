@@ -1,0 +1,166 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyNode = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyEdge = any;
+
+// ============================================================
+// Canvas state types
+// ============================================================
+
+export type BackgroundType = "dots" | "grid" | "blank";
+export type ThemeMode = "light" | "dark";
+
+export interface ViewportState {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+// ============================================================
+// Node data types
+// ============================================================
+
+export const NODE_TYPE = {
+  TEXT: "text-node",
+  IMAGE: "image-node",
+  VIDEO: "video-node",
+  IMAGE_GROUP: "image-group-node",
+  GROUP: "group-node",
+} as const;
+
+export interface TextNodeData {
+  label: string;
+  content: string;
+}
+
+export interface ImageNodeData {
+  label: string;
+  src: string;
+  lockAspectRatio: boolean;
+  naturalWidth: number;
+  naturalHeight: number;
+  alt: string;
+}
+
+// ============================================================
+// Model configuration
+// ============================================================
+
+export type ModelCapability = "text" | "image" | "video" | "audio";
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  capabilities: ModelCapability[];
+}
+
+
+export interface ModelChannel {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  models: ModelInfo[];
+}
+
+export interface ImageGroupNodeData {
+  label: string;
+  images: { url: string; label: string }[];
+  mainIndex: number;
+}
+
+export interface GroupNodeData {
+  label: string;
+}
+
+// ============================================================
+// My Assets
+// ============================================================
+
+export type AssetType = "character" | "scene" | "object" | "style" | "audio" | "other";
+
+export const ASSET_CATEGORIES: { key: AssetType | "all"; labelKey: string }[] = [
+  { key: "all", labelKey: "asset.cat.all" },
+  { key: "character", labelKey: "asset.cat.character" },
+  { key: "scene", labelKey: "asset.cat.scene" },
+  { key: "object", labelKey: "asset.cat.object" },
+  { key: "style", labelKey: "asset.cat.style" },
+  { key: "audio", labelKey: "asset.cat.audio" },
+  { key: "other", labelKey: "asset.cat.other" },
+];
+
+export interface AssetFolder {
+  id: string;
+  name: string;
+  spaceKey: string;
+  parentId?: string;
+  createdAt: number;
+}
+
+export interface AssetItem {
+  id: string;
+  name: string;
+  type: AssetType;
+  width: number;
+  height: number;
+  description: string;
+  createdAt: number;
+  updatedAt: number;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  folderId?: string;
+  spaceKey: string;
+}
+
+export interface CreateAssetInput {
+  name: string;
+  type: AssetType;
+  width?: number;
+  height?: number;
+  description?: string;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+  folderId?: string;
+  spaceKey?: string;
+}
+
+// ============================================================
+// Project
+// ============================================================
+
+export interface CanvasProject {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  viewport: ViewportState;
+  background: BackgroundType;
+  theme: ThemeMode;
+  minimapVisible?: boolean;
+  snapToGrid?: boolean;
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+}
+
+// ============================================================
+// History (undo/redo)
+// ============================================================
+
+export interface HistorySnapshot {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+  viewport: ViewportState;
+  background: BackgroundType;
+  theme: ThemeMode;
+  minimapVisible: boolean;
+  snapToGrid: boolean;
+}
+
+// ============================================================
+// Clipboard
+// ============================================================
+
+export interface ClipboardData {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+}

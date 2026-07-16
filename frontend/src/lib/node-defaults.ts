@@ -1,0 +1,101 @@
+import {
+  NODE_TYPE,
+  type TextNodeData,
+  type ImageNodeData,
+  type GroupNodeData,
+  type AnyNode,
+} from "@/lib/types";
+import {
+  DEFAULT_NODE_WIDTH,
+  DEFAULT_NODE_HEIGHT,
+} from "@/lib/constants";
+
+let _idCounter = 0;
+function uid(prefix: string) {
+  _idCounter++;
+  return `${prefix}_${Date.now()}_${_idCounter}`;
+}
+
+export function createTextNode(position: { x: number; y: number }): AnyNode {
+  return {
+    id: uid("text"),
+    type: NODE_TYPE.TEXT,
+    position,
+    data: { label: "Text", content: "" } as TextNodeData,
+    style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+  };
+}
+
+export function createImageNode(
+  position: { x: number; y: number },
+  src?: string
+): AnyNode {
+  return {
+    id: uid("img"),
+    type: NODE_TYPE.IMAGE,
+    position,
+    data: {
+      label: "Image",
+      src: src || "",
+      lockAspectRatio: true,
+      naturalWidth: DEFAULT_NODE_WIDTH,
+      naturalHeight: DEFAULT_NODE_HEIGHT,
+      alt: "",
+    } as ImageNodeData,
+    style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+  };
+}
+
+export function createVideoNode(
+  position: { x: number; y: number },
+  src?: string
+): AnyNode {
+  return {
+    id: uid("vid"),
+    type: NODE_TYPE.VIDEO,
+    position,
+    data: {
+      label: "Video",
+      src: src || "",
+      naturalWidth: 320,
+      naturalHeight: 180,
+      alt: "",
+    },
+    style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+  };
+}
+
+export function createImageGroupNode(position: { x: number; y: number }, images: { url: string; label: string }[], label?: string): AnyNode {
+  return {
+    id: uid("grp"), type: NODE_TYPE.IMAGE_GROUP, position,
+    data: { label: label || "Results", images, mainIndex: 0 },
+    style: { width: 260, height: 200 },
+  };
+}
+
+export function createGroupNode(
+  position: { x: number; y: number },
+  size: { width: number; height: number },
+  label?: string
+): AnyNode {
+  return {
+    id: uid("group"),
+    type: NODE_TYPE.GROUP,
+    position,
+    data: { label: label || "Group" } as GroupNodeData,
+    style: { width: size.width, height: size.height },
+    className: "react-flow__node-group",
+  };
+}
+
+export function duplicateNode(
+  node: AnyNode,
+  offset: { x: number; y: number }
+): AnyNode {
+  return {
+    ...JSON.parse(JSON.stringify(node)),
+    id: uid(node.type || "copy"),
+    position: { x: node.position.x + offset.x, y: node.position.y + offset.y },
+    selected: false,
+  };
+}

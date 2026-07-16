@@ -1,0 +1,173 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# =====================================================
+# Noxrea-AI-Canvas .gitignore
+# =====================================================
+
+
+# =====================================================
+# Frontend - Next.js
+# =====================================================
+
+# Dependencies
+frontend/node_modules/
+
+# Next.js build
+frontend/.next/
+frontend/out/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Next.js generated
+frontend/next-env.d.ts
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+
+
+# =====================================================
+# Backend - Python FastAPI
+# =====================================================
+
+# Environment variables
+.env
+backend/.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python build
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+
+# =====================================================
+# Database
+# =====================================================
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+
+
+
+# =====================================================
+# User Generated Files
+# =====================================================
+
+# Upload files
+backend/uploads/
+
+# Generated assets
+backend/storage/
+backend/output/
+backend/outputs/
+
+# Temporary files
+tmp/
+temp/
+
+
+
+# =====================================================
+# Logs
+# =====================================================
+
+*.log
+logs/
+log/
+
+
+
+# =====================================================
+# AI / Model Files
+# =====================================================
+
+# Local models
+models/
+*.gguf
+*.safetensors
+*.ckpt
+*.pth
+
+# Cache
+.cache/
+huggingface/
+.whisper/
+
+
+
+# =====================================================
+# Claude Code
+# =====================================================
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Claude cache
+.claude/cache/
+
+
+
+# =====================================================
+# IDE
+# =====================================================
+
+.vscode/
+.idea/
+
+# JetBrains
+*.iml
+
+
+
+# =====================================================
+# OS
+# =====================================================
+
+.DS_Store
+Thumbs.db
+
+
+
+# =====================================================
+# Runtime
+# =====================================================
+
+*.pid
+*.lock
+
+
+
+# =====================================================
+# FFmpeg
+# =====================================================
+
+# 如果 ffmpeg.exe 是项目运行依赖，不要取消下面注释
+backend/bin/
