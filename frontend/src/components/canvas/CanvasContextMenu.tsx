@@ -48,26 +48,14 @@ export default function CanvasContextMenu(props: Props) {
         }}
       >
         <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("add.node")}</div>
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddText(); hide(); }}>
-          <FontSizeOutlined /> {t("text.node")}
-        </button>
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddImage(); hide(); }}>
-          <PictureOutlined /> {t("image.node")}
-        </button>
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onAddVideo(); hide(); }}>
-          <VideoCameraOutlined /> {t("video.node")}
-        </button>
+        <MenuItem onClick={() => { props.onAddText(); hide(); }}><FontSizeOutlined /> {t("text.node")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("image.node")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
         <MenuDivider />
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onSelectAll(); hide(); }}>
-          <SelectOutlined /> {t("shortcuts.desc.selectall")}
-        </button>
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { if (props.hasClipboard) props.onPaste(); hide(); }}>
-          <CopyOutlined /> {t("shortcuts.desc.paste")}
-        </button>
+        <MenuItem onClick={() => { props.onSelectAll(); hide(); }}><SelectOutlined /> {t("shortcuts.desc.selectall")}</MenuItem>
+        <MenuItem onClick={() => { if (props.hasClipboard) props.onPaste(); hide(); }}><CopyOutlined /> {t("shortcuts.desc.paste")}</MenuItem>
         <MenuDivider />
-        <button className="menu-popover-item" style={{ background: "transparent", border: "none", cursor: "pointer", width: "100%", textAlign: "left", padding: "6px 12px", fontSize: 13, color: "var(--canvas-text)", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }} onClick={() => { props.onResetView(); hide(); }}>
-          <ExpandOutlined /> {t("fit")}
-        </button>
+        <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("fit")}</MenuItem>
       </div>
     </>
   );

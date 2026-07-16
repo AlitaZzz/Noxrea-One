@@ -6,6 +6,7 @@ import { Input } from "antd";
 import { SearchOutlined, PlusOutlined, DeleteOutlined, FolderAddOutlined, UploadOutlined, FolderOutlined, TagsOutlined, CheckSquareOutlined } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useLayerOverlay } from "@/lib/layer";
+import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
 
 interface Props {
   search: string;
@@ -40,22 +41,6 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
   const handleMenuLeave = () => {
     closeTimer.current = setTimeout(() => setMenuOpen(false), 150);
   };
-
-  const menuItemStyle: React.CSSProperties = {
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    width: "100%",
-    textAlign: "left" as const,
-    padding: "6px 12px",
-    fontSize: 13,
-    color: "var(--canvas-text)",
-    borderRadius: 6,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  };
-
   return (
     <div className="flex items-center gap-3 mb-3">
       <Input
@@ -165,20 +150,14 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
               pointerEvents: "auto",
             }}
           >
-            <button
-              className="menu-popover-item"
-              style={{ ...menuItemStyle, opacity: canCreateFolder ? 1 : 0.35, cursor: canCreateFolder ? "pointer" : "not-allowed" }}
-              onClick={() => { if (canCreateFolder) { setMenuOpen(false); onCreateFolder?.(); } }}
-            >
+            <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+            <MenuItem onClick={() => { if (canCreateFolder) { setMenuOpen(false); onCreateFolder?.(); } }}
+              iconRight={!canCreateFolder ? <span style={{ opacity: 0.35 }} /> : undefined}>
               <FolderAddOutlined /> {t("asset.createFolder")}
-            </button>
-            <button
-              className="menu-popover-item"
-              style={menuItemStyle}
-              onClick={() => { setMenuOpen(false); onUpload?.(); }}
-            >
+            </MenuItem>
+            <MenuItem onClick={() => { setMenuOpen(false); onUpload?.(); }}>
               <UploadOutlined /> {t("asset.uploadTitle")}
-            </button>
+            </MenuItem>
           </div>,
           layerOverlay || document.body
         )}

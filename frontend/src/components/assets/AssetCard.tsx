@@ -8,6 +8,7 @@ import { PlusOutlined, MoreOutlined, DownloadOutlined, EditOutlined, DeleteOutli
 import type { AssetItem } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useLayerOverlay } from "@/lib/layer";
+import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
 
 interface Props {
   asset: AssetItem;
@@ -75,21 +76,6 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
   const formatDate = (ts: number) => {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  const menuItemStyle: React.CSSProperties = {
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    width: "100%",
-    textAlign: "left" as const,
-    padding: "6px 12px",
-    fontSize: 13,
-    color: "var(--canvas-text)",
-    borderRadius: 6,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
   };
 
   return (
@@ -192,28 +178,11 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
               pointerEvents: "auto",
             }}
           >
-            <button
-              className="menu-popover-item"
-              style={menuItemStyle}
-              onClick={handleDownload}
-            >
-              <DownloadOutlined /> {t("download")}
-            </button>
-            <button
-              className="menu-popover-item"
-              style={menuItemStyle}
-              onClick={handleRename}
-            >
-              <EditOutlined /> {t("asset.rename")}
-            </button>
-            <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
-            <button
-              className="menu-popover-item"
-              style={{ ...menuItemStyle, color: "var(--canvas-text-dim)" }}
-              onClick={handleDelete}
-            >
-              <DeleteOutlined /> {t("delete")}
-            </button>
+            <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+            <MenuItem onClick={handleDownload}><DownloadOutlined /> {t("download")}</MenuItem>
+            <MenuItem onClick={handleRename}><EditOutlined /> {t("asset.rename")}</MenuItem>
+            <MenuDivider />
+            <MenuItem dimmed onClick={handleDelete}><DeleteOutlined /> {t("delete")}</MenuItem>
           </div>,
           layerOverlay || document.body
         )}

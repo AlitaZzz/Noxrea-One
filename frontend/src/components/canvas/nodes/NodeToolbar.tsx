@@ -16,6 +16,7 @@ import {
   CameraOutlined,
 } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
+import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
@@ -137,10 +138,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "save-asset")} />
           </Tooltip>
           <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col gap-1 p-1" style={{ background: "var(--canvas-bg)" }}>
-              <Button type="text" size="small" onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}>{t("rotate90")}</Button>
-              <Button type="text" size="small" onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}>{t("flipH")}</Button>
-              <Button type="text" size="small" onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}>{t("flipV")}</Button>
+            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
+              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("rotate90")}</MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("flipH")}</MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("flipV")}</MenuItem>
             </div>}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<SwapOutlined />} />
           </Popover>
@@ -168,19 +170,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
           <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col gap-0.5 py-1" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 160 }}>
-              <Button type="text" size="small" style={{ textAlign: "left", justifyContent: "flex-start", width: "100%" }}
-                onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: null })}>
-                <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture current frame
-              </Button>
-              <Button type="text" size="small" style={{ textAlign: "left", justifyContent: "flex-start", width: "100%" }}
-                onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: 0 })}>
-                <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture first frame
-              </Button>
-              <Button type="text" size="small" style={{ textAlign: "left", justifyContent: "flex-start", width: "100%" }}
-                onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: -1 })}>
-                <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture last frame
-              </Button>
+            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
+              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: null })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture current frame</MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: 0 })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture first frame</MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: -1 })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture last frame</MenuItem>
             </div>}>
             <Tooltip title={t("crop")}>
               <Button type="text" size="middle" style={{ padding: 8 }} icon={<CameraOutlined />} />
