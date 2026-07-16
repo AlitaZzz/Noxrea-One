@@ -24,25 +24,32 @@ export async function api<T = any>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ code: number; data: T; msg: string }> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...getTokenHeader(),
-      ...(options.headers || {}),
-    },
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...getTokenHeader(),
+        ...(options.headers || {}),
+      },
+    });
+    return await res.json();
+  } catch {
+    return { code: 0, data: null as T, msg: "Unable to connect to server. Please check if the backend is running." };
+  }
 }
 
 export async function apiUpload<T = any>(path: string, formData: FormData): Promise<{ code: number; data: T; msg: string }> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: getTokenHeader(),
-    body: formData,
-  });
-  const json = await res.json();
-  return json;
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: getTokenHeader(),
+      body: formData,
+    });
+    return await res.json();
+  } catch {
+    return { code: 0, data: null as T, msg: "Unable to connect to server. Please check if the backend is running." };
+  }
 }
 
 export function apiUploadWithProgress<T = any>(

@@ -118,7 +118,6 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   theme: DEFAULT_THEME,
   setTheme: (theme) => {
     set({ theme });
-    saveManager.markDirty();
   },
   toggleTheme: () => {
     set((s) => ({ theme: s.theme === "light" ? "dark" : "light" }));
