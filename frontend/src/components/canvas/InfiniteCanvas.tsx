@@ -275,6 +275,7 @@ export default function InfiniteCanvas() {
             n.id === nodeId ? { ...n, position } : n
           )
         );
+        markDirty();
       }
       updateNodeData(nodeId, data ?? {}, style);
       if (immediate) markDirtyImmediate();
@@ -338,9 +339,14 @@ export default function InfiniteCanvas() {
                       // Async load real dimensions
                       loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
                         if (dims.w > 0) {
+                          const shortSide = Math.min(dims.w, dims.h);
+                          const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
+                          const displayW = Math.round(dims.w * scale);
+                          const displayH = Math.round(dims.h * scale);
+                          const titleH = 24;
                           useCanvasStore.getState().updateNodeData(node.id, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
-                          });
+                          }, { width: displayW, height: displayH + titleH });
                           markDirtyImmediate();
                         }
                       });
