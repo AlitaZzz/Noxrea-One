@@ -44,14 +44,14 @@ function TextNode({ id, data, selected }: TextNodeProps) {
       {/* Title tab */}
       <div
         className={`
-          flex items-center px-3 py-1 text-sm font-medium text-white/80 z-10
+          flex items-center px-3 py-1 text-[13px] font-medium text-white/80 z-10
         `}
       >
         <FontSizeOutlined className="mr-1" />
         <Input
           size="small"
           variant="borderless"
-          className="text-sm font-medium text-white/80"
+          className="text-[13px] font-medium text-white/80"
           value={data.label}
           onChange={(e) =>
             window.dispatchEvent(
@@ -60,7 +60,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
               })
             )
           }
-          style={{ padding: 0, height: 20, background: "transparent" }}
+          style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none" }}
         />
       </div>
 

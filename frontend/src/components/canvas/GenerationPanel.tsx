@@ -284,8 +284,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       }}
     >
       <button
-        className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs text-white/60 hover:text-white transition-colors self-start"
-        style={{ background: "rgba(255,255,255,0.04)", border: "none", cursor: "pointer" }}
+        className="flex items-center justify-center gap-1 rounded-lg text-xs text-white/60 hover:text-white transition-colors self-start"
+        style={{ width: 54, height: 26, background: "rgba(255,255,255,0.04)", border: "none", cursor: "pointer" }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
         onClick={handleRefUpload}>

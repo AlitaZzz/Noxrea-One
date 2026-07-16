@@ -35,20 +35,20 @@ function GroupNode({ id, data, selected }: GroupNodeProps) {
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title — same as ImageNode */}
-      <div className="flex items-center justify-between px-3 py-1 text-sm font-medium text-white/80">
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
         <span className="truncate">
           <GroupOutlined className="mr-1" />
           {editing ? (
             <Input
               size="small"
               variant="borderless"
-              className="text-sm font-medium text-white/80"
+              className="text-[13px] font-medium text-white/80"
               value={label}
               onChange={(e) => handleLabelChange(e.target.value)}
               onBlur={() => setEditing(false)}
               onPressEnter={() => setEditing(false)}
               autoFocus
-              style={{ padding: 0, height: 20, background: "transparent", width: 120 }}
+              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
             />
           ) : (
             <span
