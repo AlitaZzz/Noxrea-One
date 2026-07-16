@@ -60,12 +60,16 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
             const displayW = Math.round(nw * scale);
             const displayH = Math.round(nh * scale);
             const titleH = 24;
+            const store = useCanvasStore.getState();
+            const currentNode = store.nodes.find((n) => n.id === id);
+            const latestData = (currentNode?.data || data) as ImageNodeData;
             window.dispatchEvent(
               new CustomEvent("node:update-data", {
                 detail: {
                   nodeId: id,
-                  data: { ...data, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
                   style: { width: displayW, height: displayH + titleH },
+                  immediate: true,
                 },
               })
             );
@@ -197,6 +201,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           nodeId: id,
           data: { ...data, src: "", label: t("image.node") },
           style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_WIDTH },
+          immediate: true,
         },
       })
     );

@@ -175,12 +175,16 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
           const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
           const displayW = Math.round(nw * scale);
           const displayH = Math.round(nh * scale);
+          const store = useCanvasStore.getState();
+          const currentNode = store.nodes.find((n) => n.id === id);
+          const latestData = (currentNode?.data || data) as any;
           window.dispatchEvent(
             new CustomEvent("node:update-data", {
               detail: {
                 nodeId: id,
-                data: { ...data, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
+                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
                 style: { width: displayW, height: displayH + titleH },
+                immediate: true,
               },
             })
           );
@@ -223,7 +227,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
     setSrc("");
     window.dispatchEvent(
       new CustomEvent("node:update-data", {
-        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: 400, height: 225 } },
+        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: 400, height: 225 }, immediate: true },
       })
     );
   }, [id, data]);
