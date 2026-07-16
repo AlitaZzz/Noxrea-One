@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Tooltip, Popover } from "antd";
+import { Tooltip, Popover, Input } from "antd";
 import {
   UploadOutlined,
   VideoCameraOutlined,
@@ -232,16 +232,76 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
     );
   }, [id, data]);
 
+  // Listen for node action events from NodeToolbar
+  useEffect(() => {
+    function onNodeAction(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail.nodeId !== id) return;
+      switch (detail.action) {
+        case "download": handleDownload(); break;
+        case "replace": handleReplace(); break;
+        case "clear": handleClear(); break;
+        case "capture-frame": {
+          const v = videoRef.current;
+          if (detail.time === -1) {
+            captureFrame(v?.duration ? v.duration - 0.1 : 10);
+          } else {
+            captureFrame(detail.time);
+          }
+          break;
+        }
+      }
+    }
+    window.addEventListener("canvas:node-action", onNodeAction);
+    return () => window.removeEventListener("canvas:node-action", onNodeAction);
+  }, [id, handleDownload, handleReplace, handleClear, captureFrame]);
+
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(data.alt || data.label || "");
+
+  const handleTitleDblClick = () => {
+    setTitleDraft(data.alt || data.label || "");
+    setEditingTitle(true);
+  };
+
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    if (titleDraft && titleDraft !== (data.alt || data.label)) {
+      window.dispatchEvent(
+        new CustomEvent("node:update-data", {
+          detail: { nodeId: id, data: { ...data, label: titleDraft, alt: titleDraft } },
+        })
+      );
+    }
+  };
+
   const hasVideo = src && src.length > 0;
 
   return (
     <div className="group relative w-full h-full flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1 text-sm font-medium text-white/80">
-        <span className="truncate">
-          <VideoCameraOutlined className="mr-1" />
-          {hasVideo ? data.alt || data.label : t("video.node")}
-        </span>
-        <span className="text-white/30 text-xs">{data.naturalWidth || 320}×{data.naturalHeight || 180}</span>
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+        {editingTitle ? (
+          <span className="flex items-center gap-0.5 flex-1 min-w-0">
+            <VideoCameraOutlined className="shrink-0" />
+            <Input
+              size="small"
+              variant="borderless"
+              className="text-[13px] font-medium text-white/80"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleTitleSave}
+              onPressEnter={handleTitleSave}
+              autoFocus
+              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
+            />
+          </span>
+        ) : (
+          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
+            <VideoCameraOutlined className="mr-1" />
+            {data.label || data.alt || t("video.node")}
+          </span>
+        )}
+        <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth || 320}×{data.naturalHeight || 180}</span>
       </div>
 
       <div

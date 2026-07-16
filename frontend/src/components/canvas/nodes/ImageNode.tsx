@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Tooltip, Popover } from "antd";
+import { Tooltip, Popover, Input } from "antd";
 import {
   UploadOutlined,
   PictureOutlined,
@@ -207,6 +207,24 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     );
   }, [id, data]);
 
+  // Listen for node action events from NodeToolbar
+  useEffect(() => {
+    function onNodeAction(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail.nodeId !== id) return;
+      switch (detail.action) {
+        case "download": handleDownload(); break;
+        case "save-asset": handleSaveToAssets(); break;
+        case "crop": handleCrop(); break;
+        case "replace": handleReplace(); break;
+        case "clear": handleClear(); break;
+        case "transform": handleTransform(detail.op); break;
+      }
+    }
+    window.addEventListener("canvas:node-action", onNodeAction);
+    return () => window.removeEventListener("canvas:node-action", onNodeAction);
+  }, [id, handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform]);
+
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
   const handleDrop = (e: React.DragEvent) => {
@@ -215,18 +233,54 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     if (file) handleFile(file);
   };
 
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(data.alt || data.label || "");
+
+  const handleTitleDblClick = () => {
+    setTitleDraft(data.alt || data.label || "");
+    setEditingTitle(true);
+  };
+
+  const handleTitleSave = () => {
+    setEditingTitle(false);
+    if (titleDraft && titleDraft !== (data.alt || data.label)) {
+      window.dispatchEvent(
+        new CustomEvent("node:update-data", {
+          detail: { nodeId: id, data: { ...data, label: titleDraft, alt: titleDraft } },
+        })
+      );
+    }
+  };
+
   const hasImage = src && src.length > 0;
 
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-sm font-medium text-white/80">
-        <span className="truncate">
-          <FileImageOutlined className="mr-1" />
-          {hasImage ? data.alt || data.label : t("image.node")}
-        </span>
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+        {editingTitle ? (
+          <span className="flex items-center gap-0.5 flex-1 min-w-0">
+            <FileImageOutlined className="shrink-0" />
+            <Input
+              size="small"
+              variant="borderless"
+              className="text-[13px] font-medium text-white/80"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleTitleSave}
+              onPressEnter={handleTitleSave}
+              autoFocus
+              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
+            />
+          </span>
+        ) : (
+          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
+            <FileImageOutlined className="mr-1" />
+            {data.label || data.alt || t("image.node")}
+          </span>
+        )}
         {hasImage && data.naturalWidth > 0 && (
-          <span className="text-white/30 text-xs">{data.naturalWidth}×{data.naturalHeight}</span>
+          <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth}×{data.naturalHeight}</span>
         )}
       </div>
 
@@ -251,26 +305,6 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         ) : hasImage ? (
           <>
             <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
-            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/body:opacity-100 transition-opacity">
-              <Tooltip title={t("save.assets")}><button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleSaveToAssets}><StarOutlined /></button></Tooltip>
-              <Tooltip title={t("download")}><button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleDownload}><DownloadOutlined /></button></Tooltip>
-              <Popover content={<div className="flex flex-col gap-1 p-1" style={{background:"var(--canvas-bg)"}}>
-                <button className="text-left px-3 py-1 text-sm text-white hover:bg-white/10 rounded" onClick={()=>handleTransform("rot90")}>{t("rotate90")}</button>
-                <button className="text-left px-3 py-1 text-sm text-white hover:bg-white/10 rounded" onClick={()=>handleTransform("flipH")}>{t("flipH")}</button>
-                <button className="text-left px-3 py-1 text-sm text-white hover:bg-white/10 rounded" onClick={()=>handleTransform("flipV")}>{t("flipV")}</button>
-              </div>} trigger="click" placement="bottom"><button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white"><SwapOutlined /></button></Popover>
-              <Tooltip title={t("crop")}><button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleCrop}><ScissorOutlined /></button></Tooltip>
-              <Tooltip title={t("replace")}>
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleReplace}>
-                  <UploadOutlined />
-                </button>
-              </Tooltip>
-              <Tooltip title={t("clear")}>
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleClear}>
-                  <DeleteOutlined />
-                </button>
-              </Tooltip>
-            </div>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
