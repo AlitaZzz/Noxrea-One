@@ -5,7 +5,7 @@ import { Input, Popover, App } from "antd";
 import { MarkerType } from "@xyflow/react";
 import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
-import { useCanvasStore, markDirty, flushAndWait } from "@/stores/canvas-store";
+import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
 import { createImageNode } from "@/lib/node-defaults";
@@ -93,6 +93,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryRef = useRef({ count: 0, prompt: "", modelKey: "", quality: "", genSize: "", ratio: "", refImages: [] as string[], n: 1, entry: null as any, channel: null as any });
+  const latestSettingsRef = useRef({ prompt, modelKey, quality, genSize, ratio, refOrder, n });
+  latestSettingsRef.current = { prompt, modelKey, quality, genSize, ratio, refOrder, n };
   const { notification } = App.useApp();
 
   // Persist settings to node data on change (debounced)
@@ -104,6 +106,23 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     }, 300);
     return () => clearTimeout(timer);
   }, [prompt, modelKey, quality, genSize, ratio, refOrder, n, nodeId]);
+
+  // Flush pending settings on component unmount (not on dep changes)
+  useEffect(() => {
+    return () => {
+      const latest = latestSettingsRef.current;
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const saved = (node?.data as any)?._genSettings;
+      // 没有已保存值 或 任一字段变化 → flush（refOrder 用 JSON.stringify 比较）
+      if (saved &&
+          saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
+          saved.quality === latest.quality && saved.genSize === latest.genSize &&
+          saved.ratio === latest.ratio && saved.n === latest.n &&
+          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
+      useCanvasStore.getState().updateNodeData(nodeId, { _genSettings: { ...latest } });
+      markDirtyImmediate();
+    };
+  }, []);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -202,7 +221,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           markerEnd: { type: MarkerType.ArrowClosed, color: "#666" },
         };
         store.setEdges([...store.edges, newEdge]);
-        markDirty();
+        markDirtyImmediate();
       };
       img.src = imgUrl;
     };
@@ -218,10 +237,11 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
     setError("");
     useCanvasStore.getState().updateNodeData(nodeId, { task_status: "pending" });
+    markDirtyImmediate();
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: true } } }));
+    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: true }, immediate: true } }));
 
     const errMsg = await submitTask();
 
@@ -231,7 +251,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       setError("");
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined });
-      window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: false } } }));
+      markDirtyImmediate();
+      window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: false }, immediate: true } }));
       setError(errMsg);
     }
   };
@@ -247,6 +268,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     useCanvasStore.getState().updateNodeData(nodeId, {
       task_status: undefined, task_id: undefined, _generating: false,
     });
+    markDirtyImmediate();
     setError("");
   };
 

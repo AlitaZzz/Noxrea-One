@@ -21,7 +21,7 @@ function ImageGroupNode({ id, data, selected }: Props) {
 
   const handleSetMain = (idx: number) => {
     setMainIdx(idx);
-    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId: id, data: { ...data, mainIndex: idx } } }));
+    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId: id, data: { ...data, mainIndex: idx }, immediate: true } }));
   };
 
   const handleDownload = async (url: string) => {
