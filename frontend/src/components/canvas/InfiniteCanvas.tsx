@@ -268,8 +268,15 @@ export default function InfiniteCanvas() {
 
   useEffect(() => {
     function onUpdateData(e: Event) {
-      const { nodeId, data, style, immediate } = (e as CustomEvent).detail;
-      updateNodeData(nodeId, data, style);
+      const { nodeId, data, style, position, immediate } = (e as CustomEvent).detail;
+      if (position) {
+        useCanvasStore.getState().setNodes(
+          useCanvasStore.getState().nodes.map((n) =>
+            n.id === nodeId ? { ...n, position } : n
+          )
+        );
+      }
+      updateNodeData(nodeId, data ?? {}, style);
       if (immediate) markDirtyImmediate();
     }
     window.addEventListener("node:update-data", onUpdateData);

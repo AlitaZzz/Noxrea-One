@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { useCanvasStore, markDirty } from "@/stores/canvas-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -93,18 +93,16 @@ export default function ResizeHandle({
         if (corner.includes("left")) newX = startRef.current.px + (startRef.current.w - newW);
         if (corner.includes("top")) newY = startRef.current.py + (startRef.current.h - newH);
 
-        const s = useCanvasStore.getState();
-        s.setNodes(
-          s.nodes.map((n) => {
-            if (n.id !== nodeId) return n;
-            return {
-              ...n,
+        window.dispatchEvent(
+          new CustomEvent("node:update-data", {
+            detail: {
+              nodeId,
+              data: {},
+              style: { width: newW, height: newH },
               position: { x: newX, y: newY },
-              style: { ...n.style, width: newW, height: newH },
-            };
+            },
           })
         );
-        markDirty();
       }
 
       function onPointerUp() {
