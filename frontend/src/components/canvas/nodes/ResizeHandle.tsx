@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useCanvasStore, markDirty } from "@/stores/canvas-store";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -104,6 +104,7 @@ export default function ResizeHandle({
             };
           })
         );
+        markDirty();
       }
 
       function onPointerUp() {

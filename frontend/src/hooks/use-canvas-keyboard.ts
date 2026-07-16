@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
+import { useCanvasStore, takeCanvasSnapshot, markDirtyImmediate } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { duplicateNode } from "@/lib/node-defaults";
@@ -145,6 +145,7 @@ export function useCanvasKeyboard() {
           s.setTheme(prev.theme);
           if (prev.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: prev.minimapVisible });
           if (prev.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: prev.snapToGrid });
+          markDirtyImmediate();
         }
       }
 
@@ -161,6 +162,7 @@ export function useCanvasKeyboard() {
           s.setTheme(next.theme);
           if (next.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: next.minimapVisible });
           if (next.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: next.snapToGrid });
+          markDirtyImmediate();
         }
       }
 

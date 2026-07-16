@@ -36,7 +36,7 @@ import GenerationPanel from "@/components/canvas/GenerationPanel";
 import TextAskPanel from "@/components/canvas/TextAskPanel";
 import CanvasContextMenu, { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
-import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, flushAndWait } from "@/stores/canvas-store";
+import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, markDirtyImmediate, flushAndWait, flushOnUnload } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useModelStore } from "@/stores/model-store";
@@ -175,19 +175,24 @@ export default function InfiniteCanvas() {
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const applied = applyNodeChanges(changes, nodes);
+      let appliedNodes;
       if (snapToGrid) {
         // Snap position changes to grid
-        setNodes(
-          applied.map((n) => ({
-            ...n,
-            position: {
-              x: Math.round(n.position.x / snapGridSize) * snapGridSize,
-              y: Math.round(n.position.y / snapGridSize) * snapGridSize,
-            },
-          }))
-        );
+        appliedNodes = applied.map((n) => ({
+          ...n,
+          position: {
+            x: Math.round(n.position.x / snapGridSize) * snapGridSize,
+            y: Math.round(n.position.y / snapGridSize) * snapGridSize,
+          },
+        }));
       } else {
-        setNodes(applied);
+        appliedNodes = applied;
+      }
+      setNodes(appliedNodes);
+      // Only mark dirty for position changes (user drag).
+      // Exclude select (pure UI) and dimensions (React Flow internal DOM measurement).
+      if (changes.some((c) => c.type === "position")) {
+        markDirty();
       }
     },
     [nodes, setNodes, snapToGrid, snapGridSize]
@@ -215,7 +220,7 @@ export default function InfiniteCanvas() {
           edges
         )
       );
-      markDirty();
+      markDirtyImmediate();
     },
     [edges, setEdges, pushHistory]
   );
@@ -235,7 +240,7 @@ export default function InfiniteCanvas() {
 
   const handleNodeDragStop = useCallback(() => {
     pushHistory(takeCanvasSnapshot());
-    markDirty();
+    markDirtyImmediate();
   }, [pushHistory]);
 
   const handlePaneClick = useCallback(() => {
@@ -263,8 +268,9 @@ export default function InfiniteCanvas() {
 
   useEffect(() => {
     function onUpdateData(e: Event) {
-      const { nodeId, data, style } = (e as CustomEvent).detail;
+      const { nodeId, data, style, immediate } = (e as CustomEvent).detail;
       updateNodeData(nodeId, data, style);
+      if (immediate) markDirtyImmediate();
     }
     window.addEventListener("node:update-data", onUpdateData);
     return () => window.removeEventListener("node:update-data", onUpdateData);
@@ -321,13 +327,14 @@ export default function InfiniteCanvas() {
                         lockAspectRatio: true, _generating: false,
                         task_status: undefined, task_id: undefined,
                       });
+                      markDirtyImmediate();
                       // Async load real dimensions
                       loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
                         if (dims.w > 0) {
                           useCanvasStore.getState().updateNodeData(node.id, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
                           });
-                          markDirty();
+                          markDirtyImmediate();
                         }
                       });
                       const t = useI18nStore.getState().t;
@@ -336,13 +343,13 @@ export default function InfiniteCanvas() {
                         notifiedTasksRef.current.add(taskId);
                         notifRef.current.success({ title: t("generation.image.success"), description: desc, placement: "bottomRight", duration: 5 });
                       }
-                      markDirty();
                       sseCtrlsRef.current.delete(taskId);
                       return;
                     } else if (evt.status === "failed") {
                       useCanvasStore.getState().updateNodeData(node.id, {
                         _generating: false, task_status: undefined, task_id: undefined,
                       });
+                      markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
@@ -512,6 +519,7 @@ export default function InfiniteCanvas() {
       });
 
       store.setNodes([{ ...groupNode, selected: true }, ...updatedNodes]);
+      markDirtyImmediate();
     }
 
     function onUngroupNodes() {
@@ -556,6 +564,7 @@ export default function InfiniteCanvas() {
 
       store.setNodes(newNodes);
       store.setEdges(newEdges);
+      markDirtyImmediate();
     }
 
     window.addEventListener("canvas:group-nodes", onGroupNodes);
@@ -622,6 +631,11 @@ export default function InfiniteCanvas() {
         selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target) ? 3 : 2,
     },
   }));
+
+  // ---- Component unmount: browser back, route change → save current state ----
+  useEffect(() => {
+    return () => { flushOnUnload(); };
+  }, []);
 
   return (
     <div

@@ -17,7 +17,7 @@ import {
   InboxOutlined,
 } from "@ant-design/icons";
 import type { BackgroundType } from "@/lib/types";
-import { useCanvasStore, markDirty } from "@/stores/canvas-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { MIN_ZOOM, MAX_ZOOM } from "@/lib/constants";
@@ -169,7 +169,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
             type="text"
             className={`canvas-ctrl-btn ${minimapVisible ? "canvas-ctrl-active" : ""}`}
             icon={<AimOutlined />}
-            onClick={() => { toggleMinimap(); markDirty(); }}
+            onClick={() => { toggleMinimap(); }}
           />
         </Tooltip>
 
@@ -180,7 +180,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
             type="text"
             className={`canvas-ctrl-btn ${snapToGrid ? "canvas-ctrl-active" : ""}`}
             icon={<MedicineBoxOutlined />}
-            onClick={() => { toggleSnapToGrid(); markDirty(); }}
+            onClick={() => { toggleSnapToGrid(); }}
           />
       </Tooltip>
 
@@ -190,7 +190,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
           <div className="flex flex-col p-2 gap-0.5" style={{ background: "var(--canvas-bg, #262626)", borderRadius: 6, margin: -12, width: 120 }}>
             <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
             {(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
-              <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); markDirty(); }}>{t(bg)}</MenuItem>
+              <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(bg)}</MenuItem>
             ))}
           </div>
         }
@@ -217,7 +217,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
           type="text"
           className="canvas-ctrl-btn"
           icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
-          onClick={() => { toggleTheme(); markDirty(); useAuthStore.getState().savePreference("theme", theme === "dark" ? "light" : "dark"); }}
+          onClick={() => { toggleTheme(); useAuthStore.getState().savePreference("theme", theme === "dark" ? "light" : "dark"); }}
         />
       </Tooltip>
 
