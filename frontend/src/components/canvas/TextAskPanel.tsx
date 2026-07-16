@@ -4,6 +4,7 @@ import { memo, useState } from "react";
 import { Select, Input, App } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
+import { getTokenHeader, BASE } from "@/lib/api";
 import WheelGuard from "@/components/common/WheelGuard";
 
 interface Props { nodeId: string; currentContent: string; }
@@ -30,14 +31,14 @@ const TextAskPanel = memo(function TextAskPanel({ nodeId, currentContent }: Prop
       if (currentContent) msgs.push({ role: "user", content: currentContent });
       msgs.push({ role: "user", content: prompt.trim() });
 
-      const res = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const res = await fetch(`${BASE}/api/chat/completions`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, model: entry.modelName, messages: msgs }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
 
-      const reply = json.choices?.[0]?.message?.content || "";
+      const reply = json.data?.choices?.[0]?.message?.content || "";
       const newContent = currentContent ? `${currentContent}\n\nQ: ${prompt.trim()}\nA: ${reply}` : reply;
       window.dispatchEvent(new CustomEvent("node:update-data", {
         detail: { nodeId, data: { content: newContent } },

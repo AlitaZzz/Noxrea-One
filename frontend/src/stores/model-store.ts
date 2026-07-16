@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ModelChannel, ModelInfo, ModelCapability } from "@/lib/types";
-import { api } from "@/lib/api";
+import { api, getTokenHeader, BASE } from "@/lib/api";
 
 function guessCapabilities(name: string): ModelCapability[] {
   const lower = name.toLowerCase();
@@ -103,16 +103,14 @@ export const useModelStore = create<ModelState>((set, get) => ({
   fetchModels: async (channelId) => {
     const ch = get().channels.find((c) => c.id === channelId);
     if (!ch || !ch.baseUrl) return;
-    const headers: Record<string, string> = {};
-    if (ch.apiKey) headers["Authorization"] = `Bearer ${ch.apiKey}`;
     try {
-      const res = await fetch("/api/models", {
+      const res = await fetch(`${BASE}/api/models/list`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({ baseUrl: ch.baseUrl, apiKey: ch.apiKey }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
       const models: { name: string; capabilities: ModelCapability[] }[] = (json.data || []).map((m: any) => ({
         name: m.id || m.name,
         capabilities: guessCapabilities(m.id || m.name),
