@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Tooltip, Popover, Input } from "antd";
+import { Tooltip, Input } from "antd";
 import {
   UploadOutlined,
   VideoCameraOutlined,
@@ -10,7 +10,6 @@ import {
   DownloadOutlined,
   PauseCircleOutlined,
   CaretRightOutlined,
-  CameraOutlined,
 } from "@ant-design/icons";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { createImageNode } from "@/lib/node-defaults";
@@ -46,7 +45,6 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [muted, setMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -146,7 +144,6 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
       node.data.label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
       node.style = { width: Math.round(nw * scale), height: Math.round(nh * scale) };
       addNodes([node]);
-      setMenuOpen(false);
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, addNodes]);
 
@@ -393,62 +390,6 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
               </button>
             </div>
 
-            {/* Floating buttons */}
-            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/body:opacity-100 transition-opacity z-20">
-              <Tooltip title="Download">
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleDownload}>
-                  <DownloadOutlined />
-                </button>
-              </Tooltip>
-              <Popover
-                content={
-                  <div className="flex flex-col gap-0.5 py-1" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 160 }}>
-                    <button
-                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
-                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
-                      onClick={() => captureFrame(null)}
-                    >
-                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture current frame
-                    </button>
-                    <button
-                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
-                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
-                      onClick={() => captureFrame(0)}
-                    >
-                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture first frame
-                    </button>
-                    <button
-                      className="text-left px-3 py-1.5 text-sm hover:bg-white/10 rounded transition-colors w-full"
-                      style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
-                      onClick={() => {
-                        const v = videoRef.current;
-                        captureFrame(v?.duration ? v.duration - 0.1 : 10);
-                      }}
-                    >
-                      <CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture last frame
-                    </button>
-                  </div>
-                }
-                trigger="click"
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                placement="bottomRight"
-              >
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white">
-                  <CameraOutlined />
-                </button>
-              </Popover>
-              <Tooltip title="Replace video">
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleReplace}>
-                  <UploadOutlined />
-                </button>
-              </Tooltip>
-              <Tooltip title="Clear video">
-                <button className="w-9 h-9 flex items-center justify-center rounded bg-black/50 text-white/80 hover:bg-black/70 hover:text-white" onClick={handleClear}>
-                  <DeleteOutlined />
-                </button>
-              </Tooltip>
-            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">

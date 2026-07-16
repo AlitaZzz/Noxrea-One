@@ -429,16 +429,19 @@ export default function InfiniteCanvas() {
   const clipboard = useSelectionStore((s) => s.clipboard);
 
   useEffect(() => {
-    function onCtx(e: MouseEvent) {
+    function onCanvasDblClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (target.closest(".react-flow__pane") && !target.closest(".react-flow__node")) {
-        e.preventDefault();
-        e.stopPropagation();
         showCtx(e.clientX, e.clientY);
       }
     }
-    document.addEventListener("contextmenu", onCtx, true);
-    return () => document.removeEventListener("contextmenu", onCtx, true);
+    function preventCtx(e: Event) { e.preventDefault(); }
+    document.addEventListener("dblclick", onCanvasDblClick, true);
+    document.addEventListener("contextmenu", preventCtx, { capture: true });
+    return () => {
+      document.removeEventListener("dblclick", onCanvasDblClick, true);
+      document.removeEventListener("contextmenu", preventCtx, { capture: true });
+    };
   }, [showCtx]);
 
   const handleAddText = useCallback(() => {
@@ -686,6 +689,7 @@ export default function InfiniteCanvas() {
         panOnScroll={false}
         zoomOnScroll={true}
         zoomOnPinch={true}
+        zoomOnDoubleClick={false}
         minZoom={0.1}
         maxZoom={5}
         proOptions={{ hideAttribution: true }}
