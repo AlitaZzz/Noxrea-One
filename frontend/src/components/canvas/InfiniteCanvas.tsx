@@ -361,11 +361,12 @@ export default function InfiniteCanvas() {
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t("generation.image.success"), description: desc, placement: "bottomRight", duration: 5 });
+                        notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 5 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
                     } else if (evt.status === "failed") {
+                      const isVideoNode = node.type === "video-node";
                       useCanvasStore.getState().updateNodeData(node.id, {
                         _generating: false, task_status: undefined, task_id: undefined,
                       });
@@ -373,7 +374,7 @@ export default function InfiniteCanvas() {
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: t("generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
+                        notifRef.current.error({ title: t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
