@@ -42,5 +42,8 @@ class Settings(BaseSettings):
     WORKER_STUCK_TIMEOUT: int = 20      # minutes before a processing task is considered stuck
     WORKER_ZOMBIE_INTERVAL: int = 60    # seconds between zombie cleanup checks
 
+    # SSRF
+    ALLOWED_INTERNAL_HOSTS: str = ""     # 逗号分隔的内网地址白名单，如 "192.168.1.50,192.168.1.51"
+
 
 settings = Settings()
