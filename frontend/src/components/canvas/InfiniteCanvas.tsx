@@ -37,6 +37,7 @@ import TextAskPanel from "@/components/canvas/TextAskPanel";
 import CanvasContextMenu, { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
 import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, markDirtyImmediate, flushAndWait, flushOnUnload } from "@/stores/canvas-store";
+import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useModelStore } from "@/stores/model-store";
@@ -111,6 +112,12 @@ export default function InfiniteCanvas() {
   const selectedNodeIds = useMemo(
     () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
     [nodes]
+  );
+
+  // Edges connected to any selected node → trigger multi-dot flow animation
+  const highlightedEdgeIds = useMemo(
+    () => new Set(edges.filter((e) => selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)).map((e) => e.id)),
+    [edges, selectedNodeIds]
   );
 
   // Clipboard for copy/paste
@@ -638,7 +645,7 @@ export default function InfiniteCanvas() {
       ...e.style,
       stroke:
         selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)
-          ? "#1677ff"
+          ? "#1D9E75"
           : (e.style?.stroke as string) || (theme === "dark" ? "#666" : "#999"),
       strokeWidth:
         selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target) ? 3 : 2,
@@ -656,6 +663,7 @@ export default function InfiniteCanvas() {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <ReactFlow
         nodes={nodes}
         edges={highlightedEdges}
@@ -795,6 +803,7 @@ export default function InfiniteCanvas() {
                 }}
               />
             </div>
+
           </div>
         </Panel>
 
@@ -870,6 +879,7 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )})}
       </ReactFlow>
+      </EdgeHighlightContext.Provider>
 
       <CanvasContextMenu
         onAddText={handleAddText}

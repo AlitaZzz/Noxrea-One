@@ -2,6 +2,28 @@
 
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
 import { ScissorOutlined } from "@ant-design/icons";
+import { useHighlightedEdges } from "@/lib/edge-highlight-context";
+
+const DOT_COLOR = "#1D9E75";
+const DURATION = 1.6;
+const STAGGER = [0, -0.55, -1.1];
+
+/**
+ * 光点 + 光晕的 SVG 元素组，沿 path 流动。
+ * 每对由一个透明光晕 (r=8) 和一个实心内核 (r=3) 组成。
+ */
+function FlowingDot({ path, begin, color }: { path: string; begin: number; color: string }) {
+  return (
+    <g>
+      <circle r="8" fill={`${color}33`}>
+        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
+      </circle>
+      <circle r="3" fill={color}>
+        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
+      </circle>
+    </g>
+  );
+}
 
 export default function DeletableEdge({
   id,
@@ -16,13 +38,11 @@ export default function DeletableEdge({
   markerEnd,
 }: EdgeProps) {
   const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
   });
+
+  const highlightedEdgeIds = useHighlightedEdges();
+  const isHighlighted = highlightedEdgeIds.has(id);
 
   const onEdgeClick = (evt: React.MouseEvent) => {
     evt.stopPropagation();
@@ -33,16 +53,24 @@ export default function DeletableEdge({
 
   return (
     <>
+      {/* Base path */}
       <BaseEdge
         id={id}
         path={edgePath}
         style={{
           ...style,
           strokeWidth: selected ? 3 : 2,
-          stroke: selected ? "#1677ff" : (style.stroke as string || "var(--canvas-text-muted)"),
+          stroke: selected ? "#1D9E75" : (style.stroke as string || "var(--canvas-text-muted)"),
         }}
         markerEnd={markerEnd}
       />
+
+      {/* Multi-dot flow animation (when connected node is selected) */}
+      {isHighlighted && STAGGER.map((begin) => (
+        <FlowingDot key={`${id}-${begin}`} path={edgePath} begin={begin} color={DOT_COLOR} />
+      ))}
+
+      {/* Delete button */}
       <EdgeLabelRenderer>
         <div
           style={{
@@ -55,8 +83,8 @@ export default function DeletableEdge({
             onClick={onEdgeClick}
             className="nodrag nopan flex items-center justify-center rounded-full"
             style={{
-              width: 22,
-              height: 22,
+              width: 30,
+              height: 30,
               background: "var(--canvas-bg, #262626)",
               border: "1px solid #555",
               cursor: "pointer",
@@ -65,7 +93,7 @@ export default function DeletableEdge({
               boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
             }}
           >
-            <ScissorOutlined style={{ color: "var(--canvas-text-dim)", fontSize: 12 }} />
+            <ScissorOutlined style={{ color: "var(--canvas-text-dim)", fontSize: 16 }} />
           </button>
         </div>
       </EdgeLabelRenderer>
