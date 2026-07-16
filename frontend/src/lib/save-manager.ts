@@ -5,7 +5,7 @@
  *  - dirty 状态管理
  *  - trailing save queue（只保存最终最新状态）
  *  - save: PUT /api/canvas/projects/{id}
- *  - flushSave（页面隐藏时紧急保存，keepalive: true）
+ *  - flushSave / flushOnUnload（页面卸载/组件卸载时紧急保存，keepalive: true）
  *  - 错误处理与重试
  *
  * 不依赖 React component 生命周期。
@@ -16,7 +16,23 @@ import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
 import { BASE, getTokenHeader } from "@/lib/api";
 
-const SAVE_DELAY = 3000;
+const SAVE_DELAY = 2000;
+const SAVE_DELAY_IMMEDIATE = 100;
+
+/** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
+function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
+  return {
+    ...snapshot,
+    nodes: snapshot.nodes.map((n: any) => {
+      const { selected, dragging, positionAbsolute, ...rest } = n;
+      return rest;
+    }),
+    edges: snapshot.edges.map((e: any) => {
+      const { selected, ...rest } = e;
+      return rest;
+    }),
+  };
+}
 
 class SaveManager {
   private dirty = false;
@@ -25,11 +41,22 @@ class SaveManager {
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
   private resolveSave: (() => void) | null = null;
+  /** saving 期间被跳过的最紧急 delay，恢复时用此值而非默认值 */
+  private pendingDelay: number = SAVE_DELAY;
 
   // ==================== 公开接口 ====================
 
-  /** 标记改脏 — 开始 trailing save 计时 */
+  /** 标记改脏 — 2s trailing save（连续操作：拖拽/打字/缩放） */
   markDirty(): void {
+    this.setDirty(SAVE_DELAY);
+  }
+
+  /** 标记改脏 — 100ms trailing save（离散操作：增删节点/编组/粘贴/连接） */
+  markDirtyImmediate(): void {
+    this.setDirty(SAVE_DELAY_IMMEDIATE);
+  }
+
+  private setDirty(delay: number): void {
     // 确保项目列表内存状态已同步
     const s = useCanvasStore.getState();
     const pid = useProjectStore.getState().activeProjectId;
@@ -43,7 +70,8 @@ class SaveManager {
       this.dirty = true;
       this.registerFlushOnce();
     }
-    this.resetTimer();
+    this.pendingDelay = Math.min(this.pendingDelay, delay);
+    this.resetTimer(delay);
   }
 
   /** 立即保存最新状态（页面隐藏等，fire-and-forget） */
@@ -78,6 +106,29 @@ class SaveManager {
     }
   }
 
+  /**
+   * 页面生命周期兜底保存（关闭/刷新/组件卸载），fire-and-forget。
+   * 与 save() 不同：
+   *  - 检查 dirty 但跳过 saving（避免与 save() 冲突）
+   *  - 不重试，不改变内部状态
+   *  - 始终使用 keepalive: true
+   */
+  flushOnUnload(): void {
+    if (!this.dirty) return;
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+
+    const pid = useProjectStore.getState().activeProjectId;
+    if (!pid) return;
+
+    const snapshot = takeCanvasSnapshot();
+    if (!snapshot.nodes.length && !snapshot.edges.length) return;
+
+    this.saveToApi(pid, snapshot, true).catch(() => {});
+  }
+
   /** 查询保存状态，供 UI 显示 */
   get status(): { dirty: boolean; saving: boolean } {
     return { dirty: this.dirty, saving: this.saving };
@@ -85,14 +136,17 @@ class SaveManager {
 
   // ==================== 内部实现 ====================
 
-  private resetTimer(): void {
+  private resetTimer(delay: number = SAVE_DELAY): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
-    if (this.saving) return;
+    if (this.saving) {
+      this.pendingDelay = Math.min(this.pendingDelay, delay);
+      return;
+    }
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
       void this.save(false);
-    }, SAVE_DELAY);
+    }, delay);
   }
 
   private async save(keepalive: boolean): Promise<void> {
@@ -103,7 +157,10 @@ class SaveManager {
 
     try {
       const activeId = useProjectStore.getState().activeProjectId;
-      if (!activeId) return;
+      if (!activeId) {
+        this.dirty = true;
+        return;
+      }
 
       const snapshot = takeCanvasSnapshot();
       await this.saveToApi(activeId, snapshot, keepalive);
@@ -115,7 +172,10 @@ class SaveManager {
       this.resolveSave?.();
     }
 
-    if (this.dirty) this.resetTimer();
+    if (this.dirty) {
+      this.resetTimer(this.pendingDelay);
+    }
+    this.pendingDelay = SAVE_DELAY;
   }
 
   private async saveToApi(
@@ -126,10 +186,13 @@ class SaveManager {
     const id = parseInt(projectId, 10);
     if (isNaN(id)) return;
 
+    // 深拷贝并剔除 React Flow 运行时字段（不影响 undo 栈的快照）
+    const clean = stripRuntimeFields(snapshot);
+
     const body = JSON.stringify({
       canvas_data: {
-        nodes: snapshot.nodes,
-        edges: snapshot.edges,
+        nodes: clean.nodes,
+        edges: clean.edges,
         viewport: snapshot.viewport,
         background: snapshot.background,
         theme: snapshot.theme,
@@ -150,17 +213,18 @@ class SaveManager {
     });
   }
 
-  /** 全局只注册一次 pagehide/visibilitychange */
+  /** 全局只注册一次页面生命周期监听 */
   private registerFlushOnce(): void {
     if (this.registered) return;
     this.registered = true;
     if (typeof window === "undefined") return;
 
-    const onHide = () => {
-      if (document.visibilityState === "hidden") this.flushSave();
-    };
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", () => this.flushSave());
+    const onUnload = () => this.flushOnUnload();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") onUnload();
+    });
+    window.addEventListener("pagehide", onUnload);
+    window.addEventListener("beforeunload", onUnload);
   }
 }
 

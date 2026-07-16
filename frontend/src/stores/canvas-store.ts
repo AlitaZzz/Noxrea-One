@@ -12,9 +12,19 @@ export function markDirty() {
   saveManager.markDirty();
 }
 
+/** 立即保存（离散操作，100ms 合并） */
+export function markDirtyImmediate() {
+  saveManager.markDirtyImmediate();
+}
+
 /** 等待保存完成并确保最终状态已落盘（项目切换等场景） */
 export function flushAndWait(): Promise<void> {
   return saveManager.flushAndWait();
+}
+
+/** 页面卸载 / 组件卸载时兜底保存（fire-and-forget，keepalive） */
+export function flushOnUnload(): void {
+  saveManager.flushOnUnload();
 }
 
 interface CanvasState {
@@ -72,15 +82,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   edges: [],
   setNodes: (nodes) => {
     set({ nodes });
-    saveManager.markDirty();
   },
   setEdges: (edges) => {
     set({ edges });
-    saveManager.markDirty();
   },
   addNodes: (nodes) => {
     set((s) => ({ nodes: [...s.nodes, ...nodes] }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
   updateNodeData: (nodeId, data, style) => {
     set((s) => ({
@@ -100,19 +108,19 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         (e) => !idSet.has(e.source) && !idSet.has(e.target)
       ),
     }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
   removeEdges: (edgeIds) => {
     const idSet = new Set(edgeIds);
     set((s) => ({
       edges: s.edges.filter((e) => !idSet.has(e.id)),
     }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
   background: DEFAULT_BACKGROUND,
   setBackground: (background) => {
     set({ background });
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
 
   theme: DEFAULT_THEME,
@@ -121,13 +129,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   },
   toggleTheme: () => {
     set((s) => ({ theme: s.theme === "light" ? "dark" : "light" }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
 
   minimapVisible: true,
   toggleMinimap: () => {
     set((s) => ({ minimapVisible: !s.minimapVisible }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
 
   resetViewport: () => set({ viewport: DEFAULT_VIEWPORT }),
@@ -138,7 +146,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   snapToGrid: false,
   toggleSnapToGrid: () => {
     set((s) => ({ snapToGrid: !s.snapToGrid }));
-    saveManager.markDirty();
+    saveManager.markDirtyImmediate();
   },
   snapGridSize: 20,
 
