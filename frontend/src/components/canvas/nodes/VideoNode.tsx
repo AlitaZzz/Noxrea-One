@@ -15,6 +15,7 @@ import { useCanvasStore } from "@/stores/canvas-store";
 import { createImageNode } from "@/lib/node-defaults";
 import { useI18nStore } from "@/stores/i18n-store";
 import { apiUpload, BASE } from "@/lib/api";
+import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
 
 interface VideoNodeData {
   label: string;
@@ -224,7 +225,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
     setSrc("");
     window.dispatchEvent(
       new CustomEvent("node:update-data", {
-        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: 400, height: 225 }, immediate: true },
+        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }, immediate: true },
       })
     );
   }, [id, data]);

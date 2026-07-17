@@ -17,7 +17,7 @@ import {
 } from "@ant-design/icons";
 import type { ImageNodeData, AnyNode } from "@/lib/types";
 import {
-  DEFAULT_NODE_WIDTH, THUMBNAIL_MAX,
+  DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, THUMBNAIL_MAX,
 } from "@/lib/constants";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
@@ -270,7 +270,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         detail: {
           nodeId: id,
           data: { ...data, src: "", label: t("image.node") },
-          style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_WIDTH },
+          style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
           immediate: true,
         },
       })
