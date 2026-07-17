@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { Button, Tooltip, Popover } from "antd";
 import {
   CopyOutlined,
@@ -32,6 +32,60 @@ interface NodeToolbarProps {
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
   window.dispatchEvent(
     new CustomEvent("canvas:node-action", { detail: { nodeId, action, ...extra } })
+  );
+}
+
+/** 宫格切分选择器 — 鼠标划过高亮行列数，点击确认 */
+function GridPicker({ nodeId }: { nodeId: string }) {
+  const [hover, setHover] = useState({ rows: 0, cols: 0 });
+  const MAX = 5;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+      {[2, 3, 4, 5].map((n) => (
+        <MenuItem key={n} onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+            {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}宫格 ({n}×{n})
+          </span>
+        </MenuItem>
+      ))}
+      <MenuDivider />
+      <div style={{ padding: "4px 4px 0" }}>
+        <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>自定义</div>
+        <div className="text-xs mb-1 text-center" style={{ color: "var(--canvas-text)" }}>
+          {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : "选择行列数"}
+        </div>
+        <div className="flex justify-center">
+          <div className="inline-grid gap-[1px]" style={{
+            gridTemplateColumns: `repeat(${MAX}, 14px)`,
+            background: "var(--canvas-border)",
+            border: "1px solid var(--canvas-border)",
+          }}>
+            {Array.from({ length: MAX * MAX }).map((_, i) => {
+              const row = Math.floor(i / MAX) + 1;
+              const col = (i % MAX) + 1;
+              const active = row <= hover.rows && col <= hover.cols;
+              return (
+                <div key={i}
+                  onMouseEnter={() => setHover({ rows: row, cols: col })}
+                  onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: row, cols: col })}
+                  style={{
+                    width: 14, height: 14,
+                    background: active ? "#1D9E75" : "var(--canvas-bg)",
+                    cursor: "pointer",
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -150,6 +204,20 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "crop")} />
           </Tooltip>
+          <Popover trigger="click" placement="bottom"
+            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
+              <GridPicker nodeId={nodeId} />
+            </div>}>
+            <Tooltip title="宫格切分">
+              <Button type="text" size="middle" style={{ padding: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "middle", marginRight: 6 }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="12" y1="3" x2="12" y2="21" />
+                </svg>
+              </Button>
+            </Tooltip>
+          </Popover>
           <Tooltip title={t("replace")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<UploadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "replace")} />

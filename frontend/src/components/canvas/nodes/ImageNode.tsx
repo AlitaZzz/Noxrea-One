@@ -219,6 +219,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         case "replace": handleReplace(); break;
         case "clear": handleClear(); break;
         case "transform": handleTransform(detail.op); break;
+        case "grid-split": console.log("grid-split:", { rows: detail.rows, cols: detail.cols }); break;
       }
     }
     window.addEventListener("canvas:node-action", onNodeAction);
