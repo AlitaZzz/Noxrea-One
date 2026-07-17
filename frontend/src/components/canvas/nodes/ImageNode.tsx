@@ -281,7 +281,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       new CustomEvent("node:update-data", {
         detail: {
           nodeId: id,
-          data: { ...data, src: "", label: t("image.node") },
+          data: { ...data, src: "", label: t("image.node"), alt: "", naturalWidth: 0, naturalHeight: 0 },
           style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
           immediate: true,
         },

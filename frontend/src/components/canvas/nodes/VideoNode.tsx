@@ -225,7 +225,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
     setSrc("");
     window.dispatchEvent(
       new CustomEvent("node:update-data", {
-        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node") }, style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }, immediate: true },
+        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node"), alt: "", naturalWidth: 0, naturalHeight: 0 }, style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }, immediate: true },
       })
     );
   }, [id, data]);

@@ -5,6 +5,7 @@ import { Button, Tooltip, Popover } from "antd";
 import {
   CopyOutlined,
   DeleteOutlined,
+  ClearOutlined,
   InfoCircleOutlined,
   GroupOutlined,
   UngroupOutlined,
@@ -13,8 +14,10 @@ import {
   ScissorOutlined,
   UploadOutlined,
   SwapOutlined,
+  RotateRightOutlined,
   CameraOutlined,
 } from "@ant-design/icons";
+import { FlipHorizontal, FlipVertical } from "lucide-react";
 import { useI18nStore } from "@/stores/i18n-store";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 
@@ -37,6 +40,7 @@ function dispatchNodeAction(nodeId: string, action: string, extra?: Record<strin
 
 /** 宫格切分选择器 — 鼠标划过高亮行列数，点击确认 */
 function GridPicker({ nodeId }: { nodeId: string }) {
+  const t = useI18nStore((s) => s.t);
   const [hover, setHover] = useState({ rows: 0, cols: 0 });
   const MAX = 5;
   return (
@@ -50,15 +54,15 @@ function GridPicker({ nodeId }: { nodeId: string }) {
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="12" y1="3" x2="12" y2="21" />
             </svg>
-            {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}宫格 ({n}×{n})
+            {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}×{n}
           </span>
         </MenuItem>
       ))}
       <MenuDivider />
       <div style={{ padding: "4px 4px 0" }}>
-        <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>自定义</div>
+        <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("grid.custom")}</div>
         <div className="text-xs mb-1 text-center" style={{ color: "var(--canvas-text)" }}>
-          {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : "选择行列数"}
+          {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : t("grid.select")}
         </div>
         <div className="flex justify-center">
           <div className="inline-grid gap-[1px]" style={{
@@ -194,11 +198,13 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
               <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("rotate90")}</MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("flipH")}</MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><SwapOutlined className="mr-1.5" style={{ fontSize: 14 }} /> {t("flipV")}</MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 14 }} /> {t("rotate90")}</span></MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={14} /> {t("flipH")}</span></MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={14} /> {t("flipV")}</span></MenuItem>
             </div>}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<SwapOutlined />} />
+            <Tooltip title={t("transform")}>
+              <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} />
+            </Tooltip>
           </Popover>
           <Tooltip title={t("crop")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />}
@@ -208,7 +214,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
               <GridPicker nodeId={nodeId} />
             </div>}>
-            <Tooltip title="宫格切分">
+            <Tooltip title={t("grid.split")}>
               <Button type="text" size="middle" style={{ padding: 8 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "middle", marginRight: 6 }}>
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -223,7 +229,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "replace")} />
           </Tooltip>
           <Tooltip title={t("clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DeleteOutlined />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ClearOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
@@ -253,7 +259,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "replace")} />
           </Tooltip>
           <Tooltip title={t("clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DeleteOutlined />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ClearOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
