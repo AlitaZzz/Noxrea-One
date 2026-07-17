@@ -14,7 +14,6 @@ import {
   type EdgeChange,
   applyNodeChanges,
   applyEdgeChanges,
-  addEdge,
   MarkerType,
   Position,
   useReactFlow,
@@ -51,7 +50,7 @@ import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { NODE_TYPE } from "@/lib/types";
-import { createTextNode, createImageNode, createVideoNode, createGroupNode, duplicateNode } from "@/lib/node-defaults";
+import { createTextNode, createImageNode, createVideoNode, createGroupNode, duplicateNode, createEdge } from "@/lib/node-defaults";
 import { GROUP_NODE_PADDING, THUMBNAIL_MAX } from "@/lib/constants";
 
 /** Async load image or video dimensions for display */
@@ -215,18 +214,7 @@ export default function InfiniteCanvas() {
   const handleConnect = useCallback(
     (connection: Connection) => {
       pushHistory(takeCanvasSnapshot());
-      setEdges(
-        addEdge(
-          {
-            ...connection,
-            type: "deletable",
-            animated: true,
-            style: { stroke: theme === "dark" ? "#666" : "#999", strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: theme === "dark" ? "#666" : "#999" },
-          },
-          edges
-        )
-      );
+      setEdges([...edges, createEdge(connection.source || "", connection.target || "")]);
       markDirtyImmediate();
     },
     [edges, setEdges, pushHistory]
@@ -698,9 +686,9 @@ export default function InfiniteCanvas() {
         connectionLineStyle={{ stroke: "#1677ff", strokeWidth: 2 }}
         defaultEdgeOptions={{
           type: "deletable",
-          animated: true,
-          style: { stroke: theme === "dark" ? "#666" : "#999", strokeWidth: 2 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: theme === "dark" ? "#666" : "#999" },
+          animated: false,
+          style: { stroke: "#666", strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: "#666" },
         }}
       >
         <Background

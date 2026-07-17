@@ -1,3 +1,4 @@
+import { MarkerType } from "@xyflow/react";
 import {
   NODE_TYPE,
   type TextNodeData,
@@ -97,5 +98,23 @@ export function duplicateNode(
     id: uid(node.type || "copy"),
     position: { x: node.position.x + offset.x, y: node.position.y + offset.y },
     selected: false,
+  };
+}
+
+/** 创建统一样式的连接线（deletable、静态、灰色箭头） */
+export function createEdge(
+  source: string,
+  target: string,
+  options?: { id?: string; type?: string; style?: Record<string, unknown>; markerEnd?: Record<string, unknown> }
+) {
+  const edgeId = options?.id || `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  return {
+    id: edgeId,
+    source,
+    target,
+    type: options?.type || "deletable",
+    animated: false,
+    style: { stroke: "#666", strokeWidth: 2, ...(options?.style || {}) },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#666", ...(options?.markerEnd || {}) },
   };
 }

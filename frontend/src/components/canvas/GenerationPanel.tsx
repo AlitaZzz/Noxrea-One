@@ -2,13 +2,12 @@
 
 import { memo, useState, useEffect, useRef, useMemo } from "react";
 import { Input, Popover, App } from "antd";
-import { MarkerType } from "@xyflow/react";
 import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
-import { createImageNode } from "@/lib/node-defaults";
+import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { useI18nStore } from "@/stores/i18n-store";
 import { THUMBNAIL_MAX } from "@/lib/constants";
 import WheelGuard from "@/components/common/WheelGuard";
@@ -210,17 +209,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         newNode.style = { width: dw, height: dh };
         store.addNodes([newNode]);
 
-        const edgeId = `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        const newEdge = {
-          id: edgeId,
-          source: newNode.id,
-          target: nodeId,
-          type: "deletable",
-          animated: true,
-          style: { stroke: "#666", strokeWidth: 2 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: "#666" },
-        };
-        store.setEdges([...store.edges, newEdge]);
+        store.setEdges([...store.edges, createEdge(newNode.id, nodeId)]);
         markDirtyImmediate();
       };
       img.src = imgUrl;

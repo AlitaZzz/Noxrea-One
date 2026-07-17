@@ -13,13 +13,13 @@ import {
   SwapOutlined,
   StarOutlined,
 } from "@ant-design/icons";
-import type { ImageNodeData } from "@/lib/types";
+import type { ImageNodeData, AnyNode } from "@/lib/types";
 import {
   DEFAULT_NODE_WIDTH, THUMBNAIL_MAX,
 } from "@/lib/constants";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
-import { createImageNode } from "@/lib/node-defaults";
+import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { apiUpload } from "@/lib/api";
 import { useI18nStore } from "@/stores/i18n-store";
 
@@ -193,6 +193,73 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     });
   }, [src, data.alt, data.label, addAsset]);
 
+  const handleGridSplit = useCallback(async (rows: number, cols: number) => {
+    if (!src) return;
+    // Show loading
+    useCanvasStore.getState().updateNodeData(id, { _generating: true });
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = src;
+      });
+
+      const pieceW = img.naturalWidth / cols;
+      const pieceH = img.naturalHeight / rows;
+      const titleH = 24;
+      const shortSide = Math.min(pieceW, pieceH);
+      const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
+      const displayW = Math.round(pieceW * scale);
+      const displayH = Math.round(pieceH * scale);
+
+      // Get original node position
+      const origNode = useCanvasStore.getState().nodes.find((n) => n.id === id);
+      const baseX = (origNode?.position.x || 0) + (origNode?.style?.width as number || 600) + 60;
+      const baseY = origNode?.position.y || 0;
+      const gap = 12;
+
+      const nodes: AnyNode[] = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const canvas = document.createElement("canvas");
+          canvas.width = pieceW;
+          canvas.height = pieceH;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, c * pieceW, r * pieceH, pieceW, pieceH, 0, 0, pieceW, pieceH);
+
+          const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+          const fd = new FormData();
+          fd.append("file", blob, `grid_${r}_${c}.png`);
+          const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", fd);
+          if (res.code !== 200 || !res.data?.url) continue;
+
+          const node = createImageNode(
+            { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) },
+            res.data.url
+          );
+          node.data.naturalWidth = pieceW;
+          node.data.naturalHeight = pieceH;
+          node.data.label = `${data.alt || data.label || "image"} (${r + 1}-${c + 1})`;
+          node.style = { width: displayW, height: displayH + titleH };
+          nodes.push(node);
+        }
+      }
+      if (nodes.length > 0) {
+        addNodes(nodes);
+        // Create edges from original node to each grid piece
+        const store = useCanvasStore.getState();
+        const newEdges = nodes.map((n) => createEdge(id, n.id));
+        store.setEdges([...store.edges, ...newEdges]);
+      }
+    } catch (e) {
+      console.error("grid-split failed:", e);
+    } finally {
+      useCanvasStore.getState().updateNodeData(id, { _generating: false });
+    }
+  }, [id, src, data.alt, data.label, addNodes, addAsset]);
+
   const handleClear = useCallback(() => {
     setSrc("");
     window.dispatchEvent(
@@ -208,23 +275,26 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   }, [id, data]);
 
   // Listen for node action events from NodeToolbar
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform, handleGridSplit });
+  actionRefs.current = { handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform, handleGridSplit };
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
       if (detail.nodeId !== id) return;
+      const a = actionRefs.current;
       switch (detail.action) {
-        case "download": handleDownload(); break;
-        case "save-asset": handleSaveToAssets(); break;
-        case "crop": handleCrop(); break;
-        case "replace": handleReplace(); break;
-        case "clear": handleClear(); break;
-        case "transform": handleTransform(detail.op); break;
-        case "grid-split": console.log("grid-split:", { rows: detail.rows, cols: detail.cols }); break;
+        case "download": a.handleDownload(); break;
+        case "save-asset": a.handleSaveToAssets(); break;
+        case "crop": a.handleCrop(); break;
+        case "replace": a.handleReplace(); break;
+        case "clear": a.handleClear(); break;
+        case "transform": a.handleTransform(detail.op); break;
+        case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
       }
     }
     window.addEventListener("canvas:node-action", onNodeAction);
     return () => window.removeEventListener("canvas:node-action", onNodeAction);
-  }, [id, handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform]);
+  }, [id]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
