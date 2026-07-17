@@ -44,13 +44,19 @@ export async function uploadAndAddNode(
   const baseX = (origNode.position.x || 0) + ((origNode.style?.width as number) || 600) + 60;
   const baseY = origNode.position.y || 0;
 
-  const label = `${(origNode.data as any)?.alt || (origNode.data as any)?.label || "image"}${labelSuffix}`;
+  const origName = (origNode.data as any)?.alt || (origNode.data as any)?.label || "image";
+  // Split extension so suffix goes before it, e.g. "A.png" → "A (cropped).png"
+  const dotIdx = origName.lastIndexOf(".");
+  const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
+  const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
+  const label = `${base}${labelSuffix}${ext}`;
+  const altName = `${base}${labelSuffix}${ext}`;
 
   const newNode = createImageNode({ x: baseX, y: baseY }, url);
   newNode.data.naturalWidth = nw;
   newNode.data.naturalHeight = nh;
   newNode.data.label = label;
-  newNode.data.alt = label;
+  newNode.data.alt = altName;
   newNode.style = { width: displayW, height: displayH + titleH };
   if (extraNodeData) Object.assign(newNode.data, extraNodeData);
 

@@ -32,12 +32,21 @@ interface ImageNodeProps {
 }
 
 function ImageNode({ id, data, selected }: ImageNodeProps) {
-  useI18nStore((s) => s.lang); // subscribe to language changes
+  useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [src, setSrc] = useState(data.src || "");
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+
+  // Format: "basename (suffix).ext" — split extension before inserting suffix
+  const formatNodeName = (suffix: string) => {
+    const raw = data.alt || data.label || "image";
+    const dot = raw.lastIndexOf(".");
+    const base = dot > 0 ? raw.slice(0, dot) : raw;
+    const ext = dot > 0 ? raw.slice(dot) : "";
+    return { label: `${base} ${suffix}${ext}`, alt: `${base} ${suffix}${ext}` };
+  };
 
   // Sync local src when data.src changes externally (e.g. from generation panel)
   useEffect(() => {
@@ -140,7 +149,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const cy = -s.viewport.y / s.viewport.zoom + (window.innerHeight / 2) / s.viewport.zoom;
       const node = createImageNode({ x: cx - displaySize / 2, y: cy - displaySize / 2 }, croppedUrl);
       node.data.naturalWidth = size; node.data.naturalHeight = size;
-      node.data.label = (data.alt || "crop") + " (cropped)";
+      const n1 = formatNodeName("(cropped)");
+      node.data.label = n1.label; node.data.alt = n1.alt;
       node.style = { width: displaySize, height: displaySize };
       addNodes([node]);
     };
@@ -177,7 +187,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const cy = -s.viewport.y / s.viewport.zoom + (window.innerHeight / 2) / s.viewport.zoom;
       const node = createImageNode({ x: cx - displayW / 2, y: cy - displayH / 2 }, url);
       node.data.naturalWidth = nw; node.data.naturalHeight = nh;
-      node.data.label = (data.alt || "image") + ` (${op})`;
+      const n2 = formatNodeName(`(${op})`);
+      node.data.label = n2.label; node.data.alt = n2.alt;
       node.style = { width: displayW, height: displayH };
       addNodes([node]);
     };
@@ -244,7 +255,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           );
           node.data.naturalWidth = pieceW;
           node.data.naturalHeight = pieceH;
-          node.data.label = `${data.alt || data.label || "image"} (${r + 1}-${c + 1})`;
+          const n3 = formatNodeName(`(${r + 1}-${c + 1})`);
+          node.data.label = n3.label; node.data.alt = n3.alt;
           node.style = { width: displayW, height: displayH + titleH };
           nodes.push(node);
         }
