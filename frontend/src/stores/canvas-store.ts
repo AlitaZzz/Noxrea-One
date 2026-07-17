@@ -62,6 +62,10 @@ interface CanvasState {
   shortcutsVisible: boolean;
   setShortcutsVisible: (v: boolean) => void;
 
+  // Modal open (blocks canvas keyboard shortcuts)
+  modalOpen: boolean;
+  setModalOpen: (v: boolean) => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -142,6 +146,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   shortcutsVisible: false,
   setShortcutsVisible: (v) => set({ shortcutsVisible: v }),
+
+  modalOpen: false,
+  setModalOpen: (v) => set({ modalOpen: v }),
 
   snapToGrid: false,
   toggleSnapToGrid: () => {

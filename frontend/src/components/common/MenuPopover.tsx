@@ -37,7 +37,7 @@ export function MenuPopover({ open, onOpenChange, trigger, placement, content }:
   open: boolean;
   onOpenChange: (v: boolean) => void;
   trigger: ReactNode;
-  placement?: "bottomLeft" | "bottomRight" | "topLeft" | "topRight";
+  placement?: "bottomLeft" | "bottomRight" | "topLeft" | "topRight" | "top" | "bottom";
   content: ReactNode;
 }) {
   return (
