@@ -46,7 +46,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { apiUpload } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
+import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { NODE_TYPE } from "@/lib/types";
@@ -712,10 +712,21 @@ export default function InfiniteCanvas() {
               className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px]"
               style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }}
             >
-              <Popover
+              <MenuPopover
+                open={toolbarMenuOpen}
+                onOpenChange={setToolbarMenuOpen}
+                trigger={
+                  <div className="flex shrink-0 cursor-pointer items-center gap-1 hover:bg-white/10 rounded px-0.5 py-0.5 transition-colors">
+                    <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
+                    <svg width="10" height="10" viewBox="0 0 16 16" className="shrink-0 transition-transform duration-200"
+                      style={{ color: "var(--canvas-text-dim)", transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}>
+                      <g transform="translate(4.7 5.8)"><path d="M6.2 0.1C6.36 -0.06 6.61 -0.06 6.77 0.1L7.19 0.52C7.35 0.68 7.35 0.93 7.19 1.09L4.15 4.13C3.87 4.4 3.43 4.4 3.16 4.13L0.12 1.09C-0.04 0.93 -0.04 0.68 0.12 0.52L0.54 0.1C0.7 -0.07 0.95 -0.07 1.11 0.1L3.65 2.64L6.2 0.1Z" fill="currentColor"/></g>
+                    </svg>
+                  </div>
+                }
+                placement="bottomLeft"
                 content={
-                  <div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 180 }}>
-                    {/* User info */}
+                  <>
                     <div className="flex items-center gap-2 px-1 py-1.5">
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
                         style={{ background: "#1677ff", color: "#fff" }}>
@@ -731,7 +742,6 @@ export default function InfiniteCanvas() {
                         </div>
                       </div>
                     </div>
-                    <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
                     <MenuDivider />
                     <MenuItem onClick={async () => { setToolbarMenuOpen(false); await flushAndWait(); router.push("/project"); }}>{t("home")}</MenuItem>
                     <MenuDivider />
@@ -749,26 +759,9 @@ export default function InfiniteCanvas() {
                         setToolbarMenuOpen(false);
                         setLogoutConfirmOpen(true);
                       }}>{t("logout")}</MenuItem>
-                  </div>
+                  </>
                 }
-                trigger="click"
-                placement="bottomLeft"
-                open={toolbarMenuOpen}
-                onOpenChange={setToolbarMenuOpen}
-              >
-                <div className="flex shrink-0 cursor-pointer items-center gap-1 hover:bg-white/10 rounded px-0.5 py-0.5 transition-colors">
-                  <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
-                  <svg
-                    width="10" height="10" viewBox="0 0 16 16"
-                    className="shrink-0 transition-transform duration-200"
-                    style={{ color: "var(--canvas-text-dim)", transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
-                  >
-                    <g transform="translate(4.7 5.8)">
-                      <path d="M6.2 0.1C6.36 -0.06 6.61 -0.06 6.77 0.1L7.19 0.52C7.35 0.68 7.35 0.93 7.19 1.09L4.15 4.13C3.87 4.4 3.43 4.4 3.16 4.13L0.12 1.09C-0.04 0.93 -0.04 0.68 0.12 0.52L0.54 0.1C0.7 -0.07 0.95 -0.07 1.11 0.1L3.65 2.64L6.2 0.1Z" fill="currentColor"/>
-                    </g>
-                  </svg>
-                </div>
-              </Popover>
+              />
               <div className="w-px h-5 mx-0.5" style={{ background: "var(--canvas-border)" }} />
               <input
                 className="bg-transparent text-sm outline-none border-none flex-1 min-w-0 cursor-default"

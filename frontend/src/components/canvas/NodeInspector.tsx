@@ -1,7 +1,7 @@
 "use client";
 
 import { Descriptions, Typography } from "antd";
-import { LayerModal } from "@/lib/layer";
+import AppModal from "@/lib/app-modal";
 import type { Node } from "@xyflow/react";
 
 const { Paragraph } = Typography;
@@ -22,8 +22,8 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
   );
 
   return (
-    <LayerModal
-      title={`Node: ${(node.data as { label?: string })?.label || node.id}`}
+    <AppModal
+      title={(node.data as { label?: string })?.label || node.id}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -54,6 +54,6 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
       >
         <pre className="m-0 text-xs whitespace-pre-wrap">{jsonStr}</pre>
       </Paragraph>
-    </LayerModal>
+    </AppModal>
   );
 }

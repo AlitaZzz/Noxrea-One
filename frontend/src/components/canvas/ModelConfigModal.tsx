@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Input, Button, App, Tag, Tooltip, Checkbox, Select } from "antd";
-import { LayerModal } from "@/lib/layer";
+import AppModal from "@/lib/app-modal";
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -133,7 +133,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const otherModels = channel?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
 
   return (
-    <LayerModal
+    <AppModal
       title={
         <div className="flex items-center gap-2">
           <ApiOutlined />
@@ -381,6 +381,6 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         onOk={() => { if (deleteChannelId) deleteChannel(deleteChannelId); setChannelId(null); setDeleteChannelId(null); }}
         onCancel={() => setDeleteChannelId(null)}
       />
-    </LayerModal>
+    </AppModal>
   );
 }

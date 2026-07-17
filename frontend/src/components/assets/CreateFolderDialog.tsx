@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Button } from "antd";
-import { LayerModal } from "@/lib/layer";
+import { Input } from "antd";
+import AppModal from "@/lib/app-modal";
+import ModalButton from "@/components/common/ModalButton";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {
@@ -29,63 +30,24 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
   };
 
   return (
-    <LayerModal
-      title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.createFolder")}</span>}
+    <AppModal
+      title={t("asset.createFolder")}
       open={open}
       onCancel={() => { setName(""); setError(""); onClose(); }}
-      className="asset-dialog"
+      width={400}
+      destroyOnHidden
       footer={
-        <div className="flex justify-end gap-2 pt-4">
-          <Button
-            className="modal-cancel-btn"
-            onClick={() => { setName(""); onClose(); }}
-            style={{
-              height: 36,
-              background: "var(--canvas-bg)",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-text)",
-              borderRadius: 8,
-            }}
-          >
-            {t("cancel")}
-          </Button>
-          <Button
-            className="modal-save-btn"
-            onClick={handleCreate}
-            disabled={!name.trim()}
-            style={{
-              height: 36,
-              background: "#fff",
-              border: "1px solid var(--canvas-border)",
-              color: "#1a1a1a",
-              borderRadius: 8,
-              fontWeight: 500,
-            }}
-          >
-            {t("save")}
-          </Button>
+        <div className="flex justify-end gap-2">
+          <ModalButton onClick={() => { setName(""); onClose(); }}>{t("cancel")}</ModalButton>
+          <ModalButton variant="primary" onClick={handleCreate} disabled={!name.trim()}>{t("save")}</ModalButton>
         </div>
       }
-      width={400}
-      centered
-      destroyOnHidden
-      styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
-        body: { background: "var(--canvas-bg)", padding: "20px 24px 8px" },
-        footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
-      }}
-      closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
     >
       <style>{`
-        .asset-dialog .ant-input:hover,
-        .asset-dialog .ant-input:focus,
-        .asset-dialog .ant-input-affix-wrapper:hover,
-        .asset-dialog .ant-input-affix-wrapper:focus {
+        .ant-input:hover, .ant-input:focus,
+        .ant-input-affix-wrapper:hover, .ant-input-affix-wrapper:focus {
           border-color: var(--canvas-border) !important;
           box-shadow: none !important;
-        }
-        .asset-dialog .folder-save-btn:not(:disabled):hover {
-          background: #e6e6e6 !important;
         }
       `}</style>
       <Input
@@ -105,6 +67,6 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       {error && (
         <div className="text-xs mt-1.5" style={{ color: "#ff4d4f" }}>{error}</div>
       )}
-    </LayerModal>
+    </AppModal>
   );
 }

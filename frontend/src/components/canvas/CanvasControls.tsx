@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { Button, Popover, Tooltip } from "antd";
-import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
+import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import {
   AimOutlined,
   MedicineBoxOutlined,
@@ -185,31 +185,17 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
       </Tooltip>
 
       {/* Background picker */}
-      <Popover
-        content={
-          <div className="flex flex-col p-2 gap-0.5" style={{ background: "var(--canvas-bg, #262626)", borderRadius: 6, margin: -12, width: 120 }}>
-            <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-            {(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
-              <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(bg)}</MenuItem>
-            ))}
-          </div>
+      <MenuPopover open={bgOpen} onOpenChange={setBgOpen}
+        trigger={
+          <Tooltip title={t("background")}>
+            <Button size="small" type="text" className="canvas-ctrl-btn" icon={<BgColorsOutlined />} />
+          </Tooltip>
         }
-        trigger="click"
-        open={bgOpen}
-        onOpenChange={setBgOpen}
         placement="top"
-        styles={{ container: { padding: 12, background: "var(--canvas-bg, #262626)" } }}
-      >
-        <Tooltip title={t("background")}>
-          <Button
-            size="small"
-            type="text"
-            className="canvas-ctrl-btn"
-            icon={<BgColorsOutlined />}
-          />
-        </Tooltip>
-      </Popover>
-
+        content={(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
+          <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(bg)}</MenuItem>
+        ))}
+      />
       {/* Theme toggle */}
       <Tooltip title={theme === "dark" ? t("theme.light") : t("theme.dark")}>
         <Button

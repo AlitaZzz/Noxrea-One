@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Button, Select, Progress, App } from "antd";
-import { LayerModal } from "@/lib/layer";
+import { Select, Progress, App, Button } from "antd";
+import AppModal from "@/lib/app-modal";
+import ModalButton from "@/components/common/ModalButton";
 import { PlusOutlined, CloseOutlined, PlayCircleOutlined, AudioOutlined } from "@ant-design/icons";
 import type { AssetType, AssetFolder, CreateAssetInput } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -296,7 +297,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const saveDisabled = files.length === 0 || hasActiveWork;
 
   return (
-    <LayerModal
+    <AppModal
       title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.uploadTitle")}</span>}
       open={open}
       onCancel={() => { reset(); onClose(); }}
@@ -513,6 +514,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
           </div>
         </div>
       </div>
-    </LayerModal>
+    </AppModal>
   );
 }

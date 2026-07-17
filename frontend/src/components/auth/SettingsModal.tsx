@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Input, Button, App } from "antd";
-import { LayerModal } from "@/lib/layer";
+import AppModal from "@/lib/app-modal";
 import { UserOutlined, LockOutlined, CameraOutlined } from "@ant-design/icons";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -63,14 +63,12 @@ export default function SettingsModal({ open, onClose }: Props) {
   };
 
   return (
-    <LayerModal
-      title={<span style={{ color: "var(--canvas-text)" }}>{t("account.settings")}</span>}
+    <AppModal
+      title={t("account.settings")}
       open={open}
       onCancel={onClose}
       footer={null}
       width={400}
-      centered
-      destroyOnHidden
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "none" },
         body: { background: "var(--canvas-bg)", padding: "24px" },
@@ -130,6 +128,6 @@ export default function SettingsModal({ open, onClose }: Props) {
         </Button>
       </div>
       <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
-    </LayerModal>
+    </AppModal>
   );
 }

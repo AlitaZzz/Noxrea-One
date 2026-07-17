@@ -3,7 +3,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { Input, Button, Select } from "antd";
 import { DatabaseOutlined, InboxOutlined, UserOutlined, FolderOutlined } from "@ant-design/icons";
-import { LayerModal } from "@/lib/layer";
+import AppModal from "@/lib/app-modal";
+import ModalButton from "@/components/common/ModalButton";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import type { AssetType, AssetItem, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES } from "@/lib/types";
@@ -261,7 +262,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   return (
     <>
-      <LayerModal
+      <AppModal
         title={
           <div className="flex items-center gap-2">
             <InboxOutlined style={{ color: "var(--canvas-text-secondary)" }} />
@@ -356,7 +357,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         </div>
 
         {/* Rename modal — nested inside main LayerModal (depth=2) */}
-        <LayerModal
+        <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.rename")}</span>}
           open={!!renamingId}
           onCancel={() => setRenamingId(null)}
@@ -365,35 +366,9 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={400}
           className="rename-modal"
           footer={
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                className="modal-cancel-btn"
-                onClick={() => setRenamingId(null)}
-                style={{
-                  height: 36,
-                  background: "var(--canvas-bg)",
-                  border: "1px solid var(--canvas-border)",
-                  color: "var(--canvas-text)",
-                  borderRadius: 8,
-                }}
-              >
-                {t("cancel")}
-              </Button>
-              <Button
-                className="modal-save-btn"
-                onClick={handleRenameConfirm}
-                disabled={!renameValue.trim()}
-                style={{
-                  height: 36,
-                  background: "#fff",
-                  border: "1px solid var(--canvas-border)",
-                  color: "#1a1a1a",
-                  borderRadius: 8,
-                  fontWeight: 500,
-                }}
-              >
-                {t("save")}
-              </Button>
+            <div className="flex justify-end gap-2">
+              <ModalButton onClick={() => setRenamingId(null)}>{t("cancel")}</ModalButton>
+              <ModalButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("save")}</ModalButton>
             </div>
           }
           styles={{
@@ -427,7 +402,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               color: "var(--canvas-text)",
             }}
           />
-        </LayerModal>
+        </AppModal>
 
         {/* Delete confirm — nested inside main LayerModal (depth=2) */}
         <ConfirmModal
@@ -447,7 +422,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         />
 
         {/* Batch move modal */}
-        <LayerModal
+        <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.moveTo")}</span>}
           open={batchMoveOpen}
           onCancel={() => setBatchMoveOpen(false)}
@@ -455,19 +430,8 @@ export default function AssetsModal({ open, onClose }: Props) {
           destroyOnHidden
           width={360}
           footer={
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                onClick={() => setBatchMoveOpen(false)}
-                style={{
-                  height: 36,
-                  background: "var(--canvas-bg)",
-                  border: "1px solid var(--canvas-border)",
-                  color: "var(--canvas-text)",
-                  borderRadius: 8,
-                }}
-              >
-                {t("cancel")}
-              </Button>
+            <div className="flex justify-end gap-2">
+              <ModalButton onClick={() => setBatchMoveOpen(false)}>{t("cancel")}</ModalButton>
             </div>
           }
           styles={{
@@ -505,10 +469,10 @@ export default function AssetsModal({ open, onClose }: Props) {
               return buildTree(undefined, 0);
             })()}
           </div>
-        </LayerModal>
+        </AppModal>
 
         {/* Batch type modal */}
-        <LayerModal
+        <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.changeType")}</span>}
           open={batchTypeOpen}
           onCancel={() => setBatchTypeOpen(false)}
@@ -516,33 +480,9 @@ export default function AssetsModal({ open, onClose }: Props) {
           destroyOnHidden
           width={360}
           footer={
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                onClick={() => setBatchTypeOpen(false)}
-                style={{
-                  height: 36,
-                  background: "var(--canvas-bg)",
-                  border: "1px solid var(--canvas-border)",
-                  color: "var(--canvas-text)",
-                  borderRadius: 8,
-                }}
-              >
-                {t("cancel")}
-              </Button>
-              <Button
-                className="modal-save-btn"
-                onClick={() => handleBatchType(batchTypeValue)}
-                style={{
-                  height: 36,
-                  background: "#fff",
-                  border: "1px solid var(--canvas-border)",
-                  color: "#1a1a1a",
-                  borderRadius: 8,
-                  fontWeight: 500,
-                }}
-              >
-                {t("save")}
-              </Button>
+            <div className="flex justify-end gap-2">
+              <ModalButton onClick={() => setBatchTypeOpen(false)}>{t("cancel")}</ModalButton>
+              <ModalButton variant="primary" onClick={() => handleBatchType(batchTypeValue)}>{t("save")}</ModalButton>
             </div>
           }
           styles={{
@@ -563,7 +503,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               label: t(cat.labelKey),
             }))}
           />
-        </LayerModal>
+        </AppModal>
 
         {/* Upload dialog — nested inside main LayerModal (depth=2) */}
         <AssetCreateDialog
@@ -579,7 +519,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           onClose={() => setFolderCreateOpen(false)}
           onCreate={handleCreateFolder}
         />
-      </LayerModal>
+      </AppModal>
     </>
   );
 }
