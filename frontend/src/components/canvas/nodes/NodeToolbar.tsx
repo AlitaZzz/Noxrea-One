@@ -16,7 +16,7 @@ import {
   CameraOutlined,
 } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
-import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
+import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
@@ -202,7 +202,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           </Popover>
           <Tooltip title={t("crop")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />}
-              onClick={() => dispatchNodeAction(nodeId, "crop")} />
+              onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
           </Tooltip>
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>

@@ -1,7 +1,9 @@
 "use client";
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Handle, Position } from "@xyflow/react";
+import ImageCropModal from "@/components/canvas/ImageCropModal";
 import { Tooltip, Popover, Input } from "antd";
 import {
   UploadOutlined,
@@ -35,6 +37,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const [src, setSrc] = useState(data.src || "");
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
 
   // Sync local src when data.src changes externally (e.g. from generation panel)
   useEffect(() => {
@@ -286,6 +289,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
         case "crop": a.handleCrop(); break;
+        case "crop-interactive": setCropOpen(true); break;
         case "replace": a.handleReplace(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
@@ -326,6 +330,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const hasImage = src && src.length > 0;
 
   return (
+    <>
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
@@ -392,6 +397,11 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a" }} />
       <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a" }} />
     </div>
+    {cropOpen && src && createPortal(
+      <ImageCropModal src={src} sourceId={id} onClose={() => setCropOpen(false)} />,
+      document.body
+    )}
+    </>
   );
 }
 
