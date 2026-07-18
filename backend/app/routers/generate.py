@@ -23,22 +23,29 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    prompt = (body.get("prompt") or "").strip()
-    if not prompt:
-        raise HTTPException(status_code=400, detail="Missing prompt")
+    task_type = body.get("type", "image")
 
-    config = {
-        "model": body.get("model", ""),
-        "baseUrl": body.get("baseUrl", ""),
-        "apiKey": body.get("apiKey", ""),
-        "quality": body.get("quality", "auto"),
-        "size": body.get("size", "1K"),
-        "ratio": body.get("ratio", "1:1"),
-        "n": body.get("n", 1),
-    }
-    # Validate
-    if not config["baseUrl"] or not config["apiKey"]:
-        raise HTTPException(status_code=400, detail="Missing baseUrl or apiKey")
+    # bg_removal tasks use the inference service directly (no AI provider config needed)
+    if task_type == "bg_removal":
+        prompt = ""
+        config = {}
+    else:
+        prompt = (body.get("prompt") or "").strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Missing prompt")
+
+        config = {
+            "model": body.get("model", ""),
+            "baseUrl": body.get("baseUrl", ""),
+            "apiKey": body.get("apiKey", ""),
+            "quality": body.get("quality", "auto"),
+            "size": body.get("size", "1K"),
+            "ratio": body.get("ratio", "1:1"),
+            "n": body.get("n", 1),
+        }
+        # Validate
+        if not config["baseUrl"] or not config["apiKey"]:
+            raise HTTPException(status_code=400, detail="Missing baseUrl or apiKey")
 
     task_id = uuid.uuid4().hex
     now = datetime.now(timezone.utc)
@@ -55,7 +62,7 @@ async def create_task(
         {
             "id": task_id,
             "uid": user.id,
-            "type": body.get("type", "image"),
+            "type": task_type,
             "prompt": prompt,
             "config": json.dumps(config),
             "refs": json.dumps(ref_urls) if ref_urls else "[]",

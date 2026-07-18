@@ -277,7 +277,7 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         api_key = app_settings.INFERENCE_SERVICE_API_KEY
 
         async with httpx.AsyncClient(timeout=120) as client:
-            headers = {"X-API-Key": api_key} if api_key else {}
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
             files = {"file": ("input.png", src_bytes, "image/png")}
             data = {"model": "rembg"}
             resp = await client.post(inference_url, files=files, data=data, headers=headers)
