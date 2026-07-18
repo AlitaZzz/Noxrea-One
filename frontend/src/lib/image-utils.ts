@@ -92,6 +92,32 @@ export function canvasToBlob(
 }
 
 /**
+ * 异步加载图片/视频的真实显示尺寸。
+ *
+ * 适用于需要在节点创建前获取媒体原始宽高的场景。
+ *
+ * @param url      媒体 URL
+ * @param isVideo  是否为视频（影响加载方式）
+ * @returns { w, h } 宽高，失败时返回 0
+ */
+export function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w: number; h: number }> {
+  return new Promise((resolve) => {
+    if (isVideo) {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => resolve({ w: v.videoWidth || 1152, h: v.videoHeight || 768 });
+      v.onerror = () => resolve({ w: 0, h: 0 });
+      v.src = url;
+    } else {
+      const img = new window.Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve({ w: 0, h: 0 });
+      img.src = url;
+    }
+  });
+}
+
+/**
  * 上传图片 Blob → 返回 URL。
  * 纯上传，无节点操作，可安全地在循环中调用。
  */
