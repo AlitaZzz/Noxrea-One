@@ -1,15 +1,18 @@
 import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 
+TaskTypeValue = Literal["image", "video", "bg_removal"]
+
+
 class TaskCreate(BaseModel):
-    type: str  # "image" / "video"
-    prompt: str
-    config: dict
+    type: TaskTypeValue = "image"
+    prompt: str = ""
+    config: dict = {}
     ref_urls: Optional[list[str]] = None
-    node_id: str
+    node_id: str = ""
 
 
 class TaskOut(BaseModel):

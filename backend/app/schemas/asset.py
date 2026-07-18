@@ -1,7 +1,10 @@
 import datetime
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# 前端 AssetType 定义（与 frontend/src/lib/types.ts 对齐）
+AssetTypeValue = Literal["character", "scene", "object", "style", "audio", "other"]
 
 
 # --- Folder ---
@@ -30,8 +33,8 @@ class AssetFolderOut(BaseModel):
 # --- Asset ---
 
 class AssetCreate(BaseModel):
-    name: str = "Untitled"
-    type: str = "other"
+    name: str = Field(default="Untitled", max_length=200)
+    type: AssetTypeValue = "other"
     width: int = 0
     height: int = 0
     description: str = ""
@@ -42,8 +45,8 @@ class AssetCreate(BaseModel):
 
 
 class AssetUpdate(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=200)
+    type: Optional[AssetTypeValue] = None
     width: Optional[int] = None
     height: Optional[int] = None
     description: Optional[str] = None
