@@ -110,7 +110,7 @@ export function useGroupOperations() {
       );
 
       store.setNodes(newNodes);
-      store.setEdges(newEdges);
+      store.setEdges(newEdges, { skipHistory: true });
       markDirtyImmediate();
     }
 

@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useCanvasStore, takeCanvasSnapshot, getViewportCenter } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
+import { useCanvasStore, getViewportCenter } from "@/stores/canvas-store";
 import {
   createTextNode,
   createImageNode,
@@ -16,18 +15,16 @@ export type AddNodeType = "text" | "image" | "video" | "group";
 /**
  * 在画布视口中心添加节点的 hook。
  *
- * 封装了 push 历史快照 → 计算视口中心 → 创建节点 → addNodes 的通用流程。
+ * 计算视口中心 → 创建节点 → addNodes（自动记录历史）。
  *
  * 视频节点使用更大的居中偏移（200×100 而非 120×80），因为视频默认尺寸更宽。
  * 组节点使用默认分组区域尺寸（400×200）。
  */
 export function useAddNode() {
   const addNodes = useCanvasStore((s) => s.addNodes);
-  const pushHistory = useHistoryStore((s) => s.push);
 
   const addNode = useCallback(
     (type: AddNodeType) => {
-      pushHistory(takeCanvasSnapshot());
       const { x: cx, y: cy } = getViewportCenter();
 
       let node: ReturnType<typeof createTextNode>;
@@ -50,7 +47,7 @@ export function useAddNode() {
       }
       addNodes([node]);
     },
-    [addNodes, pushHistory],
+    [addNodes],
   );
 
   return { addNode };

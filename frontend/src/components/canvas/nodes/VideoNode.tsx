@@ -54,8 +54,9 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
   const [duration, setDuration] = useState(0);
   const addNodes = useCanvasStore((s) => s.addNodes);
 
+  // Sync local src when data.src changes externally (e.g. from undo/clear)
   useEffect(() => {
-    if (data.src && data.src !== src) setSrc(data.src);
+    if (data.src !== src) setSrc(data.src || "");
   }, [data.src]);
 
   const togglePlay = useCallback(() => {

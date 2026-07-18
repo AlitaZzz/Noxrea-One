@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, type DragEvent } from "react";
-import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { apiUpload } from "@/lib/api";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
 import { applyThumbnailSettings, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
@@ -26,7 +25,6 @@ export function useFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
   notif?: { error: Function; warning?: Function; info?: Function },
 ) {
-  const pushHistory = useHistoryStore((s) => s.push);
   const addNodes = useCanvasStore((s) => s.addNodes);
 
   const handleDragOver = useCallback((e: DragEvent) => {
@@ -92,7 +90,6 @@ export function useFileDrop(
         .map((r) => (r as PromiseFulfilledResult<any>).value);
 
       if (createdNodes.length > 0) {
-        pushHistory(takeCanvasSnapshot());
         addNodes(createdNodes);
       }
 
@@ -105,7 +102,7 @@ export function useFileDrop(
         notif.error({ title: t("file.upload.failed"), description, placement: "bottomRight", duration: 4 });
       }
     },
-    [screenToFlowPosition, pushHistory, addNodes],
+    [screenToFlowPosition, addNodes],
   );
 
   return { handleDragOver, handleDrop };
