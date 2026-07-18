@@ -103,7 +103,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
         _genSettings: { prompt, modelKey, quality, genSize, ratio, refOrder, n },
-      });
+      }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
   }, [prompt, modelKey, quality, genSize, ratio, refOrder, n, nodeId]);
@@ -120,7 +120,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           saved.quality === latest.quality && saved.genSize === latest.genSize &&
           saved.ratio === latest.ratio && saved.n === latest.n &&
           JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { _genSettings: { ...latest } });
+      useCanvasStore.getState().updateNodeData(nodeId, { _genSettings: { ...latest } }, undefined, { skipHistory: true });
       markDirtyImmediate();
     };
   }, []);
@@ -166,7 +166,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       if (!taskId) return "No task_id returned";
 
       // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
-      useCanvasStore.getState().updateNodeData(nodeId, { task_id: taskId, task_status: "pending" });
+      useCanvasStore.getState().updateNodeData(nodeId, { task_id: taskId, task_status: "pending" }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
     } catch (e: any) {
@@ -224,7 +224,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (!channel) return;
 
     setError("");
-    useCanvasStore.getState().updateNodeData(nodeId, { task_status: "pending" });
+    useCanvasStore.getState().updateNodeData(nodeId, { task_status: "pending" }, undefined, { skipHistory: true });
     markDirtyImmediate();
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
@@ -238,7 +238,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (errMsg === null) {
       setError("");
     } else {
-      useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined });
+      useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
       window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId, data: { _generating: false }, immediate: true } }));
       setError(errMsg);
@@ -255,7 +255,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     }
     useCanvasStore.getState().updateNodeData(nodeId, {
       task_status: undefined, task_id: undefined, _generating: false,
-    });
+    }, undefined, { skipHistory: true });
     markDirtyImmediate();
     setError("");
   };

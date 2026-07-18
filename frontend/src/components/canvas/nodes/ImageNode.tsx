@@ -271,7 +271,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         task_id: taskId,
         task_status: "pending",
         pendingAction: "bg_removal",
-      });
+      }, undefined, { skipHistory: true });
       // markDirtyImmediate handled by updateNodeData internally
     } catch (e: any) {
       useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });

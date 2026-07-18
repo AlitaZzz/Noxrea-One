@@ -66,7 +66,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         // Clear source node state
                         useCanvasStore.getState().updateNodeData(node.id, {
                           _generating: false, task_status: undefined, task_id: undefined, pendingAction: undefined,
-                        });
+                        }, undefined, { skipHistory: true });
                         markDirtyImmediate();
                         // Load real dimensions for the new node
                         if (newNode) {
@@ -127,7 +127,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       useCanvasStore.getState().updateNodeData(node.id, {
                         _generating: false, task_status: undefined, task_id: undefined,
                         pendingAction: undefined,
-                      });
+                      }, undefined, { skipHistory: true });
                       markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
