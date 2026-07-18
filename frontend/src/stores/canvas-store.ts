@@ -3,6 +3,11 @@ import type { Edge } from "@xyflow/react";
 import type { ViewportState, BackgroundType, ThemeMode, HistorySnapshot, AnyNode } from "@/lib/types";
 import { DEFAULT_VIEWPORT, DEFAULT_BACKGROUND, DEFAULT_THEME } from "@/lib/constants";
 import { saveManager } from "@/lib/save-manager";
+import { useHistoryStore } from "@/stores/history-store";
+
+/** updateNodeData 自动压栈防抖时间（ms） */
+const HISTORY_THROTTLE = 300;
+let _lastHistoryTime = 0;
 
 /**
  * Mark canvas as modified — SaveManager 负责 trailing save。
@@ -94,7 +99,12 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     set((s) => ({ nodes: [...s.nodes, ...nodes] }));
     saveManager.markDirtyImmediate();
   },
-  updateNodeData: (nodeId, data, style) => {
+  updateNodeData: (nodeId, data, style, options) => {
+    const now = Date.now();
+    if (!options?.skipHistory && now - _lastHistoryTime > 300) {
+      useHistoryStore.getState().push(takeCanvasSnapshot());
+      _lastHistoryTime = now;
+    }
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === nodeId
