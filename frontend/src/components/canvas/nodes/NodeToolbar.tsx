@@ -20,6 +20,7 @@ import {
 } from "@ant-design/icons";
 import { FlipHorizontal, FlipVertical } from "lucide-react";
 import { useI18nStore } from "@/stores/i18n-store";
+import { EventNames } from "@/lib/eventNames";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 
 const NODE_ACTIONS = {
@@ -35,7 +36,7 @@ interface NodeToolbarProps {
 
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
   window.dispatchEvent(
-    new CustomEvent("canvas:node-action", { detail: { nodeId, action, ...extra } })
+    new CustomEvent(EventNames.CANVAS_NODE_ACTION, { detail: { nodeId, action, ...extra } })
   );
 }
 
@@ -100,7 +101,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       window.dispatchEvent(
-        new CustomEvent("canvas:copy-node", { detail: { nodeId } })
+        new CustomEvent(EventNames.CANVAS_COPY_NODE, { detail: { nodeId } })
       );
     },
     [nodeId]
@@ -110,7 +111,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       window.dispatchEvent(
-        new CustomEvent("canvas:delete-nodes", { detail: { nodeIds: [nodeId] } })
+        new CustomEvent(EventNames.CANVAS_DELETE_NODES, { detail: { nodeIds: [nodeId] } })
       );
     },
     [nodeId]
@@ -155,7 +156,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           icon={<GroupOutlined />}
           onClick={(e) => {
             e.stopPropagation();
-            window.dispatchEvent(new CustomEvent("canvas:group-nodes"));
+            window.dispatchEvent(new CustomEvent(EventNames.CANVAS_GROUP_NODES));
           }}
         />
       </Tooltip>
@@ -168,7 +169,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             icon={<UngroupOutlined />}
             onClick={(e) => {
               e.stopPropagation();
-              window.dispatchEvent(new CustomEvent("canvas:ungroup-nodes"));
+              window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
             }}
           />
         </Tooltip>

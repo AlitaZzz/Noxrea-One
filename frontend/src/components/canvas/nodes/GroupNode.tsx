@@ -7,6 +7,7 @@ import type { GroupNodeData } from "@/lib/types";
 import { GROUP_NODE_MIN_WIDTH, GROUP_NODE_MIN_HEIGHT } from "@/lib/constants";
 import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
+import { EventNames } from "@/lib/eventNames";
 
 interface GroupNodeProps {
   id: string;
@@ -24,7 +25,7 @@ function GroupNode({ id, data, selected }: GroupNodeProps) {
     (value: string) => {
       setLabel(value);
       window.dispatchEvent(
-        new CustomEvent("node:update-data", {
+        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
           detail: { nodeId: id, data: { ...data, label: value || t("group.node") } },
         })
       );

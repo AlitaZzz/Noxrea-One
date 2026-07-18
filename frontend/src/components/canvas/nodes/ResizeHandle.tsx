@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { EventNames } from "@/lib/eventNames";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -94,7 +95,7 @@ export default function ResizeHandle({
         if (corner.includes("top")) newY = startRef.current.py + (startRef.current.h - newH);
 
         window.dispatchEvent(
-          new CustomEvent("node:update-data", {
+          new CustomEvent(EventNames.NODE_UPDATE_DATA, {
             detail: {
               nodeId,
               data: {},

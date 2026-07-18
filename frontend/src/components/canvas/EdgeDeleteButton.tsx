@@ -3,6 +3,7 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
 import { ScissorOutlined } from "@ant-design/icons";
 import { useHighlightedEdges } from "@/lib/edge-highlight-context";
+import { EventNames } from "@/lib/eventNames";
 
 const DOT_COLOR = "#1D9E75";
 const DURATION = 1.6;
@@ -47,7 +48,7 @@ export default function DeletableEdge({
   const onEdgeClick = (evt: React.MouseEvent) => {
     evt.stopPropagation();
     window.dispatchEvent(
-      new CustomEvent("canvas:delete-edges", { detail: { edgeIds: [id] } })
+      new CustomEvent(EventNames.CANVAS_DELETE_EDGES, { detail: { edgeIds: [id] } })
     );
   };
 

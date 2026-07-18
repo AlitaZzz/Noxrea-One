@@ -8,6 +8,7 @@ import type { TextNodeData } from "@/lib/types";
 import { TEXT_NODE_MIN_WIDTH, TEXT_NODE_MIN_HEIGHT } from "@/lib/constants";
 import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
+import { EventNames } from "@/lib/eventNames";
 
 interface TextNodeProps {
   id: string;
@@ -31,7 +32,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
     (value: string) => {
       setContent(value);
       window.dispatchEvent(
-        new CustomEvent("node:update-data", {
+        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
           detail: { nodeId: id, data: { ...data, content: value } },
         })
       );
@@ -55,7 +56,7 @@ function TextNode({ id, data, selected }: TextNodeProps) {
           value={data.label}
           onChange={(e) =>
             window.dispatchEvent(
-              new CustomEvent("node:update-data", {
+              new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: { nodeId: id, data: { ...data, label: e.target.value || t("text.node") } },
               })
             )
