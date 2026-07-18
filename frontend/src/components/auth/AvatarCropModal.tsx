@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Button, App } from "antd";
 import { LayerModal } from "@/lib/layer";
 import { apiUpload } from "@/lib/api";
+import { canvasToBlob } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {
@@ -101,14 +102,10 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
   const handleSave = async () => {
     if (!img) return;
     setSaving(true);
-    const canvas = document.createElement("canvas");
-    canvas.width = OUTPUT;
-    canvas.height = OUTPUT;
-    const ctx = canvas.getContext("2d")!;
-    const scale = zoom;
-    const srcW = SIZE / scale;
-    ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => { if (b) resolve(b); }, "image/png"));
+    const srcW = SIZE / zoom;
+    const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
+      ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
+    });
     const fd = new FormData();
     fd.append("file", blob, "avatar.png");
     try {

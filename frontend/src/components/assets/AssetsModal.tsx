@@ -169,6 +169,9 @@ export default function AssetsModal({ open, onClose }: Props) {
       const s = useCanvasStore.getState();
       const nw = asset.width || DEFAULT_NODE_WIDTH;
       const nh = asset.height || DEFAULT_NODE_HEIGHT;
+      // 资源库插入的节点使用更大尺寸（长边约束 600px，对齐 DEFAULT_NODE_WIDTH），
+      // 画布内自动生成的节点使用紧凑尺寸（短边约束 360px，THUMBNAIL_MAX），
+      // 这是有意的设计差异：用户主动从资源库拖入时需要更醒目的预览。
       const MAX = 600;
       const scale = Math.max(nw, nh) > MAX ? MAX / Math.max(nw, nh) : 1;
       const dw = Math.round(nw * scale);

@@ -21,8 +21,10 @@ import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
 import { createEdge } from "@/lib/node-defaults";
 import { apiUpload } from "@/lib/api";
-import { uploadBlob, buildNodeFromUrl } from "@/lib/image-utils";
+import { uploadBlob, buildNodeFromUrl, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
+import { useEditableTitle } from "@/hooks/use-editable-title";
+import { EventNames } from "@/lib/eventNames";
 
 interface ImageNodeProps {
   id: string;
@@ -55,18 +57,14 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           setSrc(imgUrl);
           const img = new window.Image();
           img.onload = () => {
-            const THUMBNAIL_MAX = 360;
             const nw = img.naturalWidth, nh = img.naturalHeight;
-            const shortSide = Math.min(nw, nh);
-            const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-            const displayW = Math.round(nw * scale);
-            const displayH = Math.round(nh * scale);
+            const { displayW, displayH } = computeThumbScale(nw, nh);
             const titleH = 24;
             const store = useCanvasStore.getState();
             const currentNode = store.nodes.find((n) => n.id === id);
             const latestData = (currentNode?.data || data) as ImageNodeData;
             window.dispatchEvent(
-              new CustomEvent("node:update-data", {
+              new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: {
                   nodeId: id,
                   data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
@@ -131,24 +129,21 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
       // 2. Canvas 烘焙
       const isRot90 = op === "rot90";
-      const canvas = document.createElement("canvas");
-      canvas.width = isRot90 ? img.naturalHeight : img.naturalWidth;
-      canvas.height = isRot90 ? img.naturalWidth : img.naturalHeight;
-      const ctx = canvas.getContext("2d")!;
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      if (isRot90) ctx.rotate(Math.PI / 2);
-      if (op === "flipH") ctx.scale(-1, 1);
-      if (op === "flipV") ctx.scale(1, -1);
-      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-
-      // 3. 导出并上传
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+      const cw = isRot90 ? img.naturalHeight : img.naturalWidth;
+      const ch = isRot90 ? img.naturalWidth : img.naturalHeight;
+      const blob = await canvasToBlob(cw, ch, (ctx) => {
+        ctx.translate(cw / 2, ch / 2);
+        if (isRot90) ctx.rotate(Math.PI / 2);
+        if (op === "flipH") ctx.scale(-1, 1);
+        if (op === "flipV") ctx.scale(1, -1);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      });
       const url = await uploadBlob(blob, `transform_${Date.now()}.png`);
       if (!url) throw new Error("Upload failed");
 
       // 4. 按 THUMBNAIL_MAX 等比缩放计算显示尺寸
-      const nw = canvas.width;
-      const nh = canvas.height;
+      const nw = cw;
+      const nh = ch;
       const shortSide = Math.min(nw, nh);
       const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
       const displayW = Math.round(nw * scale);
@@ -211,13 +206,9 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const nodes: AnyNode[] = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const canvas = document.createElement("canvas");
-          canvas.width = pieceW;
-          canvas.height = pieceH;
-          const ctx = canvas.getContext("2d")!;
-          ctx.drawImage(img, c * pieceW, r * pieceH, pieceW, pieceH, 0, 0, pieceW, pieceH);
-
-          const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+          const blob = await canvasToBlob(pieceW, pieceH, (ctx) => {
+            ctx.drawImage(img, c * pieceW, r * pieceH, pieceW, pieceH, 0, 0, pieceW, pieceH);
+          });
           const url = await uploadBlob(blob, `grid_${r}_${c}.png`);
           if (!url) continue;
 
@@ -302,8 +293,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         case "bg-removal": a.handleBgRemoval(); break;
       }
     }
-    window.addEventListener("canvas:node-action", onNodeAction);
-    return () => window.removeEventListener("canvas:node-action", onNodeAction);
+    window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
+    return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
@@ -314,24 +305,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     if (file) handleFile(file);
   };
 
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(data.alt || data.label || "");
-
-  const handleTitleDblClick = () => {
-    setTitleDraft(data.alt || data.label || "");
-    setEditingTitle(true);
-  };
-
-  const handleTitleSave = () => {
-    setEditingTitle(false);
-    if (titleDraft && titleDraft !== (data.alt || data.label)) {
-      window.dispatchEvent(
-        new CustomEvent("node:update-data", {
-          detail: { nodeId: id, data: { ...data, label: titleDraft, alt: titleDraft } },
-        })
-      );
-    }
-  };
+  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
+    useEditableTitle(id, data.alt || data.label || "", { syncAlt: true });
 
   const hasImage = src && src.length > 0;
 

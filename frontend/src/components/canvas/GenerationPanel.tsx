@@ -8,8 +8,10 @@ import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/s
 import { NODE_TYPE } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
+import { applyThumbnailSettings } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { THUMBNAIL_MAX } from "@/lib/constants";
+import { EventNames } from "@/lib/eventNames";
 import WheelGuard from "@/components/common/WheelGuard";
 
 function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
@@ -192,21 +194,18 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       const img = new window.Image();
       img.onload = () => {
         const nw = img.naturalWidth, nh = img.naturalHeight;
-        const shortSide = Math.min(nw, nh);
-        const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-        const dw = Math.round(nw * scale);
-        const dh = Math.round(nh * scale);
         const tw = (targetNode.style?.width as number) || 400;
 
         const newNode = createImageNode(
-          { x: targetNode.position.x - dw - 50, y: targetNode.position.y + (tw - dh) / 2 },
+          { x: targetNode.position.x - 50, y: targetNode.position.y + (tw) / 2 },
           imgUrl,
         );
-        newNode.data.naturalWidth = nw;
-        newNode.data.naturalHeight = nh;
-        newNode.data.label = file.name;
-        newNode.data.alt = file.name;
-        newNode.style = { width: dw, height: dh };
+        applyThumbnailSettings(newNode, nw, nh, file.name);
+        // Position relative to target: left side, vertically centered
+        const dw = newNode.style?.width as number || nw;
+        const dh = newNode.style?.height as number || nh;
+        newNode.position.x = targetNode.position.x - dw - 50;
+        newNode.position.y = targetNode.position.y + (tw - dh) / 2;
         store.addNodes([newNode]);
 
         store.setEdges([...store.edges, createEdge(newNode.id, nodeId)]);
@@ -230,7 +229,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: true }, immediate: true } }));
+    window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId, data: { _generating: true }, immediate: true } }));
 
     const errMsg = await submitTask();
 
@@ -241,7 +240,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined });
       markDirtyImmediate();
-      window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId, data: { _generating: false }, immediate: true } }));
+      window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId, data: { _generating: false }, immediate: true } }));
       setError(errMsg);
     }
   };

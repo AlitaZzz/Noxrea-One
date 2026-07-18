@@ -7,6 +7,91 @@ import { THUMBNAIL_MAX } from "@/lib/constants";
 import type { AnyNode } from "@/lib/types";
 
 /**
+ * 纯函数：计算 THUMBNAIL_MAX 等比缩放后的显示尺寸。
+ *
+ * 返回 { scale, displayW, displayH }，不含标题栏高度（titleH 由调用方酌情添加）。
+ *
+ * @param naturalW  图片自然宽度
+ * @param naturalH  图片自然高度
+ * @param max       可选，短边最大像素值，默认 THUMBNAIL_MAX(360)
+ */
+export function computeThumbScale(
+  naturalW: number,
+  naturalH: number,
+  max?: number,
+): { scale: number; displayW: number; displayH: number } {
+  const limit = max ?? THUMBNAIL_MAX;
+  const shortSide = Math.min(naturalW, naturalH);
+  const scale = shortSide > limit ? limit / shortSide : 1;
+  return {
+    scale,
+    displayW: Math.round(naturalW * scale),
+    displayH: Math.round(naturalH * scale),
+  };
+}
+
+/**
+ * 对节点应用 THUMBNAIL_MAX 等比缩放，并预留 titleH(24px) 标题栏高度。
+ *
+ * 所有创建图片节点的路径都应通过此函数统一计算显示尺寸，
+ * 避免遗漏 titleH 导致的图片区域压缩。
+ *
+ * @param node        已创建的 ImageNode（通常通过 createImageNode）
+ * @param naturalW    图片自然宽度
+ * @param naturalH    图片自然高度
+ * @param label       可选，设置 label 和 alt
+ * @returns 被修改后的 node（方便链式调用）
+ */
+export function applyThumbnailSettings(
+  node: AnyNode,
+  naturalW: number,
+  naturalH: number,
+  label?: string,
+): AnyNode {
+  const { scale, displayW: w, displayH: h } = computeThumbScale(naturalW, naturalH);
+  // 零尺寸保护：回到 buildNodeFromUrl 原本的 fallback
+  const displayW = naturalW > 0 ? w : 300;
+  const displayH = naturalH > 0 ? h : 300;
+  const titleH = 24;
+
+  node.data.naturalWidth = naturalW;
+  node.data.naturalHeight = naturalH;
+  if (label !== undefined) {
+    node.data.label = label;
+    node.data.alt = label;
+  }
+  node.style = { width: displayW, height: displayH + titleH };
+  return node;
+}
+
+/**
+ * 创建 Canvas → 执行绘制 → 导出 Blob。
+ *
+ * 提取的是 createElement("canvas") + getContext("2d") + toBlob 的公共管线，
+ * 具体的绘制逻辑由 draw 回调处理，不强求统一。
+ *
+ * @param width   canvas 宽度
+ * @param height  canvas 高度
+ * @param draw    绘制回调，接收 (ctx, canvas)
+ * @param type    导出 MIME 类型，默认 "image/png"
+ * @param quality 导出质量（0-1），仅对 image/jpeg 生效
+ */
+export function canvasToBlob(
+  width: number,
+  height: number,
+  draw: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void,
+  type?: string,
+  quality?: number,
+): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  draw(ctx, canvas);
+  return new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), type || "image/png", quality));
+}
+
+/**
  * 上传图片 Blob → 返回 URL。
  * 纯上传，无节点操作，可安全地在循环中调用。
  */
@@ -54,13 +139,6 @@ export function buildNodeFromUrl(
     y = origNode?.position.y || 0;
   }
 
-  // Display dimensions (thumbnail-scaled)
-  const shortSide = Math.min(naturalW, naturalH);
-  const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-  const displayW = naturalW > 0 ? Math.round(naturalW * scale) : 300;
-  const displayH = naturalH > 0 ? Math.round(naturalH * scale) : 300;
-  const titleH = 24;
-
   // Label: insert suffix before extension
   const origName = (origNode?.data as any)?.alt || (origNode?.data as any)?.label || "image";
   const dotIdx = origName.lastIndexOf(".");
@@ -68,12 +146,9 @@ export function buildNodeFromUrl(
   const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
   const label = `${base}${labelSuffix}${ext}`;
 
+  // Display dimensions (thumbnail-scaled) — via shared helper
   const newNode = createImageNode({ x, y }, url);
-  newNode.data.naturalWidth = naturalW;
-  newNode.data.naturalHeight = naturalH;
-  newNode.data.label = label;
-  newNode.data.alt = label;
-  newNode.style = { width: displayW, height: displayH + titleH };
+  applyThumbnailSettings(newNode, naturalW, naturalH, label);
   if (extraNodeData) Object.assign(newNode.data, extraNodeData);
 
   return newNode;

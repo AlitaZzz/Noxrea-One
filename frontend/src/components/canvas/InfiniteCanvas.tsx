@@ -45,13 +45,16 @@ import { useProjectStore } from "@/stores/project-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { apiUpload } from "@/lib/api";
+import { applyThumbnailSettings, computeThumbScale } from "@/lib/image-utils";
 import { useRouter } from "next/navigation";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { NODE_TYPE } from "@/lib/types";
-import { createTextNode, createImageNode, createVideoNode, createGroupNode, duplicateNode, createEdge } from "@/lib/node-defaults";
-import { GROUP_NODE_PADDING, THUMBNAIL_MAX } from "@/lib/constants";
+import { createImageNode, createGroupNode, duplicateNode, createEdge } from "@/lib/node-defaults";
+import { useAddNode } from "@/hooks/use-add-node";
+import { GROUP_NODE_PADDING } from "@/lib/constants";
+import { EventNames } from "@/lib/eventNames";
 
 /** Async load image or video dimensions for display */
 function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w: number; h: number }> {
@@ -275,8 +278,8 @@ export default function InfiniteCanvas() {
       updateNodeData(nodeId, data ?? {}, style);
       if (immediate) markDirtyImmediate();
     }
-    window.addEventListener("node:update-data", onUpdateData);
-    return () => window.removeEventListener("node:update-data", onUpdateData);
+    window.addEventListener(EventNames.NODE_UPDATE_DATA, onUpdateData);
+    return () => window.removeEventListener(EventNames.NODE_UPDATE_DATA, onUpdateData);
   }, [updateNodeData]);
 
   // ---- SSE task monitor (survives panel unmount) ----
@@ -335,10 +338,7 @@ export default function InfiniteCanvas() {
                         if (newNode) {
                           loadMediaDimensions(evt.result_url, false).then((dims) => {
                             if (dims.w > 0) {
-                              const shortSide = Math.min(dims.w, dims.h);
-                              const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-                              const displayW = Math.round(dims.w * scale);
-                              const displayH = Math.round(dims.h * scale);
+                              const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
                               const titleH = 24;
                               useCanvasStore.getState().updateNodeData(newNode.id, {
                                 naturalWidth: dims.w, naturalHeight: dims.h,
@@ -371,10 +371,7 @@ export default function InfiniteCanvas() {
                       // Async load real dimensions
                       loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
                         if (dims.w > 0) {
-                          const shortSide = Math.min(dims.w, dims.h);
-                          const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-                          const displayW = Math.round(dims.w * scale);
-                          const displayH = Math.round(dims.h * scale);
+                          const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
                           const titleH = 24;
                           useCanvasStore.getState().updateNodeData(node.id, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
@@ -434,8 +431,8 @@ export default function InfiniteCanvas() {
       const target = allNodes.find((n) => n.id === nodeId);
       if (target) copySelected([target]);
     }
-    window.addEventListener("canvas:copy-node", onCopyNode);
-    return () => window.removeEventListener("canvas:copy-node", onCopyNode);
+    window.addEventListener(EventNames.CANVAS_COPY_NODE, onCopyNode);
+    return () => window.removeEventListener(EventNames.CANVAS_COPY_NODE, onCopyNode);
   }, [copySelected]);
 
   // ---- Custom events: delete nodes (from toolbar) ----
@@ -446,8 +443,8 @@ export default function InfiniteCanvas() {
       pushHistory(takeCanvasSnapshot());
       removeNodes(nodeIds);
     }
-    window.addEventListener("canvas:delete-nodes", onDeleteNodes);
-    return () => window.removeEventListener("canvas:delete-nodes", onDeleteNodes);
+    window.addEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
+    return () => window.removeEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
   }, [pushHistory, removeNodes]);
 
   // ---- Right-click context menu on canvas ----
@@ -472,23 +469,10 @@ export default function InfiniteCanvas() {
     };
   }, [showCtx]);
 
-  const handleAddText = useCallback(() => {
-    pushHistory(takeCanvasSnapshot());
-    const { x: cx, y: cy } = getViewportCenter();
-    addNodes([createTextNode({ x: cx - 120, y: cy - 80 })]);
-  }, [pushHistory, addNodes]);
-
-  const handleAddImage = useCallback(() => {
-    pushHistory(takeCanvasSnapshot());
-    const { x: cx, y: cy } = getViewportCenter();
-    addNodes([createImageNode({ x: cx - 120, y: cy - 80 })]);
-  }, [pushHistory, addNodes]);
-
-  const handleAddVideo = useCallback(() => {
-    pushHistory(takeCanvasSnapshot());
-    const { x: cx, y: cy } = getViewportCenter();
-    addNodes([createVideoNode({ x: cx - 200, y: cy - 100 })]);
-  }, [pushHistory, addNodes]);
+  const { addNode: addNodeAtCenter } = useAddNode();
+  const handleAddText = useCallback(() => addNodeAtCenter("text"), [addNodeAtCenter]);
+  const handleAddImage = useCallback(() => addNodeAtCenter("image"), [addNodeAtCenter]);
+  const handleAddVideo = useCallback(() => addNodeAtCenter("video"), [addNodeAtCenter]);
 
   const handlePaste = useCallback(() => {
     const clip = useSelectionStore.getState().clipboard;
@@ -516,8 +500,8 @@ export default function InfiniteCanvas() {
       pushHistory(takeCanvasSnapshot());
       removeEdges(edgeIds);
     }
-    window.addEventListener("canvas:delete-edges", onDeleteEdges);
-    return () => window.removeEventListener("canvas:delete-edges", onDeleteEdges);
+    window.addEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
+    return () => window.removeEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
   }, [pushHistory, removeEdges]);
 
   // ---- Custom events: group / ungroup nodes ----
@@ -618,11 +602,11 @@ export default function InfiniteCanvas() {
       markDirtyImmediate();
     }
 
-    window.addEventListener("canvas:group-nodes", onGroupNodes);
-    window.addEventListener("canvas:ungroup-nodes", onUngroupNodes);
+    window.addEventListener(EventNames.CANVAS_GROUP_NODES, onGroupNodes);
+    window.addEventListener(EventNames.CANVAS_UNGROUP_NODES, onUngroupNodes);
     return () => {
-      window.removeEventListener("canvas:group-nodes", onGroupNodes);
-      window.removeEventListener("canvas:ungroup-nodes", onUngroupNodes);
+      window.removeEventListener(EventNames.CANVAS_GROUP_NODES, onGroupNodes);
+      window.removeEventListener(EventNames.CANVAS_UNGROUP_NODES, onUngroupNodes);
     };
   }, [pushHistory, addNodes]);
 
@@ -649,16 +633,7 @@ export default function InfiniteCanvas() {
           img.onload = () => {
             pushHistory(takeCanvasSnapshot());
             const node = createImageNode(pos, src);
-            node.data.naturalWidth = img.naturalWidth;
-            node.data.naturalHeight = img.naturalHeight;
-            node.data.label = file.name;
-            node.data.alt = file.name;
-            const nw = img.naturalWidth, nh = img.naturalHeight;
-            const shortSide = Math.min(nw, nh);
-            const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-            const displayW = Math.round(nw * scale);
-            const displayH = Math.round(nh * scale);
-            node.style = { width: displayW, height: displayH };
+            applyThumbnailSettings(node, img.naturalWidth, img.naturalHeight, file.name);
             addNodes([node]);
           };
           img.src = src;

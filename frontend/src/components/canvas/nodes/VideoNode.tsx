@@ -13,9 +13,12 @@ import {
 } from "@ant-design/icons";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { createImageNode } from "@/lib/node-defaults";
+import { applyThumbnailSettings, computeThumbScale } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
+import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUpload, BASE } from "@/lib/api";
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
+import { EventNames } from "@/lib/eventNames";
 
 interface VideoNodeData {
   label: string;
@@ -135,15 +138,13 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
       const st = useCanvasStore.getState();
       const cx = -st.viewport.x / st.viewport.zoom + (window.innerWidth / 2) / st.viewport.zoom;
       const cy = -st.viewport.y / st.viewport.zoom + (window.innerHeight / 2) / st.viewport.zoom;
-      const THUMBNAIL_MAX = 360;
       const nw = v.videoWidth, nh = v.videoHeight;
-      const shortSide = Math.min(nw, nh);
-      const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-      const node = createImageNode({ x: cx - (nw * scale) / 2, y: cy - (nh * scale) / 2 }, imgUrl);
-      node.data.naturalWidth = nw;
-      node.data.naturalHeight = nh;
-      node.data.label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
-      node.style = { width: Math.round(nw * scale), height: Math.round(nh * scale) };
+      const node = createImageNode({ x: cx, y: cy }, imgUrl);
+      const label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
+      applyThumbnailSettings(node, nw, nh, label);
+      // Center the node relative to viewport center
+      node.position.x = cx - (node.style.width as number) / 2;
+      node.position.y = cy - (node.style.height as number) / 2;
       addNodes([node]);
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, addNodes]);
@@ -167,17 +168,13 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
           });
           const nw = dims.w || 1280;
           const nh = dims.h || 720;
-          const THUMBNAIL_MAX = 360;
+          const { displayW, displayH } = computeThumbScale(nw, nh);
           const titleH = 24;
-          const shortSide = Math.min(nw, nh);
-          const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-          const displayW = Math.round(nw * scale);
-          const displayH = Math.round(nh * scale);
           const store = useCanvasStore.getState();
           const currentNode = store.nodes.find((n) => n.id === id);
           const latestData = (currentNode?.data || data) as any;
           window.dispatchEvent(
-            new CustomEvent("node:update-data", {
+            new CustomEvent(EventNames.NODE_UPDATE_DATA, {
               detail: {
                 nodeId: id,
                 data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
@@ -224,7 +221,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
   const handleClear = useCallback(() => {
     setSrc("");
     window.dispatchEvent(
-      new CustomEvent("node:update-data", {
+      new CustomEvent(EventNames.NODE_UPDATE_DATA, {
         detail: { nodeId: id, data: { ...data, src: "", label: t("video.node"), alt: "", naturalWidth: 0, naturalHeight: 0 }, style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }, immediate: true },
       })
     );
@@ -250,28 +247,12 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
         }
       }
     }
-    window.addEventListener("canvas:node-action", onNodeAction);
-    return () => window.removeEventListener("canvas:node-action", onNodeAction);
+    window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
+    return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id, handleDownload, handleReplace, handleClear, captureFrame]);
 
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(data.alt || data.label || "");
-
-  const handleTitleDblClick = () => {
-    setTitleDraft(data.alt || data.label || "");
-    setEditingTitle(true);
-  };
-
-  const handleTitleSave = () => {
-    setEditingTitle(false);
-    if (titleDraft && titleDraft !== (data.alt || data.label)) {
-      window.dispatchEvent(
-        new CustomEvent("node:update-data", {
-          detail: { nodeId: id, data: { ...data, label: titleDraft, alt: titleDraft } },
-        })
-      );
-    }
-  };
+  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
+    useEditableTitle(id, data.alt || data.label || "", { syncAlt: true });
 
   const hasVideo = src && src.length > 0;
 
@@ -299,7 +280,9 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
             {data.label || data.alt || t("video.node")}
           </span>
         )}
-        <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth || 320}×{data.naturalHeight || 180}</span>
+        {hasVideo && data.naturalWidth > 0 && (
+          <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth}×{data.naturalHeight}</span>
+        )}
       </div>
 
       <div
