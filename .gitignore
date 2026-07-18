@@ -12,6 +12,9 @@
 # Dependencies
 frontend/node_modules/
 
+# vitest 从仓库根目录运行时产生的缓存（node_modules/.vite）
+node_modules/
+
 # Next.js build
 frontend/.next/
 frontend/out/
