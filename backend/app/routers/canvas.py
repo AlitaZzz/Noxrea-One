@@ -12,8 +12,23 @@ from app.schemas.canvas import (
 )
 from app.deps import get_db, get_current_user
 from app.crud import canvas as crud
+from app.models.canvas import CanvasProject
 
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
+
+
+async def get_owned_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+) -> CanvasProject:
+    """获取项目并验证所有权。用于 get/update/delete 三个端点注入。"""
+    project = await crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    return project
 
 
 @router.get("/projects", response_model=UnifiedResponse[list[CanvasProjectListItem]])
@@ -41,15 +56,8 @@ async def create_project(
 
 @router.get("/projects/{project_id}", response_model=UnifiedResponse[CanvasProjectOut])
 async def get_project(
-    project_id: int,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    project: CanvasProject = Depends(get_owned_project),
 ):
-    project = await crud.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if project.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="ok")
 
 
@@ -58,27 +66,17 @@ async def update_project(
     project_id: int,
     body: CanvasProjectUpdate,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    owned_project: CanvasProject = Depends(get_owned_project),
 ):
-    project = await crud.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if project.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    project = await crud.update_project(db, project_id, project.user_id, body.name, body.canvas_data, body.needRefRecalc)
-    return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="updated")
+    updated = await crud.update_project(db, project_id, owned_project.user_id, body.name, body.canvas_data, body.needRefRecalc)
+    return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(updated), msg="updated")
 
 
 @router.delete("/projects/{project_id}", response_model=UnifiedResponse)
 async def delete_project(
     project_id: int,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    _owned_project: CanvasProject = Depends(get_owned_project),
 ):
-    project = await crud.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if project.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     ok = await crud.delete_project(db, project_id)
     return UnifiedResponse(code=200, msg="deleted")

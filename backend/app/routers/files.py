@@ -36,7 +36,7 @@ def get_upload_dir(user_id: int, category: str = "") -> str:
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    category: str = "",
+    category: str = Query(...),
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -61,7 +61,7 @@ async def upload_file(
     file_hash = hashlib.sha256(content).hexdigest()
 
     # 映射 category 到 source
-    source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated"}
+    source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated", "avatars": "avatar_upload"}
     source = source_map.get(category, "unknown")
 
     # 用户级去重：检查是否已存在
