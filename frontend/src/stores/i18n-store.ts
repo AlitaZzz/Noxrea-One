@@ -113,6 +113,8 @@ const zh: Record<string, string> = {
   "asset.createFolder": "新建文件夹",
   "asset.folderNamePlaceholder": "输入文件夹名称",
   "asset.folderDuplicate": "同级已存在同名文件夹",
+  "file.upload.failed": "上传失败",
+  "file.upload.failed.all": "全部文件上传失败",
 };
 
 const en: Record<string, string> = {
@@ -211,6 +213,8 @@ const en: Record<string, string> = {
   "nodes.count": " nodes",
   "nothing.to.save": "Nothing to save", "save.failed": "Save failed",
   "drop.video": "Drop video or click Upload",
+  "file.upload.failed": "Upload failed",
+  "file.upload.failed.all": "All files failed to upload",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({
