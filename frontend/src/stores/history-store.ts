@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { HistorySnapshot } from "@/lib/types";
-import { DEFAULT_VIEWPORT, DEFAULT_BACKGROUND, DEFAULT_THEME } from "@/lib/constants";
 import { HISTORY_MAX_SIZE } from "@/lib/constants";
 
 interface HistoryState {
@@ -9,25 +8,21 @@ interface HistoryState {
 
   /** Push current state before making a change */
   push: (snapshot: HistorySnapshot) => void;
-  /** Returns the snapshot to restore, or null if nothing to undo */
-  undo: () => HistorySnapshot | null;
-  /** Returns the snapshot to restore, or null if nothing to redo */
-  redo: () => HistorySnapshot | null;
+  /**
+   * 弹出并返回 undoStack 栈顶（= 最近一次改动前的状态，即撤销要恢复的目标）。
+   * `current` 必须是调用瞬间的现场快照，会被存入 redoStack —— redo 用它回到撤销前的状态。
+   * 无可撤销时返回 null 且不改动任何栈。
+   */
+  undo: (current: HistorySnapshot) => HistorySnapshot | null;
+  /**
+   * 弹出并返回 redoStack 栈顶（= 上一次撤销前的现场状态）。
+   * `current` 是调用瞬间的现场快照，会被存回 undoStack，保证 redo 之后还能再 undo 回来。
+   * 无可重做时返回 null 且不改动任何栈。
+   */
+  redo: (current: HistorySnapshot) => HistorySnapshot | null;
   canUndo: () => boolean;
   canRedo: () => boolean;
   clear: () => void;
-}
-
-function emptySnapshot(): HistorySnapshot {
-  return {
-    nodes: [],
-    edges: [],
-    viewport: DEFAULT_VIEWPORT,
-    background: DEFAULT_BACKGROUND,
-    theme: DEFAULT_THEME,
-    minimapVisible: true,
-    snapToGrid: false,
-  };
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -41,29 +36,26 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       return { undoStack: newUndo, redoStack: [] };
     }),
 
-  undo: () => {
+  undo: (current) => {
     const { undoStack } = get();
     if (undoStack.length === 0) return null;
-    const current = undoStack[undoStack.length - 1];
-    const newUndo = undoStack.slice(0, -1);
+    const target = undoStack[undoStack.length - 1];
     set((s) => ({
-      undoStack: newUndo,
+      undoStack: s.undoStack.slice(0, -1),
       redoStack: [...s.redoStack, current],
     }));
-    const prev = newUndo.length > 0 ? newUndo[newUndo.length - 1] : emptySnapshot();
-    return prev;
+    return target;
   },
 
-  redo: () => {
+  redo: (current) => {
     const { redoStack } = get();
     if (redoStack.length === 0) return null;
-    const entry = redoStack[redoStack.length - 1];
-    const newRedo = redoStack.slice(0, -1);
+    const target = redoStack[redoStack.length - 1];
     set((s) => ({
-      redoStack: newRedo,
-      undoStack: [...s.undoStack, entry],
+      redoStack: s.redoStack.slice(0, -1),
+      undoStack: [...s.undoStack, current],
     }));
-    return entry;
+    return target;
   },
 
   canUndo: () => get().undoStack.length > 0,

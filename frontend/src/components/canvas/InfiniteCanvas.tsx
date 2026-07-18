@@ -123,6 +123,10 @@ export default function InfiniteCanvas() {
     const project = useProjectStore.getState().activeProject();
     if (project) {
       useCanvasStore.getState().restoreFromProject(project);
+      // 切换/加载项目 = 历史归零。修复 undo 弹出即应用后不再需要基线快照
+      // （旧基线是为了规避 undo 偏移下的 emptySnapshot 兜底），同时避免
+      // 撤销穿透到上一个项目的画布内容。
+      useHistoryStore.getState().clear();
     }
   }, [activeProjectId]);
 
@@ -197,11 +201,10 @@ export default function InfiniteCanvas() {
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      pushHistory(takeCanvasSnapshot());
       setEdges([...edges, createEdge(connection.source || "", connection.target || "")]);
       markDirtyImmediate();
     },
-    [edges, setEdges, pushHistory]
+    [edges, setEdges]
   );
 
   const handleViewportChange = useCallback(
@@ -212,20 +215,20 @@ export default function InfiniteCanvas() {
     [setViewport]
   );
 
-  // End of drag / resize → push history
-  const handleMoveEnd = useCallback(() => {
+  const handleNodeDragStart = useCallback(() => {
     pushHistory(takeCanvasSnapshot());
   }, [pushHistory]);
 
   const handleNodeDragStop = useCallback(() => {
-    pushHistory(takeCanvasSnapshot());
+    // 只在拖拽开始时压栈（改动前压栈约定）。此前这里的第二次 pushHistory
+    // 是为了掩盖 undo() 的偏移，修复后必须移除，否则会产生一次"空撤销"。
     markDirtyImmediate();
-  }, [pushHistory]);
+  }, []);
 
   const handlePaneClick = useCallback(() => {
     // Deselect all nodes and edges
     setNodes(nodes.map((n) => ({ ...n, selected: false })));
-    setEdges(edges.map((e) => ({ ...e, selected: false })));
+    setEdges(edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
   }, [nodes, edges, setNodes, setEdges]);
 
   // Explicitly handle node selection — React Flow's internal click detection
@@ -255,10 +258,9 @@ export default function InfiniteCanvas() {
   const handlePaste = useCallback(() => {
     const clip = useSelectionStore.getState().clipboard;
     if (!clip || !clip.nodes.length) return;
-    pushHistory(takeCanvasSnapshot());
     const newNodes = clip.nodes.map((n: any) => duplicateNode(n, { x: 30, y: 30 }));
     addNodes(newNodes);
-  }, [pushHistory, addNodes]);
+  }, [addNodes]);
 
   const handleSelectAll = useCallback(() => {
     setNodes(nodes.map((n) => ({ ...n, selected: true })));
@@ -310,7 +312,7 @@ export default function InfiniteCanvas() {
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
         onViewportChange={handleViewportChange}
-        onMoveEnd={handleMoveEnd}
+        onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
         onNodeClick={handleNodeClick}
