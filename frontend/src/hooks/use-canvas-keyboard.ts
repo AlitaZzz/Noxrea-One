@@ -7,6 +7,7 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { duplicateNode } from "@/lib/node-defaults";
 import { PASTE_OFFSET } from "@/lib/constants";
+import { EventNames } from "@/lib/eventNames";
 
 function getSelectedNodeIds(): string[] {
   return useCanvasStore
@@ -128,11 +129,11 @@ export function useCanvasKeyboard() {
       // ---- Group (Ctrl+G) / Ungroup (Ctrl+Shift+G) ----
       if (mod && e.key === "g" && !e.shiftKey) {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("canvas:group-nodes"));
+        window.dispatchEvent(new CustomEvent(EventNames.CANVAS_GROUP_NODES));
       }
       if (mod && e.key === "g" && e.shiftKey) {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("canvas:ungroup-nodes"));
+        window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
       }
 
       // ---- Undo ----

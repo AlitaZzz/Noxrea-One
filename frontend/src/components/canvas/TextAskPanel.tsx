@@ -5,6 +5,7 @@ import { Select, Input, App } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
 import { getTokenHeader, BASE } from "@/lib/api";
+import { EventNames } from "@/lib/eventNames";
 import WheelGuard from "@/components/common/WheelGuard";
 
 interface Props { nodeId: string; currentContent: string; }
@@ -40,7 +41,7 @@ const TextAskPanel = memo(function TextAskPanel({ nodeId, currentContent }: Prop
 
       const reply = json.data?.choices?.[0]?.message?.content || "";
       const newContent = currentContent ? `${currentContent}\n\nQ: ${prompt.trim()}\nA: ${reply}` : reply;
-      window.dispatchEvent(new CustomEvent("node:update-data", {
+      window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, {
         detail: { nodeId, data: { content: newContent } },
       }));
       setPrompt("");

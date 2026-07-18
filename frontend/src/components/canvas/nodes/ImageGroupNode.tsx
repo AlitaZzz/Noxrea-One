@@ -8,6 +8,7 @@ import { DownloadOutlined, ExpandOutlined, PictureOutlined } from "@ant-design/i
 import type { ImageGroupNodeData } from "@/lib/types";
 import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
+import { EventNames } from "@/lib/eventNames";
 
 interface Props { id: string; data: ImageGroupNodeData; selected?: boolean; }
 
@@ -21,7 +22,7 @@ function ImageGroupNode({ id, data, selected }: Props) {
 
   const handleSetMain = (idx: number) => {
     setMainIdx(idx);
-    window.dispatchEvent(new CustomEvent("node:update-data", { detail: { nodeId: id, data: { ...data, mainIndex: idx }, immediate: true } }));
+    window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId: id, data: { ...data, mainIndex: idx }, immediate: true } }));
   };
 
   const handleDownload = async (url: string) => {
