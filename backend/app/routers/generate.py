@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_current_user
 from app.schemas.common import UnifiedResponse
 from app.schemas.task import TaskOut
+from app.crud import task as crud
 
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
@@ -52,40 +52,13 @@ async def create_task(
     ref_urls = body.get("refUrls") or body.get("ref_urls") or []
     node_id = body.get("nodeId") or body.get("node_id") or ""
 
-    await db.execute(
-        text("""
-            INSERT INTO generation_tasks
-                (id, user_id, type, status, prompt, config, ref_urls, node_id, created_at, updated_at)
-            VALUES
-                (:id, :uid, :type, 'pending', :prompt, :config, :refs, :nid, :now, :now)
-        """),
-        {
-            "id": task_id,
-            "uid": user.id,
-            "type": task_type,
-            "prompt": prompt,
-            "config": json.dumps(config),
-            "refs": json.dumps(ref_urls) if ref_urls else "[]",
-            "nid": node_id,
-            "now": now,
-        },
+    task = await crud.create_task(
+        db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
     )
-    await db.commit()
 
     return UnifiedResponse(
         code=200,
-        data=TaskOut(
-            id=task_id,
-            user_id=user.id,
-            type=body.get("type", "image"),
-            status="pending",
-            prompt=prompt,
-            config=config,
-            ref_urls=ref_urls or None,
-            node_id=node_id,
-            created_at=now,
-            updated_at=now,
-        ),
+        data=TaskOut.model_validate(task),
         msg="task created",
     )
 
@@ -99,19 +72,13 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    result = await db.execute(
-        text("SELECT id, user_id, type, status, prompt, config, ref_urls, "
-             "result_url, error, node_id, created_at, updated_at "
-             "FROM generation_tasks WHERE id = :id"),
-        {"id": task_id},
-    )
-    row = result.fetchone()
-    if not row:
+    task = await crud.get_task(db, task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if row[1] != user.id:
+    if task.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    return UnifiedResponse(code=200, data=_row_to_out(row), msg="ok")
+    return UnifiedResponse(code=200, data=TaskOut.model_validate(task), msg="ok")
 
 
 # ── SSE stream ──────────────────────────────────────────────────
@@ -124,46 +91,33 @@ async def stream_task(
     user=Depends(get_current_user),
 ):
     # Verify task exists and belongs to user
-    result = await db.execute(
-        text("SELECT id, user_id, type, status, prompt, config, ref_urls, "
-             "result_url, error, node_id, created_at, updated_at "
-             "FROM generation_tasks WHERE id = :id"),
-        {"id": task_id},
-    )
-    row = result.fetchone()
-    if not row:
+    task = await crud.get_task(db, task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if row[1] != user.id:
+    if task.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     async def event_stream():
         last_status = ""
         while True:
-            # Use fresh session per poll to avoid stale data
+            # Use fresh session per poll + filter by user_id (secondary guard)
             from app.database import async_session as _sse_session
             async with _sse_session() as sse_db:
-                result = await sse_db.execute(
-                    text("SELECT id, user_id, type, status, prompt, config, ref_urls, "
-                         "result_url, error, node_id, created_at, updated_at "
-                         "FROM generation_tasks WHERE id = :id"),
-                    {"id": task_id},
-                )
-                row = result.fetchone()
-            if not row:
+                task = await crud.get_task_for_user(sse_db, task_id, user.id)
+            if not task:
                 yield f"data: {json.dumps({'type': 'error', 'error': 'Task deleted'})}\n\n"
                 break
 
-            status = row[3]
+            status = task.status
             if status != last_status:
-                out = _row_to_out(row)
                 event = {
                     "type": "status",
                     "task_id": task_id,
                     "status": status,
-                    "result_url": out.result_url,
-                    "error": out.error,
-                    "config": out.config,
-                    "prompt": out.prompt,
+                    "result_url": task.result_url,
+                    "error": task.error,
+                    "config": task.config,
+                    "prompt": task.prompt,
                 }
                 yield f"data: {json.dumps(event)}\n\n"
                 last_status = status
@@ -189,44 +143,18 @@ async def cancel_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    result = await db.execute(
-        text("SELECT user_id, status FROM generation_tasks WHERE id = :id"),
-        {"id": task_id},
-    )
-    row = result.fetchone()
+    row = await crud.get_task_status(db, task_id)
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
-    if row[0] != user.id:
+    db_user_id, status = row
+    if db_user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    if row[1] in ("completed", "failed"):
+    if status in ("completed", "failed"):
         raise HTTPException(status_code=400, detail="Task already finished")
 
-    await db.execute(
-        text("UPDATE generation_tasks SET status = 'failed', error = 'Cancelled', updated_at = :now WHERE id = :id"),
-        {"now": datetime.now(timezone.utc), "id": task_id},
-    )
-    await db.commit()
+    await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
     return UnifiedResponse(code=200, msg="cancelled")
 
 
-# ── Helper ──────────────────────────────────────────────────────
-
-
-def _row_to_out(row) -> TaskOut:
-    config = row[5]
-    if isinstance(config, str):
-        config = json.loads(config)
-    refs = row[6]
-    if isinstance(refs, str):
-        refs = json.loads(refs) if refs else None
-
-    return TaskOut(
-        id=row[0], user_id=row[1], type=row[2], status=row[3],
-        prompt=row[4], config=config, ref_urls=refs,
-        result_url=row[7], error=row[8], node_id=row[9],
-        created_at=row[10], updated_at=row[11],
-    )
-
-
-# ── Import needed for SSE streaming ─────────────────────────────
+# ── Imports needed for SSE streaming ────────────────────────────
 import asyncio
