@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.schemas.common import UnifiedResponse
 from app.deps import get_db, get_current_user
-from app.models.model_config import ModelChannel, ModelInfo
+from app.crud import model_config as crud
 
 router = APIRouter(prefix="/api/model-config", tags=["model-config"])
 
@@ -15,10 +13,7 @@ async def list_channels(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(ModelChannel).where(ModelChannel.user_id == user.id).options(selectinload(ModelChannel.models)).order_by(ModelChannel.updated_at.desc())
-    )
-    channels = result.scalars().all()
+    channels = await crud.get_channels(db, user.id)
     data = []
     for ch in channels:
         data.append({
@@ -34,10 +29,7 @@ async def create_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ch = ModelChannel(user_id=user.id, name=body.get("name", ""), base_url=body.get("baseUrl", ""), api_key=body.get("apiKey", ""))
-    db.add(ch)
-    await db.commit()
-    await db.refresh(ch)
+    ch = await crud.create_channel(db, user.id, body.get("name", ""), body.get("baseUrl", ""), body.get("apiKey", ""))
     return UnifiedResponse(code=200, data={"id": str(ch.id)}, msg="created")
 
 
@@ -48,14 +40,12 @@ async def update_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ModelChannel).where(ModelChannel.id == int(channel_id), ModelChannel.user_id == user.id))
-    ch = result.scalar_one_or_none()
+    ch = await crud.update_channel(
+        db, int(channel_id), user.id,
+        name=body.get("name"), base_url=body.get("baseUrl"), api_key=body.get("apiKey"),
+    )
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    if "name" in body: ch.name = body["name"]
-    if "baseUrl" in body: ch.base_url = body["baseUrl"]
-    if "apiKey" in body: ch.api_key = body["apiKey"]
-    await db.commit()
     return UnifiedResponse(code=200, msg="updated")
 
 
@@ -65,12 +55,9 @@ async def delete_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ModelChannel).where(ModelChannel.id == int(channel_id), ModelChannel.user_id == user.id))
-    ch = result.scalar_one_or_none()
-    if not ch:
+    ok = await crud.delete_channel(db, int(channel_id), user.id)
+    if not ok:
         raise HTTPException(status_code=404, detail="Not found")
-    await db.delete(ch)
-    await db.commit()
     return UnifiedResponse(code=200, msg="deleted")
 
 
@@ -81,14 +68,10 @@ async def add_model(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ModelChannel).where(ModelChannel.id == int(channel_id), ModelChannel.user_id == user.id))
-    ch = result.scalar_one_or_none()
+    ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    m = ModelInfo(channel_id=int(channel_id), name=body.get("name", ""), capabilities=body.get("capabilities", []))
-    db.add(m)
-    await db.commit()
-    await db.refresh(m)
+    m = await crud.add_model(db, int(channel_id), body.get("name", ""), body.get("capabilities", []))
     return UnifiedResponse(code=200, data={"id": str(m.id)}, msg="added")
 
 
@@ -99,15 +82,10 @@ async def remove_model(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ModelChannel).where(ModelChannel.id == int(channel_id), ModelChannel.user_id == user.id))
-    ch = result.scalar_one_or_none()
+    ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    m_result = await db.execute(select(ModelInfo).where(ModelInfo.id == int(model_id), ModelInfo.channel_id == int(channel_id)))
-    m = m_result.scalar_one_or_none()
-    if m:
-        await db.delete(m)
-        await db.commit()
+    await crud.remove_model(db, int(model_id), int(channel_id))
     return UnifiedResponse(code=200, msg="deleted")
 
 
@@ -118,15 +96,10 @@ async def set_models(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(ModelChannel).where(ModelChannel.id == int(channel_id), ModelChannel.user_id == user.id))
-    ch = result.scalar_one_or_none()
+    ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    await db.execute(delete(ModelInfo).where(ModelInfo.channel_id == int(channel_id)))
-    for m_data in body.get("models", []):
-        m = ModelInfo(channel_id=int(channel_id), name=m_data["name"], capabilities=m_data.get("capabilities", []))
-        db.add(m)
-    await db.commit()
+    await crud.set_models(db, int(channel_id), body.get("models", []))
     return UnifiedResponse(code=200, msg="updated")
 
 
@@ -138,10 +111,10 @@ async def toggle_capability(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    m_result = await db.execute(select(ModelInfo).where(ModelInfo.id == int(model_id), ModelInfo.channel_id == int(channel_id)))
-    m = m_result.scalar_one_or_none()
+    ch = await crud.get_channel(db, int(channel_id), user.id)
+    if not ch:
+        raise HTTPException(status_code=404, detail="Not found")
+    m = await crud.update_model_capabilities(db, int(model_id), int(channel_id), body.get("capabilities", []))
     if not m:
         raise HTTPException(status_code=404, detail="Not found")
-    m.capabilities = body.get("capabilities", m.capabilities)
-    await db.commit()
     return UnifiedResponse(code=200, msg="updated")

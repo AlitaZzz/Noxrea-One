@@ -10,28 +10,18 @@ from app.models.asset import AssetItem, AssetFolder
 logger = logging.getLogger(__name__)
 
 
-def _parse_hash_from_url(url: str) -> tuple[int, str, str] | None:
-    """从 URL 解析 (user_id, hash, ext)。URL 格式: /api/files/{user_id}/{hash[:2]}/{hash}{ext}"""
-    if "/api/files/" not in url:
+def _parse_hash_from_url(url: str) -> str | None:
+    """从 URL 提取 64 字符 SHA256 hash。URL 格式: /api/files/{user_id}/{hash[:2]}/{hash}{ext}"""
+    if not url or "/api/files/" not in url:
         return None
     path = url.split("/api/files/")[-1]
     parts = path.split("/")
     if len(parts) != 3:
         return None
-    filename = parts[2]
-    dot = filename.rfind(".")
-    if dot == -1:
-        file_hash, ext = filename, ""
-    else:
-        file_hash, ext = filename[:dot], filename[dot:]
-    # SHA256 hex 是 64 字符，非 hash 路径（如 UUID 命名）不处理
-    if len(file_hash) != 64:
-        return None
-    try:
-        user_id = int(parts[0])
-    except ValueError:
-        return None
-    return user_id, file_hash, ext
+    fn = parts[2]
+    dot = fn.rfind(".")
+    h = fn[:dot] if dot > 0 else fn
+    return h if len(h) == 64 else None
 
 
 # --- Folder CRUD ---
@@ -136,10 +126,9 @@ async def _add_asset_ref(db: AsyncSession, user_id: int, source_url: str | None,
     """记录 asset 对文件的引用（同一事务中调用，不自己 commit）"""
     if not source_url:
         return
-    parsed = _parse_hash_from_url(source_url)
-    if not parsed:
+    file_hash = _parse_hash_from_url(source_url)
+    if not file_hash:
         return
-    _, file_hash, _ = parsed
     await db.execute(
         _sql("INSERT OR IGNORE INTO file_references (file_hash, user_id, ref_type, ref_id) "
              "VALUES (:h, :uid, 'asset', :rid)"),
@@ -151,10 +140,9 @@ async def _remove_asset_ref(db: AsyncSession, user_id: int, source_url: str | No
     """删除 asset 对文件的引用（同一事务中调用，不自己 commit）"""
     if not source_url:
         return
-    parsed = _parse_hash_from_url(source_url)
-    if not parsed:
+    file_hash = _parse_hash_from_url(source_url)
+    if not file_hash:
         return
-    _, file_hash, _ = parsed
     await db.execute(
         _sql("DELETE FROM file_references WHERE file_hash = :h AND user_id = :uid AND ref_type = 'asset' AND ref_id = :rid"),
         {"h": file_hash, "uid": user_id, "rid": asset_id},
