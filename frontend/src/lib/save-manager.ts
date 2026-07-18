@@ -14,10 +14,50 @@
 
 import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
-import { BASE, getTokenHeader } from "@/lib/api";
+import { BASE, getTokenHeader, checkUnauthorized } from "@/lib/api";
 
 const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
+
+// ── fingerprint：追踪画布文件引用变化 ──
+// 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
+function _extractHashFromUrl(url: string): string | null {
+  if (!url || typeof url !== "string") return null;
+  const idx = url.indexOf("/api/files/");
+  if (idx === -1) return null;
+  const path = url.slice(idx + "/api/files/".length);
+  const parts = path.split("/");
+  if (parts.length !== 3) return null;
+  const fn = parts[2];
+  const dot = fn.lastIndexOf(".");
+  const h = dot > 0 ? fn.slice(0, dot) : fn;
+  return h.length === 64 ? h : null;
+}
+
+function _collectCanvasHashes(nodes: any[]): string[] {
+  const hashes: string[] = [];
+  for (const node of nodes) {
+    const d = node?.data || {};
+    // image-node / video-node: data.src
+    if (typeof d.src === "string") {
+      const h = _extractHashFromUrl(d.src);
+      if (h) hashes.push(h);
+    }
+    // image-group-node: data.images[].url
+    if (Array.isArray(d.images)) {
+      for (const img of d.images) {
+        if (img?.url) {
+          const h = _extractHashFromUrl(img.url);
+          if (h) hashes.push(h);
+        }
+      }
+    }
+  }
+  return [...new Set(hashes)].sort();
+}
+
+/** 按 projectId 区分指纹，项目切换时自动隔离 */
+const fingerprintMap = new Map<string, string>();
 
 /** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
 function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
@@ -186,10 +226,14 @@ class SaveManager {
     const id = parseInt(projectId, 10);
     if (isNaN(id)) return;
 
-    // 深拷贝并剔除 React Flow 运行时字段（不影响 undo 栈的快照）
     const clean = stripRuntimeFields(snapshot);
 
-    const body = JSON.stringify({
+    // 计算当前 fingerprint，判断文件引用是否变化
+    const currentFp = _collectCanvasHashes(clean.nodes).join(",");
+    const prevFp = fingerprintMap.get(projectId) ?? "";
+    const needRefRecalc = currentFp !== prevFp;
+
+    const payload: Record<string, unknown> = {
       canvas_data: {
         nodes: clean.nodes,
         edges: clean.edges,
@@ -199,18 +243,27 @@ class SaveManager {
         minimapVisible: snapshot.minimapVisible,
         snapToGrid: snapshot.snapToGrid,
       },
-    });
+    };
+    if (needRefRecalc) {
+      payload.needRefRecalc = true;
+    }
 
+    const body = JSON.stringify(payload);
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const auth = getTokenHeader().Authorization;
     if (auth) headers["Authorization"] = auth;
 
-    await fetch(`${BASE}/api/canvas/projects/${id}`, {
+    const res = await fetch(`${BASE}/api/canvas/projects/${id}`, {
       method: "PUT",
       headers,
       body,
       keepalive,
     });
+
+    // keepalive 请求无法读取响应体，且页面即将卸载时无需处理 401
+    if (!keepalive && checkUnauthorized(res.status)) return;
+
+    fingerprintMap.set(projectId, currentFp);
   }
 
   /** 全局只注册一次页面生命周期监听 */

@@ -170,6 +170,8 @@ async def _process_task(task: GenerationTask) -> None:
                     client, provider, task, model, base_url, headers,
                     ratio, refs,
                 )
+            elif task.type == "bg_removal":
+                result_url = await _process_bg_removal(task)
             else:
                 await _update_task_status(task.id, "failed", error=f"Unknown type: {task.type}")
                 return
@@ -242,6 +244,83 @@ def _make_user_jwt(user_id: int) -> str:
     """Create JWT for the worker to authenticate with FastAPI endpoints."""
     from app.services.auth import create_access_token
     return create_access_token({"sub": str(user_id)})
+
+
+async def _process_bg_removal(task: GenerationTask) -> str | None:
+    """Process a bg_removal task: call inference service, save result."""
+    from app.config import settings as app_settings
+
+    ref_urls = task.ref_urls or []
+    if isinstance(ref_urls, str):
+        import json as _json
+        ref_urls = _json.loads(ref_urls) if ref_urls else []
+    if not ref_urls:
+        await _update_task_status(task.id, "failed", error="No source image URL provided")
+        return None
+
+    source_url = ref_urls[0]
+    import logging
+    logger = logging.getLogger("worker")
+
+    try:
+        # 1. Download source image
+        async with httpx.AsyncClient(timeout=60) as client:
+            src_resp = await client.get(source_url)
+            if not src_resp.is_success:
+                await _update_task_status(task.id, "failed",
+                    error=f"Failed to download source image: HTTP {src_resp.status_code}")
+                return None
+            src_bytes = src_resp.content
+
+        # 2. Call inference service
+        inference_url = app_settings.INFERENCE_SERVICE_URL.rstrip("/") + "/process/bg-removal"
+        api_key = app_settings.INFERENCE_SERVICE_API_KEY
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            headers = {"X-API-Key": api_key} if api_key else {}
+            files = {"file": ("input.png", src_bytes, "image/png")}
+            data = {"model": "rembg"}
+            resp = await client.post(inference_url, files=files, data=data, headers=headers)
+
+            if not resp.is_success:
+                err_detail = f"Inference service returned HTTP {resp.status_code}"
+                try:
+                    err_body = resp.json()
+                    err_detail = err_body.get("detail", err_detail)
+                except Exception:
+                    pass
+                await _update_task_status(task.id, "failed", error=err_detail)
+                return None
+
+            result_bytes = resp.content
+
+        # 3. Upload result to local storage
+        user_jwt = _make_user_jwt(task.user_id)
+        async with httpx.AsyncClient(timeout=60) as client:
+            upload_files = {"file": ("bg_removed.png", result_bytes, "image/png")}
+            upload_headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
+            save_resp = await client.post(
+                f"{app_settings.PUBLIC_URL}/api/files/upload?category=generated",
+                files=upload_files,
+                headers=upload_headers,
+            )
+            if save_resp.is_success:
+                data = save_resp.json()
+                local_url = data.get("data", {}).get("url")
+                if local_url:
+                    await _update_task_status(task.id, "completed", result_url=local_url)
+                    return local_url
+
+            await _update_task_status(task.id, "failed", error="Failed to save processed image")
+            return None
+
+    except httpx.TimeoutException:
+        await _update_task_status(task.id, "failed", error="Inference service timed out")
+        return None
+    except Exception as e:
+        logger.error(f"[worker] bg_removal failed: {e}")
+        await _update_task_status(task.id, "failed", error=str(e)[:500])
+        return None
 
 
 async def _update_task_status(task_id: str, status: str, *, result_url: str | None = None, error: str | None = None) -> None:

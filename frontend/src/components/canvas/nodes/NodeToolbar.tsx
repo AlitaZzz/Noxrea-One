@@ -16,6 +16,7 @@ import {
   SwapOutlined,
   RotateRightOutlined,
   CameraOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { FlipHorizontal, FlipVertical } from "lucide-react";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -224,6 +225,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               </Button>
             </Tooltip>
           </Popover>
+          <Tooltip title={t("bg_removal")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExperimentOutlined />}
+              onClick={() => dispatchNodeAction(nodeId, "bg-removal")} />
+          </Tooltip>
           <Tooltip title={t("replace")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<UploadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "replace")} />

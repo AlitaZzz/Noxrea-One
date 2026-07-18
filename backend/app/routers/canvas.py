@@ -65,7 +65,7 @@ async def update_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     if project.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    project = await crud.update_project(db, project_id, body.name, body.canvas_data)
+    project = await crud.update_project(db, project_id, project.user_id, body.name, body.canvas_data, body.needRefRecalc)
     return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(project), msg="updated")
 
 

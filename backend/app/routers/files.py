@@ -1,13 +1,18 @@
 import uuid
 import os
 import hashlib
+import logging
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Query
 from fastapi.responses import FileResponse
+from sqlalchemy import text as _sql
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.common import UnifiedResponse
-from app.deps import get_current_user
+from app.deps import get_current_user, get_db
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -32,6 +37,7 @@ def get_upload_dir(user_id: int, category: str = "") -> str:
 async def upload_file(
     file: UploadFile = File(...),
     category: str = "",
+    db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
     content_type = file.content_type or ""
@@ -51,18 +57,48 @@ async def upload_file(
         else:
             ext = ".png"
 
-    filename = f"{uuid.uuid4().hex}{ext}"
-    target_dir = get_upload_dir(user.id, category)
-    filepath = os.path.join(target_dir, filename)
-
     content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
+    file_hash = hashlib.sha256(content).hexdigest()
 
-    # URL: {user_id}/{category}/{filename}
-    url_path = f"{user.id}/{category}/{filename}" if category else f"{user.id}/{filename}"
-    url = f"{settings.PUBLIC_URL}/api/files/{url_path}"
-    return UnifiedResponse(code=200, data={"url": url, "filename": filename}, msg="uploaded")
+    # 映射 category 到 source
+    source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated"}
+    source = source_map.get(category, "unknown")
+
+    # 用户级去重：检查是否已存在
+    row = await db.execute(
+        _sql("SELECT hash FROM file_objects WHERE user_id = :uid AND hash = :h"),
+        {"uid": user.id, "h": file_hash},
+    )
+    existing = row.fetchone()
+
+    if existing:
+        # 已存在 → 刷新 updated_at，不写盘
+        await db.execute(
+            _sql("UPDATE file_objects SET updated_at = CURRENT_TIMESTAMP WHERE user_id = :uid AND hash = :h"),
+            {"uid": user.id, "h": file_hash},
+        )
+        await db.commit()
+        logger.info(f"dedup hit: user={user.id} hash={file_hash}")
+    else:
+        # 新文件 → 写盘 + 建记录
+        sub = file_hash[:2]
+        full_dir = os.path.join(UPLOAD_DIR, str(user.id), sub)
+        full_path = os.path.join(full_dir, f"{file_hash}{ext}")
+        os.makedirs(full_dir, exist_ok=True)
+        with open(full_path, "wb") as f:
+            f.write(content)
+
+        await db.execute(
+            _sql("""INSERT INTO file_objects (user_id, hash, size, mime_type, ext, source)
+                     VALUES (:uid, :h, :sz, :mime, :ext, :src)"""),
+            {"uid": user.id, "h": file_hash, "sz": len(content),
+             "mime": content_type, "ext": ext, "src": source},
+        )
+        await db.commit()
+
+    # URL: /api/files/{user_id}/{hash[:2]}/{hash}{ext}
+    url = f"{settings.PUBLIC_URL}/api/files/{user.id}/{file_hash[:2]}/{file_hash}{ext}"
+    return UnifiedResponse(code=200, data={"url": url, "filename": f"{file_hash}{ext}"}, msg="uploaded")
 
 
 @router.get("/{filepath:path}")
@@ -70,6 +106,11 @@ async def get_file(
     filepath: str,
     w: int = Query(None, ge=1, le=4096, description="Resize image width in pixels"),
 ):
+    """
+    TODO: 文件访问鉴权 — 当前完全公开，任何人拿到 URL 可读取任意用户文件。
+    已知安全缺口，等独立方案确定后再处理（当前进度的阶段性决策，非疏忽）。
+    目标方案见 docs/architecture-notes.md 或单独的文件访问鉴权任务。
+    """
     full_path = os.path.join(UPLOAD_DIR, filepath)
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -167,15 +208,17 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
 
 @router.delete("/{filepath:path}")
 async def delete_file(filepath: str, user=Depends(get_current_user)):
+    """
+    当前不建议使用。去重体系下直接删物理文件可能影响其他引用同一 hash 的资源。
+    资产删除请通过 DELETE /api/assets/items/{id} 操作（仅减 ref_count，不删文件）。
+    """
     full_path = os.path.join(UPLOAD_DIR, filepath)
-    # Security: only allow deleting files under user's own directory
     if not full_path.startswith(os.path.join(UPLOAD_DIR, str(user.id))):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete other user's files")
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     os.remove(full_path)
 
-    # Clean up cached resized versions
     base_name = os.path.splitext(os.path.basename(filepath))[0]
     cache_sub = os.path.dirname(filepath)
     cache_dir = os.path.join(CACHE_DIR, cache_sub)

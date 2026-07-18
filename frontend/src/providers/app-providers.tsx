@@ -1,16 +1,24 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConfigProvider, theme as antTheme, App as AntApp } from "antd";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { getLayerPopupContainer } from "@/lib/layer";
+import { setGlobalMessageApi } from "@/lib/global-message";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000 },
   },
 });
+
+/** 在组件内获取 message API 并暴露给全局，供 api.ts 等 React 树外的代码使用 */
+function MessageApiRegistrar() {
+  const { message } = AntApp.useApp();
+  useEffect(() => { setGlobalMessageApi(message); }, [message]);
+  return null;
+}
 
 function AntConfigProvider({ children }: { children: ReactNode }) {
   const themeMode = useCanvasStore((s) => s.theme);
@@ -42,7 +50,10 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
       }}
       getPopupContainer={getLayerPopupContainer}
     >
-      <AntApp>{children}</AntApp>
+      <AntApp>
+        <MessageApiRegistrar />
+        {children}
+      </AntApp>
     </ConfigProvider>
   );
 }

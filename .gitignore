@@ -78,6 +78,10 @@ backend/*.db-wal
 
 
 # =====================================================
+# Inference Service
+inference_service/__pycache__/
+inference_service/.env
+
 # User Generated Files
 # =====================================================
 

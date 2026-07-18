@@ -23,6 +23,7 @@ const zh: Record<string, string> = {
   "replace": "替换", "download": "下载", "clear": "清除", "upload": "上传",
   "crop": "裁剪", "transform": "旋转 / 翻转", "rotate90": "旋转90°", "flipH": "水平翻转", "flipV": "垂直翻转",
   "grid.split": "宫格切分", "grid.custom": "自定义", "grid.select": "选择行列数",
+  "bg_removal": "抠图",
   "save.assets": "保存到素材",
   // Generation
   "generate": "生成", "model": "模型", "quality": "质量", "size": "尺寸",
@@ -77,6 +78,7 @@ const zh: Record<string, string> = {
   "delete.asset": "删除资产", "delete.channel": "删除渠道",
   "asset.count": "项",
   "my.api": "我的 API", "preset": "预设", "add.model.placeholder": "手动添加模型名称...",
+  "session.expired": "登录已过期，请重新登录",
   // Assets
   "asset.title": "资产管理",
   "asset.spaces": "资产空间",
@@ -125,6 +127,7 @@ const en: Record<string, string> = {
   "replace": "Replace", "download": "Download", "clear": "Clear", "upload": "Upload",
   "crop": "Crop", "transform": "Rotate / Flip", "rotate90": "Rotate 90°", "flipH": "Flip H", "flipV": "Flip V",
   "grid.split": "Grid Split", "grid.custom": "Custom", "grid.select": "Select rows & cols",
+  "bg_removal": "Bg Removal",
   "save.assets": "Save to Assets",
   "generate": "Generate", "model": "Model", "quality": "Quality", "size": "Size",
   "generation.failed": "Generation failed. Check model config and network connection.",
@@ -170,6 +173,7 @@ const en: Record<string, string> = {
   "delete.asset": "Delete Asset", "delete.channel": "Delete Channel",
   "asset.count": "items",
   "my.api": "My API", "preset": "Preset", "add.model.placeholder": "Add model name manually...",
+  "session.expired": "Session expired, please log in again",
   // Assets
   "asset.title": "Asset Management",
   "asset.spaces": "Asset Spaces",

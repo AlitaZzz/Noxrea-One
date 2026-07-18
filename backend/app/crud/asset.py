@@ -1,9 +1,37 @@
+import logging
 from typing import Optional, Sequence
 
 from sqlalchemy import select, delete, update
+from sqlalchemy import text as _sql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetItem, AssetFolder
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_hash_from_url(url: str) -> tuple[int, str, str] | None:
+    """从 URL 解析 (user_id, hash, ext)。URL 格式: /api/files/{user_id}/{hash[:2]}/{hash}{ext}"""
+    if "/api/files/" not in url:
+        return None
+    path = url.split("/api/files/")[-1]
+    parts = path.split("/")
+    if len(parts) != 3:
+        return None
+    filename = parts[2]
+    dot = filename.rfind(".")
+    if dot == -1:
+        file_hash, ext = filename, ""
+    else:
+        file_hash, ext = filename[:dot], filename[dot:]
+    # SHA256 hex 是 64 字符，非 hash 路径（如 UUID 命名）不处理
+    if len(file_hash) != 64:
+        return None
+    try:
+        user_id = int(parts[0])
+    except ValueError:
+        return None
+    return user_id, file_hash, ext
 
 
 # --- Folder CRUD ---
@@ -104,9 +132,42 @@ async def get_asset(db: AsyncSession, asset_id: int, user_id: int) -> Optional[A
     return result.scalar_one_or_none()
 
 
+async def _add_asset_ref(db: AsyncSession, user_id: int, source_url: str | None, asset_id: int):
+    """记录 asset 对文件的引用（同一事务中调用，不自己 commit）"""
+    if not source_url:
+        return
+    parsed = _parse_hash_from_url(source_url)
+    if not parsed:
+        return
+    _, file_hash, _ = parsed
+    await db.execute(
+        _sql("INSERT OR IGNORE INTO file_references (file_hash, user_id, ref_type, ref_id) "
+             "VALUES (:h, :uid, 'asset', :rid)"),
+        {"h": file_hash, "uid": user_id, "rid": asset_id},
+    )
+
+
+async def _remove_asset_ref(db: AsyncSession, user_id: int, source_url: str | None, asset_id: int):
+    """删除 asset 对文件的引用（同一事务中调用，不自己 commit）"""
+    if not source_url:
+        return
+    parsed = _parse_hash_from_url(source_url)
+    if not parsed:
+        return
+    _, file_hash, _ = parsed
+    await db.execute(
+        _sql("DELETE FROM file_references WHERE file_hash = :h AND user_id = :uid AND ref_type = 'asset' AND ref_id = :rid"),
+        {"h": file_hash, "uid": user_id, "rid": asset_id},
+    )
+
+
 async def create_asset(db: AsyncSession, user_id: int, **kwargs) -> AssetItem:
     asset = AssetItem(user_id=user_id, **kwargs)
     db.add(asset)
+    # flush 让 asset.id 生成
+    await db.flush()
+    # 与 asset 记录创建在同一事务中
+    await _add_asset_ref(db, user_id, (kwargs.get("extra_data") or {}).get("sourceUrl"), asset.id)
     await db.commit()
     await db.refresh(asset)
     return asset
@@ -115,6 +176,10 @@ async def create_asset(db: AsyncSession, user_id: int, **kwargs) -> AssetItem:
 async def create_assets_batch(db: AsyncSession, user_id: int, items: list[dict]) -> list[AssetItem]:
     assets = [AssetItem(user_id=user_id, **item) for item in items]
     db.add_all(assets)
+    await db.flush()
+    # 与 asset 记录创建在同一事务中（需要 asset.id，所以先 flush）
+    for asset, item in zip(assets, items):
+        await _add_asset_ref(db, user_id, (item.get("extra_data") or {}).get("sourceUrl"), asset.id)
     await db.commit()
     for a in assets:
         await db.refresh(a)
@@ -150,27 +215,13 @@ async def update_asset(db: AsyncSession, asset_id: int, user_id: int, **kwargs) 
 
 
 async def delete_asset(db: AsyncSession, asset_id: int, user_id: int) -> bool:
-    import os as _os
     asset = await get_asset(db, asset_id, user_id)
     if not asset:
         return False
 
-    # Collect file URLs to delete
     source_url = (asset.extra_data or {}).get("sourceUrl")
-    urls = [source_url] if source_url else []
-
-    UPLOAD_DIR = _os.path.join(_os.path.dirname(__file__), "..", "..", "uploads")
-    for url in urls:
-        if not url or "/api/files/" not in url:
-            continue
-        rel = url.split("/api/files/")[-1]
-        filepath = _os.path.join(UPLOAD_DIR, rel)
-        try:
-            if _os.path.isfile(filepath):
-                _os.remove(filepath)
-        except OSError:
-            pass
-
+    # 与 asset 记录删除在同一事务中
+    await _remove_asset_ref(db, user_id, source_url, asset_id)
     await db.delete(asset)
     await db.commit()
     return True

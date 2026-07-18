@@ -45,5 +45,9 @@ class Settings(BaseSettings):
     # SSRF
     ALLOWED_INTERNAL_HOSTS: str = ""     # 逗号分隔的内网地址白名单，如 "192.168.1.50,192.168.1.51"
 
+    # Inference Service (background removal, etc.)
+    INFERENCE_SERVICE_URL: str = "http://localhost:8100"
+    INFERENCE_SERVICE_API_KEY: str = ""
+
 
 settings = Settings()

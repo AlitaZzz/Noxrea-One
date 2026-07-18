@@ -12,11 +12,12 @@ class CanvasProjectCreate(BaseModel):
 class CanvasProjectUpdate(BaseModel):
     name: Optional[str] = None
     canvas_data: Optional[dict] = None
+    needRefRecalc: bool = False
 
 
 class CanvasProjectOut(BaseModel):
     id: int
-    user_id: Optional[int]
+    user_id: int
     name: str
     canvas_data: dict
     created_at: datetime.datetime

@@ -318,7 +318,44 @@ export default function InfiniteCanvas() {
                   try {
                     const evt = JSON.parse(line.slice(6));
                     if (evt.status === "completed" && evt.result_url) {
+                      const d = node.data as any;
                       const prompt = evt.prompt || "";
+
+                      if (d.pendingAction === "bg_removal") {
+                        // 抠图 → 创建新节点，不覆盖原图
+                        const { createNodeFromUrl } = await import("@/lib/image-utils");
+                        const defW = 1024, defH = 1024;
+                        const newNode = await createNodeFromUrl(node.id, evt.result_url, defW, defH, " (bg-removed)");
+                        // Clear source node state
+                        useCanvasStore.getState().updateNodeData(node.id, {
+                          _generating: false, task_status: undefined, task_id: undefined, pendingAction: undefined,
+                        });
+                        markDirtyImmediate();
+                        // Load real dimensions for the new node
+                        if (newNode) {
+                          loadMediaDimensions(evt.result_url, false).then((dims) => {
+                            if (dims.w > 0) {
+                              const shortSide = Math.min(dims.w, dims.h);
+                              const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
+                              const displayW = Math.round(dims.w * scale);
+                              const displayH = Math.round(dims.h * scale);
+                              const titleH = 24;
+                              useCanvasStore.getState().updateNodeData(newNode.id, {
+                                naturalWidth: dims.w, naturalHeight: dims.h,
+                              }, { width: displayW, height: displayH + titleH });
+                              markDirtyImmediate();
+                            }
+                          });
+                        }
+                        const t = useI18nStore.getState().t;
+                        if (!notifiedTasksRef.current.has(taskId)) {
+                          notifiedTasksRef.current.add(taskId);
+                          notifRef.current.success({ title: t("generation.image.success"), description: "Background removed", placement: "bottomRight", duration: 5 });
+                        }
+                        sseCtrlsRef.current.delete(taskId);
+                        return;
+                      }
+
                       const label = prompt.slice(0, 20);
                       const isVideoNode = node.type === "video-node";
                       // Immediately show result with default size
@@ -355,14 +392,16 @@ export default function InfiniteCanvas() {
                       return;
                     } else if (evt.status === "failed") {
                       const isVideoNode = node.type === "video-node";
+                      const d = node.data as any;
                       useCanvasStore.getState().updateNodeData(node.id, {
                         _generating: false, task_status: undefined, task_id: undefined,
+                        pendingAction: undefined,
                       });
                       markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
+                        notifRef.current.error({ title: d.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

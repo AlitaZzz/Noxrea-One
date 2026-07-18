@@ -40,6 +40,12 @@ export interface ImageNodeData {
   naturalWidth: number;
   naturalHeight: number;
   alt: string;
+  /** CSS 旋转度数（0/90/180/270），仅影响显示，不修改原图文件 */
+  rotation?: number;
+  /** CSS 水平翻转，仅影响显示，不修改原图文件 */
+  flipH?: boolean;
+  /** CSS 垂直翻转，仅影响显示，不修改原图文件 */
+  flipV?: boolean;
 }
 
 // ============================================================

@@ -8,21 +8,20 @@ import { Tooltip, Popover, Input } from "antd";
 import {
   UploadOutlined,
   PictureOutlined,
-  DeleteOutlined,
   FileImageOutlined,
   DownloadOutlined,
   ScissorOutlined,
-  SwapOutlined,
   StarOutlined,
 } from "@ant-design/icons";
 import type { ImageNodeData, AnyNode } from "@/lib/types";
 import {
   DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, THUMBNAIL_MAX,
 } from "@/lib/constants";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
-import { createImageNode, createEdge } from "@/lib/node-defaults";
+import { createEdge } from "@/lib/node-defaults";
 import { apiUpload } from "@/lib/api";
+import { uploadBlob, buildNodeFromUrl } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface ImageNodeProps {
@@ -38,15 +37,6 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
-
-  // Format: "basename (suffix).ext" — split extension before inserting suffix
-  const formatNodeName = (suffix: string) => {
-    const raw = data.alt || data.label || "image";
-    const dot = raw.lastIndexOf(".");
-    const base = dot > 0 ? raw.slice(0, dot) : raw;
-    const ext = dot > 0 ? raw.slice(dot) : "";
-    return { label: `${base} ${suffix}${ext}`, alt: `${base} ${suffix}${ext}` };
-  };
 
   // Sync local src when data.src changes externally (e.g. from generation panel)
   useEffect(() => {
@@ -125,75 +115,61 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const addNodes = useCanvasStore((s) => s.addNodes);
   const addAsset = useAssetsStore((s) => s.addAsset);
 
-  const handleCrop = useCallback(async () => {
-    if (!src) return;
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = async () => {
-      const size = Math.min(img.naturalWidth, img.naturalHeight);
-      const sx = (img.naturalWidth - size) / 2;
-      const sy = (img.naturalHeight - size) / 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = size; canvas.height = size;
-      canvas.getContext("2d")!.drawImage(img, sx, sy, size, size, 0, 0, size, size);
-      const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
-      const fd = new FormData();
-      fd.append("file", blob, "crop.png");
-      const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", fd);
-      if (res.code !== 200 || !res.data?.url) return;
-      const croppedUrl = res.data.url;
-      const s = useCanvasStore.getState();
-      const THUMBNAIL_MAX = 360;
-      const displaySize = size > THUMBNAIL_MAX ? THUMBNAIL_MAX : size;
-      const cx = -s.viewport.x / s.viewport.zoom + (window.innerWidth / 2) / s.viewport.zoom;
-      const cy = -s.viewport.y / s.viewport.zoom + (window.innerHeight / 2) / s.viewport.zoom;
-      const node = createImageNode({ x: cx - displaySize / 2, y: cy - displaySize / 2 }, croppedUrl);
-      node.data.naturalWidth = size; node.data.naturalHeight = size;
-      const n1 = formatNodeName("(cropped)");
-      node.data.label = n1.label; node.data.alt = n1.alt;
-      node.style = { width: displaySize, height: displaySize };
-      addNodes([node]);
-    };
-    img.src = src;
-  }, [src, data.alt, addNodes]);
-
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = async () => {
+    const store = useCanvasStore.getState();
+    store.updateNodeData(id, { _generating: true });
+    try {
+      // 1. 加载原图
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new window.Image();
+        i.crossOrigin = "anonymous";
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = src;
+      });
+
+      // 2. Canvas 烘焙
+      const isRot90 = op === "rot90";
       const canvas = document.createElement("canvas");
-      if (op === "rot90") { canvas.width = img.naturalHeight; canvas.height = img.naturalWidth; }
-      else { canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; }
+      canvas.width = isRot90 ? img.naturalHeight : img.naturalWidth;
+      canvas.height = isRot90 ? img.naturalWidth : img.naturalHeight;
       const ctx = canvas.getContext("2d")!;
-      if (op === "rot90") { ctx.translate(canvas.width, 0); ctx.rotate(Math.PI / 2); }
-      else if (op === "flipH") { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-      else if (op === "flipV") { ctx.translate(0, canvas.height); ctx.scale(1, -1); }
-      ctx.drawImage(img, 0, 0);
-      const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
-      const fd = new FormData();
-      fd.append("file", blob, "transform.png");
-      const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", fd);
-      if (res.code !== 200 || !res.data?.url) return;
-      const url = res.data.url;
-      const s = useCanvasStore.getState();
-      const THUMBNAIL_MAX = 360;
-      const nw = canvas.width, nh = canvas.height;
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      if (isRot90) ctx.rotate(Math.PI / 2);
+      if (op === "flipH") ctx.scale(-1, 1);
+      if (op === "flipV") ctx.scale(1, -1);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+
+      // 3. 导出并上传
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+      const url = await uploadBlob(blob, `transform_${Date.now()}.png`);
+      if (!url) throw new Error("Upload failed");
+
+      // 4. 按 THUMBNAIL_MAX 等比缩放计算显示尺寸
+      const nw = canvas.width;
+      const nh = canvas.height;
       const shortSide = Math.min(nw, nh);
       const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
       const displayW = Math.round(nw * scale);
       const displayH = Math.round(nh * scale);
-      const cx = -s.viewport.x / s.viewport.zoom + (window.innerWidth / 2) / s.viewport.zoom;
-      const cy = -s.viewport.y / s.viewport.zoom + (window.innerHeight / 2) / s.viewport.zoom;
-      const node = createImageNode({ x: cx - displayW / 2, y: cy - displayH / 2 }, url);
-      node.data.naturalWidth = nw; node.data.naturalHeight = nh;
-      const n2 = formatNodeName(`(${op})`);
-      node.data.label = n2.label; node.data.alt = n2.alt;
-      node.style = { width: displayW, height: displayH };
-      addNodes([node]);
-    };
-    img.src = src;
-  }, [src, data.alt, addNodes]);
+
+      // 5. 更新节点
+      store.updateNodeData(id, {
+        src: url,
+        naturalWidth: nw,
+        naturalHeight: nh,
+        _generating: false,
+        rotation: undefined,
+        flipH: undefined,
+        flipV: undefined,
+      }, { width: displayW, height: displayH + 24 });
+      markDirtyImmediate();
+    } catch (e) {
+      store.updateNodeData(id, { _generating: false });
+      console.error("transform failed:", e);
+    }
+  }, [id, src]);
 
   const handleSaveToAssets = useCallback(() => {
     if (!src) return;
@@ -209,7 +185,6 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;
-    // Show loading
     useCanvasStore.getState().updateNodeData(id, { _generating: true });
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -222,13 +197,12 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
       const pieceW = img.naturalWidth / cols;
       const pieceH = img.naturalHeight / rows;
-      const titleH = 24;
       const shortSide = Math.min(pieceW, pieceH);
       const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
       const displayW = Math.round(pieceW * scale);
       const displayH = Math.round(pieceH * scale);
 
-      // Get original node position
+      // Get original node position for grid layout
       const origNode = useCanvasStore.getState().nodes.find((n) => n.id === id);
       const baseX = (origNode?.position.x || 0) + (origNode?.style?.width as number || 600) + 60;
       const baseY = origNode?.position.y || 0;
@@ -244,26 +218,17 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           ctx.drawImage(img, c * pieceW, r * pieceH, pieceW, pieceH, 0, 0, pieceW, pieceH);
 
           const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
-          const fd = new FormData();
-          fd.append("file", blob, `grid_${r}_${c}.png`);
-          const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", fd);
-          if (res.code !== 200 || !res.data?.url) continue;
+          const url = await uploadBlob(blob, `grid_${r}_${c}.png`);
+          if (!url) continue;
 
-          const node = createImageNode(
-            { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) },
-            res.data.url
-          );
-          node.data.naturalWidth = pieceW;
-          node.data.naturalHeight = pieceH;
-          const n3 = formatNodeName(`(${r + 1}-${c + 1})`);
-          node.data.label = n3.label; node.data.alt = n3.alt;
-          node.style = { width: displayW, height: displayH + titleH };
+          // Position each piece in the grid
+          const pos = { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) };
+          const node = buildNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, undefined, pos);
           nodes.push(node);
         }
       }
       if (nodes.length > 0) {
         addNodes(nodes);
-        // Create edges from original node to each grid piece
         const store = useCanvasStore.getState();
         const newEdges = nodes.map((n) => createEdge(id, n.id));
         store.setEdges([...store.edges, ...newEdges]);
@@ -273,25 +238,54 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     } finally {
       useCanvasStore.getState().updateNodeData(id, { _generating: false });
     }
-  }, [id, src, data.alt, data.label, addNodes, addAsset]);
+  }, [id, src, addNodes]);
+
+  const handleBgRemoval = useCallback(async () => {
+    if (!src) return;
+    useCanvasStore.getState().updateNodeData(id, { _generating: true });
+    try {
+      // Create task via existing generation task queue
+      const { BASE, getTokenHeader } = await import("@/lib/api");
+      const res = await fetch(`${BASE}/api/generate/task`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getTokenHeader() },
+        body: JSON.stringify({
+          type: "bg_removal",
+          prompt: "",
+          refUrls: [src],
+          nodeId: id,
+        }),
+      });
+      if (!res.ok) throw new Error(`Task creation failed: HTTP ${res.status}`);
+      const json = await res.json();
+      const taskId = json.data?.id;
+      if (!taskId) throw new Error("No task_id returned");
+
+      // Store task info in node data for InfiniteCanvas SSE monitor
+      useCanvasStore.getState().updateNodeData(id, {
+        task_id: taskId,
+        task_status: "pending",
+        pendingAction: "bg_removal",
+      });
+      // markDirtyImmediate handled by updateNodeData internally
+    } catch (e: any) {
+      useCanvasStore.getState().updateNodeData(id, { _generating: false });
+      console.error("bg-removal failed:", e);
+    }
+  }, [id, src]);
 
   const handleClear = useCallback(() => {
     setSrc("");
-    window.dispatchEvent(
-      new CustomEvent("node:update-data", {
-        detail: {
-          nodeId: id,
-          data: { ...data, src: "", label: t("image.node"), alt: "", naturalWidth: 0, naturalHeight: 0 },
-          style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
-          immediate: true,
-        },
-      })
-    );
-  }, [id, data]);
+    useCanvasStore.getState().updateNodeData(id, {
+      src: "", label: t("image.node"), alt: "", naturalWidth: 0, naturalHeight: 0,
+      rotation: undefined, flipH: undefined, flipV: undefined,
+    }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
+    markDirtyImmediate();
+  }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform, handleGridSplit });
-  actionRefs.current = { handleDownload, handleSaveToAssets, handleCrop, handleReplace, handleClear, handleTransform, handleGridSplit };
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval });
+  actionRefs.current = { handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -300,12 +294,12 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
-        case "crop": a.handleCrop(); break;
         case "crop-interactive": setCropOpen(true); break;
         case "replace": a.handleReplace(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
+        case "bg-removal": a.handleBgRemoval(); break;
       }
     }
     window.addEventListener("canvas:node-action", onNodeAction);
@@ -340,6 +334,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   };
 
   const hasImage = src && src.length > 0;
+
+  // 烘焙模式：图片本身就是旋转/翻转后的成品，无需 CSS transform
 
   return (
     <>

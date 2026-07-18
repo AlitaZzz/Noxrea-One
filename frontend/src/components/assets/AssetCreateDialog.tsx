@@ -105,11 +105,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     return Promise.resolve();
   }, []);
 
-  // Delete uploaded files from server AND clear state (used for cancel/close)
+  // Clear local state — 不删物理文件，去重体系下取消上传时文件继续保留
   const reset = () => {
-    files.forEach((f) => {
-      if (f.url) delServerFile(f.url);
-    });
     clearState();
   };
 
@@ -222,18 +219,10 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     }
   }
 
-  const delServerFile = (url: string) => {
-    if (!url) return;
-    const token = localStorage.getItem("noxrea-auth-token") || "";
-    const rel = url.split("/api/files/")[1];
-    if (rel) fetch(`${BASE}/api/files/${rel}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-  };
-
   const removeFile = useCallback((id: string) => {
     const target = files.find((f) => f.id === id);
     if (target) {
       URL.revokeObjectURL(target.previewUrl);
-      if (target.url) delServerFile(target.url);
     }
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, [files]);
