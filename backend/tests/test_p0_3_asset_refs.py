@@ -42,7 +42,7 @@ class TestAssetReferences:
 
         r = await async_client.post("/api/assets/items", json={
             "name": "test-asset",
-            "type": "image",
+            "type": "other",
             "space_key": "default",
             "extra_data": {"sourceUrl": url},
         })
@@ -66,7 +66,7 @@ class TestAssetReferences:
         await _ensure_file_object(db, uid, TEST_HASH_A)
 
         r = await async_client.post("/api/assets/items", json={
-            "name": "del-asset", "type": "image", "space_key": "default",
+            "name": "del-asset", "type": "other", "space_key": "default",
             "extra_data": {"sourceUrl": url},
         })
         asset_id = r.json()["data"]["id"]
@@ -92,9 +92,9 @@ class TestAssetReferences:
         await _ensure_file_object(db, uid, TEST_HASH_B)
 
         r = await async_client.post("/api/assets/items/batch", json=[
-            {"name": "batch1", "type": "image", "space_key": "default",
+            {"name": "batch1", "type": "other", "space_key": "default",
              "extra_data": {"sourceUrl": url_a}},
-            {"name": "batch2", "type": "image", "space_key": "default",
+            {"name": "batch2", "type": "other", "space_key": "default",
              "extra_data": {"sourceUrl": url_b}},
         ])
         assert r.status_code == 200, f"Batch create failed: {r.text}"
@@ -121,7 +121,7 @@ class TestAssetReferences:
         """非 CAS url 的 sourceUrl → 不创建 file_reference."""
         body = {
             "name": "external-img",
-            "type": "image",
+            "type": "other",
             "space_key": "default",
         }
         if bad_url is not None:

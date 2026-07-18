@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.common import UnifiedResponse
+from app.schemas.model_config import ModelChannelCreate, ModelChannelUpdate, ModelInfoCreate, ModelModelsSet, ModelCapabilityUpdate
 from app.deps import get_db, get_current_user
 from app.crud import model_config as crud
 
@@ -25,24 +26,24 @@ async def list_channels(
 
 @router.post("/channels")
 async def create_channel(
-    body: dict,
+    body: ModelChannelCreate,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ch = await crud.create_channel(db, user.id, body.get("name", ""), body.get("baseUrl", ""), body.get("apiKey", ""))
+    ch = await crud.create_channel(db, user.id, body.name, body.baseUrl, body.apiKey)
     return UnifiedResponse(code=200, data={"id": str(ch.id)}, msg="created")
 
 
 @router.put("/channels/{channel_id}")
 async def update_channel(
     channel_id: str,
-    body: dict,
+    body: ModelChannelUpdate,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     ch = await crud.update_channel(
         db, int(channel_id), user.id,
-        name=body.get("name"), base_url=body.get("baseUrl"), api_key=body.get("apiKey"),
+        name=body.name, base_url=body.baseUrl, api_key=body.apiKey,
     )
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
@@ -64,14 +65,14 @@ async def delete_channel(
 @router.post("/channels/{channel_id}/models")
 async def add_model(
     channel_id: str,
-    body: dict,
+    body: ModelInfoCreate,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    m = await crud.add_model(db, int(channel_id), body.get("name", ""), body.get("capabilities", []))
+    m = await crud.add_model(db, int(channel_id), body.name, body.capabilities)
     return UnifiedResponse(code=200, data={"id": str(m.id)}, msg="added")
 
 
@@ -92,14 +93,15 @@ async def remove_model(
 @router.post("/channels/{channel_id}/models/set")
 async def set_models(
     channel_id: str,
-    body: dict,
+    body: ModelModelsSet,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    await crud.set_models(db, int(channel_id), body.get("models", []))
+    models_data = [m.model_dump() for m in body.models]
+    await crud.set_models(db, int(channel_id), models_data)
     return UnifiedResponse(code=200, msg="updated")
 
 
@@ -107,14 +109,14 @@ async def set_models(
 async def toggle_capability(
     channel_id: str,
     model_id: str,
-    body: dict,
+    body: ModelCapabilityUpdate,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     ch = await crud.get_channel(db, int(channel_id), user.id)
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
-    m = await crud.update_model_capabilities(db, int(model_id), int(channel_id), body.get("capabilities", []))
+    m = await crud.update_model_capabilities(db, int(model_id), int(channel_id), body.capabilities)
     if not m:
         raise HTTPException(status_code=404, detail="Not found")
     return UnifiedResponse(code=200, msg="updated")

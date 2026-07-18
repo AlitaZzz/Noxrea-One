@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserOut(BaseModel):
@@ -18,14 +18,14 @@ class UserOut(BaseModel):
 
 
 class UserCreate(BaseModel):
-    username: str
+    username: str = Field(max_length=50)
     password: str  # plaintext — hashed before storage
     avatar: Optional[str] = None
     role: str = "admin"
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
+    username: Optional[str] = Field(default=None, max_length=50)
     avatar: Optional[str] = None
     password: Optional[str] = None
     old_password: Optional[str] = None
