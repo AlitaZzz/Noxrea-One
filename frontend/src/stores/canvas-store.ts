@@ -32,6 +32,16 @@ export function flushOnUnload(): void {
   saveManager.flushOnUnload();
 }
 
+/** 自动压栈 throttle 辅助函数 */
+function maybePushHistory(options?: { skipHistory?: boolean }) {
+  if (options?.skipHistory) return;
+  const now = Date.now();
+  if (now - _lastHistoryTime > HISTORY_THROTTLE) {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    _lastHistoryTime = now;
+  }
+}
+
 interface CanvasState {
   // Viewport
   viewport: ViewportState;
@@ -41,11 +51,11 @@ interface CanvasState {
   nodes: AnyNode[];
   edges: Edge[];
   setNodes: (nodes: AnyNode[]) => void;
-  setEdges: (edges: Edge[]) => void;
-  addNodes: (nodes: AnyNode[]) => void;
-  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>) => void;
-  removeNodes: (nodeIds: string[]) => void;
-  removeEdges: (edgeIds: string[]) => void;
+  setEdges: (edges: Edge[], options?: { skipHistory?: boolean }) => void;
+  addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean }) => void;
+  removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
+  removeEdges: (edgeIds: string[], options?: { skipHistory?: boolean }) => void;
 
   // Background
   background: BackgroundType;
@@ -92,19 +102,17 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setNodes: (nodes) => {
     set({ nodes });
   },
-  setEdges: (edges) => {
+  setEdges: (edges, options) => {
+    maybePushHistory(options);
     set({ edges });
   },
-  addNodes: (nodes) => {
+  addNodes: (nodes, options) => {
+    maybePushHistory(options);
     set((s) => ({ nodes: [...s.nodes, ...nodes] }));
     saveManager.markDirtyImmediate();
   },
   updateNodeData: (nodeId, data, style, options) => {
-    const now = Date.now();
-    if (!options?.skipHistory && now - _lastHistoryTime > 300) {
-      useHistoryStore.getState().push(takeCanvasSnapshot());
-      _lastHistoryTime = now;
-    }
+    maybePushHistory(options);
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === nodeId
@@ -114,7 +122,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     }));
     saveManager.markDirty();
   },
-  removeNodes: (nodeIds) => {
+  removeNodes: (nodeIds, options) => {
+    maybePushHistory(options);
     const idSet = new Set(nodeIds);
     set((s) => ({
       nodes: s.nodes.filter((n) => !idSet.has(n.id)),
@@ -124,7 +133,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     }));
     saveManager.markDirtyImmediate();
   },
-  removeEdges: (edgeIds) => {
+  removeEdges: (edgeIds, options) => {
+    maybePushHistory(options);
     const idSet = new Set(edgeIds);
     set((s) => ({
       edges: s.edges.filter((e) => !idSet.has(e.id)),
