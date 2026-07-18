@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useCanvasStore, takeCanvasSnapshot, markDirty, markDirtyImmediate } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
+import { useCanvasStore, markDirty, markDirtyImmediate } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
 import { EventNames } from "@/lib/eventNames";
@@ -16,7 +15,6 @@ import { EventNames } from "@/lib/eventNames";
 export function useCanvasEvents() {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const copySelected = useSelectionStore((s) => s.copySelected);
-  const pushHistory = useHistoryStore((s) => s.push);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
   const removeEdges = useCanvasStore((s) => s.removeEdges);
   const showCtx = useCtxMenu((s) => s.show);
@@ -56,23 +54,21 @@ export function useCanvasEvents() {
   useEffect(() => {
     function onDeleteNodes(e: Event) {
       const { nodeIds } = (e as CustomEvent).detail;
-      pushHistory(takeCanvasSnapshot());
       removeNodes(nodeIds);
     }
     window.addEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
     return () => window.removeEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
-  }, [pushHistory, removeNodes]);
+  }, [removeNodes]);
 
   // 4) canvas:delete-edges
   useEffect(() => {
     function onDeleteEdges(e: Event) {
       const { edgeIds } = (e as CustomEvent).detail;
-      pushHistory(takeCanvasSnapshot());
       removeEdges(edgeIds);
     }
     window.addEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
     return () => window.removeEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
-  }, [pushHistory, removeEdges]);
+  }, [removeEdges]);
 
   // 5) Right-click context menu (DOM events, not CustomEvent)
   useEffect(() => {

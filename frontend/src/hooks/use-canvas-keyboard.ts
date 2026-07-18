@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { useCanvasStore, takeCanvasSnapshot, markDirtyImmediate } from "@/stores/canvas-store";
+import { useCanvasStore, markDirtyImmediate, takeCanvasSnapshot } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { duplicateNode } from "@/lib/node-defaults";
@@ -34,7 +34,6 @@ export function useCanvasKeyboard() {
   const removeEdges = useCanvasStore((s) => s.removeEdges);
   const resetViewport = useCanvasStore((s) => s.resetViewport);
 
-  const pushHistory = useHistoryStore((s) => s.push);
   const undoHistory = useHistoryStore((s) => s.undo);
   const redoHistory = useHistoryStore((s) => s.redo);
 
@@ -86,7 +85,6 @@ export function useCanvasKeyboard() {
         const clip = useSelectionStore.getState().clipboard;
         if (clip && clip.nodes.length > 0) {
           e.preventDefault();
-          pushHistory(takeCanvasSnapshot());
           const newNodes = clip.nodes.map((n) =>
             duplicateNode(n, PASTE_OFFSET)
           );
@@ -111,7 +109,6 @@ export function useCanvasKeyboard() {
 
         if (hasNodeSelection || hasEdgeSelection) {
           e.preventDefault();
-          pushHistory(takeCanvasSnapshot());
           if (hasNodeSelection) removeNodes(selNodeIds);
           if (hasEdgeSelection) removeEdges(selEdgeIds);
         }
@@ -122,7 +119,7 @@ export function useCanvasKeyboard() {
         const s = useCanvasStore.getState();
         setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
         useCanvasStore.getState().setEdges(
-          s.edges.map((e) => ({ ...e, selected: false }))
+          s.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true }
         );
       }
 
@@ -139,11 +136,12 @@ export function useCanvasKeyboard() {
       // ---- Undo ----
       if (mod && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
-        const prev = undoHistory();
+        // 先捕获现场快照（进 redoStack，供 redo 回到撤销前），再弹出恢复目标
+        const prev = undoHistory(takeCanvasSnapshot());
         if (prev) {
           const s = useCanvasStore.getState();
           s.setNodes(prev.nodes.map((n: any) => ({ ...n, selected: false })));
-          s.setEdges(prev.edges.map((e: any) => ({ ...e, selected: false })));
+          s.setEdges(prev.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(prev.viewport);
           s.setBackground(prev.background);
           s.setTheme(prev.theme);
@@ -156,11 +154,12 @@ export function useCanvasKeyboard() {
       // ---- Redo ----
       if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
         e.preventDefault();
-        const next = redoHistory();
+        // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标
+        const next = redoHistory(takeCanvasSnapshot());
         if (next) {
           const s = useCanvasStore.getState();
           s.setNodes(next.nodes.map((n: any) => ({ ...n, selected: false })));
-          s.setEdges(next.edges.map((e: any) => ({ ...e, selected: false })));
+          s.setEdges(next.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(next.viewport);
           s.setBackground(next.background);
           s.setTheme(next.theme);
@@ -184,5 +183,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, setNodes, resetViewport, pushHistory, undoHistory, redoHistory, addNodes, removeNodes, removeEdges]);
+  }, [zoomIn, zoomOut, fitView, setNodes, resetViewport, undoHistory, redoHistory, addNodes, removeNodes, removeEdges]);
 }
