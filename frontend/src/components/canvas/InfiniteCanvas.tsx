@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type DragEvent, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ReactFlow,
   Background,
@@ -33,7 +33,7 @@ import CanvasControls from "@/components/canvas/CanvasControls";
 import CenterToolbar from "@/components/canvas/CenterToolbar";
 import GenerationPanel from "@/components/canvas/GenerationPanel";
 import TextAskPanel from "@/components/canvas/TextAskPanel";
-import CanvasContextMenu, { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
+import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
 import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, markDirtyImmediate, flushAndWait, flushOnUnload } from "@/stores/canvas-store";
 import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
@@ -44,35 +44,17 @@ import { useAssetsStore } from "@/stores/assets-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
-import { apiUpload } from "@/lib/api";
-import { applyThumbnailSettings, computeThumbScale } from "@/lib/image-utils";
+import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { useRouter } from "next/navigation";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { NODE_TYPE } from "@/lib/types";
-import { createImageNode, createGroupNode, duplicateNode, createEdge } from "@/lib/node-defaults";
+import { duplicateNode, createEdge } from "@/lib/node-defaults";
 import { useAddNode } from "@/hooks/use-add-node";
-import { GROUP_NODE_PADDING } from "@/lib/constants";
-import { EventNames } from "@/lib/eventNames";
-
-/** Async load image or video dimensions for display */
-function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w: number; h: number }> {
-  return new Promise((resolve) => {
-    if (isVideo) {
-      const v = document.createElement("video");
-      v.preload = "metadata";
-      v.onloadedmetadata = () => resolve({ w: v.videoWidth || 1152, h: v.videoHeight || 768 });
-      v.onerror = () => resolve({ w: 0, h: 0 });
-      v.src = url;
-    } else {
-      const img = new window.Image();
-      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      img.onerror = () => resolve({ w: 0, h: 0 });
-      img.src = url;
-    }
-  });
-}
+import { useGroupOperations } from "@/hooks/use-group-operations";
+import { useCanvasEvents } from "@/hooks/use-canvas-events";
+import { useFileDrop } from "@/hooks/use-file-drop";
 
 const nodeTypes = {
   [NODE_TYPE.TEXT]: TextNode,
@@ -90,8 +72,7 @@ export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView } = useReactFlow();
   const { notification: notif } = App.useApp();
-  const notifRef = useRef(notif);
-  notifRef.current = notif;
+  useSseTaskMonitor(notif);
 
   // Canvas state
   const nodes = useCanvasStore((s) => s.nodes);
@@ -262,213 +243,10 @@ export default function InfiniteCanvas() {
     [nodes, setNodes]
   );
 
-  // ---- Custom events: update node data ----
-
-  useEffect(() => {
-    function onUpdateData(e: Event) {
-      const { nodeId, data, style, position, immediate } = (e as CustomEvent).detail;
-      if (position) {
-        useCanvasStore.getState().setNodes(
-          useCanvasStore.getState().nodes.map((n) =>
-            n.id === nodeId ? { ...n, position } : n
-          )
-        );
-        markDirty();
-      }
-      updateNodeData(nodeId, data ?? {}, style);
-      if (immediate) markDirtyImmediate();
-    }
-    window.addEventListener(EventNames.NODE_UPDATE_DATA, onUpdateData);
-    return () => window.removeEventListener(EventNames.NODE_UPDATE_DATA, onUpdateData);
-  }, [updateNodeData]);
-
-  // ---- SSE task monitor (survives panel unmount) ----
-  const sseCtrlsRef = useRef<Map<string, AbortController>>(new Map());
-  const notifiedTasksRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    import("@/lib/api").then(({ BASE, getTokenHeader }) => {
-      const scanAndConnect = () => {
-        const allNodes = useCanvasStore.getState().nodes;
-        for (const node of allNodes) {
-          const d = node.data as any;
-          if (!d?.task_id) continue;
-          const st = d?.task_status;
-          if (st !== "pending" && st !== "processing") continue;
-          if (sseCtrlsRef.current.has(d.task_id)) continue;
-
-          const taskId = d.task_id;
-          const ctrl = new AbortController();
-          sseCtrlsRef.current.set(taskId, ctrl);
-
-          (async () => {
-            try {
-              const res = await fetch(`${BASE}/api/generate/task/${taskId}/stream`, {
-                headers: { ...getTokenHeader() },
-                signal: ctrl.signal,
-              });
-              if (!res.ok || !res.body) { sseCtrlsRef.current.delete(taskId); return; }
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder();
-              let buffer = "";
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-                for (const line of lines) {
-                  if (!line.startsWith("data: ")) continue;
-                  try {
-                    const evt = JSON.parse(line.slice(6));
-                    if (evt.status === "completed" && evt.result_url) {
-                      const d = node.data as any;
-                      const prompt = evt.prompt || "";
-
-                      if (d.pendingAction === "bg_removal") {
-                        // 抠图 → 创建新节点，不覆盖原图
-                        const { createNodeFromUrl } = await import("@/lib/image-utils");
-                        const defW = 1024, defH = 1024;
-                        const newNode = await createNodeFromUrl(node.id, evt.result_url, defW, defH, " (bg-removed)");
-                        // Clear source node state
-                        useCanvasStore.getState().updateNodeData(node.id, {
-                          _generating: false, task_status: undefined, task_id: undefined, pendingAction: undefined,
-                        });
-                        markDirtyImmediate();
-                        // Load real dimensions for the new node
-                        if (newNode) {
-                          loadMediaDimensions(evt.result_url, false).then((dims) => {
-                            if (dims.w > 0) {
-                              const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
-                              const titleH = 24;
-                              useCanvasStore.getState().updateNodeData(newNode.id, {
-                                naturalWidth: dims.w, naturalHeight: dims.h,
-                              }, { width: displayW, height: displayH + titleH });
-                              markDirtyImmediate();
-                            }
-                          });
-                        }
-                        const t = useI18nStore.getState().t;
-                        if (!notifiedTasksRef.current.has(taskId)) {
-                          notifiedTasksRef.current.add(taskId);
-                          notifRef.current.success({ title: t("generation.image.success"), description: "Background removed", placement: "bottomRight", duration: 5 });
-                        }
-                        sseCtrlsRef.current.delete(taskId);
-                        return;
-                      }
-
-                      const label = prompt.slice(0, 20);
-                      const isVideoNode = node.type === "video-node";
-                      // Immediately show result with default size
-                      const defW = isVideoNode ? 1152 : 1024;
-                      const defH = isVideoNode ? 768 : 1024;
-                      useCanvasStore.getState().updateNodeData(node.id, {
-                        src: evt.result_url, label, alt: label,
-                        naturalWidth: defW, naturalHeight: defH,
-                        lockAspectRatio: true, _generating: false,
-                        task_status: undefined, task_id: undefined,
-                      });
-                      markDirtyImmediate();
-                      // Async load real dimensions
-                      loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
-                        if (dims.w > 0) {
-                          const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
-                          const titleH = 24;
-                          useCanvasStore.getState().updateNodeData(node.id, {
-                            naturalWidth: dims.w, naturalHeight: dims.h,
-                          }, { width: displayW, height: displayH + titleH });
-                          markDirtyImmediate();
-                        }
-                      });
-                      const t = useI18nStore.getState().t;
-                      const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
-                      if (!notifiedTasksRef.current.has(taskId)) {
-                        notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 5 });
-                      }
-                      sseCtrlsRef.current.delete(taskId);
-                      return;
-                    } else if (evt.status === "failed") {
-                      const isVideoNode = node.type === "video-node";
-                      const d = node.data as any;
-                      useCanvasStore.getState().updateNodeData(node.id, {
-                        _generating: false, task_status: undefined, task_id: undefined,
-                        pendingAction: undefined,
-                      });
-                      markDirtyImmediate();
-                      if (!notifiedTasksRef.current.has(taskId)) {
-                        notifiedTasksRef.current.add(taskId);
-                        const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: d.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
-                      }
-                      sseCtrlsRef.current.delete(taskId);
-                      return;
-                    }
-                  } catch {}
-                }
-              }
-            } catch { /* SSE disconnected */ }
-            sseCtrlsRef.current.delete(taskId);
-          })();
-        }
-      };
-
-      scanAndConnect();
-      const timer = setInterval(scanAndConnect, 3000);
-      return () => {
-        clearInterval(timer);
-        for (const ctrl of sseCtrlsRef.current.values()) ctrl.abort();
-        sseCtrlsRef.current.clear();
-      };
-    });
-  }, [markDirty]);
-
-  // ---- Custom events: copy node ----
-
-  useEffect(() => {
-    function onCopyNode(e: Event) {
-      const { nodeId } = (e as CustomEvent).detail;
-      const allNodes = useCanvasStore.getState().nodes;
-      const target = allNodes.find((n) => n.id === nodeId);
-      if (target) copySelected([target]);
-    }
-    window.addEventListener(EventNames.CANVAS_COPY_NODE, onCopyNode);
-    return () => window.removeEventListener(EventNames.CANVAS_COPY_NODE, onCopyNode);
-  }, [copySelected]);
-
-  // ---- Custom events: delete nodes (from toolbar) ----
-
-  useEffect(() => {
-    function onDeleteNodes(e: Event) {
-      const { nodeIds } = (e as CustomEvent).detail;
-      pushHistory(takeCanvasSnapshot());
-      removeNodes(nodeIds);
-    }
-    window.addEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
-    return () => window.removeEventListener(EventNames.CANVAS_DELETE_NODES, onDeleteNodes);
-  }, [pushHistory, removeNodes]);
-
-  // ---- Right-click context menu on canvas ----
-
-  const showCtx = useCtxMenu((s) => s.show);
-  const hideCtx = useCtxMenu((s) => s.hide);
   const clipboard = useSelectionStore((s) => s.clipboard);
 
-  useEffect(() => {
-    function onCanvasDblClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (target.closest(".react-flow__pane") && !target.closest(".react-flow__node")) {
-        showCtx(e.clientX, e.clientY);
-      }
-    }
-    function preventCtx(e: Event) { e.preventDefault(); }
-    document.addEventListener("dblclick", onCanvasDblClick, true);
-    document.addEventListener("contextmenu", preventCtx, { capture: true });
-    return () => {
-      document.removeEventListener("dblclick", onCanvasDblClick, true);
-      document.removeEventListener("contextmenu", preventCtx, { capture: true });
-    };
-  }, [showCtx]);
-
+  useGroupOperations();
+  useCanvasEvents();
   const { addNode: addNodeAtCenter } = useAddNode();
   const handleAddText = useCallback(() => addNodeAtCenter("text"), [addNodeAtCenter]);
   const handleAddImage = useCallback(() => addNodeAtCenter("image"), [addNodeAtCenter]);
@@ -492,156 +270,9 @@ export default function InfiniteCanvas() {
     fitView({ duration: 300 });
   }, []);
 
-  // ---- Custom events: delete edges (from edge X button) ----
-
-  useEffect(() => {
-    function onDeleteEdges(e: Event) {
-      const { edgeIds } = (e as CustomEvent).detail;
-      pushHistory(takeCanvasSnapshot());
-      removeEdges(edgeIds);
-    }
-    window.addEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
-    return () => window.removeEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
-  }, [pushHistory, removeEdges]);
-
-  // ---- Custom events: group / ungroup nodes ----
-
-  useEffect(() => {
-    function onGroupNodes() {
-      const allNodes = useCanvasStore.getState().nodes;
-      const selected = allNodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
-      if (selected.length < 2) return;
-
-      // Calculate bounding box of selected nodes
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const n of selected) {
-        const w = Number(n.style?.width) || 200;
-        const h = Number(n.style?.height) || 120;
-        minX = Math.min(minX, n.position.x);
-        minY = Math.min(minY, n.position.y);
-        maxX = Math.max(maxX, n.position.x + w);
-        maxY = Math.max(maxY, n.position.y + h);
-      }
-
-      const groupX = minX - GROUP_NODE_PADDING;
-      const groupY = minY - GROUP_NODE_PADDING;
-      const groupW = maxX - minX + GROUP_NODE_PADDING * 2;
-      const groupH = maxY - minY + GROUP_NODE_PADDING * 2;
-
-      pushHistory(takeCanvasSnapshot());
-
-      const groupNode = createGroupNode(
-        { x: groupX, y: groupY },
-        { width: groupW, height: groupH }
-      );
-
-      const store = useCanvasStore.getState();
-      // Move selected nodes to be children of the group
-      const updatedNodes = store.nodes.map((n) => {
-        if (selected.find((s) => s.id === n.id)) {
-          return {
-            ...n,
-            parentId: groupNode.id,
-            position: {
-              x: n.position.x - groupX,
-              y: n.position.y - groupY,
-            },
-            extent: "parent" as const,
-            selected: false,
-          };
-        }
-        return n;
-      });
-
-      store.setNodes([{ ...groupNode, selected: true }, ...updatedNodes]);
-      markDirtyImmediate();
-    }
-
-    function onUngroupNodes() {
-      const allNodes = useCanvasStore.getState().nodes;
-      const selectedGroup = allNodes.filter((n) => n.selected && n.type === NODE_TYPE.GROUP);
-      if (selectedGroup.length === 0) return;
-
-      pushHistory(takeCanvasSnapshot());
-
-      const store = useCanvasStore.getState();
-      let newNodes = [...store.nodes];
-
-      for (const group of selectedGroup) {
-        const groupX = group.position.x;
-        const groupY = group.position.y;
-
-        // Move children back to absolute positions
-        newNodes = newNodes.map((n) => {
-          if (n.parentId === group.id) {
-            return {
-              ...n,
-              parentId: undefined,
-              extent: undefined,
-              position: {
-                x: n.position.x + groupX,
-                y: n.position.y + groupY,
-              },
-            };
-          }
-          return n;
-        });
-
-        // Remove the group node
-        newNodes = newNodes.filter((n) => n.id !== group.id);
-      }
-
-      // Clear all edges connected to removed group nodes
-      const removedIds = new Set(selectedGroup.map((g) => g.id));
-      const newEdges = store.edges.filter(
-        (e) => !removedIds.has(e.source) && !removedIds.has(e.target)
-      );
-
-      store.setNodes(newNodes);
-      store.setEdges(newEdges);
-      markDirtyImmediate();
-    }
-
-    window.addEventListener(EventNames.CANVAS_GROUP_NODES, onGroupNodes);
-    window.addEventListener(EventNames.CANVAS_UNGROUP_NODES, onUngroupNodes);
-    return () => {
-      window.removeEventListener(EventNames.CANVAS_GROUP_NODES, onGroupNodes);
-      window.removeEventListener(EventNames.CANVAS_UNGROUP_NODES, onUngroupNodes);
-    };
-  }, [pushHistory, addNodes]);
-
   // ---- File drop on canvas → create image node ----
 
-  const handleDragOver = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  }, []);
-
-  const handleDrop = useCallback(
-    async (e: DragEvent) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files?.[0];
-      if (!file || !file.type.startsWith("image/")) return;
-      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", formData);
-        if (res.code === 200 && res.data?.url) {
-          const src = res.data.url;
-          const img = new window.Image();
-          img.onload = () => {
-            pushHistory(takeCanvasSnapshot());
-            const node = createImageNode(pos, src);
-            applyThumbnailSettings(node, img.naturalWidth, img.naturalHeight, file.name);
-            addNodes([node]);
-          };
-          img.src = src;
-        }
-      } catch (e) { console.error("Drop upload failed:", e); }
-    },
-    [screenToFlowPosition, pushHistory, addNodes]
-  );
+  const { handleDragOver, handleDrop } = useFileDrop(screenToFlowPosition, notif);
 
   // ---- Highlight selected node's connections ----
 
