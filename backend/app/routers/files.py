@@ -11,16 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.common import UnifiedResponse
 from app.deps import get_current_user, get_db
 from app.config import settings
+from app.services.media import (
+    UPLOAD_DIR as _UPLOAD_DIR,
+    IMAGE_EXTS,
+    resize_and_cache_image,
+    extract_video_frame,
+    validate_user_file,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
-CACHE_DIR = os.path.join(UPLOAD_DIR, "_cache")
-
-# Image extensions that support resize
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+UPLOAD_DIR = _UPLOAD_DIR
+CACHE_DIR = os.path.join(_UPLOAD_DIR, "_cache")
 
 
 def get_upload_dir(user_id: int, category: str = "") -> str:
@@ -60,11 +64,9 @@ async def upload_file(
     content = await file.read()
     file_hash = hashlib.sha256(content).hexdigest()
 
-    # 映射 category 到 source
     source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated", "avatars": "avatar_upload"}
     source = source_map.get(category, "unknown")
 
-    # 用户级去重：检查是否已存在
     row = await db.execute(
         _sql("SELECT hash FROM file_objects WHERE user_id = :uid AND hash = :h"),
         {"uid": user.id, "h": file_hash},
@@ -72,7 +74,6 @@ async def upload_file(
     existing = row.fetchone()
 
     if existing:
-        # 已存在 → 刷新 updated_at，不写盘
         await db.execute(
             _sql("UPDATE file_objects SET updated_at = CURRENT_TIMESTAMP WHERE user_id = :uid AND hash = :h"),
             {"uid": user.id, "h": file_hash},
@@ -80,7 +81,6 @@ async def upload_file(
         await db.commit()
         logger.info(f"dedup hit: user={user.id} hash={file_hash}")
     else:
-        # 新文件 → 写盘 + 建记录
         sub = file_hash[:2]
         full_dir = os.path.join(UPLOAD_DIR, str(user.id), sub)
         full_path = os.path.join(full_dir, f"{file_hash}{ext}")
@@ -96,7 +96,6 @@ async def upload_file(
         )
         await db.commit()
 
-    # URL: /api/files/{user_id}/{hash[:2]}/{hash}{ext}
     url = f"{settings.PUBLIC_URL}/api/files/{user.id}/{file_hash[:2]}/{file_hash}{ext}"
     return UnifiedResponse(code=200, data={"url": url, "filename": f"{file_hash}{ext}"}, msg="uploaded")
 
@@ -109,7 +108,6 @@ async def get_file(
     """
     TODO: 文件访问鉴权 — 当前完全公开，任何人拿到 URL 可读取任意用户文件。
     已知安全缺口，等独立方案确定后再处理（当前进度的阶段性决策，非疏忽）。
-    目标方案见 docs/architecture-notes.md 或单独的文件访问鉴权任务。
     """
     full_path = os.path.join(UPLOAD_DIR, filepath)
     if not os.path.isfile(full_path):
@@ -131,32 +129,10 @@ async def get_file(
 
     # Serve resized image when ?w= is specified
     if w is not None and ext in IMAGE_EXTS:
-        # Use WebP for cache (smaller than JPEG, supports alpha)
-        cache_ext = ".webp"
-        cache_sub = os.path.dirname(filepath)
-        cache_name = f"{os.path.splitext(os.path.basename(filepath))[0]}_w{w}{cache_ext}"
-        cache_path = os.path.join(CACHE_DIR, cache_sub, cache_name)
-        cache_media = "image/webp"
-
-        if os.path.isfile(cache_path):
-            return FileResponse(cache_path, media_type=cache_media, headers=headers)
-
-        # Generate resized image
-        try:
-            from PIL import Image
-
-            img = Image.open(full_path)
-            orig_w, orig_h = img.size
-            ratio = w / orig_w
-            new_h = max(1, round(orig_h * ratio))
-            img = img.resize((w, new_h), Image.LANCZOS)
-
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            img.save(cache_path, "WEBP", quality=75, optimize=True)
-            return FileResponse(cache_path, media_type=cache_media, headers=headers)
-        except Exception:
-            # Fallback to original on any processing error
-            pass
+        cache_path = resize_and_cache_image(full_path, w, CACHE_DIR)
+        if cache_path:
+            return FileResponse(cache_path, media_type="image/webp", headers=headers)
+        # Fallback to original on any processing error
 
     # For video, support range requests
     if ext in (".mp4", ".webm"):
@@ -168,7 +144,6 @@ async def get_file(
 @router.post("/capture-frame")
 async def capture_frame(body: dict, user=Depends(get_current_user)):
     """Extract a frame from a video file. body: { url: str, time: float }"""
-    import subprocess, uuid, os as _os
     video_url = body.get("url", "")
     seek_time = body.get("time", 0)
 
@@ -176,32 +151,26 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Invalid video URL")
 
     rel = video_url.split("/api/files/")[-1]
-    video_path = _os.path.join(UPLOAD_DIR, rel)
-    if not _os.path.isfile(video_path):
-        raise HTTPException(status_code=404, detail="Video not found")
-    if not video_path.startswith(_os.path.join(UPLOAD_DIR, str(user.id))):
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    # Generate output filename
-    frame_name = f"{uuid.uuid4().hex}.png"
-    out_dir = get_upload_dir(user.id, "frames")
-    out_path = _os.path.join(out_dir, frame_name)
-
-    # ffmpeg binary: backend/bin/ffmpeg (or ffmpeg.exe on Windows)
-    bin_dir = _os.path.join(_os.path.dirname(__file__), "..", "..", "bin")
-    ffmpeg = _os.path.join(bin_dir, "ffmpeg.exe" if _os.name == "nt" else "ffmpeg")
 
     try:
-        subprocess.run(
-            [ffmpeg, "-y", "-i", video_path, "-ss", str(seek_time),
-             "-vframes", "1", out_path],
-            check=True, capture_output=True, timeout=30,
-        )
-    except subprocess.CalledProcessError:
-        raise HTTPException(status_code=500, detail="Frame extraction failed")
+        video_path = validate_user_file(rel, user.id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Video not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    out_dir = get_upload_dir(user.id, "frames")
+
+    try:
+        out_path = extract_video_frame(video_path, seek_time, out_dir, timeout=30)
+        if not out_path:
+            raise HTTPException(status_code=500, detail="Frame extraction failed")
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="ffmpeg not installed")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
 
+    frame_name = os.path.basename(out_path)
     url = f"{settings.PUBLIC_URL}/api/files/{user.id}/frames/{frame_name}"
     return UnifiedResponse(code=200, data={"url": url}, msg="frame captured")
 
@@ -212,21 +181,23 @@ async def delete_file(filepath: str, user=Depends(get_current_user)):
     当前不建议使用。去重体系下直接删物理文件可能影响其他引用同一 hash 的资源。
     资产删除请通过 DELETE /api/assets/items/{id} 操作（仅减 ref_count，不删文件）。
     """
-    full_path = os.path.join(UPLOAD_DIR, filepath)
-    if not full_path.startswith(os.path.join(UPLOAD_DIR, str(user.id))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete other user's files")
-    if not os.path.isfile(full_path):
+    try:
+        full_path = validate_user_file(filepath, user.id)
+    except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete other user's files")
+
     os.remove(full_path)
 
     base_name = os.path.splitext(os.path.basename(filepath))[0]
     cache_sub = os.path.dirname(filepath)
-    cache_dir = os.path.join(CACHE_DIR, cache_sub)
-    if os.path.isdir(cache_dir):
-        for fname in os.listdir(cache_dir):
+    cache_dir_path = os.path.join(CACHE_DIR, cache_sub)
+    if os.path.isdir(cache_dir_path):
+        for fname in os.listdir(cache_dir_path):
             if fname.startswith(base_name + "_w"):
                 try:
-                    os.remove(os.path.join(cache_dir, fname))
+                    os.remove(os.path.join(cache_dir_path, fname))
                 except OSError:
                     pass
 

@@ -33,10 +33,13 @@ os.environ["INFERENCE_SERVICE_API_KEY"] = ""
 # Reload settings from overridden env
 from app.config import settings as _s
 
-# Patch UPLOAD_DIR in files.py (module-level constant)
+# Patch UPLOAD_DIR in files.py and services/media.py (module-level constants)
 import app.routers.files as _files_mod
 _files_mod.UPLOAD_DIR = TEST_UPLOAD_DIR
 _files_mod.CACHE_DIR = os.path.join(TEST_UPLOAD_DIR, "_cache")
+
+import app.services.media as _media_mod
+_media_mod.UPLOAD_DIR = TEST_UPLOAD_DIR
 
 # ── In-memory engine + session ──────────────────────────────────
 
