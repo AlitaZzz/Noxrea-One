@@ -40,14 +40,24 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
 
-  // Sync local src when data.src changes externally (e.g. from generation panel)
+  // Sync local src when data.src changes externally (e.g. from undo/clear)
   useEffect(() => {
-    if (data.src && data.src !== src) setSrc(data.src);
+    if (data.src !== src) setSrc(data.src || "");
   }, [data.src]);
 
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) return;
+
+      // 生成本次上传的版本标记。版本号存储在 node.data 中，
+      // 撤销时整个 node.data 被快照替换，版本号自动失效。
+      const uploadVersion = Date.now();
+      const store = useCanvasStore.getState();
+      const nodeBefore = store.nodes.find((n) => n.id === id);
+      if (nodeBefore) {
+        store.updateNodeData(id, { _uploadVersion: uploadVersion }, undefined, { skipHistory: true });
+      }
+
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -57,12 +67,16 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           setSrc(imgUrl);
           const img = new window.Image();
           img.onload = () => {
+            // 异步回调时校验：节点存在且版本号匹配（未被撤销/重置）
+            const s = useCanvasStore.getState();
+            const currentNode = s.nodes.find((n) => n.id === id);
+            if (!currentNode) return;
+            if (currentNode.data._uploadVersion !== uploadVersion) return;
+
             const nw = img.naturalWidth, nh = img.naturalHeight;
             const { displayW, displayH } = computeThumbScale(nw, nh);
             const titleH = 24;
-            const store = useCanvasStore.getState();
-            const currentNode = store.nodes.find((n) => n.id === id);
-            const latestData = (currentNode?.data || data) as ImageNodeData;
+            const latestData = currentNode.data as ImageNodeData;
             window.dispatchEvent(
               new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: {
@@ -116,7 +130,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { _generating: true });
+    store.updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -161,7 +175,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       }, { width: displayW, height: displayH + 24 });
       markDirtyImmediate();
     } catch (e) {
-      store.updateNodeData(id, { _generating: false });
+      store.updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
       console.error("transform failed:", e);
     }
   }, [id, src]);
@@ -180,7 +194,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true });
+    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
@@ -227,13 +241,13 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     } catch (e) {
       console.error("grid-split failed:", e);
     } finally {
-      useCanvasStore.getState().updateNodeData(id, { _generating: false });
+      useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
     }
   }, [id, src, addNodes]);
 
   const handleBgRemoval = useCallback(async () => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true });
+    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
     try {
       // Create task via existing generation task queue
       const { BASE, getTokenHeader } = await import("@/lib/api");
@@ -260,7 +274,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       });
       // markDirtyImmediate handled by updateNodeData internally
     } catch (e: any) {
-      useCanvasStore.getState().updateNodeData(id, { _generating: false });
+      useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
       console.error("bg-removal failed:", e);
     }
   }, [id, src]);
