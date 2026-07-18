@@ -9,7 +9,7 @@ import ReactCrop, {
 } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { uploadAndAddNode } from "@/lib/image-utils";
+import { uploadAndAddNode, canvasToBlob } from "@/lib/image-utils";
 import AppModal from "@/lib/app-modal";
 import ModalButton from "@/components/common/ModalButton";
 import NavButton from "@/components/common/NavButton";
@@ -114,24 +114,20 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
       const scaleX = img.naturalWidth / dispW;
       const scaleY = img.naturalHeight / dispH;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(pixelCrop.width * scaleX);
-      canvas.height = Math.round(pixelCrop.height * scaleY);
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(
-        img,
-        pixelCrop.x * scaleX, pixelCrop.y * scaleY,
-        pixelCrop.width * scaleX, pixelCrop.height * scaleY,
-        0, 0, canvas.width, canvas.height,
-      );
-
-      const blob = await new Promise<Blob>((resolve) =>
-        canvas.toBlob((b) => resolve(b!), "image/png"),
-      );
+      const cw = Math.round(pixelCrop.width * scaleX);
+      const ch = Math.round(pixelCrop.height * scaleY);
+      const blob = await canvasToBlob(cw, ch, (ctx) => {
+        ctx.drawImage(
+          img,
+          pixelCrop.x * scaleX, pixelCrop.y * scaleY,
+          pixelCrop.width * scaleX, pixelCrop.height * scaleY,
+          0, 0, cw, ch,
+        );
+      });
 
       await uploadAndAddNode(sourceId, blob, " (cropped)", {
-        naturalWidth: canvas.width,
-        naturalHeight: canvas.height,
+        naturalWidth: cw,
+        naturalHeight: ch,
       });
 
       onClose();

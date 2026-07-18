@@ -9,9 +9,7 @@ import {
   VideoCameraOutlined,
   GroupOutlined,
 } from "@ant-design/icons";
-import { useCanvasStore, takeCanvasSnapshot, getViewportCenter } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { createTextNode, createImageNode, createVideoNode, createGroupNode } from "@/lib/node-defaults";
+import { useAddNode } from "@/hooks/use-add-node";
 import { useI18nStore } from "@/stores/i18n-store";
 import { MenuItem, MenuDivider } from "@/components/common/MenuPopover";
 
@@ -30,21 +28,13 @@ export default function CenterToolbar() {
     return () => window.removeEventListener("canvas:context-menu", onContextMenu);
   }, []);
 
-  const addNodes = useCanvasStore((s) => s.addNodes);
-  const pushHistory = useHistoryStore((s) => s.push);
-
+  const { addNode: addNodeAtCenter } = useAddNode();
   const addNode = useCallback(
     (type: "text" | "image" | "video" | "group") => {
-      pushHistory(takeCanvasSnapshot());
-      const { x: cx, y: cy } = getViewportCenter();
-      const pos = { x: cx - 120, y: cy - 80 };
-      if (type === "text") addNodes([createTextNode(pos)]);
-      else if (type === "image") addNodes([createImageNode(pos)]);
-      else if (type === "video") addNodes([createVideoNode(pos)]);
-      else addNodes([createGroupNode({ x: cx - 200, y: cy - 100 }, { width: 400, height: 200 })]);
+      addNodeAtCenter(type);
       setOpen(false);
     },
-    [addNodes, pushHistory]
+    [addNodeAtCenter]
   );
 
   return (
