@@ -46,7 +46,7 @@ function ImageGroupNode({ id, data, selected }: Props) {
     <div className={`group relative w-full h-full flex flex-col rounded-lg border ${selected ? "border-white/30 shadow-lg" : "border-white/10"}`}>
       <div className="flex items-center justify-between px-3 py-1 text-xs font-medium text-white/80 border-b border-white/10">
         <span><PictureOutlined className="mr-1" />{data.label || `Results (${images.length})`}</span>
-        <button className="text-white/40 hover:text-white" onClick={() => setExpanded(true)}><ExpandOutlined /></button>
+        <button className="nodrag text-white/40 hover:text-white" onClick={() => setExpanded(true)}><ExpandOutlined /></button>
       </div>
 
       {/* Stacked cards */}
@@ -56,7 +56,7 @@ function ImageGroupNode({ id, data, selected }: Props) {
           const isMain = idx === mainIdx;
           return (
             <div key={idx}
-              className="absolute inset-2 transition-all duration-200 cursor-pointer hover:z-20"
+              className="nodrag absolute inset-2 transition-all duration-200 cursor-pointer hover:z-20"
               style={{
                 zIndex: isMain ? 10 : 5 - i,
                 transform: isMain ? "none" : `translate(${(5 - i) * -3}px, ${(5 - i) * -3}px) rotate(${(5 - i) * -1}deg)`,
@@ -83,11 +83,11 @@ function ImageGroupNode({ id, data, selected }: Props) {
         styles={{ header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" }, body: { background: "var(--canvas-bg)" } }}>
         <div className="grid grid-cols-3 gap-3 max-h-[500px] overflow-auto">
           {images.map((img, idx) => (
-            <div key={idx} className={`relative rounded-lg overflow-hidden border-2 ${idx === mainIdx ? "border-blue-500" : "border-white/10"} cursor-pointer`}
+            <div key={idx} className={`nodrag relative rounded-lg overflow-hidden border-2 ${idx === mainIdx ? "border-blue-500" : "border-white/10"} cursor-pointer`}
               style={{ background: "var(--canvas-bg-elevated)" }} onClick={() => { handleSetMain(idx); setExpanded(false); }}>
               <img src={img.url} alt={img.label} className="w-full h-32 object-cover" />
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 hover:opacity-100 transition-opacity">
-                <Tooltip title="Download"><button className="w-6 h-6 flex items-center justify-center rounded bg-black/50 text-white/80" onClick={(e) => { e.stopPropagation(); handleDownload(img.url); }}><DownloadOutlined /></button></Tooltip>
+                <Tooltip title="Download"><button className="nodrag w-6 h-6 flex items-center justify-center rounded bg-black/50 text-white/80" onClick={(e) => { e.stopPropagation(); handleDownload(img.url); }}><DownloadOutlined /></button></Tooltip>
               </div>
               <div className="px-2 py-1 text-[10px] text-white/50 truncate">{img.label}</div>
             </div>

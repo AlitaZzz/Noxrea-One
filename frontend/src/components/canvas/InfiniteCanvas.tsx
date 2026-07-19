@@ -168,7 +168,7 @@ export default function InfiniteCanvas() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const applied = applyNodeChanges(changes, nodes);
+      const applied = applyNodeChanges(changes, useCanvasStore.getState().nodes);
       let appliedNodes;
       if (snapToGrid) {
         // Snap position changes to grid
@@ -189,22 +189,22 @@ export default function InfiniteCanvas() {
         markDirty();
       }
     },
-    [nodes, setNodes, snapToGrid, snapGridSize]
+    [setNodes, snapToGrid, snapGridSize]
   );
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      setEdges(applyEdgeChanges(changes, edges));
+      setEdges(applyEdgeChanges(changes, useCanvasStore.getState().edges));
     },
-    [edges, setEdges]
+    [setEdges]
   );
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      setEdges([...edges, createEdge(connection.source || "", connection.target || "")]);
+      setEdges([...useCanvasStore.getState().edges, createEdge(connection.source || "", connection.target || "")]);
       markDirtyImmediate();
     },
-    [edges, setEdges]
+    [setEdges]
   );
 
   const handleViewportChange = useCallback(
@@ -227,9 +227,9 @@ export default function InfiniteCanvas() {
 
   const handlePaneClick = useCallback(() => {
     // Deselect all nodes and edges
-    setNodes(nodes.map((n) => ({ ...n, selected: false })));
-    setEdges(edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
-  }, [nodes, edges, setNodes, setEdges]);
+    setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
+    setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
+  }, [setNodes, setEdges]);
 
   // Explicitly handle node selection — React Flow's internal click detection
   // may miss clicks that land on interactive child elements (inputs, selects, etc.)
@@ -237,13 +237,13 @@ export default function InfiniteCanvas() {
     (_event: React.MouseEvent, node: Record<string, unknown>) => {
       const nodeId = node.id as string;
       setNodes(
-        nodes.map((n) => ({
+        useCanvasStore.getState().nodes.map((n) => ({
           ...n,
           selected: n.id === nodeId,
         }))
       );
     },
-    [nodes, setNodes]
+    [setNodes]
   );
 
   const clipboard = useSelectionStore((s) => s.clipboard);
@@ -318,6 +318,8 @@ export default function InfiniteCanvas() {
         onNodeClick={handleNodeClick}
         defaultViewport={viewport}
         selectionMode={SelectionMode.Partial}
+        nodeDragThreshold={2}
+        nodeClickDistance={3}
         multiSelectionKeyCode="Shift"
         deleteKeyCode={[]}
         fitView={false}
