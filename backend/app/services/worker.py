@@ -1,15 +1,9 @@
 """
 Background worker that processes generation tasks from the queue.
-
-Requirements met:
-1. Atomic task claiming (UPDATE ... WHERE status='pending' RETURNING *)
-2. Concurrent processing with asyncio.Semaphore (max 10)
-3. External API timeout (asyncio.wait_for)
-4. Zombie task cleanup (stuck "processing" → "failed" after N minutes)
-5. SQLite WAL mode
 """
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -18,6 +12,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.models.task import GenerationTask
 from app.services.providers import detect_provider, is_async_provider, download_and_save
 
@@ -160,6 +156,7 @@ async def _process_task(task: GenerationTask) -> None:
 
     async with httpx.AsyncClient(timeout=API_TIMEOUT_SEC) as client:
         try:
+            logger.info(f"[worker] processing: task={task.id} type={task.type} prompt_len={len(task.prompt)}")
             if task.type == "image":
                 result_url = await _process_image(
                     client, provider, task, model, base_url, headers,
@@ -181,12 +178,16 @@ async def _process_task(task: GenerationTask) -> None:
                 user_jwt = _make_user_jwt(task.user_id)
                 local_url = await download_and_save(result_url, headers.get("Authorization", ""), user_jwt, task.type)
                 await _update_task_status(task.id, "completed", result_url=local_url)
+                logger.info(f"[worker] completed: task={task.id}")
             else:
                 await _update_task_status(task.id, "failed", error="No result from provider")
+                logger.warning(f"[worker] no result: task={task.id}")
 
         except asyncio.TimeoutError:
+            logger.warning(f"[worker] timeout: task={task.id}")
             await _update_task_status(task.id, "failed", error="API call timed out")
         except Exception as e:
+            logger.error(f"[worker] error: task={task.id} err={str(e)[:200]}")
             await _update_task_status(task.id, "failed", error=str(e)[:500])
 
 
@@ -220,7 +221,7 @@ async def _process_video(
     data = resp.json()
     video_id = provider.extract_video_id(data)
     if not video_id:
-        logging.error(f"[worker] no video_id in response")
+        logger.error(f"[worker] no video_id in response")
         return None
 
     # Poll for completion
@@ -259,8 +260,6 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         return None
 
     source_url = ref_urls[0]
-    import logging
-    logger = logging.getLogger("worker")
 
     try:
         # 1. Download source image
@@ -348,7 +347,6 @@ async def _update_task_status(task_id: str, status: str, *, result_url: str | No
 
 async def _cleanup_zombies(db: AsyncSession) -> None:
     """Mark tasks stuck in 'processing' for > STUCK_TIMEOUT_MIN as failed."""
-    import logging
     cutoff = datetime.now(timezone.utc)
     result = await db.execute(
         text("""
@@ -363,7 +361,7 @@ async def _cleanup_zombies(db: AsyncSession) -> None:
         },
     )
     if result.rowcount:
-        logging.warning(f"[worker] cleaned up {result.rowcount} zombie task(s)")
+        logger.warning(f"[worker] cleaned up {result.rowcount} zombie task(s)")
 
     await db.commit()
 
@@ -373,13 +371,9 @@ async def _cleanup_zombies(db: AsyncSession) -> None:
 
 async def worker_loop():
     """Main worker loop — runs as an asyncio background task."""
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("worker")
-
     await _ensure_wal()
-    logger.info("Worker started (WAL=%s, max_concurrency=%d, stuck_timeout=%dmin)",
-                "sqlite" in settings.DATABASE_URL, MAX_CONCURRENCY, STUCK_TIMEOUT_MIN)
+    logger.info("Worker started (max_concurrency=%d, stuck_timeout=%dmin)",
+                MAX_CONCURRENCY, STUCK_TIMEOUT_MIN)
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
     active_tasks = 0

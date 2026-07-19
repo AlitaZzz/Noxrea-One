@@ -97,6 +97,7 @@ async def upload_file(
         await db.commit()
 
     url = f"{settings.PUBLIC_URL}/api/files/{user.id}/{file_hash[:2]}/{file_hash}{ext}"
+    logger.info(f"Upload success: user={user.id} size={len(content)} hash={file_hash[:12]} url={url}")
     return UnifiedResponse(code=200, data={"url": url, "filename": f"{file_hash}{ext}"}, msg="uploaded")
 
 
@@ -172,6 +173,7 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
 
     frame_name = os.path.basename(out_path)
     url = f"{settings.PUBLIC_URL}/api/files/{user.id}/frames/{frame_name}"
+    logger.info(f"Frame captured: user={user.id} time={time}s url={url}")
     return UnifiedResponse(code=200, data={"url": url}, msg="frame captured")
 
 

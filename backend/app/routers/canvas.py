@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +15,7 @@ from app.deps import get_db, get_current_user
 from app.crud import canvas as crud
 from app.models.canvas import CanvasProject
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/canvas", tags=["canvas"])
 
 
@@ -69,6 +71,7 @@ async def update_project(
     owned_project: CanvasProject = Depends(get_owned_project),
 ):
     updated = await crud.update_project(db, project_id, owned_project.user_id, body.name, body.canvas_data, body.needRefRecalc)
+    logger.debug(f"Project saved: id={project_id} user={owned_project.user_id} nodes={len(body.canvas_data.get('nodes',[]) if body.canvas_data else [])}")
     return UnifiedResponse(code=200, data=CanvasProjectOut.model_validate(updated), msg="updated")
 
 
