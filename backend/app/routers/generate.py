@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -11,6 +13,7 @@ from app.schemas.common import UnifiedResponse
 from app.schemas.task import TaskOut
 from app.crud import task as crud
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
 
@@ -55,6 +58,7 @@ async def create_task(
     task = await crud.create_task(
         db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
     )
+    logger.info(f"Task created: id={task_id} type={task_type} user={user.id} node={node_id} prompt_len={len(prompt)}")
 
     return UnifiedResponse(
         code=200,
@@ -98,6 +102,7 @@ async def stream_task(
         raise HTTPException(status_code=403, detail="Access denied")
 
     async def event_stream():
+        logger.debug(f"SSE stream opened: task_id={task_id} user={user.id}")
         last_status = ""
         while True:
             # Use fresh session per poll + filter by user_id (secondary guard)
@@ -123,6 +128,7 @@ async def stream_task(
                 last_status = status
 
                 if status in ("completed", "failed"):
+                    logger.info(f"SSE stream ended: task_id={task_id} status={status}")
                     break
 
             await asyncio.sleep(3)
@@ -153,8 +159,7 @@ async def cancel_task(
         raise HTTPException(status_code=400, detail="Task already finished")
 
     await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
+    logger.info(f"Task cancelled: id={task_id} user={user.id}")
     return UnifiedResponse(code=200, msg="cancelled")
 
 
-# ── Imports needed for SSE streaming ────────────────────────────
-import asyncio

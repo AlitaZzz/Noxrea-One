@@ -1,7 +1,18 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+from app.config import settings
+
+# 控制台日志：DEBUG=true 输出所有日志，否则只输出 WARNING 以上
+logging.basicConfig(
+    level=logging.DEBUG if settings.DEBUG else logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -11,6 +22,7 @@ from app.routers import auth, canvas, files, model_config, assets, generate, ai_
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(f"Starting up (DEBUG={settings.DEBUG})")
     # Startup: ensure tables exist and default admin is created
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -18,13 +30,16 @@ async def lifespan(app: FastAPI):
 
     async with async_session() as db:
         await ensure_admin_exists(db)
+    logger.info("Database initialized, admin ensured")
 
     # Start background worker for generation task queue
     from app.services.worker import worker_loop
 
     worker_task = asyncio.create_task(worker_loop())
+    logger.info("Background worker started")
     yield
     # Shutdown: cancel worker and clean up connection pool
+    logger.info("Shutting down")
     worker_task.cancel()
     await engine.dispose()
 
