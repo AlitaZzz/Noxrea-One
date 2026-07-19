@@ -233,10 +233,10 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         }
       }
       if (nodes.length > 0) {
-        addNodes(nodes);
+        addNodes(nodes, { skipHistory: true });
         const store = useCanvasStore.getState();
         const newEdges = nodes.map((n) => createEdge(id, n.id));
-        store.setEdges([...store.edges, ...newEdges]);
+        store.setEdges([...store.edges, ...newEdges], { skipHistory: true });
       }
     } catch (e) {
       console.error("grid-split failed:", e);
