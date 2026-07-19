@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-import { computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
+import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
 
 /**
  * SSE 任务监控 hook。
@@ -75,11 +75,10 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         if (newNode) {
                           loadMediaDimensions(evt.result_url, false).then((dims) => {
                             if (dims.w > 0) {
-                              const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
-                              const titleH = 24;
+                              const { width, height } = computeNodeSize(dims.w, dims.h);
                               useCanvasStore.getState().updateNodeData(newNode.id, {
                                 naturalWidth: dims.w, naturalHeight: dims.h,
-                              }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
+                              }, { width: width, height }, { skipHistory: true });
                               markDirtyImmediate();
                             }
                           });
@@ -108,11 +107,10 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       // Async load real dimensions
                       loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
                         if (dims.w > 0) {
-                          const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
-                          const titleH = 24;
+                          const { width, height } = computeNodeSize(dims.w, dims.h);
                           useCanvasStore.getState().updateNodeData(nodeId, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
-                          }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
+                          }, { width, height }, { skipHistory: true });
                           markDirtyImmediate();
                         }
                       });

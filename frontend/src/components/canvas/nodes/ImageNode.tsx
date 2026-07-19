@@ -21,7 +21,7 @@ import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
 import { createEdge } from "@/lib/node-defaults";
 import { apiUpload } from "@/lib/api";
-import { uploadBlob, buildNodeFromUrl, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
+import { uploadBlob, buildNodeFromUrl, computeNodeSize, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { EventNames } from "@/lib/eventNames";
@@ -74,15 +74,14 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
             if (currentNode.data._uploadVersion !== uploadVersion) return;
 
             const nw = img.naturalWidth, nh = img.naturalHeight;
-            const { displayW, displayH } = computeThumbScale(nw, nh);
-            const titleH = 24;
+            const { width, height } = computeNodeSize(nw, nh);
             const latestData = currentNode.data as ImageNodeData;
             window.dispatchEvent(
               new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: {
                   nodeId: id,
                   data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
-                  style: { width: displayW, height: displayH + titleH },
+                  style: { width, height },
                   immediate: true,
                 },
               })
@@ -157,7 +156,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
       const nw = cw;
       const nh = ch;
-      const { displayW, displayH } = computeThumbScale(nw, nh);
+      const { width, height } = computeNodeSize(nw, nh);
 
       // 5. 更新节点
       store.updateNodeData(id, {
@@ -168,7 +167,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         rotation: undefined,
         flipH: undefined,
         flipV: undefined,
-      }, { width: displayW, height: displayH + 24 }, { skipHistory: true });
+      }, { width, height }, { skipHistory: true });
       markDirtyImmediate();
     } catch (e) {
       store.updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
@@ -178,15 +177,17 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleSaveToAssets = useCallback(() => {
     if (!src) return;
+    const node = useCanvasStore.getState().nodes.find(n => n.id === id);
+    const d = node?.data as ImageNodeData | undefined;
     addAsset({
       name: data.alt || data.label || t("image.node"),
       type: "other",
-      width: data.naturalWidth || 0,
-      height: data.naturalHeight || 0,
+      width: d?.naturalWidth || 0,
+      height: d?.naturalHeight || 0,
       description: "",
       metadata: { sourceUrl: src },
     });
-  }, [src, data.alt, data.label, addAsset]);
+  }, [src, data.alt, data.label, id, addAsset]);
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;

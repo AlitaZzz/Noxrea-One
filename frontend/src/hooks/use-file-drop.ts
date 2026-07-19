@@ -4,7 +4,7 @@ import { useCallback, type DragEvent } from "react";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { apiUploadWithProgress } from "@/lib/api";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
-import { computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
+import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
 
@@ -90,15 +90,14 @@ export function useFileDrop(
             const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
             const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
 
-            const { displayW, displayH } = computeThumbScale(nw, nh);
-            const titleH = 24;
+            const { width, height } = computeNodeSize(nw, nh);
             updateNodeData(node.id, {
               src: res.data.url,
               naturalWidth: nw,
               naturalHeight: nh,
               _uploading: false,
               _uploadProgress: undefined,
-            }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
+            }, { width, height }, { skipHistory: true });
           } catch {
             failedIds.push(node.id);
           }
