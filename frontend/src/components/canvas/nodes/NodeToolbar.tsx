@@ -1,16 +1,18 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Button, Tooltip, Popover } from "antd";
+import { useCanvasStore } from "@/stores/canvas-store";
+import { useAssetsStore } from "@/stores/assets-store";
 import {
   CopyOutlined,
   DeleteOutlined,
-  ClearOutlined,
   InfoCircleOutlined,
   GroupOutlined,
   UngroupOutlined,
   DownloadOutlined,
   StarOutlined,
+  StarFilled,
   ScissorOutlined,
   UploadOutlined,
   SwapOutlined,
@@ -18,7 +20,7 @@ import {
   CameraOutlined,
   ExperimentOutlined,
 } from "@ant-design/icons";
-import { FlipHorizontal, FlipVertical } from "lucide-react";
+import { Eraser, FlipHorizontal, FlipVertical } from "lucide-react";
 import { useI18nStore } from "@/stores/i18n-store";
 import { EventNames } from "@/lib/eventNames";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
@@ -97,6 +99,10 @@ function GridPicker({ nodeId }: { nodeId: string }) {
 
 function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const t = useI18nStore((s) => s.t);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const items = useAssetsStore((s) => s.items);
+  const assetSrc = (nodes.find(n => n.id === nodeId)?.data as any)?.src;
+  const isInAssets = useMemo(() => !!assetSrc && items.some(i => i.metadata?.sourceUrl === assetSrc), [assetSrc, items]);
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -193,9 +199,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
-          <Tooltip title={t("save.assets")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<StarOutlined />}
-              onClick={() => dispatchNodeAction(nodeId, "save-asset")} />
+          <Tooltip title={isInAssets ? t("asset.alreadySaved") : t("save.assets")}>
+            <Button type="text" size="middle" style={{ padding: 8 }}
+              icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
+              onClick={() => { if (!isInAssets) dispatchNodeAction(nodeId, "save-asset"); }} />
           </Tooltip>
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
@@ -235,7 +242,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "replace")} />
           </Tooltip>
           <Tooltip title={t("clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ClearOutlined />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
@@ -254,7 +261,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "replace")} />
           </Tooltip>
           <Tooltip title={t("clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ClearOutlined />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
