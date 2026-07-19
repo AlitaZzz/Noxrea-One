@@ -2,10 +2,11 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Tooltip, Input } from "antd";
+import { Tooltip, Input, Popover } from "antd";
 import {
   UploadOutlined,
   VideoCameraOutlined,
+  CameraOutlined,
   DeleteOutlined,
   DownloadOutlined,
   PauseCircleOutlined,
@@ -369,23 +370,54 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
                 {formatTime(duration)}
               </span>
               <button
-                className="w-6 h-6 flex items-center justify-center rounded text-white/60 hover:text-white transition-colors flex-shrink-0"
+                className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
                 onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               >
                 {muted ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                     <line x1="23" y1="9" x2="17" y2="15" />
                     <line x1="17" y1="9" x2="23" y2="15" />
                   </svg>
                 ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                   </svg>
                 )}
               </button>
+              <Popover trigger="hover" placement="top"
+                content={
+                  <div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 170 }}>
+                    <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
+                      style={{ color: "var(--canvas-text)" }}
+                      onClick={() => captureFrame(videoRef.current?.currentTime ?? null)}>
+                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.currentFrame")}
+                    </div>
+                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
+                      style={{ color: "var(--canvas-text)" }}
+                      onClick={() => captureFrame(0)}>
+                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.firstFrame")}
+                    </div>
+                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
+                      style={{ color: "var(--canvas-text)" }}
+                      onClick={() => captureFrame(videoRef.current?.duration ? videoRef.current.duration - 0.1 : 10)}>
+                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.lastFrame")}
+                    </div>
+                  </div>
+                }
+              >
+                <button
+                  className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                  onClick={(e) => { e.stopPropagation(); captureFrame(videoRef.current?.currentTime ?? null); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                >
+                  <CameraOutlined style={{ fontSize: 22 }} />
+                </button>
+              </Popover>
             </div>
 
           </div>

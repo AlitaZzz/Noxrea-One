@@ -249,17 +249,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
-          <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
-              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: null })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture current frame</MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: 0 })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture first frame</MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "capture-frame", { time: -1 })}><CameraOutlined className="mr-1.5" style={{ fontSize: 14 }} /> Capture last frame</MenuItem>
-            </div>}>
-            <Tooltip title={t("crop")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<CameraOutlined />} />
-            </Tooltip>
-          </Popover>
           <Tooltip title={t("replace")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<UploadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "replace")} />
