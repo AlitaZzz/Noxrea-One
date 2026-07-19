@@ -5,6 +5,7 @@ import { Input, Popover, App } from "antd";
 import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
 import { NODE_TYPE } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
@@ -229,7 +230,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { skipHistory: true });
+    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { forceHistory: true });
 
     const errMsg = await submitTask();
 
@@ -241,6 +242,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
       useCanvasStore.getState().updateNodeData(nodeId, { _generating: false }, undefined, { skipHistory: true });
+      // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
+      useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
       setError(errMsg);
     }
   };
@@ -257,6 +260,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       task_status: undefined, task_id: undefined, _generating: false,
     }, undefined, { skipHistory: true });
     markDirtyImmediate();
+    // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
+    useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
     setError("");
   };
 
