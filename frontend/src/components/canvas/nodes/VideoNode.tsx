@@ -341,6 +341,17 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
               onEnded={() => setPlaying(false)}
               onContextMenu={(e) => e.preventDefault()}
             />
+            {/* 替换按钮 — hover 时显示在内容右上角 */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover/body:opacity-100 transition-opacity z-10 nodrag">
+              <Tooltip title={t("replace")}>
+                <button
+                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
+                  onClick={handleReplace}
+                >
+                  <UploadOutlined style={{ fontSize: 13 }} />
+                </button>
+              </Tooltip>
+            </div>
             {/* Controls bar */}
             <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex items-center gap-2 px-2 ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
               <button
