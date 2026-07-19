@@ -31,6 +31,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
           if (sseCtrlsRef.current.has(d.task_id)) continue;
 
           const taskId = d.task_id;
+          const nodeId = node.id;
           const ctrl = new AbortController();
           sseCtrlsRef.current.set(taskId, ctrl);
 
@@ -55,16 +56,18 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                   try {
                     const evt = JSON.parse(line.slice(6));
                     if (evt.status === "completed" && evt.result_url) {
-                      const d = node.data as any;
+                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      const d = cur.data as any;
                       const prompt = evt.prompt || "";
 
                       if (d.pendingAction === "bg_removal") {
                         // 抠图 → 创建新节点，不覆盖原图
                         const { createNodeFromUrl } = await import("@/lib/image-utils");
                         const defW = 1024, defH = 1024;
-                        const newNode = await createNodeFromUrl(node.id, evt.result_url, defW, defH, " (bg-removed)");
+                        const newNode = await createNodeFromUrl(nodeId, evt.result_url, defW, defH, " (bg-removed)");
                         // Clear source node state
-                        useCanvasStore.getState().updateNodeData(node.id, {
+                        useCanvasStore.getState().updateNodeData(nodeId, {
                           _generating: false, task_status: undefined, task_id: undefined, pendingAction: undefined,
                         }, undefined, { skipHistory: true });
                         markDirtyImmediate();
@@ -91,11 +94,11 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       }
 
                       const label = prompt.slice(0, 20);
-                      const isVideoNode = node.type === "video-node";
+                      const isVideoNode = cur.type === "video-node";
                       // Immediately show result with default size
                       const defW = isVideoNode ? 1152 : 1024;
                       const defH = isVideoNode ? 768 : 1024;
-                      useCanvasStore.getState().updateNodeData(node.id, {
+                      useCanvasStore.getState().updateNodeData(nodeId, {
                         src: evt.result_url, label, alt: label,
                         naturalWidth: defW, naturalHeight: defH,
                         lockAspectRatio: true, _generating: false,
@@ -107,7 +110,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         if (dims.w > 0) {
                           const { displayW, displayH } = computeThumbScale(dims.w, dims.h);
                           const titleH = 24;
-                          useCanvasStore.getState().updateNodeData(node.id, {
+                          useCanvasStore.getState().updateNodeData(nodeId, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
                           }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
                           markDirtyImmediate();
@@ -122,9 +125,11 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       sseCtrlsRef.current.delete(taskId);
                       return;
                     } else if (evt.status === "failed") {
-                      const isVideoNode = node.type === "video-node";
-                      const d = node.data as any;
-                      useCanvasStore.getState().updateNodeData(node.id, {
+                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      const isVideoNode = cur.type === "video-node";
+                      const d = cur.data as any;
+                      useCanvasStore.getState().updateNodeData(nodeId, {
                         _generating: false, task_status: undefined, task_id: undefined,
                         pendingAction: undefined,
                       }, undefined, { skipHistory: true });
