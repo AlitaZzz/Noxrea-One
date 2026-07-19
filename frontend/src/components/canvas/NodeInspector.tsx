@@ -42,7 +42,7 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
 
       <div className="text-xs text-zinc-500 mb-1">Raw JSON:</div>
       <Paragraph
-        copyable
+        copyable={{ text: jsonStr }}
         className="text-xs"
         style={{
           background: "var(--canvas-bg-elevated, #353535)",
