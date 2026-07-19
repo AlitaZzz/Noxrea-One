@@ -30,6 +30,20 @@ export function computeThumbScale(
   };
 }
 
+/** 节点头部标题栏高度（px） */
+const TITLE_H = 24;
+
+/**
+ * 计算节点的显示尺寸（等比缩放 + 标题栏高度）。
+ *
+ * 所有创建/更新图片/视频节点的路径应统一使用此函数，
+ * 避免遗漏 titleH 导致的图片区域压缩。
+ */
+export function computeNodeSize(naturalW: number, naturalH: number): { width: number; height: number } {
+  const { displayW, displayH } = computeThumbScale(naturalW, naturalH);
+  return { width: displayW, height: displayH + TITLE_H };
+}
+
 /**
  * 对节点应用 NODE_DISPLAY_MAX 等比缩放，并预留 titleH(24px) 标题栏高度。
  *
@@ -48,11 +62,10 @@ export function applyThumbnailSettings(
   naturalH: number,
   label?: string,
 ): AnyNode {
-  const { scale, displayW: w, displayH: h } = computeThumbScale(naturalW, naturalH);
-  // 零尺寸保护：回到 buildNodeFromUrl 原本的 fallback
-  const displayW = naturalW > 0 ? w : 300;
-  const displayH = naturalH > 0 ? h : 300;
-  const titleH = 24;
+  // 零尺寸保护：fallback 300
+  const nw = naturalW > 0 ? naturalW : 300;
+  const nh = naturalH > 0 ? naturalH : 300;
+  const { width, height } = computeNodeSize(nw, nh);
 
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
@@ -60,7 +73,7 @@ export function applyThumbnailSettings(
     node.data.label = label;
     node.data.alt = label;
   }
-  node.style = { width: displayW, height: displayH + titleH };
+  node.style = { width, height };
   return node;
 }
 

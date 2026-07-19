@@ -14,7 +14,7 @@ import {
 } from "@ant-design/icons";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { createImageNode } from "@/lib/node-defaults";
-import { applyThumbnailSettings, computeThumbScale } from "@/lib/image-utils";
+import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUpload, BASE } from "@/lib/api";
@@ -170,8 +170,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
           });
           const nw = dims.w || 1280;
           const nh = dims.h || 720;
-          const { displayW, displayH } = computeThumbScale(nw, nh);
-          const titleH = 24;
+          const { width, height } = computeNodeSize(nw, nh);
           const store = useCanvasStore.getState();
           const currentNode = store.nodes.find((n) => n.id === id);
           const latestData = (currentNode?.data || data) as any;
@@ -180,7 +179,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
               detail: {
                 nodeId: id,
                 data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
-                style: { width: displayW, height: displayH + titleH },
+                style: { width, height },
                 immediate: true,
               },
             })

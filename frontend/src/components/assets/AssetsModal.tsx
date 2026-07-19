@@ -12,6 +12,7 @@ import { useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
+import { computeNodeSize } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import AssetSidebar from "./AssetSidebar";
 import AssetToolbar from "./AssetToolbar";
@@ -169,13 +170,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       const s = useCanvasStore.getState();
       const nw = asset.width || DEFAULT_NODE_WIDTH;
       const nh = asset.height || DEFAULT_NODE_HEIGHT;
-      // 资源库插入的节点使用更大尺寸（长边约束 600px，对齐 DEFAULT_NODE_WIDTH），
-      // 画布内自动生成的节点使用与素材库统一的长边约束（NODE_DISPLAY_MAX=600）
-      // 这是有意的设计差异：用户主动从资源库拖入时需要更醒目的预览。
-      const MAX = 600;
-      const scale = Math.max(nw, nh) > MAX ? MAX / Math.max(nw, nh) : 1;
-      const dw = Math.round(nw * scale);
-      const dh = Math.round(nh * scale);
+      const { width: dw, height: dh } = computeNodeSize(nw, nh);
       const cx = -s.viewport.x / s.viewport.zoom + window.innerWidth / 2 / s.viewport.zoom;
       const cy = -s.viewport.y / s.viewport.zoom + window.innerHeight / 2 / s.viewport.zoom;
 
