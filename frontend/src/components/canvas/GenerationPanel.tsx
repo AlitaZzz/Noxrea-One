@@ -228,12 +228,13 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (!channel) return;
 
     setError("");
+    // 先压栈（捕获不含 task_status 的干净状态），再写状态标记
+    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { forceHistory: true });
     useCanvasStore.getState().updateNodeData(nodeId, { task_status: "pending" }, undefined, { skipHistory: true });
     markDirtyImmediate();
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { forceHistory: true });
 
     const errMsg = await submitTask();
 
