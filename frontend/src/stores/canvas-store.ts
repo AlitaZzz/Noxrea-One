@@ -33,10 +33,10 @@ export function flushOnUnload(): void {
 }
 
 /** 自动压栈 throttle 辅助函数 */
-function maybePushHistory(options?: { skipHistory?: boolean }) {
+function maybePushHistory(options?: { skipHistory?: boolean; forceHistory?: boolean }) {
   if (options?.skipHistory) return;
   const now = Date.now();
-  if (now - _lastHistoryTime > HISTORY_THROTTLE) {
+  if (options?.forceHistory || now - _lastHistoryTime > HISTORY_THROTTLE) {
     useHistoryStore.getState().push(takeCanvasSnapshot());
     _lastHistoryTime = now;
   }
@@ -53,7 +53,7 @@ interface CanvasState {
   setNodes: (nodes: AnyNode[]) => void;
   setEdges: (edges: Edge[], options?: { skipHistory?: boolean }) => void;
   addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
-  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean }) => void;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean; forceHistory?: boolean }) => void;
   removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
   removeEdges: (edgeIds: string[], options?: { skipHistory?: boolean }) => void;
 
