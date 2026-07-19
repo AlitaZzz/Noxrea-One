@@ -25,6 +25,7 @@ const zh: Record<string, string> = {
   "grid.split": "宫格切分", "grid.custom": "自定义", "grid.select": "选择行列数",
   "bg_removal": "抠图",
   "save.assets": "保存到素材",
+  "asset.alreadySaved": "已在素材库",
   // Generation
   "generate": "生成", "model": "模型", "quality": "质量", "size": "尺寸",
   "generation.failed": "生成失败，请检查模型配置和网络连接",
@@ -136,6 +137,7 @@ const en: Record<string, string> = {
   "grid.split": "Grid Split", "grid.custom": "Custom", "grid.select": "Select rows & cols",
   "bg_removal": "Bg Removal",
   "save.assets": "Save to Assets",
+  "asset.alreadySaved": "Already in assets",
   "generate": "Generate", "model": "Model", "quality": "Quality", "size": "Size",
   "generation.failed": "Generation failed. Check model config and network connection.",
   "generation.image.success": "Image generated",
