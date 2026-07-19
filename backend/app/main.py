@@ -15,6 +15,8 @@ logging.basicConfig(
 # 第三方库日志静默（DEBUG 模式下也只输出 WARNING）
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
