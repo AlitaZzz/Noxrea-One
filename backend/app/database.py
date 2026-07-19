@@ -5,7 +5,7 @@ from app.config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=False,
     connect_args={"timeout": settings.DB_TIMEOUT} if "sqlite" in settings.DATABASE_URL else {},
 )
 
