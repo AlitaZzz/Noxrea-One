@@ -240,7 +240,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId, data: { _generating: false }, immediate: true } }));
+      useCanvasStore.getState().updateNodeData(nodeId, { _generating: false }, undefined, { skipHistory: true });
       setError(errMsg);
     }
   };

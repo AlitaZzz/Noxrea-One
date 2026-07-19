@@ -101,7 +101,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
   const handleConfirm = async () => {
     if (!completedCrop || loading || !imgRef.current) return;
     setLoading(true);
-    useCanvasStore.getState().updateNodeData(sourceId, { _generating: true }, undefined, { skipHistory: true });
+    useCanvasStore.getState().updateNodeData(sourceId, { _generating: true });
 
     try {
       const img = imgRef.current;
