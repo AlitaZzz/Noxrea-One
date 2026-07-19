@@ -57,7 +57,16 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                     const evt = JSON.parse(line.slice(6));
                     if (evt.status === "completed" && evt.result_url) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      if (!cur || (cur.data as any)?.task_id !== taskId) {
+                        sseCtrlsRef.current.delete(taskId);
+                        // 节点 task_id 已消失（撤销/取消）→ 补清理，防止 Ctrl+Y 后卡 generating
+                        if (cur && !(cur.data as any)?.task_id) {
+                          useCanvasStore.getState().updateNodeData(nodeId, {
+                            _generating: false, task_status: undefined, task_id: undefined,
+                          }, undefined, { skipHistory: true });
+                        }
+                        return;
+                      }
                       const d = cur.data as any;
                       const prompt = evt.prompt || "";
 
@@ -126,7 +135,15 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       return;
                     } else if (evt.status === "failed") {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      if (!cur || (cur.data as any)?.task_id !== taskId) {
+                        sseCtrlsRef.current.delete(taskId);
+                        if (cur && !(cur.data as any)?.task_id) {
+                          useCanvasStore.getState().updateNodeData(nodeId, {
+                            _generating: false, task_status: undefined, task_id: undefined,
+                          }, undefined, { skipHistory: true });
+                        }
+                        return;
+                      }
                       const isVideoNode = cur.type === "video-node";
                       const d = cur.data as any;
                       useCanvasStore.getState().updateNodeData(nodeId, {
