@@ -229,7 +229,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
-    window.dispatchEvent(new CustomEvent(EventNames.NODE_UPDATE_DATA, { detail: { nodeId, data: { _generating: true }, immediate: true } }));
+    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { skipHistory: true });
 
     const errMsg = await submitTask();
 
