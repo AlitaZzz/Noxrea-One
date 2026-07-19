@@ -166,6 +166,9 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       const taskId = json.data?.id;
       if (!taskId) return "No task_id returned";
 
+      // 异步回调时检查：取消后 _generating 为 false，丢弃过期结果
+      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+      if (!cur || !(cur.data as any)?._generating) return "Cancelled";
       // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
       useCanvasStore.getState().updateNodeData(nodeId, { task_id: taskId, task_status: "pending" }, undefined, { skipHistory: true });
       await flushAndWait();
