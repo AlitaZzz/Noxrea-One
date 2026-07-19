@@ -24,4 +24,5 @@ export const GROUP_NODE_MIN_WIDTH = 200;
 export const GROUP_NODE_MIN_HEIGHT = 120;
 
 // Image/video thumbnail display (short side max pixels)
-export const THUMBNAIL_MAX = 360;
+/** 节点显示尺寸上限（长边约束，px） */
+export const NODE_DISPLAY_MAX = 600;

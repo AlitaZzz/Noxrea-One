@@ -11,7 +11,6 @@ import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
-import { THUMBNAIL_MAX } from "@/lib/constants";
 import { EventNames } from "@/lib/eventNames";
 import WheelGuard from "@/components/common/WheelGuard";
 

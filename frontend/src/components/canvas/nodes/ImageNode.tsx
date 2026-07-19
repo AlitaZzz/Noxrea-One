@@ -15,7 +15,7 @@ import {
 } from "@ant-design/icons";
 import type { ImageNodeData, AnyNode } from "@/lib/types";
 import {
-  DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, THUMBNAIL_MAX,
+  DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT,
 } from "@/lib/constants";
 import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
@@ -155,13 +155,9 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const url = await uploadBlob(blob, `transform_${Date.now()}.png`);
       if (!url) throw new Error("Upload failed");
 
-      // 4. 按 THUMBNAIL_MAX 等比缩放计算显示尺寸
       const nw = cw;
       const nh = ch;
-      const shortSide = Math.min(nw, nh);
-      const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-      const displayW = Math.round(nw * scale);
-      const displayH = Math.round(nh * scale);
+      const { displayW, displayH } = computeThumbScale(nw, nh);
 
       // 5. 更新节点
       store.updateNodeData(id, {
@@ -206,10 +202,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
       const pieceW = img.naturalWidth / cols;
       const pieceH = img.naturalHeight / rows;
-      const shortSide = Math.min(pieceW, pieceH);
-      const scale = shortSide > THUMBNAIL_MAX ? THUMBNAIL_MAX / shortSide : 1;
-      const displayW = Math.round(pieceW * scale);
-      const displayH = Math.round(pieceH * scale);
+      const { displayW, displayH } = computeThumbScale(pieceW, pieceH);
 
       // Get original node position for grid layout
       const origNode = useCanvasStore.getState().nodes.find((n) => n.id === id);

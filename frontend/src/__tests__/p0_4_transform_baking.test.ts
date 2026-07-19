@@ -110,15 +110,15 @@ describe("P0-4: CSS transform baking flow", () => {
       expect(node.position.y).toBe(888);
     });
 
-    it("should scale display dimensions by THUMBNAIL_MAX", () => {
-      // THUMBNAIL_MAX = 360, 4000x3000 image → short side 3000 > 360
-      // scale = 360/3000 = 0.12, displayW = round(4000*0.12) = 480
+    it("should scale display dimensions by NODE_DISPLAY_MAX", () => {
+      // NODE_DISPLAY_MAX = 600, 4000x3000 image → long side 4000 > 600
+      // scale = 600/4000 = 0.15, displayW = round(4000*0.15) = 600
       const node = buildNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)");
       const w = node.style?.width as number;
       const h = node.style?.height as number;
-      expect(w).toBe(480);
-      // displayH = round(3000*0.12) = 360, + titleH(24) = 384
-      expect(h).toBe(384);
+      expect(w).toBe(600);
+      // displayH = round(3000*0.15) = 450, + titleH(24) = 474
+      expect(h).toBe(474);
     });
 
     it("should append label suffix before extension", () => {

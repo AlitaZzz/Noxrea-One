@@ -3,26 +3,26 @@
 import { apiUpload } from "@/lib/api";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { THUMBNAIL_MAX } from "@/lib/constants";
+import { NODE_DISPLAY_MAX } from "@/lib/constants";
 import type { AnyNode } from "@/lib/types";
 
 /**
- * 纯函数：计算 THUMBNAIL_MAX 等比缩放后的显示尺寸。
+ * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
  *
  * 返回 { scale, displayW, displayH }，不含标题栏高度（titleH 由调用方酌情添加）。
  *
  * @param naturalW  图片自然宽度
  * @param naturalH  图片自然高度
- * @param max       可选，短边最大像素值，默认 THUMBNAIL_MAX(360)
+ * @param max       可选，长边最大像素值，默认 NODE_DISPLAY_MAX(600)
  */
 export function computeThumbScale(
   naturalW: number,
   naturalH: number,
   max?: number,
 ): { scale: number; displayW: number; displayH: number } {
-  const limit = max ?? THUMBNAIL_MAX;
-  const shortSide = Math.min(naturalW, naturalH);
-  const scale = shortSide > limit ? limit / shortSide : 1;
+  const limit = max ?? NODE_DISPLAY_MAX;
+  const longSide = Math.max(naturalW, naturalH);
+  const scale = longSide > limit ? limit / longSide : 1;
   return {
     scale,
     displayW: Math.round(naturalW * scale),
@@ -31,7 +31,7 @@ export function computeThumbScale(
 }
 
 /**
- * 对节点应用 THUMBNAIL_MAX 等比缩放，并预留 titleH(24px) 标题栏高度。
+ * 对节点应用 NODE_DISPLAY_MAX 等比缩放，并预留 titleH(24px) 标题栏高度。
  *
  * 所有创建图片节点的路径都应通过此函数统一计算显示尺寸，
  * 避免遗漏 titleH 导致的图片区域压缩。
