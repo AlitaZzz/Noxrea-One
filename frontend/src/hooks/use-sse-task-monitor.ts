@@ -76,7 +76,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                               const titleH = 24;
                               useCanvasStore.getState().updateNodeData(newNode.id, {
                                 naturalWidth: dims.w, naturalHeight: dims.h,
-                              }, { width: displayW, height: displayH + titleH });
+                              }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
                               markDirtyImmediate();
                             }
                           });
@@ -100,7 +100,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         naturalWidth: defW, naturalHeight: defH,
                         lockAspectRatio: true, _generating: false,
                         task_status: undefined, task_id: undefined,
-                      });
+                      }, undefined, { skipHistory: true });
                       markDirtyImmediate();
                       // Async load real dimensions
                       loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
@@ -109,7 +109,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                           const titleH = 24;
                           useCanvasStore.getState().updateNodeData(node.id, {
                             naturalWidth: dims.w, naturalHeight: dims.h,
-                          }, { width: displayW, height: displayH + titleH });
+                          }, { width: displayW, height: displayH + titleH }, { skipHistory: true });
                           markDirtyImmediate();
                         }
                       });
