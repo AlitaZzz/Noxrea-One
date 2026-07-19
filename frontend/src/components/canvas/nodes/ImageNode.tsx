@@ -130,7 +130,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
+    store.updateNodeData(id, { _generating: true });
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -172,7 +172,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         rotation: undefined,
         flipH: undefined,
         flipV: undefined,
-      }, { width: displayW, height: displayH + 24 });
+      }, { width: displayW, height: displayH + 24 }, { skipHistory: true });
       markDirtyImmediate();
     } catch (e) {
       store.updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
