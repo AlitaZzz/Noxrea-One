@@ -5,17 +5,12 @@ import { Button, Tooltip, Popover } from "antd";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
 import {
-  CopyOutlined,
   DeleteOutlined,
   InfoCircleOutlined,
-  GroupOutlined,
-  UngroupOutlined,
   DownloadOutlined,
   StarOutlined,
   StarFilled,
   ScissorOutlined,
-  UploadOutlined,
-  SwapOutlined,
   RotateRightOutlined,
   CameraOutlined,
   ExperimentOutlined,
@@ -103,16 +98,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const items = useAssetsStore((s) => s.items);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as any)?.src;
   const isInAssets = useMemo(() => !!assetSrc && items.some(i => i.metadata?.sourceUrl === assetSrc), [assetSrc, items]);
-  const handleCopy = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      window.dispatchEvent(
-        new CustomEvent(EventNames.CANVAS_COPY_NODE, { detail: { nodeId } })
-      );
-    },
-    [nodeId]
-  );
-
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -136,15 +121,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
       className="absolute -top-[62px] left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-white dark:bg-zinc-800 rounded-md shadow-lg border border-zinc-200 dark:border-zinc-700 h-[50px] px-2 py-2 z-20"
       style={{ whiteSpace: "nowrap" }}
     >
-      <Tooltip title={`${t("copy")} (Ctrl+C)`}>
-        <Button
-          type="text"
-          size="middle"
-          style={{ padding: 8 }}
-          icon={<CopyOutlined />}
-          onClick={handleCopy}
-        />
-      </Tooltip>
       <Tooltip title={`${t("info")} & JSON`}>
         <Button
           type="text"
@@ -154,32 +130,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           onClick={handleInfo}
         />
       </Tooltip>
-      <Tooltip title={`${t("group")} (Ctrl+G)`}>
-        <Button
-          type="text"
-          size="middle"
-          style={{ padding: 8 }}
-          icon={<GroupOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            window.dispatchEvent(new CustomEvent(EventNames.CANVAS_GROUP_NODES));
-          }}
-        />
-      </Tooltip>
-      {nodeType === "group-node" && (
-        <Tooltip title={`${t("ungroup")} (Ctrl+Shift+G)`}>
-          <Button
-            type="text"
-            size="middle"
-            style={{ padding: 8 }}
-            icon={<UngroupOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
-            }}
-          />
-        </Tooltip>
-      )}
       <Tooltip title={`${t("delete")} (Delete)`}>
         <Button
           type="text"
@@ -237,10 +187,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExperimentOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "bg-removal")} />
           </Tooltip>
-          <Tooltip title={t("replace")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<UploadOutlined />}
-              onClick={() => dispatchNodeAction(nodeId, "replace")} />
-          </Tooltip>
           <Tooltip title={t("clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
@@ -255,10 +201,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Tooltip title={t("download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
-          <Tooltip title={t("replace")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<UploadOutlined />}
-              onClick={() => dispatchNodeAction(nodeId, "replace")} />
           </Tooltip>
           <Tooltip title={t("clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}

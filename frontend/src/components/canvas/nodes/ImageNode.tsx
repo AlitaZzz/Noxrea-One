@@ -385,6 +385,17 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         ) : hasImage ? (
           <>
             <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
+            {/* 替换按钮 — hover 时显示在内容右上角 */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover/body:opacity-100 transition-opacity z-10 nodrag">
+              <Tooltip title={t("replace")}>
+                <button
+                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
+                  onClick={handleReplace}
+                >
+                  <UploadOutlined style={{ fontSize: 13 }} />
+                </button>
+              </Tooltip>
+            </div>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
