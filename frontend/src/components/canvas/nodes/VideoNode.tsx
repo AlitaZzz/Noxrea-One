@@ -304,10 +304,23 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {(data as any)._generating ? (
+        {(data as any)._uploading ? (
+          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
+            {(data as any)._uploadProgress != null ? (
+              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(data as any)._uploadProgress}%` }} />
+              </div>
+            ) : (
+              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+              </div>
+            )}
+            <span className="text-sm text-white/70 font-medium">{t("uploading")}</span>
+          </div>
+        ) : (data as any)._generating ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{(data as any)._genStatus || "Generating"}...</span>
+            <span className="text-sm text-white/70 font-medium">{(data as any)._genStatus || t("generating")}</span>
             {(data as any)._genProgress != null && (
               <div className="w-3/4 h-1 bg-white/10 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(data as any)._genProgress}%` }} />

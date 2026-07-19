@@ -370,10 +370,23 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         onDrop={handleDrop}
         ref={dropRef}
       >
-        {(data as any)._generating ? (
+        {(data as any)._uploading ? (
+          <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 px-8" style={{ background: "var(--canvas-bg)" }}>
+            {(data as any)._uploadProgress != null ? (
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(data as any)._uploadProgress}%` }} />
+              </div>
+            ) : (
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+              </div>
+            )}
+            <span className="text-sm text-white/50">{t("uploading")}</span>
+          </div>
+        ) : (data as any)._generating ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/50">Generating...</span>
+            <span className="text-sm text-white/50">{t("generating")}</span>
           </div>
         ) : hasImage ? (
           <>

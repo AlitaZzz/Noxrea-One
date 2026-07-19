@@ -74,6 +74,8 @@ const zh: Record<string, string> = {
   "drop.upload": "拖放文件或点击上传",
   "nodes.count": "个节点",
   "drop.video": "拖放视频或点击上传",
+  "uploading": "正在上传...",
+  "generating": "生成中...",
   "cancel": "取消", "save": "保存", "add": "添加", "selectAll": "全选", "deselectAll": "取消全选",
   "delete.asset": "删除资产", "delete.channel": "删除渠道",
   "asset.count": "项",
@@ -213,6 +215,8 @@ const en: Record<string, string> = {
   "nodes.count": " nodes",
   "nothing.to.save": "Nothing to save", "save.failed": "Save failed",
   "drop.video": "Drop video or click Upload",
+  "uploading": "Uploading...",
+  "generating": "Generating...",
   "file.upload.failed": "Upload failed",
   "file.upload.failed.all": "All files failed to upload",
 };
