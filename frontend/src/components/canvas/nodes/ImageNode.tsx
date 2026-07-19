@@ -130,7 +130,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { _generating: true });
+    store.updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -194,7 +194,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
+    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
@@ -247,7 +247,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleBgRemoval = useCallback(async () => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { skipHistory: true });
+    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
     try {
       // Create task via existing generation task queue
       const { BASE, getTokenHeader } = await import("@/lib/api");
