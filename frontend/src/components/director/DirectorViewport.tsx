@@ -11,6 +11,9 @@ import { Character } from "@/director/entities/Character";
 import { Prop } from "@/director/entities/Prop";
 import { Crowd } from "@/director/entities/Crowd";
 import { CameraEntity } from "@/director/entities/Camera";
+import { CAMERA_PRESETS } from "@/director/core/cameraPresets";
+import type { CameraPresetCtx } from "@/director/core/cameraPresets";
+import { worldBox } from "@/director/util/measure";
 import { useDirectorStore } from "@/stores/director-store";
 import type { DirectorStateData } from "@/lib/types";
 
@@ -177,11 +180,36 @@ export default function DirectorViewport() {
         _sync(); selection.onSelect(prop.id);
         return prop;
       },
-      addCamera: () => {
+      addCamera: (presetKey = "front_mid") => {
         const name = "机位" + ++_camCount;
         const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-        const cam = new CameraEntity(name, { fov: 40, aspect: W / Math.max(1, H), scene: stage.scene });
-        cam.root.position.set(0, 1.7, 4); cam.aimAt(new THREE.Vector3(0, 1.0, 0));
+        const preset = CAMERA_PRESETS.find((p) => p.key === presetKey) || CAMERA_PRESETS[1]; // 默认正面中景
+
+        // 构建上下文：以选中角色为 subject，否则用场景中心
+        const selEnt = _findById(_selectedId);
+        let subjectCenter = new THREE.Vector3(0, 0.95, 0);
+        let subjectHeight = 1.7;
+        if (selEnt && (selEnt.type === "character" || selEnt.type === "prop")) {
+          const box = worldBox(selEnt.root, { useBones: selEnt.type === "character" });
+          subjectCenter = box.isEmpty() ? selEnt.root.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
+          subjectHeight = selEnt.height || (box.isEmpty() ? 1.7 : Math.max(0.1, box.max.y - box.min.y));
+        }
+
+        const ctx: CameraPresetCtx = {
+          subjectCenter,
+          subjectHeight,
+          directorCamera: stage.camera,
+          directorTarget: rig.controls.target.clone(),
+          sceneCenter: new THREE.Vector3(0, 0, 0),
+        };
+
+        const result = preset.build(ctx);
+        const fov = result.fov ?? preset.fov ?? 40;
+        const cam = new CameraEntity(name, { fov, aspect: W / Math.max(1, H), scene: stage.scene });
+        cam.root.position.copy(result.position);
+        cam.aimAt(result.target);
+        if (result.roll) cam._roll = result.roll;
+
         stage.add(cam.root); entities.push(cam); _registerEntity(cam);
         _sync(); selection.onSelect(cam.id);
         return cam;
