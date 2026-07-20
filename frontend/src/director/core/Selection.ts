@@ -71,7 +71,10 @@ export class Selection {
     const roots = this.getEntities()
       .filter((en) => en.visible)
       .map((en) => en.root);
-    const hits = this.ray.intersectObjects(roots, true);
+    const hits = this.ray.intersectObjects(roots, true).filter((h) => {
+      for (let o: any = h.object; o; o = o.parent) { if (o.visible === false) return false; }
+      return true;
+    });
     if (!hits.length) {
       this.onSelect(null);
       return;

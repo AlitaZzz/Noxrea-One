@@ -13,7 +13,8 @@ export class TransformGizmo {
     camera: THREE.Camera,
     domElement: HTMLElement,
     scene: THREE.Scene,
-    orbit: OrbitControls
+    orbit: OrbitControls,
+    orbitAllowed: () => boolean = () => true,
   ) {
     this.control = new TransformControls(camera, domElement);
     this.control.setMode("translate");
@@ -29,7 +30,7 @@ export class TransformGizmo {
     this._setHelperVisible(false);
 
     this.control.addEventListener("dragging-changed", (e: any) => {
-      orbit.enabled = !e.value;
+      orbit.enabled = !e.value && orbitAllowed();
     });
 
     this.control.addEventListener("objectChange", () => {

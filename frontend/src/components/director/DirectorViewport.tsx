@@ -92,7 +92,8 @@ export default function DirectorViewport() {
         // 相机视角下隐藏相机名牌
         if (ent.type === "camera" && _cameraView) { el.style.display = "none"; return; }
         ent.root.getWorldPosition(_labelTmp);
-        _labelTmp.y += (ent.type === "camera" ? 0.2 : ent.height + 0.16);
+        const ws = stage.world.scale.y;
+        _labelTmp.y += (ent.type === "camera" ? 0.2 : ent.height + 0.16) * ws;
         _labelTmp.project(cam);
         if (_labelTmp.z > 1) { el.style.display = "none"; return; }
         el.style.display = "block";
@@ -137,7 +138,7 @@ export default function DirectorViewport() {
     };
 
     // ---- Interaction ----
-    const gizmo = new TransformGizmo(stage.camera, stage.renderer.domElement, stage.scene, rig.controls);
+    const gizmo = new TransformGizmo(stage.camera, stage.renderer.domElement, stage.scene, rig.controls, () => !_cameraView);
     const selection = new Selection(stage.renderer, stage.camera, stage.scene, () => entities, (id) => {
       _selectedId = id;
       useDirectorStore.getState().setSelectedId(id);
@@ -382,28 +383,30 @@ export default function DirectorViewport() {
 
           // Clean render（隐藏辅助物）→ 提取数据 → 恢复
           (runtime as any)._beginCleanRender?.();
-          stage.renderer.render(stage.scene, camEnt.cam);
-
-          const cv = stage.renderer.domElement;
-          const frameRect = rig.frameRect;
-
           let dataURL: string;
-          if (frameRect && frameRect.w > 0 && frameRect.h > 0) {
-            const px = cv.width / W;
-            const py = cv.height / H;
-            const cw = Math.max(1, Math.round(frameRect.w * px));
-            const ch = Math.max(1, Math.round(frameRect.h * py));
-            const ox = Math.round(frameRect.x * px);
-            const oy = Math.round(frameRect.y * py);
-            const tmp = document.createElement("canvas");
-            tmp.width = cw; tmp.height = ch;
-            tmp.getContext("2d")!.drawImage(cv, ox, oy, cw, ch, 0, 0, cw, ch);
-            dataURL = tmp.toDataURL("image/png");
-          } else {
-            dataURL = cv.toDataURL("image/png");
-          }
+          try {
+            stage.renderer.render(stage.scene, camEnt.cam);
 
-          (runtime as any)._endCleanRender?.();
+            const cv = stage.renderer.domElement;
+            const frameRect = rig.frameRect;
+
+            if (frameRect && frameRect.w > 0 && frameRect.h > 0) {
+              const px = cv.width / W;
+              const py = cv.height / H;
+              const cw = Math.max(1, Math.round(frameRect.w * px));
+              const ch = Math.max(1, Math.round(frameRect.h * py));
+              const ox = Math.round(frameRect.x * px);
+              const oy = Math.round(frameRect.y * py);
+              const tmp = document.createElement("canvas");
+              tmp.width = cw; tmp.height = ch;
+              tmp.getContext("2d")!.drawImage(cv, ox, oy, cw, ch, 0, 0, cw, ch);
+              dataURL = tmp.toDataURL("image/png");
+            } else {
+              dataURL = cv.toDataURL("image/png");
+            }
+          } finally {
+            (runtime as any)._endCleanRender?.();
+          }
 
           // 上传
           const blob = await (await fetch(dataURL)).blob();
@@ -556,31 +559,31 @@ export default function DirectorViewport() {
         _sync(); selection.onSelect(crowd.id);
         return crowd;
       },
-      duplicateMany: (ids: string[]) => {
+      duplicateMany: async (ids: string[]) => {
         const list = ids.map((id) => entities.find((e: any) => e.id === id)).filter(Boolean);
         const OFF = new THREE.Vector3(0.6, 0, 0.6);
         let last: any = null;
         for (const ent of list) {
           if (ent.type === "character") {
             const srcUrl = ent._srcUrl || XBOT;
-            Character.load("角色" + String.fromCharCode(65 + _charLetter++), srcUrl, ent._opts || {})
-              .then((c: Character) => {
-                if (_cancelled) { c.dispose(); return; }
-                c._srcUrl = srcUrl; c._opts = ent._opts;
-                c.root.position.copy(ent.root.position).add(OFF);
-                c.root.quaternion.copy(ent.root.quaternion);
-                c.root.scale.copy(ent.root.scale);
-                c.setColor(ent.color);
-                Object.assign(c.values, ent.values); c.applyPose();
-                stage.add(c.root); entities.push(c); last = c; _sync();
-              }).catch(() => {});
+            try {
+              const c = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), srcUrl, ent._opts || {});
+              if (_cancelled) { c.dispose(); return; }
+              c._srcUrl = srcUrl; c._opts = ent._opts;
+              c.root.position.copy(ent.root.position).add(OFF);
+              c.root.quaternion.copy(ent.root.quaternion);
+              c.root.scale.copy(ent.root.scale);
+              c.setColor(ent.color);
+              Object.assign(c.values, ent.values); c.applyPose();
+              stage.add(c.root); entities.push(c); _registerEntity(c); last = c; _sync();
+            } catch {}
           } else if (ent.type === "prop") {
             const p = new Prop(ent.kind, ent.name + "副本");
             p.root.position.copy(ent.root.position).add(OFF);
             p.root.quaternion.copy(ent.root.quaternion);
             p.root.scale.copy(ent.root.scale);
             p.setColor(ent.color);
-            stage.add(p.root); entities.push(p); last = p; _sync();
+            stage.add(p.root); entities.push(p); _registerEntity(p); last = p; _sync();
           }
         }
         if (last) selection.onSelect(last.id);
@@ -605,7 +608,7 @@ export default function DirectorViewport() {
             if (ent.type === "character") return { ...base, bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
             if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
             if (ent.type === "camera") return { ...base, fov: ent.fov };
-            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => ({ bodyType: getBodyType(m), color: "#" + m.color.toString(16).padStart(6, "0"), pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible })) };
+            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => ({ bodyType: getBodyType(m), color: "#" + m.color.toString(16).padStart(6, "0"), pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible, pose: { mode: m.poseMode, preset: m.currentPreset, values: m.poseMode === "manual" ? { ...m.values } : undefined } })) };
             return base;
           }),
           sceneState: { ...store.sceneState } as any,
@@ -663,7 +666,13 @@ export default function DirectorViewport() {
               if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
               if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
               ch.setVisible(mdata?.visible ?? true);
-              ch.applyPosePreset("stand");
+              if (mdata?.pose?.mode === "manual" && mdata.pose.values) {
+                Object.assign(ch.values, mdata.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
+              } else if (mdata?.pose?.preset) {
+                ch.applyPosePreset(mdata.pose.preset);
+              } else {
+                ch.applyPosePreset("stand");
+              }
               group.add(ch.root); members.push(ch);
             }
             const crowd = new Crowd(e.name, group, members, { rows, cols });
