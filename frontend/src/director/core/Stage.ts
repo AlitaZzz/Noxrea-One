@@ -8,7 +8,7 @@ export class Stage {
   camera: THREE.PerspectiveCamera;
   activeCamera: THREE.PerspectiveCamera | null = null;
   world: THREE.Group;
-  clock: THREE.Clock;
+  clock: THREE.Timer;
   private _tick: ((dt: number) => void) | null = null;
   private _panoTex: THREE.Texture | null = null;
   private _panoRotDeg: number = 0;
@@ -52,7 +52,7 @@ export class Stage {
     this.ground = built.ground;
     this.grid = built.grid;
 
-    this.clock = new THREE.Clock();
+    this.clock = new THREE.Timer();
 
     this.onResize = this.onResize.bind(this);
     window.addEventListener("resize", this.onResize);
