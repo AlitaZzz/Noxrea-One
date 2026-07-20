@@ -30,7 +30,6 @@ const BODY_TYPES: Record<string, { url: string; label: string; height: number; g
 };
 const PROP_LABEL: Record<string, string> = { box: "方块", cylinder: "圆柱", sphere: "球体", mannequin: "人体素模" };
 
-let _charLetter = 0;
 let _propCount: Record<string, number> = {};
 let _camCount = 0;
 
@@ -83,6 +82,12 @@ export default function DirectorViewport() {
       _labelEls.set(ent.id, d);
     };
 
+    // 确保实体有标签（已存在则跳过，避免重复创建残留 DOM）
+    const _ensureLabel = (ent: any) => {
+      if (_labelEls.has(ent.id)) return;
+      _makeLabel(ent);
+    };
+
     const _updateLabels = () => {
       const layer = document.getElementById("dirLabelLayer");
       if (!layer || !_labelsVisible) return;
@@ -121,6 +126,21 @@ export default function DirectorViewport() {
       }
     };
 
+    // 推算下一个可用角色名（角色A..角色Z），跳过现有角色名与本次已分配字母
+    const _nextCharName = (reserved: Set<string> = new Set()) => {
+      _forEachEntity((e: any) => {
+        if (e.type === "character" && typeof e.name === "string" && e.name.startsWith("角色")) {
+          const letter = e.name.slice(2);
+          if (letter.length === 1 && letter >= "A" && letter <= "Z") reserved.add(letter);
+        }
+      });
+      for (let i = 0; i < 26; i++) {
+        const ch = String.fromCharCode(65 + i);
+        if (!reserved.has(ch)) { reserved.add(ch); return "角色" + ch; }
+      }
+      return "角色" + (reserved.size + 1);
+    };
+
     const _placeNew = (root: THREE.Object3D) => {
       const n = entities.length;
       root.position.set(Math.cos(n * 0.95) * Math.min(0.9 + n * 0.4, 3.2), 0,
@@ -129,7 +149,7 @@ export default function DirectorViewport() {
     const _sync = () => useDirectorStore.getState().setEntities(
       entities.map((e: any) => ({
         id: e.id, type: e.type, name: e.name, visible: e.visible,
-        ...(e.type === "crowd" ? { _members: e.members.map((m: any) => ({ id: m.id, name: m.name, type: "character" as const, visible: m.visible })) } : {}),
+        ...(e.type === "crowd" ? { _members: e.members.map((m: any) => ({ id: m.id, name: m.name, type: m.type, visible: m.visible })) } : {}),
       })) as any
     );
 
@@ -174,7 +194,7 @@ export default function DirectorViewport() {
     const runtime = {
       addCharacter: async (bodyType = "standard") => {
         const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
-        const name = "角色" + String.fromCharCode(65 + _charLetter++);
+        const name = _nextCharName();
         try {
           const c = await Character.load(name, b.url, { height: b.height, girth: b.girth });
           if (_cancelled) { c.dispose(); return null; }
@@ -235,19 +255,21 @@ export default function DirectorViewport() {
         const PALETTE = [0x4f8ef7, 0xff9f43, 0xee5253, 0x10ac84, 0xfeca57, 0xa55eea, 0x00d2d3, 0xff6b9d, 0x9b59b6];
         const group = new THREE.Group();
         const members: any[] = [];
+        const usedLetters = new Set<string>();
         const w = (cols - 1) * spacing, d = (rows - 1) * spacing;
         let idx = 0;
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++, idx++) {
             let ch: any;
             try {
-              ch = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), b.url, b);
+              ch = await Character.load(_nextCharName(usedLetters), b.url, b);
             } catch (err) { console.error("addCrowd char", err); continue; }
             if (_cancelled) { ch.dispose(); return null; }
             ch.setColor(PALETTE[idx % PALETTE.length]);
             ch.root.position.set(c * spacing - w / 2, 0, r * spacing - d / 2);
             ch.applyPosePreset("stand");
             group.add(ch.root);
+            _ensureLabel(ch);
             members.push(ch);
           }
         }
@@ -545,6 +567,7 @@ export default function DirectorViewport() {
           stage.add(m.root);
           mat.decompose(m.root.position as any, m.root.quaternion as any, m.root.scale as any);
           m.root.userData.entityId = m.id;
+          _ensureLabel(m);
           entities.push(m);
         }
         stage.remove(crowd.root);
@@ -646,7 +669,7 @@ export default function DirectorViewport() {
             if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
             if (ent.type === "camera") return { ...base, fov: ent.fov, roll: (ent as any)._roll || 0 };
             if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => {
-              const mb: any = { type: m.type, pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible };
+              const mb: any = { type: m.type, id: m.id, name: m.name, pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible };
               if (m.type === "character") { mb.bodyType = getBodyType(m); mb.color = "#" + m.color.toString(16).padStart(6, "0"); mb.pose = { mode: m.poseMode, preset: m.currentPreset, values: m.poseMode === "manual" ? { ...m.values } : undefined }; }
               else if (m.type === "camera") { mb.fov = m.fov; mb.roll = m._roll || 0; }
               else if (m.type === "prop") { mb.kind = m.kind; mb.color = "#" + m.color.toString(16).padStart(6, "0"); }
@@ -707,26 +730,30 @@ export default function DirectorViewport() {
             const rows = e.rows || 3, cols = e.cols || 3;
             const group = new THREE.Group();
             const members: any[] = [];
+            const usedLetters = new Set<string>();
             const memberCount = e.members?.length || rows * cols;
             for (let i = 0; i < memberCount; i++) {
               if (_cancelled) return;
               const mdata = e.members?.[i];
               if ((mdata?.type || "character") === "camera") {
                 const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-                const cam = new CameraEntity("机位", { fov: (mdata as any)?.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+                const cam = new CameraEntity(mdata?.name || "机位", { fov: (mdata as any)?.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+                if (mdata?.id) { cam.id = mdata.id; }
                 if (mdata) { cam.root.position.set(...mdata.pos); cam.root.quaternion.set(...mdata.rot); }
                 if ((mdata as any)?.roll) cam._roll = (mdata as any).roll;
                 cam.setVisible(mdata?.visible ?? true);
-                group.add(cam.root); members.push(cam);
+                group.add(cam.root); _ensureLabel(cam); members.push(cam);
               } else if ((mdata?.type || "character") === "prop") {
-                const p = new Prop((mdata as any)?.kind || "box", "道具");
+                const p = new Prop((mdata as any)?.kind || "box", mdata?.name || "道具");
+                if (mdata?.id) { p.id = mdata.id; }
                 if (mdata?.color) p.setColor(parseInt(mdata.color.slice(1), 16));
                 if (mdata) { p.root.position.set(...mdata.pos); p.root.quaternion.set(...mdata.rot); }
                 p.setVisible(mdata?.visible ?? true);
                 group.add(p.root); members.push(p);
               } else {
                 const b = BODY_TYPES.standard;
-                const ch = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), b.url, b);
+                const ch = await Character.load(mdata?.name || _nextCharName(usedLetters), b.url, b);
+                if (mdata?.id) { ch.id = mdata.id; }
                 if (_cancelled) { ch.dispose(); return; }
                 if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
                 if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
@@ -738,7 +765,7 @@ export default function DirectorViewport() {
                 } else {
                   ch.applyPosePreset("stand");
                 }
-                group.add(ch.root); members.push(ch);
+                group.add(ch.root); _ensureLabel(ch); members.push(ch);
               }
             }
             const crowd = new Crowd(e.name, group, members, { rows, cols });
@@ -833,7 +860,7 @@ export default function DirectorViewport() {
       for (const ent of entities) ent.dispose?.();
       stage.dispose(); useDirectorStore.getState().setRuntime(null);
       // 重置模块级计数器，避免跨会话泄露
-      _charLetter = 0; _propCount = {}; _camCount = 0;
+      _propCount = {}; _camCount = 0;
     };
   }, []);
 
