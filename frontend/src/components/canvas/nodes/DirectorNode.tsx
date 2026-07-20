@@ -5,6 +5,7 @@ import { Handle, Position } from "@xyflow/react";
 import { PartitionOutlined } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { useDirectorStore } from "@/stores/director-store";
 
 interface Props {
   id: string;
@@ -33,7 +34,16 @@ function DirectorNode({ id, data, selected }: Props) {
           <PartitionOutlined className="text-5xl" />
           <span className="text-base text-center">{t("director.desc")}</span>
           <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-            onClick={() => useCanvasStore.getState().setDirectorOverlayOpen(true)}>
+            onClick={() => {
+              const cs = useCanvasStore.getState();
+              const node = cs.nodes.find(n => n.id === id);
+              const directorState = (node?.data as any)?.directorState;
+              if (directorState) {
+                useDirectorStore.getState().setRestoreState(directorState);
+              }
+              useDirectorStore.getState().setOpeningNodeId(id);
+              cs.setDirectorOverlayOpen(true);
+            }}>
             {t("director.open")}
           </button>
         </div>

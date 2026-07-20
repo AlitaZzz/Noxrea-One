@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { CloseOutlined } from "@ant-design/icons";
 import { useDirectorStore } from "@/stores/director-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import Outliner from "@/components/director/Outliner";
 import Inspector from "@/components/director/Inspector";
 import ScenePanel from "@/components/director/ScenePanel";
@@ -53,7 +54,18 @@ export default function DirectorOverlay({ onClose }: Props) {
 
         {/* 关闭按钮 */}
         <div className="ml-auto flex items-center">
-          <button onClick={() => { useDirectorStore.getState().reset(); onClose(); }} className="cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors">
+          <button onClick={() => {
+            const ds = useDirectorStore.getState();
+            const nodeId = ds.openingNodeId;
+            if (ds.runtime && nodeId) {
+              const state = ds.runtime.captureState();
+              if (state) {
+                useCanvasStore.getState().updateNodeData(nodeId, { directorState: state } as any);
+              }
+            }
+            ds.reset();
+            onClose();
+          }} className="cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors">
             <CloseOutlined style={{ fontSize: 16 }} />
           </button>
         </div>
