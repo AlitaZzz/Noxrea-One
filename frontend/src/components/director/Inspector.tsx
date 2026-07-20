@@ -60,6 +60,11 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
     requestAnimationFrame(() => { pendingRef.current = false; refreshPreview(); });
   }, [refreshPreview]);
   useEffect(() => { refreshPreview(); }, [refreshPreview]);
+  // 注册到 runtime，让 gizmo 拖拽也能触发预览刷新
+  useEffect(() => {
+    if (runtime) (runtime as any)._onCameraAttrChange = schedulePreview;
+    return () => { if (runtime) (runtime as any)._onCameraAttrChange = null; };
+  }, [runtime, schedulePreview]);
 
   const targets = entities.filter((e: any) => e.type === "character" || e.type === "prop");
   const aimOpts = [{ value: "manual", label: "手动坐标" }, ...targets.map((t: any) => ({ value: t.id, label: t.name }))];
@@ -93,7 +98,7 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
             onChange={(id: string) => runtime.select(id)} />
         </div>
       )}
-      <TripleRow label="位置" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update?.(); } }))} />
+      <TripleRow label="位置" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update?.(); schedulePreview(); } }))} />
       <div className="dir-field">
         <label className="dir-label">注视目标</label>
         <Select size="small" className="w-full dir-select" value={aimMode}
@@ -114,7 +119,7 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
             }
           }} />
       </div>
-      <TripleRow label="注视坐标" step={0.05} keys={["x","y","z"].map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); } }))} />
+      <TripleRow label="注视坐标" step={0.05} keys={["x","y","z"].map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); schedulePreview(); } }))} />
       <div className="dir-field">
         <div className="flex justify-between items-center dir-label"><span>视野角度 <Tooltip title={FOV_TIP}><span className="text-white/25 cursor-help">ⓘ</span></Tooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
@@ -180,12 +185,12 @@ function CameraShots({ cameraId }: { cameraId: string }) {
           ))}
         </div>
       )}
-      {/* 全屏预览 modal */}
+      {/* 放大预览 modal（复用相机预览弹层样式） */}
       {previewUrl && (
-        <div className="dir-shot-modal-overlay" onClick={() => setPreviewUrl("")}>
-          <div className="dir-shot-modal-box" onClick={(e) => e.stopPropagation()}>
-            <button className="dir-shot-modal-close" onClick={() => setPreviewUrl("")}>×</button>
-            <img src={previewUrl} alt="预览" />
+        <div className="dir-modal-overlay" onClick={() => setPreviewUrl("")}>
+          <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="dir-modal-close" onClick={() => setPreviewUrl("")}>×</button>
+            <img src={previewUrl} className="dir-modal-img" alt="预览" />
           </div>
         </div>
       )}

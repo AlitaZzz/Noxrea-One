@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Input, Button } from "antd";
-import { EyeOutlined, EyeInvisibleOutlined, DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined } from "@ant-design/icons";
 import { useDirectorStore } from "@/stores/director-store";
 
 const ICON: Record<string, string> = {
@@ -26,11 +27,15 @@ export default function Outliner() {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; ids: string[] } | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
-    const close = () => setCtxMenu(null);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const close = (e: Event) => {
+      if (ctxMenuRef.current?.contains(e.target as Node)) return; // 点菜单内部不关
+      setCtxMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCtxMenu(null); };
     const id = setTimeout(() => {
       window.addEventListener("pointerdown", close, true);
       window.addEventListener("keydown", onKey);
@@ -45,7 +50,7 @@ export default function Outliner() {
   const matches = (name: string) => !search || name.toLowerCase().includes(search.toLowerCase());
   const typeIcon = (type: string) => type === "character" ? "person" : type === "camera" ? "camera" : type === "crowd" ? "group" : "cube";
   const filtered = search ? entities.filter((e) => matches(e.name)) : entities;
-  const ctxCharCount = ctxMenu?.ids.filter((id) => entities.find((x) => x.id === id)?.type === "character").length || 0;
+  const ctxGroupCount = ctxMenu?.ids.filter((id) => { const t = entities.find((x) => x.id === id)?.type; return t === "character" || t === "camera" || t === "prop"; }).length || 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -76,8 +81,8 @@ export default function Outliner() {
                 ${sel ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
                 style={{ padding: "9px 10px" }}
                 onClick={(e) => {
-                  if (e.shiftKey && (ent.type === "character" || ent.type === "prop")) {
-                    runtime?.select(ent.id); return;
+                  if (e.shiftKey) {
+                    runtime?.toggleSelect(ent.id); return;
                   }
                   if (ent.type === "camera") {
                     runtime?.select(ent.id);
@@ -124,7 +129,7 @@ export default function Outliner() {
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                         onClick={(e) => { e.stopPropagation(); (runtime as any)?.ungroupCrowd?.(ent.id); }} title="解组">⊟</button>}
                       <Button type="text" size="small"
-                        icon={ent.visible ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                        icon={<span className="w-[14px] flex items-center" dangerouslySetInnerHTML={{ __html: ent.visible ? S("eye") : S("eyeOff") }} />}
                         className="!p-0.5"
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
@@ -159,22 +164,22 @@ export default function Outliner() {
         })}
       </div>
 
-      {/* 右键菜单 */}
-      {ctxMenu && (
-        <div className="dir-ctxmenu" style={{ left: Math.min(ctxMenu.x, window.innerWidth - 200), top: Math.min(ctxMenu.y, window.innerHeight - 200) }}>
+      {/* 右键菜单 — portal 到 body 最上层 */}
+      {ctxMenu && createPortal(
+        <div ref={ctxMenuRef} className="dir-ctxmenu" style={{ left: Math.min(ctxMenu.x, window.innerWidth - 200), top: Math.min(ctxMenu.y, window.innerHeight - 200), zIndex: 9999 }}>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { runtime?.groupCharacters?.(ctxMenu.ids); setCtxMenu(null); }}
-            disabled={ctxCharCount < 2} style={ctxCharCount < 2 ? { color: "var(--dir-dim2)", cursor: "default", pointerEvents: "none" } : {}}>
+            onClick={() => { runtime?.groupCharacters(ctxMenu.ids); setCtxMenu(null); }}
+            disabled={ctxGroupCount < 2} style={ctxGroupCount < 2 ? { color: "var(--dir-dim2)", cursor: "default", pointerEvents: "none" } : {}}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⊞</span>
             <span className="flex-1">打组</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { runtime?.toggleVisibleMany?.(ctxMenu.ids); setCtxMenu(null); }}>
-            <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>👁</span>
+            onClick={() => { runtime?.toggleVisibleMany(ctxMenu.ids); setCtxMenu(null); }}>
+            <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }} dangerouslySetInnerHTML={{ __html: S("eye") }} />
             <span className="flex-1">显示 / 隐藏</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { runtime?.duplicateMany?.(ctxMenu.ids); setCtxMenu(null); }}>
+            onClick={() => { runtime?.duplicateMany(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⧉</span>
             <span className="flex-1">创建副本</span>
           </button>
@@ -185,7 +190,8 @@ export default function Outliner() {
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>🗑</span>
             <span className="flex-1">删除</span>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

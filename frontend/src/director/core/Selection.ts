@@ -15,6 +15,7 @@ export class Selection {
   ring: THREE.Mesh;
   selectedEntity: any = null;
   private _shouldSkip: () => boolean = () => false;
+  _filterInvisible = false;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -71,10 +72,14 @@ export class Selection {
     const roots = this.getEntities()
       .filter((en) => en.visible)
       .map((en) => en.root);
-    const hits = this.ray.intersectObjects(roots, true).filter((h) => {
-      for (let o: any = h.object; o; o = o.parent) { if (o.visible === false) return false; }
-      return true;
-    });
+    let hits = this.ray.intersectObjects(roots, true);
+    // 机位视角下过滤隐藏的相机 body/helper（仅在 camera view 启用）
+    if (this._filterInvisible) {
+      hits = hits.filter((h) => {
+        for (let o: any = h.object; o; o = o.parent) { if (o.visible === false) return false; }
+        return true;
+      });
+    }
     if (!hits.length) {
       this.onSelect(null);
       return;
