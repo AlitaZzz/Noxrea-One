@@ -43,7 +43,6 @@ function _collectCanvasHashes(nodes: any[]): string[] {
       const h = _extractHashFromUrl(d.src);
       if (h) hashes.push(h);
     }
-    // image-group-node: data.images[].url
     if (Array.isArray(d.images)) {
       for (const img of d.images) {
         if (img?.url) {

@@ -187,14 +187,6 @@ describe("P0-4: CSS transform baking flow", () => {
       expect(result).toEqual([hash1]);
     });
 
-    it("should collect image URLs from image-group nodes", () => {
-      const nodes = [
-        { data: { images: [{ url: `/api/files/1/${hash2.slice(0, 2)}/${hash2}.jpg` }] } },
-      ];
-      const result = collectCanvasHashes(nodes);
-      expect(result).toEqual([hash2]);
-    });
-
     it("should deduplicate and sort", () => {
       const nodes = [
         { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },

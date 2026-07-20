@@ -66,14 +66,6 @@ export function createVideoNode(
   };
 }
 
-export function createImageGroupNode(position: { x: number; y: number }, images: { url: string; label: string }[], label?: string): AnyNode {
-  return {
-    id: uid("grp"), type: NODE_TYPE.IMAGE_GROUP, position,
-    data: { label: label || "Results", images, mainIndex: 0 },
-    style: { width: 260, height: 200 },
-  };
-}
-
 export function createGroupNode(
   position: { x: number; y: number },
   size: { width: number; height: number },

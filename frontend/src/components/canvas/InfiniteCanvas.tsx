@@ -23,7 +23,6 @@ import "@xyflow/react/dist/style.css";
 import ImageNode from "@/components/canvas/nodes/ImageNode";
 import TextNode from "@/components/canvas/nodes/TextNode";
 import VideoNode from "@/components/canvas/nodes/VideoNode";
-import ImageGroupNode from "@/components/canvas/nodes/ImageGroupNode";
 import GroupNode from "@/components/canvas/nodes/GroupNode";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
 import { Popover, App } from "antd";
@@ -60,7 +59,6 @@ const nodeTypes = {
   [NODE_TYPE.TEXT]: TextNode,
   [NODE_TYPE.IMAGE]: ImageNode,
   [NODE_TYPE.VIDEO]: VideoNode,
-  [NODE_TYPE.IMAGE_GROUP]: ImageGroupNode,
   [NODE_TYPE.GROUP]: GroupNode,
 };
 
@@ -465,7 +463,6 @@ export default function InfiniteCanvas() {
                   if (t === NODE_TYPE.TEXT) return "#1677ff";
                   if (t === NODE_TYPE.IMAGE) return "#52c41a";
                   if (t === NODE_TYPE.VIDEO) return "#13c2c2";
-                  if (t === NODE_TYPE.IMAGE_GROUP) return "#52c41a";
                   if (t === NODE_TYPE.GROUP) return "#722ed1";
                   return "#1677ff";
                 }}

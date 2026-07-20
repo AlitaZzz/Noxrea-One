@@ -125,12 +125,6 @@ describe("_collectCanvasHashes（前端 save-manager 版本）", () => {
     expect(collectCanvasHashes(nodes)).toEqual([hashA, hashB]);
   });
 
-  it("从 image-group-node 的 data.images[].url 收集", () => {
-    const nodes = [
-      { data: { images: [{ url: `/api/files/1/${hashA.slice(0, 2)}/${hashA}.jpg` }] } },
-    ];
-    expect(collectCanvasHashes(nodes)).toEqual([hashA]);
-  });
 
   it("重复 hash 去重并排序", () => {
     const nodes = [
