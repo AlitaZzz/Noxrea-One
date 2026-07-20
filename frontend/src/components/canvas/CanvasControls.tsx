@@ -2,11 +2,11 @@
 
 import { useState, useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { Button, Popover, Tooltip } from "antd";
+import { Button, Popover, Tooltip, InputNumber } from "antd";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import {
   AimOutlined,
-  MedicineBoxOutlined,
+  MedicineBoxOutlined, // unused — kept for other components
   ZoomInOutlined,
   ZoomOutOutlined,
   ExpandOutlined,
@@ -85,42 +85,14 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
 
   const zoomMenu = (
     <div style={{ width: 170 }}>
-      <div style={{ position: "relative", marginBottom: 4 }}>
-        <input
-          type="number"
-          min={Math.round(MIN_ZOOM * 100)}
-          max={Math.round(MAX_ZOOM * 100)}
-          value={inputZoom}
-          onChange={(e) => setInputZoom(Number(e.target.value))}
-          onKeyDown={(e) => { if (e.key === "Enter") handleZoomInput(inputZoom); }}
-          placeholder="100"
-          autoFocus
-          className="zoom-input-no-spin"
-          style={{
-            width: "100%",
-            padding: "4px 28px 4px 8px",
-            background: "var(--canvas-bg-elevated, #333)",
-            border: "1px solid #444",
-            borderRadius: 4,
-            color: "var(--canvas-text)",
-            fontSize: 13,
-            outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
-        <span
-          style={{
-            position: "absolute",
-            right: 8,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "var(--canvas-text-dim)",
-            fontSize: 13,
-            pointerEvents: "none",
-          }}
-        >
-          %
-        </span>
+      <div style={{ marginBottom: 4 }}>
+        <InputNumber
+          size="small" controls={false}
+          min={Math.round(MIN_ZOOM * 100)} max={Math.round(MAX_ZOOM * 100)}
+          value={inputZoom} placeholder="100" autoFocus
+          style={{ width: "100%" }}
+          suffix={<span style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>%</span>}
+          onChange={(v) => { if (v != null) { setInputZoom(v); handleZoomInput(v); } }} />
       </div>
       <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
       <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("zoom.in")}</MenuItem>
@@ -135,14 +107,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
   return (
     <>
       <style>{`
-        .zoom-input-no-spin::-webkit-outer-spin-button,
-        .zoom-input-no-spin::-webkit-inner-spin-button {
-          -webkit-appearance: none;
-          margin: 0;
-        }
-        .zoom-input-no-spin[type=number] {
-          -moz-appearance: textfield;
-        }
         .canvas-ctrl-btn.ant-btn-text {
           color: var(--canvas-text);
         }
@@ -179,7 +143,12 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
             size="small"
             type="text"
             className={`canvas-ctrl-btn ${snapToGrid ? "canvas-ctrl-active" : ""}`}
-            icon={<MedicineBoxOutlined />}
+            icon={
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 4v9a6 6 0 0 0 12 0V4" />
+                <path d="M4 4h4v3H4z" /><path d="M16 4h4v3h-4z" />
+              </svg>
+            }
             onClick={() => { toggleSnapToGrid(); }}
           />
       </Tooltip>

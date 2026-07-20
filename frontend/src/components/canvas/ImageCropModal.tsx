@@ -177,7 +177,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
               </ReactCrop>
             </div>
             {/* Info bar */}
-            <div className="flex items-center justify-center gap-3 text-xs" style={{ color: "#aaa" }}>
+            <div className="flex items-center justify-center gap-3 text-xs" style={{ color: "var(--canvas-text-dim)" }}>
               <span>裁剪: <b style={{ color: "var(--canvas-text)" }}>{naturalW} × {naturalH}</b></span>
               <span>比例: <b style={{ color: "var(--canvas-text)" }}>{ratioStr}</b></span>
               <span>原图: <b style={{ color: "var(--canvas-text)" }}>{naturalSize.w} × {naturalSize.h}</b></span>
@@ -189,7 +189,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
                   active={aspect === p.value}
                   style={{
                     padding: "2px 6px", height: 28, fontSize: 12, minWidth: 45,
-                    flex: 1, border: "1px solid #444", justifyContent: "center",
+                    flex: 1, border: "1px solid var(--canvas-border)", justifyContent: "center",
                   }}
                 >{p.label}</NavButton>
               ))}
