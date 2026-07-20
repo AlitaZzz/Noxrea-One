@@ -34,7 +34,7 @@ export function MenuPopover({ open, onOpenChange, trigger, placement, content }:
     <Popover
       content={<div className="menu-popover">{content}</div>}
       trigger="click" placement={placement || "bottomRight"} open={open} onOpenChange={onOpenChange}
-      overlayInnerStyle={{ padding: 0, background: "transparent" }}>
+      styles={{ container: { padding: 0, background: "transparent" } }}>
       {trigger}
     </Popover>
   );
