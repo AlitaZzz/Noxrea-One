@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Select, Input, App } from "antd";
+import { Select, Input, App, Button } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
 import { getTokenHeader, BASE } from "@/lib/api";
@@ -62,11 +62,11 @@ const TextAskPanel = memo(function TextAskPanel({ nodeId, currentContent }: Prop
       <div className="flex items-center gap-2">
         <Select size="small" value={modelKey || undefined} onChange={setModelKey} style={{ flex: 1 }}
           options={allModels.map((m) => ({ label: m.value, value: m.value }))} />
-        <button className="flex items-center gap-1 px-3 py-1 rounded text-xs font-medium flex-shrink-0 disabled:opacity-50"
-          style={{ background: "#1677ff", color: "#fff", border: "none", cursor: loading ? "wait" : "pointer", height: 30 }}
-          onClick={handleAsk} disabled={loading || !prompt.trim() || !modelKey}>
-          <ThunderboltOutlined /> {loading ? "..." : "Ask AI"}
-        </button>
+        <Button type="primary" size="small" className="flex items-center gap-1 text-xs font-medium flex-shrink-0"
+          style={{ height: 30 }} loading={loading} disabled={!prompt.trim() || !modelKey}
+          onClick={handleAsk} icon={<ThunderboltOutlined />}>
+          {loading ? "..." : "Ask AI"}
+        </Button>
       </div>
     </WheelGuard>
   );

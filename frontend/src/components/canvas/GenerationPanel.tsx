@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useRef, useMemo } from "react";
-import { Input, Popover, App } from "antd";
+import { Input, Popover, App, Button } from "antd";
 import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
@@ -279,14 +279,14 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         width: 580,
       }}
     >
-      <button
+      <Button size="small" type="text"
         className="flex items-center justify-center gap-1 rounded-lg text-xs text-white/60 hover:text-white transition-colors self-start"
         style={{ width: 54, height: 26, background: "rgba(255,255,255,0.04)", border: "none", cursor: "pointer" }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
         onClick={handleRefUpload}>
         <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
-      </button>
+      </Button>
       {refOrder.length > 0 && (
         <div
           className="flex gap-2 flex-wrap"
@@ -348,8 +348,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                   <img src={img.includes('/api/files/') ? `${img}?w=320` : img} className="max-w-[320px] max-h-[280px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", objectFit: "contain" }} />
                 </div>
               )}
-              <button className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-white/60 hover:text-white hover:bg-white/30 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ border: "none", cursor: "pointer", lineHeight: 1 }}
+              <Button type="text" size="small"
+                className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
                 onClick={() => {
                   const store = useCanvasStore.getState();
                   const edge = store.edges.find((e) => {
@@ -358,7 +358,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                     return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === img;
                   });
                   if (edge) store.removeEdges([edge.id]);
-                }}>✕</button>
+                }}>✕</Button>
             </div>
           ))}
         </div>
@@ -373,23 +373,23 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         <Popover
           content={<div className="flex flex-col gap-1 p-1" style={{ width: 320, margin: -12, background: "var(--canvas-bg)", borderRadius: 8 }}>
             {allModels.map((m) => (
-              <button key={m.value} className="text-left px-3 py-1.5 rounded text-sm transition-colors"
+              <Button size="small" type="text"key={m.value} className="text-left px-3 py-1.5 rounded text-sm transition-colors"
                 style={{ background: modelKey === m.value ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "none", cursor: "pointer" }}
                 onMouseEnter={(e) => { if (modelKey !== m.value) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                 onMouseLeave={(e) => { if (modelKey !== m.value) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                onClick={() => { setModelKey(m.value); setModelOpen(false); }}>{m.value}</button>
+                onClick={() => { setModelKey(m.value); setModelOpen(false); }}>{m.value}</Button>
             ))}
           </div>}
           trigger="click" placement="bottomLeft"
           open={modelOpen} onOpenChange={setModelOpen}
         >
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white hover:bg-white/10 transition-colors truncate"
+          <Button size="small" type="text"className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white hover:bg-white/10 transition-colors truncate"
             style={{ height: 36, background: "transparent", border: "none", cursor: "pointer", color: "var(--canvas-text)" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
             <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
             {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
-          </button>
+          </Button>
         </Popover>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
@@ -399,11 +399,11 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                 <div className="text-white/50 text-xs mb-1.5">Quality</div>
                 <div className="flex gap-1">
                   {["auto", "high", "medium", "low"].map((v) => (
-                    <button key={v} className="flex-1 rounded-md text-[13px] transition-colors"
+                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
                       style={{ padding: "4px 0", background: quality === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
                       onMouseEnter={(e) => { if (quality !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                       onMouseLeave={(e) => { if (quality !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setQuality(v)}>{v}</button>
+                      onClick={() => setQuality(v)}>{v}</Button>
                   ))}
                 </div>
               </div>
@@ -411,11 +411,11 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                 <div className="text-white/50 text-xs mb-1.5">Size</div>
                 <div className="flex gap-0.5 justify-center">
                   {["1K", "2K", "4K"].map((v) => (
-                    <button key={v} className="flex-1 rounded-md text-[13px] transition-colors"
+                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
                       style={{ padding: "4px 0", background: genSize === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
                       onMouseEnter={(e) => { if (genSize !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                       onMouseLeave={(e) => { if (genSize !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setGenSize(v)}>{v}</button>
+                      onClick={() => setGenSize(v)}>{v}</Button>
                   ))}
                 </div>
               </div>
@@ -429,7 +429,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                     const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
                     const active = ratio === v;
                     return (
-                      <button key={v} className="flex flex-col items-center rounded-md transition-colors"
+                      <Button size="small" type="text"key={v} className="flex flex-col items-center rounded-md transition-colors"
                         style={{ padding: "6px 2px 4px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: "1px solid #555", cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
@@ -439,7 +439,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                             style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border)", transition: "border-color 0.15s" }} />
                         </div>
                         <span className="text-xs mt-0.5 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -448,11 +448,11 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                 <div className="text-white/50 text-xs mb-1.5">Count</div>
                 <div className="flex gap-0.5 justify-center">
                   {[1, 2, 3, 4].map((v) => (
-                    <button key={v} className="flex-1 rounded-md text-[13px] transition-colors"
+                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
                       style={{ padding: "4px 0", background: n === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
                       onMouseEnter={(e) => { if (n !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                       onMouseLeave={(e) => { if (n !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setN(v)}>{v}</button>
+                      onClick={() => setN(v)}>{v}</Button>
                   ))}
                 </div>
               </div>
@@ -460,16 +460,16 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           }
           trigger="click" placement="bottomRight"
         >
-          <button className="flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs text-white transition-colors"
+          <Button size="small" type="text"className="flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs text-white transition-colors"
             style={{ height: 36, background: "transparent", border: "none", cursor: "pointer", color: "var(--canvas-text)" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
             <RatioIcon ratio={ratio} active />
             {ratio} · {quality} · {genSize} · {n}张
-          </button>
+          </Button>
         </Popover>
         <div className="flex-1" />
-        <button
+        <Button size="small" type="text"
           className="flex items-center justify-center rounded-full flex-shrink-0 transition-all"
           style={{
             width: 36, height: 36,
@@ -481,7 +481,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           onClick={isGenerating ? handleCancel : handleGenerate}
         >
           {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}
-        </button>
+        </Button>
       </div>
     </WheelGuard>
     </>
