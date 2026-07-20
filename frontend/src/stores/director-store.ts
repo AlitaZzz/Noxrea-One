@@ -58,6 +58,10 @@ export interface DirectorRuntime {
   setJointValue: (characterId: string, jointKey: string, value: number) => void;
   rename: (id: string, name: string) => void;
   toggleVisible: (id: string) => void;
+  setEntityColor: (id: string, hex: string) => void;
+  groupCharacters: (ids: string[]) => void;
+  duplicateMany: (ids: string[]) => Promise<void>;
+  toggleVisibleMany: (ids: string[]) => void;
   captureShot: () => Promise<{ url: string; name: string; cameraId: string } | null>;
   sendShotToCanvas: (shotId: string) => Promise<void>;
   resetView: () => void;
