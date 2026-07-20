@@ -115,9 +115,10 @@ export interface DirectorStateData {
   transformMode: string;
   shots: Array<{
     id: string;
-    dataURL: string;
-    label: string;
-    timestamp: number;
+    url: string;
+    name: string;
+    cameraId: string;
+    createdAt: number;
     selected?: boolean;
   }>;
 }

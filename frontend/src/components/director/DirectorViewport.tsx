@@ -14,7 +14,9 @@ import { CameraEntity } from "@/director/entities/Camera";
 import { CAMERA_PRESETS } from "@/director/core/cameraPresets";
 import type { CameraPresetCtx } from "@/director/core/cameraPresets";
 import { worldBox } from "@/director/util/measure";
+import { uploadBlob, createNodeFromUrl } from "@/lib/image-utils";
 import { useDirectorStore } from "@/stores/director-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import type { DirectorStateData } from "@/lib/types";
 
 const XBOT = "/assets/Xbot.glb";
@@ -350,11 +352,81 @@ export default function DirectorViewport() {
         const ent = _findChar(characterId);
         if (ent) { ent.values[jointKey] = value; ent.enterManual(); ent.applyPose(); ent.currentPreset = null; }
       },
-      captureShot: () => {
-        stage.render();
-        return { dataURL: stage.renderer.domElement.toDataURL("image/png"), label: `截图 ${new Date().toLocaleTimeString()}` };
+      // ---- Screenshot helpers (对齐参考项目 ShotManager) ----
+      _resolveShotCamera: () => {
+        // 1) 机位视角 + 活跃相机
+        if (_cameraView && _activeCamId) {
+          const a = entities.find((e: any) => e.id === _activeCamId && e.type === "camera");
+          if (a) return a;
+        }
+        // 2) 选中实体是相机
+        const sel = _findById(_selectedId);
+        if (sel?.type === "camera") return sel;
+        // 3) 无机位上下文：按当前视角克隆新建
+        return (runtime as any).addCamera("current");
       },
-      sendShotToCanvas: async () => {},
+      captureShot: () => {
+        return new Promise((resolve) => {
+          const camEnt = (runtime as any)._resolveShotCamera() as any;
+          if (!camEnt?.cam) { resolve(null); return; }
+
+          // 设置相机 aspect 匹配视口
+          const W = stage.viewport.clientWidth || 1920;
+          const H = stage.viewport.clientHeight || 1080;
+          camEnt.cam.aspect = W / Math.max(1, H);
+          camEnt.cam.updateProjectionMatrix();
+
+          // Clean render（隐藏辅助物）
+          (runtime as any)._beginCleanRender?.();
+          stage.renderer.render(stage.scene, camEnt.cam);
+          (runtime as any)._endCleanRender?.();
+
+          const cv = stage.renderer.domElement;
+          const frameRect = rig.frameRect;
+
+          // 裁剪或全幅 → toBlob
+          const doUpload = (blob: Blob | null) => {
+            if (!blob) { resolve(null); return; }
+            uploadBlob(blob, `shot_${Date.now()}.png`).then((url) => {
+              if (!url) { resolve(null); return; }
+              const n = ((runtime as any)._shotSeq = (runtime as any)._shotSeq || {});
+              n[camEnt.id] = (n[camEnt.id] || 0) + 1;
+              resolve({
+                url,
+                name: `${camEnt.name}-截图${String(n[camEnt.id]).padStart(2, "0")}`,
+                cameraId: camEnt.id,
+              });
+            });
+          };
+
+          if (frameRect && frameRect.w > 0 && frameRect.h > 0) {
+            const px = cv.width / W;
+            const py = cv.height / H;
+            const cw = Math.max(1, Math.round(frameRect.w * px));
+            const ch = Math.max(1, Math.round(frameRect.h * py));
+            const ox = Math.round(frameRect.x * px);
+            const oy = Math.round(frameRect.y * py);
+            const tmp = document.createElement("canvas");
+            tmp.width = cw; tmp.height = ch;
+            tmp.getContext("2d")!.drawImage(cv, ox, oy, cw, ch, 0, 0, cw, ch);
+            tmp.toBlob(doUpload, "image/png");
+          } else {
+            cv.toBlob(doUpload, "image/png");
+          }
+        });
+      },
+      sendShotToCanvas: async (shotId: string) => {
+        const ds = useDirectorStore.getState();
+        const shot = ds.shots.find((s) => s.id === shotId);
+        if (!shot) return;
+        const cs = useCanvasStore.getState();
+        const nodeId = ds.openingNodeId;
+        if (!nodeId || !cs.nodes.find((n) => n.id === nodeId)) return;
+        const W = stage.viewport.clientWidth || 1920;
+        const H = stage.viewport.clientHeight || 1080;
+        await createNodeFromUrl(nodeId, shot.url, W, H, shot.name);
+        useDirectorStore.getState().removeShot(shotId);
+      },
       resetView: () => rig.resetView(),
       toggleVisible: (id: string) => {
         const ent = entities.find((e: any) => e.id === id);
