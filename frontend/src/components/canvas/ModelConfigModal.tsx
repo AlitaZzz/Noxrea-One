@@ -111,22 +111,6 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     setNewModelName("");
   };
 
-  const is: React.CSSProperties = {
-    background: "var(--canvas-bg)",
-    border: "1px solid var(--canvas-border)",
-    color: "var(--canvas-text)",
-    borderRadius: 8,
-    fontSize: 14,
-    height: 36,
-  };
-
-  const btn: React.CSSProperties = {
-    background: "var(--canvas-bg)",
-    border: "1px solid var(--canvas-border)",
-    color: "var(--canvas-text)",
-    borderRadius: 8,
-    height: 36,
-  };
 
   // Models filtered by current capability tab
   const capModels = channel?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
@@ -160,6 +144,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         .model-config-wrap .ant-input-password .ant-input-suffix { display: flex; align-items: center; }
         .model-config-wrap .ant-input-password input { height: 34px !important; line-height: 34px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
         .model-config-wrap .ant-input-password:focus, .model-config-wrap .ant-input-password-focused, .model-config-wrap .ant-input-affix-wrapper-focused { border-color: var(--canvas-border) !important; box-shadow: none !important; outline: none !important; }
+        .model-config-wrap .model-btn { background: var(--canvas-bg); border: none !important; box-shadow: none !important; color: var(--canvas-text); border-radius: 8px; height: 36px; }
+        .model-config-wrap .model-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
         .model-config-wrap .ant-btn { background: var(--canvas-bg); border: none !important; box-shadow: none !important; color: var(--canvas-text); border-radius: 8px; height: 36px; }
         .model-config-wrap .ant-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
         .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -171,7 +157,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           size="small"
           value={channelId}
           onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
-          style={{ ...is, flex: 1, maxWidth: 200 }}
+          style={{ width: 180, height: 36 }}
           options={channels.map((c) => ({ label: c.name, value: c.id }))}
           notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
         />
@@ -181,19 +167,19 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           </span>
         )}
         <div className="flex gap-1 flex-shrink-0">
-          <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} style={btn}>
+          <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} className="model-btn">
             {t("add.channel")}
           </Button>
           {channel && (
             <>
               <div className="w-px h-5 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
-              <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} style={btn}>
+              <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
                 {channel.models.length > 0 ? `${t("fetch.models")} (${channel.models.length})` : t("fetch.models")}
               </Button>
               <Tooltip title={t("settings")}>
-                <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} style={btn} />
+                <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} className="model-btn" />
               </Tooltip>
-              <Button size="small" icon={<DeleteOutlined />} style={btn} onClick={() => setDeleteChannelId(channel.id)} />
+              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteChannelId(channel.id)} />
             </>
           )}
         </div>
@@ -205,14 +191,14 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           <div className="flex flex-wrap gap-2 items-end flex-1">
             <div className="flex flex-col gap-0.5" style={{ minWidth: 100 }}>
               <span className="text-[13px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
-              <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ ...is, width: 120 }} autoFocus />
+              <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: 120 }} autoFocus />
             </div>
             <div className="flex flex-col gap-0.5 flex-1" style={{ minWidth: 200 }}>
               <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
               <div className="flex gap-1">
-                <Input size="small" placeholder="https://api.openai.com" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ ...is, flex: 1 }} />
+                <Input size="small" placeholder="https://api.openai.com" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ flex: 1 }} />
                 <Select
-                  size="small" style={{ ...is, width: 110 }}
+                  size="small" style={{ width: 110 }}
                   placeholder={t("preset")}
                   options={PROVIDER_PRESETS.map((p) => ({ label: p.name, value: p.url }))}
                   onChange={(url) => setChForm((f) => ({ ...f, baseUrl: url, name: f.name || PROVIDER_PRESETS.find((p) => p.url === url)?.name || "" }))}
@@ -224,7 +210,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               <Input.Password
                 placeholder="sk-..." value={chForm.apiKey}
                 onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
-                style={is}
+                style={{}}
                 iconRender={(v) => (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
                     {v ? (
@@ -245,7 +231,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
             </div>
           </div>
           <div className="flex gap-1 flex-shrink-0">
-            <Button size="small" onClick={resetChForm} style={{ ...btn, fontSize: 13, padding: "0 16px" }}>{t("cancel")}</Button>
+            <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("cancel")}</Button>
             <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
               {editChannelId ? t("save.changes") : t("add.channel")}
             </Button>
@@ -260,11 +246,10 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           return (
             <button
               key={tab.key}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${activeCap === tab.key ? "" : "border-transparent text-white/40 hover:text-white/70"}`}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 border-transparent"
               style={{
-                background: "transparent",
-                cursor: "pointer",
-                color: activeCap === tab.key ? tab.color : undefined,
+                background: "transparent", cursor: "pointer",
+                color: activeCap === tab.key ? tab.color : "var(--canvas-text-dim)",
                 borderColor: activeCap === tab.key ? tab.color : "transparent",
               }}
               onClick={() => setActiveCap(tab.key)}
@@ -300,7 +285,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                 {capModels.map((m) => (
                   <label
                     key={m.id}
-                    className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-white/5 text-sm transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
                     style={{ color: "var(--canvas-text)" }}
                   >
                     <Checkbox
@@ -331,7 +316,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                 {otherModels.map((m) => (
                   <label
                     key={m.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-white/5 text-sm transition-colors"
+                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
                     style={{ color: "var(--canvas-text-dim)" }}
                   >
                     <Checkbox
@@ -365,9 +350,9 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               value={newModelName}
               onChange={(e) => setNewModelName(e.target.value)}
               onPressEnter={handleAddModel}
-              style={{ ...is, flex: 1 }}
+              style={{ flex: 1 }}
             />
-            <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} style={btn}>
+            <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
               {t("add")}
             </Button>
           </div>
