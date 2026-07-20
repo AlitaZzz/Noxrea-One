@@ -66,6 +66,16 @@ export function createVideoNode(
   };
 }
 
+export function createDirectorNode(position: { x: number; y: number }): AnyNode {
+  return {
+    id: uid("dir"),
+    type: NODE_TYPE.DIRECTOR,
+    position,
+    data: { label: "3D导演台" },
+    style: { width: 600, height: 450 },
+  };
+}
+
 export function createGroupNode(
   position: { x: number; y: number },
   size: { width: number; height: number },

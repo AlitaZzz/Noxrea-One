@@ -24,6 +24,7 @@ import ImageNode from "@/components/canvas/nodes/ImageNode";
 import TextNode from "@/components/canvas/nodes/TextNode";
 import VideoNode from "@/components/canvas/nodes/VideoNode";
 import GroupNode from "@/components/canvas/nodes/GroupNode";
+import DirectorNode from "@/components/canvas/nodes/DirectorNode";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
 import { Popover, App } from "antd";
 import NodeToolbarUI from "@/components/canvas/nodes/NodeToolbar";
@@ -60,6 +61,7 @@ const nodeTypes = {
   [NODE_TYPE.IMAGE]: ImageNode,
   [NODE_TYPE.VIDEO]: VideoNode,
   [NODE_TYPE.GROUP]: GroupNode,
+  [NODE_TYPE.DIRECTOR]: DirectorNode,
 };
 
 const edgeTypes = {
@@ -464,6 +466,7 @@ export default function InfiniteCanvas() {
                   if (t === NODE_TYPE.IMAGE) return "#52c41a";
                   if (t === NODE_TYPE.VIDEO) return "#13c2c2";
                   if (t === NODE_TYPE.GROUP) return "#722ed1";
+                  if (t === NODE_TYPE.DIRECTOR) return "#ff8a3d";
                   return "#1677ff";
                 }}
                 maskColor="rgba(255,255,255,0.08)"

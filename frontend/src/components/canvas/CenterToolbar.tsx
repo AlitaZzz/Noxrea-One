@@ -29,7 +29,7 @@ export default function CenterToolbar() {
   }, []);
 
   const { addNode: addNodeAtCenter } = useAddNode();
-  const addNode = useCallback((type: "text" | "image" | "video" | "group") => {
+  const addNode = useCallback((type: "text" | "image" | "video" | "group" | "director") => {
     addNodeAtCenter(type); setOpen(false);
   }, [addNodeAtCenter]);
 
@@ -40,6 +40,8 @@ export default function CenterToolbar() {
       <MenuItem onClick={() => addNode("video")}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
       <MenuDivider />
       <MenuItem onClick={() => addNode("group")}><GroupOutlined /> {t("group.node")}</MenuItem>
+      <MenuDivider />
+      <MenuItem onClick={() => addNode("director")}><VideoCameraOutlined /> {t("director.node")}</MenuItem>
     </div>
   );
 
@@ -48,7 +50,7 @@ export default function CenterToolbar() {
       <div className="canvas-toolbar absolute left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-2xl z-10"
         style={{ bottom: 24, padding: "8px 12px" }}>
         <Popover content={menuContent} trigger="click" open={open} onOpenChange={setOpen} placement="top"
-          overlayInnerStyle={{ padding: 0, background: "transparent" }}>
+          styles={{ container: { padding: 0, background: "transparent" } }}>
           <Tooltip title={t("add.node")}>
             <Button type="text" className="canvas-toolbar-btn" icon={<PlusOutlined style={{ fontSize: 20 }} />} />
           </Tooltip>
@@ -75,7 +77,7 @@ export default function CenterToolbar() {
               ))}
             </div>
           } trigger="click" open={shortcutsOpen} onOpenChange={setShortcutsOpen} placement="top"
-          overlayInnerStyle={{ padding: 0, background: "transparent" }}>
+          styles={{ container: { padding: 0, background: "transparent" } }}>
           <Tooltip title={t("shortcuts")}>
             <Button type="text" className="canvas-toolbar-btn" icon={
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="8" x2="6" y2="8" /><line x1="9" y1="8" x2="9" y2="8" /><line x1="12" y1="8" x2="12" y2="8" /><line x1="15" y1="8" x2="15" y2="8" /><line x1="18" y1="8" x2="18" y2="8" /><line x1="6" y1="12" x2="8" y2="12" /><line x1="18" y1="12" x2="18" y2="16" /><line x1="6" y1="16" x2="16" y2="16" /></svg>} />
@@ -91,6 +93,8 @@ export default function CenterToolbar() {
             <MenuItem onClick={() => { addNode("video"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
             <MenuDivider />
             <MenuItem onClick={() => { addNode("group"); setCtxMenu(null); }}><GroupOutlined /> {t("group.node")}</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={() => { addNode("director"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("director.node")}</MenuItem>
           </div>
         </div>
       )}

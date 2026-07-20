@@ -18,7 +18,7 @@ const zh: Record<string, string> = {
   "zoom.in": "放大", "zoom.out": "缩小", "fit": "适应屏幕", "zoom.to.50": "缩放到 50%", "zoom.to.100": "缩放到 100%",
   "theme.dark": "深色模式", "theme.light": "浅色模式",
   // Nodes
-  "add.node": "添加节点", "text.node": "文本", "image.node": "图片", "video.node": "视频", "group.node": "编组",
+  "add.node": "添加节点", "text.node": "文本", "image.node": "图片", "video.node": "视频", "group.node": "编组", "director.node": "3D导演台", "director.desc": "3D空间搭建场景并进行多视角截图", "director.open": "打开导演台",
   "copy": "复制", "info": "信息", "delete": "删除", "group": "编组", "ungroup": "解组",
   "replace": "替换", "download": "下载", "clear": "清除", "upload": "上传",
   "crop": "裁剪", "transform": "旋转 / 翻转", "rotate90": "旋转90°", "flipH": "水平翻转", "flipV": "垂直翻转",
@@ -130,7 +130,7 @@ const en: Record<string, string> = {
   "dots": "Dots", "grid": "Grid", "blank": "Blank",
   "zoom.in": "Zoom In", "zoom.out": "Zoom Out", "fit": "Fit to Screen", "zoom.to.50": "Zoom to 50%", "zoom.to.100": "Zoom to 100%",
   "theme.dark": "Dark Mode", "theme.light": "Light Mode",
-  "add.node": "Add Node", "text.node": "Text", "image.node": "Image", "video.node": "Video", "group.node": "Group",
+  "add.node": "Add Node", "text.node": "Text", "image.node": "Image", "video.node": "Video", "group.node": "Group", "director.node": "3D Director", "director.desc": "Build 3D scenes and multi-angle capture", "director.open": "Open Director",
   "copy": "Copy", "info": "Info", "delete": "Delete", "group": "Group", "ungroup": "Ungroup",
   "replace": "Replace", "download": "Download", "clear": "Clear", "upload": "Upload",
   "crop": "Crop", "transform": "Rotate / Flip", "rotate90": "Rotate 90°", "flipH": "Flip H", "flipV": "Flip V",
