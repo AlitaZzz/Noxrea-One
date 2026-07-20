@@ -43,6 +43,8 @@ export default function DirectorViewport() {
 
     const entities: any[] = [];
     let _selectedId: string | null = null;
+    let _activeCamId: string | null = null;
+    let _cameraView = false;
     let _cancelled = false;
     const _labelEls: Map<string, HTMLElement> = new Map();
     const _labelTmp = new THREE.Vector3();
@@ -66,6 +68,8 @@ export default function DirectorViewport() {
       const update = (ent: any) => {
         const el = _labelEls.get(ent.id);
         if (!el || !ent.visible) { if (el) el.style.display = "none"; return; }
+        // 相机视角下隐藏相机名牌
+        if (ent.type === "camera" && _cameraView) { el.style.display = "none"; return; }
         ent.root.getWorldPosition(_labelTmp);
         _labelTmp.y += (ent.type === "camera" ? 0.2 : ent.height + 0.16);
         _labelTmp.project(cam);
@@ -97,16 +101,29 @@ export default function DirectorViewport() {
       })) as any
     );
 
+    // 搜索任意实体(含群众成员)
+    const _findById = (id: string | null) => {
+      if (!id) return null;
+      const ent = entities.find((e: any) => e.id === id);
+      if (ent) return ent;
+      for (const e of entities) {
+        if (e.type === "crowd") {
+          const m = e.members?.find((x: any) => x.id === id);
+          if (m) return m;
+        }
+      }
+      return null;
+    };
+
     // ---- Interaction ----
     const gizmo = new TransformGizmo(stage.camera, stage.renderer.domElement, stage.scene, rig.controls);
     const selection = new Selection(stage.renderer, stage.camera, stage.scene, () => entities, (id) => {
       _selectedId = id;
       useDirectorStore.getState().setSelectedId(id);
-      if (id) {
-        const ent = entities.find((e: any) => e.id === id) || null;
-        if (ent) gizmo.attach(ent.root);
-        selection.highlight(ent);
-      } else { gizmo.detach(); selection.highlight(null); }
+      const ent = _findById(id);
+      if (ent && !_cameraView) { gizmo.attach(ent.root); }
+      else { gizmo.detach(); }
+      selection.highlight(_cameraView ? null : ent);
     });
     selection.setSkipPredicate(() => gizmo.dragging || gizmo.overAxis);
     gizmo.onObjectChange(() => { runtime._syncInspector?.(); });
@@ -114,6 +131,12 @@ export default function DirectorViewport() {
     // Nav gizmo
     const navSvg = viewport.parentElement?.querySelector<SVGElement>("#navsvg");
     const navGizmo = navSvg ? new NavGizmo(navSvg, stage.camera, () => rig.resetView()) : null;
+
+    // 搜索角色(含群众成员)
+    const _findChar = (id: string) => {
+      const ent = _findById(id);
+      return ent?.type === "character" ? ent : null;
+    };
 
     // ---- Runtime API ----
     const runtime = {
@@ -191,26 +214,46 @@ export default function DirectorViewport() {
       select: (id: string | null) => {
         _selectedId = id;
         useDirectorStore.getState().setSelectedId(id);
-        if (id) {
-          const ent = entities.find((e: any) => e.id === id) || null;
-          if (ent) gizmo.attach(ent.root);
-          selection.highlight(ent);
-        } else { gizmo.detach(); selection.highlight(null); }
+        const ent = id ? _findById(id) : null;
+        if (ent && !_cameraView) { gizmo.attach(ent.root); }
+        else { gizmo.detach(); }
+        selection.highlight(_cameraView ? null : ent);
       },
       setTransformMode: (mode: string) => {
         gizmo.setMode(mode); useDirectorStore.getState().setTransformMode(mode as any);
       },
       setCameraView: (on: boolean) => {
-        useDirectorStore.getState().setCameraView(on);
         if (on) {
-          const selEnt = entities.find((e: any) => e.id === _selectedId);
-          if (selEnt?.type === "camera") {
-            stage.activeCamera = selEnt.cam;
-            rig.controls.enabled = false;
+          // 选定 active：当前选中相机 > 上次 active > 第一个相机
+          const sel = _selectedId ? entities.find((e: any) => e.id === _selectedId) : null;
+          const activeCam = (sel?.type === "camera" ? sel : null)
+            || entities.find((e: any) => e.id === _activeCamId && e.type === "camera")
+            || entities.find((e: any) => e.type === "camera");
+          if (!activeCam) return;
+          _activeCamId = activeCam.id;
+          _cameraView = true;
+          activeCam.cam.aspect = stage.viewport.clientWidth / Math.max(1, stage.viewport.clientHeight);
+          activeCam.cam.updateProjectionMatrix();
+          stage.activeCamera = activeCam.cam;
+          rig.controls.enabled = false;
+          useDirectorStore.getState().setCameraView(true);
+          // select 会触发 gizmo.attach/ring(由 _cameraView 检查屏蔽)
+          selection.onSelect(activeCam.id);
+          // setCameraGizmoVisible(false)
+          for (const ent of entities) {
+            if (ent.type === "camera") { ent.body.visible = false; ent.helper.visible = false; }
           }
+          selection.ring.visible = false;
         } else {
+          _activeCamId = _selectedId;
+          _cameraView = false;
           stage.activeCamera = null;
           rig.controls.enabled = true;
+          for (const ent of entities) {
+            if (ent.type === "camera") { ent.body.visible = true; ent.helper.visible = true; }
+          }
+          if (selection.selectedEntity) { gizmo.attach(selection.selectedEntity.root); selection.ring.visible = true; }
+          useDirectorStore.getState().setCameraView(false);
         }
       },
       setRatio: (r: string) => {
@@ -256,12 +299,12 @@ export default function DirectorViewport() {
         useDirectorStore.getState().setSceneState({ rot: { ...st.rot } });
       },
       applyPosePreset: (characterId: string, presetKey: string) => {
-        const ent = entities.find((e: any) => e.id === characterId);
-        if (ent?.type === "character") ent.applyPosePreset(presetKey);
+        const ent = _findChar(characterId);
+        if (ent) ent.applyPosePreset(presetKey);
       },
       setJointValue: (characterId: string, jointKey: string, value: number) => {
-        const ent = entities.find((e: any) => e.id === characterId);
-        if (ent?.type === "character") { ent.values[jointKey] = value; ent.enterManual(); ent.applyPose(); ent.currentPreset = null; }
+        const ent = _findChar(characterId);
+        if (ent) { ent.values[jointKey] = value; ent.enterManual(); ent.applyPose(); ent.currentPreset = null; }
       },
       captureShot: () => {
         stage.render();
@@ -277,8 +320,37 @@ export default function DirectorViewport() {
         const ent = entities.find((e: any) => e.id === id);
         if (ent?.setColor) ent.setColor(hex);
       },
-      _getEntity: (id: string) => entities.find((e: any) => e.id === id) || null,
+      _getEntity: (id: string) => {
+        let ent = entities.find((e: any) => e.id === id);
+        if (ent) return ent;
+        for (const e of entities) {
+          if (e.type === "crowd") {
+            const m = e.members?.find((x: any) => x.id === id);
+            if (m) return m;
+          }
+        }
+        return null;
+      },
       _getStage: () => stage,
+      _beginCleanRender: () => {
+        gizmo.setVisible(false);
+        selection.ring.visible = false;
+        for (const ent of entities) {
+          if (ent.type === "camera") { ent.body.visible = false; ent.helper.visible = false; }
+        }
+        const ll = document.getElementById("dirLabelLayer");
+        if (ll) ll.style.display = "none";
+      },
+      _endCleanRender: () => {
+        if (!_cameraView) {
+          if (selection.selectedEntity) { gizmo.attach(selection.selectedEntity.root); selection.ring.visible = true; }
+          for (const ent of entities) {
+            if (ent.type === "camera") { ent.body.visible = true; ent.helper.visible = true; }
+          }
+        }
+        const ll = document.getElementById("dirLabelLayer");
+        if (ll) ll.style.display = _labelsVisible ? "block" : "none";
+      },
       _getPoseValues: (id: string) => {
         const ent = entities.find((e: any) => e.id === id);
         return ent?.type === "character" ? { ...ent.values } : {};

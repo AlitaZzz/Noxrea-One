@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import * as THREE from "three";
 import { Button, ColorPicker, Tooltip, Select, Slider, Input, InputNumber } from "antd";
+import { worldBox } from "@/director/util/measure";
 import { DeleteOutlined } from "@ant-design/icons";
 import { useDirectorStore } from "@/stores/director-store";
 import { POSE_PRESETS } from "@/director/entities/posePresets";
@@ -36,17 +38,46 @@ function TripleRow({ label, keys, step = 0.01, deg = false }: {
 
 function CameraAttr({ entity, ent, entities, runtime }: any) {
   const [previewUrl, setPreviewUrl] = useState("");
+  const [modalUrl, setModalUrl] = useState("");
+  const [aimMode, setAimMode] = useState(ent._aimRef || "manual");
+  const pendingRef = useRef(false);
   const refreshPreview = useCallback(() => {
     if (!ent.cam) return;
-    try { setPreviewUrl(renderCameraThumbnail((runtime as any)._getStage?.(), ent.cam, 248, 140)); } catch {}
+    const stage = (runtime as any)._getStage?.();
+    if (!stage) return;
+    try {
+      const url = renderCameraThumbnail(stage, ent.cam, 248, 140, {
+        before: () => (runtime as any)._beginCleanRender?.(),
+        after: () => (runtime as any)._endCleanRender?.(),
+      });
+      setPreviewUrl(url);
+    } catch {}
   }, [ent.cam, runtime]);
-  useEffect(() => { refreshPreview(); const id = setInterval(refreshPreview, 2000); return () => clearInterval(id); }, [refreshPreview]);
+  // 防抖预览(原项目用 requestAnimationFrame)
+  const schedulePreview = useCallback(() => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    requestAnimationFrame(() => { pendingRef.current = false; refreshPreview(); });
+  }, [refreshPreview]);
+  useEffect(() => { refreshPreview(); }, [refreshPreview]);
+
+  const targets = entities.filter((e: any) => e.type === "character" || e.type === "prop");
+  const aimOpts = [{ value: "manual", label: "手动坐标" }, ...targets.map((t: any) => ({ value: t.id, label: t.name }))];
 
   return (
     <div className="flex-1 overflow-auto px-4 pb-3">
       <div className="dir-cam-preview">
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
+        <button className="dir-cam-expand" title="全屏扩大" onClick={() => {
+          const stage = (runtime as any)._getStage?.();
+          if (!stage) return;
+          const url = renderCameraThumbnail(stage, ent.cam, 1280, 720, {
+            before: () => (runtime as any)._beginCleanRender?.(),
+            after: () => (runtime as any)._endCleanRender?.(),
+          });
+          setModalUrl(url);
+        }}>⤢</button>
       </div>
       <div className="dir-field">
         <label className="dir-label">名称</label>
@@ -57,12 +88,33 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
       {entities.filter((e: any) => e.type === "camera").length > 1 && (
         <div className="dir-field">
           <label className="dir-label">切换机位</label>
-          <Select size="small" className="w-full" value={entity.id}
+          <Select size="small" className="w-full dir-select" value={entity.id}
             options={entities.filter((e: any) => e.type === "camera").map((c: any) => ({ value: c.id, label: c.name }))}
             onChange={(id: string) => runtime.select(id)} />
         </div>
       )}
       <TripleRow label="位置" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update?.(); } }))} />
+      <div className="dir-field">
+        <label className="dir-label">注视目标</label>
+        <Select size="small" className="w-full dir-select" value={aimMode}
+          options={aimOpts}
+          onChange={(val) => {
+            setAimMode(val);
+            if (val !== "manual") {
+              const target = (runtime as any)._getEntity?.(val);
+              if (target?.root) {
+                const box = worldBox(target.root, { useBones: target.type === "character" });
+                const center = box.isEmpty() ? target.root.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
+                ent.aimAt(center);
+                ent._aimRef = val;
+                schedulePreview();
+              }
+            } else {
+              ent._aimRef = "manual";
+            }
+          }} />
+      </div>
+      <TripleRow label="注视坐标" step={0.05} keys={["x","y","z"].map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); } }))} />
       <div className="dir-field">
         <div className="flex justify-between items-center dir-label"><span>视野角度 <Tooltip title={FOV_TIP}><span className="text-white/25 cursor-help">ⓘ</span></Tooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
@@ -71,6 +123,18 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
           <div className="dir-valbox">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
+      {/* 全屏预览 modal */}
+      {modalUrl && (
+        <div className="dir-modal-overlay" onClick={() => setModalUrl("")}>
+          <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="dir-modal-close" onClick={() => setModalUrl("")}>×</button>
+            <img src={modalUrl} className="dir-modal-img" alt="POV" />
+            <div className="dir-modal-bar">
+              <span className="dir-modal-title">{ent.name}：FOV {Math.round(ent.cam?.fov || 40)}°</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -79,7 +143,9 @@ export default function Inspector() {
   const runtime = useDirectorStore((s) => s.runtime);
   const selectedId = useDirectorStore((s) => s.selectedId);
   const entities = useDirectorStore((s) => s.entities);
-  const entity = entities.find((e) => e.id === selectedId) || null;
+  const entity = entities.find((e) => e.id === selectedId)
+    || entities.flatMap((e) => (e as any)._members || []).find((m: any) => m.id === selectedId)
+    || null;
   const [activeTab, setActiveTab] = useState("attr");
   const [posePresetKey, setPosePresetKey] = useState<string | null>(null);
   const poseSyncRef = useRef<(() => void) | null>(null);
@@ -88,6 +154,11 @@ export default function Inspector() {
   const syncFromObject = useCallback(() => forceUpdate((n) => n + 1), []);
 
   useEffect(() => { if (runtime) (runtime as any)._syncInspector = syncFromObject; return () => { if (runtime) (runtime as any)._syncInspector = null; }; }, [runtime, syncFromObject]);
+  useEffect(() => {
+    const ent = (runtime as any)._getEntity?.(entity?.id);
+    const c = ent ? `#${(ent.color || 0x34c759).toString(16).padStart(6, "0")}` : "#34c759";
+    setEntityColor(c);
+  }, [entity, runtime]);
   if (!entity || !runtime) return <div className="px-4 py-3 text-white/30 text-sm">未选中实体</div>;
   const ent = (runtime as any)._getEntity?.(entity.id) || null;
   if (!ent) return <div className="px-4 py-3 text-white/30 text-sm">加载中...</div>;
@@ -95,8 +166,6 @@ export default function Inspector() {
   const isCharacter = ent.type === "character", isCamera = ent.type === "camera", isCrowd = ent.type === "crowd";
   const typeLabel = isCharacter ? "角色" : isCamera ? "摄像机" : isCrowd ? "群众" : "道具";
   const tabItems = [{ key: "attr", label: "属性" }, ...(isCharacter || isCrowd ? [{ key: "pose", label: "姿势" }] : [])];
-  const colorFromEntity = `#${(ent.color || 0x34c759).toString(16).padStart(6, "0")}`;
-  useEffect(() => { setEntityColor(colorFromEntity); }, [colorFromEntity]);
 
   return (
     <div className="flex flex-col h-full text-sm">
@@ -114,9 +183,41 @@ export default function Inspector() {
       </div>
 
       {activeTab === "attr" && !isCamera && (isCrowd ? (
-        <div className="flex-1 overflow-auto p-4 space-y-2">
+        <div className="flex-1 overflow-auto px-4 pb-3">
           <div className="dir-multi-note">已选中 {ent.members?.length || 0} 个角色，修改将同步应用到全部选中对象</div>
-          <Button size="small" type="text" onClick={() => (runtime as any).ungroupCrowd?.(entity.id)}>⊟ 解组（拆为独立角色）</Button>
+          <button className="dir-minibtn" onClick={() => (runtime as any).ungroupCrowd?.(entity.id)}>⊟ 解组（拆为独立角色）</button>
+          <div className="dir-field">
+            <label className="dir-label">名称</label>
+            <div className="dir-namefld">
+              <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
+            </div>
+          </div>
+          <TripleRow label="位置" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
+          <TripleRow label="旋转" step={1} deg keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
+          <TripleRow label="缩放" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
+          <div className="dir-field">
+            <label className="dir-label">统一缩放</label>
+            <div className="flex items-center gap-3">
+              <Slider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
+                value={ent.baseScale ? ent.root.scale.y / ent.baseScale : 1}
+                tooltip={{ formatter: (v) => (v as number).toFixed(1) }}
+                onChange={(v) => { const s = (ent.baseScale || 1) * (v as number); ent.root.scale.set(s, s, s); syncFromObject(); }} />
+              <div className="dir-valbox">{(ent.baseScale ? ent.root.scale.y / ent.baseScale : 1).toFixed(1)}</div>
+            </div>
+          </div>
+          <div className="dir-field">
+            <label className="dir-label">颜色</label>
+            <ColorPicker size="small" value={entityColor}
+              onChange={(_, hex) => { (runtime as any).setEntityColor?.(entity.id, hex); setEntityColor(hex); }} />
+          </div>
+          <div className="flex items-center justify-between text-xs dir-dim">
+            <span>可见</span>
+            <span className="dir-eye" onClick={() => (runtime as any).toggleVisible?.(entity.id)}
+              dangerouslySetInnerHTML={{ __html: entity.visible
+                ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`
+                : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.1 6.1C3.5 7.7 2 12 2 12s3.5 7 10 7a9.5 9.5 0 0 0 4-0.9M3 3l18 18"/></svg>`
+              }} />
+          </div>
         </div>
       ) : (
         <div className="flex-1 overflow-auto px-4 pb-3">
