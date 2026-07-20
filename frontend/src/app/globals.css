@@ -514,3 +514,77 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Director: 截图卡片 hover 操作按钮 */
+.dir-shot-actions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0,0,0,.55);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.dir-shot-card:hover .dir-shot-actions {
+  opacity: 1;
+}
+.dir-shot-actions button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s;
+}
+.dir-shot-actions button:hover {
+  background: rgba(255,255,255,.3);
+}
+
+/* Director: 截图放大预览 modal */
+.dir-shot-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dir-shot-modal-box {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+.dir-shot-modal-box img {
+  display: block;
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.dir-shot-modal-close {
+  position: absolute;
+  top: -16px;
+  right: -16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dir-shot-modal-close:hover {
+  background: rgba(255,255,255,.35);
+}

@@ -388,7 +388,7 @@ export default function DirectorViewport() {
           const doUpload = (blob: Blob | null) => {
             if (!blob) { resolve(null); return; }
             uploadBlob(blob, `shot_${Date.now()}.png`).then((url) => {
-              if (!url) { resolve(null); return; }
+              if (!url) { console.error("[captureShot] uploadBlob returned null"); resolve(null); return; }
               const n = ((runtime as any)._shotSeq = (runtime as any)._shotSeq || {});
               n[camEnt.id] = (n[camEnt.id] || 0) + 1;
               resolve({
@@ -396,6 +396,9 @@ export default function DirectorViewport() {
                 name: `${camEnt.name}-截图${String(n[camEnt.id]).padStart(2, "0")}`,
                 cameraId: camEnt.id,
               });
+            }).catch((err: any) => {
+              console.error("[captureShot] uploadBlob error:", err);
+              resolve(null);
             });
           };
 

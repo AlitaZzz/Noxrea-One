@@ -145,45 +145,49 @@ function CameraShots({ cameraId }: { cameraId: string }) {
   const toggleShotSelected = useDirectorStore((s) => s.toggleShotSelected);
   const removeShot = useDirectorStore((s) => s.removeShot);
   const runtime = useDirectorStore((s) => s.runtime);
+  const [previewUrl, setPreviewUrl] = useState("");
 
   const shots = useMemo(() => allShots.filter((s) => s.cameraId === cameraId), [allShots, cameraId]);
-  const selectedShots = useMemo(() => shots.filter((s) => s.selected), [shots]);
-  const hasSelection = selectedShots.length > 0;
 
   return (
-    <div className="dir-field">
+    <div className="dir-field" style={{ marginTop: 8 }}>
       <div className="dir-sec-title" style={{ marginBottom: 8 }}>相机截图 ({shots.length})</div>
       {shots.length === 0 ? (
         <div className="dir-placeholder" style={{ marginBottom: 0 }}>点击底部「截图」按钮捕获该相机画面</div>
       ) : (
-        <>
-          <div className="dir-shot-grid">
-            {shots.map((shot) => (
-              <div key={shot.id}
-                className="dir-shot-card"
-                data-selected={shot.selected || undefined}
-                onClick={() => toggleShotSelected(shot.id)}
-                title={shot.name}>
-                <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
-                <span className="dir-shot-label">{shot.name}</span>
+        <div className="dir-shot-grid">
+          {shots.map((shot) => (
+            <div key={shot.id}
+              className="dir-shot-card"
+              data-selected={shot.selected || undefined}
+              onClick={() => toggleShotSelected(shot.id)}
+              title={shot.name}>
+              <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
+              <span className="dir-shot-label">{shot.name}</span>
+              {/* hover 操作按钮 */}
+              <div className="dir-shot-actions">
+                <button title="发送到画布" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                </button>
+                <button title="删除" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+                </button>
+                <button title="放大预览" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg>
+                </button>
               </div>
-            ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 全屏预览 modal */}
+      {previewUrl && (
+        <div className="dir-shot-modal-overlay" onClick={() => setPreviewUrl("")}>
+          <div className="dir-shot-modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="dir-shot-modal-close" onClick={() => setPreviewUrl("")}>×</button>
+            <img src={previewUrl} alt="预览" />
           </div>
-          <div className="flex gap-2 mt-3">
-            <button className="menu-item-btn flex-1 justify-center"
-              style={{ opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? "auto" : "none" }}
-              disabled={!hasSelection}
-              onClick={() => { selectedShots.forEach((s) => runtime?.sendShotToCanvas(s.id)); }}>
-              发送到画布
-            </button>
-            <button className="menu-item-btn flex-1 justify-center"
-              style={{ opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? "auto" : "none", color: "var(--dir-accent)" }}
-              disabled={!hasSelection}
-              onClick={() => { selectedShots.forEach((s) => removeShot(s.id)); }}>
-              删除选中
-            </button>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
