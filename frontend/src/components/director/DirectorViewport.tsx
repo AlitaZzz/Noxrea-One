@@ -555,12 +555,12 @@ export default function DirectorViewport() {
       _broadcastPosePreset: (crowdId: string, presetKey: string) => {
         const crowd = entities.find((e: any) => e.id === crowdId);
         if (crowd?.type !== "crowd") return;
-        crowd.members.forEach((m: any) => m.applyPosePreset(presetKey));
+        crowd.members.forEach((m: any) => { if (m.type === "character") m.applyPosePreset(presetKey); });
       },
       _broadcastResetPose: (crowdId: string) => {
         const crowd = entities.find((e: any) => e.id === crowdId);
         if (crowd?.type !== "crowd") return;
-        crowd.members.forEach((m: any) => { m.resetPose(); m.currentPreset = null; });
+        crowd.members.forEach((m: any) => { if (m.type === "character") { m.resetPose(); m.currentPreset = null; } });
       },
       groupCharacters: (ids: string[]) => {
         const members = ids.map((id) => entities.find((e: any) => e.id === id))
@@ -785,7 +785,11 @@ export default function DirectorViewport() {
       for (const ent of entities) {
         if (ent.type === "character") ent.update(dt);
         else if (ent.type === "camera") ent.update();
-        else if (ent.type === "crowd") ent.members?.forEach((m: any) => m.update(dt));
+        else if (ent.type === "crowd") ent.members?.forEach((m: any) => {
+          if (m.type === "character") m.update(dt);
+          else if (m.type === "camera") m.update();
+          // prop 无 update，跳过（与顶层 prop 不参与 update 一致）
+        });
       }
       rig.update(); selection.update(); navGizmo?.update();
       _updateLabels();
