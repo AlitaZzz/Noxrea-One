@@ -385,7 +385,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               box-shadow: none !important;
             }
             .rename-modal .rename-save-btn:not(:disabled):hover {
-              background: #e6e6e6 !important;
+              background: var(--canvas-bg-hover) !important;
             }
           `}</style>
           <Input

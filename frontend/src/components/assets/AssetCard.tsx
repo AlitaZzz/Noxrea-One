@@ -84,7 +84,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       style={{
         background: "var(--canvas-bg-elevated)",
         aspectRatio: "1",
-        borderColor: selected ? "#1677ff" : undefined,
+        borderColor: selected ? "var(--canvas-accent)" : undefined,
         borderWidth: selected ? 2 : 1,
       }}
       onClick={(e) => {
@@ -97,7 +97,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       {/* Selected checkmark */}
       {selected && (
         <div className="absolute top-2 left-2 z-10">
-          <CheckCircleFilled style={{ color: "#1677ff", fontSize: 18 }} />
+          <CheckCircleFilled style={{ color: "var(--canvas-accent)", fontSize: 18 }} />
         </div>
       )}
 

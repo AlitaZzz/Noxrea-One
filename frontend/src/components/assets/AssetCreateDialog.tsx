@@ -299,16 +299,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         header: { background: "var(--canvas-bg)" },
         body: { background: "var(--canvas-bg)", padding: 0 },
       }}
-      closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
+      closeIcon={<span style={{ color: "var(--canvas-text-dim)" }}>✕</span>}
     >
       <style>{`
         .asset-dialog .ant-input:hover,
         .asset-dialog .ant-input:focus,
         .upload-drop-zone:hover {
-          background: rgba(255,255,255,0.06) !important;
-        }
-        .asset-dialog .upload-save-btn:not(:disabled):hover {
-          background: #e6e6e6 !important;
+          background: var(--canvas-bg-hover) !important;
         }
       `}</style>
       {/* Hidden file input */}
@@ -344,7 +341,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                   height: 130,
                 }}
               >
-                <PlusOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.2)" }} />
+                <PlusOutlined style={{ fontSize: 28, color: "var(--canvas-text-muted)" }} />
               </div>
 
               {/* Uploaded files */}
@@ -471,31 +468,26 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
           <div className="flex flex-col gap-2">
             <Button
               block
-              className="modal-save-btn"
               onClick={handleSave}
-              disabled={saveDisabled}
-              loading={saving}
+              disabled={saveDisabled} loading={saving}
               style={{
-                background: saveDisabled ? "rgba(255,255,255,0.15)" : "#fff",
+                background: "var(--canvas-text)",
                 border: "1px solid var(--canvas-border)",
-                color: saveDisabled ? "rgba(255,255,255,0.25)" : "#1a1a1a",
-                borderRadius: 8,
-                height: 36,
-                fontWeight: 500,
+                color: "var(--canvas-bg)",
+                borderRadius: 8, height: 36, fontWeight: 500,
+                opacity: saveDisabled ? 0.35 : 1,
               }}
             >
               {t("save")}
             </Button>
             <Button
               block
-              className="modal-cancel-btn"
               onClick={() => { reset(); onClose(); }}
               style={{
-                background: "var(--canvas-bg)",
+                background: "var(--canvas-bg-elevated)",
                 border: "1px solid var(--canvas-border)",
                 color: "var(--canvas-text)",
-                borderRadius: 8,
-                height: 36,
+                borderRadius: 8, height: 36,
               }}
             >
               {t("cancel")}

@@ -124,9 +124,9 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
           ref={triggerRef}
           className="flex items-center gap-1.5 px-4 rounded-lg text-sm font-medium transition-colors"
           style={{
-            background: "#fff",
+            background: "var(--canvas-text)",
             border: "1px solid var(--canvas-border)",
-            color: "#1a1a1a",
+            color: "var(--canvas-bg)",
             borderRadius: 8,
             height: 36,
           }}
