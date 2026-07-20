@@ -22,6 +22,7 @@ export default function Outliner() {
   const selectedId = useDirectorStore((s) => s.selectedId);
   const selectedIds = useDirectorStore((s) => s.selectedIds);
   const runtime = useDirectorStore((s) => s.runtime);
+  const allShots = useDirectorStore((s) => s.shots);
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; ids: string[] } | null>(null);
@@ -63,6 +64,8 @@ export default function Outliner() {
           const sel = selectedIds.includes(ent.id);
           const isCrowd = ent.type === "crowd";
           const open = !collapsed.has(ent.id);
+          const isCamera = ent.type === "camera";
+          const shotCount = isCamera ? allShots.filter((s) => s.cameraId === ent.id).length : 0;
 
           return (
             <div key={ent.id}>
@@ -101,6 +104,14 @@ export default function Outliner() {
                   const n = prompt("重命名", ent.name);
                   if (n != null) (runtime as any)?.rename?.(ent.id, n);
                 }}>{ent.name}</span>
+                {isCamera && shotCount > 0 && (
+                  <span style={{
+                    minWidth: 18, height: 18, borderRadius: 9,
+                    background: "var(--dir-accent)", color: "#fff",
+                    fontSize: 10, fontWeight: 600, lineHeight: "18px",
+                    textAlign: "center", padding: "0 5px", flexShrink: 0,
+                  }}>{shotCount}</span>
+                )}
                 {/* 操作按钮(hover/选中时显示) */}
                 <span className={`gap-0.5 ${sel ? "flex" : "hidden"} group-hover/item:flex`} style={{ display: sel ? "flex" : undefined }}>
                   {(isCrowd || true) && (

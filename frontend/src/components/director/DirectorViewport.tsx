@@ -282,6 +282,8 @@ export default function DirectorViewport() {
           activeCam.cam.updateProjectionMatrix();
           stage.activeCamera = activeCam.cam;
           rig.controls.enabled = false;
+          const curRatio = useDirectorStore.getState().ratio;
+          rig.setRatio(curRatio === "auto" ? "free" : curRatio);
           useDirectorStore.getState().setCameraView(true);
           // select 会触发 gizmo.attach/ring(由 _cameraView 检查屏蔽)
           selection.onSelect(activeCam.id);
@@ -295,6 +297,8 @@ export default function DirectorViewport() {
           _cameraView = false;
           stage.activeCamera = null;
           rig.controls.enabled = true;
+          const curRatio = useDirectorStore.getState().ratio;
+          rig.setRatio(curRatio === "auto" ? "free" : curRatio);
           for (const ent of entities) {
             if (ent.type === "camera") { ent.body.visible = true; ent.helper.visible = true; }
           }
@@ -366,7 +370,7 @@ export default function DirectorViewport() {
         return (runtime as any).addCamera("current");
       },
       captureShot: () => {
-        return new Promise((resolve) => {
+        return new Promise(async (resolve) => {
           const camEnt = (runtime as any)._resolveShotCamera() as any;
           if (!camEnt?.cam) { resolve(null); return; }
 
@@ -376,32 +380,14 @@ export default function DirectorViewport() {
           camEnt.cam.aspect = W / Math.max(1, H);
           camEnt.cam.updateProjectionMatrix();
 
-          // Clean render（隐藏辅助物）
+          // Clean render（隐藏辅助物）→ 提取数据 → 恢复
           (runtime as any)._beginCleanRender?.();
           stage.renderer.render(stage.scene, camEnt.cam);
-          (runtime as any)._endCleanRender?.();
 
           const cv = stage.renderer.domElement;
           const frameRect = rig.frameRect;
 
-          // 裁剪或全幅 → toBlob
-          const doUpload = (blob: Blob | null) => {
-            if (!blob) { resolve(null); return; }
-            uploadBlob(blob, `shot_${Date.now()}.png`).then((url) => {
-              if (!url) { console.error("[captureShot] uploadBlob returned null"); resolve(null); return; }
-              const n = ((runtime as any)._shotSeq = (runtime as any)._shotSeq || {});
-              n[camEnt.id] = (n[camEnt.id] || 0) + 1;
-              resolve({
-                url,
-                name: `${camEnt.name}-截图${String(n[camEnt.id]).padStart(2, "0")}`,
-                cameraId: camEnt.id,
-              });
-            }).catch((err: any) => {
-              console.error("[captureShot] uploadBlob error:", err);
-              resolve(null);
-            });
-          };
-
+          let dataURL: string;
           if (frameRect && frameRect.w > 0 && frameRect.h > 0) {
             const px = cv.width / W;
             const py = cv.height / H;
@@ -412,10 +398,28 @@ export default function DirectorViewport() {
             const tmp = document.createElement("canvas");
             tmp.width = cw; tmp.height = ch;
             tmp.getContext("2d")!.drawImage(cv, ox, oy, cw, ch, 0, 0, cw, ch);
-            tmp.toBlob(doUpload, "image/png");
+            dataURL = tmp.toDataURL("image/png");
           } else {
-            cv.toBlob(doUpload, "image/png");
+            dataURL = cv.toDataURL("image/png");
           }
+
+          (runtime as any)._endCleanRender?.();
+
+          // 上传
+          const blob = await (await fetch(dataURL)).blob();
+          uploadBlob(blob, `shot_${Date.now()}.png`).then((url) => {
+            if (!url) { console.error("[captureShot] uploadBlob returned null"); resolve(null); return; }
+            const n = ((runtime as any)._shotSeq = (runtime as any)._shotSeq || {});
+            n[camEnt.id] = (n[camEnt.id] || 0) + 1;
+            resolve({
+              url,
+              name: `${camEnt.name}-截图${String(n[camEnt.id]).padStart(2, "0")}`,
+              cameraId: camEnt.id,
+            });
+          }).catch((err: any) => {
+            console.error("[captureShot] uploadBlob error:", err);
+            resolve(null);
+          });
         });
       },
       sendShotToCanvas: async (shotId: string) => {
@@ -425,15 +429,29 @@ export default function DirectorViewport() {
         const cs = useCanvasStore.getState();
         const nodeId = ds.openingNodeId;
         if (!nodeId || !cs.nodes.find((n) => n.id === nodeId)) return;
-        const W = stage.viewport.clientWidth || 1920;
-        const H = stage.viewport.clientHeight || 1080;
-        await createNodeFromUrl(nodeId, shot.url, W, H, shot.name);
-        useDirectorStore.getState().removeShot(shotId);
+
+        // 先加载图片获取真实尺寸（对齐宫格切分模式），再创建节点
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const i = new window.Image();
+          i.crossOrigin = "anonymous";
+          i.onload = () => resolve(i);
+          i.onerror = () => reject(new Error("Failed to load shot image"));
+          i.src = shot.url;
+        });
+        await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name);
       },
       resetView: () => rig.resetView(),
       toggleVisible: (id: string) => {
         const ent = entities.find((e: any) => e.id === id);
-        if (ent) { ent.setVisible(!ent.visible); _sync(); }
+        if (!ent) return;
+        ent.setVisible(!ent.visible);
+        // 机位视角下相机 body/helper 由视角逻辑统一隐藏，toggleVisible 不得重新点亮
+        if (ent.type === "camera" && _cameraView) {
+          for (const e of entities) {
+            if (e.type === "camera") { e.body.visible = false; e.helper.visible = false; }
+          }
+        }
+        _sync();
       },
       setEntityColor: (id: string, hex: string) => {
         const ent = entities.find((e: any) => e.id === id);
@@ -606,6 +624,7 @@ export default function DirectorViewport() {
             const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
             if (_cancelled) { ch.dispose(); return; }
             ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
+            ch.id = e.id; // 保持原始 ID
             if (e.color) ch.setColor(parseInt(e.color!.slice(1), 16));
             setTransform(ch.root, e.pos, e.rot, e.scale);
             stage.add(ch.root); entities.push(ch);
@@ -618,6 +637,7 @@ export default function DirectorViewport() {
             _registerEntity(ch);
           } else if (e.type === "prop") {
             const p = new Prop(e.kind as any, e.name);
+            p.id = e.id; // 保持原始 ID
             if (e.color) p.setColor(parseInt(e.color!.slice(1), 16));
             setTransform(p.root, e.pos, e.rot, e.scale);
             stage.add(p.root); entities.push(p);
@@ -647,6 +667,7 @@ export default function DirectorViewport() {
               group.add(ch.root); members.push(ch);
             }
             const crowd = new Crowd(e.name, group, members, { rows, cols });
+            crowd.id = e.id; // 保持原始 ID
             setTransform(crowd.root, e.pos, e.rot, e.scale);
             for (const m of members) m.root.userData.entityId = crowd.id;
             stage.add(group); entities.push(crowd as any);

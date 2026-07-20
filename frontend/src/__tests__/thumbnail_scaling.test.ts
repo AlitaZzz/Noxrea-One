@@ -36,7 +36,7 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { buildNodeFromUrl, computeThumbScale } from "@/lib/image-utils";
+import { createNodeFromUrl, computeThumbScale } from "@/lib/image-utils";
 
 const D = NODE_DISPLAY_MAX; // 600
 
@@ -88,14 +88,14 @@ describe("核心缩放公式（computeThumbScale）— 长边约束 NODE_DISPLAY
   }
 });
 
-describe("buildNodeFromUrl — 统一使用 computeThumbScale", () => {
+describe("createNodeFromUrl — 统一使用 computeThumbScale", () => {
   for (const tc of testCases) {
-    it(`缩放 + titleH：${tc.name}`, () => {
-      const node = buildNodeFromUrl("n1", "http://img.url/r.png", tc.naturalW, tc.naturalH, " (test)");
+    it(`缩放 + titleH：${tc.name}`, async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/r.png", tc.naturalW, tc.naturalH, " (test)");
       const expectedW = tc.naturalW > 0 ? tc.expectedDisplayW : 300;
       const expectedH = tc.naturalH > 0 ? tc.expectedDisplayH : 300;
-      expect(node.style?.width).toBe(expectedW);
-      expect(node.style?.height).toBe(expectedH + 24);
+      expect(node?.style?.width).toBe(expectedW);
+      expect(node?.style?.height).toBe(expectedH + 24);
     });
   }
 });
