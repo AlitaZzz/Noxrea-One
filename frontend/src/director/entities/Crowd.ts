@@ -30,7 +30,7 @@ export class Crowd {
   }
 
   get color(): number { return this.members[0]?.color ?? 0x4f8ef7; }
-  setColor(hex: number) { this.members.forEach((m) => m.setColor(hex)); }
+  setColor(hex: number) { this.members.forEach((m) => { if (m.type !== "camera") m.setColor(hex); }); }
 
   setVisible(v: boolean) {
     this.visible = v;
