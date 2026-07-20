@@ -30,13 +30,15 @@ export default function Outliner() {
   useEffect(() => {
     if (!ctxMenu) return;
     const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     const id = setTimeout(() => {
       window.addEventListener("pointerdown", close, true);
-      window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+      window.addEventListener("keydown", onKey);
     }, 0);
     return () => {
       clearTimeout(id);
       window.removeEventListener("pointerdown", close, true);
+      window.removeEventListener("keydown", onKey);
     };
   }, [ctxMenu]);
 

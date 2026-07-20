@@ -104,6 +104,7 @@ export interface DirectorEntityState {
     pos: [number, number, number];
     rot: [number, number, number, number];
     visible: boolean;
+    pose?: { mode: "preset" | "manual"; preset?: string | null; values?: Record<string, number> };
   }>;
 }
 

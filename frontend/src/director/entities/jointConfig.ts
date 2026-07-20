@@ -79,5 +79,6 @@ export function groupJoints(joints: Joint[] = JOINTS): JointGroup[] {
     }
     s.joints.push(j);
   }
+  for (const g of groups) delete (g as any)._smap;
   return groups;
 }

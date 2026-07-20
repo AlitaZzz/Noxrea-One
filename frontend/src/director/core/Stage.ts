@@ -234,10 +234,12 @@ export class Stage {
     this.renderer.render(this.scene, this.activeCamera || this.camera);
   }
 
+  private _rafId = 0;
+
   startLoop(tick: (dt: number) => void) {
     this._tick = tick;
     const loop = () => {
-      requestAnimationFrame(loop);
+      this._rafId = requestAnimationFrame(loop);
       const dt = this.clock.getDelta();
       try {
         this._tick && this._tick(dt);
@@ -250,6 +252,7 @@ export class Stage {
   }
 
   dispose() {
+    if (this._rafId) cancelAnimationFrame(this._rafId);
     window.removeEventListener("resize", this.onResize);
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
