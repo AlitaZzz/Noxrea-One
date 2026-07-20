@@ -1,0 +1,99 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { ArrowLeftOutlined } from "@ant-design/icons";
+import { useAuthStore } from "@/stores/auth-store";
+import { useDirectorStore } from "@/stores/director-store";
+import Outliner from "@/components/director/Outliner";
+import Inspector from "@/components/director/Inspector";
+import ScenePanel from "@/components/director/ScenePanel";
+import Dock from "@/components/director/Dock";
+
+const DirectorViewport = dynamic(() => import("@/components/director/DirectorViewport"), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full text-white/50 text-sm">加载 3D 视口...</div>,
+});
+
+export default function DirectorPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const runtime = useDirectorStore((s) => s.runtime);
+  const selectedId = useDirectorStore((s) => s.selectedId);
+  const transformMode = useDirectorStore((s) => s.transformMode);
+  const cameraView = useDirectorStore((s) => s.cameraView);
+  const entities = useDirectorStore((s) => s.entities);
+  const entityName = entities.find((e) => e.id === selectedId)?.name || "";
+
+  useEffect(() => {
+    const init = async () => {
+      await useAuthStore.getState().initialize();
+      if (!useAuthStore.getState().user) { window.location.href = "/login"; return; }
+      setReady(true);
+    };
+    init();
+  }, []);
+
+  if (!ready) {
+    return <div className="flex items-center justify-center h-screen w-screen bg-black text-white/50 text-sm">加载中...</div>;
+  }
+
+  const tfLabel = { translate: "V移动", rotate: "R旋转", scale: "S缩放" }[transformMode] || "";
+
+  return (
+    <div id="director-page" className="flex flex-col h-screen bg-black text-white overflow-hidden" style={{ fontFamily: "-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif", fontSize: 13 }}>
+      {/* Header — 56px, panel bg */}
+      <header className="flex items-center shrink-0 px-5 border-b border-white/[0.06] relative z-20"
+        style={{ height: 56, background: "var(--dir-panel)" }}>
+        {/* Logo */}
+        <span className="font-semibold text-[17px] tracking-wide">3D 导演台</span>
+
+        {/* 视角切换标签(居中) */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex rounded-[10px] p-[3px]" style={{ background: "var(--dir-panel2)" }}>
+          <button onClick={() => runtime?.setCameraView(false)} className="dir-viewtab" data-active={!cameraView}>
+            导演视角
+          </button>
+          <button onClick={() => runtime?.setCameraView(true)} className="dir-viewtab" data-active={cameraView}>
+            机位视角
+          </button>
+        </div>
+
+        {/* 右侧信息 */}
+        <div className="ml-auto flex items-center gap-2.5">
+          <button onClick={() => router.push("/canvas")} className="flex items-center gap-1 text-white/45 hover:text-white text-[13px] transition-colors">
+            <ArrowLeftOutlined /> 返回画布
+          </button>
+          <span className="text-white/20">|</span>
+          <span className="text-[13px] text-white/30">
+            {entities.length} 项{selectedId ? ` · 选中: ${entityName}` : ""} {tfLabel && `· ${tfLabel}`}
+          </span>
+        </div>
+      </header>
+
+      {/* 主体 */}
+      <main className="flex flex-1 min-h-0">
+        {/* 左:场景清单 — 232px, panel bg */}
+        <aside className="w-[232px] shrink-0 border-r border-white/[0.06] overflow-auto"
+          style={{ background: "var(--dir-panel)", padding: "18px 14px" }}>
+          <h3 className="text-sm font-semibold text-white mb-[14px]">场景</h3>
+          <Outliner />
+        </aside>
+
+        {/* 中:3D 视口 */}
+        <div className="flex-1 relative min-w-0 bg-black">
+          <DirectorViewport />
+        </div>
+
+        {/* 右:面板 — 290px, panel bg, no padding(由内部组件自行处理) */}
+        <aside className="w-[290px] shrink-0 border-l border-white/[0.06] overflow-auto relative z-10"
+          style={{ background: "var(--dir-panel)" }}>
+          {selectedId ? <Inspector /> : <ScenePanel />}
+        </aside>
+      </main>
+
+      {/* 底部工具坞(绝对定位浮在视口底部) */}
+      <Dock />
+    </div>
+  );
+}
