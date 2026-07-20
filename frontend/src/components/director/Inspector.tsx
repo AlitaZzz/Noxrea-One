@@ -123,8 +123,6 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
           <div className="dir-valbox">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
-      {/* 相机截图 */}
-      <CameraShots cameraId={entity.id} />
       {/* 全屏预览 modal */}
       {modalUrl && (
         <div className="dir-modal-overlay" onClick={() => setModalUrl("")}>
@@ -206,6 +204,7 @@ export default function Inspector() {
   const syncFromObject = useCallback(() => forceUpdate((n) => n + 1), []);
 
   useEffect(() => { if (runtime) (runtime as any)._syncInspector = syncFromObject; return () => { if (runtime) (runtime as any)._syncInspector = null; }; }, [runtime, syncFromObject]);
+  useEffect(() => { setActiveTab("attr"); }, [entity?.id]);
   useEffect(() => {
     if (!runtime) return;
     const ent = (runtime as any)._getEntity?.(entity?.id);
@@ -308,7 +307,12 @@ export default function Inspector() {
         </div>
       ))}
 
-      {activeTab === "attr" && isCamera && <CameraAttr entity={entity} ent={ent} entities={entities} runtime={runtime} />}
+      {activeTab === "attr" && isCamera && (
+        <>
+          <CameraAttr entity={entity} ent={ent} entities={entities} runtime={runtime} />
+          <CameraShots cameraId={entity.id} />
+        </>
+      )}
 
       {activeTab === "pose" && (isCharacter || isCrowd) && (
         <div className="flex-1 overflow-auto px-4 pb-3">
