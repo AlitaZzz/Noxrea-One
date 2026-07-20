@@ -101,6 +101,8 @@ export interface DirectorEntityState {
   spacing?: number;
   members?: Array<{
     type?: string;
+    id?: string;
+    name?: string;
     bodyType?: string;
     color?: string;
     pos: [number, number, number];

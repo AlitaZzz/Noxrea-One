@@ -148,17 +148,33 @@ export default function Outliner() {
               </div>
 
               {/* 群众成员(展开) */}
-              {isCrowd && open && (ent as any)._members?.map((m: any) => (
+              {isCrowd && open && (ent as any)._members?.map((m: any) => {
+                const mIsCamera = m.type === "camera";
+                const mShotCount = mIsCamera ? allShots.filter((s) => s.cameraId === m.id).length : 0;
+                return (
                 <div key={m.id} className={`flex items-center gap-[9px] rounded-lg cursor-pointer text-[13px] transition-colors
                   ${selectedId === m.id ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
                   style={{ padding: "9px 10px", paddingLeft: 30 }}
-                  onClick={(e) => { e.stopPropagation(); runtime?.select(m.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (mIsCamera) { runtime?.select(m.id); runtime?.setCameraView(true); }
+                    else { runtime?.setCameraView(false); runtime?.select(m.id); }
+                  }}
                   onDoubleClick={() => { const n = prompt("重命名", m.name); if (n != null) (runtime as any)?.rename?.(m.id, n); }}
                 >
-                  <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S("person") }} />
+                  <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(m.type)) }} />
                   <span className="flex-1 truncate">{m.name}</span>
+                  {mIsCamera && mShotCount > 0 && (
+                    <span style={{
+                      minWidth: 18, height: 18, borderRadius: 9,
+                      background: "var(--dir-accent)", color: "#fff",
+                      fontSize: 10, fontWeight: 600, lineHeight: "18px",
+                      textAlign: "center", padding: "0 5px", flexShrink: 0,
+                    }}>{mShotCount}</span>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           );
         })}
