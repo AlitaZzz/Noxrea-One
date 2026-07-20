@@ -12,9 +12,10 @@ export interface DirectorEntityMeta {
 
 export interface Shot {
   id: string;
-  dataURL: string;
-  label: string;
-  timestamp: number;
+  url: string;
+  name: string;
+  cameraId: string;
+  createdAt: number;
   selected?: boolean;
 }
 
@@ -57,7 +58,7 @@ export interface DirectorRuntime {
   setJointValue: (characterId: string, jointKey: string, value: number) => void;
   rename: (id: string, name: string) => void;
   toggleVisible: (id: string) => void;
-  captureShot: () => { dataURL: string; label: string } | null;
+  captureShot: () => Promise<{ url: string; name: string; cameraId: string } | null>;
   sendShotToCanvas: (shotId: string) => Promise<void>;
   resetView: () => void;
   captureState: () => DirectorStateData;

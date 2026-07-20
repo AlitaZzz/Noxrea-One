@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Button, ColorPicker, Tooltip, Select, Slider, Input, InputNumber } from "antd";
 import { worldBox } from "@/director/util/measure";
@@ -123,6 +123,8 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
           <div className="dir-valbox">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
+      {/* 相机截图 */}
+      <CameraShots cameraId={entity.id} />
       {/* 全屏预览 modal */}
       {modalUrl && (
         <div className="dir-modal-overlay" onClick={() => setModalUrl("")}>
@@ -134,6 +136,56 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 相机截图缩略图面板 */
+function CameraShots({ cameraId }: { cameraId: string }) {
+  const allShots = useDirectorStore((s) => s.shots);
+  const toggleShotSelected = useDirectorStore((s) => s.toggleShotSelected);
+  const removeShot = useDirectorStore((s) => s.removeShot);
+  const runtime = useDirectorStore((s) => s.runtime);
+
+  const shots = useMemo(() => allShots.filter((s) => s.cameraId === cameraId), [allShots, cameraId]);
+  const selectedShots = useMemo(() => shots.filter((s) => s.selected), [shots]);
+  const hasSelection = selectedShots.length > 0;
+
+  return (
+    <div className="dir-field">
+      <div className="dir-sec-title" style={{ marginBottom: 8 }}>相机截图 ({shots.length})</div>
+      {shots.length === 0 ? (
+        <div className="dir-placeholder" style={{ marginBottom: 0 }}>点击底部「截图」按钮捕获该相机画面</div>
+      ) : (
+        <>
+          <div className="dir-shot-grid">
+            {shots.map((shot) => (
+              <div key={shot.id}
+                className="dir-shot-card"
+                data-selected={shot.selected || undefined}
+                onClick={() => toggleShotSelected(shot.id)}
+                title={shot.name}>
+                <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
+                <span className="dir-shot-label">{shot.name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button className="menu-item-btn flex-1 justify-center"
+              style={{ opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? "auto" : "none" }}
+              disabled={!hasSelection}
+              onClick={() => { selectedShots.forEach((s) => runtime?.sendShotToCanvas(s.id)); }}>
+              发送到画布
+            </button>
+            <button className="menu-item-btn flex-1 justify-center"
+              style={{ opacity: hasSelection ? 1 : 0.4, pointerEvents: hasSelection ? "auto" : "none", color: "var(--dir-accent)" }}
+              disabled={!hasSelection}
+              onClick={() => { selectedShots.forEach((s) => removeShot(s.id)); }}>
+              删除选中
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

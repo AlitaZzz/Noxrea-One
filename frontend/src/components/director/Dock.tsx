@@ -72,6 +72,7 @@ export default function Dock() {
   const runtime = useDirectorStore((s) => s.runtime);
   const transformMode = useDirectorStore((s) => s.transformMode);
   const ratio = useDirectorStore((s) => s.ratio);
+  const shotCount = useDirectorStore((s) => s.shots.length);
 
   // 菜单 open 状态（click trigger）
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -193,12 +194,24 @@ export default function Dock() {
       </Popover>
 
       {/* 截图 */}
-      {dockBtn("shot", "截图", () => {
-        const shot = runtime?.captureShot();
-        if (shot) useDirectorStore.getState().addShot({
-          id: "s"+Date.now(), dataURL: shot.dataURL, label: shot.label, timestamp: Date.now(),
-        });
-      })}
+      <span style={{ position: "relative" }}>
+        {dockBtn("shot", "截图", async () => {
+          const shot = await runtime?.captureShot();
+          if (shot) useDirectorStore.getState().addShot({
+            id: "s"+Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
+          });
+        })}
+        {shotCount > 0 && (
+          <span style={{
+            position: "absolute", top: 2, right: 2,
+            minWidth: 16, height: 16, borderRadius: 8,
+            background: "var(--dir-accent)", color: "#fff",
+            fontSize: 10, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "0 4px", lineHeight: 1,
+          }}>{shotCount}</span>
+        )}
+      </span>
 
     </div>
   );
