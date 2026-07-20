@@ -106,10 +106,7 @@ export default function Dock() {
 
   return (
     <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-2xl z-10"
-      style={{
-        bottom: 24, background: "#1b1b1f", border: "1px solid var(--dir-line2)",
-        padding: "8px 12px", boxShadow: "0 10px 34px rgba(0,0,0,.55)",
-      }}>
+      style={{ background: "#1b1b1f", border: "1px solid var(--dir-line2)", boxShadow: "0 10px 34px rgba(0,0,0,.55)", bottom: 24, padding: "8px 12px" }}>
       {/* 变换模式 */}
       {dockBtn(TF_ICON.translate, "移动 (V)", () => runtime?.setTransformMode("translate"), transformMode === "translate")}
       {dockBtn(TF_ICON.rotate, "旋转 (R)", () => runtime?.setTransformMode("rotate"), transformMode === "rotate")}
