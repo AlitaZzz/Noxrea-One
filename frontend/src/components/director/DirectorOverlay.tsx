@@ -29,10 +29,10 @@ export default function DirectorOverlay({ onClose }: Props) {
   const tfLabel = { translate: "V移动", rotate: "R旋转", scale: "S缩放" }[transformMode] || "";
 
   return (
-    <div id="director-page" className="fixed inset-0 z-[100] flex flex-col bg-black text-white overflow-hidden"
+    <div id="director-page" className="fixed inset-0 z-[100] flex flex-col bg-[var(--dir-bg)] text-white overflow-hidden"
       style={{ fontFamily: "-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif", fontSize: 13 }}>
       {/* Header — 56px, panel bg */}
-      <header className="flex items-center shrink-0 px-5 border-b border-white/[0.06] relative z-20"
+      <header className="flex items-center shrink-0 px-5 border-b border-[var(--dir-line)] relative z-20"
         style={{ height: 56, background: "var(--dir-panel)" }}>
         {/* Logo + info */}
         <div className="flex items-center gap-3">
@@ -74,7 +74,7 @@ export default function DirectorOverlay({ onClose }: Props) {
       {/* 主体 */}
       <main className="flex flex-1 min-h-0">
         {/* 左:场景清单 — 232px, panel bg */}
-        <aside className="w-[232px] shrink-0 border-r border-white/[0.06] overflow-auto"
+        <aside className="w-[232px] shrink-0 border-r border-[var(--dir-line)] overflow-hidden"
           style={{ background: "var(--dir-panel)", padding: "18px 14px" }}>
           <h3 className="text-sm font-semibold text-white mb-[14px]">场景</h3>
           <Outliner />
@@ -86,7 +86,7 @@ export default function DirectorOverlay({ onClose }: Props) {
         </div>
 
         {/* 右:面板 — 290px, panel bg, no padding(由内部组件自行处理) */}
-        <aside className="w-[290px] shrink-0 border-l border-white/[0.06] overflow-auto relative z-10"
+        <aside className="w-[290px] shrink-0 border-l border-[var(--dir-line)] overflow-auto relative z-10"
           style={{ background: "var(--dir-panel)" }}>
           {selectedId ? <Inspector /> : <ScenePanel />}
         </aside>

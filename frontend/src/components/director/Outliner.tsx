@@ -55,7 +55,7 @@ export default function Outliner() {
       </div>
 
       {/* 树 */}
-      <div className="flex flex-col gap-0.5 select-none flex-1 overflow-auto">
+      <div className="flex flex-col gap-0.5 select-none flex-1 dir-outliner-list">
         {filtered.length === 0 && (
           <div className="text-center text-xs py-[22px] px-1.5" style={{ color: "var(--dir-dim2)" }}>场景为空</div>
         )}
@@ -68,7 +68,7 @@ export default function Outliner() {
             <div key={ent.id}>
               {/* 主行 */}
               <div className={`flex items-center gap-[9px] rounded-lg cursor-pointer text-[13px] transition-colors
-                ${sel ? "bg-[#232327] text-white" : "text-[#7d7d86] hover:bg-[#16161a] hover:text-white"}`}
+                ${sel ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
                 style={{ padding: "9px 10px" }}
                 onClick={(e) => {
                   if (e.shiftKey && (ent.type === "character" || ent.type === "prop")) {
@@ -105,15 +105,24 @@ export default function Outliner() {
                 <span className={`gap-0.5 ${sel ? "flex" : "hidden"} group-hover/item:flex`} style={{ display: sel ? "flex" : undefined }}>
                   {(isCrowd || true) && (
                     <>
-                      {isCrowd && <button className="inline-flex items-center justify-center p-0.5 rounded text-white/45 hover:text-white bg-transparent border-0 cursor-pointer"
+                      {isCrowd && <button className="inline-flex items-center justify-center p-0.5 rounded bg-transparent border-0 cursor-pointer"
+                        style={{ color: "var(--dir-dim)" }}
+                        onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
+                        onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                         onClick={(e) => { e.stopPropagation(); (runtime as any)?.ungroupCrowd?.(ent.id); }} title="解组">⊟</button>}
                       <Button type="text" size="small"
                         icon={ent.visible ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-                        className="!text-white/45 hover:!text-white !p-0.5"
+                        className="!p-0.5"
+                        style={{ color: "var(--dir-dim)" }}
+                        onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
+                        onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                         onClick={(e) => { e.stopPropagation(); (runtime as any)?.toggleVisible?.(ent.id); }} />
                       <Button type="text" size="small"
                         icon={<DeleteOutlined />}
-                        className="!text-white/45 hover:!text-red-400 !p-0.5"
+                        className="!p-0.5"
+                        style={{ color: "var(--dir-dim)" }}
+                        onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
+                        onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                         onClick={(e) => { e.stopPropagation(); runtime?.remove(ent.id); }} />
                     </>
                   )}
@@ -123,7 +132,7 @@ export default function Outliner() {
               {/* 群众成员(展开) */}
               {isCrowd && open && (ent as any)._members?.map((m: any) => (
                 <div key={m.id} className={`flex items-center gap-[9px] rounded-lg cursor-pointer text-[13px] transition-colors
-                  ${selectedId === m.id ? "bg-[#232327] text-white" : "text-[#7d7d86] hover:bg-[#16161a] hover:text-white"}`}
+                  ${selectedId === m.id ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
                   style={{ padding: "9px 10px", paddingLeft: 30 }}
                   onClick={(e) => { e.stopPropagation(); runtime?.select(m.id); }}
                   onDoubleClick={() => { const n = prompt("重命名", m.name); if (n != null) (runtime as any)?.rename?.(m.id, n); }}
@@ -140,24 +149,25 @@ export default function Outliner() {
       {/* 右键菜单 */}
       {ctxMenu && (
         <div className="dir-ctxmenu" style={{ left: Math.min(ctxMenu.x, window.innerWidth - 200), top: Math.min(ctxMenu.y, window.innerHeight - 200) }}>
-          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[#2a2a30] bg-transparent border-0"
+          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { (runtime as any)?.groupCharacters?.(ctxMenu.ids); setCtxMenu(null); }}
             disabled={ctxCharCount < 2} style={ctxCharCount < 2 ? { color: "var(--dir-dim2)", cursor: "default", pointerEvents: "none" } : {}}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⊞</span>
             <span className="flex-1">打组</span>
           </button>
-          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[#2a2a30] bg-transparent border-0"
+          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { (runtime as any)?.toggleVisibleMany?.(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>👁</span>
             <span className="flex-1">显示 / 隐藏</span>
           </button>
-          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[#2a2a30] bg-transparent border-0"
+          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { (runtime as any)?.duplicateMany?.(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⧉</span>
             <span className="flex-1">创建副本</span>
           </button>
           <div className="h-px my-1.5 mx-1.5" style={{ background: "var(--dir-line2)" }} />
-          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-red-400 cursor-pointer hover:bg-[#2a2a30] bg-transparent border-0"
+          <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
+            style={{ color: "var(--dir-accent)" }}
             onClick={() => { ctxMenu.ids.forEach((id) => runtime?.remove(id)); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>🗑</span>
             <span className="flex-1">删除</span>

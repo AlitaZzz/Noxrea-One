@@ -36,7 +36,7 @@ function CrowdForm({ runtime }: { runtime: any }) {
   const MAX = 6;
 
   return (
-    <div style={{ padding: 12, background: "#1c1c20", borderRadius: 12, border: "1px solid var(--dir-line2)" }}>
+    <div style={{ padding: 12, background: "var(--dir-panel)", borderRadius: 12, border: "1px solid var(--dir-line2)" }}>
       <div style={{ fontSize: 11, color: "var(--dir-dim2)", marginBottom: 8 }}>
         群众阵列 · 共{rows * cols}人
       </div>
@@ -57,7 +57,7 @@ function CrowdForm({ runtime }: { runtime: any }) {
             const c = (i % MAX) + 1;
             const active = r <= rows && c <= cols;
             return (
-              <div key={i} style={{ width: 16, height: 16, background: active ? "#fff" : "var(--dir-panel2)", cursor: "pointer" }}
+              <div key={i} style={{ width: 16, height: 16, background: active ? "var(--dir-txt)" : "var(--dir-panel2)", cursor: "pointer" }}
                 onMouseEnter={() => { setRows(r); setCols(c); }}
                 onClick={() => runtime?.addCrowd?.(r, c, spacing)} />
             );
@@ -83,19 +83,19 @@ export default function Dock() {
     <Tooltip title={title} key={title} mouseEnterDelay={0.5} open={hideTooltip ? false : undefined}>
       <button onClick={onClick}
         style={{
-          width: 40, height: 38, borderRadius: 9, border: "none", background: active ? "#34343b" : "none",
-          color: active ? "#fff" : "#c7c7cd", cursor: "pointer",
+          width: 40, height: 38, borderRadius: 9, border: "none", background: active ? "var(--toolbar-btn-active)" : "none",
+          color: active ? "var(--dir-txt)" : "var(--toolbar-btn-color)", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", transition: ".12s",
         }}
-        onMouseEnter={(e) => { if (!active) { (e.target as HTMLElement).style.background = "#2a2a30"; (e.target as HTMLElement).style.color = "#fff"; } }}
-        onMouseLeave={(e) => { if (!active) { (e.target as HTMLElement).style.background = "none"; (e.target as HTMLElement).style.color = "#c7c7cd"; } }}
+        onMouseEnter={(e) => { if (!active) { (e.target as HTMLElement).style.background = "var(--toolbar-btn-hover)"; (e.target as HTMLElement).style.color = "var(--dir-txt)"; } }}
+        onMouseLeave={(e) => { if (!active) { (e.target as HTMLElement).style.background = "none"; (e.target as HTMLElement).style.color = "var(--toolbar-btn-color)"; } }}
         dangerouslySetInnerHTML={{ __html: S(icon) }} />
     </Tooltip>
   );
 
   const menuItem = (icon: string, label: string, onClick: () => void, checked = false, hasSub = false) => (
     <button key={label} onClick={onClick}
-      className="flex items-center gap-[11px] w-full text-left rounded-lg text-[13px] cursor-pointer border-0 bg-transparent hover:bg-[#2a2a30]"
+      className="flex items-center gap-[11px] w-full text-left rounded-lg text-[13px] cursor-pointer border-0 bg-transparent hover:bg-[var(--menu-item-hover)]"
       style={{ padding: "9px 12px", color: "var(--dir-txt)" }}>
       {icon ? <span className="w-[20px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }} dangerouslySetInnerHTML={{ __html: S(icon) }} /> : <span className="w-[20px]" />}
       <span className="flex-1">{label}</span>
@@ -105,7 +105,7 @@ export default function Dock() {
   );
 
   const menuContent = (children: React.ReactNode, minWidth = 200) => (
-    <div className="flex flex-col gap-0.5" style={{ padding: 6, minWidth, background: "#1c1c20", borderRadius: 12, border: "1px solid var(--dir-line2)" }}>
+    <div className="flex flex-col gap-0.5" style={{ padding: 6, minWidth, background: "var(--menu-bg)", borderRadius: 12, border: "1px solid var(--dir-line2)" }}>
       {children}
     </div>
   );
@@ -114,7 +114,7 @@ export default function Dock() {
 
   return (
     <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-2xl z-10"
-      style={{ background: "#1b1b1f", border: "1px solid var(--dir-line2)", boxShadow: "0 10px 34px rgba(0,0,0,.55)", bottom: 24, padding: "8px 12px" }}>
+      style={{ background: "var(--toolbar-bg)", border: "1px solid var(--dir-line2)", boxShadow: "0 10px 34px rgba(0,0,0,.55)", bottom: 24, padding: "8px 12px" }}>
       {/* 变换模式 */}
       {dockBtn(TF_ICON.translate, "移动 (V)", () => runtime?.setTransformMode("translate"), transformMode === "translate")}
       {dockBtn(TF_ICON.rotate, "旋转 (R)", () => runtime?.setTransformMode("rotate"), transformMode === "rotate")}
@@ -154,7 +154,7 @@ export default function Dock() {
         open={panoMenuOpen} onOpenChange={setPanoMenuOpen}
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={menuContent(
-        <label className="flex items-center gap-[11px] px-3 py-[9px] rounded-lg text-[13px] cursor-pointer hover:bg-[#2a2a30]"
+        <label className="flex items-center gap-[11px] px-3 py-[9px] rounded-lg text-[13px] cursor-pointer hover:bg-[var(--menu-item-hover)]"
           style={{ color: "var(--dir-txt)" }}>
           <span className="w-[20px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }} dangerouslySetInnerHTML={{ __html: S("upload") }} />
           <span className="flex-1">本地上传</span>
@@ -200,12 +200,6 @@ export default function Dock() {
         });
       })}
 
-      {/* 全屏 */}
-      {dockBtn("expand", "全屏", () => {
-        const vp = document.querySelector("main > div");
-        if (!document.fullscreenElement) (vp as any)?.requestFullscreen?.();
-        else document.exitFullscreen?.();
-      })}
     </div>
   );
 }
