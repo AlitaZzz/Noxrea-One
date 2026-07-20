@@ -163,18 +163,18 @@ export default function Outliner() {
       {ctxMenu && (
         <div className="dir-ctxmenu" style={{ left: Math.min(ctxMenu.x, window.innerWidth - 200), top: Math.min(ctxMenu.y, window.innerHeight - 200) }}>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { (runtime as any)?.groupCharacters?.(ctxMenu.ids); setCtxMenu(null); }}
+            onClick={() => { runtime?.groupCharacters?.(ctxMenu.ids); setCtxMenu(null); }}
             disabled={ctxCharCount < 2} style={ctxCharCount < 2 ? { color: "var(--dir-dim2)", cursor: "default", pointerEvents: "none" } : {}}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⊞</span>
             <span className="flex-1">打组</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { (runtime as any)?.toggleVisibleMany?.(ctxMenu.ids); setCtxMenu(null); }}>
+            onClick={() => { runtime?.toggleVisibleMany?.(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>👁</span>
             <span className="flex-1">显示 / 隐藏</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
-            onClick={() => { (runtime as any)?.duplicateMany?.(ctxMenu.ids); setCtxMenu(null); }}>
+            onClick={() => { runtime?.duplicateMany?.(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⧉</span>
             <span className="flex-1">创建副本</span>
           </button>
