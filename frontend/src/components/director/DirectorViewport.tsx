@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { message } from "antd";
 import { Stage } from "@/director/core/Stage";
 import { CameraRig } from "@/director/core/CameraRig";
 import { TransformGizmo } from "@/director/core/TransformGizmo";
@@ -433,15 +434,19 @@ export default function DirectorViewport() {
         const nodeId = ds.openingNodeId;
         if (!nodeId || !cs.nodes.find((n) => n.id === nodeId)) return;
 
-        // 先加载图片获取真实尺寸（对齐宫格切分模式），再创建节点
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const i = new window.Image();
-          i.crossOrigin = "anonymous";
-          i.onload = () => resolve(i);
-          i.onerror = () => reject(new Error("Failed to load shot image"));
-          i.src = shot.url;
-        });
-        await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name);
+        try {
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const i = new window.Image();
+            i.crossOrigin = "anonymous";
+            i.onload = () => resolve(i);
+            i.onerror = () => reject(new Error("Failed to load shot image"));
+            i.src = shot.url;
+          });
+          await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name);
+          message.success(`已发送到画布：${shot.name}`);
+        } catch {
+          message.error("发送到画布失败");
+        }
       },
       resetView: () => rig.resetView(),
       toggleVisible: (id: string) => {

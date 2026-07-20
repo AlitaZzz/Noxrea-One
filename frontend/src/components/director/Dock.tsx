@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Tooltip, Popover, InputNumber } from "antd";
+import { Tooltip, Popover, InputNumber, message } from "antd";
 import { useDirectorStore } from "@/stores/director-store";
 import { groupedPresets } from "@/director/core/cameraPresets";
 
@@ -195,9 +195,12 @@ export default function Dock() {
       {/* 截图 */}
       {dockBtn("shot", "截图", async () => {
         const shot = await runtime?.captureShot();
-        if (shot) useDirectorStore.getState().addShot({
-          id: "s"+Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
-        });
+        if (shot) {
+          useDirectorStore.getState().addShot({
+            id: "s"+Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
+          });
+          message.success(shot.name);
+        }
       })}
 
     </div>
