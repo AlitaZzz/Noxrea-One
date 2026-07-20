@@ -2,17 +2,31 @@
 
 /* ===== Dark theme (default) ===== */
 :root, [data-theme="dark"] {
-  --canvas-app-bg: #0d0d0d;
-  --canvas-header-bg: #141414;
-  --canvas-bg: #2e2e2e;
-  --canvas-bg-hover: #3a3a3a;
-  --canvas-bg-active: #3a3a3a;
-  --canvas-bg-elevated: #353535;
-  --canvas-border: #484848;
-  --canvas-border-light: #555;
-  --canvas-text: #e5e5e5;
-  --canvas-text-dim: #aaa;
-  --canvas-text-muted: #888;
+  --canvas-app-bg: #000000;
+  --canvas-header-bg: #0e0e11;
+  --canvas-bg: #1a1a1e;
+  --canvas-bg-hover: #232327;
+  --canvas-bg-active: #33333a;
+  --canvas-bg-elevated: #1a1a1e;
+  --canvas-border: #2c2c31;
+  --canvas-border-light: #3a3a40;
+  --canvas-text: #ececf0;
+  --canvas-text-dim: #7d7d86;
+  --canvas-text-muted: #56565d;
+  --canvas-accent: #3b82f6;
+  --nav-active-bg: #232327;
+  --nav-hover-bg: #16161a;
+  /* 工具栏 */
+  --toolbar-bg: #1b1b1f;
+  --toolbar-border: #2c2c31;
+  --toolbar-shadow: 0 10px 34px rgba(0,0,0,.55);
+  --toolbar-btn-hover: #2a2a30;
+  --toolbar-btn-active: #34343b;
+  --toolbar-btn-color: #c7c7cd;
+  /* 菜单 */
+  --menu-bg: #1c1c20;
+  --menu-border: #2c2c31;
+  --menu-item-hover: #2a2a30;
 }
 
 /* ===== Light theme ===== */
@@ -28,6 +42,20 @@
   --canvas-text: #1a1a1a;
   --canvas-text-dim: #888;
   --canvas-text-muted: #aaa;
+  --canvas-accent: #1677ff;
+  --nav-active-bg: #e8e8e8;
+  --nav-hover-bg: #f0f0f0;
+  /* 工具栏 */
+  --toolbar-bg: #ffffff;
+  --toolbar-border: #e0e0e0;
+  --toolbar-shadow: 0 4px 16px rgba(0,0,0,.08);
+  --toolbar-btn-hover: #f0f0f0;
+  --toolbar-btn-active: #e8e8e8;
+  --toolbar-btn-color: #666;
+  /* 菜单 */
+  --menu-bg: #ffffff;
+  --menu-border: #e0e0e0;
+  --menu-item-hover: #f0f0f0;
 }
 
 /* ===== Light theme: remap Tailwind "white" to dark ===== */
@@ -293,7 +321,111 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   padding: 7px 10px; font-size: 12.5px; font-variant-numeric: tabular-nums;
 }
 
-/* Director: 右键菜单 */
+/* === Director: 共享 Component CSS === */
+
+/* 字段容器 */
+.dir-field { margin-bottom: 15px; }
+.dir-label { display: block; font-size: 12px; color: var(--dir-dim); margin-bottom: 8px; }
+
+/* TripleRow fld 输入组 */
+.dir-fld { display: flex; align-items: center; gap: 5px; background: var(--dir-panel2); border: 1px solid transparent; border-radius: 8px; padding: 0 10px; }
+.dir-ax { font-size: 12px; color: var(--dir-dim); }
+.dir-inputnum { width: 100% !important; background: none !important; border: none !important; box-shadow: none !important; }
+.dir-inputnum:hover, .dir-inputnum:focus, .dir-inputnum:focus-within { border: none !important; box-shadow: none !important; }
+.dir-inputnum .ant-input-number-input { padding: 8px 0 !important; font-size: 12.5px !important; color: var(--dir-txt) !important; }
+
+/* 名称输入框 */
+.dir-namefld { background: var(--dir-panel2); border-radius: 8px; padding: 0 12px; }
+.dir-nameinp { font-size: 13px !important; color: var(--dir-txt) !important; padding: 9px 0 !important; }
+
+/* 右侧面板 padding */
+.dir-rp-pad { padding: 18px 16px 0; }
+
+/* Tab 栏 */
+.dir-ptabs { display: flex; gap: 24px; margin: 16px 0 18px; padding: 0 16px; border-bottom: 1px solid var(--dir-line); }
+.dir-ptab { background: none; border: none; color: var(--dir-dim); font-size: 14px; padding: 0 0 12px; cursor: pointer; position: relative; }
+.dir-ptab.on { color: #fff; }
+.dir-ptab.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #fff; border-radius: 2px; }
+
+/* 多选提示 */
+.dir-multi-note { font-size: 12px; color: var(--dir-dim); background: var(--dir-panel2); border-radius: 8px; padding: 9px 11px; }
+
+/* 章节标题 */
+.dir-sec-title { font-size: 13.5px; font-weight: 600; margin-bottom: 14px; margin-top: 4px; }
+
+/* 姿势网格(Inspector 和 ScenePanel 共用) */
+.dir-pose-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 4px; }
+
+/* Valbox(Slider 旁数值) */
+.dir-valbox { flex: 0 0 auto; min-width: 56px; text-align: center; background: var(--dir-panel2); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--dir-dim); }
+.dir-val { font-size: 12.5px; color: var(--dir-dim2); }
+
+/* 摄像机预览 */
+.dir-cam-preview { position: relative; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--dir-line2); margin-bottom: 15px; }
+.dir-cam-badge { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+
+/* 文字颜色 */
+.dir-dim { color: var(--dir-dim); }
+
+/* 可见性图标 */
+.dir-eye { cursor: pointer; opacity: 0.6; }
+.dir-eye:hover { opacity: 1; }
+
+/* 视角切换按钮 */
+.dir-viewtab { font-size: 13.5px; padding: 7px 22px; border-radius: 8px; border: none; background: none; color: var(--dir-dim); cursor: pointer; transition: .12s; }
+.dir-viewtab[data-active="true"] { background: #33333a; color: #fff; }
+.dir-viewtab:hover:not([data-active="true"]) { color: #cfcfd4; }
+
+/* 姿势预设按钮 */
+.dir-posebtn { background: var(--dir-panel2); border: 1px solid transparent; border-radius: 8px; padding: 7px 4px; font-size: 12.5px; cursor: pointer; text-align: center; color: var(--dir-dim); transition: .1s; }
+.dir-posebtn:hover:not(.on) { color: #fff; border-color: var(--dir-line2); }
+.dir-posebtn.on { border-color: #555; color: #fff; }
+
+/* 复位按钮 */
+.dir-minibtn { display: block; width: 100%; text-align: center; margin-bottom: 12px; background: var(--dir-panel2); border: 1px solid transparent; color: var(--dir-dim); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; cursor: pointer; }
+.dir-minibtn:hover { color: #fff; border-color: var(--dir-line2); }
+
+/* PoseSliders */
+.pose-h4 { font-size: 12.5px; font-weight: 600; color: var(--dir-txt); margin: 16px 0 4px; }
+.pose-side { font-size: 11px; color: var(--dir-dim); margin: 9px 0 5px; }
+.pose-sld { margin-bottom: 10px; }
+.pose-sld-lab { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 5px; }
+.pose-sld-lab b { font-weight: 500; color: var(--dir-txt); }
+.pose-sld-val { color: var(--dir-dim); font-variant-numeric: tabular-nums; }
+
+/* ScenePanel */
+.dir-sec-first { margin-top: 14px; }
+.dir-sec { border-top: 1px solid var(--dir-line); padding-top: 16px; margin-top: 16px; }
+.dir-h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--dir-txt); }
+.dir-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--dir-line2); border-radius: 9px; padding: 16px 12px; color: var(--dir-dim2); font-size: 12px; text-align: center; }
+.toggle-label { font-size: 13.5px; font-weight: 600; }
+
+/* Canvas 工具栏按钮 */
+.canvas-toolbar-btn.ant-btn-text { width: 40px; height: 38px; border-radius: 9px; color: var(--canvas-text); padding: 0; display: flex; align-items: center; justify-content: center; }
+.canvas-toolbar-btn.ant-btn-text:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
+.canvas-toolbar-btn.ant-btn-text:active { background: var(--canvas-bg-active) !important; }
+.canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
+.canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
+
+/* 节点上传/参考按钮 */
+.node-upload-btn { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); border: none; cursor: pointer; transition: background .15s, color .15s; }
+.node-upload-btn:hover { background: var(--canvas-bg-active); color: var(--canvas-text); }
+
+/* 全局菜单样式(Director Dock + Canvas Toolbar 共用) */
+.menu-item-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: transparent; border: none; cursor: pointer; padding: 6px 12px;
+  font-size: 13px; border-radius: 6px;
+}
+.menu-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
+.menu-divider { height: 1px; background: var(--menu-border); margin: 2px 6px; }
+.menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); }
+
+/* 工具栏容器 */
+.toolbar-dock { background: var(--toolbar-bg); border: 1px solid var(--toolbar-border); box-shadow: var(--toolbar-shadow); }
+
+/* 右键菜单 */
+
 .dir-ctxmenu {
   position: fixed; z-index: 50; min-width: 184px;
   background: #1b1b1f; border: 1px solid var(--dir-line2); border-radius: 16px;

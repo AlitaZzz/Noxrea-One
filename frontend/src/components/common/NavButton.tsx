@@ -10,7 +10,7 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-/** 导航/选择类按钮 — 默认透明底，active 时 var(--canvas-bg-elevated) + 左侧高亮条，hover 时 var(--canvas-bg-hover)。 */
+/** 导航/选择类按钮 — 默认透明底，active 时 var(--canvas-bg-elevated)，hover 时 var(--canvas-bg-hover)。 */
 export default function NavButton({ children, onClick, active, className = "", style }: Props) {
   const [hovered, setHovered] = useState(false);
 
@@ -27,14 +27,14 @@ export default function NavButton({ children, onClick, active, className = "", s
         textAlign: "left",
         display: "flex",
         alignItems: "center",
-        gap: 8,
+        gap: 9,
         width: "100%",
-        padding: "6px 10px",
+        padding: "9px 10px",
         fontSize: 13,
-        borderRadius: 6,
+        borderRadius: 8,
         transition: "background 0.15s",
-        background: active ? "var(--canvas-bg-elevated)" : hovered ? "var(--canvas-bg-hover)" : "transparent",
-        color: active ? "var(--canvas-text)" : "var(--canvas-text-secondary)",
+        background: active ? "var(--nav-active-bg)" : hovered ? "var(--nav-hover-bg)" : "transparent",
+        color: active ? "var(--canvas-text)" : "var(--canvas-text-dim)",
         ...style,
       }}
     >

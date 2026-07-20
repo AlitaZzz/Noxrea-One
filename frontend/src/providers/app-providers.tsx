@@ -30,22 +30,57 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
       theme={{
         algorithm:
           isDark ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
-        token: {
+        token: isDark ? {
+          // Director 配色
+          colorPrimary: "#3b82f6",
+          borderRadius: 8,
+          colorBgLayout: "#000000",
+          colorBgContainer: "#0e0e11",
+          colorBgElevated: "#1a1a1e",
+          colorBgSpotlight: "#1a1a1e",
+          colorBorder: "#2c2c31",
+          colorBorderSecondary: "#232327",
+          colorText: "#ececf0",
+          colorTextSecondary: "#7d7d86",
+          colorTextTertiary: "#56565d",
+          colorTextQuaternary: "#3a3a40",
+          controlOutlineWidth: 0,
+        } : {
           colorPrimary: "#1677ff",
           borderRadius: 6,
-          colorBgElevated: isDark ? "#2e2e2e" : "#ffffff",
-          colorBgContainer: isDark ? "#2e2e2e" : "#ffffff",
-          colorBgLayout: isDark ? "#0d0d0d" : "#f8f9fa",
-          controlOutlineWidth: 0,
-          lineWidthFocus: 0,
-          colorBorder: isDark ? "#3a3a3a" : "#d9d9d9",
+          colorBgElevated: "#ffffff",
+          colorBgContainer: "#ffffff",
+          colorBgLayout: "#f8f9fa",
+          colorBorder: "#d9d9d9",
         },
         components: {
           Select: {
-            activeBorderColor: isDark ? "#3a3a3a" : "#d9d9d9",
-            hoverBorderColor: isDark ? "#3a3a3a" : "#d9d9d9",
+            activeBorderColor: isDark ? "#2c2c31" : "#d9d9d9",
+            hoverBorderColor: isDark ? "#2c2c31" : "#d9d9d9",
             activeOutlineColor: "transparent",
           },
+          Slider: isDark ? {
+            trackBg: "#fff",
+            trackHoverBg: "#fff",
+            railBg: "#1a1a1e",
+            railHoverBg: "#1a1a1e",
+            handleColor: "#fff",
+            handleActiveColor: "#fff",
+            dotActiveBorderColor: "#fff",
+            handleSizeHover: 10,
+            handleSize: 10,
+            railSize: 2,
+          } : {},
+          Segmented: isDark ? {
+            trackBg: "#232327",
+            itemSelectedBg: "#232327",
+            itemSelectedColor: "#fff",
+          } : {},
+          Switch: isDark ? {
+            handleBg: "#000",
+            colorPrimary: "#fff",
+            colorPrimaryHover: "#fff",
+          } : {},
         },
       }}
       getPopupContainer={getLayerPopupContainer}
