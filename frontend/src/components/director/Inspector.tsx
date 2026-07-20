@@ -65,7 +65,7 @@ function CameraAttr({ entity, ent, entities, runtime }: any) {
   const aimOpts = [{ value: "manual", label: "手动坐标" }, ...targets.map((t: any) => ({ value: t.id, label: t.name }))];
 
   return (
-    <div className="flex-1 overflow-auto px-4 pb-3">
+    <div>
       <div className="dir-cam-preview">
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
@@ -308,10 +308,10 @@ export default function Inspector() {
       ))}
 
       {activeTab === "attr" && isCamera && (
-        <>
+        <div className="flex-1 overflow-auto px-4 pb-3">
           <CameraAttr entity={entity} ent={ent} entities={entities} runtime={runtime} />
           <CameraShots cameraId={entity.id} />
-        </>
+        </div>
       )}
 
       {activeTab === "pose" && (isCharacter || isCrowd) && (
