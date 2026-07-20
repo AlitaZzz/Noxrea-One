@@ -423,7 +423,7 @@ export default function InfiniteCanvas() {
                   const t = e.target as HTMLInputElement;
                   t.removeAttribute("readOnly");
                   t.focus();
-                  t.select();
+                  t.setSelectionRange(t.value.length, t.value.length);
                 }}
                 onBlur={(e) => {
                   const t = e.target as HTMLInputElement;

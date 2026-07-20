@@ -2,10 +2,12 @@
 
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
+import { Input } from "antd";
 import { PartitionOutlined } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/stores/director-store";
+import { useEditableTitle } from "@/hooks/use-editable-title";
 
 interface Props {
   id: string;
@@ -14,16 +16,37 @@ interface Props {
 }
 
 function DirectorNode({ id, data, selected }: Props) {
+  useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
+  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
+    useEditableTitle(id, data.label || t("director.node"), { syncAlt: false });
 
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
-        <span className="truncate cursor-default">
-          <PartitionOutlined className="mr-1" />
-          {data.label || t("director.node")}
-        </span>
+        {editingTitle ? (
+          <span className="flex items-center gap-0.5 flex-1 min-w-0">
+            <PartitionOutlined className="shrink-0" />
+            <Input
+              size="small"
+              variant="borderless"
+              className="text-[13px] font-medium text-white/80"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleTitleSave}
+              onPressEnter={handleTitleSave}
+              autoFocus
+              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
+            />
+          </span>
+        ) : (
+          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
+            <PartitionOutlined className="mr-1" />
+            {data.label || t("director.node")}
+          </span>
+        )}
+
       </div>
 
       {/* Body */}

@@ -7,7 +7,7 @@ import {
   createImageNode,
   createVideoNode,
   createGroupNode,
-  createDirectorNode,
+  directorNode,
 } from "@/lib/node-defaults";
 
 /** 支持的节点类型 */
@@ -46,7 +46,7 @@ export function useAddNode() {
           );
           break;
         case "director":
-          node = createDirectorNode({ x: cx - 300, y: cy - 225 });
+          node = directorNode({ x: cx - 200, y: cy - 150 });
           break;
       }
       addNodes([node]);

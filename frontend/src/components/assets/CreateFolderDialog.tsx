@@ -36,6 +36,10 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       onCancel={() => { setName(""); setError(""); onClose(); }}
       width={400}
       destroyOnHidden
+      styles={{
+        header: { background: "var(--canvas-bg)", borderBottom: "none" },
+        body: { background: "var(--canvas-bg)", padding: "20px 24px" },
+      }}
       footer={
         <div className="flex justify-end gap-2">
           <ModalButton onClick={() => { setName(""); onClose(); }}>{t("cancel")}</ModalButton>
