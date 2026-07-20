@@ -625,6 +625,7 @@ export default function DirectorViewport() {
           } else if (e.type === "camera") {
             const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
             const cam = new CameraEntity(e.name, { fov: e.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+            cam.id = e.id; // 保持原始 ID，确保截图 cameraId 能匹配
             setTransform(cam.root, e.pos, e.rot, e.scale);
             stage.add(cam.root); entities.push(cam); _registerEntity(cam);
             cam.setVisible(e.visible);
@@ -671,7 +672,17 @@ export default function DirectorViewport() {
           useDirectorStore.getState().setSceneState({ ...ss });
         }
         if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
-        if (data.shots) data.shots.forEach((s: any) => useDirectorStore.getState().addShot(s));
+        if (data.shots) {
+          const firstCam = entities.find((e: any) => e.type === "camera");
+          data.shots.forEach((s: any) => {
+            const shot = { ...s };
+            // 修正 orphan cameraId：restore 后实体 ID 可能变化
+            if (!entities.find((e: any) => e.id === shot.cameraId) && firstCam) {
+              shot.cameraId = firstCam.id;
+            }
+            useDirectorStore.getState().addShot(shot);
+          });
+        }
         rig.frameAll(entities);
       },
     };
