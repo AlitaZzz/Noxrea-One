@@ -288,11 +288,12 @@ export default function DirectorViewport() {
       },
       setCameraView: (on: boolean) => {
         if (on) {
-          // 选定 active：当前选中相机 > 上次 active > 第一个相机
-          const sel = _selectedId ? entities.find((e: any) => e.id === _selectedId) : null;
-          const activeCam = (sel?.type === "camera" ? sel : null)
-            || entities.find((e: any) => e.id === _activeCamId && e.type === "camera")
-            || entities.find((e: any) => e.type === "camera");
+          // 选定 active：当前选中相机 > 上次 active > 第一个相机（含组内成员）
+          const sel = _selectedId ? _findById(_selectedId) : null;
+          const prev = _activeCamId ? _findById(_activeCamId) : null;
+          let activeCam: any = sel?.type === "camera" ? sel : null;
+          if (!activeCam && prev?.type === "camera") activeCam = prev;
+          if (!activeCam) _forEachEntity((ent) => { if (!activeCam && ent.type === "camera") activeCam = ent; });
           if (!activeCam) return;
           _activeCamId = activeCam.id;
           _cameraView = true;
@@ -380,8 +381,8 @@ export default function DirectorViewport() {
       _resolveShotCamera: () => {
         // 1) 机位视角 + 活跃相机
         if (_cameraView && _activeCamId) {
-          const a = entities.find((e: any) => e.id === _activeCamId && e.type === "camera");
-          if (a) return a;
+          const a = _findById(_activeCamId);
+          if (a?.type === "camera") return a;
         }
         // 2) 选中实体是相机
         const sel = _findById(_selectedId);
@@ -765,11 +766,11 @@ export default function DirectorViewport() {
         }
         if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
         if (data.shots) {
-          const firstCam = entities.find((e: any) => e.type === "camera");
+          let firstCam: any = null; _forEachEntity((e: any) => { if (!firstCam && e.type === "camera") firstCam = e; });
           data.shots.forEach((s: any) => {
             const shot = { ...s };
             // 修正 orphan cameraId：restore 后实体 ID 可能变化
-            if (!entities.find((e: any) => e.id === shot.cameraId) && firstCam) {
+            if (!_findById(shot.cameraId) && firstCam) {
               shot.cameraId = firstCam.id;
             }
             useDirectorStore.getState().addShot(shot);
