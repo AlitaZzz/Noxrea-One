@@ -74,9 +74,9 @@ htmlcov/
 *.db-shm
 *.db-wal
 
-backend/*.db
-backend/*.db-shm
-backend/*.db-wal
+backend/**/*.db
+backend/**/*.db-shm
+backend/**/*.db-wal
 
 
 

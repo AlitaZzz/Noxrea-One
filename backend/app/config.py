@@ -8,8 +8,11 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./app.db"
+    # Database — SQLite 默认，生产换 MySQL/PostgreSQL
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app.db"
+    # MySQL 示例: "mysql+aiomysql://root:<password>@localhost:3306/noxrea"
+    # PostgreSQL 示例: "postgresql+asyncpg://user:<password>@localhost:5432/noxrea"
+    DB_TIMEOUT: int = 30  # SQLite connection timeout in seconds
 
     # JWT
     JWT_SECRET_KEY: str  # REQUIRED — must be set in .env or environment
@@ -31,9 +34,6 @@ class Settings(BaseSettings):
     # The frontend URL(s) that are allowed to call this API from the browser.
     # For production, replace with your actual frontend domain(s).
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
-
-    # Database
-    DB_TIMEOUT: int = 30  # SQLite connection timeout in seconds
 
     # Worker
     WORKER_POLL_INTERVAL: int = 2       # seconds between worker main loop iterations
