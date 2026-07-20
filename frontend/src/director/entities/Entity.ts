@@ -1,7 +1,5 @@
 import * as THREE from "three";
 
-let _idSeq = 0;
-
 // 实体基类（§7）：gizmo 与选择都作用于 root。
 export class Entity {
   id: string;
@@ -18,7 +16,7 @@ export class Entity {
     name: string,
     root: THREE.Object3D
   ) {
-    this.id = `e${++_idSeq}`;
+    this.id = `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     this.type = type;
     this.name = name;
     this.root = root;
