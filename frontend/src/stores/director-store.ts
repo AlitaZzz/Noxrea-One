@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { DirectorStateData } from "@/lib/types";
 
 // --- Entity metadata (Three.js objects live in ref, not here) ---
 
@@ -59,6 +60,8 @@ export interface DirectorRuntime {
   captureShot: () => { dataURL: string; label: string } | null;
   sendShotToCanvas: (shotId: string) => Promise<void>;
   resetView: () => void;
+  captureState: () => DirectorStateData;
+  restoreState: (data: DirectorStateData) => Promise<void>;
 }
 
 // --- Zustand Store ---
@@ -78,9 +81,15 @@ interface DirectorState {
   // Three.js runtime handle (set by DirectorViewport on mount)
   runtime: DirectorRuntime | null;
 
+  // Persistence
+  openingNodeId: string | null;
+  restoreState: DirectorStateData | null;
+
   // Actions (pure metadata, no Three.js)
   reset: () => void;
   setRuntime: (r: DirectorRuntime | null) => void;
+  setOpeningNodeId: (id: string | null) => void;
+  setRestoreState: (s: DirectorStateData | null) => void;
   setEntities: (entities: DirectorEntityMeta[]) => void;
   setSelectedId: (id: string | null) => void;
   setTransformMode: (mode: "translate" | "rotate" | "scale") => void;
@@ -114,6 +123,8 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   },
   shots: [],
   runtime: null,
+  openingNodeId: null,
+  restoreState: null,
 
   reset: () => set({
     entities: [],
@@ -124,8 +135,12 @@ export const useDirectorStore = create<DirectorState>((set) => ({
     activeCameraId: null,
     shots: [],
     runtime: null,
+    openingNodeId: null,
+    restoreState: null,
   }),
   setRuntime: (r) => set({ runtime: r }),
+  setOpeningNodeId: (id) => set({ openingNodeId: id }),
+  setRestoreState: (s) => set({ restoreState: s }),
   setEntities: (entities) => set({ entities }),
   setSelectedId: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
   setTransformMode: (mode) => set({ transformMode: mode }),

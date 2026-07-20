@@ -12,6 +12,7 @@ import { Prop } from "@/director/entities/Prop";
 import { Crowd } from "@/director/entities/Crowd";
 import { CameraEntity } from "@/director/entities/Camera";
 import { useDirectorStore } from "@/stores/director-store";
+import type { DirectorStateData } from "@/lib/types";
 
 const XBOT = "/assets/Xbot.glb";
 const BODY_TYPES: Record<string, { url: string; label: string; height: number; girth: number }> = {
@@ -26,6 +27,21 @@ const PROP_LABEL: Record<string, string> = { box: "方块", cylinder: "圆柱", 
 let _charLetter = 0;
 let _propCount: Record<string, number> = {};
 let _camCount = 0;
+
+function getBodyType(ent: any): string {
+  const h = ent._opts?.height, g = ent._opts?.girth;
+  if (h === 2.05 && g === 1.06) return "tall";
+  if (h === 1.25 && g === 0.94) return "small";
+  if (h === 1.7 && g === 1.3) return "broad";
+  if (h === 1.78 && g === 0.8) return "slim";
+  return "standard";
+}
+
+function setTransform(root: THREE.Object3D, pos: [number, number, number], rot: [number, number, number, number], scale: [number, number, number]) {
+  root.position.set(...pos);
+  root.quaternion.set(...rot);
+  root.scale.set(...scale);
+}
 
 const D2R = Math.PI / 180;
 
@@ -455,6 +471,106 @@ export default function DirectorViewport() {
         for (const e of list) { if (e.visible !== target) e.setVisible(target); }
         _sync();
       },
+      captureState: (): DirectorStateData => {
+        const store = useDirectorStore.getState();
+        return {
+          entities: entities.map((ent: any) => {
+            const base = {
+              id: ent.id, type: ent.type, name: ent.name, visible: ent.visible,
+              pos: ent.root.position.toArray() as [number, number, number],
+              rot: ent.root.quaternion.toArray() as [number, number, number, number],
+              scale: ent.root.scale.toArray() as [number, number, number],
+            };
+            if (ent.type === "character") return { ...base, bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
+            if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
+            if (ent.type === "camera") return { ...base, fov: ent.fov };
+            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => ({ bodyType: getBodyType(m), color: "#" + m.color.toString(16).padStart(6, "0"), pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible })) };
+            return base;
+          }),
+          sceneState: { ...store.sceneState } as any,
+          ratio: store.ratio,
+          cameraView: store.cameraView,
+          transformMode: store.transformMode,
+          shots: store.shots.map((s) => ({ ...s })),
+        };
+      },
+      restoreState: async (data: DirectorStateData) => {
+        for (const e of data.entities) {
+          if (_cancelled) return;
+          if (e.type === "character") {
+            const bodyType = e.bodyType || "standard";
+            const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
+            const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
+            if (_cancelled) { ch.dispose(); return; }
+            ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
+            if (e.color) ch.setColor(parseInt(e.color!.slice(1), 16));
+            setTransform(ch.root, e.pos, e.rot, e.scale);
+            stage.add(ch.root); entities.push(ch);
+            ch.setVisible(e.visible);
+            if (e.pose?.mode === "manual" && e.pose.values) {
+              Object.assign(ch.values, e.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
+            } else if (e.pose?.preset) {
+              ch.applyPosePreset(e.pose.preset);
+            }
+            _registerEntity(ch);
+          } else if (e.type === "prop") {
+            const p = new Prop(e.kind as any, e.name);
+            if (e.color) p.setColor(parseInt(e.color!.slice(1), 16));
+            setTransform(p.root, e.pos, e.rot, e.scale);
+            stage.add(p.root); entities.push(p);
+            p.setVisible(e.visible);
+          } else if (e.type === "camera") {
+            const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
+            const cam = new CameraEntity(e.name, { fov: e.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+            setTransform(cam.root, e.pos, e.rot, e.scale);
+            stage.add(cam.root); entities.push(cam); _registerEntity(cam);
+            cam.setVisible(e.visible);
+          } else if (e.type === "crowd") {
+            const rows = e.rows || 3, cols = e.cols || 3;
+            const b = BODY_TYPES.standard;
+            const group = new THREE.Group();
+            const members: any[] = [];
+            const memberCount = e.members?.length || rows * cols;
+            for (let i = 0; i < memberCount; i++) {
+              if (_cancelled) return;
+              const mdata = e.members?.[i];
+              const ch = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), b.url, b);
+              if (_cancelled) { ch.dispose(); return; }
+              if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
+              if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
+              ch.setVisible(mdata?.visible ?? true);
+              ch.applyPosePreset("stand");
+              group.add(ch.root); members.push(ch);
+            }
+            const crowd = new Crowd(e.name, group, members, { rows, cols });
+            setTransform(crowd.root, e.pos, e.rot, e.scale);
+            for (const m of members) m.root.userData.entityId = crowd.id;
+            stage.add(group); entities.push(crowd as any);
+            crowd.setVisible(e.visible);
+          }
+        }
+        _sync();
+        if (data.sceneState) {
+          const ss = data.sceneState as any;
+          if (ss.scale != null) stage.setWorldScale(ss.scale);
+          if (ss.sky) stage.setSkyColor(ss.sky);
+          if (ss.ground) {
+            if (ss.ground.visible != null) stage.setGroundVisible(ss.ground.visible);
+            if (ss.ground.opacity != null) stage.setGroundOpacity(ss.ground.opacity);
+            if (ss.ground.height != null) stage.setGroundHeight(ss.ground.height);
+          }
+          if (ss.pos) stage.setWorldPos(ss.pos.x, ss.pos.y, ss.pos.z);
+          if (ss.rot) stage.setWorldRot(ss.rot.x * D2R, ss.rot.y * D2R, ss.rot.z * D2R);
+          if (ss.labels != null) {
+            const layer = document.getElementById("dirLabelLayer");
+            if (layer) layer.style.display = ss.labels ? "block" : "none";
+          }
+          useDirectorStore.getState().setSceneState({ ...ss });
+        }
+        if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
+        if (data.shots) data.shots.forEach((s: any) => useDirectorStore.getState().addShot(s));
+        rig.frameAll(entities);
+      },
     };
     useDirectorStore.getState().setRuntime(runtime as any);
 
@@ -470,13 +586,20 @@ export default function DirectorViewport() {
     };
     stage.startLoop(tick);
 
-    // ---- Seed ----
-    (async () => {
-      const c = await Character.load("角色A", XBOT, { height: 1.75, girth: 1.0 });
-      if (_cancelled) { c.dispose(); return; }
-      c.applyPosePreset("stand"); stage.add(c.root); entities.push(c); _registerEntity(c);
-      rig.frameAll(entities); _sync();
-    })();
+    // ---- Seed or Restore ----
+    const restore = useDirectorStore.getState().restoreState;
+    if (restore) {
+      (async () => {
+        await runtime.restoreState(restore);
+      })();
+    } else {
+      (async () => {
+        const c = await Character.load("角色A", XBOT, { height: 1.75, girth: 1.0 });
+        if (_cancelled) { c.dispose(); return; }
+        c.applyPosePreset("stand"); stage.add(c.root); entities.push(c); _registerEntity(c);
+        rig.frameAll(entities); _sync();
+      })();
+    }
 
     // ---- Resize + keyboard ----
     const onResize = () => { stage.onResize(); rig.onResize(); };

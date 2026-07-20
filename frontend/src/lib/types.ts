@@ -74,6 +74,60 @@ export interface GroupNodeData {
 }
 
 // ============================================================
+// Director node
+// ============================================================
+
+export interface DirectorEntityState {
+  id: string;
+  type: "character" | "prop" | "camera" | "crowd";
+  name: string;
+  visible: boolean;
+  pos: [number, number, number];
+  rot: [number, number, number, number];
+  scale: [number, number, number];
+  // Character
+  bodyType?: string;
+  color?: string;
+  srcUrl?: string;
+  pose?: { mode: "preset" | "manual"; preset?: string | null; values?: Record<string, number> };
+  // Prop
+  kind?: string;
+  // Camera
+  fov?: number;
+  // Crowd
+  rows?: number;
+  cols?: number;
+  spacing?: number;
+  members?: Array<{
+    bodyType: string;
+    color: string;
+    pos: [number, number, number];
+    rot: [number, number, number, number];
+    visible: boolean;
+  }>;
+}
+
+export interface DirectorStateData {
+  entities: DirectorEntityState[];
+  sceneState: Record<string, unknown>;
+  ratio: string;
+  cameraView: boolean;
+  transformMode: string;
+  shots: Array<{
+    id: string;
+    dataURL: string;
+    label: string;
+    timestamp: number;
+    selected?: boolean;
+  }>;
+}
+
+export interface DirectorNodeData {
+  label: string;
+  directorState?: DirectorStateData;
+}
+
+// ============================================================
 // My Assets
 // ============================================================
 
