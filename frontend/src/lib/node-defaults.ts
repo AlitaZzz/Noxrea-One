@@ -72,7 +72,7 @@ export function createDirectorNode(position: { x: number; y: number }): AnyNode 
     type: NODE_TYPE.DIRECTOR,
     position,
     data: { label: "3D导演台" },
-    style: { width: 600, height: 450 },
+    style: { width: 400, height: 300 },
   };
 }
 

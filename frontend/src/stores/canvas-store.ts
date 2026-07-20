@@ -81,6 +81,10 @@ interface CanvasState {
   modalOpen: boolean;
   setModalOpen: (v: boolean) => void;
 
+  // Director overlay
+  directorOverlayOpen: boolean;
+  setDirectorOverlayOpen: (v: boolean) => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -169,6 +173,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   modalOpen: false,
   setModalOpen: (v) => set({ modalOpen: v }),
+
+  directorOverlayOpen: false,
+  setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
 
   snapToGrid: false,
   toggleSnapToGrid: () => {

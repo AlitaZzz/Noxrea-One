@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
-import { ArrowLeftOutlined } from "@ant-design/icons";
-import { useAuthStore } from "@/stores/auth-store";
+import { CloseOutlined } from "@ant-design/icons";
 import { useDirectorStore } from "@/stores/director-store";
 import Outliner from "@/components/director/Outliner";
 import Inspector from "@/components/director/Inspector";
@@ -16,9 +13,11 @@ const DirectorViewport = dynamic(() => import("@/components/director/DirectorVie
   loading: () => <div className="flex items-center justify-center h-full text-white/50 text-sm">加载 3D 视口...</div>,
 });
 
-export default function DirectorPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
+interface Props {
+  onClose: () => void;
+}
+
+export default function DirectorOverlay({ onClose }: Props) {
   const runtime = useDirectorStore((s) => s.runtime);
   const selectedId = useDirectorStore((s) => s.selectedId);
   const transformMode = useDirectorStore((s) => s.transformMode);
@@ -26,28 +25,21 @@ export default function DirectorPage() {
   const entities = useDirectorStore((s) => s.entities);
   const entityName = entities.find((e) => e.id === selectedId)?.name || "";
 
-  useEffect(() => {
-    const init = async () => {
-      await useAuthStore.getState().initialize();
-      if (!useAuthStore.getState().user) { window.location.href = "/login"; return; }
-      setReady(true);
-    };
-    init();
-  }, []);
-
-  if (!ready) {
-    return <div className="flex items-center justify-center h-screen w-screen bg-black text-white/50 text-sm">加载中...</div>;
-  }
-
   const tfLabel = { translate: "V移动", rotate: "R旋转", scale: "S缩放" }[transformMode] || "";
 
   return (
-    <div id="director-page" className="flex flex-col h-screen bg-black text-white overflow-hidden" style={{ fontFamily: "-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif", fontSize: 13 }}>
+    <div id="director-page" className="fixed inset-0 z-[100] flex flex-col bg-black text-white overflow-hidden"
+      style={{ fontFamily: "-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif", fontSize: 13 }}>
       {/* Header — 56px, panel bg */}
       <header className="flex items-center shrink-0 px-5 border-b border-white/[0.06] relative z-20"
         style={{ height: 56, background: "var(--dir-panel)" }}>
-        {/* Logo */}
-        <span className="font-semibold text-[17px] tracking-wide">3D 导演台</span>
+        {/* Logo + info */}
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-[17px] tracking-wide">3D 导演台</span>
+          <span className="text-[13px] text-white/30">
+            {entities.length} 项{selectedId ? ` · 选中: ${entityName}` : ""} {tfLabel && `· ${tfLabel}`}
+          </span>
+        </div>
 
         {/* 视角切换标签(居中) */}
         <div className="absolute left-1/2 -translate-x-1/2 flex rounded-[10px] p-[3px]" style={{ background: "var(--dir-panel2)" }}>
@@ -59,15 +51,11 @@ export default function DirectorPage() {
           </button>
         </div>
 
-        {/* 右侧信息 */}
-        <div className="ml-auto flex items-center gap-2.5">
-          <button onClick={() => router.push("/canvas")} className="flex items-center gap-1 text-white/45 hover:text-white text-[13px] transition-colors">
-            <ArrowLeftOutlined /> 返回画布
+        {/* 关闭按钮 */}
+        <div className="ml-auto flex items-center">
+          <button onClick={() => { useDirectorStore.getState().reset(); onClose(); }} className="cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors">
+            <CloseOutlined style={{ fontSize: 16 }} />
           </button>
-          <span className="text-white/20">|</span>
-          <span className="text-[13px] text-white/30">
-            {entities.length} 项{selectedId ? ` · 选中: ${entityName}` : ""} {tfLabel && `· ${tfLabel}`}
-          </span>
         </div>
       </header>
 

@@ -116,19 +116,19 @@ export default function Dock() {
       <span style={{ width: 1, height: 22, background: "var(--dir-line2)", margin: "0 4px" }} />
 
       {/* 添加角色/模型 */}
-      <Popover trigger="hover" zIndex={20} placement="top"
+      <Popover trigger="hover" zIndex={1050} placement="top"
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={menuContent(
           <>
             {BODY.map(([k, l]) => menuItem("person", l, () => runtime?.addCharacter(k)))}
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
-            <Popover trigger="hover" zIndex={20} placement="rightTop"
+            <Popover trigger="hover" zIndex={1050} placement="rightTop"
               styles={{ container: { padding: 0, background: "transparent" } }}
               content={<CrowdForm runtime={runtime} />}>
               <div>{menuItem("group", "群众 (3x3)", () => {}, false, true)}</div>
             </Popover>
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
-            <Popover trigger="hover" zIndex={20} placement="rightTop"
+            <Popover trigger="hover" zIndex={1050} placement="rightTop"
               styles={{ container: { padding: 0, background: "transparent" } }}
               content={menuContent(
                 <>{GEO.map(([k, l]) => menuItem("cube", l, () => runtime?.addProp(k)))}</>, 150
@@ -141,7 +141,7 @@ export default function Dock() {
       </Popover>
 
       {/* 全景图 */}
-      <Popover trigger="hover" zIndex={20} placement="top"
+      <Popover trigger="hover" zIndex={1050} placement="top"
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={menuContent(
         <label className="flex items-center gap-[11px] px-3 py-[9px] rounded-lg text-[13px] cursor-pointer hover:bg-[#2a2a30]"
@@ -155,7 +155,7 @@ export default function Dock() {
       </Popover>
 
       {/* 添加机位 */}
-      <Popover trigger="hover" zIndex={20} placement="top"
+      <Popover trigger="hover" zIndex={1050} placement="top"
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={menuContent(
         cameraPresets.map((g) => (
@@ -172,7 +172,7 @@ export default function Dock() {
       <span style={{ width: 1, height: 22, background: "var(--dir-line2)", margin: "0 4px" }} />
 
       {/* 取景比例 */}
-      <Popover trigger="hover" zIndex={20} placement="top"
+      <Popover trigger="hover" zIndex={1050} placement="top"
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={menuContent(
         RATIOS.map(([v, l]) => menuItem("", l, () => runtime?.setRatio(v), ratio === v))

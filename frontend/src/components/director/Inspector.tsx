@@ -155,6 +155,7 @@ export default function Inspector() {
 
   useEffect(() => { if (runtime) (runtime as any)._syncInspector = syncFromObject; return () => { if (runtime) (runtime as any)._syncInspector = null; }; }, [runtime, syncFromObject]);
   useEffect(() => {
+    if (!runtime) return;
     const ent = (runtime as any)._getEntity?.(entity?.id);
     const c = ent ? `#${(ent.color || 0x34c759).toString(16).padStart(6, "0")}` : "#34c759";
     setEntityColor(c);
