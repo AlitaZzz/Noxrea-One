@@ -173,7 +173,7 @@ export default function Inspector() {
       <div className="dir-rp-pad">
         <div className="flex items-center justify-between mb-1">
           <div><span className="text-[10px] text-white/35">{typeLabel}</span><h3 className="text-sm font-medium text-white/80 truncate">{entity.name}</h3></div>
-          <Tooltip title="删除"><Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => runtime.remove(entity.id)} /></Tooltip>
+          <Tooltip title="删除"><Button type="text" size="small" icon={<DeleteOutlined />} style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} /></Tooltip>
         </div>
       </div>
       <div className="dir-ptabs">

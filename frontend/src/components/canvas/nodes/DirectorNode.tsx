@@ -37,7 +37,7 @@ function DirectorNode({ id, data, selected }: Props) {
               onBlur={handleTitleSave}
               onPressEnter={handleTitleSave}
               autoFocus
-              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
+              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
             />
           </span>
         ) : (
