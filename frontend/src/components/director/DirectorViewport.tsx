@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { message } from "antd";
+import { App } from "antd";
 import { Stage } from "@/director/core/Stage";
 import { CameraRig } from "@/director/core/CameraRig";
 import { TransformGizmo } from "@/director/core/TransformGizmo";
@@ -54,6 +54,7 @@ const D2R = Math.PI / 180;
 export default function DirectorViewport() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const { notification } = App.useApp();
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -112,6 +113,14 @@ export default function DirectorViewport() {
       _makeLabel(ent);
     };
 
+    // 遍历所有实体（含 crowd 成员）
+    const _forEachEntity = (fn: (e: any) => void) => {
+      for (const ent of entities) {
+        fn(ent);
+        if (ent.type === "crowd" && ent.members) ent.members.forEach(fn);
+      }
+    };
+
     const _placeNew = (root: THREE.Object3D) => {
       const n = entities.length;
       root.position.set(Math.cos(n * 0.95) * Math.min(0.9 + n * 0.4, 3.2), 0,
@@ -149,7 +158,7 @@ export default function DirectorViewport() {
       selection.highlight(_cameraView ? null : ent);
     });
     selection.setSkipPredicate(() => gizmo.dragging || gizmo.overAxis);
-    gizmo.onObjectChange(() => { runtime._syncInspector?.(); });
+    gizmo.onObjectChange(() => { runtime._syncInspector?.(); runtime._onCameraAttrChange?.(); });
 
     // Nav gizmo
     const navSvg = viewport.parentElement?.querySelector<SVGElement>("#navsvg");
@@ -267,6 +276,13 @@ export default function DirectorViewport() {
         else { gizmo.detach(); }
         selection.highlight(_cameraView ? null : ent);
       },
+      toggleSelect: (id: string) => {
+        useDirectorStore.getState().toggleSelectedId(id);
+        _selectedId = useDirectorStore.getState().selectedId;
+        const ent = _findById(_selectedId);
+        if (ent && !_cameraView) { gizmo.attach(ent.root); selection.highlight(ent); }
+        else { gizmo.detach(); selection.highlight(null); }
+      },
       setTransformMode: (mode: string) => {
         gizmo.setMode(mode); useDirectorStore.getState().setTransformMode(mode as any);
       },
@@ -280,6 +296,7 @@ export default function DirectorViewport() {
           if (!activeCam) return;
           _activeCamId = activeCam.id;
           _cameraView = true;
+          selection._filterInvisible = true;
           activeCam.cam.aspect = stage.viewport.clientWidth / Math.max(1, stage.viewport.clientHeight);
           activeCam.cam.updateProjectionMatrix();
           stage.activeCamera = activeCam.cam;
@@ -290,20 +307,21 @@ export default function DirectorViewport() {
           // select 会触发 gizmo.attach/ring(由 _cameraView 检查屏蔽)
           selection.onSelect(activeCam.id);
           // setCameraGizmoVisible(false)
-          for (const ent of entities) {
+          _forEachEntity((ent) => {
             if (ent.type === "camera") { ent.body.visible = false; ent.helper.visible = false; }
-          }
+          });
           selection.ring.visible = false;
         } else {
           _activeCamId = _selectedId;
           _cameraView = false;
+          selection._filterInvisible = false;
           stage.activeCamera = null;
           rig.controls.enabled = true;
           const curRatio = useDirectorStore.getState().ratio;
           rig.setRatio(curRatio === "auto" ? "free" : curRatio);
-          for (const ent of entities) {
+          _forEachEntity((ent) => {
             if (ent.type === "camera") { ent.body.visible = true; ent.helper.visible = true; }
-          }
+          });
           if (selection.selectedEntity) { gizmo.attach(selection.selectedEntity.root); selection.ring.visible = true; }
           useDirectorStore.getState().setCameraView(false);
         }
@@ -443,9 +461,9 @@ export default function DirectorViewport() {
             i.src = shot.url;
           });
           await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name);
-          message.success(`已发送到画布：${shot.name}`);
+          notification.success({ title: `已发送到画布：${shot.name}`, placement: "bottomRight" });
         } catch {
-          message.error("发送到画布失败");
+          notification.error({ title: "发送到画布失败", placement: "bottomRight" });
         }
       },
       resetView: () => rig.resetView(),
@@ -455,9 +473,9 @@ export default function DirectorViewport() {
         ent.setVisible(!ent.visible);
         // 机位视角下相机 body/helper 由视角逻辑统一隐藏，toggleVisible 不得重新点亮
         if (ent.type === "camera" && _cameraView) {
-          for (const e of entities) {
+          _forEachEntity((e) => {
             if (e.type === "camera") { e.body.visible = false; e.helper.visible = false; }
-          }
+          });
         }
         _sync();
       },
@@ -480,18 +498,18 @@ export default function DirectorViewport() {
       _beginCleanRender: () => {
         gizmo.setVisible(false);
         selection.ring.visible = false;
-        for (const ent of entities) {
+        _forEachEntity((ent) => {
           if (ent.type === "camera") { ent.body.visible = false; ent.helper.visible = false; }
-        }
+        });
         const ll = document.getElementById("dirLabelLayer");
         if (ll) ll.style.display = "none";
       },
       _endCleanRender: () => {
         if (!_cameraView) {
           if (selection.selectedEntity) { gizmo.attach(selection.selectedEntity.root); selection.ring.visible = true; }
-          for (const ent of entities) {
+          _forEachEntity((ent) => {
             if (ent.type === "camera") { ent.body.visible = true; ent.helper.visible = true; }
-          }
+          });
         }
         const ll = document.getElementById("dirLabelLayer");
         if (ll) ll.style.display = _labelsVisible ? "block" : "none";
@@ -501,6 +519,7 @@ export default function DirectorViewport() {
         return ent?.type === "character" ? { ...ent.values } : {};
       },
       _syncInspector: null as (() => void) | null,
+      _onCameraAttrChange: null as (() => void) | null,
       rename: (id: string, name: string) => {
         const ent = entities.find((e: any) => e.id === id || e.members?.some((m: any) => m.id === id));
         if (!ent) return;
@@ -545,7 +564,7 @@ export default function DirectorViewport() {
       },
       groupCharacters: (ids: string[]) => {
         const members = ids.map((id) => entities.find((e: any) => e.id === id))
-          .filter((e: any) => e && e.type === "character");
+          .filter((e: any) => e && (e.type === "character" || e.type === "camera" || e.type === "prop"));
         if (members.length < 2) return null;
         const centroid = new THREE.Vector3();
         for (const m of members) { m.root.updateMatrixWorld(true); centroid.add(m.root.getWorldPosition(new THREE.Vector3())); }
@@ -565,32 +584,44 @@ export default function DirectorViewport() {
         return crowd;
       },
       duplicateMany: async (ids: string[]) => {
-        const list = ids.map((id) => entities.find((e: any) => e.id === id)).filter(Boolean);
+        const list = ids.map((id) => _findById(id)).filter(Boolean);
         const OFF = new THREE.Vector3(0.6, 0, 0.6);
         let last: any = null;
         for (const ent of list) {
           if (ent.type === "character") {
-            const srcUrl = ent._srcUrl || XBOT;
-            try {
-              const c = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), srcUrl, ent._opts || {});
-              if (_cancelled) { c.dispose(); return; }
-              c._srcUrl = srcUrl; c._opts = ent._opts;
-              c.root.position.copy(ent.root.position).add(OFF);
-              c.root.quaternion.copy(ent.root.quaternion);
-              c.root.scale.copy(ent.root.scale);
-              c.setColor(ent.color);
-              Object.assign(c.values, ent.values); c.applyPose();
-              stage.add(c.root); entities.push(c); _registerEntity(c); last = c; _sync();
-            } catch {}
+            if (!ent._srcUrl) continue;
+            let c: Character;
+            try { c = await Character.load(ent.name + "副本", ent._srcUrl, ent._opts || {}); }
+            catch { continue; }
+            if (_cancelled) { c.dispose(); return; }
+            c._srcUrl = ent._srcUrl; c._opts = ent._opts;
+            c.root.position.copy(ent.root.position).add(OFF);
+            c.root.quaternion.copy(ent.root.quaternion);
+            c.root.scale.copy(ent.root.scale);
+            c.setColor(ent.color);
+            Object.assign(c.values, ent.values);
+            c.poseMode = ent.poseMode;
+            c.currentPreset = ent.currentPreset;
+            c.applyPose();
+            stage.add(c.root); _makeLabel(c); entities.push(c); last = c;
           } else if (ent.type === "prop") {
             const p = new Prop(ent.kind, ent.name + "副本");
             p.root.position.copy(ent.root.position).add(OFF);
             p.root.quaternion.copy(ent.root.quaternion);
             p.root.scale.copy(ent.root.scale);
             p.setColor(ent.color);
-            stage.add(p.root); entities.push(p); _registerEntity(p); last = p; _sync();
+            stage.add(p.root); entities.push(p); last = p;
+          } else if (ent.type === "camera") {
+            const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
+            const cam = new CameraEntity(ent.name + "副本", { fov: ent.fov, aspect: W / Math.max(1, H), scene: stage.scene });
+            cam.root.position.copy(ent.root.position).add(OFF);
+            cam.root.quaternion.copy(ent.root.quaternion);
+            cam.lookTarget.copy(ent.lookTarget);
+            if ((ent as any)._roll) cam._roll = (ent as any)._roll;
+            stage.add(cam.root); _makeLabel(cam); entities.push(cam); last = cam;
           }
         }
+        _sync();
         if (last) selection.onSelect(last.id);
       },
       toggleVisibleMany: (ids: string[]) => {
@@ -612,8 +643,14 @@ export default function DirectorViewport() {
             };
             if (ent.type === "character") return { ...base, bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
             if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
-            if (ent.type === "camera") return { ...base, fov: ent.fov };
-            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => ({ bodyType: getBodyType(m), color: "#" + m.color.toString(16).padStart(6, "0"), pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible, pose: { mode: m.poseMode, preset: m.currentPreset, values: m.poseMode === "manual" ? { ...m.values } : undefined } })) };
+            if (ent.type === "camera") return { ...base, fov: ent.fov, roll: (ent as any)._roll || 0 };
+            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => {
+              const mb: any = { type: m.type, pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible };
+              if (m.type === "character") { mb.bodyType = getBodyType(m); mb.color = "#" + m.color.toString(16).padStart(6, "0"); mb.pose = { mode: m.poseMode, preset: m.currentPreset, values: m.poseMode === "manual" ? { ...m.values } : undefined }; }
+              else if (m.type === "camera") { mb.fov = m.fov; mb.roll = m._roll || 0; }
+              else if (m.type === "prop") { mb.kind = m.kind; mb.color = "#" + m.color.toString(16).padStart(6, "0"); }
+              return mb;
+            }) };
             return base;
           }),
           sceneState: { ...store.sceneState } as any,
@@ -624,6 +661,13 @@ export default function DirectorViewport() {
         };
       },
       restoreState: async (data: DirectorStateData) => {
+        // 先恢复世界变换，再恢复实体（实体位置依赖 world scale/pos/rot）
+        if (data.sceneState) {
+          const ss = data.sceneState as any;
+          if (ss.scale != null) stage.setWorldScale(ss.scale);
+          if (ss.pos) stage.setWorldPos(ss.pos.x, ss.pos.y, ss.pos.z);
+          if (ss.rot) stage.setWorldRot(ss.rot.x * D2R, ss.rot.y * D2R, ss.rot.z * D2R);
+        }
         for (const e of data.entities) {
           if (_cancelled) return;
           if (e.type === "character") {
@@ -632,7 +676,7 @@ export default function DirectorViewport() {
             const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
             if (_cancelled) { ch.dispose(); return; }
             ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
-            ch.id = e.id; // 保持原始 ID
+            ch.id = e.id; ch.root.userData.entityId = e.id; // 保持原始 ID
             if (e.color) ch.setColor(parseInt(e.color!.slice(1), 16));
             setTransform(ch.root, e.pos, e.rot, e.scale);
             stage.add(ch.root); entities.push(ch);
@@ -645,7 +689,7 @@ export default function DirectorViewport() {
             _registerEntity(ch);
           } else if (e.type === "prop") {
             const p = new Prop(e.kind as any, e.name);
-            p.id = e.id; // 保持原始 ID
+            p.id = e.id; p.root.userData.entityId = e.id; // 保持原始 ID
             if (e.color) p.setColor(parseInt(e.color!.slice(1), 16));
             setTransform(p.root, e.pos, e.rot, e.scale);
             stage.add(p.root); entities.push(p);
@@ -653,35 +697,51 @@ export default function DirectorViewport() {
           } else if (e.type === "camera") {
             const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
             const cam = new CameraEntity(e.name, { fov: e.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
-            cam.id = e.id; // 保持原始 ID，确保截图 cameraId 能匹配
+            cam.id = e.id; cam.root.userData.entityId = e.id; // 保持原始 ID
             setTransform(cam.root, e.pos, e.rot, e.scale);
+            if ((e as any).roll) cam._roll = (e as any).roll;
             stage.add(cam.root); entities.push(cam); _registerEntity(cam);
             cam.setVisible(e.visible);
           } else if (e.type === "crowd") {
             const rows = e.rows || 3, cols = e.cols || 3;
-            const b = BODY_TYPES.standard;
             const group = new THREE.Group();
             const members: any[] = [];
             const memberCount = e.members?.length || rows * cols;
             for (let i = 0; i < memberCount; i++) {
               if (_cancelled) return;
               const mdata = e.members?.[i];
-              const ch = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), b.url, b);
-              if (_cancelled) { ch.dispose(); return; }
-              if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
-              if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
-              ch.setVisible(mdata?.visible ?? true);
-              if (mdata?.pose?.mode === "manual" && mdata.pose.values) {
-                Object.assign(ch.values, mdata.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
-              } else if (mdata?.pose?.preset) {
-                ch.applyPosePreset(mdata.pose.preset);
+              if ((mdata?.type || "character") === "camera") {
+                const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
+                const cam = new CameraEntity("机位", { fov: (mdata as any)?.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+                if (mdata) { cam.root.position.set(...mdata.pos); cam.root.quaternion.set(...mdata.rot); }
+                if ((mdata as any)?.roll) cam._roll = (mdata as any).roll;
+                cam.setVisible(mdata?.visible ?? true);
+                group.add(cam.root); members.push(cam);
+              } else if ((mdata?.type || "character") === "prop") {
+                const p = new Prop((mdata as any)?.kind || "box", "道具");
+                if (mdata?.color) p.setColor(parseInt(mdata.color.slice(1), 16));
+                if (mdata) { p.root.position.set(...mdata.pos); p.root.quaternion.set(...mdata.rot); }
+                p.setVisible(mdata?.visible ?? true);
+                group.add(p.root); members.push(p);
               } else {
-                ch.applyPosePreset("stand");
+                const b = BODY_TYPES.standard;
+                const ch = await Character.load("角色" + String.fromCharCode(65 + _charLetter++), b.url, b);
+                if (_cancelled) { ch.dispose(); return; }
+                if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
+                if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
+                ch.setVisible(mdata?.visible ?? true);
+                if (mdata?.pose?.mode === "manual" && mdata.pose.values) {
+                  Object.assign(ch.values, mdata.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
+                } else if (mdata?.pose?.preset) {
+                  ch.applyPosePreset(mdata.pose.preset);
+                } else {
+                  ch.applyPosePreset("stand");
+                }
+                group.add(ch.root); members.push(ch);
               }
-              group.add(ch.root); members.push(ch);
             }
             const crowd = new Crowd(e.name, group, members, { rows, cols });
-            crowd.id = e.id; // 保持原始 ID
+            crowd.id = e.id; crowd.root.userData.entityId = e.id; // 保持原始 ID
             setTransform(crowd.root, e.pos, e.rot, e.scale);
             for (const m of members) m.root.userData.entityId = crowd.id;
             stage.add(group); entities.push(crowd as any);
@@ -691,15 +751,12 @@ export default function DirectorViewport() {
         _sync();
         if (data.sceneState) {
           const ss = data.sceneState as any;
-          if (ss.scale != null) stage.setWorldScale(ss.scale);
           if (ss.sky) stage.setSkyColor(ss.sky);
           if (ss.ground) {
             if (ss.ground.visible != null) stage.setGroundVisible(ss.ground.visible);
             if (ss.ground.opacity != null) stage.setGroundOpacity(ss.ground.opacity);
             if (ss.ground.height != null) stage.setGroundHeight(ss.ground.height);
           }
-          if (ss.pos) stage.setWorldPos(ss.pos.x, ss.pos.y, ss.pos.z);
-          if (ss.rot) stage.setWorldRot(ss.rot.x * D2R, ss.rot.y * D2R, ss.rot.z * D2R);
           if (ss.labels != null) {
             const layer = document.getElementById("dirLabelLayer");
             if (layer) layer.style.display = ss.labels ? "block" : "none";
@@ -745,6 +802,7 @@ export default function DirectorViewport() {
       (async () => {
         const c = await Character.load("角色A", XBOT, { height: 1.75, girth: 1.0 });
         if (_cancelled) { c.dispose(); return; }
+        c._srcUrl = XBOT; c._opts = { height: 1.75, girth: 1.0 };
         c.applyPosePreset("stand"); stage.add(c.root); entities.push(c); _registerEntity(c);
         rig.frameAll(entities); _sync();
       })();
@@ -769,6 +827,8 @@ export default function DirectorViewport() {
       window.removeEventListener("keydown", onKey);
       for (const ent of entities) ent.dispose?.();
       stage.dispose(); useDirectorStore.getState().setRuntime(null);
+      // 重置模块级计数器，避免跨会话泄露
+      _charLetter = 0; _propCount = {}; _camCount = 0;
     };
   }, []);
 

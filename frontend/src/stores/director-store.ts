@@ -45,6 +45,7 @@ export interface DirectorRuntime {
   addCrowd: (rows?: number, cols?: number, spacing?: number) => Promise<any>;
   remove: (id: string) => void;
   select: (id: string | null) => void;
+  toggleSelect: (id: string) => void;
   setTransformMode: (mode: string) => void;
   setCameraView: (on: boolean) => void;
   setRatio: (ratio: string) => void;
@@ -97,6 +98,7 @@ interface DirectorState {
   setRestoreState: (s: DirectorStateData | null) => void;
   setEntities: (entities: DirectorEntityMeta[]) => void;
   setSelectedId: (id: string | null) => void;
+  toggleSelectedId: (id: string) => void;
   setTransformMode: (mode: "translate" | "rotate" | "scale") => void;
   setCameraView: (on: boolean) => void;
   setRatio: (ratio: string) => void;
@@ -148,6 +150,10 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   setRestoreState: (s) => set({ restoreState: s }),
   setEntities: (entities) => set({ entities }),
   setSelectedId: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  toggleSelectedId: (id) => set((s) => {
+    const exists = s.selectedIds.includes(id);
+    return { selectedIds: exists ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id], selectedId: exists ? (s.selectedIds.length > 1 ? s.selectedIds.find((x) => x !== id) || null : null) : id };
+  }),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setCameraView: (on) => set({ cameraView: on }),
   setRatio: (ratio) => set({ ratio }),

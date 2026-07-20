@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Tooltip, Popover, InputNumber, message } from "antd";
+import { Tooltip, Popover, InputNumber, App } from "antd";
 import { useDirectorStore } from "@/stores/director-store";
 import { groupedPresets } from "@/director/core/cameraPresets";
 
@@ -69,6 +69,7 @@ function CrowdForm({ runtime }: { runtime: any }) {
 }
 
 export default function Dock() {
+  const { notification } = App.useApp();
   const runtime = useDirectorStore((s) => s.runtime);
   const transformMode = useDirectorStore((s) => s.transformMode);
   const ratio = useDirectorStore((s) => s.ratio);
@@ -199,7 +200,7 @@ export default function Dock() {
           useDirectorStore.getState().addShot({
             id: "s"+Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
           });
-          message.success(shot.name);
+          notification.success({ title: shot.name, placement: "bottomRight" });
         }
       })}
 

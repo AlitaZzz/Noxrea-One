@@ -94,16 +94,21 @@ export interface DirectorEntityState {
   kind?: string;
   // Camera
   fov?: number;
+  roll?: number;
   // Crowd
   rows?: number;
   cols?: number;
   spacing?: number;
   members?: Array<{
-    bodyType: string;
-    color: string;
+    type?: string;
+    bodyType?: string;
+    color?: string;
     pos: [number, number, number];
     rot: [number, number, number, number];
     visible: boolean;
+    fov?: number;
+    roll?: number;
+    kind?: string;
     pose?: { mode: "preset" | "manual"; preset?: string | null; values?: Record<string, number> };
   }>;
 }
