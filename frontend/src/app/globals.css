@@ -478,7 +478,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 /* Director: 截图卡片网格 */
 .dir-shot-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 .dir-shot-card {
