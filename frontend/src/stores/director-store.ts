@@ -1,0 +1,134 @@
+import { create } from "zustand";
+
+// --- Entity metadata (Three.js objects live in ref, not here) ---
+
+export interface DirectorEntityMeta {
+  id: string;
+  type: "character" | "prop" | "camera" | "crowd";
+  name: string;
+  visible: boolean;
+}
+
+export interface Shot {
+  id: string;
+  dataURL: string;
+  label: string;
+  timestamp: number;
+  selected?: boolean;
+}
+
+export interface SceneState {
+  scale: number;
+  pos: { x: number; y: number; z: number };
+  rot: { x: number; y: number; z: number };
+  sky: string;
+  labels: boolean;
+  ground: {
+    visible: boolean;
+    opacity: number;
+    height: number;
+  };
+  panoActive: boolean;
+  panoRot: number;
+  panoRadius: number;
+}
+
+// --- Runtime ref interface (exposed by DirectorViewport via useImperativeHandle) ---
+// UI calls these, DirectorViewport executes Three.js logic.
+
+export interface DirectorRuntime {
+  addCharacter: (bodyType?: string) => Promise<any>;
+  addProp: (kind: string) => any;
+  addCamera: (presetKey?: string) => any;
+  addCrowd: (rows?: number, cols?: number, spacing?: number) => Promise<any>;
+  remove: (id: string) => void;
+  select: (id: string | null) => void;
+  setTransformMode: (mode: string) => void;
+  setCameraView: (on: boolean) => void;
+  setRatio: (ratio: string) => void;
+  setSceneScale: (s: number) => void;
+  setSkyColor: (hex: string) => void;
+  setLabelsVisible: (v: boolean) => void;
+  setGroundVisible: (v: boolean) => void;
+  setGroundOpacity: (v: number) => void;
+  setGroundHeight: (y: number) => void;
+  applyPosePreset: (characterId: string, presetKey: string) => void;
+  setJointValue: (characterId: string, jointKey: string, value: number) => void;
+  rename: (id: string, name: string) => void;
+  toggleVisible: (id: string) => void;
+  captureShot: () => { dataURL: string; label: string } | null;
+  sendShotToCanvas: (shotId: string) => Promise<void>;
+  resetView: () => void;
+}
+
+// --- Zustand Store ---
+
+interface DirectorState {
+  // Metadata
+  entities: DirectorEntityMeta[];
+  selectedId: string | null;
+  selectedIds: string[];
+  transformMode: "translate" | "rotate" | "scale";
+  cameraView: boolean;
+  activeCameraId: string | null;
+  ratio: string;
+  sceneState: SceneState;
+  shots: Shot[];
+
+  // Three.js runtime handle (set by DirectorViewport on mount)
+  runtime: DirectorRuntime | null;
+
+  // Actions (pure metadata, no Three.js)
+  setRuntime: (r: DirectorRuntime | null) => void;
+  setEntities: (entities: DirectorEntityMeta[]) => void;
+  setSelectedId: (id: string | null) => void;
+  setTransformMode: (mode: "translate" | "rotate" | "scale") => void;
+  setCameraView: (on: boolean) => void;
+  setRatio: (ratio: string) => void;
+  setSceneState: (partial: Partial<SceneState>) => void;
+  addShot: (shot: Shot) => void;
+  removeShot: (id: string) => void;
+  toggleShotSelected: (id: string) => void;
+  clearShots: () => void;
+}
+
+export const useDirectorStore = create<DirectorState>((set) => ({
+  entities: [],
+  selectedId: null,
+  selectedIds: [],
+  transformMode: "translate",
+  cameraView: false,
+  activeCameraId: null,
+  ratio: "auto",
+  sceneState: {
+    scale: 1,
+    pos: { x: 0, y: 0, z: 0 },
+    rot: { x: 0, y: 0, z: 0 },
+    sky: "#060608",
+    labels: true,
+    ground: { visible: true, opacity: 0.4, height: 0 },
+    panoActive: false,
+    panoRot: 0,
+    panoRadius: 60,
+  },
+  shots: [],
+  runtime: null,
+
+  setRuntime: (r) => set({ runtime: r }),
+  setEntities: (entities) => set({ entities }),
+  setSelectedId: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
+  setTransformMode: (mode) => set({ transformMode: mode }),
+  setCameraView: (on) => set({ cameraView: on }),
+  setRatio: (ratio) => set({ ratio }),
+  setSceneState: (partial) =>
+    set((s) => ({ sceneState: { ...s.sceneState, ...partial } })),
+  addShot: (shot) => set((s) => ({ shots: [...s.shots, shot] })),
+  removeShot: (id) => set((s) => ({ shots: s.shots.filter((x) => x.id !== id) })),
+  toggleShotSelected: (id) =>
+    set((s) => ({
+      shots: s.shots.map((x) =>
+        x.id === id ? { ...x, selected: !x.selected } : x
+      ),
+    })),
+  clearShots: () => set({ shots: [] }),
+}));
