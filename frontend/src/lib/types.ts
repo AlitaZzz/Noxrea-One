@@ -24,7 +24,6 @@ export const NODE_TYPE = {
   TEXT: "text-node",
   IMAGE: "image-node",
   VIDEO: "video-node",
-  IMAGE_GROUP: "image-group-node",
   GROUP: "group-node",
 } as const;
 
@@ -67,12 +66,6 @@ export interface ModelChannel {
   baseUrl: string;
   apiKey: string;
   models: ModelInfo[];
-}
-
-export interface ImageGroupNodeData {
-  label: string;
-  images: { url: string; label: string }[];
-  mainIndex: number;
 }
 
 export interface GroupNodeData {
