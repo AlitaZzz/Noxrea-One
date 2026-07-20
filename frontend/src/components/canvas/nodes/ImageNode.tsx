@@ -401,7 +401,8 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <PictureOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.upload")}</span>
-            <button className="nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base text-white/70 hover:text-white hover:bg-white/10 transition-colors" onClick={handleReplace}>
+            <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
+              onClick={handleReplace}>
               <UploadOutlined className="text-lg" /> {t("upload")}
             </button>
           </div>
