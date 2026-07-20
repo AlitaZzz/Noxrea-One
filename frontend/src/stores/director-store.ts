@@ -79,6 +79,7 @@ interface DirectorState {
   runtime: DirectorRuntime | null;
 
   // Actions (pure metadata, no Three.js)
+  reset: () => void;
   setRuntime: (r: DirectorRuntime | null) => void;
   setEntities: (entities: DirectorEntityMeta[]) => void;
   setSelectedId: (id: string | null) => void;
@@ -114,6 +115,16 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   shots: [],
   runtime: null,
 
+  reset: () => set({
+    entities: [],
+    selectedId: null,
+    selectedIds: [],
+    transformMode: "translate",
+    cameraView: false,
+    activeCameraId: null,
+    shots: [],
+    runtime: null,
+  }),
   setRuntime: (r) => set({ runtime: r }),
   setEntities: (entities) => set({ entities }),
   setSelectedId: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),

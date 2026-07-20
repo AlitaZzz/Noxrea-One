@@ -39,8 +39,9 @@ export function useCanvasKeyboard() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Skip canvas shortcuts when a modal (crop, etc.) is open
-      if (useCanvasStore.getState().modalOpen) return;
+      // Skip canvas shortcuts when a modal or director overlay is open
+      const state = useCanvasStore.getState();
+      if (state.modalOpen || state.directorOverlayOpen) return;
 
       const target = e.target as HTMLElement;
       if (

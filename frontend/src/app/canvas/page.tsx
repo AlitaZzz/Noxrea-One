@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { ReactFlowProvider } from "@xyflow/react";
 import { LayerModal } from "@/lib/layer";
 import AppShell from "@/components/layout/AppShell";
@@ -10,6 +11,11 @@ import { useProjectStore } from "@/stores/project-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
+
+const DirectorOverlay = dynamic(
+  () => import("@/components/director/DirectorOverlay"),
+  { ssr: false }
+);
 
 function CanvasWithKeyboard() {
   useCanvasKeyboard();
@@ -22,6 +28,9 @@ export default function HomePage() {
   const activeProject = useProjectStore((s) => s.activeProject);
   const shortcutsVisible = useCanvasStore((s) => s.shortcutsVisible);
   const setShortcutsVisible = useCanvasStore((s) => s.setShortcutsVisible);
+  const directorOverlayOpen = useCanvasStore((s) => s.directorOverlayOpen);
+  const setDirectorOverlayOpen = useCanvasStore((s) => s.setDirectorOverlayOpen);
+  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const [initialized, setInitialized] = useState(false);
 
   // Initialize auth first, then projects
@@ -41,6 +50,14 @@ export default function HomePage() {
     };
     init();
   }, [initialize]);
+
+  // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
+  useEffect(() => {
+    if (directorOverlayOpen) {
+      setModalOpen(true);
+      return () => setModalOpen(false);
+    }
+  }, [directorOverlayOpen, setModalOpen]);
 
   if (!initialized) {
     return (
@@ -104,6 +121,11 @@ export default function HomePage() {
           );
         })()}
       </LayerModal>
+
+      {/* Director fullscreen overlay */}
+      {directorOverlayOpen && (
+        <DirectorOverlay onClose={() => setDirectorOverlayOpen(false)} />
+      )}
     </ReactFlowProvider>
   );
 }
