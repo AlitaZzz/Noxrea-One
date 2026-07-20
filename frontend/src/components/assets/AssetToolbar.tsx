@@ -106,7 +106,7 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
               height: 36, minWidth: 108,
               background: "transparent", cursor: "pointer",
               border: "1px solid var(--canvas-border)",
-              color: "#ff4d4f",
+              color: "var(--canvas-accent)",
             }}
           >
             <DeleteOutlined />

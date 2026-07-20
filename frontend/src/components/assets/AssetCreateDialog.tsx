@@ -396,7 +396,9 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
                 {f.status === "done" && (
                   <button
-                    className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 hover:bg-red-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                    className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100"
+                    onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "var(--canvas-accent)"}
+                    onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = ""}
                     onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
                   >
                     <CloseOutlined style={{ fontSize: 10 }} />

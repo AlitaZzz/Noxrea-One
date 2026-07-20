@@ -13,13 +13,13 @@ interface Props {
 const VARIANT_STYLES: Record<string, React.CSSProperties> = {
   default: { background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" },
   primary: { background: "#fff", border: "1px solid var(--canvas-border)", color: "#1a1a1a", fontWeight: 500 },
-  danger:  { background: "transparent", border: "1px solid #ff4d4f", color: "#ff4d4f" },
+  danger:  { background: "transparent", border: "1px solid var(--canvas-accent)", color: "var(--canvas-accent)" },
 };
 
 const HOVER_BG: Record<string, string> = {
   default: "var(--canvas-bg-hover)",
   primary: "#e6e6e6",
-  danger:  "rgba(255, 77, 79, 0.08)",
+  danger:  "var(--canvas-bg-hover)",
 };
 
 /** 弹窗底部统一按钮 — 8px 圆角 36px 高度，主题色自适应。 */
