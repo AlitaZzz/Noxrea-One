@@ -24,6 +24,7 @@ export const NODE_TYPE = {
   TEXT: "text-node",
   IMAGE: "image-node",
   VIDEO: "video-node",
+  DIRECTOR: "director-node",
   GROUP: "group-node",
 } as const;
 

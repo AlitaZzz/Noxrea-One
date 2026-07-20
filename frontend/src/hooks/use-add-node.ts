@@ -7,10 +7,11 @@ import {
   createImageNode,
   createVideoNode,
   createGroupNode,
+  createDirectorNode,
 } from "@/lib/node-defaults";
 
 /** 支持的节点类型 */
-export type AddNodeType = "text" | "image" | "video" | "group";
+export type AddNodeType = "text" | "image" | "video" | "group" | "director";
 
 /**
  * 在画布视口中心添加节点的 hook。
@@ -43,6 +44,9 @@ export function useAddNode() {
             { x: cx - 200, y: cy - 100 },
             { width: 400, height: 200 },
           );
+          break;
+        case "director":
+          node = createDirectorNode({ x: cx - 300, y: cy - 225 });
           break;
       }
       addNodes([node]);
