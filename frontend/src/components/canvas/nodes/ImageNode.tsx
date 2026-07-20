@@ -13,15 +13,14 @@ import {
   ScissorOutlined,
   StarOutlined,
 } from "@ant-design/icons";
-import type { ImageNodeData, AnyNode } from "@/lib/types";
+import type { ImageNodeData } from "@/lib/types";
 import {
   DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT,
 } from "@/lib/constants";
 import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useAssetsStore } from "@/stores/assets-store";
-import { createEdge } from "@/lib/node-defaults";
 import { apiUpload } from "@/lib/api";
-import { uploadBlob, buildNodeFromUrl, computeNodeSize, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
+import { uploadBlob, createNodeFromUrl, computeNodeSize, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { EventNames } from "@/lib/eventNames";
@@ -123,7 +122,6 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     } catch {}
   }, [src, data.alt]);
 
-  const addNodes = useCanvasStore((s) => s.addNodes);
   const addAsset = useAssetsStore((s) => s.addAsset);
 
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
@@ -211,7 +209,6 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const baseY = origNode?.position.y || 0;
       const gap = 12;
 
-      const nodes: AnyNode[] = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const blob = await canvasToBlob(pieceW, pieceH, (ctx) => {
@@ -220,24 +217,16 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
           const url = await uploadBlob(blob, `grid_${r}_${c}.png`);
           if (!url) continue;
 
-          // Position each piece in the grid
           const pos = { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) };
-          const node = buildNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, undefined, pos);
-          nodes.push(node);
+          await createNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, undefined, pos);
         }
-      }
-      if (nodes.length > 0) {
-        addNodes(nodes, { skipHistory: true });
-        const store = useCanvasStore.getState();
-        const newEdges = nodes.map((n) => createEdge(id, n.id));
-        store.setEdges([...store.edges, ...newEdges], { skipHistory: true });
       }
     } catch (e) {
       console.error("grid-split failed:", e);
     } finally {
       useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
     }
-  }, [id, src, addNodes]);
+  }, [id, src]);
 
   const handleBgRemoval = useCallback(async () => {
     if (!src) return;

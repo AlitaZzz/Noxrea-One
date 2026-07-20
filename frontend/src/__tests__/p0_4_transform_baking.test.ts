@@ -2,11 +2,11 @@
  * P0-4: CSS transform 烘焙流程
  *
  * 核心验证：
- *   - buildNodeFromUrl 正确计算衍生节点位置、尺寸、label
+ *   - createNodeFromUrl 正确计算衍生节点位置、尺寸、label
  *   - uploadAndAddNode 的 CAS 上传路径走通（mock apiUpload）
  *   - save-manager.ts 的 _extractHashFromUrl 正确提取 hash
  *   - _collectCanvasHashes 正确收集画布中所有节点的文件 hash
- *   - 完整流程：uploadBlob → 返回 url → buildNodeFromUrl → 创建节点
+ *   - 完整流程：uploadBlob → 返回 url → createNodeFromUrl → 创建节点
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -18,7 +18,7 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { uploadBlob, buildNodeFromUrl, uploadAndAddNode } from "@/lib/image-utils";
+import { uploadBlob, createNodeFromUrl, uploadAndAddNode } from "@/lib/image-utils";
 
 // ── Mock Zustand stores ────────────────────────────────────────
 const mockNodes: any[] = [
@@ -93,53 +93,50 @@ function collectCanvasHashes(nodes: any[]): string[] {
 
 describe("P0-4: CSS transform baking flow", () => {
 
-  // ── buildNodeFromUrl ─────────────────────────────────────────
+  // ── createNodeFromUrl ─────────────────────────────────────────
 
-  describe("buildNodeFromUrl", () => {
-    it("should place derivative node to the right of source", () => {
-      const node = buildNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)");
+  describe("createNodeFromUrl", () => {
+    it("should place derivative node to the right of source", async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)");
       expect(node).not.toBeNull();
       // x = source.x(100) + source width(600) + 60 = 760
-      expect(node.position.x).toBe(760);
-      expect(node.position.y).toBe(200);
+      expect(node!.position.x).toBe(760);
+      expect(node!.position.y).toBe(200);
     });
 
-    it("should accept position override", () => {
-      const node = buildNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", undefined, { x: 999, y: 888 });
-      expect(node.position.x).toBe(999);
-      expect(node.position.y).toBe(888);
+    it("should accept position override", async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", undefined, { x: 999, y: 888 });
+      expect(node!.position.x).toBe(999);
+      expect(node!.position.y).toBe(888);
     });
 
-    it("should scale display dimensions by NODE_DISPLAY_MAX", () => {
-      // NODE_DISPLAY_MAX = 600, 4000x3000 image → long side 4000 > 600
-      // scale = 600/4000 = 0.15, displayW = round(4000*0.15) = 600
-      const node = buildNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)");
-      const w = node.style?.width as number;
-      const h = node.style?.height as number;
+    it("should scale display dimensions by NODE_DISPLAY_MAX", async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)");
+      const w = node!.style?.width as number;
+      const h = node!.style?.height as number;
       expect(w).toBe(600);
-      // displayH = round(3000*0.15) = 450, + titleH(24) = 474
       expect(h).toBe(474);
     });
 
-    it("should append label suffix before extension", () => {
-      const node = buildNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)");
-      const label = node.data.label as string;
+    it("should append label suffix before extension", async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)");
+      const label = node!.data.label as string;
       expect(label).toContain(" (baked)");
       expect(label.endsWith(".jpg")).toBe(true);
     });
 
-    it("should merge extraNodeData", () => {
-      const node = buildNodeFromUrl("n1", "http://img.url/result.png", 100, 100, "",
-        { customField: "hello", naturalWidth: 999 }  // naturalWidth 会被覆盖
+    it("should merge extraNodeData", async () => {
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 100, 100, "",
+        { customField: "hello", naturalWidth: 999 }
       );
-      expect((node.data as any).customField).toBe("hello");
+      expect((node!.data as any).customField).toBe("hello");
     });
 
-    it("should accept position override explicitly", () => {
+    it("should accept position override explicitly", async () => {
       const pos = { x: 50, y: 60 };
-      const node = buildNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", undefined, pos);
-      expect(node.position.x).toBe(50);
-      expect(node.position.y).toBe(60);
+      const node = await createNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", undefined, pos);
+      expect(node!.position.x).toBe(50);
+      expect(node!.position.y).toBe(60);
     });
   });
 

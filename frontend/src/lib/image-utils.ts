@@ -145,17 +145,11 @@ export async function uploadBlob(blob: Blob, filename?: string): Promise<string 
 /**
  * 纯函数：计算衍生节点的位置、尺寸、data，返回节点对象。
  *
- * 不调 addNodes/setEdges，无副作用，可安全地在循环中调用。
- *
- * @param sourceId        原图节点 ID
- * @param url             图片 URL
- * @param naturalW        图片自然宽度
- * @param naturalH        图片自然高度
- * @param labelSuffix     节点 label 后缀，如 " (cropped)" / " (bg-removed)"
- * @param extraNodeData   额外写入 node.data 的字段
- * @param positionOverride  节点位置（不传则默认放在原图节点右侧）
+/**
+ * 从已有 URL 创建 ImageNode → 写入 store → 连线到源节点。
+ * 适合：抠图任务完成、宫格切分、截图发送到画布等。
  */
-export function buildNodeFromUrl(
+export async function createNodeFromUrl(
   sourceId: string,
   url: string,
   naturalW: number,
@@ -163,7 +157,7 @@ export function buildNodeFromUrl(
   labelSuffix: string,
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
-): AnyNode {
+): Promise<AnyNode | null> {
   const store = useCanvasStore.getState();
   const origNode = store.nodes.find((n) => n.id === sourceId);
 
@@ -185,31 +179,10 @@ export function buildNodeFromUrl(
   const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
   const label = `${base}${labelSuffix}${ext}`;
 
-  // Display dimensions (thumbnail-scaled) — via shared helper
   const newNode = createImageNode({ x, y }, url);
   applyThumbnailSettings(newNode, naturalW, naturalH, label);
   if (extraNodeData) Object.assign(newNode.data, extraNodeData);
 
-  return newNode;
-}
-
-/**
- * 从已有 URL 创建衍生节点 + 连线（单节点场景）。
- * 适合结果是图片 URL 的场景（如抠图任务完成、外部图片）。
- */
-export async function createNodeFromUrl(
-  sourceId: string,
-  url: string,
-  naturalW: number,
-  naturalH: number,
-  labelSuffix: string,
-  extraNodeData?: Record<string, unknown>,
-  positionOverride?: { x: number; y: number },
-): Promise<AnyNode | null> {
-  const newNode = buildNodeFromUrl(sourceId, url, naturalW, naturalH, labelSuffix, extraNodeData, positionOverride);
-  if (!newNode) return null;
-
-  const store = useCanvasStore.getState();
   store.addNodes([newNode]);
   const newEdge = createEdge(sourceId, newNode.id);
   store.setEdges([...store.edges, newEdge]);
