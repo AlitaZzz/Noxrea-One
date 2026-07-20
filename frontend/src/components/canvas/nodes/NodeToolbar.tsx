@@ -118,8 +118,8 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
 
   return (
     <div
-      className="absolute -top-[62px] left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-white dark:bg-zinc-800 rounded-md shadow-lg border border-zinc-200 dark:border-zinc-700 h-[50px] px-2 py-2 z-20"
-      style={{ whiteSpace: "nowrap" }}
+      className="canvas-toolbar absolute -top-[62px] left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-xl z-20"
+      style={{ height: 50, padding: "6px 10px", whiteSpace: "nowrap" }}
     >
       <Tooltip title={`${t("info")} & JSON`}>
         <Button

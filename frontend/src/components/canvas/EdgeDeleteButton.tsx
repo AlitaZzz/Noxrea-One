@@ -87,7 +87,7 @@ export default function DeletableEdge({
               width: 30,
               height: 30,
               background: "var(--canvas-bg, #262626)",
-              border: "1px solid #555",
+              border: "1px solid var(--canvas-border)",
               cursor: "pointer",
               opacity: selected ? 1 : 0,
               transition: "opacity 0.15s",
