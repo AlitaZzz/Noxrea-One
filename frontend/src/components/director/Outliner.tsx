@@ -74,7 +74,13 @@ export default function Outliner() {
                   if (e.shiftKey && (ent.type === "character" || ent.type === "prop")) {
                     runtime?.select(ent.id); return;
                   }
-                  runtime?.select(ent.id);
+                  if (ent.type === "camera") {
+                    runtime?.select(ent.id);
+                    runtime?.setCameraView(true);
+                  } else {
+                    runtime?.setCameraView(false);
+                    runtime?.select(ent.id);
+                  }
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
