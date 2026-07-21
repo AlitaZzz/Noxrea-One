@@ -315,6 +315,7 @@ async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict,
             if resp.status_code in _RETRYABLE_STATUS and attempt < MAX_RETRIES:
                 logger.warning(f"retryable status {resp.status_code} task={task_id} attempt={attempt+1}")
                 await asyncio.sleep(1.5 * (attempt + 1))
+                logger.info(f"retrying post task={task_id} attempt={attempt+1} endpoint={endpoint}")
                 continue
             resp.raise_for_status()
             return resp.json()
@@ -324,6 +325,7 @@ async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict,
             if attempt < MAX_RETRIES:
                 logger.warning(f"retryable transport error task={task_id} attempt={attempt+1} err={str(e)[:120]}")
                 await asyncio.sleep(1.5 * (attempt + 1))
+                logger.info(f"retrying post task={task_id} attempt={attempt+1} endpoint={endpoint}")
                 continue
             raise
         except asyncio.TimeoutError:
