@@ -7,6 +7,7 @@ Provider 基类与共享工具。
 import base64
 import logging
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -105,8 +106,27 @@ def is_async_provider(provider: ProviderConfig) -> bool:
 # ── Download & save (used by worker) ────────────────────────────
 
 
+def _is_self_url(url: str) -> bool:
+    """判断 url 是否指向本服务（已是本地存储，无需再下载上传）。"""
+    if any(x in url for x in ("localhost", "127.0.0.1")):
+        return True
+    pub = settings.PUBLIC_URL
+    if pub:
+        try:
+            return urlparse(url).hostname == urlparse(pub).hostname
+        except Exception:
+            return False
+    return False
+
+
 async def download_and_save(cdn_url: str, auth_header: str, user_jwt: str, file_type: str) -> str:
-    """Download from CDN and save to local storage. Returns local URL."""
+    """Download from CDN and save to local storage. Returns local URL.
+
+    若 cdn_url 已是本服务 URL（如 b64 兜底已上传落地的情况），直接返回，避免重复存储。
+    """
+    # 已是本服务 URL -> 无需下载再上传（防止 b64 路径二次存储）
+    if _is_self_url(cdn_url):
+        return cdn_url
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             # Try without auth first
