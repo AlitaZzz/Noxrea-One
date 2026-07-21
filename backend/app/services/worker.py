@@ -49,57 +49,36 @@ async def _ensure_wal():
 # ── Atomic task claim ──────────────────────────────────────────
 
 
-async def _claim_task(db: AsyncSession) -> GenerationTask | None:
-    """Atomically claim one pending task using a SELECT + UPDATE transaction."""
-    # Find the oldest pending task
-    result = await db.execute(
-        text("SELECT id, user_id, type, status, prompt, config, ref_urls, "
-             "result_url, error, node_id, created_at, updated_at "
-             "FROM generation_tasks WHERE status = 'pending' "
-             "ORDER BY created_at ASC LIMIT 1")
-    )
-    row = result.fetchone()
-    if row is None:
-        return None
-
-    task_id = row[0]
-    # Atomically claim it
-    await db.execute(
-        text("UPDATE generation_tasks SET status = 'processing', updated_at = :now WHERE id = :id AND status = 'pending'"),
-        {"now": datetime.now(timezone.utc), "id": task_id},
-    )
-    await db.flush()
-
-    # Verify we claimed it (rowcount check)
-    # Re-read to get the full task
-    result = await db.execute(
-        text("SELECT id, user_id, type, status, prompt, config, ref_urls, "
-             "result_url, error, node_id, created_at, updated_at "
-             "FROM generation_tasks WHERE id = :id"),
-        {"id": task_id},
-    )
-    row = result.fetchone()
-    if row is None or row[3] != "processing":
-        return None
-
-    return GenerationTask(
-        id=row[0], user_id=row[1], type=row[2], status=row[3],
-        prompt=row[4], config=row[5], ref_urls=row[6],
-        result_url=row[7], error=row[8], node_id=row[9],
-        created_at=row[10], updated_at=row[11],
-    )
-
-
 async def _claim_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask]:
-    """Atomically claim up to `limit` pending tasks."""
-    tasks: list[GenerationTask] = []
-    for _ in range(limit):
-        task = await _claim_task(db)
-        if task is None:
-            break
-        tasks.append(task)
-        await db.commit()
-    return tasks
+    """原子地批量领取最多 limit 条 pending 任务。
+
+    单条 UPDATE ... WHERE id IN (SELECT ... pending LIMIT N) RETURNING *：
+    - WHERE status='pending' 保证并发下只领取仍为 pending 的行
+    - RETURNING 只返回真正被改成 processing 的行，等价于旧逻辑的二次确认
+    - 一次往返 + 一次 commit，替代旧的逐条 SELECT+UPDATE+re-SELECT
+    """
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        text(
+            "UPDATE generation_tasks SET status = 'processing', updated_at = :now "
+            "WHERE id IN (SELECT id FROM generation_tasks WHERE status = 'pending' "
+            "ORDER BY created_at ASC LIMIT :limit) "
+            "RETURNING id, user_id, type, status, prompt, config, ref_urls, "
+            "result_url, error, node_id, created_at, updated_at"
+        ),
+        {"now": now, "limit": limit},
+    )
+    rows = result.fetchall()
+    await db.commit()
+    return [
+        GenerationTask(
+            id=row[0], user_id=row[1], type=row[2], status=row[3],
+            prompt=row[4], config=row[5], ref_urls=row[6],
+            result_url=row[7], error=row[8], node_id=row[9],
+            created_at=row[10], updated_at=row[11],
+        )
+        for row in rows
+    ]
 
 
 # ── Resolve reference images to base64 ────────────────────────
@@ -242,10 +221,8 @@ async def _process_image(
 
     logger.info(f"[worker] image request: task={task.id} endpoint={endpoint} model={model} prompt_len={len(task.prompt)} n={n}")
     try:
-        resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
-        logger.info(f"[worker] image response: task={task.id} status={resp.status_code} headers={dict(resp.headers)}")
-        resp.raise_for_status()
-        data = resp.json()
+        data = await _post_with_retry(client, endpoint, body, headers, task.id)
+        logger.info(f"[worker] image response parsed: task={task.id}")
 
         result_url, raw_bytes = provider.extract_image(data)
         if result_url:
@@ -282,9 +259,7 @@ async def _process_video(
     body = provider.build_video_body(model, task.prompt, ratio, refs or None)
     api_base = base_url.rstrip("/")
     endpoint = build_endpoint(api_base, provider.video_endpoint)
-    resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
-    resp.raise_for_status()
-    data = resp.json()
+    data = await _post_with_retry(client, endpoint, body, headers, task.id)
     video_id = provider.extract_video_id(data)
     if not video_id:
         logger.error(f"[worker] no video_id in response")
@@ -325,6 +300,40 @@ async def _upload_bytes(raw: bytes, user_id: int, ext: str) -> str | None:
         if save_resp.is_success:
             return save_resp.json().get("data", {}).get("url")
     return None
+
+
+# 瞬时错误重试：429/5xx/连接错误退避重试 1 次；4xx 业务错误、超时不重试
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+MAX_RETRIES = 1
+
+
+async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict, headers: dict, task_id: str) -> dict:
+    """POST 并对瞬时错误退避重试。返回解析后的 JSON。失败抛异常（交由调用方捕获）。"""
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
+            if resp.status_code in _RETRYABLE_STATUS and attempt < MAX_RETRIES:
+                logger.warning(f"[worker] retryable status {resp.status_code}: task={task_id} endpoint={endpoint} attempt={attempt+1}")
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except (httpx.TransportError, httpx.RemoteProtocolError) as e:
+            # 连接级错误：可重试
+            last_exc = e
+            if attempt < MAX_RETRIES:
+                logger.warning(f"[worker] retryable transport error: task={task_id} attempt={attempt+1} err={str(e)[:120]}")
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            raise
+        except asyncio.TimeoutError:
+            # 超时不重试（多为生成慢，重试只会更慢并双倍计费）
+            raise
+    # 重试用尽
+    if last_exc:
+        raise last_exc
+    raise RuntimeError(f"[worker] post failed after retries: task={task_id} endpoint={endpoint}")
 
 
 async def _process_bg_removal(task: GenerationTask) -> str | None:

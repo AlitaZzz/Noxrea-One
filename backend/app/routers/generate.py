@@ -140,7 +140,8 @@ async def stream_task(
                     logger.info(f"SSE stream ended: task_id={task_id} status={status}")
                     break
 
-            await asyncio.sleep(3)
+            # 1s 轮询：让 completed/failed 更快推给前端（DB 查询频率略升可接受）
+            await asyncio.sleep(1)
 
     return StreamingResponse(
         event_stream(),
