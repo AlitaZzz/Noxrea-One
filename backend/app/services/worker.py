@@ -3,9 +3,11 @@ Background worker that processes generation tasks from the queue.
 """
 
 import asyncio
+import base64
 import logging
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import text
@@ -15,7 +17,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 from app.models.task import GenerationTask
-from app.services.providers import detect_provider, is_async_provider, download_and_save
+from app.services.providers import build_endpoint, detect_provider, download_and_save, is_async_provider
 
 # ── Constants ───────────────────────────────────────────────────
 
@@ -103,16 +105,28 @@ async def _claim_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask
 # ── Resolve reference images to base64 ────────────────────────
 
 
+def _is_local_url(url: str) -> bool:
+    """判断 url 是否指向本服务（需下载后转 base64，外部 provider 访问不到 localhost）。"""
+    if any(x in url for x in ("localhost", "127.0.0.1")):
+        return True
+    pub = settings.PUBLIC_URL
+    if pub:
+        try:
+            return urlparse(url).hostname == urlparse(pub).hostname
+        except Exception:
+            return False
+    return False
+
+
 async def _resolve_refs(ref_urls: list[str]) -> list[str]:
     """Convert local file URLs to base64 data URLs (AI providers can't access localhost)."""
     if not ref_urls:
         return []
     resolved: list[str] = []
-    import base64
     async with httpx.AsyncClient(timeout=30) as client:
         for url in ref_urls:
             # Local file → download and convert to base64
-            if any(x in url for x in ("localhost", "127.0.0.1", ":8000")):
+            if _is_local_url(url):
                 try:
                     resp = await client.get(url)
                     if resp.is_success:
@@ -184,7 +198,10 @@ async def _process_task(task: GenerationTask) -> None:
                 logger.warning(f"[worker] no result: task={task.id}")
 
         except asyncio.TimeoutError:
-            logger.warning(f"[worker] timeout: task={task.id}")
+            logger.error(f"[worker] TIMEOUT: task={task.id} type={task.type}"
+                         f" url={config.get('baseUrl','')[:60]} model={model}"
+                         f" prompt_len={len(task.prompt or '')} timeout={API_TIMEOUT_SEC}s"
+                         f" provider={type(provider).__name__}")
             await _update_task_status(task.id, "failed", error="API call timed out")
         except Exception as e:
             logger.error(f"[worker] error: task={task.id} err={str(e)[:200]}")
@@ -197,11 +214,41 @@ async def _process_image(
 ) -> str | None:
     """Call image generation API and return CDN URL."""
     body = provider.build_image_body(model, task.prompt, n, ratio, size, quality, refs or None)
-    endpoint = base_url.rstrip("/") + provider.image_endpoint
-    resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
-    resp.raise_for_status()
-    data = resp.json()
-    return provider.extract_image_url(data)
+    suffix = (
+        provider.image_edit_endpoint
+        if (refs and provider.image_edit_endpoint)
+        else provider.image_endpoint
+    )
+    endpoint = build_endpoint(base_url, suffix)
+
+    logger.info(f"[worker] image request: task={task.id} endpoint={endpoint} model={model} prompt_len={len(task.prompt)} n={n}")
+    try:
+        resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
+        logger.info(f"[worker] image response: task={task.id} status={resp.status_code} headers={dict(resp.headers)}")
+        resp.raise_for_status()
+        data = resp.json()
+
+        result_url, raw_bytes = provider.extract_image(data)
+        if result_url:
+            logger.info(f"[worker] image extract: task={task.id} result_url={result_url}")
+            return result_url
+
+        # provider 返回 b64 -> 解码后通过文件接口上传
+        if raw_bytes:
+            local_url = await _upload_bytes(raw_bytes, task.user_id, "png")
+            if local_url:
+                logger.info(f"[worker] image base64 saved: task={task.id} local_url={local_url}")
+                return local_url
+            logger.error(f"[worker] image base64 upload failed: task={task.id}")
+
+        logger.warning(f"[worker] image no result: task={task.id} data_keys={list(data.keys())} has_data={bool(data.get('data'))}")
+        return None
+    except asyncio.TimeoutError:
+        logger.error(f"[worker] image TIMEOUT: task={task.id} endpoint={endpoint} model={model} timeout={API_TIMEOUT_SEC}s")
+        raise
+    except Exception as e:
+        logger.error(f"[worker] image error: task={task.id} err={str(e)[:300]}")
+        raise
 
 
 async def _process_video(
@@ -215,7 +262,7 @@ async def _process_video(
     # Create video task
     body = provider.build_video_body(model, task.prompt, ratio, refs or None)
     api_base = base_url.rstrip("/")
-    endpoint = api_base + provider.video_endpoint
+    endpoint = build_endpoint(api_base, provider.video_endpoint)
     resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
     resp.raise_for_status()
     data = resp.json()
@@ -245,6 +292,20 @@ def _make_user_jwt(user_id: int) -> str:
     """Create JWT for the worker to authenticate with FastAPI endpoints."""
     from app.services.auth import create_access_token
     return create_access_token({"sub": str(user_id)})
+
+
+async def _upload_bytes(raw: bytes, user_id: int, ext: str) -> str | None:
+    """Upload raw bytes to local storage via the files API. Returns local URL or None."""
+    user_jwt = _make_user_jwt(user_id)
+    async with httpx.AsyncClient(timeout=60) as up_client:
+        save_resp = await up_client.post(
+            f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
+            files={"file": (f"generated.{ext}", raw)},
+            headers={"Authorization": f"Bearer {user_jwt}"} if user_jwt else {},
+        )
+        if save_resp.is_success:
+            return save_resp.json().get("data", {}).get("url")
+    return None
 
 
 async def _process_bg_removal(task: GenerationTask) -> str | None:
