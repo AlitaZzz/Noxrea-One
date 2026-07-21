@@ -19,7 +19,7 @@ from app.routers import auth, canvas, files, model_config, assets, generate, ai_
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"startup debug={settings.DEBUG} log_level={settings.LOG_LEVEL}")
+    logger.info(f"startup log_level={settings.LOG_LEVEL}")
     # Startup: ensure tables exist and default admin is created
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

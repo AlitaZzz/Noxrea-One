@@ -6,6 +6,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # .env 里多余的字段忽略而非报错（避免历史 DEBUG= 等导致启动崩）
     )
 
     # Database — SQLite 默认，生产换 MySQL/PostgreSQL
@@ -25,7 +26,6 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "Noxrea AI Canvas API"
-    DEBUG: bool = False
     # 日志级别：默认 INFO（看业务关键流），DEBUG 看轮询/SSE 等诊断细节
     LOG_LEVEL: str = "INFO"
 
