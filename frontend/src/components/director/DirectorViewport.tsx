@@ -27,7 +27,6 @@ const BODY_TYPES: Record<string, { url: string; label: string; height: number; g
   small: { url: XBOT, label: "矮小素体", height: 1.25, girth: 0.94 },
   broad: { url: XBOT, label: "宽厚素体", height: 1.7, girth: 1.3 },
   slim: { url: XBOT, label: "纤细素体", height: 1.78, girth: 0.8 },
-  chibi: { url: XBOT, label: "二头身", height: 1.0, girth: 1.3 },
 };
 const PROP_LABEL: Record<string, string> = { box: "方块", cylinder: "圆柱", sphere: "球体", mannequin: "人体素模" };
 
@@ -40,7 +39,6 @@ function getBodyType(ent: any): string {
   if (h === 1.25 && g === 0.94) return "small";
   if (h === 1.7 && g === 1.3) return "broad";
   if (h === 1.78 && g === 0.8) return "slim";
-  if (h === 1.0 && g === 1.3) return "chibi";
   return "standard";
 }
 
@@ -162,9 +160,9 @@ export default function DirectorViewport() {
       if (e.type === "character") {
         const bodyType = e.bodyType || "standard";
         const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
-        const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth, bodyType });
+        const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
         if (_cancelled) { ch.dispose(); return null; }
-        ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth, bodyType };
+        ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
         ch.id = e.id;
         if (e.color) ch.setColor(parseInt(e.color.slice(1), 16));
         setTransform(ch.root, e.pos, e.rot, e.scale);
@@ -253,9 +251,9 @@ export default function DirectorViewport() {
         const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
         const name = _nextCharName();
         try {
-          const c = await Character.load(name, b.url, { height: b.height, girth: b.girth, bodyType });
+          const c = await Character.load(name, b.url, { height: b.height, girth: b.girth });
           if (_cancelled) { c.dispose(); return null; }
-          c._srcUrl = b.url; c._opts = { height: b.height, girth: b.girth, bodyType };
+          c._srcUrl = b.url; c._opts = { height: b.height, girth: b.girth };
           _placeNew(c.root); stage.add(c.root); entities.push(c);
           c.applyPosePreset("stand"); _sync(); _registerEntity(c);
           selection.onSelect(c.id); rig.focus(c);
@@ -455,43 +453,6 @@ export default function DirectorViewport() {
       setJointValue: (characterId: string, jointKey: string, value: number) => {
         const ent = _findChar(characterId);
         if (ent) { ent.values[jointKey] = value; ent.enterManual(); ent.applyPose(); ent.currentPreset = null; }
-      },
-      getBodyTypeOptions: () => Object.entries(BODY_TYPES).map(([k, v]) => ({ key: k, label: v.label })),
-      setBodyType: async (id: string, bodyType: string) => {
-        const oldEnt = _findChar(id);
-        if (!oldEnt) return;
-        const b = BODY_TYPES[bodyType];
-        if (!b) return;
-
-        const oldId = oldEnt.id, oldName = oldEnt.name;
-        const saved = {
-          values: { ...oldEnt.values }, preset: oldEnt.currentPreset, mode: oldEnt.poseMode,
-          pos: oldEnt.root.position.toArray() as [number, number, number],
-          quat: oldEnt.root.quaternion.toArray() as [number, number, number, number],
-          scale: oldEnt.root.scale.toArray() as [number, number, number],
-          visible: oldEnt.visible, color: oldEnt.color,
-        };
-
-        const idx = entities.indexOf(oldEnt);
-        if (idx >= 0) entities.splice(idx, 1);
-        stage.remove(oldEnt.root); oldEnt.dispose();
-        if (oldId === _selectedId) gizmo.detach();
-
-        try {
-          const c = await Character.load(oldName, b.url, { height: b.height, girth: b.girth, bodyType });
-          if (_cancelled) { c.dispose(); return; }
-          c.id = oldId; c._srcUrl = b.url; c._opts = { height: b.height, girth: b.girth, bodyType };
-          c.setColor(saved.color);
-          setTransform(c.root, saved.pos, saved.quat, saved.scale);
-          c.setVisible(saved.visible);
-          Object.assign(c.values, saved.values);
-          if (saved.mode === "preset" && saved.preset) c.applyPosePreset(saved.preset);
-          else { c.enterManual(); c.applyPose(); }
-
-          stage.add(c.root); entities.push(c);
-          _sync(); _registerEntity(c);
-          if (oldId === _selectedId) { gizmo.attach(c.root); selection.onSelect(oldId); }
-        } catch (err) { console.error("setBodyType", err); }
       },
       // ---- Screenshot helpers (对齐参考项目 ShotManager) ----
       _resolveShotCamera: () => {
