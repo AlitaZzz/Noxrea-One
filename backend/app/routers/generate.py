@@ -67,7 +67,7 @@ async def create_task(
     task = await crud.create_task(
         db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
     )
-    logger.info(f"Task created: id={task_id} type={task_type} user={user.id} node={node_id} prompt_len={len(prompt)}")
+    logger.info(f"task created id={task_id} type={task_type} user={user.id} node={node_id} prompt_len={len(prompt)}")
 
     return UnifiedResponse(
         code=200,
@@ -111,7 +111,7 @@ async def stream_task(
         raise HTTPException(status_code=403, detail="Access denied")
 
     async def event_stream():
-        logger.debug(f"SSE stream opened: task_id={task_id} user={user.id}")
+        logger.debug(f"SSE stream opened task_id={task_id} user={user.id}")
         last_status = ""
         while True:
             # Use fresh session per poll + filter by user_id (secondary guard)
@@ -137,7 +137,7 @@ async def stream_task(
                 last_status = status
 
                 if status in ("completed", "failed"):
-                    logger.info(f"SSE stream ended: task_id={task_id} status={status}")
+                    logger.debug(f"SSE stream ended task_id={task_id} status={status}")
                     break
 
             # 1s 轮询：让 completed/failed 更快推给前端（DB 查询频率略升可接受）
@@ -169,7 +169,7 @@ async def cancel_task(
         raise HTTPException(status_code=400, detail="Task already finished")
 
     await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
-    logger.info(f"Task cancelled: id={task_id} user={user.id}")
+    logger.info(f"task cancelled id={task_id} user={user.id}")
     return UnifiedResponse(code=200, msg="cancelled")
 
 

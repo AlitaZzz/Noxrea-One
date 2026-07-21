@@ -18,12 +18,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await authenticate_user(db, request.username, request.password)
     if user is None:
-        logger.warning(f"Login failed: username={request.username}")
+        logger.warning(f"login failed user={request.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    logger.info(f"Login success: user={user.username} id={user.id}")
+    logger.info(f"login ok user={user.username} id={user.id}")
     token = create_access_token(
         data={"sub": str(user.id), "username": user.username}
     )

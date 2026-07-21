@@ -5,11 +5,14 @@ Provider 基类与共享工具。
 """
 
 import base64
+import logging
 from typing import Any, Optional
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # ── Size resolution ─────────────────────────────────────────────
 
@@ -126,5 +129,5 @@ async def download_and_save(cdn_url: str, auth_header: str, user_jwt: str, file_
                 if data.get("data", {}).get("url"):
                     return data["data"]["url"]
     except Exception as e:
-        print(f"[providers] download_and_save failed: {e}")
+        logger.warning(f"download_and_save failed url={cdn_url[:60]} err={str(e)[:120]}")
     return cdn_url

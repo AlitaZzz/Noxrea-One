@@ -5,18 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config import settings
+from app.logging_config import setup_logging
 
-# 控制台日志：DEBUG=true 输出所有日志，否则只输出 WARNING 以上
-logging.basicConfig(
-    level=logging.DEBUG if settings.DEBUG else logging.WARNING,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-# 第三方库日志静默（DEBUG 模式下也只输出 WARNING）
-logging.getLogger("aiosqlite").setLevel(logging.WARNING)
-logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
+# 统一日志配置：彩色 + 对齐 + 第三方库静默。须在 import 各业务模块前调用。
+setup_logging()
 logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,7 +19,7 @@ from app.routers import auth, canvas, files, model_config, assets, generate, ai_
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"Starting up (DEBUG={settings.DEBUG})")
+    logger.info(f"startup debug={settings.DEBUG} log_level={settings.LOG_LEVEL}")
     # Startup: ensure tables exist and default admin is created
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -35,16 +27,16 @@ async def lifespan(app: FastAPI):
 
     async with async_session() as db:
         await ensure_admin_exists(db)
-    logger.info("Database initialized, admin ensured")
+    logger.info("database initialized")
 
     # Start background worker for generation task queue
     from app.services.worker import worker_loop
 
     worker_task = asyncio.create_task(worker_loop())
-    logger.info("Background worker started")
+    logger.info("worker started")
     yield
     # Shutdown: cancel worker and clean up connection pool
-    logger.info("Shutting down")
+    logger.info("shutdown")
     worker_task.cancel()
     await engine.dispose()
 

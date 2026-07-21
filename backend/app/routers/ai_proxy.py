@@ -8,6 +8,7 @@ AI 代理接口 — 带鉴权和 SSRF 防护的转发层。
 所有接口均需 JWT 鉴权 (Depends(get_current_user))。
 """
 
+import logging
 import re
 import socket
 from contextlib import contextmanager
@@ -21,6 +22,7 @@ from app.config import settings
 from app.deps import get_current_user
 from app.schemas.common import UnifiedResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ai-proxy"])
 
 
@@ -104,6 +106,8 @@ if settings.ALLOWED_INTERNAL_HOSTS:
 
 
 def _raise_bad_url(msg: str):
+    # 所有 SSRF / 非法 baseUrl 拦截统一在此告警，便于发现探测行为
+    logger.warning(f"ssrf blocked: {msg}")
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
 
@@ -187,6 +191,7 @@ async def chat_completions(
     user=Depends(get_current_user),
 ):
     ip, hostname, scheme, port = _resolve_and_validate(body.baseUrl)
+    logger.debug(f"chat proxy user={user.id} model={body.model} host={hostname}")
 
     headers = {"Content-Type": "application/json"}
     if body.apiKey:
@@ -230,6 +235,7 @@ async def models_list(
     user=Depends(get_current_user),
 ):
     ip, hostname, scheme, port = _resolve_and_validate(body.baseUrl)
+    logger.debug(f"models list proxy user={user.id} host={hostname}")
 
     headers = {}
     if body.apiKey:

@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, Sequence
 
 from sqlalchemy import select, delete, update
@@ -6,8 +5,6 @@ from sqlalchemy import text as _sql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetItem, AssetFolder
-
-logger = logging.getLogger(__name__)
 
 
 def _parse_hash_from_url(url: str) -> str | None:
