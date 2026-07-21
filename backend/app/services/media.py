@@ -119,10 +119,10 @@ def resize_and_cache_image(
 
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         img.save(cache_path, "WEBP", quality=75, optimize=True)
-        logger.info(f"Resized image cached: {cache_path}")
+        logger.debug(f"image cached path={cache_path}")
         return cache_path
     except Exception:
-        logger.warning(f"Image resize failed for {src_path}", exc_info=True)
+        logger.warning(f"image resize failed src={src_path}", exc_info=True)
         return None
 
 
@@ -177,12 +177,12 @@ def extract_video_frame(
             capture_output=True,
             timeout=timeout,
         )
-        logger.info(f"Frame extracted: {out_path}")
+        logger.debug(f"frame extracted path={out_path}")
         return out_path
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
-        logger.error(f"ffmpeg failed for {video_path}: {stderr}")
+        logger.error(f"ffmpeg failed src={video_path} err={stderr[:120]}")
         raise RuntimeError(f"Frame extraction failed: {stderr[:200]}")
     except subprocess.TimeoutExpired:
-        logger.error(f"ffmpeg timed out ({timeout}s) for {video_path}")
+        logger.error(f"ffmpeg timeout src={video_path} timeout={timeout}s")
         raise

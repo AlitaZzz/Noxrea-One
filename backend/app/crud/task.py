@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from typing import Optional
 
@@ -6,8 +5,6 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import GenerationTask
-
-logger = logging.getLogger(__name__)
 
 
 async def create_task(

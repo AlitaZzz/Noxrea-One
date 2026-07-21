@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "Noxrea AI Canvas API"
     DEBUG: bool = False
+    # 日志级别：默认 INFO（看业务关键流），DEBUG 看轮询/SSE 等诊断细节
+    LOG_LEVEL: str = "INFO"
 
     # Public URL for file links (e.g. "http://localhost:8000" or "https://api.example.com")
     PUBLIC_URL: str = "http://localhost:8000"

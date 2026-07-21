@@ -5,6 +5,7 @@ Background worker that processes generation tasks from the queue.
 import asyncio
 import base64
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -168,7 +169,7 @@ async def _process_task(task: GenerationTask) -> None:
 
     async with httpx.AsyncClient(timeout=API_TIMEOUT_SEC) as client:
         try:
-            logger.info(f"[worker] processing: task={task.id} type={task.type} prompt_len={len(task.prompt)}")
+            logger.info(f"processing task={task.id} type={task.type}")
             if task.type == "image":
                 result_url = await _process_image(
                     client, provider, task, model, base_url, headers,
@@ -190,19 +191,17 @@ async def _process_task(task: GenerationTask) -> None:
                 user_jwt = _make_user_jwt(task.user_id)
                 local_url = await download_and_save(result_url, headers.get("Authorization", ""), user_jwt, task.type)
                 await _update_task_status(task.id, "completed", result_url=local_url)
-                logger.info(f"[worker] completed: task={task.id}")
+                logger.info(f"completed task={task.id}")
             else:
                 await _update_task_status(task.id, "failed", error="No result from provider")
-                logger.warning(f"[worker] no result: task={task.id}")
+                logger.warning(f"no result task={task.id}")
 
         except asyncio.TimeoutError:
-            logger.error(f"[worker] TIMEOUT: task={task.id} type={task.type}"
-                         f" url={base_url[:60]} model={model}"
-                         f" prompt_len={len(task.prompt or '')} timeout={API_TIMEOUT_SEC}s"
-                         f" provider={type(provider).__name__}")
+            logger.error(f"TIMEOUT task={task.id} type={task.type} url={base_url[:60]} model={model}"
+                         f" timeout={API_TIMEOUT_SEC}s provider={type(provider).__name__}")
             await _update_task_status(task.id, "failed", error="API call timed out")
         except Exception as e:
-            logger.error(f"[worker] error: task={task.id} err={str(e)[:200]}")
+            logger.error(f"error task={task.id} err={str(e)[:200]}")
             await _update_task_status(task.id, "failed", error=str(e)[:500])
 
 
@@ -219,31 +218,31 @@ async def _process_image(
     )
     endpoint = build_endpoint(base_url, suffix)
 
-    logger.info(f"[worker] image request: task={task.id} endpoint={endpoint} model={model} prompt_len={len(task.prompt)} n={n}")
+    logger.info(f"image request task={task.id} endpoint={endpoint} model={model} n={n}")
+    t0 = time.perf_counter()
     try:
         data = await _post_with_retry(client, endpoint, body, headers, task.id)
-        logger.info(f"[worker] image response parsed: task={task.id}")
 
         result_url, raw_bytes = provider.extract_image(data)
         if result_url:
-            logger.info(f"[worker] image extract: task={task.id} result_url={result_url}")
+            logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms")
             return result_url
 
         # provider 返回 b64 -> 解码后通过文件接口上传
         if raw_bytes:
             local_url = await _upload_bytes(raw_bytes, task.user_id, "png")
             if local_url:
-                logger.info(f"[worker] image base64 saved: task={task.id} local_url={local_url}")
+                logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms (b64)")
                 return local_url
-            logger.error(f"[worker] image base64 upload failed: task={task.id}")
+            logger.error(f"image base64 upload failed task={task.id}")
 
-        logger.warning(f"[worker] image no result: task={task.id} data_keys={list(data.keys())} has_data={bool(data.get('data'))}")
+        logger.warning(f"image no result task={task.id} data_keys={list(data.keys())}")
         return None
     except asyncio.TimeoutError:
-        logger.error(f"[worker] image TIMEOUT: task={task.id} endpoint={endpoint} model={model} timeout={API_TIMEOUT_SEC}s")
+        logger.error(f"image TIMEOUT task={task.id} endpoint={endpoint} model={model} timeout={API_TIMEOUT_SEC}s")
         raise
     except Exception as e:
-        logger.error(f"[worker] image error: task={task.id} err={str(e)[:300]}")
+        logger.error(f"image failed task={task.id} err={str(e)[:300]}")
         raise
 
 
@@ -262,7 +261,7 @@ async def _process_video(
     data = await _post_with_retry(client, endpoint, body, headers, task.id)
     video_id = provider.extract_video_id(data)
     if not video_id:
-        logger.error(f"[worker] no video_id in response")
+        logger.error(f"no video_id in response task={task.id}")
         return None
 
     # Poll for completion
@@ -314,7 +313,7 @@ async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict,
         try:
             resp = await asyncio.wait_for(client.post(endpoint, json=body, headers=headers), timeout=API_TIMEOUT_SEC)
             if resp.status_code in _RETRYABLE_STATUS and attempt < MAX_RETRIES:
-                logger.warning(f"[worker] retryable status {resp.status_code}: task={task_id} endpoint={endpoint} attempt={attempt+1}")
+                logger.warning(f"retryable status {resp.status_code} task={task_id} attempt={attempt+1}")
                 await asyncio.sleep(1.5 * (attempt + 1))
                 continue
             resp.raise_for_status()
@@ -323,7 +322,7 @@ async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict,
             # 连接级错误：可重试
             last_exc = e
             if attempt < MAX_RETRIES:
-                logger.warning(f"[worker] retryable transport error: task={task_id} attempt={attempt+1} err={str(e)[:120]}")
+                logger.warning(f"retryable transport error task={task_id} attempt={attempt+1} err={str(e)[:120]}")
                 await asyncio.sleep(1.5 * (attempt + 1))
                 continue
             raise
@@ -333,7 +332,7 @@ async def _post_with_retry(client: httpx.AsyncClient, endpoint: str, body: dict,
     # 重试用尽
     if last_exc:
         raise last_exc
-    raise RuntimeError(f"[worker] post failed after retries: task={task_id} endpoint={endpoint}")
+    raise RuntimeError(f"post failed after retries: task={task_id} endpoint={endpoint}")
 
 
 async def _process_bg_removal(task: GenerationTask) -> str | None:
@@ -406,7 +405,7 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         await _update_task_status(task.id, "failed", error="Inference service timed out")
         return None
     except Exception as e:
-        logger.error(f"[worker] bg_removal failed: {e}")
+        logger.error(f"bg_removal failed task={task.id} err={str(e)[:200]}")
         await _update_task_status(task.id, "failed", error=str(e)[:500])
         return None
 
@@ -450,7 +449,7 @@ async def _cleanup_zombies(db: AsyncSession) -> None:
         },
     )
     if result.rowcount:
-        logger.warning(f"[worker] cleaned up {result.rowcount} zombie task(s)")
+        logger.warning(f"cleaned up {result.rowcount} zombie task(s)")
 
     await db.commit()
 
@@ -461,8 +460,7 @@ async def _cleanup_zombies(db: AsyncSession) -> None:
 async def worker_loop():
     """Main worker loop — runs as an asyncio background task."""
     await _ensure_wal()
-    logger.info("Worker started (max_concurrency=%d, stuck_timeout=%dmin)",
-                MAX_CONCURRENCY, STUCK_TIMEOUT_MIN)
+    logger.info(f"worker started max_concurrency={MAX_CONCURRENCY} stuck_timeout={STUCK_TIMEOUT_MIN}min")
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
     active_tasks = 0
@@ -480,6 +478,8 @@ async def worker_loop():
             # ── Claim pending tasks ──
             async with _async_session() as db:
                 tasks = await _claim_tasks(db)
+            if tasks:
+                logger.debug(f"claimed {len(tasks)} task(s)")
 
             # ── Process tasks concurrently (Semaphore limits to MAX_CONCURRENCY) ──
             for task in tasks:
@@ -490,6 +490,6 @@ async def worker_loop():
                 asyncio.create_task(_run())
 
         except Exception as e:
-            logger.error(f"[worker] loop error: {e}")
+            logger.error(f"loop error: {e}")
 
         await asyncio.sleep(POLL_INTERVAL_SEC)
