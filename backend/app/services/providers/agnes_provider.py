@@ -73,7 +73,7 @@ class AgnesProvider(ProviderConfig):
             "frame_rate": 24,
         }
         if refs and len(refs) == 1:
-            body["image_urls"] = refs[0]
+            body["image"] = refs[0]  # 图生视频：顶层 image 单值
         elif refs and len(refs) > 1:
             body["extra_body"] = {"image": refs, "mode": "keyframes"}
         return body
