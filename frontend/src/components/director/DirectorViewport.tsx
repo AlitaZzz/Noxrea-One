@@ -141,6 +141,61 @@ export default function DirectorViewport() {
       return "角色" + (reserved.size + 1);
     };
 
+    // 序列化实体（顶层与 crowd 成员共用）
+    const _serializeEntity = (ent: any): any => {
+      const base = {
+        id: ent.id, type: ent.type, name: ent.name, visible: ent.visible,
+        pos: ent.root.position.toArray() as [number, number, number],
+        rot: ent.root.quaternion.toArray() as [number, number, number, number],
+        scale: ent.root.scale.toArray() as [number, number, number],
+      };
+      if (ent.type === "character") return { ...base, bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
+      if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
+      if (ent.type === "camera") return { ...base, fov: ent.fov, roll: (ent as any)._roll || 0 };
+      return base;
+    };
+
+    // 反序列化实体（顶层与 crowd 成员共用，返回实体不 add/push）
+    const _deserializeEntity = async (e: any): Promise<any> => {
+      if (e.type === "character") {
+        const bodyType = e.bodyType || "standard";
+        const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
+        const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
+        if (_cancelled) { ch.dispose(); return null; }
+        ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
+        ch.id = e.id;
+        if (e.color) ch.setColor(parseInt(e.color.slice(1), 16));
+        setTransform(ch.root, e.pos, e.rot, e.scale);
+        ch.setVisible(e.visible);
+        if (e.pose?.mode === "manual" && e.pose.values) {
+          Object.assign(ch.values, e.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
+        } else if (e.pose?.preset) {
+          ch.applyPosePreset(e.pose.preset);
+        } else {
+          ch.applyPosePreset("stand");
+        }
+        return ch;
+      }
+      if (e.type === "prop") {
+        const p = new Prop(e.kind as any, e.name);
+        p.id = e.id;
+        if (e.color) p.setColor(parseInt(e.color.slice(1), 16));
+        setTransform(p.root, e.pos, e.rot, e.scale);
+        p.setVisible(e.visible);
+        return p;
+      }
+      if (e.type === "camera") {
+        const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
+        const cam = new CameraEntity(e.name, { fov: e.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
+        cam.id = e.id;
+        setTransform(cam.root, e.pos, e.rot, e.scale);
+        if (e.roll) cam._roll = e.roll;
+        cam.setVisible(e.visible);
+        return cam;
+      }
+      return null;
+    };
+
     const _placeNew = (root: THREE.Object3D) => {
       const n = entities.length;
       root.position.set(Math.cos(n * 0.95) * Math.min(0.9 + n * 0.4, 3.2), 0,
@@ -659,23 +714,8 @@ export default function DirectorViewport() {
         const store = useDirectorStore.getState();
         return {
           entities: entities.map((ent: any) => {
-            const base = {
-              id: ent.id, type: ent.type, name: ent.name, visible: ent.visible,
-              pos: ent.root.position.toArray() as [number, number, number],
-              rot: ent.root.quaternion.toArray() as [number, number, number, number],
-              scale: ent.root.scale.toArray() as [number, number, number],
-            };
-            if (ent.type === "character") return { ...base, bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
-            if (ent.type === "prop") return { ...base, kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
-            if (ent.type === "camera") return { ...base, fov: ent.fov, roll: (ent as any)._roll || 0 };
-            if (ent.type === "crowd") return { ...base, rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => {
-              const mb: any = { type: m.type, id: m.id, name: m.name, pos: m.root.position.toArray() as [number, number, number], rot: m.root.quaternion.toArray() as [number, number, number, number], visible: m.visible };
-              if (m.type === "character") { mb.bodyType = getBodyType(m); mb.color = "#" + m.color.toString(16).padStart(6, "0"); mb.pose = { mode: m.poseMode, preset: m.currentPreset, values: m.poseMode === "manual" ? { ...m.values } : undefined }; }
-              else if (m.type === "camera") { mb.fov = m.fov; mb.roll = m._roll || 0; }
-              else if (m.type === "prop") { mb.kind = m.kind; mb.color = "#" + m.color.toString(16).padStart(6, "0"); }
-              return mb;
-            }) };
-            return base;
+            if (ent.type === "crowd") return { ..._serializeEntity(ent), rows: ent.rows, cols: ent.cols, members: ent.members.map((m: any) => _serializeEntity(m)) };
+            return _serializeEntity(ent);
           }),
           sceneState: { ...store.sceneState } as any,
           ratio: store.ratio,
@@ -694,86 +734,31 @@ export default function DirectorViewport() {
         }
         for (const e of data.entities) {
           if (_cancelled) return;
-          if (e.type === "character") {
-            const bodyType = e.bodyType || "standard";
-            const b = BODY_TYPES[bodyType] || BODY_TYPES.standard;
-            const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
-            if (_cancelled) { ch.dispose(); return; }
-            ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
-            ch.id = e.id; ch.root.userData.entityId = e.id; // 保持原始 ID
-            if (e.color) ch.setColor(parseInt(e.color!.slice(1), 16));
-            setTransform(ch.root, e.pos, e.rot, e.scale);
-            stage.add(ch.root); entities.push(ch);
-            ch.setVisible(e.visible);
-            if (e.pose?.mode === "manual" && e.pose.values) {
-              Object.assign(ch.values, e.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
-            } else if (e.pose?.preset) {
-              ch.applyPosePreset(e.pose.preset);
-            }
-            _registerEntity(ch);
-          } else if (e.type === "prop") {
-            const p = new Prop(e.kind as any, e.name);
-            p.id = e.id; p.root.userData.entityId = e.id; // 保持原始 ID
-            if (e.color) p.setColor(parseInt(e.color!.slice(1), 16));
-            setTransform(p.root, e.pos, e.rot, e.scale);
-            stage.add(p.root); entities.push(p);
-            p.setVisible(e.visible);
-          } else if (e.type === "camera") {
-            const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-            const cam = new CameraEntity(e.name, { fov: e.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
-            cam.id = e.id; cam.root.userData.entityId = e.id; // 保持原始 ID
-            setTransform(cam.root, e.pos, e.rot, e.scale);
-            if ((e as any).roll) cam._roll = (e as any).roll;
-            stage.add(cam.root); entities.push(cam); _registerEntity(cam);
-            cam.setVisible(e.visible);
-          } else if (e.type === "crowd") {
+          if (e.type === "crowd") {
             const rows = e.rows || 3, cols = e.cols || 3;
             const group = new THREE.Group();
             const members: any[] = [];
-            const usedLetters = new Set<string>();
-            const memberCount = e.members?.length || rows * cols;
-            for (let i = 0; i < memberCount; i++) {
+            for (const mdata of (e.members || [])) {
               if (_cancelled) return;
-              const mdata = e.members?.[i];
-              if ((mdata?.type || "character") === "camera") {
-                const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-                const cam = new CameraEntity(mdata?.name || "机位", { fov: (mdata as any)?.fov || 40, aspect: W / Math.max(1, H), scene: stage.scene });
-                if (mdata?.id) { cam.id = mdata.id; }
-                if (mdata) { cam.root.position.set(...mdata.pos); cam.root.quaternion.set(...mdata.rot); }
-                if ((mdata as any)?.roll) cam._roll = (mdata as any).roll;
-                cam.setVisible(mdata?.visible ?? true);
-                group.add(cam.root); _ensureLabel(cam); members.push(cam);
-              } else if ((mdata?.type || "character") === "prop") {
-                const p = new Prop((mdata as any)?.kind || "box", mdata?.name || "道具");
-                if (mdata?.id) { p.id = mdata.id; }
-                if (mdata?.color) p.setColor(parseInt(mdata.color.slice(1), 16));
-                if (mdata) { p.root.position.set(...mdata.pos); p.root.quaternion.set(...mdata.rot); }
-                p.setVisible(mdata?.visible ?? true);
-                group.add(p.root); members.push(p);
-              } else {
-                const b = BODY_TYPES.standard;
-                const ch = await Character.load(mdata?.name || _nextCharName(usedLetters), b.url, b);
-                if (mdata?.id) { ch.id = mdata.id; }
-                if (_cancelled) { ch.dispose(); return; }
-                if (mdata?.color) ch.setColor(parseInt(mdata.color.slice(1), 16));
-                if (mdata) { ch.root.position.set(...mdata.pos); ch.root.quaternion.set(...mdata.rot); }
-                ch.setVisible(mdata?.visible ?? true);
-                if (mdata?.pose?.mode === "manual" && mdata.pose.values) {
-                  Object.assign(ch.values, mdata.pose.values); ch.enterManual(); ch.applyPose(); ch.currentPreset = null;
-                } else if (mdata?.pose?.preset) {
-                  ch.applyPosePreset(mdata.pose.preset);
-                } else {
-                  ch.applyPosePreset("stand");
-                }
-                group.add(ch.root); _ensureLabel(ch); members.push(ch);
-              }
+              const m = await _deserializeEntity(mdata);
+              if (!m) return;
+              m.root.userData.entityId = m.id;
+              _ensureLabel(m);
+              group.add(m.root); members.push(m);
             }
+            if (!members.length) continue;
             const crowd = new Crowd(e.name, group, members, { rows, cols });
             crowd.id = e.id; crowd.root.userData.entityId = e.id; // 保持原始 ID
             setTransform(crowd.root, e.pos, e.rot, e.scale);
             for (const m of members) m.root.userData.entityId = crowd.id;
             stage.add(group); entities.push(crowd as any);
             crowd.setVisible(e.visible);
+          } else {
+            const ent = await _deserializeEntity(e);
+            if (!ent) return;
+            ent.root.userData.entityId = ent.id;
+            stage.add(ent.root); entities.push(ent);
+            _registerEntity(ent);
           }
         }
         _sync();
