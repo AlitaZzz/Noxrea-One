@@ -15,6 +15,7 @@ const _loader = new GLTFLoader();
 export interface CharacterOpts {
   height?: number;
   girth?: number;
+  bodyType?: string;
 }
 
 /**
@@ -41,6 +42,19 @@ export class Character extends Entity {
 
   _srcUrl?: string;
   _opts?: CharacterOpts;
+  _bodyType?: string;
+
+  // 各体型骨骼缩放。
+  // key = jointConfig bone 名（原始写法，如 mixamorig:Head），
+  // value = [scaleX, scaleY, scaleZ]。
+  // 只在构造函数中应用一次（不跟踪变化）。
+  static CHIBI_SCALES: Record<string, [number, number, number]> = {
+    "mixamorig:Head": [2.8, 2.8, 2.8],
+    "mixamorig:LeftHand": [1.3, 1.3, 1.3],
+    "mixamorig:RightHand": [1.3, 1.3, 1.3],
+    "mixamorig:LeftFoot": [1.15, 0.9, 1.15],
+    "mixamorig:RightFoot": [1.15, 0.9, 1.15],
+  };
 
   constructor(name: string, gltf: any, opts: CharacterOpts = {}) {
     const root = new THREE.Group();
@@ -86,6 +100,7 @@ export class Character extends Entity {
     });
 
     this._normalize();
+    this.applyBodyScale(opts.bodyType);
   }
 
   /** 异步加载工厂：返回 Promise<Character>。 */
@@ -201,6 +216,18 @@ export class Character extends Entity {
     const c = new THREE.Color(hex);
     this._mats.forEach((m) => m.color.copy(c));
     this.color = c.getHex();
+  }
+
+  applyBodyScale(bodyType?: string) {
+    this._bodyType = bodyType;
+    if (!bodyType || bodyType === "standard") return;
+    if (bodyType === "chibi") {
+      for (const [boneName, [sx, sy, sz]] of Object.entries(Character.CHIBI_SCALES)) {
+        const bone = findBone(this.bones, boneName);
+        if (bone) bone.scale.set(sx, sy, sz);
+      }
+      this.model.updateMatrixWorld(true);
+    }
   }
 
   getLabelAnchor(out = new THREE.Vector3()): THREE.Vector3 {
