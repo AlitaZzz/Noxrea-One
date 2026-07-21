@@ -138,7 +138,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, quality: q, genSize: gs, ratio: r, refImages: refs, n: num } = retryRef.current;
+    const { entry, prompt: p, quality: q, genSize: gs, ratio: r, refImages: refs, n: num } = retryRef.current;
     try {
       const res = await fetch(`${BASE}/api/generate/task`, {
         method: "POST",
@@ -147,8 +147,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           type,
           prompt: p.trim(),
           model: entry.modelName,
-          baseUrl: channel.baseUrl,
-          apiKey: channel.apiKey,
+          channelId: entry.channelId,
           quality: q === "auto" ? undefined : q,
           size: gs,
           ratio: r,

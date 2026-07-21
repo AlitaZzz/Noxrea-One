@@ -150,8 +150,6 @@ async def _process_task(task: GenerationTask) -> None:
     if isinstance(config, str):
         import json as _json
         config = _json.loads(config)
-    base_url = config.get("baseUrl", "")
-    api_key = config.get("apiKey", "")
     model = config.get("model", "")
     quality = config.get("quality", "auto")
     ratio = config.get("ratio", "1:1")
@@ -162,6 +160,27 @@ async def _process_task(task: GenerationTask) -> None:
         import json as _json
         raw_refs = _json.loads(raw_refs) if raw_refs else []
     refs = await _resolve_refs(raw_refs)
+
+    # image/video 按 channel_id 解析 baseUrl/apiKey（apiKey 不再落库到 task）；
+    # bg_removal 走推理服务，不需要 channel。
+    if task.type == "bg_removal":
+        base_url, api_key = "", ""
+    else:
+        channel_id = config.get("channel_id")
+        try:
+            channel_id_int = int(channel_id) if channel_id else 0
+        except (TypeError, ValueError):
+            channel_id_int = 0
+        if not channel_id_int:
+            await _update_task_status(task.id, "failed", error="Missing or invalid channel_id in task config")
+            return
+        from app.crud import model_config as crud_mc
+        async with _async_session() as db:
+            channel = await crud_mc.get_channel(db, channel_id_int, task.user_id)
+        if not channel:
+            await _update_task_status(task.id, "failed", error="Channel not found")
+            return
+        base_url, api_key = channel.base_url, channel.api_key
 
     provider = detect_provider(base_url)
     headers = {"Content-Type": "application/json"}
@@ -199,7 +218,7 @@ async def _process_task(task: GenerationTask) -> None:
 
         except asyncio.TimeoutError:
             logger.error(f"[worker] TIMEOUT: task={task.id} type={task.type}"
-                         f" url={config.get('baseUrl','')[:60]} model={model}"
+                         f" url={base_url[:60]} model={model}"
                          f" prompt_len={len(task.prompt or '')} timeout={API_TIMEOUT_SEC}s"
                          f" provider={type(provider).__name__}")
             await _update_task_status(task.id, "failed", error="API call timed out")

@@ -12,6 +12,7 @@ from app.deps import get_db, get_current_user
 from app.schemas.common import UnifiedResponse
 from app.schemas.task import TaskOut
 from app.crud import task as crud
+from app.crud import model_config as crud_model_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -37,18 +38,26 @@ async def create_task(
         if not prompt:
             raise HTTPException(status_code=400, detail="Missing prompt")
 
+        channel_id = body.get("channelId")
+        try:
+            channel_id_int = int(channel_id) if channel_id else 0
+        except (TypeError, ValueError):
+            channel_id_int = 0
+        if not channel_id_int:
+            raise HTTPException(status_code=400, detail="Missing or invalid channelId")
+        # 校验 channel 归属当前用户；apiKey/baseUrl 不再存进 task，处理时按 channel_id 解析
+        channel = await crud_model_config.get_channel(db, channel_id_int, user.id)
+        if not channel:
+            raise HTTPException(status_code=400, detail="Channel not found")
+
         config = {
+            "channel_id": channel_id_int,
             "model": body.get("model", ""),
-            "baseUrl": body.get("baseUrl", ""),
-            "apiKey": body.get("apiKey", ""),
             "quality": body.get("quality", "auto"),
             "size": body.get("size", "1K"),
             "ratio": body.get("ratio", "1:1"),
             "n": body.get("n", 1),
         }
-        # Validate
-        if not config["baseUrl"] or not config["apiKey"]:
-            raise HTTPException(status_code=400, detail="Missing baseUrl or apiKey")
 
     task_id = uuid.uuid4().hex
     now = datetime.now(timezone.utc)
