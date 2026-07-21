@@ -288,16 +288,6 @@ export default function Inspector() {
               <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
-          <div className="dir-field">
-            <label className="dir-label">体型</label>
-            <Select size="small" className="dir-bodytype" value={ent._bodyType || "standard"}
-              onChange={(val) => (runtime as any).setBodyType?.(entity.id, val)}
-              style={{ width: "100%" }}>
-              {((runtime as any).getBodyTypeOptions?.() || []).map((opt: any) => (
-                <Select.Option key={opt.key} value={opt.key}>{opt.label}</Select.Option>
-              ))}
-            </Select>
-          </div>
           <TripleRow label="位置" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
           <TripleRow label="旋转" step={1} deg keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
           <TripleRow label="缩放" step={0.01} keys={["x","y","z"].map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
