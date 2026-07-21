@@ -38,7 +38,7 @@ export default function PoseSliders({ characterId: _characterId, values, onChang
                     </div>
                     <Slider min={j.min} max={j.max} step={1} value={val}
                       style={{ margin: 0 }}
-                      tooltip={{ formatter: (v) => `${Math.round(v as number)}°` }}
+                      tooltip={{ open: false }}
                       onChange={(v) => { setLocalVals((prev) => ({ ...prev, [j.key]: v as number })); onChange(j.key, v as number); }} />
                   </div>
                 );

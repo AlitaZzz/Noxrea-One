@@ -99,20 +99,7 @@ export interface DirectorEntityState {
   rows?: number;
   cols?: number;
   spacing?: number;
-  members?: Array<{
-    type?: string;
-    id?: string;
-    name?: string;
-    bodyType?: string;
-    color?: string;
-    pos: [number, number, number];
-    rot: [number, number, number, number];
-    visible: boolean;
-    fov?: number;
-    roll?: number;
-    kind?: string;
-    pose?: { mode: "preset" | "manual"; preset?: string | null; values?: Record<string, number> };
-  }>;
+  members?: Omit<DirectorEntityState, "rows" | "cols" | "spacing" | "members">[];
 }
 
 export interface DirectorStateData {

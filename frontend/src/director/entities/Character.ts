@@ -126,7 +126,7 @@ export class Character extends Entity {
       if (!rest) continue;
       bone.quaternion.copy(rest);
       for (const j of joints) {
-        const a = THREE.MathUtils.degToRad(this.values[j.key] || 0);
+        const a = THREE.MathUtils.degToRad((this.values[j.key] || 0) * (j.sign ?? 1));
         if (a === 0) continue;
         const ax = new THREE.Vector3(
           j.axis === "x" ? 1 : 0,

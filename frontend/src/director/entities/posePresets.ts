@@ -2,7 +2,7 @@
 // 静止位是 Mixamo T-Pose（手臂水平张开），故"站立"需把手臂放下；"T型"才是全 0。
 // 复用基线：STAND = 手臂自然下垂于体侧（多数站立类预设以此为基础叠加）。
 
-const STAND = { lArmAbd: -80, rArmAbd: 80, lFore: -8, rFore: 8 };
+const STAND = { lArmAbd: -80, rArmAbd: -80, lFore: 8, rFore: 8 };
 
 export interface PosePreset {
   key: string;
@@ -17,7 +17,7 @@ export const POSE_PRESETS: PosePreset[] = [
   { key: "walk", label: "行走", values: { ...STAND, lLegFwd: -25, rLegFwd: 20, lKnee: 20, rKnee: 10,
                                           lArmFwd: -25, rArmFwd: 30, lFore: -25, rFore: 25 } },
   { key: "run", label: "跑步", values: { ...STAND, spineX: 15, lLegFwd: -40, rLegFwd: 30, lKnee: 30, rKnee: 85,
-                                         lArmFwd: 45, rArmFwd: -35, lFore: -95, rFore: 95 } },
+                                         lArmFwd: -45, rArmFwd: 35, lFore: 95, rFore: 95 } },
   { key: "akimbo", label: "叉腰", values: { lArmAbd: -62, rArmAbd: 62, lArmFwd: 12, rArmFwd: 12,
                                             lFore: -95, rFore: 95, lArmTwist: 30, rArmTwist: -30 } },
   { key: "bow", label: "鞠躬", values: { bodyX: 18, spineX: 35, headX: 12, lArmAbd: -82, rArmAbd: 82 } },
