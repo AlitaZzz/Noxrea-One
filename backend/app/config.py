@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # Worker
     WORKER_POLL_INTERVAL: int = 2       # seconds between worker main loop iterations
     WORKER_MAX_CONCURRENCY: int = 10    # max simultaneous AI API calls
-    WORKER_API_TIMEOUT: int = 120       # seconds before an AI API call times out
+    WORKER_API_TIMEOUT: int = 240       # seconds before an AI API call times out
     WORKER_STUCK_TIMEOUT: int = 20      # minutes before a processing task is considered stuck
     WORKER_ZOMBIE_INTERVAL: int = 60    # seconds between zombie cleanup checks
 
