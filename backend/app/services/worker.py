@@ -201,8 +201,16 @@ async def _process_task(task: GenerationTask) -> None:
                     # Download from CDN and save locally（不携带 provider 凭证）
                     user_jwt = _make_user_jwt(task.user_id)
                     local_url = await download_and_save(result_url, user_jwt, task.type)
-                    await _update_task_status(task.id, "completed", result_url=local_url)
-                    logger.info(f"completed task={task.id}")
+                    if local_url is None:
+                        # 下载/存储失败：不把易失效的外链 url 存成结果，标 failed 让用户重试
+                        await _update_task_status(
+                            task.id, "failed",
+                            error=f"结果下载或本地存储失败，原始 url: {result_url[:120]}",
+                        )
+                        logger.warning(f"download failed task={task.id} url={result_url[:60]}")
+                    else:
+                        await _update_task_status(task.id, "completed", result_url=local_url)
+                        logger.info(f"completed task={task.id}")
                 else:
                     await _update_task_status(task.id, "failed", error="No result from provider")
                     logger.warning(f"no result task={task.id}")

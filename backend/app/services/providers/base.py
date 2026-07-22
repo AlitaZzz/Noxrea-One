@@ -120,12 +120,15 @@ def _is_self_url(url: str) -> bool:
     return False
 
 
-async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str:
-    """Download from CDN and save to local storage. Returns local URL.
+async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str | None:
+    """Download from CDN and save to local storage. Returns local URL, or None on failure.
 
     若 cdn_url 已是本服务 URL（如 b64 兜底已上传落地的情况），直接返回，避免重复存储。
     跟随重定向，但对每个跳转目标重新 SSRF 校验，防御重定向到内网/元数据。
     不携带 provider 凭证：cdn_url 不可信，禁止把 apiKey 发给下载目标。
+
+    失败时返回 None（而非原 cdn_url）：让上层把 task 标 failed，避免把易失效的
+    外链 url 当成本地结果存入 DB，导致节点 src 失效、capture_frame 等本地功能不可用。
     """
     # 已是本服务 URL -> 无需下载再上传（防止 b64 路径二次存储）
     if _is_self_url(cdn_url):
@@ -142,7 +145,8 @@ async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str:
             ) as client:
                 resp = await client.get(cdn_url)
                 if not resp.is_success:
-                    return cdn_url
+                    logger.warning(f"download_and_save bad status={resp.status_code} url={cdn_url[:60]}")
+                    return None
 
                 ext = "mp4" if file_type == "video" else "png"
                 files = {"file": (f"generated.{ext}", resp.content)}
@@ -156,10 +160,12 @@ async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str:
                     data = save_resp.json()
                     if data.get("data", {}).get("url"):
                         return data["data"]["url"]
+                logger.warning(f"download_and_save upload failed url={cdn_url[:60]} status={save_resp.status_code}")
+                return None
     except HTTPException:
-        # SSRF 校验拦截（cdn_url 或重定向目标指向内网/元数据）-> 不落地，返回原 url 让上层判失败
+        # SSRF 校验拦截（cdn_url 或重定向目标指向内网/元数据）-> 不落地
         logger.warning(f"download_and_save ssrf blocked url={cdn_url[:60]}")
-        return cdn_url
+        return None
     except Exception as e:
         logger.warning(f"download_and_save failed url={cdn_url[:60]} err={str(e)[:120]}")
-    return cdn_url
+        return None

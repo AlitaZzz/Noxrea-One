@@ -125,8 +125,8 @@ async def test_download_and_save_ssrf_block_no_nameerror(monkeypatch):
     monkeypatch.setattr(base_mod, "_is_self_url", lambda url: False)
     monkeypatch.setattr(ssrf_mod, "resolve_and_validate", raise_ssrf)
 
-    # 不应抛 NameError，应返回原 cdn_url（下载未落地）
+    # SSRF 拦截 -> 返回 None（让上层标 failed），不再返回原外链 url 蒙混
     result = await base_mod.download_and_save(
         "http://169.254.169.254/x.png", "user-jwt", "image"
     )
-    assert result == "http://169.254.169.254/x.png"
+    assert result is None
