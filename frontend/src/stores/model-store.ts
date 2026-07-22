@@ -107,7 +107,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const res = await fetch(`${BASE}/api/models/list`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify({ baseUrl: ch.baseUrl, apiKey: ch.apiKey }),
+        body: JSON.stringify({ channelId }),
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);

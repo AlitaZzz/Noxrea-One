@@ -5,6 +5,7 @@ test_supplement_3_model_config_isolation — model_config 跨用户隔离。
 """
 
 import pytest
+from contextlib import nullcontext
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text as _sql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.main import app
 from app.deps import get_current_user
 from app.models.user import User
+import app.services.ssrf as ssrf_mod
+
+
+@pytest.fixture(autouse=True)
+def _bypass_ssrf(monkeypatch):
+    """本文件测跨用户隔离，与 SSRF 无关；跳过真实 DNS 解析避免依赖外网。"""
+    monkeypatch.setattr(
+        ssrf_mod, "resolve_and_validate",
+        lambda u: ("1.2.3.4", "test.example.com", "https", 443),
+    )
+    monkeypatch.setattr(ssrf_mod, "dns_pin", lambda *a: nullcontext())
 
 
 @pytest.mark.asyncio
