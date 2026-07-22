@@ -7,6 +7,7 @@ P1: SSRF 防护接入生成链路。
 """
 
 import pytest
+import httpx
 
 import app.services.providers.base as base_mod
 
@@ -130,3 +131,167 @@ async def test_download_and_save_ssrf_block_no_nameerror(monkeypatch):
         "http://169.254.169.254/x.png", "user-jwt", "image"
     )
     assert result is None
+
+
+# ── 下载重试 ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_download_retry_transport_error_rescued(monkeypatch):
+    """第一次连接错误，第二次成功 -> 重试救回，返回本地 url。"""
+    from contextlib import nullcontext
+    import app.services.ssrf as ssrf_mod
+    monkeypatch.setattr(base_mod, "_is_self_url", lambda url: False)
+    monkeypatch.setattr(ssrf_mod, "resolve_and_validate", lambda u: ("1.2.3.4", "cdn.example.com", "https", 443))
+    monkeypatch.setattr(ssrf_mod, "dns_pin", lambda *a: nullcontext())
+
+    call_count = 0
+
+    class FakeResp:
+        is_success = True
+        content = b"\x89PNG data"
+        status_code = 200
+        headers = {}
+
+    class FakeUploadResp:
+        is_success = True
+        def json(self):
+            return {"data": {"url": "http://testserver/api/files/1/ab/retry_rescued.png"}}
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def get(self, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.RemoteProtocolError("Server disconnected")
+            return FakeResp()
+        async def post(self, url, **kw):
+            return FakeUploadResp()
+
+    monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
+    result = await base_mod.download_and_save("https://cdn.example.com/x.png", "user-jwt", "image")
+    assert result is not None
+    assert "retry_rescued.png" in result
+    assert call_count == 2, f"expected 2 calls (1 fail + 1 retry), got {call_count}"
+
+
+@pytest.mark.asyncio
+async def test_download_retry_503_rescued(monkeypatch):
+    """第一次 503，第二次成功 -> 重试救回。"""
+    from contextlib import nullcontext
+    import app.services.ssrf as ssrf_mod
+    monkeypatch.setattr(base_mod, "_is_self_url", lambda url: False)
+    monkeypatch.setattr(ssrf_mod, "resolve_and_validate", lambda u: ("1.2.3.4", "cdn.example.com", "https", 443))
+    monkeypatch.setattr(ssrf_mod, "dns_pin", lambda *a: nullcontext())
+
+    call_count = 0
+
+    class FakeResp503:
+        is_success = False
+        status_code = 503
+        content = b""
+        headers = {}
+
+    class FakeResp200:
+        is_success = True
+        content = b"\x89PNG data"
+        status_code = 200
+        headers = {}
+
+    class FakeUploadResp:
+        is_success = True
+        def json(self):
+            return {"data": {"url": "http://testserver/retry_503_rescued.png"}}
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def get(self, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            return FakeResp503() if call_count == 1 else FakeResp200()
+        async def post(self, url, **kw):
+            return FakeUploadResp()
+
+    monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
+    result = await base_mod.download_and_save("https://cdn.example.com/x.png", "user-jwt", "image")
+    assert result is not None and "retry_503_rescued.png" in result
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_download_retry_exhausted(monkeypatch):
+    """全部重试用尽仍失败 -> 返回 None。"""
+    from contextlib import nullcontext
+    import app.services.ssrf as ssrf_mod
+    monkeypatch.setattr(base_mod, "_is_self_url", lambda url: False)
+    monkeypatch.setattr(ssrf_mod, "resolve_and_validate", lambda u: ("1.2.3.4", "cdn.example.com", "https", 443))
+    monkeypatch.setattr(ssrf_mod, "dns_pin", lambda *a: nullcontext())
+
+    call_count = 0
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def get(self, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            raise httpx.RemoteProtocolError("Still down")
+        async def post(self, url, **kw):
+            return None
+
+    monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
+    result = await base_mod.download_and_save("https://cdn.example.com/x.png", "user-jwt", "image")
+    assert result is None
+    assert call_count == 3  # 原始 + 2 次重试
+
+
+@pytest.mark.asyncio
+async def test_download_does_not_retry_404(monkeypatch):
+    """4xx 不重试，直接返回 None。"""
+    from contextlib import nullcontext
+    import app.services.ssrf as ssrf_mod
+    monkeypatch.setattr(base_mod, "_is_self_url", lambda url: False)
+    monkeypatch.setattr(ssrf_mod, "resolve_and_validate", lambda u: ("1.2.3.4", "cdn.example.com", "https", 443))
+    monkeypatch.setattr(ssrf_mod, "dns_pin", lambda *a: nullcontext())
+
+    call_count = 0
+
+    class FakeResp404:
+        is_success = False
+        status_code = 404
+        content = b""
+        headers = {}
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return False
+        async def get(self, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            return FakeResp404()
+        async def post(self, url, **kw):
+            return None
+
+    monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
+    result = await base_mod.download_and_save("https://cdn.example.com/not-found.png", "user-jwt", "image")
+    assert result is None
+    assert call_count == 1  # 只试一次，不重试
