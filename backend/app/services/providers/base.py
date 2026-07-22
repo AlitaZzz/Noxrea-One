@@ -10,6 +10,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
+from fastapi import HTTPException
 
 from app.config import settings
 
@@ -119,35 +120,46 @@ def _is_self_url(url: str) -> bool:
     return False
 
 
-async def download_and_save(cdn_url: str, auth_header: str, user_jwt: str, file_type: str) -> str:
+async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str:
     """Download from CDN and save to local storage. Returns local URL.
 
     若 cdn_url 已是本服务 URL（如 b64 兜底已上传落地的情况），直接返回，避免重复存储。
+    跟随重定向，但对每个跳转目标重新 SSRF 校验，防御重定向到内网/元数据。
+    不携带 provider 凭证：cdn_url 不可信，禁止把 apiKey 发给下载目标。
     """
     # 已是本服务 URL -> 无需下载再上传（防止 b64 路径二次存储）
     if _is_self_url(cdn_url):
         return cdn_url
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            # Try without auth first
-            resp = await client.get(cdn_url, follow_redirects=True)
-            if resp.status_code == 401 and auth_header:
-                resp = await client.get(cdn_url, headers={"Authorization": auth_header}, follow_redirects=True)
-            if not resp.is_success:
-                return cdn_url
+    from app.services.ssrf import resolve_and_validate, dns_pin, SSRFRedirectValidator
 
-            ext = "mp4" if file_type == "video" else "png"
-            files = {"file": (f"generated.{ext}", resp.content)}
-            headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
-            save_resp = await client.post(
-                f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
-                files=files,
-                headers=headers,
-            )
-            if save_resp.is_success:
-                data = save_resp.json()
-                if data.get("data", {}).get("url"):
-                    return data["data"]["url"]
+    try:
+        ip, hostname, scheme, port = resolve_and_validate(cdn_url)
+        with dns_pin(hostname, ip, port):
+            async with httpx.AsyncClient(
+                timeout=120,
+                follow_redirects=True,
+                event_hooks={"response": [SSRFRedirectValidator().async_response]},
+            ) as client:
+                resp = await client.get(cdn_url)
+                if not resp.is_success:
+                    return cdn_url
+
+                ext = "mp4" if file_type == "video" else "png"
+                files = {"file": (f"generated.{ext}", resp.content)}
+                headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
+                save_resp = await client.post(
+                    f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
+                    files=files,
+                    headers=headers,
+                )
+                if save_resp.is_success:
+                    data = save_resp.json()
+                    if data.get("data", {}).get("url"):
+                        return data["data"]["url"]
+    except HTTPException:
+        # SSRF 校验拦截（cdn_url 或重定向目标指向内网/元数据）-> 不落地，返回原 url 让上层判失败
+        logger.warning(f"download_and_save ssrf blocked url={cdn_url[:60]}")
+        return cdn_url
     except Exception as e:
         logger.warning(f"download_and_save failed url={cdn_url[:60]} err={str(e)[:120]}")
     return cdn_url
