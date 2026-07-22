@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.schemas.common import UnifiedResponse
 from app.schemas.task import TaskOut
 from app.crud import task as crud
 from app.crud import model_config as crud_model_config
+from app.database import async_session as _sse_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -56,7 +57,8 @@ async def create_task(
             "quality": body.get("quality", "auto"),
             "size": body.get("size", "1K"),
             "ratio": body.get("ratio", "1:1"),
-            "n": body.get("n", 1),
+            # n 限幅到 [1,4]，防止前端传超大值放大计费/触发限流
+            "n": max(1, min(4, int(body.get("n", 1) or 1))),
         }
 
     task_id = uuid.uuid4().hex
@@ -100,6 +102,7 @@ async def get_task(
 @router.get("/task/{task_id}/stream")
 async def stream_task(
     task_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -114,8 +117,11 @@ async def stream_task(
         logger.debug(f"SSE stream opened task_id={task_id} user={user.id}")
         last_status = ""
         while True:
+            # 客户端断连则退出，避免连接/内存堆积
+            if await request.is_disconnected():
+                logger.debug(f"SSE client disconnected task_id={task_id}")
+                break
             # Use fresh session per poll + filter by user_id (secondary guard)
-            from app.database import async_session as _sse_session
             async with _sse_session() as sse_db:
                 task = await crud.get_task_for_user(sse_db, task_id, user.id)
             if not task:
