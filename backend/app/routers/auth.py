@@ -2,11 +2,13 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.schemas.common import UnifiedResponse
 from app.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, TokenData
 from app.schemas.user import UserOut, UserUpdate
 from app.deps import get_db, get_current_user
 from app.services.auth import authenticate_user, create_access_token, hash_password, verify_password
+from app.services.ratelimit import rate_limit
 from app.crud.user import get_user_by_username, create_user
 from app.models.user import User
 
@@ -14,7 +16,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=UnifiedResponse[LoginResponse])
+@router.post(
+    "/login",
+    response_model=UnifiedResponse[LoginResponse],
+    dependencies=[Depends(rate_limit("login", max_count=10, window_sec=300))],
+)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await authenticate_user(db, request.username, request.password)
     if user is None:
@@ -37,8 +43,14 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/register", response_model=UnifiedResponse[LoginResponse])
+@router.post(
+    "/register",
+    response_model=UnifiedResponse[LoginResponse],
+    dependencies=[Depends(rate_limit("register", max_count=5, window_sec=3600))],
+)
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if not settings.ALLOW_REGISTRATION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is disabled")
     existing = await get_user_by_username(db, request.username)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")

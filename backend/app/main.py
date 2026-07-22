@@ -20,9 +20,11 @@ from app.routers import auth, canvas, files, model_config, assets, generate, ai_
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"startup log_level={settings.LOG_LEVEL}")
-    # Startup: ensure tables exist and default admin is created
+    # Startup: 开发兜底建表；生产应以 `alembic upgrade head` 为准（create_all 只建缺失的表，
+    # 不会改已有表结构，会掩盖迁移未执行的情况）。
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.warning("create_all ran (dev fallback). 生产请使用 `alembic upgrade head` 管理表结构。")
     from app.services.auth import ensure_admin_exists
 
     async with async_session() as db:
@@ -49,7 +51,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if settings.CORS_ORIGINS.strip() == "*" else [s.strip() for s in settings.CORS_ORIGINS.split(",") if s.strip()],
-    allow_credentials=True,
+    # allow_credentials=True 与 allow_origins=["*"] 不兼容（Starlette 会回退为回显 Origin，
+    # 等价于任意源可带凭据跨域）。仅当显式指定白名单来源时才开启 credentials。
+    allow_credentials=settings.CORS_ORIGINS.strip() != "*",
     allow_methods=["*"],
     allow_headers=["*"],
 )
