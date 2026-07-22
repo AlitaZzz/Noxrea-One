@@ -36,7 +36,7 @@ export function createImageNode(
     type: NODE_TYPE.IMAGE,
     position,
     data: {
-      label: "Image",
+      label: "",
       src: src || "",
       lockAspectRatio: true,
       naturalWidth: DEFAULT_NODE_WIDTH,
@@ -56,7 +56,7 @@ export function createVideoNode(
     type: NODE_TYPE.VIDEO,
     position,
     data: {
-      label: "Video",
+      label: "",
       src: src || "",
       naturalWidth: 320,
       naturalHeight: 180,

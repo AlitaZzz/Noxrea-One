@@ -253,7 +253,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
   }, [id, handleDownload, handleReplace, handleClear, captureFrame]);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || "", { syncAlt: true });
+    useEditableTitle(id, data.alt || data.label || t("video.node"), { syncAlt: true });
 
   const hasVideo = src && src.length > 0;
 
