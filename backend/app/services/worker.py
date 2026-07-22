@@ -182,7 +182,7 @@ async def _process_task(task: GenerationTask) -> None:
             try:
                 logger.info(f"processing task={task.id} type={task.type}")
                 if task.type == "image":
-                    result_url = await _process_image(
+                    result_url, image_error = await _process_image(
                         client, provider, task, model, base_url, headers,
                         quality, ratio, size, n, refs,
                     )
@@ -191,8 +191,10 @@ async def _process_task(task: GenerationTask) -> None:
                         client, provider, task, model, base_url, headers,
                         ratio, refs,
                     )
+                    image_error = ""
                 elif task.type == "bg_removal":
                     result_url = await _process_bg_removal(task)
+                    image_error = ""
                 else:
                     await _update_task_status(task.id, "failed", error=f"Unknown type: {task.type}")
                     return
@@ -212,8 +214,10 @@ async def _process_task(task: GenerationTask) -> None:
                         await _update_task_status(task.id, "completed", result_url=local_url)
                         logger.info(f"completed task={task.id}")
                 else:
-                    await _update_task_status(task.id, "failed", error="No result from provider")
-                    logger.warning(f"no result task={task.id}")
+                    # 优先透传 provider 返回的真实失败原因，否则兜底
+                    fail_reason = image_error or "No result from provider"
+                    await _update_task_status(task.id, "failed", error=fail_reason)
+                    logger.warning(f"no result task={task.id} reason={fail_reason}")
 
             except asyncio.TimeoutError:
                 logger.error(f"TIMEOUT task={task.id} type={task.type} url={base_url[:60]} model={model}"
@@ -227,8 +231,9 @@ async def _process_task(task: GenerationTask) -> None:
 async def _process_image(
     client, provider, task, model, base_url, headers,
     quality, ratio, size, n, refs,
-) -> str | None:
-    """Call image generation API and return CDN URL."""
+) -> tuple[str | None, str]:
+    """Call image generation API and return (cdn_url, error_reason)。
+    成功 -> (url, "")；失败 -> (None, reason)，reason 透传给上层写入 DB。"""
     body = provider.build_image_body(model, task.prompt, n, ratio, size, quality, refs or None)
     suffix = (
         provider.image_edit_endpoint
@@ -245,18 +250,65 @@ async def _process_image(
         result_url, raw_bytes = provider.extract_image(data)
         if result_url:
             logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms")
-            return result_url
+            return result_url, ""
 
         # provider 返回 b64 -> 解码后通过文件接口上传
         if raw_bytes:
             local_url = await _upload_bytes(raw_bytes, task.user_id, "png")
             if local_url:
                 logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms (b64)")
-                return local_url
+                return local_url, ""
             logger.error(f"image base64 upload failed task={task.id}")
+            return None, "结果图片本地存储失败"
+
+        # 异步任务模式：提交后没有立即返回图片，走轮询
+        task_id = provider.extract_image_task_id(data) if is_async_provider(provider) else None
+        if task_id:
+            poll_url = provider.build_image_poll_url(base_url, task_id)
+            logger.info(f"image async task={task.id} task_id={task_id} poll_url={poll_url}")
+            # 首次轮询前的初始等待（异步任务通常需要处理时间，前几次轮询多半 pending）
+            initial_delay = getattr(settings, "ASYNC_POLL_INITIAL_DELAY", 0.0) or 0.0
+            if initial_delay > 0:
+                logger.info(f"image async initial delay task={task.id} wait={initial_delay}s")
+                await asyncio.sleep(initial_delay)
+            poll_failed_reason = ""
+            for attempt in range(provider.max_poll_attempts):
+                await asyncio.sleep(provider.poll_interval / 1000)
+                try:
+                    poll_resp = await client.get(poll_url, headers=headers)
+                    if not poll_resp.is_success:
+                        logger.warning(f"image poll bad status task={task.id} attempt={attempt} status={poll_resp.status_code} task_id={task_id}")
+                        continue
+                    poll_data = poll_resp.json()
+                    result = provider.extract_image_poll_result(poll_data)
+                    if result == "__FAILED__":
+                        reason = ""
+                        if hasattr(provider, "extract_image_poll_error"):
+                            reason = provider.extract_image_poll_error(poll_data) or ""
+                        poll_failed_reason = reason or "上游任务执行失败"
+                        logger.warning(f"image async failed task={task.id} task_id={task_id} reason={reason}")
+                        break
+                    if result:
+                        logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt}")
+                        return result, ""
+                    # pending：每 5 次记一次进度，方便判断任务是否在推进
+                    if attempt % 5 == 0:
+                        payload = poll_data.get("data") if isinstance(poll_data, dict) and isinstance(poll_data.get("data"), dict) else poll_data
+                        pstatus = str(payload.get("status") or payload.get("task_status") or "") if isinstance(payload, dict) else ""
+                        progress = payload.get("progress") if isinstance(payload, dict) else None
+                        logger.info(f"image polling task={task.id} attempt={attempt} status={pstatus} progress={progress} task_id={task_id}")
+                except Exception as e:
+                    logger.warning(f"image poll error task={task.id} attempt={attempt} err={str(e)[:80]}")
+                    continue
+            # 轮询结束仍未出图：优先用已捕获的失败原因，否则是超时
+            if poll_failed_reason:
+                logger.warning(f"image async failed task={task.id} task_id={task_id}")
+                return None, poll_failed_reason
+            logger.warning(f"image async timeout task={task.id} task_id={task_id}")
+            return None, f"异步生图超时（task_id={task_id}）"
 
         logger.warning(f"image no result task={task.id} data_keys={list(data.keys())}")
-        return None
+        return None, "provider 未返回图片结果"
     except asyncio.TimeoutError:
         # 超时上下文由 _process_task 的 TimeoutError 分支统一记录，这里不重复
         raise
