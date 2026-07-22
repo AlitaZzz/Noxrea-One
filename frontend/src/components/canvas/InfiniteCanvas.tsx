@@ -293,14 +293,6 @@ export default function InfiniteCanvas() {
     },
   }));
 
-  // ---- Block canvas keyboard shortcuts when sidebar is open ----
-  useEffect(() => {
-    if (canvasSidebarOpen) {
-      useCanvasStore.getState().setModalOpen(true);
-      return () => { useCanvasStore.getState().setModalOpen(false); };
-    }
-  }, [canvasSidebarOpen]);
-
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
     return () => { flushOnUnload(); };

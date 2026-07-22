@@ -57,7 +57,7 @@ export default function CenterToolbar() {
         </Popover>
         <span className="canvas-toolbar-sep" />
         <Popover content={
-            <div className="flex gap-8 text-sm p-4" style={{ color: "var(--dir-dim)", minWidth: 900, background: "var(--menu-bg)", borderRadius: 12, border: "1px solid var(--menu-border)" }}>
+            <div className="flex gap-10 p-6" style={{ color: "var(--dir-dim)", background: "var(--menu-bg)", borderRadius: 12, border: "1px solid var(--menu-border)" }}>
               {[
                 { title: t("shortcuts.zoom"), items: [["Ctrl+=", t("shortcuts.desc.zoomin")], ["Ctrl+-", t("shortcuts.desc.zoomout")], ["Ctrl+0", t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
                 { title: t("shortcuts.pan"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.pan")], [t("shortcuts.key.spaceDrag"), t("shortcuts.desc.temppan")]] },
@@ -65,12 +65,12 @@ export default function CenterToolbar() {
                 { title: t("shortcuts.group"), items: [["Ctrl+G", t("shortcuts.desc.group")], ["Ctrl+Shift+G", t("shortcuts.desc.ungroup")]] },
                 { title: t("shortcuts.other"), items: [["Ctrl+A", t("shortcuts.desc.selectall")], ["Ctrl+M", t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
               ].map((group, i, arr) => (
-                <div key={group.title} className={`flex-1 ${i < arr.length - 1 ? "border-r border-white/10 pr-8" : ""}`}>
-                  <div className="text-white/50 text-sm font-medium mb-2.5">{group.title}</div>
+                <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-white/10 pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
+                  <div className="text-white/50 text-sm font-medium mb-3">{group.title}</div>
                   {group.items.map(([key, desc]) => (
-                    <div key={key} className="flex items-center justify-between py-1.5">
-                      <kbd className="bg-white/10 px-2 py-0.5 rounded text-sm font-mono text-white/80">{key}</kbd>
-                      <span>{desc}</span>
+                    <div key={key} className="flex items-center justify-between gap-3 py-2">
+                      <kbd className="bg-white/10 px-2.5 py-1 rounded text-sm font-mono text-white/80 whitespace-nowrap">{key}</kbd>
+                      <span className="text-sm text-right">{desc}</span>
                     </div>
                   ))}
                 </div>
