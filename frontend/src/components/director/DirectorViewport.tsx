@@ -98,9 +98,15 @@ export default function DirectorViewport() {
         if (!el || !ent.visible) { if (el) el.style.display = "none"; return; }
         // 相机视角下隐藏相机名牌
         if (ent.type === "camera" && _cameraView) { el.style.display = "none"; return; }
-        ent.root.getWorldPosition(_labelTmp);
         const ws = stage.world.scale.y;
-        _labelTmp.y += (ent.type === "camera" ? 0.2 : ent.height + 0.16) * ws;
+        // 角色标签跟随 Head 骨(身体组旋转/躺地后仍贴脑袋);其他实体用脚底+高度
+        if (ent.type === "character" && typeof ent.getLabelAnchor === "function") {
+          ent.getLabelAnchor(_labelTmp);
+          _labelTmp.y += 0.2 * ws;
+        } else {
+          ent.root.getWorldPosition(_labelTmp);
+          _labelTmp.y += (ent.type === "camera" ? 0.2 : ent.height + 0.16) * ws;
+        }
         _labelTmp.project(cam);
         if (_labelTmp.z > 1) { el.style.display = "none"; return; }
         el.style.display = "block";

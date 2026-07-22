@@ -303,7 +303,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   };
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || "", { syncAlt: true });
+    useEditableTitle(id, data.alt || data.label || t("image.node"), { syncAlt: true });
 
   const hasImage = src && src.length > 0;
 
