@@ -429,6 +429,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .canvas-toolbar-btn.ant-btn-text:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
 .canvas-toolbar-btn.ant-btn-text:active { background: var(--canvas-bg-active) !important; }
 .canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
+/* 生成面板按钮（模型选择/参数面板 trigger）：hover 与工具栏同色 */
+.gen-panel-btn.ant-btn-text { height: 36px; border-radius: 8px; color: var(--canvas-text); display: flex; align-items: center; }
+.gen-panel-btn.ant-btn-text:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
+.gen-panel-btn.ant-btn-text:active { background: var(--canvas-bg-active) !important; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
 
 /* 节点上传/参考按钮 */

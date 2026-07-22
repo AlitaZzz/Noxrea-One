@@ -8,6 +8,7 @@ import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/s
 import { useHistoryStore } from "@/stores/history-store";
 import { NODE_TYPE } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
+import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -369,27 +370,21 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         style={{ ...is, resize: "vertical", minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
-        <Popover
-          content={<div className="flex flex-col gap-1 p-1" style={{ width: 320, margin: -12, background: "var(--canvas-bg)", borderRadius: 8 }}>
-            {allModels.map((m) => (
-              <Button size="small" type="text"key={m.value} className="text-left px-3 py-1.5 rounded text-sm transition-colors"
-                style={{ background: modelKey === m.value ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "none", cursor: "pointer" }}
-                onMouseEnter={(e) => { if (modelKey !== m.value) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                onMouseLeave={(e) => { if (modelKey !== m.value) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                onClick={() => { setModelKey(m.value); setModelOpen(false); }}>{m.value}</Button>
-            ))}
-          </div>}
-          trigger="click" placement="bottomLeft"
-          open={modelOpen} onOpenChange={setModelOpen}
-        >
-          <Button size="small" type="text"className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-white hover:bg-white/10 transition-colors truncate"
-            style={{ height: 36, background: "transparent", border: "none", cursor: "pointer", color: "var(--canvas-text)" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
-            <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
-            {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
-          </Button>
-        </Popover>
+        <MenuPopover
+          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
+          trigger={
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm truncate"
+              style={{ border: "none", cursor: "pointer" }}>
+              <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
+              {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
+            </Button>
+          }
+          content={allModels.map((m) => (
+            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} dimmed={modelKey === m.value}>
+              {m.value}
+            </MenuItem>
+          ))}
+        />
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
@@ -459,10 +454,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           }
           trigger="click" placement="bottomRight"
         >
-          <Button size="small" type="text"className="flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs text-white transition-colors"
-            style={{ height: 36, background: "transparent", border: "none", cursor: "pointer", color: "var(--canvas-text)" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs"
+            style={{ border: "none", cursor: "pointer" }}>
             <RatioIcon ratio={ratio} active />
             {ratio} · {quality} · {genSize} · {n}张
           </Button>
