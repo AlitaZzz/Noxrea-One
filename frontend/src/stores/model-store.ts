@@ -14,7 +14,7 @@ interface ModelState {
 
   addModel: (channelId: string, name: string) => Promise<void>;
   toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
-  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
+  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[]; inferredCapabilities?: ModelCapability[] }[]) => Promise<void>;
   fetchModels: (channelId: string) => Promise<void>;
   fetchPresets: () => Promise<void>;
 }
@@ -128,19 +128,31 @@ export const useModelStore = create<ModelState>((set, get) => ({
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
-      const fetched: { name: string }[] = (json.data || []).map((m: any) => ({ name: m.id || m.name }));
-      const fetchedNames = new Set(fetched.map((m) => m.name));
+      const fetched = (json.data || []).map((m: any) => ({
+        name: (m.id || m.name) as string,
+        // 推断出的类型：仅作展示提示，不写入 capabilities（不自动勾选进"已启用"）
+        suggested: ((m.suggestedCapabilities || []) as string[]).filter((c) =>
+          ["text", "image", "video", "audio"].includes(c)
+        ) as ModelCapability[],
+      }));
+      const fetchedSet = new Set(fetched.map((m) => m.name));
       const existing = ch.models;
-      // 增量合并：已存在的保留用户调过的 capabilities，新模型默认不启用（空 capabilities，进"可用"），上游删的丢弃
-      const merged: { name: string; capabilities: ModelCapability[] }[] = [];
+      // 拉取后只同步模型名单与推断类型：已存在模型保留用户手动设置的能力，并刷新推断类型；
+      // 新模型以空能力 + 推断类型加入（落在"可用"区，勾选后才进"已启用"）。上游已删除的模型丢弃。
+      const merged: {
+        name: string;
+        capabilities: ModelCapability[];
+        inferredCapabilities: ModelCapability[];
+      }[] = [];
       for (const ex of existing) {
-        if (fetchedNames.has(ex.name)) {
-          merged.push({ name: ex.name, capabilities: ex.capabilities || [] });
+        if (fetchedSet.has(ex.name)) {
+          const sug = fetched.find((f) => f.name === ex.name)?.suggested || [];
+          merged.push({ name: ex.name, capabilities: ex.capabilities || [], inferredCapabilities: sug });
         }
       }
       for (const f of fetched) {
         if (!existing.some((e) => e.name === f.name)) {
-          merged.push({ name: f.name, capabilities: [] });
+          merged.push({ name: f.name, capabilities: [], inferredCapabilities: f.suggested });
         }
       }
       await get().setChannelModels(channelId, merged);

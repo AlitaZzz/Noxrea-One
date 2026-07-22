@@ -21,6 +21,7 @@ class ModelInfoCreate(BaseModel):
     """添加单个模型输入。"""
     name: str = Field(max_length=200)
     capabilities: list[str] = []
+    inferredCapabilities: list[str] = []
 
 
 class ModelModelsSet(BaseModel):

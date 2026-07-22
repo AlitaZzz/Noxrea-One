@@ -147,6 +147,9 @@ async def set_models(
             channel_id=channel_id,
             name=m_data["name"],
             capabilities=m_data.get("capabilities", []),
+            inferred_capabilities=m_data.get(
+                "inferredCapabilities", m_data.get("inferred_capabilities", [])
+            ),
         )
         db.add(m)
     await db.commit()

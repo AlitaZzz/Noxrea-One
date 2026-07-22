@@ -39,6 +39,8 @@ class ModelInfo(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     capabilities: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # 拉取时推断出的模型类型（如 image/video），仅作展示提示，不自动勾选进「已启用」
+    inferred_capabilities: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
