@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input, Button, App, Tag, Tooltip, Checkbox, Select } from "antd";
-import AppModal from "@/lib/app-modal";
+import { Input, Button, App, Tooltip, Checkbox, Select, Drawer } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -16,7 +15,7 @@ import {
   AudioOutlined,
 } from "@ant-design/icons";
 import { useModelStore } from "@/stores/model-store";
-import type { ModelCapability } from "@/lib/types";
+import type { ModelCapability, ModelInfo } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import ConfirmModal from "@/components/common/ConfirmModal";
 
@@ -41,6 +40,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const deleteChannel = useModelStore((s) => s.deleteChannel);
   const addModel = useModelStore((s) => s.addModel);
   const toggleModelCapability = useModelStore((s) => s.toggleModelCapability);
+  const setChannelModels = useModelStore((s) => s.setChannelModels);
   const fetchModels = useModelStore((s) => s.fetchModels);
 
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -51,6 +51,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const [newModelName, setNewModelName] = useState("");
   const [fetching, setFetching] = useState(false);
   const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null);
+  const [searchModel, setSearchModel] = useState("");
 
   const channel = channels.find((c) => c.id === channelId);
 
@@ -110,8 +111,34 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const capModels = channel?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
   const otherModels = channel?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
 
+  // 搜索过滤（不区分大小写，空串 = 全部）
+  const searchLower = searchModel.trim().toLowerCase();
+  const filterFn = (m: { name: string }) => !searchLower || m.name.toLowerCase().includes(searchLower);
+  const filteredCap = capModels.filter(filterFn);
+  const filteredOther = otherModels.filter(filterFn);
+  // 批量操作目标：当前过滤后可见的全部模型（cap + other）
+  const visibleModels = [...filteredCap, ...filteredOther];
+
+  // 批量勾选：本地算好全量 capabilities，一次 set_models 提交
+  const batchApply = async (nextCapsForVisible: (m: ModelInfo) => ModelCapability[]) => {
+    if (!channel || visibleModels.length === 0) return;
+    const visibleIds = new Set(visibleModels.map((m) => m.id));
+    const merged = channel.models.map((m) => ({
+      name: m.name,
+      capabilities: visibleIds.has(m.id) ? nextCapsForVisible(m) : (m.capabilities || []),
+    }));
+    await setChannelModels(channel.id, merged);
+  };
+  const batchSelectAll = () => batchApply((m) => Array.from(new Set([...(m.capabilities || []), activeCap])));
+  const batchInvert = () => batchApply((m) => {
+    const has = (m.capabilities || []).includes(activeCap);
+    return has ? (m.capabilities || []).filter((c) => c !== activeCap) : [...(m.capabilities || []), activeCap];
+  });
+  const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
+
   return (
-    <AppModal
+    <>
+    <Drawer
       title={
         <div className="flex items-center gap-2">
           <ApiOutlined />
@@ -119,19 +146,20 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         </div>
       }
       open={open}
-      onCancel={onClose}
-      footer={null}
-      width={1000}
-      centered
-      destroyOnHidden
+      onClose={onClose}
+      size={480}
+      placement="right"
+      destroyOnClose
       styles={{
-        header: { background: "var(--canvas-bg)" },
-        body: { background: "var(--canvas-bg)", padding: 0 },
+        header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" },
+        body: { background: "var(--canvas-bg)", padding: 0, display: "flex", flexDirection: "column", height: "100%" },
       }}
     >
-    <div className="model-config-wrap">
+    <div className="model-config-wrap flex flex-col h-full">
       <style>{`
         .model-config-wrap input:not([type]), .model-config-wrap .ant-input, .model-config-wrap .ant-input-password, .model-config-wrap .ant-select-selector { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; color: var(--canvas-text) !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
+        .model-config-wrap .ant-input-affix-wrapper { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; border-radius: 8px !important; height: 36px !important; }
+        .model-config-wrap .ant-input-affix-wrapper .ant-input { background: transparent !important; border: none !important; height: 34px !important; }
         .model-config-wrap input:not([type]):focus, .model-config-wrap .ant-input:focus, .model-config-wrap .ant-input-password:focus, .model-config-wrap .ant-select-focused .ant-select-selector { border-color: var(--canvas-border) !important; box-shadow: none !important; }
         .model-config-wrap input:not([type]):hover, .model-config-wrap .ant-input:hover, .model-config-wrap .ant-input-password:hover, .model-config-wrap .ant-select-selector:hover { border-color: var(--canvas-border) !important; }
         .model-config-wrap .ant-input-password { display: flex !important; align-items: center !important; }
@@ -145,28 +173,30 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
       {/* ===== Channel selector ===== */}
-      <div className="flex items-center gap-2 px-5 py-2.5">
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("channels")}:</span>
-        <Select
-          size="small"
-          value={channelId}
-          onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
-          style={{ width: 180, height: 36 }}
-          options={channels.map((c) => ({ label: c.name, value: c.id }))}
-          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
-        />
-        {channel && (
-          <span className="text-xs truncate flex-1 min-w-0" style={{ color: "var(--canvas-text-muted)" }}>
-            {channel.baseUrl}
-          </span>
-        )}
-        <div className="flex gap-1 flex-shrink-0">
+      <div className="flex flex-col gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
+        <div className="flex items-center gap-2">
+          <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("channels")}:</span>
+          <Select
+            size="small"
+            value={channelId}
+            onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
+            style={{ width: 150, height: 32 }}
+            options={channels.map((c) => ({ label: c.name, value: c.id }))}
+            notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
+          />
+          {channel && (
+            <span className="text-xs truncate flex-1 min-w-0" style={{ color: "var(--canvas-text-muted)" }}>
+              {channel.baseUrl}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 justify-end">
           <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} className="model-btn">
             {t("add.channel")}
           </Button>
           {channel && (
             <>
-              <div className="w-px h-5 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
+              <div className="w-px h-4 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
               <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
                 {channel.models.length > 0 ? `${t("fetch.models")} (${channel.models.length})` : t("fetch.models")}
               </Button>
@@ -181,17 +211,16 @@ export default function ModelConfigModal({ open, onClose }: Props) {
 
       {/* ===== Add/Edit channel form ===== */}
       {showAddChannel && (
-        <div className="px-5 py-3 flex flex-wrap gap-2 items-end border-b" style={{ borderColor: "var(--canvas-border)" }}>
-          <div className="flex flex-wrap gap-2 items-end flex-1">
-            <div className="flex flex-col gap-0.5" style={{ minWidth: 100 }}>
-              <span className="text-[13px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
-              <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: 120 }} autoFocus />
-            </div>
-            <div className="flex flex-col gap-0.5 flex-1" style={{ minWidth: 200 }}>
-              <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
-              <div className="flex gap-1">
-                <Input size="small" placeholder="https://api.openai.com" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ flex: 1 }} />
-                <Select
+        <div className="px-4 py-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--canvas-border)" }}>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
+            <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
+            <div className="flex gap-1">
+              <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ flex: 1 }} />
+              <Select
                   size="small" style={{ width: 110 }}
                   placeholder={t("preset")}
                   options={presets.map((p) => ({ label: p.name, value: p.baseUrl }))}
@@ -199,32 +228,31 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-0.5" style={{ minWidth: 160 }}>
-              <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
-              <Input.Password
-                placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
-                onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
-                style={{}}
-                iconRender={(v) => (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
-                    {v ? (
-                      <>
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </>
-                    ) : (
-                      <>
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </>
-                    )}
-                  </svg>
-                )}
-              />
-            </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
+            <Input.Password
+              placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
+              onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
+              style={{ width: "100%" }}
+              iconRender={(v) => (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
+                  {v ? (
+                    <>
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </>
+                  )}
+                </svg>
+              )}
+            />
           </div>
-          <div className="flex gap-1 flex-shrink-0">
+          <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("cancel")}</Button>
             <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
               {editChannelId ? t("save.changes") : t("add.channel")}
@@ -257,7 +285,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       </div>
 
       {/* ===== Model list ===== */}
-      <div className="p-5 overflow-auto" style={{ maxHeight: "calc(100vh - 100px)" }}>
+      <div className="p-5 overflow-auto flex-1" style={{ scrollbarGutter: "stable" }}>
         {!channel ? (
           <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
             <ApiOutlined className="text-3xl mb-2 block" />
@@ -270,13 +298,45 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           </div>
         ) : (
           <>
+            {/* Search + batch ops */}
+            <div className="flex items-center gap-1.5 mb-3 sticky top-0 z-10" style={{ background: "var(--canvas-bg)" }}>
+              <Input
+                size="small"
+                allowClear
+                placeholder={t("search.model")}
+                value={searchModel}
+                onChange={(e) => setSearchModel(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("select.all") || "全选"}</Button>
+              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("invert") || "反选"}</Button>
+              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("clear.cap") || "清空"}</Button>
+            </div>
+
+            {/* Add model manually */}
+            {channel && (
+              <div className="flex gap-1.5 mb-3">
+                <Input
+                  size="small"
+                  placeholder={t("add.model.placeholder")}
+                  value={newModelName}
+                  onChange={(e) => setNewModelName(e.target.value)}
+                  onPressEnter={handleAddModel}
+                  style={{ flex: 1 }}
+                />
+                <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
+                  {t("add")}
+                </Button>
+              </div>
+            )}
+
             {/* Enabled models for this capability */}
-            {capModels.length > 0 && (
+            {filteredCap.length > 0 && (
               <div className="flex flex-col gap-1 mb-3">
                 <div className="text-[12px] font-medium mb-1 flex items-center gap-1" style={{ color: CAPABILITY_TABS.find((t) => t.key === activeCap)?.color }}>
                   {CAPABILITY_TABS.find((t) => t.key === activeCap)?.icon} {t("enabled")}
                 </div>
-                {capModels.map((m) => (
+                {filteredCap.map((m) => (
                   <label
                     key={m.id}
                     className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
@@ -290,12 +350,17 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
                     <span className="flex-1 truncate">{m.name}</span>
                     {m.capabilities.length > 1 && (
-                      <span className="flex gap-0.5 flex-shrink-0">
-                        {m.capabilities.filter((c) => c !== activeCap).map((c) => (
-                          <Tag key={c} color={CAPABILITY_TABS.find((t) => t.key === c)?.color} className="text-xs leading-none" style={{ margin: 0, padding: "0 4px", lineHeight: "16px" }}>
-                            {c}
-                          </Tag>
-                        ))}
+                      <span className="flex gap-1 flex-shrink-0 items-center">
+                        {m.capabilities.filter((c) => c !== activeCap).map((c) => {
+                          const tab = CAPABILITY_TABS.find((t) => t.key === c);
+                          return (
+                            <Tooltip key={c} title={tab?.label || c}>
+                              <span style={{ color: tab?.color || "#888", display: "inline-flex", alignItems: "center" }}>
+                                {tab?.icon}
+                              </span>
+                            </Tooltip>
+                          );
+                        })}
                       </span>
                     )}
                   </label>
@@ -304,10 +369,10 @@ export default function ModelConfigModal({ open, onClose }: Props) {
             )}
 
             {/* Other models (not yet enabled for this capability) */}
-            {otherModels.length > 0 && (
+            {filteredOther.length > 0 && (
               <div className="flex flex-col gap-1">
                 <div className="text-[12px] font-medium mb-1" style={{ color: "var(--canvas-text-muted)" }}>{t("available")}</div>
-                {otherModels.map((m) => (
+                {filteredOther.map((m) => (
                   <label
                     key={m.id}
                     className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
@@ -320,12 +385,17 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     <RobotOutlined className="text-xs flex-shrink-0" />
                     <span className="flex-1 truncate">{m.name}</span>
                     {m.capabilities.length > 0 && (
-                      <span className="flex gap-0.5 flex-shrink-0">
-                        {m.capabilities.map((c) => (
-                          <Tag key={c} color={CAPABILITY_TABS.find((t) => t.key === c)?.color} className="text-xs leading-none" style={{ margin: 0, padding: "0 4px", lineHeight: "16px" }}>
-                            {c}
-                          </Tag>
-                        ))}
+                      <span className="flex gap-1 flex-shrink-0 items-center">
+                        {m.capabilities.map((c) => {
+                          const tab = CAPABILITY_TABS.find((t) => t.key === c);
+                          return (
+                            <Tooltip key={c} title={tab?.label || c}>
+                              <span style={{ color: tab?.color || "#888", display: "inline-flex", alignItems: "center" }}>
+                                {tab?.icon}
+                              </span>
+                            </Tooltip>
+                          );
+                        })}
                       </span>
                     )}
                   </label>
@@ -335,24 +405,9 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           </>
         )}
 
-        {/* Add model manually */}
-        {channel && (
-          <div className="flex gap-1.5 mt-3 pt-3" style={{ borderTop: "1px solid var(--canvas-border)" }}>
-            <Input
-              size="small"
-              placeholder={t("add.model.placeholder")}
-              value={newModelName}
-              onChange={(e) => setNewModelName(e.target.value)}
-              onPressEnter={handleAddModel}
-              style={{ flex: 1 }}
-            />
-            <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
-              {t("add")}
-            </Button>
-          </div>
-        )}
       </div>
     </div>
+    </Drawer>
       <ConfirmModal
         open={!!deleteChannelId}
         title={t("delete.channel")}
@@ -360,6 +415,6 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         onOk={() => { if (deleteChannelId) deleteChannel(deleteChannelId); setChannelId(null); setDeleteChannelId(null); }}
         onCancel={() => setDeleteChannelId(null)}
       />
-    </AppModal>
+    </>
   );
 }
