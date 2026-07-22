@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Input, Button, App, Tooltip, Checkbox, Select, Drawer } from "antd";
+import { useState, useEffect, memo, useRef, useCallback } from "react";
+import type { ReactNode, Key, CSSProperties } from "react";
+import { Input, Button, App, Checkbox, Select, Drawer } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -24,15 +25,136 @@ interface Props {
   onClose: () => void;
 }
 
+// ── 模块级常量与组件（稳定引用，避免每次渲染重建导致虚拟列表失效） ──
+const CAPABILITY_TABS: {
+  key: ModelCapability;
+  labelKey: string;
+  icon: ReactNode;
+  color: string;
+}[] = [
+  { key: "text", labelKey: "text.cap", icon: <FontSizeOutlined />, color: "#1677ff" },
+  { key: "image", labelKey: "image.cap", icon: <PictureOutlined />, color: "#52c41a" },
+  { key: "video", labelKey: "video.cap", icon: <VideoCameraOutlined />, color: "#13c2c2" },
+  { key: "audio", labelKey: "audio.cap", icon: <AudioOutlined />, color: "#fa8c16" },
+];
+
+// 根据能力类型渲染图标徽章（不加 tooltip，纯图标）
+const renderCapIcon = (cap: ModelCapability, keyPrefix: string) => {
+  const tab = CAPABILITY_TABS.find((t) => t.key === cap);
+  if (!tab) return null;
+  return (
+    <span
+      key={`${keyPrefix}-${cap}`}
+      style={{ color: tab.color || "#888", display: "inline-flex", alignItems: "center" }}
+    >
+      {tab.icon}
+    </span>
+  );
+};
+
+// 单行（已 memo）：仅在 m / checked / activeCap / onToggle 变化时才重渲染
+const ModelRow = memo(function ModelRow({
+  m,
+  checked,
+  activeCap,
+  onToggle,
+}: {
+  m: ModelInfo;
+  checked: boolean;
+  activeCap: ModelCapability;
+  onToggle: (id: string) => void;
+}) {
+  const color = CAPABILITY_TABS.find((t) => t.key === activeCap)?.color;
+  return (
+    <label
+      className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
+      style={{ color: checked ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+    >
+      <Checkbox
+        checked={checked}
+        onChange={() => onToggle(m.id)}
+        style={checked ? { accentColor: color } : undefined}
+      />
+      <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
+      <span className="flex-1 truncate">{m.name}</span>
+      {/* 推断类型徽章：勾选与否都显示；未探测到则无徽章 */}
+      {m.inferredCapabilities && m.inferredCapabilities.length > 0 && (
+        <span className="flex gap-1 flex-shrink-0 items-center">
+          {m.inferredCapabilities.map((c) => renderCapIcon(c, `inf-${m.id}`))}
+        </span>
+      )}
+    </label>
+  );
+});
+
+// 轻量虚拟列表（固定行高，无第三方依赖）：仅渲染可视区行
+const OVERSCAN = 6;
+function VirtualList<T>({
+  items,
+  itemHeight,
+  rowKey,
+  renderItem,
+  className,
+  style,
+}: {
+  items: T[];
+  itemHeight: number;
+  rowKey: (item: T, index: number) => Key;
+  renderItem: (item: T, index: number) => ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setViewport(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const total = items.length * itemHeight;
+  const start = Math.max(0, Math.floor(scrollTop / itemHeight) - OVERSCAN);
+  const visibleCount = Math.ceil(viewport / itemHeight) + OVERSCAN * 2;
+  const end = Math.min(items.length, start + visibleCount);
+  const slice = items.slice(start, end);
+
+  return (
+    <div
+      ref={ref}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      className={className}
+      style={{ overflowY: "auto", position: "relative", ...style }}
+    >
+      <div style={{ height: total, position: "relative" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            transform: `translateY(${start * itemHeight}px)`,
+          }}
+        >
+          {slice.map((item, i) => (
+            <div key={rowKey(item, start + i)} style={{ height: itemHeight }}>
+              {renderItem(item, start + i)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ModelConfigModal({ open, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
   const { message } = App.useApp();
-  const CAPABILITY_TABS = [
-    { key: "text" as ModelCapability, label: t("text.cap"), icon: <FontSizeOutlined />, color: "#1677ff" },
-    { key: "image" as ModelCapability, label: t("image.cap"), icon: <PictureOutlined />, color: "#52c41a" },
-    { key: "video" as ModelCapability, label: t("video.cap"), icon: <VideoCameraOutlined />, color: "#13c2c2" },
-    { key: "audio" as ModelCapability, label: t("audio.cap"), icon: <AudioOutlined />, color: "#fa8c16" },
-  ];
   const channels = useModelStore((s) => s.channels);
   const presets = useModelStore((s) => s.presets);
   const addChannel = useModelStore((s) => s.addChannel);
@@ -106,7 +228,6 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     setNewModelName("");
   };
 
-
   // Models filtered by current capability tab
   const capModels = channel?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
   const otherModels = channel?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
@@ -135,6 +256,26 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     return has ? (m.capabilities || []).filter((c) => c !== activeCap) : [...(m.capabilities || []), activeCap];
   });
   const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
+
+  // 稳定的单行切换回调（memo 行依赖它，避免每次渲染 new function 导致全量重渲染）
+  const onToggleCap = useCallback(
+    (id: string) => toggleModelCapability(channel?.id ?? "", id, activeCap),
+    [channel?.id, activeCap, toggleModelCapability]
+  );
+
+  // 合并为「已启用 / 可用」两段、带分组标题的扁平数组，交给虚拟列表渲染
+  type Row =
+    | { kind: "header"; key: string; label: string; tone: "cap" | "other" }
+    | { kind: "model"; key: string; m: ModelInfo; checked: boolean };
+  const rows: Row[] = [];
+  if (filteredCap.length > 0) {
+    rows.push({ kind: "header", key: "h-cap", label: t("enabled"), tone: "cap" });
+    for (const m of filteredCap) rows.push({ kind: "model", key: m.id, m, checked: true });
+  }
+  if (filteredOther.length > 0) {
+    rows.push({ kind: "header", key: "h-other", label: t("available"), tone: "other" });
+    for (const m of filteredOther) rows.push({ kind: "model", key: m.id, m, checked: false });
+  }
 
   return (
     <>
@@ -272,7 +413,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               onClick={() => setActiveCap(tab.key)}
             >
               {tab.icon}
-              {tab.label}
+              {t(tab.labelKey)}
               <span className="text-[12px] opacity-60">({count})</span>
             </button>
           );
@@ -280,7 +421,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       </div>
 
       {/* ===== Model list ===== */}
-      <div className="p-5 overflow-auto flex-1" style={{ scrollbarGutter: "stable" }}>
+      <div className="p-5 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
         {!channel ? (
           <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
             <ApiOutlined className="text-3xl mb-2 block" />
@@ -294,7 +435,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         ) : (
           <>
             {/* Search + batch ops */}
-            <div className="flex items-center gap-1.5 mb-3 sticky top-0 z-10" style={{ background: "var(--canvas-bg)" }}>
+            <div className="flex items-center gap-1.5 mb-3 flex-shrink-0">
               <Input
                 size="small"
                 allowClear
@@ -309,94 +450,47 @@ export default function ModelConfigModal({ open, onClose }: Props) {
             </div>
 
             {/* Add model manually */}
-            {channel && (
-              <div className="flex gap-1.5 mb-3">
-                <Input
-                  size="small"
-                  placeholder={t("add.model.placeholder")}
-                  value={newModelName}
-                  onChange={(e) => setNewModelName(e.target.value)}
-                  onPressEnter={handleAddModel}
-                  style={{ flex: 1 }}
-                />
-                <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
-                  {t("add")}
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-1.5 mb-3 flex-shrink-0">
+              <Input
+                size="small"
+                placeholder={t("add.model.placeholder")}
+                value={newModelName}
+                onChange={(e) => setNewModelName(e.target.value)}
+                onPressEnter={handleAddModel}
+                style={{ flex: 1 }}
+              />
+              <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
+                {t("add")}
+              </Button>
+            </div>
 
-            {/* Enabled models for this capability */}
-            {filteredCap.length > 0 && (
-              <div className="flex flex-col gap-1 mb-3">
-                <div className="text-[12px] font-medium mb-1 flex items-center gap-1" style={{ color: CAPABILITY_TABS.find((t) => t.key === activeCap)?.color }}>
-                  {CAPABILITY_TABS.find((t) => t.key === activeCap)?.icon} {t("enabled")}
-                </div>
-                {filteredCap.map((m) => (
-                  <label
-                    key={m.id}
-                    className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
-                    style={{ color: "var(--canvas-text)" }}
+            {/* 虚拟列表：仅渲染可视区行；搜索已在数据层完成（rows 已是过滤后结果），不影响搜得到 */}
+            <VirtualList
+              items={rows}
+              itemHeight={36}
+              rowKey={(r) => r.key}
+              className="flex-1 min-h-0"
+              style={{ scrollbarGutter: "stable" }}
+              renderItem={(r) =>
+                r.kind === "header" ? (
+                  <div
+                    className="flex items-center gap-1 text-[12px] font-medium"
+                    style={{
+                      height: 36,
+                      color:
+                        r.tone === "cap"
+                          ? CAPABILITY_TABS.find((t) => t.key === activeCap)?.color
+                          : "var(--canvas-text-muted)",
+                    }}
                   >
-                    <Checkbox
-                      checked
-                      onChange={() => toggleModelCapability(channel.id, m.id, activeCap)}
-                      style={{ accentColor: CAPABILITY_TABS.find((t) => t.key === activeCap)?.color }}
-                    />
-                    <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
-                    <span className="flex-1 truncate">{m.name}</span>
-                    {m.capabilities.length > 1 && (
-                      <span className="flex gap-1 flex-shrink-0 items-center">
-                        {m.capabilities.filter((c) => c !== activeCap).map((c) => {
-                          const tab = CAPABILITY_TABS.find((t) => t.key === c);
-                          return (
-                            <Tooltip key={c} title={tab?.label || c}>
-                              <span style={{ color: tab?.color || "#888", display: "inline-flex", alignItems: "center" }}>
-                                {tab?.icon}
-                              </span>
-                            </Tooltip>
-                          );
-                        })}
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {/* Other models (not yet enabled for this capability) */}
-            {filteredOther.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <div className="text-[12px] font-medium mb-1" style={{ color: "var(--canvas-text-muted)" }}>{t("available")}</div>
-                {filteredOther.map((m) => (
-                  <label
-                    key={m.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
-                    style={{ color: "var(--canvas-text-dim)" }}
-                  >
-                    <Checkbox
-                      checked={false}
-                      onChange={() => toggleModelCapability(channel.id, m.id, activeCap)}
-                    />
-                    <RobotOutlined className="text-xs flex-shrink-0" />
-                    <span className="flex-1 truncate">{m.name}</span>
-                    {m.capabilities.length > 0 && (
-                      <span className="flex gap-1 flex-shrink-0 items-center">
-                        {m.capabilities.map((c) => {
-                          const tab = CAPABILITY_TABS.find((t) => t.key === c);
-                          return (
-                            <Tooltip key={c} title={tab?.label || c}>
-                              <span style={{ color: tab?.color || "#888", display: "inline-flex", alignItems: "center" }}>
-                                {tab?.icon}
-                              </span>
-                            </Tooltip>
-                          );
-                        })}
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
+                    {r.tone === "cap" && CAPABILITY_TABS.find((t) => t.key === activeCap)?.icon}
+                    {r.label}
+                  </div>
+                ) : (
+                  <ModelRow m={r.m} checked={r.checked} activeCap={activeCap} onToggle={onToggleCap} />
+                )
+              }
+            />
           </>
         )}
 
