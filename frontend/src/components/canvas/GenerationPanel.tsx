@@ -20,7 +20,7 @@ function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
   const maxDim = 14;
   const boxW = Math.max(3, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
   const boxH = Math.max(3, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
-  return <div className="rounded-sm border flex-shrink-0"
+  return <div className="border flex-shrink-0"
     style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border)" }} />;
 }
 
@@ -388,33 +388,42 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="flex flex-col gap-3 p-2" style={{ width: 420, margin: -12, background: "var(--canvas-bg, #262626)", borderRadius: 8 }}>
+            <div className="flex flex-col gap-3 p-2" style={{ width: 320, margin: -12, background: "var(--menu-bg, #262626)", border: "1px solid var(--menu-border, #3a3a3a)", borderRadius: 12 }}>
+              {/* ── ① 画质 ── */}
               <div>
-                <div className="text-white/50 text-xs mb-1.5">Quality</div>
-                <div className="flex gap-1">
-                  {["auto", "high", "medium", "low"].map((v) => (
-                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
-                      style={{ padding: "4px 0", background: quality === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
-                      onMouseEnter={(e) => { if (quality !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                      onMouseLeave={(e) => { if (quality !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setQuality(v)}>{v}</Button>
-                  ))}
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("quality")}</div>
+                <div className="grid grid-cols-4 gap-1">
+                  {["auto", "high", "medium", "low"].map((v) => {
+                    const active = quality === v;
+                    return (
+                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
+                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
+                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        onClick={() => setQuality(v)}>{t(`quality.${v}`)}</Button>
+                    );
+                  })}
                 </div>
               </div>
+              {/* ── ② 清晰度 ── */}
               <div>
-                <div className="text-white/50 text-xs mb-1.5">Size</div>
-                <div className="flex gap-0.5 justify-center">
-                  {["1K", "2K", "4K"].map((v) => (
-                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
-                      style={{ padding: "4px 0", background: genSize === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
-                      onMouseEnter={(e) => { if (genSize !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                      onMouseLeave={(e) => { if (genSize !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setGenSize(v)}>{v}</Button>
-                  ))}
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
+                <div className="grid grid-cols-3 gap-1">
+                  {["1K", "2K", "4K"].map((v) => {
+                    const active = genSize === v;
+                    return (
+                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
+                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
+                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        onClick={() => setGenSize(v)}>{v}</Button>
+                    );
+                  })}
                 </div>
               </div>
+              {/* ── ③ 比例 ── */}
               <div>
-                <div className="text-white/50 text-xs mb-1.5">Ratio</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("ratio")}</div>
                 <div className="grid grid-cols-5 gap-1">
                   {(["1:1", "1:2", "2:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21"] as const).map((v) => {
                     const [w, h] = v.split(":").map(Number);
@@ -423,41 +432,45 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                     const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
                     const active = ratio === v;
                     return (
-                      <Button size="small" type="text"key={v} className="flex flex-col items-center rounded-md transition-colors"
-                        style={{ padding: "6px 2px 4px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: "1px solid #555", cursor: "pointer" }}
+                      <Button size="small" type="text" key={v} className="flex flex-col items-center justify-center rounded-md transition-colors"
+                        style={{ height: "auto", minHeight: 48, padding: "8px 2px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                         onClick={() => setRatio(v)}>
                         <div className="flex items-center justify-center" style={{ height: 20 }}>
-                          <div className="rounded-sm border"
-                            style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border)", transition: "border-color 0.15s" }} />
+                          <div className="border"
+                            style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border-light)", transition: "border-color 0.15s" }} />
                         </div>
-                        <span className="text-xs mt-0.5 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
+                        <span className="text-xs mt-1 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
                       </Button>
                     );
                   })}
                 </div>
               </div>
+              {/* ── ④ 生成数量 ── */}
               <div>
-                <div className="text-white/50 text-xs mb-1.5">Count</div>
-                <div className="flex gap-0.5 justify-center">
-                  {[1, 2, 3, 4].map((v) => (
-                    <Button size="small" type="text"key={v} className="flex-1 rounded-md text-[13px] transition-colors"
-                      style={{ padding: "4px 0", background: n === v ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: "var(--canvas-text)", border: "1px solid #555", cursor: "pointer" }}
-                      onMouseEnter={(e) => { if (n !== v) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                      onMouseLeave={(e) => { if (n !== v) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                      onClick={() => setN(v)}>{v}</Button>
-                  ))}
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.count")}</div>
+                <div className="grid grid-cols-3 gap-1">
+                  {[1, 2, 4].map((v) => {
+                    const active = n === v;
+                    return (
+                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
+                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
+                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        onClick={() => setN(v)}>{v}{t("count.unit")}</Button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           }
-          trigger="click" placement="bottomRight"
+          trigger="click" placement="bottomLeft"
         >
           <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs"
-            style={{ border: "none", cursor: "pointer" }}>
+            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
             <RatioIcon ratio={ratio} active />
-            {ratio} · {quality} · {genSize} · {n}张
+            {ratio} · {t(`quality.${quality}`)} · {genSize} · {n}张
           </Button>
         </Popover>
         <div className="flex-1" />
