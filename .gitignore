@@ -62,6 +62,8 @@ backend/.venv/
 .pytest_cache/
 .coverage
 htmlcov/
+# 后端测试运行时产生的临时上传目录（conftest.TEST_UPLOAD_DIR）
+backend/tests/fixtures/.test_uploads/
 
 
 
