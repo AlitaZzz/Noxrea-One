@@ -7,7 +7,7 @@ from .base import ProviderConfig, _resolve_size
 
 class NanoBananaProvider(ProviderConfig):
     def __init__(self):
-        super().__init__("banana", "/v1/images/generations", "")
+        super().__init__("banana", "/images/generations", "")
 
     def build_image_body(self, model, prompt, n, ratio, size, quality="auto", refs=None):
         body: dict[str, Any] = {

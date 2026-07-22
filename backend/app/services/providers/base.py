@@ -31,11 +31,8 @@ def _resolve_size(sizes_by_ratio: dict[str, list[str]] | None, ratio: str, size_
 
 
 def build_endpoint(api_base: str, suffix: str) -> str:
-    """拼接 base_url 与 endpoint，去掉重复的 /v1 段。"""
-    base = api_base.rstrip("/")
-    if base.endswith("/v1") and suffix.startswith("/v1"):
-        suffix = suffix[len("/v1"):]
-    return base + suffix
+    """拼接 base_url 与 endpoint。base_url 需含 /v1，suffix 只写 /v1 之后的路径。"""
+    return api_base.rstrip("/") + suffix
 
 
 # ── Provider type ────────────────────────────────────────────────
@@ -52,6 +49,7 @@ class ProviderConfig:
         poll_interval: int = 5000,
         max_poll_attempts: int = 0,
         image_edit_endpoint: str = "",
+        presets: list[dict[str, str]] | None = None,
     ):
         self.detect_str = detect
         self.image_endpoint = image_endpoint
@@ -62,6 +60,8 @@ class ProviderConfig:
         self.max_poll_attempts = max_poll_attempts
         # 有参考图（图生图/编辑）时改走这个端点；空则复用 image_endpoint
         self.image_edit_endpoint = image_edit_endpoint
+        # 预设下拉项：每项 {"name": ..., "baseUrl": ...}，由 /api/model-config/presets 拍平返回
+        self.presets = presets or []
 
     def matches(self, base_url: str) -> bool:
         return self.detect_str in base_url.lower()
@@ -82,7 +82,8 @@ class ProviderConfig:
         raise NotImplementedError
 
     def extract_image(self, data: dict[str, Any]) -> tuple[Optional[str], Optional[bytes]]:
-        """从响应抽取结果，返回 (url, raw_bytes)：优先 url，其次 b64_json。"""
+        """从响应抽取结果，返回 (url, raw_bytes)：优先 url，其次 b64_json。
+        返回 (None, None) 表示异步模式——worker 会调用 extract_image_task_id 等走轮询。"""
         for item in (data.get("data") or []):
             if item.get("url"):
                 return item["url"], None
@@ -90,6 +91,20 @@ class ProviderConfig:
             if b64:
                 return None, base64.b64decode(b64)
         return None, None
+
+    # ── 异步生图轮询（覆写后由 worker._process_image 调用） ──────────
+
+    def extract_image_task_id(self, data: dict[str, Any]) -> Optional[str]:
+        """从生图响应提取异步任务 ID。返回 None 表示同步模式（立即出图）。"""
+        return None
+
+    def build_image_poll_url(self, base_url: str, task_id: str) -> str:
+        """构建生图任务轮询 URL。"""
+        return ""
+
+    def extract_image_poll_result(self, data: dict[str, Any]) -> Optional[str]:
+        """检查轮询响应，返回：图片 URL / None(pending) / '__FAILED__'。"""
+        return None
 
     def extract_video_id(self, data: dict[str, Any]) -> Optional[str]:
         return None

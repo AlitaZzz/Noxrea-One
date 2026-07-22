@@ -7,7 +7,7 @@ from .base import ProviderConfig, _resolve_size
 
 class GPTImageProvider(ProviderConfig):
     def __init__(self):
-        super().__init__("gpt-image", "/v1/images/generations", "")
+        super().__init__("gpt-image", "/images/generations", "")
 
     def build_image_body(self, model, prompt, n, ratio, size, quality="auto", refs=None):
         body: dict[str, Any] = {

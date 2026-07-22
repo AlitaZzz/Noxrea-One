@@ -14,6 +14,7 @@ class ExellomeProvider(ProviderConfig):
             "/images/generations",
             "",
             image_edit_endpoint="/images/edits",
+            presets=[{"name": "Exellome", "baseUrl": "https://new.exellome.online/v1"}],
         )
 
     def build_image_body(self, model, prompt, n, ratio, size, quality="auto", refs=None):

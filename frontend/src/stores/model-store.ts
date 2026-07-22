@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ModelChannel, ModelInfo, ModelCapability } from "@/lib/types";
+import type { ModelChannel, ModelInfo, ModelCapability, ProviderPreset } from "@/lib/types";
 import { api, getTokenHeader, BASE } from "@/lib/api";
 
 function guessCapabilities(name: string): ModelCapability[] {
@@ -15,6 +15,7 @@ function guessCapabilities(name: string): ModelCapability[] {
 
 interface ModelState {
   channels: ModelChannel[];
+  presets: ProviderPreset[];
   initialized: boolean;
   initialize: () => Promise<void>;
 
@@ -25,10 +26,12 @@ interface ModelState {
   addModel: (channelId: string, name: string) => Promise<void>;
   toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
   fetchModels: (channelId: string) => Promise<void>;
+  fetchPresets: () => Promise<void>;
 }
 
 export const useModelStore = create<ModelState>((set, get) => ({
   channels: [],
+  presets: [],
   initialized: false,
 
   initialize: async () => {
@@ -37,10 +40,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const res = await api<any[]>("/api/model-config/channels");
       if (res.code === 200 && res.data) {
         set({ channels: res.data, initialized: true });
+        await get().fetchPresets();
         return;
       }
     } catch {}
     set({ initialized: true });
+  },
+
+  fetchPresets: async () => {
+    try {
+      const res = await api<ProviderPreset[]>("/api/model-config/presets");
+      if (res.code === 200 && res.data) {
+        set({ presets: res.data });
+      }
+    } catch {
+      // 预设拉取失败不阻塞：下拉为空，用户手敲 baseUrl
+    }
   },
 
   addChannel: async (name, baseUrl, apiKey) => {

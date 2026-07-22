@@ -9,6 +9,24 @@ from app.crud import model_config as crud
 router = APIRouter(prefix="/api/model-config", tags=["model-config"])
 
 
+@router.get("/presets")
+async def list_presets(user=Depends(get_current_user)):
+    """返回 provider 预设下拉项，由 PROVIDERS 注册表派生（单一来源）。
+    每项 {"name", "baseUrl"}；按 baseUrl 去重。"""
+    from app.services.providers import PROVIDERS
+
+    seen: set[str] = set()
+    data = []
+    for p in PROVIDERS:
+        for entry in p.presets:
+            url = entry.get("baseUrl", "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            data.append({"name": entry.get("name", ""), "baseUrl": url})
+    return UnifiedResponse(code=200, data=data, msg="ok")
+
+
 @router.get("/channels")
 async def list_channels(
     user=Depends(get_current_user),

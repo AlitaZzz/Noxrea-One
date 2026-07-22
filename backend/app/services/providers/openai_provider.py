@@ -7,7 +7,7 @@ from .base import ProviderConfig, _resolve_size
 
 class OpenAIProvider(ProviderConfig):
     def __init__(self):
-        super().__init__("api.openai.com", "/v1/images/generations", "")
+        super().__init__("api.openai.com", "/images/generations", "")
 
     def build_image_body(self, model, prompt, n, ratio, size, quality="auto", refs=None):
         body: dict[str, Any] = {
