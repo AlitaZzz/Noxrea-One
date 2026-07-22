@@ -147,3 +147,54 @@ async def test_image_failure_logs_error_once(monkeypatch, caplog):
     # 不再有旧的 "image failed" 重复日志
     assert not any("image failed" in r.getMessage() for r in caplog.records)
 
+
+@pytest.mark.asyncio
+async def test_download_failure_marks_task_failed(monkeypatch):
+    """download_and_save 返回 None（下载/存储失败）时，task 应标 failed 而非 completed。
+
+    旧逻辑：下载失败静默返回外链 url，task 仍标 completed，导致节点 src 是易失效外链、
+    capture_frame 等本地功能失效。修复后失败必须标 failed。
+    """
+    class FakeChannel:
+        base_url = "https://api.openai.com"
+        api_key = "sk-x"
+
+    async def fake_get_channel(db, cid, uid):
+        return FakeChannel()
+
+    import app.crud.model_config as crud_mc
+    monkeypatch.setattr(crud_mc, "get_channel", fake_get_channel)
+
+    async def fake_process_image(*a, **kw):
+        return "https://cdn.example.com/x.png"  # provider 返回外链
+
+    monkeypatch.setattr(worker, "_process_image", fake_process_image)
+
+    # download_and_save 失败 -> None
+    async def fake_download(*a, **kw):
+        return None
+
+    monkeypatch.setattr(worker, "download_and_save", fake_download)
+
+    async def fake_refs(urls):
+        return urls or []
+
+    monkeypatch.setattr(worker, "_resolve_refs", fake_refs)
+
+    updates = []
+
+    async def fake_update(task_id, status, **kw):
+        updates.append((task_id, status, kw))
+
+    monkeypatch.setattr(worker, "_update_task_status", fake_update)
+
+    await worker._process_task(_make_task("image"))
+
+    # 应标 failed，而非 completed
+    statuses = [u[1] for u in updates]
+    assert "failed" in statuses, f"expected failed, got {statuses}"
+    assert "completed" not in statuses, f"should not be completed when download failed, got {statuses}"
+    # error 信息含原始 url
+    failed = next(u for u in updates if u[1] == "failed")
+    assert "下载" in failed[2].get("error", "") or "url" in failed[2].get("error", "")
+
