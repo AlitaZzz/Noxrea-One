@@ -6,7 +6,7 @@ import { DatabaseOutlined, InboxOutlined, UserOutlined, FolderOutlined } from "@
 import AppModal from "@/lib/app-modal";
 import ModalButton from "@/components/common/ModalButton";
 import ConfirmModal from "@/components/common/ConfirmModal";
-import type { AssetType, AssetItem, CreateAssetInput } from "@/lib/types";
+import type { AssetType, AssetItem, AssetFolder, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES } from "@/lib/types";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";
@@ -35,6 +35,7 @@ export default function AssetsModal({ open, onClose }: Props) {
   const addFolder = useAssetsStore((s) => s.addFolder);
   const updateAsset = useAssetsStore((s) => s.updateAsset);
   const removeAsset = useAssetsStore((s) => s.removeAsset);
+  const removeFolder = useAssetsStore((s) => s.removeFolder);
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
   const getFiltered = useAssetsStore((s) => s.getFiltered);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
@@ -53,6 +54,9 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // Delete confirm state
   const [deleteAsset, setDeleteAsset] = useState<AssetItem | null>(null);
+
+  // Delete folder confirm state
+  const [deleteFolder, setDeleteFolder] = useState<AssetFolder | null>(null);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -237,6 +241,31 @@ export default function AssetsModal({ open, onClose }: Props) {
     [],
   );
 
+  const handleDeleteFolder = useCallback(
+    (folder: AssetFolder) => {
+      setDeleteFolder(folder);
+    },
+    [],
+  );
+
+  const handleDeleteFolderConfirm = useCallback(() => {
+    if (!deleteFolder) return;
+    const deletedId = deleteFolder.id;
+    removeFolder(deletedId);
+    // If the active folder (or one of its ancestors) is being deleted, reset to root.
+    if (activeFolderId) {
+      let cur: string | null = activeFolderId;
+      let within = false;
+      while (cur) {
+        if (cur === deletedId) { within = true; break; }
+        cur = folders.find((f) => f.id === cur)?.parentId || null;
+      }
+      if (within) setActiveFolderId(null);
+    }
+    setSelectedIds(new Set());
+    setDeleteFolder(null);
+  }, [deleteFolder, removeFolder, activeFolderId, folders]);
+
   const handleSelectSpace = useCallback((key: string) => {
     setActiveSpace(key);
     setActiveFolderId(null);
@@ -314,6 +343,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               onSelectFolder={handleSelectFolder}
               folders={folders}
               folderCounts={folderCounts}
+              onDeleteFolder={handleDeleteFolder}
             />
           </div>
 
@@ -349,6 +379,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onRename={handleRename}
                 onDelete={handleDelete}
                 onEnterFolder={(folder) => setActiveFolderId(folder.id)}
+                onDeleteFolder={handleDeleteFolder}
               />
             </div>
           </div>
@@ -417,6 +448,15 @@ export default function AssetsModal({ open, onClose }: Props) {
             }
           }}
           onCancel={() => { setDeleteAsset(null); setSelectedIds(new Set()); }}
+        />
+
+        {/* Delete folder confirm — nested inside main LayerModal (depth=2) */}
+        <ConfirmModal
+          open={!!deleteFolder}
+          title={t("delete.folder")}
+          content={`${deleteFolder?.name || ""} — ${t("delete.folder.warn")}`}
+          onOk={handleDeleteFolderConfirm}
+          onCancel={() => { setDeleteFolder(null); setSelectedIds(new Set()); }}
         />
 
         {/* Batch move modal */}

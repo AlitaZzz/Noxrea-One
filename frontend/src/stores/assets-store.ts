@@ -207,13 +207,28 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeFolder: async (id) => {
-    set((s) => {
-      const folders = s.folders.filter((f) => f.id !== id);
-      const items = s.items.map((item) =>
-        item.folderId === id ? { ...item, folderId: undefined, updatedAt: Date.now() } : item,
-      );
-      return { folders, items };
-    });
+    // Collect the full subtree (folder + descendant subfolders) for optimistic removal.
+    const subtree = new Set<number>([id]);
+    const stack = [id];
+    const { folders: rootFolders } = get();
+    const byParent = new Map<number | undefined, number[]>();
+    for (const f of rootFolders) {
+      const list = byParent.get(f.parentId);
+      if (list) list.push(f.id);
+      else byParent.set(f.parentId, [f.id]);
+    }
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const child of byParent.get(cur) ?? []) {
+        subtree.add(child);
+        stack.push(child);
+      }
+    }
+    set((s) => ({
+      folders: s.folders.filter((f) => !subtree.has(f.id)),
+      // 整个子树内的资产一并移除
+      items: s.items.filter((item) => !item.folderId || !subtree.has(item.folderId)),
+    }));
     const intId = toIntId(id);
     if (intId) await assetApi.deleteFolder(intId).catch(() => {});
   },
