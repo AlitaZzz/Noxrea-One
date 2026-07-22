@@ -7,6 +7,7 @@ import base64
 import logging
 import time
 import uuid
+from contextlib import nullcontext as _nullcontext
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -167,42 +168,52 @@ async def _process_task(task: GenerationTask) -> None:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    async with httpx.AsyncClient(timeout=API_TIMEOUT_SEC) as client:
-        try:
-            logger.info(f"processing task={task.id} type={task.type}")
-            if task.type == "image":
-                result_url = await _process_image(
-                    client, provider, task, model, base_url, headers,
-                    quality, ratio, size, n, refs,
-                )
-            elif task.type == "video":
-                result_url = await _process_video(
-                    client, provider, task, model, base_url, headers,
-                    ratio, refs,
-                )
-            elif task.type == "bg_removal":
-                result_url = await _process_bg_removal(task)
-            else:
-                await _update_task_status(task.id, "failed", error=f"Unknown type: {task.type}")
-                return
+    # SSRF 校验：对 AI provider 的 base_url 解析并锁定 DNS，防御内网/元数据探测
+    from app.services.ssrf import resolve_and_validate, dns_pin
+    if base_url:
+        ip, hostname, scheme, port = resolve_and_validate(base_url)
+    else:
+        ip = hostname = scheme = port = None  # bg_removal 不发 provider 请求
 
-            if result_url:
-                # Download from CDN and save locally
-                user_jwt = _make_user_jwt(task.user_id)
-                local_url = await download_and_save(result_url, headers.get("Authorization", ""), user_jwt, task.type)
-                await _update_task_status(task.id, "completed", result_url=local_url)
-                logger.info(f"completed task={task.id}")
-            else:
-                await _update_task_status(task.id, "failed", error="No result from provider")
-                logger.warning(f"no result task={task.id}")
+    # dns_pin 是同步上下文管理器（@contextmanager），用 with；httpx 用 async with
+    pin_ctx = dns_pin(hostname, ip, port) if hostname else _nullcontext()
+    with pin_ctx:
+        async with httpx.AsyncClient(timeout=API_TIMEOUT_SEC) as client:
+            try:
+                logger.info(f"processing task={task.id} type={task.type}")
+                if task.type == "image":
+                    result_url = await _process_image(
+                        client, provider, task, model, base_url, headers,
+                        quality, ratio, size, n, refs,
+                    )
+                elif task.type == "video":
+                    result_url = await _process_video(
+                        client, provider, task, model, base_url, headers,
+                        ratio, refs,
+                    )
+                elif task.type == "bg_removal":
+                    result_url = await _process_bg_removal(task)
+                else:
+                    await _update_task_status(task.id, "failed", error=f"Unknown type: {task.type}")
+                    return
 
-        except asyncio.TimeoutError:
-            logger.error(f"TIMEOUT task={task.id} type={task.type} url={base_url[:60]} model={model}"
-                         f" timeout={API_TIMEOUT_SEC}s provider={type(provider).__name__}")
-            await _update_task_status(task.id, "failed", error="API call timed out")
-        except Exception as e:
-            logger.error(f"error task={task.id} err={str(e)[:200]}")
-            await _update_task_status(task.id, "failed", error=str(e)[:500])
+                if result_url:
+                    # Download from CDN and save locally（不携带 provider 凭证）
+                    user_jwt = _make_user_jwt(task.user_id)
+                    local_url = await download_and_save(result_url, user_jwt, task.type)
+                    await _update_task_status(task.id, "completed", result_url=local_url)
+                    logger.info(f"completed task={task.id}")
+                else:
+                    await _update_task_status(task.id, "failed", error="No result from provider")
+                    logger.warning(f"no result task={task.id}")
+
+            except asyncio.TimeoutError:
+                logger.error(f"TIMEOUT task={task.id} type={task.type} url={base_url[:60]} model={model}"
+                             f" timeout={API_TIMEOUT_SEC}s provider={type(provider).__name__}")
+                await _update_task_status(task.id, "failed", error="API call timed out")
+            except Exception as e:
+                logger.error(f"error task={task.id} type={task.type} err={str(e)[:300]}")
+                await _update_task_status(task.id, "failed", error=str(e)[:500])
 
 
 async def _process_image(
@@ -239,10 +250,10 @@ async def _process_image(
         logger.warning(f"image no result task={task.id} data_keys={list(data.keys())}")
         return None
     except asyncio.TimeoutError:
-        logger.error(f"image TIMEOUT task={task.id} endpoint={endpoint} model={model} timeout={API_TIMEOUT_SEC}s")
+        # 超时上下文由 _process_task 的 TimeoutError 分支统一记录，这里不重复
         raise
-    except Exception as e:
-        logger.error(f"image failed task={task.id} err={str(e)[:300]}")
+    except Exception:
+        # 其他异常由 _process_task 的 Exception 分支统一记录，避免重复打日志
         raise
 
 
@@ -461,7 +472,6 @@ async def _cleanup_zombies(db: AsyncSession) -> None:
 
 async def worker_loop():
     """Main worker loop — runs as an asyncio background task."""
-    await _ensure_wal()
     logger.info(f"worker started max_concurrency={MAX_CONCURRENCY} stuck_timeout={STUCK_TIMEOUT_MIN}min")
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -470,6 +480,13 @@ async def worker_loop():
 
     while True:
         try:
+            # 首轮开启 WAL（失败不应让整个 worker 挂掉，记录后继续）
+            if zombie_tick == 0 and "sqlite" in settings.DATABASE_URL:
+                try:
+                    await _ensure_wal()
+                except Exception as e:
+                    logger.warning(f"ensure_wal failed (ignored): {e}")
+
             # ── Zombie cleanup (every ZOMBIE_CHECK_INTERVAL seconds) ──
             zombie_tick += 1
             if zombie_tick >= ZOMBIE_CHECK_INTERVAL // POLL_INTERVAL_SEC:
