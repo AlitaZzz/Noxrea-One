@@ -236,7 +236,7 @@ function CanvasElementsView() {
 
       {/* 底部统计 */}
       <div
-        className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
+        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
         style={{
           borderColor: "var(--canvas-border)",
           color: "var(--canvas-text-muted)",
@@ -366,7 +366,7 @@ function AssetsView() {
 
       {/* 底部统计 */}
       <div
-        className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
+        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
         style={{
           borderColor: "var(--canvas-border)",
           color: "var(--canvas-text-muted)",
