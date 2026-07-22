@@ -45,6 +45,7 @@ class AgnesProvider(ProviderConfig):
             sizes_by_ratio=AGNES_SIZES,
             poll_interval=5000,
             max_poll_attempts=72,
+            presets=[{"name": "Agnes", "baseUrl": "https://apihub.agnes-ai.com/v1"}],
         )
 
     def build_image_body(self, model, prompt, n, ratio, size, quality="auto", refs=None):

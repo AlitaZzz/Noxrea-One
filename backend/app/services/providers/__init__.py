@@ -12,6 +12,7 @@ from .exellome_provider import ExellomeProvider
 from .agnes_provider import AgnesProvider
 from .nanobanana_provider import NanoBananaProvider
 from .gpt_image_provider import GPTImageProvider
+from .apimart_provider import ApimartProvider
 
 # ── Registry ────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ PROVIDERS: list[ProviderConfig] = [
     AgnesProvider(),
     NanoBananaProvider(),
     GPTImageProvider(),
+    ApimartProvider(),
 ]
 
 
@@ -43,4 +45,5 @@ __all__ = [
     "AgnesProvider",
     "NanoBananaProvider",
     "GPTImageProvider",
+    "ApimartProvider",
 ]

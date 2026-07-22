@@ -54,6 +54,11 @@ export interface ImageNodeData {
 
 export type ModelCapability = "text" | "image" | "video" | "audio";
 
+export interface ProviderPreset {
+  name: string;
+  baseUrl: string;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;

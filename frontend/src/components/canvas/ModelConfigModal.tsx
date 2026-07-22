@@ -20,14 +20,6 @@ import type { ModelCapability } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import ConfirmModal from "@/components/common/ConfirmModal";
 
-const PROVIDER_PRESETS = [
-  { name: "OpenAI", url: "https://api.openai.com" },
-  { name: "Groq", url: "https://api.groq.com/openai" },
-  { name: "Together", url: "https://api.together.xyz" },
-  { name: "DeepSeek", url: "https://api.deepseek.com" },
-  { name: "OpenRouter", url: "https://openrouter.ai/api" },
-];
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -43,6 +35,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     { key: "audio" as ModelCapability, label: t("audio.cap"), icon: <AudioOutlined />, color: "#fa8c16" },
   ];
   const channels = useModelStore((s) => s.channels);
+  const presets = useModelStore((s) => s.presets);
   const addChannel = useModelStore((s) => s.addChannel);
   const updateChannel = useModelStore((s) => s.updateChannel);
   const deleteChannel = useModelStore((s) => s.deleteChannel);
@@ -201,9 +194,9 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                 <Select
                   size="small" style={{ width: 110 }}
                   placeholder={t("preset")}
-                  options={PROVIDER_PRESETS.map((p) => ({ label: p.name, value: p.url }))}
-                  onChange={(url) => setChForm((f) => ({ ...f, baseUrl: url, name: f.name || PROVIDER_PRESETS.find((p) => p.url === url)?.name || "" }))}
-                        />
+                  options={presets.map((p) => ({ label: p.name, value: p.baseUrl }))}
+                  onChange={(url) => setChForm((f) => ({ ...f, baseUrl: url }))}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-0.5" style={{ minWidth: 160 }}>

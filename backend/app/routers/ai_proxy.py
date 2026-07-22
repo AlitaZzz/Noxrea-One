@@ -10,6 +10,7 @@ AI 代理接口 - 带鉴权和 SSRF 防护的转发层。
 SSRF 防护逻辑统一在 app.services.ssrf。
 """
 
+import json
 import logging
 
 import httpx
@@ -120,7 +121,14 @@ async def models_list(
         ) as client:
             try:
                 res = await client.get(f"{url}/models", headers=headers)
-                data = res.json()
+                try:
+                    data = res.json()
+                except json.JSONDecodeError:
+                    return UnifiedResponse(
+                        code=502,
+                        data=None,
+                        msg=f"上游返回非 JSON（{res.status_code}），请检查 channel baseUrl 是否包含 /v1。当前 baseUrl: {url}",
+                    )
                 if not res.is_success:
                     return UnifiedResponse(
                         code=res.status_code,
