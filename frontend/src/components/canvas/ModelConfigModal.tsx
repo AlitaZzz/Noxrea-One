@@ -147,7 +147,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       }
       open={open}
       onClose={onClose}
-      size={480}
+      size={600}
       placement="right"
       destroyOnClose
       styles={{
@@ -173,24 +173,17 @@ export default function ModelConfigModal({ open, onClose }: Props) {
         .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
       {/* ===== Channel selector ===== */}
-      <div className="flex flex-col gap-1.5 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        <div className="flex items-center gap-2">
-          <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("channels")}:</span>
-          <Select
-            size="small"
-            value={channelId}
-            onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
-            style={{ width: 150, height: 32 }}
-            options={channels.map((c) => ({ label: c.name, value: c.id }))}
-            notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
-          />
-          {channel && (
-            <span className="text-xs truncate flex-1 min-w-0" style={{ color: "var(--canvas-text-muted)" }}>
-              {channel.baseUrl}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 justify-end">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
+        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("channels")}:</span>
+        <Select
+          size="small"
+          value={channelId}
+          onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
+          style={{ width: 150, height: 32 }}
+          options={channels.map((c) => ({ label: c.name, value: c.id }))}
+          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
+        />
+        <div className="flex items-center gap-1 ml-auto">
           <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} className="model-btn">
             {t("add.channel")}
           </Button>
@@ -200,10 +193,12 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
                 {channel.models.length > 0 ? `${t("fetch.models")} (${channel.models.length})` : t("fetch.models")}
               </Button>
-              <Tooltip title={t("settings")}>
-                <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} className="model-btn" />
-              </Tooltip>
-              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteChannelId(channel.id)} />
+              <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} className="model-btn">
+                {t("edit")}
+              </Button>
+              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteChannelId(channel.id)}>
+                {t("delete")}
+              </Button>
             </>
           )}
         </div>
