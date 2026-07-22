@@ -45,6 +45,8 @@ const zh: Record<string, string> = {
   "add.model": "添加模型", "name": "名称", "base.url": "基础 URL", "api.key": "API 密钥", "api.key.keepblank": "留空保持不变",
   "text.cap": "文本", "image.cap": "图片", "video.cap": "视频", "audio.cap": "音频",
   "enabled": "已启用", "available": "可用（点击启用）",
+  "select.all": "全选", "invert": "反选", "clear.cap": "清空",
+  "search.model": "搜索模型",
   // Project
   "projects": "项目", "new.project": "新建项目", "delete.project": "删除项目",
   "all.projects": "全部项目", "no.projects": "暂无项目",
@@ -155,6 +157,8 @@ const en: Record<string, string> = {
   "add.model": "Add Model", "name": "Name", "base.url": "Base URL", "api.key": "API Key", "api.key.keepblank": "Leave blank to keep unchanged",
   "text.cap": "Text", "image.cap": "Image", "video.cap": "Video", "audio.cap": "Audio",
   "enabled": "Enabled", "available": "Available (click to enable)",
+  "select.all": "All", "invert": "Invert", "clear.cap": "Clear",
+  "search.model": "Search models",
   "projects": "Projects", "new.project": "New Project", "delete.project": "Delete Project",
   "all.projects": "All Projects", "no.projects": "No projects yet",
   "home": "Home", "logout": "Logout", "logout.confirm": "Are you sure you want to logout?",

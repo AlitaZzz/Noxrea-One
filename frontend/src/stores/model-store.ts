@@ -1,17 +1,6 @@
 import { create } from "zustand";
-import type { ModelChannel, ModelInfo, ModelCapability, ProviderPreset } from "@/lib/types";
+import type { ModelChannel, ModelCapability, ProviderPreset } from "@/lib/types";
 import { api, getTokenHeader, BASE } from "@/lib/api";
-
-function guessCapabilities(name: string): ModelCapability[] {
-  const lower = name.toLowerCase();
-  const caps: ModelCapability[] = [];
-  if (/dall-e|flux|stable.?diffusion|sd[-_.]|midjourney|imagen|playground|image/.test(lower)) caps.push("image");
-  if (/sora|runway|pika|video|gen-?[23]|kling|hailuo/.test(lower)) caps.push("video");
-  if (/whisper|tts|audio|speech|voice|elevenlabs|sonic/.test(lower)) caps.push("audio");
-  if (/gpt|claude|gemini|llama|qwen|deepseek|mistral|mixtral|command|phi|yi|chat|instruct|text/.test(lower)) caps.push("text");
-  if (caps.length === 0) caps.push("text");
-  return caps;
-}
 
 interface ModelState {
   channels: ModelChannel[];
@@ -25,6 +14,7 @@ interface ModelState {
 
   addModel: (channelId: string, name: string) => Promise<void>;
   toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
+  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
   fetchModels: (channelId: string) => Promise<void>;
   fetchPresets: () => Promise<void>;
 }
@@ -82,12 +72,12 @@ export const useModelStore = create<ModelState>((set, get) => ({
   addModel: async (channelId, name) => {
     const res = await api<{ id: string }>(`/api/model-config/channels/${channelId}/models`, {
       method: "POST",
-      body: JSON.stringify({ name, capabilities: guessCapabilities(name) }),
+      body: JSON.stringify({ name, capabilities: [] }),
     });
     if (res.code === 200 && res.data) {
       set((s) => ({
         channels: s.channels.map((c) =>
-          c.id === channelId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: guessCapabilities(name) }] } : c
+          c.id === channelId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
         ),
       }));
     }
@@ -115,6 +105,18 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }));
   },
 
+  setChannelModels: async (channelId, models) => {
+    // 全量提交（models/set = delete all + insert），用于批量勾选 / 增量合并
+    await api(`/api/model-config/channels/${channelId}/models/set`, {
+      method: "POST", body: JSON.stringify({ models }),
+    });
+    // 后端 set_models 不返回带 id 的模型，重载 channels 拿回完整数据（含 id）
+    const reload = await api<any[]>("/api/model-config/channels");
+    if (reload.code === 200 && reload.data) {
+      set({ channels: reload.data });
+    }
+  },
+
   fetchModels: async (channelId) => {
     const ch = get().channels.find((c) => c.id === channelId);
     if (!ch || !ch.baseUrl) return;
@@ -126,19 +128,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
-      const models: { name: string; capabilities: ModelCapability[] }[] = (json.data || []).map((m: any) => ({
-        name: m.id || m.name,
-        capabilities: guessCapabilities(m.id || m.name),
-      }));
-      // Save fetched models via API
-      await api(`/api/model-config/channels/${channelId}/models/set`, {
-        method: "POST", body: JSON.stringify({ models }),
-      });
-      // Reload channels
-      const reload = await api<any[]>("/api/model-config/channels");
-      if (reload.code === 200 && reload.data) {
-        set({ channels: reload.data });
+      const fetched: { name: string }[] = (json.data || []).map((m: any) => ({ name: m.id || m.name }));
+      const fetchedNames = new Set(fetched.map((m) => m.name));
+      const existing = ch.models;
+      // 增量合并：已存在的保留用户调过的 capabilities，新模型默认不启用（空 capabilities，进"可用"），上游删的丢弃
+      const merged: { name: string; capabilities: ModelCapability[] }[] = [];
+      for (const ex of existing) {
+        if (fetchedNames.has(ex.name)) {
+          merged.push({ name: ex.name, capabilities: ex.capabilities || [] });
+        }
       }
+      for (const f of fetched) {
+        if (!existing.some((e) => e.name === f.name)) {
+          merged.push({ name: f.name, capabilities: [] });
+        }
+      }
+      await get().setChannelModels(channelId, merged);
     } catch (e) { console.error("Fetch models failed:", e); throw e; }
   },
 }));
