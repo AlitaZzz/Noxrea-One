@@ -17,13 +17,14 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app as _app
 from app.deps import get_db
 import app.routers.files as _files_mod
+from conftest import sample_png_bytes
 
 UPLOAD_PATH = _files_mod.UPLOAD_DIR
 
 
 class TestCrossUserDedup:
 
-    SAMPLE = b"same-content-for-both-users"
+    SAMPLE = sample_png_bytes()
     FILE_HASH = hashlib.sha256(SAMPLE).hexdigest()
 
     async def _ensure_user(self, db, username: str):

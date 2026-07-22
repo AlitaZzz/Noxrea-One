@@ -37,6 +37,34 @@ def get_upload_dir(user_id: int, category: str = "") -> str:
     return target
 
 
+def _sniff_mime(data: bytes) -> str | None:
+    """按 magic bytes 判定真实类型；不在白名单内返回 None（拒绝上传）。
+
+    content_type 由客户端提供可伪造，故以真实内容为准。
+    """
+    if data.startswith(b"\x89PNG"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith(b"GIF8"):
+        return "image/gif"
+    if data[4:8] == b"ftyp":
+        return "video/mp4"  # ISO BMFF（mp4/mov 等）
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video/webm"  # EBML/Matroska
+    if data.startswith(b"ID3") or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "audio/mpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "audio/wav"
+    if data.startswith(b"OggS"):
+        return "audio/ogg"
+    if data.startswith(b"fLaC"):
+        return "audio/flac"
+    return None
+
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -45,12 +73,38 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     content_type = file.content_type or ""
-    if not content_type or not (
+    if not (
         content_type.startswith("image/")
         or content_type.startswith("video/")
         or content_type.startswith("audio/")
     ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only images, videos, and audio allowed")
+
+    # 分块读取 + 大小限制（避免一次性 read 大文件导致 OOM）
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)",
+            )
+        chunks.append(chunk)
+    content = b"".join(chunks)
+
+    # magic bytes 校验：以真实内容为准，忽略可伪造的 content_type
+    sniffed = _sniff_mime(content)
+    if not sniffed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported or invalid file type",
+        )
+    content_type = sniffed
 
     ext = os.path.splitext(file.filename or "image.png")[1] or ".png"
     if not ext or ext == ".":
@@ -61,7 +115,6 @@ async def upload_file(
         else:
             ext = ".png"
 
-    content = await file.read()
     file_hash = hashlib.sha256(content).hexdigest()
 
     source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated", "avatars": "avatar_upload"}
@@ -110,7 +163,11 @@ async def get_file(
     TODO: 文件访问鉴权 — 当前完全公开，任何人拿到 URL 可读取任意用户文件。
     已知安全缺口，等独立方案确定后再处理（当前进度的阶段性决策，非疏忽）。
     """
-    full_path = os.path.join(UPLOAD_DIR, filepath)
+    full_path = os.path.realpath(os.path.join(UPLOAD_DIR, filepath))
+    upload_root = os.path.realpath(UPLOAD_DIR)
+    # 路径穿越拦截：解析 .. 与符号链接后必须仍在 UPLOAD_DIR 之内，越界统一 404 不暴露存在性
+    if not (full_path == upload_root or full_path.startswith(upload_root + os.sep)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
@@ -173,34 +230,5 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
 
     frame_name = os.path.basename(out_path)
     url = f"{settings.PUBLIC_URL}/api/files/{user.id}/frames/{frame_name}"
-    logger.info(f"frame captured user={user.id} time={time}s url={url}")
+    logger.info(f"frame captured user={user.id} time={seek_time}s url={url}")
     return UnifiedResponse(code=200, data={"url": url}, msg="frame captured")
-
-
-@router.delete("/{filepath:path}")
-async def delete_file(filepath: str, user=Depends(get_current_user)):
-    """
-    当前不建议使用。去重体系下直接删物理文件可能影响其他引用同一 hash 的资源。
-    资产删除请通过 DELETE /api/assets/items/{id} 操作（仅减 ref_count，不删文件）。
-    """
-    try:
-        full_path = validate_user_file(filepath, user.id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-    except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete other user's files")
-
-    os.remove(full_path)
-
-    base_name = os.path.splitext(os.path.basename(filepath))[0]
-    cache_sub = os.path.dirname(filepath)
-    cache_dir_path = os.path.join(CACHE_DIR, cache_sub)
-    if os.path.isdir(cache_dir_path):
-        for fname in os.listdir(cache_dir_path):
-            if fname.startswith(base_name + "_w"):
-                try:
-                    os.remove(os.path.join(cache_dir_path, fname))
-                except OSError:
-                    pass
-
-    return UnifiedResponse(code=200, msg="deleted")
