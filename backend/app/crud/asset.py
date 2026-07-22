@@ -70,12 +70,58 @@ async def update_folder(db: AsyncSession, folder_id: int, name: str, user_id: in
     return folder
 
 
+async def _collect_subtree_folder_ids(db: AsyncSession, user_id: int, root_id: int) -> list[int]:
+    """Collect the full subtree of folder ids rooted at ``root_id`` (inclusive)."""
+    result = await db.execute(select(AssetFolder).where(AssetFolder.user_id == user_id))
+    folders = result.scalars().all()
+    children_map: dict[int | None, list[int]] = {}
+    for f in folders:
+        children_map.setdefault(f.parent_id, []).append(f.id)
+    ids: list[int] = []
+    queue = [root_id]
+    while queue:
+        cur = queue.pop()
+        ids.append(cur)
+        for child in children_map.get(cur, []):
+            queue.append(child)
+    return ids
+
+
 async def delete_folder(db: AsyncSession, folder_id: int, user_id: int) -> bool:
     folder = await get_folder(db, folder_id, user_id)
     if not folder:
         return False
-    # Cascade sets child folders' parent_id to NULL (via FK ondelete SET NULL)
-    await db.delete(folder)
+
+    # Collect the whole subtree (folder + all descendant subfolders).
+    subtree_ids = await _collect_subtree_folder_ids(db, user_id, folder_id)
+
+    # Fully delete every asset inside the subtree, cleaning up file references.
+    assets = (
+        await db.execute(
+            select(AssetItem).where(
+                AssetItem.user_id == user_id,
+                AssetItem.folder_id.in_(subtree_ids),
+            )
+        )
+    ).scalars().all()
+    for asset in assets:
+        source_url = (asset.extra_data or {}).get("sourceUrl")
+        await _remove_asset_ref(db, user_id, source_url, asset.id)
+    if assets:
+        await db.execute(
+            delete(AssetItem).where(
+                AssetItem.user_id == user_id,
+                AssetItem.folder_id.in_(subtree_ids),
+            )
+        )
+
+    # Delete the folders explicitly (child folders are removed recursively).
+    await db.execute(
+        delete(AssetFolder).where(
+            AssetFolder.user_id == user_id,
+            AssetFolder.id.in_(subtree_ids),
+        )
+    )
     await db.commit()
     return True
 
