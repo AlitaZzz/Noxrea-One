@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +8,6 @@ from app.crud.user import get_user_by_id
 from app.models.user import User
 
 security = HTTPBearer()
-security_optional = HTTPBearer(auto_error=False)
 
 
 async def get_db():
@@ -45,18 +42,3 @@ async def get_current_user(
             detail="User not found",
         )
     return user
-
-
-async def get_current_user_or_none(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
-    db: AsyncSession = Depends(get_db),
-):
-    """返回当前用户，未登录返回 None（访客模式）"""
-    if credentials is None:
-        return None
-    try:
-        return await get_current_user(credentials, db)
-    except HTTPException:
-        return None
-
-
