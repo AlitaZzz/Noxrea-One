@@ -64,10 +64,8 @@ async def _recalc_project_refs(db: AsyncSession, project_id: int, user_id: int, 
         )
 
 
-async def get_projects(db: AsyncSession, user_id: Optional[int]) -> Sequence[CanvasProject]:
-    q = select(CanvasProject)
-    if user_id is not None:
-        q = q.where(CanvasProject.user_id == user_id)
+async def get_projects(db: AsyncSession, user_id: int) -> Sequence[CanvasProject]:
+    q = select(CanvasProject).where(CanvasProject.user_id == user_id)
     q = q.order_by(CanvasProject.updated_at.desc())
     result = await db.execute(q)
     return result.scalars().all()
@@ -79,7 +77,7 @@ async def get_project(db: AsyncSession, project_id: int) -> Optional[CanvasProje
 
 
 async def create_project(
-    db: AsyncSession, user_id: Optional[int], name: str, canvas_data: dict
+    db: AsyncSession, user_id: int, name: str, canvas_data: dict
 ) -> CanvasProject:
     project = CanvasProject(user_id=user_id, name=name, canvas_data=canvas_data)
     db.add(project)
@@ -89,7 +87,7 @@ async def create_project(
 
 
 async def update_project(
-    db: AsyncSession, project_id: int, user_id: Optional[int],
+    db: AsyncSession, project_id: int, user_id: int,
     name: Optional[str], canvas_data: Optional[dict],
     needRefRecalc: bool = False,
 ) -> Optional[CanvasProject]:
@@ -100,14 +98,14 @@ async def update_project(
         project.name = name
     if canvas_data is not None:
         project.canvas_data = canvas_data
-        if needRefRecalc and user_id:
+        if needRefRecalc:
             await _recalc_project_refs(db, project_id, user_id, canvas_data)
     await db.commit()
     await db.refresh(project)
     return project
 
 
-async def delete_project(db: AsyncSession, project_id: int, user_id: Optional[int] = None) -> bool:
+async def delete_project(db: AsyncSession, project_id: int) -> bool:
     project = await get_project(db, project_id)
     if not project:
         return False

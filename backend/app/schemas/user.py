@@ -17,13 +17,6 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class UserCreate(BaseModel):
-    username: str = Field(max_length=50)
-    password: str  # plaintext — hashed before storage
-    avatar: Optional[str] = None
-    role: str = "admin"
-
-
 class UserUpdate(BaseModel):
     username: Optional[str] = Field(default=None, max_length=50)
     avatar: Optional[str] = None

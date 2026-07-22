@@ -20,7 +20,7 @@ async def create_user(
     db: AsyncSession,
     username: str,
     password_hash: str,
-    role: str = "admin",
+    role: str = "user",
 ) -> User:
     user = User(username=username, password_hash=password_hash, role=role)
     db.add(user)
