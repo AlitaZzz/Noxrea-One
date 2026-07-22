@@ -42,7 +42,7 @@ const zh: Record<string, string> = {
   "fetch.models": "拉取模型", "no.channels": "暂无渠道", "no.models": "暂无模型",
   "no.channels.desc": "添加渠道以开始使用",
   "no.models.desc": "点击拉取模型，或手动添加",
-  "add.model": "添加模型", "name": "名称", "base.url": "基础 URL", "api.key": "API 密钥",
+  "add.model": "添加模型", "name": "名称", "base.url": "基础 URL", "api.key": "API 密钥", "api.key.keepblank": "留空保持不变",
   "text.cap": "文本", "image.cap": "图片", "video.cap": "视频", "audio.cap": "音频",
   "enabled": "已启用", "available": "可用（点击启用）",
   // Project
@@ -152,7 +152,7 @@ const en: Record<string, string> = {
   "fetch.models": "Fetch Models", "no.channels": "No channels", "no.models": "No models",
   "no.channels.desc": "Add a channel to get started",
   "no.models.desc": "Click Fetch to pull models, or add manually",
-  "add.model": "Add Model", "name": "Name", "base.url": "Base URL", "api.key": "API Key",
+  "add.model": "Add Model", "name": "Name", "base.url": "Base URL", "api.key": "API Key", "api.key.keepblank": "Leave blank to keep unchanged",
   "text.cap": "Text", "image.cap": "Image", "video.cap": "Video", "audio.cap": "Audio",
   "enabled": "Enabled", "available": "Available (click to enable)",
   "projects": "Projects", "new.project": "New Project", "delete.project": "Delete Project",

@@ -34,7 +34,7 @@ const TextAskPanel = memo(function TextAskPanel({ nodeId, currentContent }: Prop
 
       const res = await fetch(`${BASE}/api/chat/completions`, {
         method: "POST", headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify({ baseUrl: channel.baseUrl, apiKey: channel.apiKey, model: entry.modelName, messages: msgs }),
+        body: JSON.stringify({ channelId: entry.channelId, model: entry.modelName, messages: msgs }),
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);

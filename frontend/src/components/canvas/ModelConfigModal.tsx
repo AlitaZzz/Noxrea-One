@@ -88,7 +88,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const handleEditChannel = (id: string) => {
     const ch = channels.find((c) => c.id === id);
     if (!ch) return;
-    setChForm({ name: ch.name, baseUrl: ch.baseUrl, apiKey: ch.apiKey });
+    // apiKey 不预填（后端返回的是掩码）：留空表示保持原 key 不变，用户需改时重新输入完整值
+    setChForm({ name: ch.name, baseUrl: ch.baseUrl, apiKey: "" });
     setEditChannelId(id);
     setShowAddChannel(true);
   };
@@ -208,7 +209,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
             <div className="flex flex-col gap-0.5" style={{ minWidth: 160 }}>
               <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
               <Input.Password
-                placeholder="sk-..." value={chForm.apiKey}
+                placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
                 onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
                 style={{}}
                 iconRender={(v) => (

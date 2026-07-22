@@ -18,7 +18,8 @@ async def list_channels(
     data = []
     for ch in channels:
         data.append({
-            "id": str(ch.id), "name": ch.name, "baseUrl": ch.base_url, "apiKey": ch.api_key,
+            "id": str(ch.id), "name": ch.name, "baseUrl": ch.base_url,
+            "apiKey": crud.mask_api_key(ch.api_key),  # 掩码回显，避免明文泄漏
             "models": [{"id": str(m.id), "name": m.name, "capabilities": m.capabilities or []} for m in ch.models],
         })
     return UnifiedResponse(code=200, data=data, msg="ok")
@@ -30,6 +31,9 @@ async def create_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # SSRF：创建时即校验 base_url，尽早拒绝内网/元数据地址（机制同 ai_proxy）
+    from app.services.ssrf import resolve_and_validate
+    resolve_and_validate(body.baseUrl)
     ch = await crud.create_channel(db, user.id, body.name, body.baseUrl, body.apiKey)
     return UnifiedResponse(code=200, data={"id": str(ch.id)}, msg="created")
 
@@ -41,9 +45,18 @@ async def update_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # SSRF：更新时同样校验（用户可借修改 base_url 绕过创建校验）
+    from app.services.ssrf import resolve_and_validate
+    if body.baseUrl:
+        resolve_and_validate(body.baseUrl)
+    # apiKey：前端编辑时预填的是掩码值，"未改动/留空"应保留原值，避免把掩码字符串写回覆盖真 key
+    existing = await crud.get_channel(db, int(channel_id), user.id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Not found")
+    new_api_key = None if crud.is_masked_or_empty(body.apiKey, existing.api_key) else body.apiKey
     ch = await crud.update_channel(
         db, int(channel_id), user.id,
-        name=body.name, base_url=body.baseUrl, api_key=body.apiKey,
+        name=body.name, base_url=body.baseUrl, api_key=new_api_key,
     )
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")

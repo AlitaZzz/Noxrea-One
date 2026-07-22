@@ -7,6 +7,27 @@ from sqlalchemy.orm import selectinload
 from app.models.model_config import ModelChannel, ModelInfo
 
 
+# ── apiKey 掩码 ──────────────────────────────────────────────────────
+
+def mask_api_key(api_key: str) -> str:
+    """apiKey 脱敏：保留末 4 位，前缀 sk-***。空串返回空串。
+
+    list_channels 返回掩码值，避免明文经 HTTP/前端泄漏。
+    update_channel 据此判断"用户未修改 apiKey"（传入值 == 掩码 或 为空 -> 不更新）。
+    """
+    if not api_key:
+        return ""
+    tail = api_key[-4:] if len(api_key) >= 4 else api_key[-1:]
+    return f"sk-***{tail}"
+
+
+def is_masked_or_empty(api_key: Optional[str], current: str) -> bool:
+    """判断 update 时是否应跳过 apiKey 更新：空、或等于当前 key 的掩码。"""
+    if not api_key:
+        return True
+    return api_key == mask_api_key(current)
+
+
 # ── Channel CRUD ─────────────────────────────────────────────────────
 
 
