@@ -35,6 +35,7 @@ import GenerationPanel from "@/components/canvas/GenerationPanel";
 import TextAskPanel from "@/components/canvas/TextAskPanel";
 import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
+import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
 import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, markDirtyImmediate, flushAndWait, flushOnUnload } from "@/stores/canvas-store";
 import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
 import { useSelectionStore } from "@/stores/selection-store";
@@ -162,6 +163,7 @@ export default function InfiniteCanvas() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
+  const [canvasSidebarOpen, setCanvasSidebarOpen] = useState(false);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
   // ---- Change handlers ----
@@ -291,6 +293,14 @@ export default function InfiniteCanvas() {
     },
   }));
 
+  // ---- Block canvas keyboard shortcuts when sidebar is open ----
+  useEffect(() => {
+    if (canvasSidebarOpen) {
+      useCanvasStore.getState().setModalOpen(true);
+      return () => { useCanvasStore.getState().setModalOpen(false); };
+    }
+  }, [canvasSidebarOpen]);
+
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
     return () => { flushOnUnload(); };
@@ -355,7 +365,7 @@ export default function InfiniteCanvas() {
         />
 
         {/* Top-left panel: quick toolbar */}
-        <Panel position="top-left" style={{ margin: 0, padding: 0 }}>
+        <Panel position="top-left" style={{ margin: 0, padding: 0, marginLeft: canvasSidebarOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
             <div
               className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px]"
@@ -443,7 +453,7 @@ export default function InfiniteCanvas() {
         </Panel>
 
         {/* Bottom-left panel: minimap + controls */}
-        <Panel position="bottom-left" style={{ margin: 0, padding: 0 }}>
+        <Panel position="bottom-left" style={{ margin: 0, padding: 0, marginLeft: canvasSidebarOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
           <div className="flex flex-col gap-2" style={{ paddingLeft: 30, paddingBottom: 30 }}>
             {minimapVisible && (
               <MiniMap
@@ -472,7 +482,7 @@ export default function InfiniteCanvas() {
                 maskColor="rgba(255,255,255,0.08)"
               />
             )}
-            <CanvasControls onOpenSettings={() => setSettingsOpen(true)} onOpenAssets={() => setAssetsOpen(true)} />
+            <CanvasControls onOpenSettings={() => setSettingsOpen(true)} onOpenAssets={() => setAssetsOpen(true)} onOpenCanvasSidebar={() => setCanvasSidebarOpen(true)} />
           </div>
         </Panel>
 
@@ -570,6 +580,11 @@ export default function InfiniteCanvas() {
       <AssetsModal
         open={assetsOpen}
         onClose={() => setAssetsOpen(false)}
+      />
+
+      <CanvasSidebar
+        open={canvasSidebarOpen}
+        onClose={() => setCanvasSidebarOpen(false)}
       />
     </div>
   );

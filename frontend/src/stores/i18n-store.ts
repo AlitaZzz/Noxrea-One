@@ -125,6 +125,12 @@ const zh: Record<string, string> = {
   "asset.folderDuplicate": "同级已存在同名文件夹",
   "file.upload.failed": "上传失败",
   "file.upload.failed.all": "全部文件上传失败",
+  // Canvas Sidebar
+  "canvas.sidebar": "画布", "canvas.openSidebar": "打开画布面板",
+  "canvas.tab.elements": "画布元素", "canvas.tab.assets": "资产",
+  "canvas.empty": "画布为空，添加节点开始创作吧",
+  "canvas.search.placeholder": "搜索节点...",
+  "canvas.total": "共 {n} 个节点",
 };
 
 const en: Record<string, string> = {
@@ -235,6 +241,12 @@ const en: Record<string, string> = {
   "capture.lastFrame": "Capture last frame",
   "file.upload.failed": "Upload failed",
   "file.upload.failed.all": "All files failed to upload",
+  // Canvas Sidebar
+  "canvas.sidebar": "Canvas", "canvas.openSidebar": "Open Canvas Panel",
+  "canvas.tab.elements": "Elements", "canvas.tab.assets": "Assets",
+  "canvas.empty": "Canvas is empty, add nodes to get started",
+  "canvas.search.placeholder": "Search nodes...",
+  "canvas.total": "{n} nodes total",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({

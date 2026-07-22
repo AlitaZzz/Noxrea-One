@@ -15,6 +15,7 @@ import {
   MoonOutlined,
   SettingOutlined,
   InboxOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import type { BackgroundType } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
@@ -43,9 +44,10 @@ function LanguageToggle() {
 interface Props {
   onOpenSettings?: () => void;
   onOpenAssets?: () => void;
+  onOpenCanvasSidebar?: () => void;
 }
 
-export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) {
+export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const t = useI18nStore((s) => s.t);
 
@@ -187,6 +189,11 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets }: Props) 
       {/* My Assets */}
       <Tooltip title={t("assets")}>
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<InboxOutlined />} onClick={onOpenAssets} />
+      </Tooltip>
+
+      {/* Canvas Sidebar */}
+      <Tooltip title={t("canvas.openSidebar")}>
+        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AppstoreOutlined />} onClick={onOpenCanvasSidebar} />
       </Tooltip>
 
       {/* Zoom display + menu */}
