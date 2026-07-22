@@ -86,7 +86,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         const t = useI18nStore.getState().t;
                         if (!notifiedTasksRef.current.has(taskId)) {
                           notifiedTasksRef.current.add(taskId);
-                          notifRef.current.success({ title: t("generation.image.success"), description: "Background removed", placement: "bottomRight", duration: 5 });
+                          notifRef.current.success({ title: t("generation.image.success"), description: "Background removed", placement: "bottomRight", duration: 15 });
                         }
                         sseCtrlsRef.current.delete(taskId);
                         return;
@@ -118,7 +118,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 5 });
+                        notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
@@ -135,7 +135,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: d.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 5 });
+                        notifRef.current.error({ title: d.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
