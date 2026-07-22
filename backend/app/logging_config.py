@@ -63,6 +63,9 @@ _NOISY_LOGGERS = [
     "httpx",
     "urllib3",
     "watchfiles",
+    "PIL",  # Pillow 首次 Image.open 懒加载全部插件的 DEBUG 日志，纯噪音
+    "PngImagePlugin",
+    "Image",
 ]
 
 
