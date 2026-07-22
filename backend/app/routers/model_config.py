@@ -38,7 +38,8 @@ async def list_channels(
         data.append({
             "id": str(ch.id), "name": ch.name, "baseUrl": ch.base_url,
             "apiKey": crud.mask_api_key(ch.api_key),  # 掩码回显，避免明文泄漏
-            "models": [{"id": str(m.id), "name": m.name, "capabilities": m.capabilities or []} for m in ch.models],
+            "models": [{"id": str(m.id), "name": m.name, "capabilities": m.capabilities or [],
+                        "inferredCapabilities": m.inferred_capabilities or []} for m in ch.models],
         })
     return UnifiedResponse(code=200, data=data, msg="ok")
 
