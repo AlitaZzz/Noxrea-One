@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { FolderOutlined } from "@ant-design/icons";
+import { FolderOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { AssetFolder } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import NavButton from "@/components/common/NavButton";
@@ -20,6 +20,7 @@ interface Props {
   onSelectFolder: (folderId: string | null) => void;
   folders: AssetFolder[];
   folderCounts: Record<string, number>;
+  onDeleteFolder?: (folder: AssetFolder) => void;
 }
 
 function FolderTree({
@@ -30,6 +31,7 @@ function FolderTree({
   depth,
   folderCounts,
   t,
+  onDeleteFolder,
 }: {
   folders: AssetFolder[];
   parentId: string | undefined;
@@ -38,6 +40,7 @@ function FolderTree({
   depth: number;
   folderCounts: Record<string, number>;
   t: (key: string) => string;
+  onDeleteFolder?: (folder: AssetFolder) => void;
 }) {
   const children = folders.filter((f) => (f.parentId || undefined) === parentId);
   if (children.length === 0) return null;
@@ -45,7 +48,7 @@ function FolderTree({
   return (
     <>
       {children.map((f) => (
-        <div key={f.id}>
+        <div key={f.id} className="group relative">
           <NavButton
             onClick={(e) => { e?.stopPropagation(); onSelectFolder(f.id); }}
             active={activeFolderId === f.id}
@@ -53,8 +56,17 @@ function FolderTree({
           >
             <FolderOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
             <span className="flex-1 text-left truncate">{f.name}</span>
-            <span className="text-xs text-white/30">{folderCounts[f.id] || 0} {t("asset.count")}</span>
+            <span className="text-xs text-white/30 transition-opacity group-hover:opacity-0">{folderCounts[f.id] || 0} {t("asset.count")}</span>
           </NavButton>
+          {onDeleteFolder && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDeleteFolder(f); }}
+              title={t("delete.folder")}
+              className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded text-white/40 hover:text-white hover:bg-white/10"
+            >
+              <DeleteOutlined />
+            </button>
+          )}
           <FolderTree
             folders={folders}
             parentId={f.id}
@@ -63,6 +75,7 @@ function FolderTree({
             depth={depth + 1}
             folderCounts={folderCounts}
             t={t}
+            onDeleteFolder={onDeleteFolder}
           />
         </div>
       ))}
@@ -70,7 +83,7 @@ function FolderTree({
   );
 }
 
-export default function AssetSidebar({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts }: Props) {
+export default function AssetSidebar({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
   const t = useI18nStore((s) => s.t);
   const spaceFolders = folders.filter((f) => f.spaceKey === activeSpace && !f.parentId);
 
@@ -95,6 +108,7 @@ export default function AssetSidebar({ spaces, activeSpace, activeFolderId, onSe
               depth={0}
               folderCounts={folderCounts}
               t={t}
+              onDeleteFolder={onDeleteFolder}
             />
           )}
         </div>
