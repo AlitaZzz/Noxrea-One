@@ -136,6 +136,8 @@ async def models_list(
                         msg=data.get("error", {}).get("message", str(res.status_code)),
                     )
                 models = data.get("data", data) if isinstance(data, dict) else data
+                count = len(models) if isinstance(models, list) else "n/a"
+                logger.info(f"models list upstream status={res.status_code} user={user.id} host={hostname} count={count}")
                 return UnifiedResponse(code=200, data=models, msg="ok")
             except httpx.RequestError as e:
                 raise HTTPException(
