@@ -9,10 +9,7 @@ import ConfirmModal from "@/components/common/ConfirmModal";
 import type { AssetType, AssetItem, AssetFolder, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES } from "@/lib/types";
 import { useAssetsStore } from "@/stores/assets-store";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { createImageNode, createVideoNode } from "@/lib/node-defaults";
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
-import { computeNodeSize } from "@/lib/image-utils";
+import { addAssetToCanvas } from "@/lib/add-asset";
 import { useI18nStore } from "@/stores/i18n-store";
 import AssetSidebar from "./AssetSidebar";
 import AssetToolbar from "./AssetToolbar";
@@ -39,7 +36,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
   const getFiltered = useAssetsStore((s) => s.getFiltered);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
-  const addNodes = useCanvasStore((s) => s.addNodes);
 
   const [activeSpace, setActiveSpace] = useState("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -171,37 +167,10 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const handleInsertCanvas = useCallback(
     (asset: AssetItem) => {
-      const s = useCanvasStore.getState();
-      const nw = asset.width || DEFAULT_NODE_WIDTH;
-      const nh = asset.height || DEFAULT_NODE_HEIGHT;
-      const { width: dw, height: dh } = computeNodeSize(nw, nh);
-      const cx = -s.viewport.x / s.viewport.zoom + window.innerWidth / 2 / s.viewport.zoom;
-      const cy = -s.viewport.y / s.viewport.zoom + window.innerHeight / 2 / s.viewport.zoom;
-
-      // Check if this asset has a source URL (video/audio → VideoNode, image → ImageNode)
-      const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
-      const isVideo = sourceUrl && (sourceUrl.endsWith(".mp4") || sourceUrl.endsWith(".webm") || sourceUrl.endsWith(".mov"));
-      if (isVideo) {
-        const node = createVideoNode({ x: cx - dw / 2, y: cy - dh / 2 }, sourceUrl);
-        node.data.label = asset.name;
-        node.data.alt = asset.name;
-        node.data.naturalWidth = nw || 320;
-        node.data.naturalHeight = nh || 180;
-        node.style = { width: dw || DEFAULT_NODE_WIDTH, height: dh || DEFAULT_NODE_HEIGHT };
-        addNodes([node]);
-      } else {
-        const imgSrc = asset.metadata?.sourceUrl as string;
-        const node = createImageNode({ x: cx - dw / 2, y: cy - dh / 2 }, imgSrc);
-        node.data.label = asset.name;
-        node.data.alt = asset.name;
-        node.data.naturalWidth = nw;
-        node.data.naturalHeight = nh;
-        node.style = { width: dw, height: dh };
-        addNodes([node]);
-      }
+      addAssetToCanvas(asset);
       onClose();
     },
-    [addNodes, onClose],
+    [onClose],
   );
 
   const handleCreateAssets = useCallback(
