@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_current_user, get_db
 from app.schemas.common import UnifiedResponse
 from app.services.ssrf import resolve_and_validate, dns_pin
+from app.services.model_capabilities import infer_capabilities, load_records, load_whitelist
 from app.crud import model_config as crud_model_config
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,19 @@ async def models_list(
                         msg=data.get("error", {}).get("message", str(res.status_code)),
                     )
                 models = data.get("data", data) if isinstance(data, dict) else data
+                # 能力推断：仅附加 suggestedCapabilities / capSource 建议字段，
+                # 不改变上游返回，也不自动勾取能力。
+                if isinstance(models, list):
+                    # 拉取时各读取一次本地库与白名单进内存，后续每个模型在内存中匹配
+                    records = load_records()
+                    whitelist = load_whitelist()
+                    for m in models:
+                        if isinstance(m, dict):
+                            nm = m.get("id") or m.get("name")
+                            if nm:
+                                info = infer_capabilities(str(nm), records, whitelist)
+                                m["suggestedCapabilities"] = info["suggested"]
+                                m["capSource"] = info["source"]
                 count = len(models) if isinstance(models, list) else "n/a"
                 logger.info(f"models list upstream status={res.status_code} user={user.id} host={hostname} count={count}")
                 return UnifiedResponse(code=200, data=models, msg="ok")
