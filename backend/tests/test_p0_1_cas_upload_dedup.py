@@ -73,7 +73,8 @@ class TestCasFileUploadDedup:
 
     async def test_upload_same_file_different_categories(self, async_client, db):
         """images / assets / generated 上传同一文件 → 去重."""
-        content = b"dedup-category-test-content-xyz"
+        from conftest import sample_png_bytes
+        content = sample_png_bytes()
         file_hash = hashlib.sha256(content).hexdigest()
 
         for cat in ("images", "assets", "generated"):
@@ -90,8 +91,9 @@ class TestCasFileUploadDedup:
 
     async def test_upload_different_files(self, async_client, db):
         """不同内容不触发去重."""
-        content_a = b"file-a-content-111"
-        content_b = b"file-b-content-222"
+        from conftest import sample_png_bytes, sample_jpg_bytes
+        content_a = sample_png_bytes()
+        content_b = sample_jpg_bytes()
 
         r1 = await async_client.post(
             "/api/files/upload?category=images",
