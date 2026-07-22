@@ -1,4 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
+
+# 启动时必须替换的占位符（来自 .env.example 默认值），生产环境带占位符启动有严重安全风险
+_PLACEHOLDER_SECRETS = {
+    "JWT_SECRET_KEY": "change-me-to-a-random-secret",
+    "ADMIN_PASSWORD": "change-me-to-a-strong-password",
+}
 
 
 class Settings(BaseSettings):
@@ -47,9 +54,31 @@ class Settings(BaseSettings):
     # SSRF
     ALLOWED_INTERNAL_HOSTS: str = ""     # 逗号分隔的内网地址白名单，如 "192.168.1.50,192.168.1.51"
 
+    # Upload
+    MAX_UPLOAD_SIZE_MB: int = 30  # 单文件上传上限（MB），超限返回 413
+
     # Inference Service (background removal, etc.)
     INFERENCE_SERVICE_URL: str = "http://localhost:8100"
     INFERENCE_SERVICE_API_KEY: str = ""
+
+    # 开发逃生开关：本地调试时可设为 true 跳过占位符密钥校验（生产严禁开启）
+    ALLOW_INSECURE_SECRETS: bool = False
+
+    # 是否开放自助注册（默认 true=开放，向后兼容；生产建议 false）
+    ALLOW_REGISTRATION: bool = True
+
+    @model_validator(mode="after")
+    def _check_placeholder_secrets(self) -> "Settings":
+        """JWT_SECRET_KEY / ADMIN_PASSWORD 仍为占位符时拒绝启动（除非显式 ALLOW_INSECURE_SECRETS=true）。"""
+        if self.ALLOW_INSECURE_SECRETS:
+            return self
+        offenders = [k for k, ph in _PLACEHOLDER_SECRETS.items() if getattr(self, k) == ph]
+        if offenders:
+            raise ValueError(
+                f"Insecure placeholder secrets still in use: {offenders}. "
+                f"Set real values in .env, or set ALLOW_INSECURE_SECRETS=true for local dev."
+            )
+        return self
 
 
 settings = Settings()
