@@ -4,6 +4,7 @@ Provider 基类与共享工具。
 各具体 provider 见同目录 *_provider.py；注册表与 detect_provider 在 __init__.py。
 """
 
+import asyncio
 import base64
 import logging
 from typing import Any, Optional
@@ -129,11 +130,17 @@ async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str 
 
     失败时返回 None（而非原 cdn_url）：让上层把 task 标 failed，避免把易失效的
     外链 url 当成本地结果存入 DB，导致节点 src 失效、capture_frame 等本地功能不可用。
+
+    对瞬时错误（5xx/429/连接级）退避重试 2 次（1s → 2s），覆盖 CDN 抖动；
+    4xx/超时/SSRF 拦截不重试。
     """
     # 已是本服务 URL -> 无需下载再上传（防止 b64 路径二次存储）
     if _is_self_url(cdn_url):
         return cdn_url
     from app.services.ssrf import resolve_and_validate, dns_pin, SSRFRedirectValidator
+
+    _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+    _MAX_RETRIES = 2
 
     try:
         ip, hostname, scheme, port = resolve_and_validate(cdn_url)
@@ -143,25 +150,42 @@ async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str 
                 follow_redirects=True,
                 event_hooks={"response": [SSRFRedirectValidator().async_response]},
             ) as client:
-                resp = await client.get(cdn_url)
-                if not resp.is_success:
+                # 重试循环：对瞬时错误退避重试，永久错误直接放弃
+                for attempt in range(_MAX_RETRIES + 1):
+                    try:
+                        resp = await client.get(cdn_url)
+                    except (httpx.TransportError, httpx.RemoteProtocolError) as e:
+                        if attempt < _MAX_RETRIES:
+                            logger.warning(f"download retryable transport err attempt={attempt+1} url={cdn_url[:60]} err={str(e)[:80]}")
+                            await asyncio.sleep(1 * (attempt + 1))
+                            continue
+                        logger.warning(f"download failed after retries url={cdn_url[:60]} err={str(e)[:120]}")
+                        return None
+
+                    if resp.is_success:
+                        # 下载成功 -> 上传落地
+                        ext = "mp4" if file_type == "video" else "png"
+                        files = {"file": (f"generated.{ext}", resp.content)}
+                        headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
+                        save_resp = await client.post(
+                            f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
+                            files=files,
+                            headers=headers,
+                        )
+                        if save_resp.is_success:
+                            data = save_resp.json()
+                            if data.get("data", {}).get("url"):
+                                return data["data"]["url"]
+                        logger.warning(f"download_and_save upload failed url={cdn_url[:60]} status={save_resp.status_code}")
+                        return None
+
+                    if resp.status_code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
+                        logger.warning(f"download retryable status={resp.status_code} attempt={attempt+1} url={cdn_url[:60]}")
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+                    # 4xx 或重试用尽
                     logger.warning(f"download_and_save bad status={resp.status_code} url={cdn_url[:60]}")
                     return None
-
-                ext = "mp4" if file_type == "video" else "png"
-                files = {"file": (f"generated.{ext}", resp.content)}
-                headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
-                save_resp = await client.post(
-                    f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
-                    files=files,
-                    headers=headers,
-                )
-                if save_resp.is_success:
-                    data = save_resp.json()
-                    if data.get("data", {}).get("url"):
-                        return data["data"]["url"]
-                logger.warning(f"download_and_save upload failed url={cdn_url[:60]} status={save_resp.status_code}")
-                return None
     except HTTPException:
         # SSRF 校验拦截（cdn_url 或重定向目标指向内网/元数据）-> 不落地
         logger.warning(f"download_and_save ssrf blocked url={cdn_url[:60]}")
@@ -169,3 +193,4 @@ async def download_and_save(cdn_url: str, user_jwt: str, file_type: str) -> str 
     except Exception as e:
         logger.warning(f"download_and_save failed url={cdn_url[:60]} err={str(e)[:120]}")
         return None
+    return None
