@@ -119,7 +119,8 @@ log/
 # =====================================================
 
 # Local models
-models/
+/models/
+inference_service/models/
 *.gguf
 *.safetensors
 *.ckpt
