@@ -6,6 +6,10 @@ pydantic>=2.9.0
 pydantic-settings>=2.5.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+# bcrypt>=4.1 enforces a 72-byte limit and raises ValueError during passlib 1.7.4's
+# backend self-check (detect_wrap_bug), breaking startup. Pin to 4.0.x to keep the
+# legacy silent-truncation behavior passlib expects.
+bcrypt<4.1
 alembic>=1.13.0
 python-multipart>=0.0.12
 Pillow>=10.0.0
