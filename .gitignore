@@ -143,6 +143,9 @@ huggingface/
 # Claude cache
 .claude/cache/
 
+# 模型能力推断用的本地参考库（手动刷新，见 backend/scripts/fetch_model_db.py）
+backend/app/data/openrouter_models.json
+
 
 
 # =====================================================
