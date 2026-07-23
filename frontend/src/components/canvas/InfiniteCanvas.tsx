@@ -479,7 +479,12 @@ export default function InfiniteCanvas() {
                 maskColor="rgba(255,255,255,0.08)"
               />
             )}
-            <CanvasControls onOpenSettings={() => setSettingsOpen(true)} onOpenAssets={() => setAssetsOpen(true)} onOpenCanvasSidebar={() => setCanvasSidebarOpen(true)} />
+            <CanvasControls
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenAssets={() => setAssetsOpen(true)}
+              onOpenCanvasSidebar={() => setCanvasSidebarOpen((v) => !v)}
+              canvasSidebarOpen={canvasSidebarOpen}
+            />
           </div>
         </Panel>
 
