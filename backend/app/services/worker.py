@@ -6,16 +6,17 @@ import asyncio
 import base64
 import logging
 import time
-import uuid
 from contextlib import nullcontext as _nullcontext
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import async_session
+from app.services.storage import save_upload_bytes
 
 logger = logging.getLogger(__name__)
 from app.models.task import GenerationTask
@@ -29,24 +30,9 @@ STUCK_TIMEOUT_MIN = settings.WORKER_STUCK_TIMEOUT
 API_TIMEOUT_SEC = settings.WORKER_API_TIMEOUT
 ZOMBIE_CHECK_INTERVAL = settings.WORKER_ZOMBIE_INTERVAL
 
-# ── Engine & session (worker owns its own to avoid lifespan coupling) ──
-
-_engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    connect_args={"timeout": settings.DB_TIMEOUT} if "sqlite" in settings.DATABASE_URL else {},
-)
-
-_async_session = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
-
-
-async def _ensure_wal():
-    """Enable WAL mode for SQLite to reduce lock contention."""
-    if "sqlite" not in settings.DATABASE_URL:
-        return
-    async with _engine.connect() as conn:
-        await conn.execute(text("PRAGMA journal_mode=WAL"))
-
+# ── Engine & session ──
+# worker 复用 app.database 的共享 engine（单一连接池），避免自建第二个 engine
+# 导致的双连接池 / WAL 不一致问题；WAL 在 lifespan 启动时统一开启。
 
 # ── Atomic task claim ──────────────────────────────────────────
 
@@ -156,7 +142,7 @@ async def _process_task(task: GenerationTask) -> None:
             await _update_task_status(task.id, "failed", error="Missing or invalid channel_id in task config")
             return
         from app.crud import model_config as crud_mc
-        async with _async_session() as db:
+        async with async_session() as db:
             channel = await crud_mc.get_channel(db, channel_id_int, task.user_id)
         if not channel:
             await _update_task_status(task.id, "failed", error="Channel not found")
@@ -201,8 +187,7 @@ async def _process_task(task: GenerationTask) -> None:
 
                 if result_url:
                     # Download from CDN and save locally（不携带 provider 凭证）
-                    user_jwt = _make_user_jwt(task.user_id)
-                    local_url = await download_and_save(result_url, user_jwt, task.type)
+                    local_url = await download_and_save(result_url, task.user_id, task.type)
                     if local_url is None:
                         # 下载/存储失败：不把易失效的外链 url 存成结果，标 failed 让用户重试
                         await _update_task_status(
@@ -252,9 +237,9 @@ async def _process_image(
             logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms")
             return result_url, ""
 
-        # provider 返回 b64 -> 解码后通过文件接口上传
+        # provider 返回 b64 -> 解码后直落本地存储
         if raw_bytes:
-            local_url = await _upload_bytes(raw_bytes, task.user_id, "png")
+            local_url = await save_upload_bytes(user_id=task.user_id, content=raw_bytes, category="generated", ext="png")
             if local_url:
                 logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms (b64)")
                 return local_url, ""
@@ -352,26 +337,6 @@ async def _process_video(
     return None
 
 
-def _make_user_jwt(user_id: int) -> str:
-    """Create JWT for the worker to authenticate with FastAPI endpoints."""
-    from app.services.auth import create_access_token
-    return create_access_token({"sub": str(user_id)})
-
-
-async def _upload_bytes(raw: bytes, user_id: int, ext: str) -> str | None:
-    """Upload raw bytes to local storage via the files API. Returns local URL or None."""
-    user_jwt = _make_user_jwt(user_id)
-    async with httpx.AsyncClient(timeout=60) as up_client:
-        save_resp = await up_client.post(
-            f"{settings.PUBLIC_URL}/api/files/upload?category=generated",
-            files={"file": (f"generated.{ext}", raw)},
-            headers={"Authorization": f"Bearer {user_jwt}"} if user_jwt else {},
-        )
-        if save_resp.is_success:
-            return save_resp.json().get("data", {}).get("url")
-    return None
-
-
 # 瞬时错误重试：429/5xx/连接错误退避重试 1 次；4xx 业务错误、超时不重试
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 MAX_RETRIES = 1
@@ -454,25 +419,19 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
 
             result_bytes = resp.content
 
-        # 3. Upload result to local storage
-        user_jwt = _make_user_jwt(task.user_id)
-        async with httpx.AsyncClient(timeout=60) as client:
-            upload_files = {"file": ("bg_removed.png", result_bytes, "image/png")}
-            upload_headers = {"Authorization": f"Bearer {user_jwt}"} if user_jwt else {}
-            save_resp = await client.post(
-                f"{app_settings.PUBLIC_URL}/api/files/upload?category=generated",
-                files=upload_files,
-                headers=upload_headers,
-            )
-            if save_resp.is_success:
-                data = save_resp.json()
-                local_url = data.get("data", {}).get("url")
-                if local_url:
-                    await _update_task_status(task.id, "completed", result_url=local_url)
-                    return local_url
+        # 3. Upload result to local storage（直落，不再自调 HTTP / 伪造 JWT）
+        local_url = await save_upload_bytes(
+            user_id=task.user_id,
+            content=result_bytes,
+            category="generated",
+            ext="png",
+        )
+        if local_url:
+            await _update_task_status(task.id, "completed", result_url=local_url)
+            return local_url
 
-            await _update_task_status(task.id, "failed", error="Failed to save processed image")
-            return None
+        await _update_task_status(task.id, "failed", error="Failed to save processed image")
+        return None
 
     except httpx.TimeoutException:
         await _update_task_status(task.id, "failed", error="Inference service timed out")
@@ -485,7 +444,7 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
 
 async def _update_task_status(task_id: str, status: str, *, result_url: str | None = None, error: str | None = None) -> None:
     """Update task status. Skips if task was cancelled (don't overwrite cancel)."""
-    async with _async_session() as db:
+    async with async_session() as db:
         now = datetime.now(timezone.utc)
         # Don't overwrite "failed" (cancelled) with "completed"
         if status == "completed":
@@ -540,22 +499,15 @@ async def worker_loop():
 
     while True:
         try:
-            # 首轮开启 WAL（失败不应让整个 worker 挂掉，记录后继续）
-            if zombie_tick == 0 and "sqlite" in settings.DATABASE_URL:
-                try:
-                    await _ensure_wal()
-                except Exception as e:
-                    logger.warning(f"ensure_wal failed (ignored): {e}")
-
             # ── Zombie cleanup (every ZOMBIE_CHECK_INTERVAL seconds) ──
             zombie_tick += 1
             if zombie_tick >= ZOMBIE_CHECK_INTERVAL // POLL_INTERVAL_SEC:
                 zombie_tick = 0
-                async with _async_session() as db:
+                async with async_session() as db:
                     await _cleanup_zombies(db)
 
             # ── Claim pending tasks ──
-            async with _async_session() as db:
+            async with async_session() as db:
                 tasks = await _claim_tasks(db)
             if tasks:
                 logger.debug(f"claimed {len(tasks)} task(s)")

@@ -40,6 +40,16 @@ async def lifespan(app: FastAPI):
         await ensure_admin_exists(db)
     logger.info("database initialized")
 
+    # SQLite: 开启 WAL 减少并发写锁竞争（worker 与请求处理器共享同一 engine）。
+    # WAL 是数据库文件级持久属性，启动时确保一次即可。
+    if "sqlite" in settings.DATABASE_URL:
+        from sqlalchemy import text as _wal_text
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(_wal_text("PRAGMA journal_mode=WAL"))
+        except Exception as e:
+            logger.warning(f"enable WAL failed (ignored): {e}")
+
     # Start background worker for generation task queue
     from app.services.worker import worker_loop
 

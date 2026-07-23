@@ -159,6 +159,10 @@ def extract_video_frame(
         ffmpeg_bin = get_ffmpeg_path()
 
     if not os.path.isfile(ffmpeg_bin):
+        logger.error(
+            f"ffmpeg not found at {ffmpeg_bin}; install ffmpeg and add it to PATH, "
+            f"or place it under backend/bin/, otherwise video thumbnails/frame capture cannot be generated"
+        )
         raise FileNotFoundError(f"ffmpeg not found at {ffmpeg_bin}")
 
     frame_name = f"{uuid.uuid4().hex}.png"

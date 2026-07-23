@@ -1,15 +1,12 @@
-import uuid
 import os
 import hashlib
 import logging
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Query
 from fastapi.responses import FileResponse
-from sqlalchemy import text as _sql
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.common import UnifiedResponse
-from app.deps import get_current_user, get_db
+from app.deps import get_current_user
 from app.config import settings
 from app.services.media import (
     UPLOAD_DIR as _UPLOAD_DIR,
@@ -18,6 +15,7 @@ from app.services.media import (
     extract_video_frame,
     validate_user_file,
 )
+from app.services.storage import save_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -37,49 +35,12 @@ def get_upload_dir(user_id: int, category: str = "") -> str:
     return target
 
 
-def _sniff_mime(data: bytes) -> str | None:
-    """按 magic bytes 判定真实类型；不在白名单内返回 None（拒绝上传）。
-
-    content_type 由客户端提供可伪造，故以真实内容为准。
-    """
-    if data.startswith(b"\x89PNG"):
-        return "image/png"
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    if data.startswith(b"GIF8"):
-        return "image/gif"
-    if data[4:8] == b"ftyp":
-        return "video/mp4"  # ISO BMFF（mp4/mov 等）
-    if data.startswith(b"\x1a\x45\xdf\xa3"):
-        return "video/webm"  # EBML/Matroska
-    if data.startswith(b"ID3") or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
-        return "audio/mpeg"
-    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
-        return "audio/wav"
-    if data.startswith(b"OggS"):
-        return "audio/ogg"
-    if data.startswith(b"fLaC"):
-        return "audio/flac"
-    return None
-
-
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
     category: str = Query(...),
-    db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    content_type = file.content_type or ""
-    if not (
-        content_type.startswith("image/")
-        or content_type.startswith("video/")
-        or content_type.startswith("audio/")
-    ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only images, videos, and audio allowed")
-
     # 分块读取 + 大小限制（避免一次性 read 大文件导致 OOM）
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     chunks: list[bytes] = []
@@ -97,59 +58,21 @@ async def upload_file(
         chunks.append(chunk)
     content = b"".join(chunks)
 
-    # magic bytes 校验：以真实内容为准，忽略可伪造的 content_type
-    sniffed = _sniff_mime(content)
-    if not sniffed:
+    # 落盘 + 去重 + DB 记录统一交给 storage 处理（含 magic bytes 校验与类型白名单）
+    url = await save_upload_bytes(
+        user_id=user.id,
+        content=content,
+        category=category,
+        filename=file.filename,
+    )
+    if url is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported or invalid file type",
         )
-    content_type = sniffed
 
     ext = os.path.splitext(file.filename or "image.png")[1] or ".png"
-    if not ext or ext == ".":
-        if "video" in content_type:
-            ext = ".mp4"
-        elif "audio" in content_type:
-            ext = ".mp3"
-        else:
-            ext = ".png"
-
     file_hash = hashlib.sha256(content).hexdigest()
-
-    source_map = {"assets": "asset_upload", "images": "node_upload", "videos": "node_upload", "generated": "ai_generated", "avatars": "avatar_upload"}
-    source = source_map.get(category, "unknown")
-
-    row = await db.execute(
-        _sql("SELECT hash FROM file_objects WHERE user_id = :uid AND hash = :h"),
-        {"uid": user.id, "h": file_hash},
-    )
-    existing = row.fetchone()
-
-    if existing:
-        await db.execute(
-            _sql("UPDATE file_objects SET updated_at = CURRENT_TIMESTAMP WHERE user_id = :uid AND hash = :h"),
-            {"uid": user.id, "h": file_hash},
-        )
-        await db.commit()
-        logger.debug(f"dedup hit user={user.id} hash={file_hash}")
-    else:
-        sub = file_hash[:2]
-        full_dir = os.path.join(UPLOAD_DIR, str(user.id), sub)
-        full_path = os.path.join(full_dir, f"{file_hash}{ext}")
-        os.makedirs(full_dir, exist_ok=True)
-        with open(full_path, "wb") as f:
-            f.write(content)
-
-        await db.execute(
-            _sql("""INSERT INTO file_objects (user_id, hash, size, mime_type, ext, source)
-                     VALUES (:uid, :h, :sz, :mime, :ext, :src)"""),
-            {"uid": user.id, "h": file_hash, "sz": len(content),
-             "mime": content_type, "ext": ext, "src": source},
-        )
-        await db.commit()
-
-    url = f"{settings.PUBLIC_URL}/api/files/{user.id}/{file_hash[:2]}/{file_hash}{ext}"
     logger.info(f"upload ok user={user.id} size={len(content)} url={url}")
     return UnifiedResponse(code=200, data={"url": url, "filename": f"{file_hash}{ext}"}, msg="uploaded")
 
@@ -204,8 +127,10 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
     """Extract a frame from a video file. body: { url: str, time: float }"""
     video_url = body.get("url", "")
     seek_time = body.get("time", 0)
+    logger.info(f"capture-frame requested user={user.id} url={video_url} time={seek_time}s")
 
     if not video_url or "/api/files/" not in video_url:
+        logger.warning(f"capture-frame invalid url user={user.id} url={video_url}")
         raise HTTPException(status_code=400, detail="Invalid video URL")
 
     rel = video_url.split("/api/files/")[-1]
@@ -213,8 +138,10 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
     try:
         video_path = validate_user_file(rel, user.id)
     except FileNotFoundError:
+        logger.warning(f"capture-frame video not found user={user.id} rel={rel}")
         raise HTTPException(status_code=404, detail="Video not found")
     except PermissionError:
+        logger.warning(f"capture-frame access denied user={user.id} rel={rel}")
         raise HTTPException(status_code=403, detail="Access denied")
 
     out_dir = get_upload_dir(user.id, "frames")
@@ -222,10 +149,13 @@ async def capture_frame(body: dict, user=Depends(get_current_user)):
     try:
         out_path = extract_video_frame(video_path, seek_time, out_dir, timeout=30)
         if not out_path:
+            logger.error(f"capture-frame extraction returned empty user={user.id} src={video_path}")
             raise HTTPException(status_code=500, detail="Frame extraction failed")
     except FileNotFoundError:
+        logger.error(f"capture-frame failed: ffmpeg not installed user={user.id} src={video_path}")
         raise HTTPException(status_code=500, detail="ffmpeg not installed")
     except RuntimeError as e:
+        logger.error(f"capture-frame runtime error user={user.id} src={video_path} err={str(e)[:200]}")
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
     frame_name = os.path.basename(out_path)
