@@ -1,21 +1,16 @@
 "use client";
 
 import { memo } from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { PartitionOutlined } from "@ant-design/icons";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/stores/director-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
+import type { DirectorNode as DirectorNodeType } from "@/lib/types";
 
-interface Props {
-  id: string;
-  data: { label?: string };
-  selected?: boolean;
-}
-
-function DirectorNode({ id, data, selected }: Props) {
+function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =

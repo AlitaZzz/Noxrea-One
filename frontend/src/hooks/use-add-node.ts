@@ -9,6 +9,7 @@ import {
   createGroupNode,
   directorNode,
 } from "@/lib/node-defaults";
+import type { AnyNode } from "@/lib/types";
 
 /** 支持的节点类型 */
 export type AddNodeType = "text" | "image" | "video" | "group" | "director";
@@ -28,7 +29,7 @@ export function useAddNode() {
     (type: AddNodeType) => {
       const { x: cx, y: cy } = getViewportCenter();
 
-      let node: ReturnType<typeof createTextNode>;
+      let node: AnyNode;
       switch (type) {
         case "text":
           node = createTextNode({ x: cx - 120, y: cy - 80 });

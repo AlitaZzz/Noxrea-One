@@ -4,7 +4,7 @@ import { apiUpload } from "@/lib/api";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
-import type { AnyNode } from "@/lib/types";
+import type { AnyNode, ImageNode } from "@/lib/types";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -57,11 +57,11 @@ export function computeNodeSize(naturalW: number, naturalH: number): { width: nu
  * @returns 被修改后的 node（方便链式调用）
  */
 export function applyThumbnailSettings(
-  node: AnyNode,
+  node: ImageNode,
   naturalW: number,
   naturalH: number,
   label?: string,
-): AnyNode {
+): ImageNode {
   // 零尺寸保护：fallback 300
   const nw = naturalW > 0 ? naturalW : 300;
   const nh = naturalH > 0 ? naturalH : 300;
@@ -173,7 +173,8 @@ export async function createNodeFromUrl(
   }
 
   // Label: insert suffix before extension
-  const origName = (origNode?.data as any)?.alt || (origNode?.data as any)?.label || "image";
+  const origData = origNode?.data as { alt?: string; label?: string } | undefined;
+  const origName = origData?.alt || origData?.label || "image";
   const dotIdx = origName.lastIndexOf(".");
   const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
   const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";

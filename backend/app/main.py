@@ -24,16 +24,10 @@ async def lifespan(app: FastAPI):
     # 不会改已有表结构，会掩盖迁移未执行的情况）。
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    # 开发兜底：为既有表补缺失列（create_all 不会改已有表结构）。生产请用 alembic 迁移。
-    try:
-        async with engine.begin() as conn:
-            from sqlalchemy import text
-            await conn.execute(
-                text("ALTER TABLE model_infos ADD COLUMN inferred_capabilities JSON NOT NULL DEFAULT '[]'")
-            )
-    except Exception:
-        pass
-    logger.warning("create_all ran (dev fallback). 生产请使用 `alembic upgrade head` 管理表结构。")
+    logger.warning(
+        "create_all 已执行（仅建缺失表、不动已有表结构）。"
+        "生产环境应以 `alembic upgrade head` 作为唯一表结构变更入口。"
+    )
     from app.services.auth import ensure_admin_exists
 
     async with async_session() as db:

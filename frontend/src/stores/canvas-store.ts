@@ -120,7 +120,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === nodeId
-          ? { ...n, data: { ...n.data, ...data }, style: style ?? n.style }
+          ? ({ ...n, data: { ...n.data, ...data }, style: style ?? n.style } as AnyNode)
           : n
       ),
     }));
@@ -190,7 +190,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       nodes: ((project.nodes || []) as AnyNode[]).map((n) => ({
         ...n,
         data: { ...n.data },
-      })),
+      })) as AnyNode[],
       edges: (project.edges || []) as Edge[],
       viewport: project.viewport || DEFAULT_VIEWPORT,
       background: project.background || DEFAULT_BACKGROUND,

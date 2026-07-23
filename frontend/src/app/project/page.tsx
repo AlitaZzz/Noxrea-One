@@ -169,9 +169,11 @@ export default function ProjectPage() {
                 style={{ background: "var(--canvas-bg-elevated)" }}
               >
                 {(() => {
-                  const imgNode = (p.nodes || []).find((n: any) => n.type === "image-node" && n.data?.src);
+                  const imgNode = (p.nodes || []).find(
+                    (n) => n.type === "image-node" && (n.data as { src?: string })?.src
+                  );
                   if (imgNode) {
-                    return <img src={imgNode.data.src} alt="" className="w-full h-full object-cover" />;
+                    return <img src={(imgNode.data as { src?: string }).src} alt="" className="w-full h-full object-cover" />;
                   }
                   return <FolderOpenOutlined className="text-3xl" style={{ color: "var(--canvas-text-muted)" }} />;
                 })()}

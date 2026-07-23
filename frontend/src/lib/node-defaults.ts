@@ -3,8 +3,14 @@ import {
   NODE_TYPE,
   type TextNodeData,
   type ImageNodeData,
+  type VideoNodeData,
   type GroupNodeData,
   type AnyNode,
+  type TextNode,
+  type ImageNode,
+  type VideoNode,
+  type DirectorNode,
+  type GroupNode,
 } from "@/lib/types";
 import {
   DEFAULT_NODE_WIDTH,
@@ -17,7 +23,7 @@ function uid(prefix: string) {
   return `${prefix}_${Date.now()}_${_idCounter}`;
 }
 
-export function createTextNode(position: { x: number; y: number }): AnyNode {
+export function createTextNode(position: { x: number; y: number }): TextNode {
   return {
     id: uid("text"),
     type: NODE_TYPE.TEXT,
@@ -30,7 +36,7 @@ export function createTextNode(position: { x: number; y: number }): AnyNode {
 export function createImageNode(
   position: { x: number; y: number },
   src?: string
-): AnyNode {
+): ImageNode {
   return {
     id: uid("img"),
     type: NODE_TYPE.IMAGE,
@@ -50,7 +56,7 @@ export function createImageNode(
 export function createVideoNode(
   position: { x: number; y: number },
   src?: string
-): AnyNode {
+): VideoNode {
   return {
     id: uid("vid"),
     type: NODE_TYPE.VIDEO,
@@ -61,12 +67,12 @@ export function createVideoNode(
       naturalWidth: 320,
       naturalHeight: 180,
       alt: "",
-    },
+    } as VideoNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };
 }
 
-export function directorNode(position: { x: number; y: number }): AnyNode {
+export function directorNode(position: { x: number; y: number }): DirectorNode {
   return {
     id: uid("dir"),
     type: NODE_TYPE.DIRECTOR,
@@ -80,7 +86,7 @@ export function createGroupNode(
   position: { x: number; y: number },
   size: { width: number; height: number },
   label?: string
-): AnyNode {
+): GroupNode {
   return {
     id: uid("group"),
     type: NODE_TYPE.GROUP,

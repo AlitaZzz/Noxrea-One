@@ -2,7 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import ImageCropModal from "@/components/canvas/ImageCropModal";
 import { Tooltip, Popover, Input } from "antd";
 import {
@@ -13,7 +13,12 @@ import {
   ScissorOutlined,
   StarOutlined,
 } from "@ant-design/icons";
-import type { ImageNodeData } from "@/lib/types";
+import {
+  isGenerating,
+  EMPTY_UPLOAD_STATE,
+  type ImageNodeData,
+  type ImageNode as ImageNodeType,
+} from "@/lib/types";
 import {
   DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT,
 } from "@/lib/constants";
@@ -25,13 +30,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { EventNames } from "@/lib/eventNames";
 
-interface ImageNodeProps {
-  id: string;
-  data: ImageNodeData;
-  selected?: boolean;
-}
-
-function ImageNode({ id, data, selected }: ImageNodeProps) {
+function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [src, setSrc] = useState(data.src || "");
@@ -54,7 +53,13 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
-        store.updateNodeData(id, { _uploadVersion: uploadVersion }, undefined, { skipHistory: true });
+        const prevUpload = (nodeBefore.data as ImageNodeData).upload;
+        store.updateNodeData(
+          id,
+          { upload: { ...(prevUpload ?? EMPTY_UPLOAD_STATE), version: uploadVersion } },
+          undefined,
+          { skipHistory: true }
+        );
       }
 
       try {
@@ -70,7 +75,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
             const s = useCanvasStore.getState();
             const currentNode = s.nodes.find((n) => n.id === id);
             if (!currentNode) return;
-            if (currentNode.data._uploadVersion !== uploadVersion) return;
+            if ((currentNode.data as ImageNodeData).upload?.version !== uploadVersion) return;
 
             const nw = img.naturalWidth, nh = img.naturalHeight;
             const { width, height } = computeNodeSize(nw, nh);
@@ -127,7 +132,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
+    store.updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -161,14 +166,14 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         src: url,
         naturalWidth: nw,
         naturalHeight: nh,
-        _generating: false,
+        taskBinding: undefined,
         rotation: undefined,
         flipH: undefined,
         flipV: undefined,
       }, { width, height }, { skipHistory: true });
       markDirtyImmediate();
     } catch (e) {
-      store.updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
+      store.updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
       console.error("transform failed:", e);
     }
   }, [id, src]);
@@ -189,7 +194,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
@@ -224,13 +229,13 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
     } catch (e) {
       console.error("grid-split failed:", e);
     } finally {
-      useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
     }
   }, [id, src]);
 
   const handleBgRemoval = useCallback(async () => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { _generating: true }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       // Create task via existing generation task queue
       const { BASE, getTokenHeader } = await import("@/lib/api");
@@ -251,13 +256,11 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
 
       // Store task info in node data for InfiniteCanvas SSE monitor
       useCanvasStore.getState().updateNodeData(id, {
-        task_id: taskId,
-        task_status: "pending",
-        pendingAction: "bg_removal",
+        taskBinding: { taskId, status: "pending", pendingAction: "bg_removal" },
       }, undefined, { skipHistory: true });
       // markDirtyImmediate handled by updateNodeData internally
-    } catch (e: any) {
-      useCanvasStore.getState().updateNodeData(id, { _generating: false }, undefined, { skipHistory: true });
+    } catch (e) {
+      useCanvasStore.getState().updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
       console.error("bg-removal failed:", e);
     }
   }, [id, src]);
@@ -353,11 +356,11 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
         onDrop={handleDrop}
         ref={dropRef}
       >
-        {(data as any)._uploading ? (
+        {data.upload?.uploading ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 px-8" style={{ background: "var(--canvas-bg)" }}>
-            {(data as any)._uploadProgress != null ? (
+            {data.upload?.progress != null ? (
               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(data as any)._uploadProgress}%` }} />
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
               </div>
             ) : (
               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -366,7 +369,7 @@ function ImageNode({ id, data, selected }: ImageNodeProps) {
             )}
             <span className="text-sm text-white/50">{t("uploading")}</span>
           </div>
-        ) : (data as any)._generating ? (
+        ) : isGenerating(data.taskBinding) ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-white/50">{t("generating")}</span>

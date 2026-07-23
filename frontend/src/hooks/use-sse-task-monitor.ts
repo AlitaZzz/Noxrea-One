@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
+import type { MediaGenFields } from "@/lib/types";
 
 /**
  * SSE 任务监控 hook。
@@ -24,13 +25,12 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       const scanAndConnect = () => {
         const allNodes = useCanvasStore.getState().nodes;
         for (const node of allNodes) {
-          const d = node.data as any;
-          if (!d?.task_id) continue;
-          const st = d?.task_status;
-          if (st !== "pending" && st !== "processing") continue;
-          if (sseCtrlsRef.current.has(d.task_id)) continue;
+          const binding = (node.data as MediaGenFields).taskBinding;
+          if (!binding?.taskId) continue;
+          if (binding.status !== "pending" && binding.status !== "processing") continue;
+          if (sseCtrlsRef.current.has(binding.taskId)) continue;
 
-          const taskId = d.task_id;
+          const taskId = binding.taskId;
           const nodeId = node.id;
           const ctrl = new AbortController();
           sseCtrlsRef.current.set(taskId, ctrl);
@@ -57,18 +57,18 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                     const evt = JSON.parse(line.slice(6));
                     if (evt.status === "completed" && evt.result_url) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
-                      const d = cur.data as any;
+                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       const prompt = evt.prompt || "";
 
-                      if (d.pendingAction === "bg_removal") {
+                      if (curBinding?.pendingAction === "bg_removal") {
                         // 抠图 → 创建新节点，不覆盖原图
                         const { createNodeFromUrl } = await import("@/lib/image-utils");
                         const defW = 1024, defH = 1024;
                         const newNode = await createNodeFromUrl(nodeId, evt.result_url, defW, defH, " (bg-removed)");
                         // Clear source node state
                         useCanvasStore.getState().updateNodeData(nodeId, {
-                          _generating: false, task_status: undefined, task_id: undefined, pendingAction: undefined,
+                          taskBinding: undefined,
                         }, undefined, { skipHistory: true });
                         markDirtyImmediate();
                         // Load real dimensions for the new node
@@ -100,8 +100,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       useCanvasStore.getState().updateNodeData(nodeId, {
                         src: evt.result_url, label, alt: label,
                         naturalWidth: defW, naturalHeight: defH,
-                        lockAspectRatio: true, _generating: false,
-                        task_status: undefined, task_id: undefined,
+                        lockAspectRatio: true, taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();
                       // Async load real dimensions
@@ -124,18 +123,17 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       return;
                     } else if (evt.status === "failed") {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      if (!cur || (cur.data as any)?.task_id !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       const isVideoNode = cur.type === "video-node";
-                      const d = cur.data as any;
                       useCanvasStore.getState().updateNodeData(nodeId, {
-                        _generating: false, task_status: undefined, task_id: undefined,
-                        pendingAction: undefined,
+                        taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: d.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
+                        notifRef.current.error({ title: curBinding?.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

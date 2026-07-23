@@ -238,7 +238,7 @@ describe("P0-4: CSS transform baking flow", () => {
       const node = await uploadAndAddNode("n1", blob, " (baked)");
 
       expect(node).not.toBeNull();
-      expect(node!.data.src).toBe("http://test/api/files/1/aa/aaaa...png");
+      expect((node!.data as { src?: string }).src).toBe("http://test/api/files/1/aa/aaaa...png");
     });
 
     it("should return null when upload fails", async () => {
