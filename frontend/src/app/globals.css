@@ -168,6 +168,15 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: var(--canvas-bg-hover) !important;
 }
 
+/* Select dropdown: 全局选项间距（!important 覆盖 antd cssinjs） */
+.ant-select-dropdown .ant-select-item-option {
+  margin-bottom: 2px !important;
+  border-radius: 6px !important;
+}
+.ant-select-dropdown .ant-select-item-option:last-child {
+  margin-bottom: 0 !important;
+}
+
 /* Restore pointer-events on antd elements rendered inside overlay-roots */
 [data-layer-overlay-root] .ant-select-dropdown,
 [data-layer-overlay-root] .ant-dropdown,
@@ -448,6 +457,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   font-size: 13px; border-radius: 6px;
 }
 .menu-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
+.menu-item-btn.selected { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
 .menu-divider { height: 1px; background: var(--menu-border); margin: 2px 6px; }
 .menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); }
 

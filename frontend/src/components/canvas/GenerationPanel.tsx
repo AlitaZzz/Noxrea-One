@@ -388,7 +388,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
             </Button>
           }
           content={allModels.map((m) => (
-            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} dimmed={modelKey === m.value}>
+            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
               {m.value}
             </MenuItem>
           ))}
