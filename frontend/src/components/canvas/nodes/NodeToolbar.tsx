@@ -96,9 +96,9 @@ function GridPicker({ nodeId }: { nodeId: string }) {
 function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const t = useI18nStore((s) => s.t);
   const nodes = useCanvasStore((s) => s.nodes);
-  const items = useAssetsStore((s) => s.items);
+  const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
-  const isInAssets = useMemo(() => !!assetSrc && items.some(i => i.metadata?.sourceUrl === assetSrc), [assetSrc, items]);
+  const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();

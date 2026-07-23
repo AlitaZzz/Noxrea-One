@@ -1,8 +1,8 @@
 "use client";
 
 import { DatabaseOutlined, FolderOutlined,InboxOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Input, Select } from "antd";
-import { useCallback,useMemo, useState } from "react";
+import { App, Button, Input, Select } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
 import ModalButton from "@/components/common/ModalButton";
@@ -10,7 +10,7 @@ import { addAssetToCanvas } from "@/lib/add-asset";
 import AppModal from "@/lib/app-modal";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES } from "@/lib/types";
-import { useAssetsStore } from "@/stores/assets-store";
+import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
@@ -28,7 +28,7 @@ interface Props {
 export default function AssetsModal({ open, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
   const lang = useI18nStore((s) => s.lang);
-  const items = useAssetsStore((s) => s.items);
+  const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
   const addFolder = useAssetsStore((s) => s.addFolder);
@@ -36,8 +36,16 @@ export default function AssetsModal({ open, onClose }: Props) {
   const removeAsset = useAssetsStore((s) => s.removeAsset);
   const removeFolder = useAssetsStore((s) => s.removeFolder);
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
-  const getFiltered = useAssetsStore((s) => s.getFiltered);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
+
+  // Independent local state — not shared with sidebar
+  const [items, setItems] = useState<AssetItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const versionRef = useRef(0);
 
   const [activeSpace, setActiveSpace] = useState("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -61,46 +69,107 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType>("character");
+
   const handleToggleSelect = useCallback((asset: AssetItem) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(asset.id)) {
-        next.delete(asset.id);
-      } else {
-        next.add(asset.id);
-      }
+      if (next.has(asset.id)) next.delete(asset.id);
+      else next.add(asset.id);
       return next;
     });
   }, []);
 
+  // Set loading immediately when modal opens (avoids empty flash)
+  useEffect(() => {
+    if (open) setLoading(true);
+    else { setLoadError(false); setLoading(false); }
+  }, [open]);
+
+  // --- Data fetching ---
+
+  const fetchAndReplace = useCallback(async (filters: { category: AssetType | "all"; search: string; folderId: string | null; spaceKey: string }) => {
+    const v = ++versionRef.current;
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const result = await fetchAssetPage(
+        { category: filters.category, search: filters.search, folderId: filters.folderId, spaceKey: filters.spaceKey },
+        0,
+      );
+      if (v !== versionRef.current) return;
+      setItems(result.items);
+      setTotalCount(result.total);
+      setLoading(false);
+    } catch {
+      if (v !== versionRef.current) return;
+      setLoadError(true);
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchNextPage = useCallback(async () => {
+    const v = ++versionRef.current;
+    setLoadingMore(true);
+    setLoadError(false);
+    try {
+      const result = await fetchAssetPage(
+        { category, search, folderId: activeFolderId, spaceKey: activeSpace },
+        items.length,
+      );
+      if (v !== versionRef.current) return;
+      setItems((prev) => [...prev, ...result.items]);
+      setTotalCount(result.total);
+      setLoadingMore(false);
+    } catch {
+      if (v !== versionRef.current) return;
+      setLoadError(true);
+      setLoadingMore(false);
+    }
+  }, [category, search, activeFolderId, activeSpace, items.length]);
+
+  // Reload when filters change
+  useEffect(() => {
+    fetchAndReplace({ category, search, folderId: activeFolderId, spaceKey: activeSpace });
+  }, [category, search, activeFolderId, activeSpace, fetchAndReplace]);
+
+  const hasMore = items.length < totalCount;
+
+  // Selection
+  const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
+
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((a) => a.id)));
+  }, [allSelected, items]);
+
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setDeleteAsset({
-      id: String(selectedIds.size),
-      name: `${selectedIds.size} ${t("asset.count")}`,
-      type: "other",
-      width: 0,
-      height: 0,
-      description: "",
-      createdAt: 0,
-      updatedAt: 0,
-      tags: [],
-      metadata: {},
-      spaceKey: "personal",
-    });
+    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], metadata: {}, spaceKey: "personal" } as AssetItem);
   }, [selectedIds, t]);
 
   const handleBatchDeleteConfirm = useCallback(() => {
-    selectedIds.forEach((id) => removeAsset(id));
+    for (const id of selectedIds) {
+      const item = items.find((i) => i.id === id);
+      if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
+      removeAsset(id);
+    }
+    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    setTotalCount((c) => Math.max(0, c - selectedIds.size));
     setSelectedIds(new Set());
     setDeleteAsset(null);
-  }, [selectedIds, removeAsset]);
+  }, [selectedIds, removeAsset, items]);
 
   const handleBatchMove = useCallback((folderId: string) => {
+    const count = selectedIds.size;
+    for (const id of selectedIds) {
+      const item = items.find((i) => i.id === id);
+      if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
+    }
+    if (folderId) useAssetsStore.getState().bumpFolderCount(folderId, count);
     updateAssetsBatch([...selectedIds], { folderId: folderId || undefined });
     setSelectedIds(new Set());
     setBatchMoveOpen(false);
-  }, [selectedIds, updateAssetsBatch]);
+  }, [selectedIds, updateAssetsBatch, items]);
 
   const handleBatchType = useCallback((type: AssetType) => {
     updateAssetsBatch([...selectedIds], { type });
@@ -122,64 +191,49 @@ export default function AssetsModal({ open, onClose }: Props) {
   }, [activeFolderId, folders]);
   const canCreateFolder = currentFolderDepth < 2;
 
-  const filtered = useMemo(
-    () => getFiltered(category, search, activeFolderId, activeSpace),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, category, search, activeFolderId, activeSpace, getFiltered],
-  );
-
-  const allSelected = filtered.length > 0 && filtered.every((a) => selectedIds.has(a.id));
-
-  const handleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map((a) => a.id)));
-    }
-  }, [allSelected, filtered]);
-
+  // Folder counts from server (lazy-load safe)
   const folderCounts = useMemo(() => {
-    // Direct counts per folder
-    const direct: Record<string, number> = {};
-    for (const item of items) {
-      if (item.folderId) {
-        direct[item.folderId] = (direct[item.folderId] || 0) + 1;
-      }
-    }
-    // Recursive: total = direct + sum of children's totals
+    const totals: Record<string, number> = {};
+    for (const f of folders) totals[f.id] = f.count || 0;
     const cache: Record<string, number> = {};
     const getRecursive = (folderId: string): number => {
       if (cache[folderId] !== undefined) return cache[folderId];
-      let total = direct[folderId] || 0;
-      const children = folders.filter((f) => f.parentId === folderId);
-      for (const child of children) {
+      let total = totals[folderId] || 0;
+      for (const child of folders.filter((f2) => f2.parentId === folderId)) {
         total += getRecursive(child.id);
       }
       cache[folderId] = total;
       return total;
     };
     const counts: Record<string, number> = {};
-    for (const f of folders) {
-      counts[f.id] = getRecursive(f.id);
-    }
+    for (const f of folders) counts[f.id] = getRecursive(f.id);
     return counts;
-  }, [items, folders]);
+  }, [folders]);
 
   // --- Handlers ---
 
-  const handleInsertCanvas = useCallback(
-    (asset: AssetItem) => {
-      addAssetToCanvas(asset);
-      onClose();
-    },
-    [onClose],
-  );
+  const handleInsertCanvas = useCallback((asset: AssetItem) => {
+    addAssetToCanvas(asset);
+    notif.success({
+      title: t("asset.added"),
+      description: asset.name,
+      placement: "bottomRight",
+      duration: 3,
+    });
+  }, [notif, t]);
 
   const handleCreateAssets = useCallback(
-    (inputs: CreateAssetInput[]) => {
-      addAssetsBatch(inputs);
+    async (inputs: CreateAssetInput[]) => {
+      const created = await addAssetsBatch(inputs);
+      if (created.length > 0) {
+        for (const asset of created) {
+          if (asset.folderId) useAssetsStore.getState().bumpFolderCount(asset.folderId, 1);
+        }
+        fetchAndReplace({ category, search, folderId: activeFolderId, spaceKey: activeSpace });
+        gridRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      }
     },
-    [addAssetsBatch],
+    [addAssetsBatch, category, search, activeFolderId, activeSpace, fetchAndReplace],
   );
 
   const handleCreateFolder = useCallback(
@@ -189,41 +243,20 @@ export default function AssetsModal({ open, onClose }: Props) {
     [addFolder, activeSpace, activeFolderId],
   );
 
-  const handleRename = useCallback(
-    (asset: AssetItem) => {
-      setRenamingId(asset.id);
-      setRenameValue(asset.name);
-    },
-    [],
-  );
-
+  const handleRename = useCallback((asset: AssetItem) => { setRenamingId(asset.id); setRenameValue(asset.name); }, []);
   const handleRenameConfirm = useCallback(() => {
-    if (renamingId && renameValue.trim()) {
-      updateAsset(renamingId, { name: renameValue.trim() });
-    }
+    if (renamingId && renameValue.trim()) updateAsset(renamingId, { name: renameValue.trim() });
     setRenamingId(null);
     setRenameValue("");
   }, [renamingId, renameValue, updateAsset]);
 
-  const handleDelete = useCallback(
-    (asset: AssetItem) => {
-      setDeleteAsset(asset);
-    },
-    [],
-  );
-
-  const handleDeleteFolder = useCallback(
-    (folder: AssetFolder) => {
-      setDeleteFolder(folder);
-    },
-    [],
-  );
+  const handleDelete = useCallback((asset: AssetItem) => { setDeleteAsset(asset); }, []);
+  const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
 
   const handleDeleteFolderConfirm = useCallback(() => {
     if (!deleteFolder) return;
     const deletedId = deleteFolder.id;
     removeFolder(deletedId);
-    // If the active folder (or one of its ancestors) is being deleted, reset to root.
     if (activeFolderId) {
       let cur: string | null = activeFolderId;
       let within = false;
@@ -237,18 +270,9 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleteFolder(null);
   }, [deleteFolder, removeFolder, activeFolderId, folders]);
 
-  const handleSelectSpace = useCallback((key: string) => {
-    setActiveSpace(key);
-    setActiveFolderId(null);
-    setSelectedIds(new Set());
-  }, []);
+  const handleSelectSpace = useCallback((key: string) => { setActiveSpace(key); setActiveFolderId(null); setSelectedIds(new Set()); }, []);
+  const handleSelectFolder = useCallback((id: string | null) => { setActiveFolderId(id); setSelectedIds(new Set()); }, []);
 
-  const handleSelectFolder = useCallback((id: string | null) => {
-    setActiveFolderId(id);
-    setSelectedIds(new Set());
-  }, []);
-
-  // i18n-aware space labels
   const spaceLabels = useMemo(
     () => [
       { key: "personal", label: t("asset.space.personal"), icon: <UserOutlined /> },
@@ -257,6 +281,19 @@ export default function AssetsModal({ open, onClose }: Props) {
     [t, lang],
   );
 
+  // Breadcrumb data
+  const breadCrumb = useMemo((): AssetFolder[] => {
+    if (!activeFolderId) return [];
+    const crumbs: AssetFolder[] = [];
+    let cur: string | undefined = activeFolderId;
+    while (cur) {
+      const f = folders.find((x) => x.id === cur);
+      if (!f) break;
+      crumbs.unshift(f);
+      cur = f.parentId || undefined;
+    }
+    return crumbs;
+  }, [activeFolderId, folders]);
 
   return (
     <>
@@ -279,9 +316,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 140px)", overflow: "hidden" },
         }}
         style={{ maxWidth: 1200 }}
-        closeIcon={
-          <span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>
-        }
+        closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
           .menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }
@@ -320,6 +355,31 @@ export default function AssetsModal({ open, onClose }: Props) {
 
           {/* Right main content */}
           <div className="flex-1 flex flex-col py-4 pr-4 pl-4 min-w-0">
+            {/* Breadcrumb — placed above toolbar */}
+            {activeFolderId && breadCrumb.length > 0 && (
+              <div className="flex items-center gap-1 pb-2 flex-shrink-0">
+                <button
+                  onClick={() => setActiveFolderId(null)}
+                  className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
+                  style={{ color: "var(--canvas-text-dim)" }}
+                >
+                  ← {t("asset.space.personal")}
+                </button>
+                {breadCrumb.map((f) => (
+                  <span key={f.id} className="flex items-center gap-1">
+                    <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                    <button
+                      onClick={() => setActiveFolderId(f.id)}
+                      className="text-sm font-medium transition-colors hover:text-white cursor-pointer"
+                      style={{ color: f.id === activeFolderId ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+                    >
+                      {f.name}
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Toolbar */}
             <AssetToolbar
               search={search}
@@ -339,9 +399,9 @@ export default function AssetsModal({ open, onClose }: Props) {
             <AssetCategoryTabs active={category} onChange={setCategory} />
 
             {/* Grid */}
-            <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8 }}>
+            <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8 }} ref={gridRef}>
               <AssetGrid
-                assets={filtered}
+                assets={items}
                 folders={getChildFolders(activeSpace, activeFolderId ?? undefined)}
                 folderCounts={folderCounts}
                 selectedIds={selectedIds}
@@ -351,12 +411,18 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onDelete={handleDelete}
                 onEnterFolder={(folder) => setActiveFolderId(folder.id)}
                 onDeleteFolder={handleDeleteFolder}
+                loading={loading}
+                hasMore={hasMore}
+                loadingMore={loadingMore}
+                onLoadMore={fetchNextPage}
+                loadError={loadError}
+                onRetry={fetchNextPage}
               />
             </div>
           </div>
         </div>
 
-        {/* Rename modal — nested inside main LayerModal (depth=2) */}
+        {/* Rename modal */}
         <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.rename")}</span>}
           open={!!renamingId}
@@ -396,15 +462,11 @@ export default function AssetsModal({ open, onClose }: Props) {
             onPressEnter={handleRenameConfirm}
             maxLength={100}
             showCount
-            style={{
-              background: "var(--canvas-bg-elevated)",
-              borderColor: "var(--canvas-border)",
-              color: "var(--canvas-text)",
-            }}
+            style={{ background: "var(--canvas-bg-elevated)", borderColor: "var(--canvas-border)", color: "var(--canvas-text)" }}
           />
         </AppModal>
 
-        {/* Delete confirm — nested inside main LayerModal (depth=2) */}
+        {/* Delete confirm */}
         <ConfirmModal
           open={!!deleteAsset}
           title={t("delete.asset")}
@@ -415,13 +477,16 @@ export default function AssetsModal({ open, onClose }: Props) {
               handleBatchDeleteConfirm();
             } else {
               removeAsset(deleteAsset.id);
+              if (deleteAsset.folderId) useAssetsStore.getState().bumpFolderCount(deleteAsset.folderId, -1);
+              setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));
+              setTotalCount((c) => Math.max(0, c - 1));
               setDeleteAsset(null);
             }
           }}
           onCancel={() => { setDeleteAsset(null); setSelectedIds(new Set()); }}
         />
 
-        {/* Delete folder confirm — nested inside main LayerModal (depth=2) */}
+        {/* Delete folder confirm */}
         <ConfirmModal
           open={!!deleteFolder}
           title={t("delete.folder")}
@@ -500,21 +565,16 @@ export default function AssetsModal({ open, onClose }: Props) {
             footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
           }}
         >
-          <style>{`
-          `}</style>
           <Select
             value={batchTypeValue}
             onChange={(v) => setBatchTypeValue(v)}
             getPopupContainer={(t) => t.parentElement || document.body}
             style={{ width: "100%" }}
-            options={ASSET_CATEGORIES.filter((c) => c.key !== "all").map((cat) => ({
-              value: cat.key,
-              label: t(cat.labelKey),
-            }))}
+            options={ASSET_CATEGORIES.filter((c) => c.key !== "all").map((cat) => ({ value: cat.key, label: t(cat.labelKey) }))}
           />
         </AppModal>
 
-        {/* Upload dialog — nested inside main LayerModal (depth=2) */}
+        {/* Upload dialog */}
         <AssetCreateDialog
           open={createOpen}
           onClose={() => setCreateOpen(false)}
@@ -522,7 +582,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           folders={folders}
         />
 
-        {/* Create folder dialog — nested inside main LayerModal (depth=2) */}
+        {/* Create folder dialog */}
         <CreateFolderDialog
           open={folderCreateOpen}
           onClose={() => setFolderCreateOpen(false)}

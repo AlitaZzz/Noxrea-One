@@ -152,8 +152,11 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
             }}
           >
             <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-            <MenuItem onClick={() => { if (canCreateFolder) { setMenuOpen(false); onCreateFolder?.(); } }}
-              iconRight={!canCreateFolder ? <span style={{ opacity: 0.35 }} /> : undefined}>
+            <MenuItem
+              onClick={canCreateFolder ? () => { setMenuOpen(false); onCreateFolder?.(); } : undefined}
+              dimmed={!canCreateFolder}
+              iconRight={!canCreateFolder ? <span style={{ opacity: 0.35 }} /> : undefined}
+            >
               <FolderAddOutlined /> {t("asset.createFolder")}
             </MenuItem>
             <MenuItem onClick={() => { setMenuOpen(false); onUpload?.(); }}>

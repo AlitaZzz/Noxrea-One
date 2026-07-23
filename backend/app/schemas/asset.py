@@ -26,6 +26,7 @@ class AssetFolderOut(BaseModel):
     space_key: str
     parent_id: Optional[int]
     created_at: datetime.datetime
+    count: int = 0
 
     model_config = {"from_attributes": True}
 

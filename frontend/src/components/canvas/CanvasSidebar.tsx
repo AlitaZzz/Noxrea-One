@@ -2,59 +2,66 @@
 
 import {
   AppstoreOutlined,
-  CameraOutlined,
+  PartitionOutlined,
   FontSizeOutlined,
   GroupOutlined,
   InboxOutlined,
   LoadingOutlined,
   PictureOutlined,
-  PlusOutlined,
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import { Drawer, Empty, Input, Tooltip } from "antd";
+import { App, Drawer, Empty, Input } from "antd";
 import { useCallback, useEffect, useMemo, useRef,useState } from "react";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { addAssetToCanvas } from "@/lib/add-asset";
 import type { AnyNode, AssetItem } from "@/lib/types";
 import { NODE_TYPE } from "@/lib/types";
-import { useAssetsStore } from "@/stores/assets-store";
-import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
-// ── 节点类型定义 ──
+import type { Edge } from "@xyflow/react";
+
+
+
+// ── 节点类型顺序和标签映射 ──
+const NODE_TYPE_I18N: Record<string, string> = {
+  [NODE_TYPE.DIRECTOR]: "director.node",
+  [NODE_TYPE.IMAGE]: "image.node",
+  [NODE_TYPE.VIDEO]: "video.node",
+  [NODE_TYPE.TEXT]: "text.node",
+  [NODE_TYPE.GROUP]: "group.node",
+};
+
 const NODE_TYPE_ORDER = [
   NODE_TYPE.DIRECTOR,
   NODE_TYPE.IMAGE,
   NODE_TYPE.VIDEO,
   NODE_TYPE.TEXT,
   NODE_TYPE.GROUP,
-] as const;
+];
 
-const NODE_TYPE_LABELS: Record<string, { zh: string; en: string }> = {
-  [NODE_TYPE.DIRECTOR]: { zh: "导演台", en: "Director" },
-  [NODE_TYPE.IMAGE]: { zh: "图片", en: "Image" },
-  [NODE_TYPE.VIDEO]: { zh: "视频", en: "Video" },
-  [NODE_TYPE.TEXT]: { zh: "文本", en: "Text" },
-  [NODE_TYPE.GROUP]: { zh: "编组", en: "Group" },
+const TYPE_COLORS: Record<string, string> = {
+  [NODE_TYPE.DIRECTOR]: "#ff8a3d",
+  [NODE_TYPE.IMAGE]: "#52c41a",
+  [NODE_TYPE.VIDEO]: "#13c2c2",
+  [NODE_TYPE.TEXT]: "#1677ff",
+  [NODE_TYPE.GROUP]: "#722ed1",
 };
 
 function getNodeTypeIcon(type: string) {
+  const color = TYPE_COLORS[type] || "var(--canvas-text-dim)";
+  const s = { fontSize: 18, color };
   switch (type) {
-    case NODE_TYPE.TEXT:
-      return <FontSizeOutlined style={{ color: "#1677ff" }} />;
-    case NODE_TYPE.IMAGE:
-      return <PictureOutlined style={{ color: "#52c41a" }} />;
-    case NODE_TYPE.VIDEO:
-      return <VideoCameraOutlined style={{ color: "#13c2c2" }} />;
-    case NODE_TYPE.DIRECTOR:
-      return <CameraOutlined style={{ color: "#ff8a3d" }} />;
-    case NODE_TYPE.GROUP:
-      return <GroupOutlined style={{ color: "#722ed1" }} />;
-    default:
-      return <PictureOutlined style={{ color: "var(--canvas-text-dim)" }} />;
+    case NODE_TYPE.TEXT:     return <FontSizeOutlined style={s} />;
+    case NODE_TYPE.IMAGE:    return <PictureOutlined style={s} />;
+    case NODE_TYPE.VIDEO:    return <VideoCameraOutlined style={s} />;
+    case NODE_TYPE.DIRECTOR: return <PartitionOutlined style={s} />;
+    case NODE_TYPE.GROUP:    return <GroupOutlined style={s} />;
+    default:                 return <PictureOutlined style={s} />;
   }
 }
 
@@ -67,10 +74,7 @@ function useVideoThumbnail(src: string | undefined) {
   useEffect(() => {
     if (!src) return;
     const cached = cache.current.get(src);
-    if (cached) {
-      setThumb(cached);
-      return;
-    }
+    if (cached) { setThumb(cached); return; }
     let cancelled = false;
     setLoading(true);
     setThumb(null);
@@ -80,445 +84,85 @@ function useVideoThumbnail(src: string | undefined) {
     video.muted = true;
     video.playsInline = true;
     video.preload = "metadata";
-
-    const cleanup = () => {
-      video.remove();
-    };
-
-    const extractFrame = () => {
-      if (cancelled) { cleanup(); return; }
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 80;
-        canvas.height = 60;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-          cache.current.set(src, dataUrl);
-          if (!cancelled) {
-            setThumb(dataUrl);
-            setLoading(false);
-          }
-        }
-      } catch {
-        if (!cancelled) { setLoading(false); }
-      }
-      cleanup();
-    };
-
-    video.addEventListener("loadeddata", () => {
-      video.currentTime = 0.1;
-    });
-    video.addEventListener("seeked", extractFrame, { once: true });
-    video.addEventListener("error", () => {
-      if (!cancelled) { setLoading(false); cleanup(); }
-    });
-
     video.src = src;
 
-    return () => {
-      cancelled = true;
-      cleanup();
+    const onSeek = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d")!.drawImage(video, 0, 0);
+        const url = canvas.toDataURL("image/jpeg", 0.6);
+        cache.current.set(src, url);
+        setThumb(url);
+      } catch { /* noop */ }
+      setLoading(false);
+      video.remove();
     };
-  }, [src]);
+    const onMeta = () => { video.currentTime = 1; };
+    const onErr = () => { if (!cancelled) { setLoading(false); video.remove(); } };
 
+    video.addEventListener("loadedmetadata", onMeta);
+    video.addEventListener("seeked", onSeek);
+    video.addEventListener("error", onErr);
+
+    return () => { cancelled = true; video.remove(); };
+  }, [src]);
   return { thumb, loading };
 }
 
-// ── 画布元素视图 ──
-function CanvasElementsView() {
-  const t = useI18nStore((s) => s.t);
-  const lang = useI18nStore((s) => s.lang);
-  const nodes = useCanvasStore((s) => s.nodes);
-  const { setNodes, fitView } = useReactFlow();
-  const [search, setSearch] = useState("");
-
-  // 按类型分组并搜索过滤
-  const grouped = useMemo(() => {
-    const searchLower = search.trim().toLowerCase();
-    const filtered = searchLower
-      ? nodes.filter((n) => {
-          const label = String(n.data?.label || "");
-          return label.toLowerCase().includes(searchLower);
-        })
-      : nodes;
-
-    const groups = NODE_TYPE_ORDER.map((type) => {
-      const items = filtered.filter((n) => n.type === type);
-      return { type, items };
-    }).filter((g) => g.items.length > 0);
-
-    return { groups, total: filtered.length };
-  }, [nodes, search]);
-
-  const handleClickNode = useCallback(
-    (nodeId: string) => {
-      const allNodes = useCanvasStore.getState().nodes;
-      setNodes(
-        allNodes.map((n: AnyNode) => ({
-          ...n,
-          selected: n.id === nodeId,
-        }))
-      );
-      // Center viewport on the node
-      const target = allNodes.find((n: AnyNode) => n.id === nodeId);
-      if (target) {
-        fitView({
-          nodes: [{ id: nodeId }],
-          duration: 300,
-          maxZoom: 1.5,
-        });
-      }
-      markDirtyImmediate();
-    },
-    [setNodes, fitView]
-  );
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* 搜索栏 */}
-      <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
-        <Input
-          size="small"
-          placeholder={t("canvas.search.placeholder")}
-          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{
-            background: "var(--canvas-bg-elevated)",
-            borderColor: "var(--canvas-border)",
-            color: "var(--canvas-text)",
-            borderRadius: 8,
-            height: 32,
-          }}
-        />
-      </div>
-
-      {/* 节点列表 */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-3">
-        {grouped.total === 0 ? (
-          <div className="flex items-center justify-center h-full min-h-[200px]">
-            <Empty
-              description={
-                <span style={{ color: "var(--canvas-text-dim)" }}>
-                  {search ? t("canvas.empty") : t("canvas.empty")}
-                </span>
-              }
-            />
-          </div>
-        ) : (
-          grouped.groups.map((group) => (
-            <div key={group.type} className="mb-3">
-              <div
-                className="text-xs font-medium px-2 py-1.5 sticky top-0 z-10 rounded"
-                style={{
-                  color: "var(--canvas-text-dim)",
-                  background: "var(--canvas-bg)",
-                }}
-              >
-                {lang === "zh"
-                  ? NODE_TYPE_LABELS[group.type]?.zh || group.type
-                  : NODE_TYPE_LABELS[group.type]?.en || group.type}
-                <span className="ml-1.5 opacity-50">({group.items.length})</span>
-              </div>
-              {group.items.map((node: AnyNode) => (
-                <NodeListItem
-                  key={node.id}
-                  node={node}
-                  onClick={() => handleClickNode(node.id)}
-                />
-              ))}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* 底部统计 */}
-      <div
-        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
-        style={{
-          borderColor: "var(--canvas-border)",
-          color: "var(--canvas-text-muted)",
-        }}
-      >
-        <span>{t("canvas.total").replace("{n}", String(grouped.total))}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── 节点列表项 ──
-function NodeListItem({ node, onClick }: { node: AnyNode; onClick: () => void }) {
-  const label = String(node.data?.label || node.type || "");
-  const nodeType = node.type as string;
-  const { thumb, loading } = useVideoThumbnail(
-    nodeType === NODE_TYPE.VIDEO ? (node.data as { src?: string })?.src : undefined
-  );
-
-  return (
-    <div
-      className="flex items-center gap-2.5 px-2 py-2 rounded-md cursor-pointer transition-colors text-sm"
-      style={{ color: "var(--canvas-text)" }}
-      onClick={onClick}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.background = "transparent";
-      }}
-    >
-      {/* 图标/缩略图 */}
-      <div
-        className="flex-shrink-0 flex items-center justify-center rounded overflow-hidden"
-        style={{ width: 32, height: 32, background: "var(--canvas-bg-elevated)" }}
-      >
-        {nodeType === NODE_TYPE.IMAGE && (node.data as { src?: string })?.src ? (
-          <img
-            src={(node.data as { src?: string }).src}
-            alt={label}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = "none";
-            }}
-          />
-        ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
-          <img src={thumb} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : nodeType === NODE_TYPE.VIDEO && loading ? (
-          <LoadingOutlined style={{ fontSize: 14, color: "var(--canvas-text-dim)" }} />
-        ) : (
-          <span className="flex items-center justify-center" style={{ fontSize: 16 }}>
-            {getNodeTypeIcon(nodeType)}
-          </span>
-        )}
-      </div>
-      {/* 标签 */}
-      <span className="flex-1 truncate">{label || `Node ${node.id}`}</span>
-    </div>
-  );
-}
-
-// ── 资产视图 ──
-function AssetsView() {
-  const t = useI18nStore((s) => s.t);
-  const items = useAssetsStore((s) => s.items);
-  const getFiltered = useAssetsStore((s) => s.getFiltered);
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(
-    () => getFiltered("all", search, null, "personal"),
-    [items, search, getFiltered]
-  );
-
-  const handleInsertCanvas = useCallback(
-    (asset: AssetItem) => {
-      addAssetToCanvas(asset);
-    },
-    []
-  );
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* 搜索栏 */}
-      <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
-        <Input
-          size="small"
-          placeholder={t("asset.search")}
-          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{
-            background: "var(--canvas-bg-elevated)",
-            borderColor: "var(--canvas-border)",
-            color: "var(--canvas-text)",
-            borderRadius: 8,
-            height: 32,
-          }}
-        />
-      </div>
-
-      {/* 资产网格 */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3">
-        {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-full min-h-[200px]">
-            <Empty
-              description={
-                <span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>
-              }
-            />
-          </div>
-        ) : (
-          <div
-            className="grid gap-2"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}
-          >
-            {filtered.map((asset) => (
-              <AssetThumbCard
-                key={asset.id}
-                asset={asset}
-                onInsert={() => handleInsertCanvas(asset)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 底部统计 */}
-      <div
-        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
-        style={{
-          borderColor: "var(--canvas-border)",
-          color: "var(--canvas-text-muted)",
-        }}
-      >
-        <InboxOutlined />
-        <span>{filtered.length} {t("asset.count")}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── 资产缩略图卡片（适配 Drawer 窄容器） ──
 export const DRAWER_WIDTH = 300;
-function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () => void }) {
-  const t = useI18nStore((s) => s.t);
-  const preview = useAssetHoverPreview(DRAWER_WIDTH);
-  const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
-  const coverUrl = asset.metadata?.coverUrl as string | undefined;
-  const isVideo = !!sourceUrl?.match(/\.(mp4|webm|mov)$/i);
 
-  const handleInsert = () => onInsert();
-
-  return (
-    <div
-      className="group relative rounded-lg border border-white/10 cursor-pointer overflow-hidden transition-all hover:border-white/30"
-      style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
-      onMouseEnter={(e) => preview.onEnter(asset, e)}
-      onMouseLeave={() => preview.onLeave()}
-      onClick={onInsert}
-    >
-      {/* 缩略图 */}
-      {isVideo && coverUrl ? (
-        <img
-          src={coverUrl.includes("/api/files/") ? `${coverUrl}?w=120` : coverUrl}
-          alt={asset.name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      ) : sourceUrl ? (
-        <img
-          src={sourceUrl.includes("/api/files/") ? `${sourceUrl}?w=120` : sourceUrl}
-          alt={asset.name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-white/15 text-3xl">
-          {isVideo ? <VideoCameraOutlined /> : <PictureOutlined />}
-        </div>
-      )}
-      {/* Hover overlay — send to canvas */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-lg">
-        <Tooltip title={t("asset.send")}>
-          <button
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
-            onClick={(e) => { e.stopPropagation(); handleInsert(); }}
-          >
-            <PlusOutlined />
-          </button>
-        </Tooltip>
-      </div>
-      {/* Name */}
-      <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 bg-gradient-to-t from-black/70 to-transparent">
-        <div className="text-white/80 text-[11px] truncate">{asset.name}</div>
-      </div>
-
-      {/* Hover large preview */}
-      <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-    </div>
-  );
-}
-
-// ── 主组件 ──
 interface CanvasSidebarProps {
   open: boolean;
   onClose: () => void;
 }
 
-type TabKey = "elements" | "assets";
-
 export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
   const t = useI18nStore((s) => s.t);
-  const [activeTab, setActiveTab] = useState<TabKey>("elements");
+  const lang = useI18nStore((s) => s.lang);
+  const [activeTab, setActiveTab] = useState<string>("elements");
 
   return (
     <Drawer
-      title={null}
+      className="canvas-sidebar"
       open={open}
       onClose={onClose}
+      mask={false}
       placement="left"
       size={DRAWER_WIDTH}
-      mask={false}
-      destroyOnClose
-      closeIcon={
-        <span style={{ color: "var(--canvas-text-dim)", fontSize: 16 }}>✕</span>
-      }
       styles={{
         header: {
           background: "var(--canvas-bg)",
           borderBottom: "1px solid var(--canvas-border)",
-          padding: "8px 16px",
+          padding: "12px 16px",
         },
         body: {
           background: "var(--canvas-bg)",
           padding: 0,
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
         },
-        wrapper: { boxShadow: "none" },
       }}
+      closable={false}
+      title={
+        <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>
+          {activeTab === "assets" ? t("asset.title") : t("canvas.sidebar")}
+        </span>
+      }
     >
       <style>{`
-        .canvas-sidebar .ant-drawer-header {
-          position: relative;
-          min-height: 40px;
-        }
-        /* 左侧抽屉：关闭按钮移到左上角（贴左边缘），符合常规 */
-        .canvas-sidebar .ant-drawer-close {
-          position: absolute !important;
-          left: 12px !important;
-          right: auto !important;
-          top: 50% !important;
-          transform: translateY(-50%) !important;
-          margin: 0 !important;
-        }
-        .canvas-sidebar .ant-drawer-body {
-          flex: 1;
-          overflow: hidden;
-        }
-        .canvas-sidebar input.ant-input {
+        .canvas-sidebar .ant-drawer-body { display:flex; flex-direction:column; height:100%; }
+        .canvas-sidebar .ant-input-affix-wrapper {
           background: var(--canvas-bg-elevated) !important;
           border-color: var(--canvas-border) !important;
           color: var(--canvas-text) !important;
           border-radius: 8px !important;
           height: 32px !important;
-          font-size: 13px !important;
         }
-        .canvas-sidebar input.ant-input:hover,
-        .canvas-sidebar input.ant-input:focus {
-          border-color: var(--canvas-border) !important;
-          box-shadow: none !important;
-        }
-        .canvas-sidebar .ant-input-affix-wrapper {
-          background: var(--canvas-bg-elevated) !important;
-          border-color: var(--canvas-border) !important;
-          border-radius: 8px !important;
-          height: 32px !important;
-        }
-        .canvas-sidebar .ant-input-affix-wrapper .ant-input {
+        .canvas-sidebar .ant-input {
           background: transparent !important;
-          border: none !important;
+          color: var(--canvas-text) !important;
+          font-size: 13px !important;
           height: 30px !important;
         }
         .canvas-sidebar .ant-input-affix-wrapper:hover,
@@ -527,16 +171,10 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
           border-color: var(--canvas-border) !important;
           box-shadow: none !important;
         }
-        .canvas-sidebar ::-webkit-scrollbar {
-          width: 4px;
-        }
-        .canvas-sidebar ::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .canvas-sidebar ::-webkit-scrollbar-thumb {
-          background: var(--canvas-border);
-          border-radius: 2px;
-        }
+        .canvas-sidebar .ant-drawer-content-wrapper { border-right: 1px solid var(--canvas-border) !important; }
+        .canvas-sidebar ::-webkit-scrollbar { width:4px; }
+        .canvas-sidebar ::-webkit-scrollbar-track { background:transparent; }
+        .canvas-sidebar ::-webkit-scrollbar-thumb { background:var(--canvas-border); border-radius:2px; }
       `}</style>
 
       <div className="canvas-sidebar flex flex-col h-full">
@@ -545,8 +183,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
           <button
             className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors border-b-2"
             style={{
-              background: "transparent",
-              cursor: "pointer",
+              background: "transparent", cursor: "pointer",
               color: activeTab === "elements" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
               borderColor: activeTab === "elements" ? "#1677ff" : "transparent",
             }}
@@ -558,8 +195,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
           <button
             className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors border-b-2"
             style={{
-              background: "transparent",
-              cursor: "pointer",
+              background: "transparent", cursor: "pointer",
               color: activeTab === "assets" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
               borderColor: activeTab === "assets" ? "#1677ff" : "transparent",
             }}
@@ -576,5 +212,355 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
         </div>
       </div>
     </Drawer>
+  );
+}
+
+// ── 元素视图 ──
+function CanvasElementsView() {
+  const t = useI18nStore((s) => s.t);
+  const nodes = useCanvasStore((s) => s.nodes);
+  const edges = useCanvasStore((s) => s.edges);
+  const { setCenter, getNodes } = useReactFlow();
+
+  const selectedNodeIds = useMemo(
+    () => new Set(getNodes().filter((n) => n.selected).map((n) => n.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes],
+  );
+
+  const handleClickElement = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      const x = node.position.x + ((node.width as number) ?? 200) / 2;
+      const y = node.position.y + ((node.height as number) ?? 200) / 2;
+      setCenter(x, y, { zoom: 1.0, duration: 300 });
+    },
+    [nodes, setCenter],
+  );
+
+  // Group nodes by type in defined order
+  const grouped = useMemo(() => {
+    const groups: { type: string; nodes: AnyNode[] }[] = [];
+    const byType = new Map<string, AnyNode[]>();
+    for (const n of nodes) {
+      const list = byType.get(n.type || "");
+      if (list) list.push(n as AnyNode);
+      else byType.set(n.type || "", [n as AnyNode]);
+    }
+    for (const type of NODE_TYPE_ORDER) {
+      const list = byType.get(type);
+      if (list && list.length > 0) groups.push({ type, nodes: list.reverse() });
+      byType.delete(type);
+    }
+    // Remaining types (uncategorized)
+    for (const [type, list] of byType) {
+      if (list.length > 0) groups.push({ type, nodes: list.reverse() });
+    }
+    return groups;
+  }, [nodes]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "12px 16px" }}>
+        {grouped.length === 0 ? (
+          <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
+        ) : (
+          grouped.map((group) => (
+            <div key={group.type} className="mb-3">
+              <div className="text-xs mb-1 px-2" style={{ color: "var(--canvas-text-muted)" }}>
+                {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
+              </div>
+              {group.nodes.map((node) => (
+                <ElementItem
+                  key={node.id}
+                  node={node as AnyNode}
+                  edges={edges}
+                  selected={selectedNodeIds.has(node.id)}
+                  onClick={() => handleClickElement(node.id)}
+                />
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+      <div
+        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
+        style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
+      >
+        <AppstoreOutlined />
+        <span>{nodes.length} {t("nodes.count")}</span>
+      </div>
+    </div>
+  );
+}
+
+function ElementItem({ node, edges, selected, onClick }: {
+  node: AnyNode;
+  edges: Edge[];
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const t = useI18nStore((s) => s.t);
+  const nodeType = node.type || "";
+  const typeLabel = nodeType && NODE_TYPE_I18N[nodeType] ? t(NODE_TYPE_I18N[nodeType]) : "";
+  const rawLabel = (node.data as { label?: string })?.label;
+  const label = rawLabel || typeLabel || nodeType;
+  const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
+  const { thumb, loading } = useVideoThumbnail(node.type === NODE_TYPE.VIDEO ? (node.data as { src?: string }).src : undefined);
+  const preview = useAssetHoverPreview(DRAWER_WIDTH);
+  const sourceUrl = (node.data as { src?: string }).src;
+
+  return (
+    <div
+      onClick={onClick}
+      className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
+      style={{
+        background: selected ? "var(--canvas-bg-hover)" : "transparent",
+        color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
+      }}
+      onMouseEnter={(e) => {
+        if (!selected) { (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-elevated)"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text)"; }
+        if (sourceUrl) preview.onEnter(node as unknown as AssetItem, e);
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text-dim)"; }
+        preview.onLeave();
+      }}
+    >
+      {/* 缩略图/图标 */}
+      <div
+        className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
+        style={{
+          minWidth: 32,
+          background: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
+            ? "var(--canvas-bg-elevated)"
+            : `${TYPE_COLORS[nodeType] || "var(--canvas-text-dim)"}18`,
+        }}
+      >
+        {nodeType === NODE_TYPE.IMAGE && src ? (
+          <img src={src + "?w=64"} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
+        ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
+          <img src={thumb} alt={label} className="w-full h-full object-cover" />
+        ) : nodeType === NODE_TYPE.VIDEO && loading ? (
+          <LoadingOutlined style={{ fontSize: 14, color: "var(--canvas-text-dim)" }} />
+        ) : (
+          getNodeTypeIcon(nodeType)
+        )}
+      </div>
+      <span className="flex-1 truncate text-xs">{label || `Node ${node.id}`}</span>
+    </div>
+  );
+}
+
+// ── 资产视图 ──
+function AssetsView() {
+  const t = useI18nStore((s) => s.t);
+  const { notification: notif } = App.useApp();
+  const folders = useAssetsStore((s) => s.folders);
+  const getChildFolders = useAssetsStore((s) => s.getChildFolders);
+
+  // Independent local state — not shared with AssetsModal
+  const [items, setItems] = useState<AssetItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const versionRef = useRef(0);
+
+  const fetchAndReplace = useCallback(async (filters: { search: string; folderId: string | null }) => {
+    const v = ++versionRef.current;
+    setItems([]);
+    setTotalCount(0);
+    setLoading(true);
+    try {
+      const result = await fetchAssetPage(
+        { category: "all", search: filters.search, folderId: filters.folderId, spaceKey: "personal" },
+        0,
+      );
+      if (v !== versionRef.current) return;
+      setItems(result.items);
+      setTotalCount(result.total);
+    } catch { /* ignore */ }
+    if (v === versionRef.current) setLoading(false);
+  }, []);
+
+  const fetchNextPage = useCallback(async () => {
+    const v = ++versionRef.current;
+    setLoadingMore(true);
+    try {
+      const result = await fetchAssetPage(
+        { category: "all", search, folderId: activeFolderId, spaceKey: "personal" },
+        items.length,
+      );
+      if (v !== versionRef.current) return;
+      setItems((prev) => [...prev, ...result.items]);
+      setTotalCount(result.total);
+    } catch { /* ignore */ }
+    if (v === versionRef.current) setLoadingMore(false);
+  }, [search, activeFolderId, items.length]);
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      fetchAndReplace({ search, folderId: activeFolderId });
+    }, 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search, activeFolderId, fetchAndReplace]);
+
+  const hasMore = items.length < totalCount;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || loadingMore) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) fetchNextPage(); },
+      { rootMargin: "100px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, loadingMore, fetchNextPage]);
+
+  const handleInsertCanvas = useCallback((asset: AssetItem) => {
+    addAssetToCanvas(asset);
+    notif.success({
+      title: t("asset.added"),
+      description: asset.name,
+      placement: "bottomRight",
+      duration: 3,
+    });
+  }, [notif, t]);
+
+  const activeFolder = useMemo(
+    () => activeFolderId ? folders.find((f) => f.id === activeFolderId) : null,
+    [activeFolderId, folders],
+  );
+
+  const childFolders = useMemo(
+    () => getChildFolders("personal", activeFolderId ?? undefined),
+    [getChildFolders, activeFolderId],
+  );
+
+  const hasContent = items.length > 0 || childFolders.length > 0;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* 搜索栏 */}
+      <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
+        <Input
+          size="small"
+          placeholder={t("asset.search")}
+          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          allowClear
+          style={{ height: 32 }}
+        />
+      </div>
+
+      {/* 面包屑 */}
+      {activeFolder && (
+        <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0">
+          <button
+            onClick={() => setActiveFolderId(null)}
+            className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/5"
+            style={{ color: "var(--canvas-text-dim)" }}
+          >
+            ← {t("asset.space.personal")}
+          </button>
+          <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+          <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>
+            {activeFolder.name}
+          </span>
+        </div>
+      )}
+
+      {/* 资产网格 */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3">
+        {!hasContent && !loading ? (
+          <div className="flex items-center justify-center h-full min-h-[200px]">
+            <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>} />
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
+              {!search && !activeFolderId && childFolders.map((folder) => (
+                <div
+                  key={folder.id}
+                  onClick={() => setActiveFolderId(folder.id)}
+                  className="relative group rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-1"
+                  style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
+                >
+                  <InboxOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.2)" }} />
+                  <span className="text-white/60 text-[11px] px-1 text-center truncate w-full">{folder.name}</span>
+                </div>
+              ))}
+              {items.map((asset) => (
+                <AssetThumbCard key={asset.id} asset={asset} onInsert={() => handleInsertCanvas(asset)} />
+              ))}
+            </div>
+            <div ref={sentinelRef} className="flex items-center justify-center py-3">
+              {loadingMore && <LoadingOutlined style={{ color: "var(--canvas-text-dim)" }} />}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 底部统计 */}
+      <div
+        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
+        style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
+      >
+        <InboxOutlined />
+        <span>{totalCount || items.length} {t("asset.count")}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── 资产缩略图卡片 ──
+function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () => void }) {
+  const t = useI18nStore((s) => s.t);
+  const preview = useAssetHoverPreview(DRAWER_WIDTH);
+  const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
+  const coverUrl = asset.metadata?.coverUrl as string | undefined;
+  const isVideo = sourceUrl && /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(sourceUrl);
+  const imgSrc = isVideo ? coverUrl || sourceUrl : sourceUrl || "";
+  const [imgError, setImgError] = useState(false);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInsert(); } },
+    [onInsert],
+  );
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        tabIndex={0}
+        role="button"
+        aria-label={t("asset.insert") + " " + asset.name}
+        onClick={onInsert}
+        onKeyDown={handleKeyDown}
+        onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
+        onMouseLeave={preview.onLeave}
+        className="relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
+        style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
+      >
+        {imgSrc && !imgError ? (
+          <img src={imgSrc + "?w=160"} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-white/15 text-2xl font-bold">
+            {isVideo ? "VID" : "IMG"}
+          </div>
+        )}
+        {isVideo && !imgError && (
+          <div className="absolute bottom-1 right-1 text-[10px] font-bold text-white/70 bg-black/50 px-1 rounded">▶</div>
+        )}
+      </div>
+      <span className="text-[10px] leading-tight text-white/50 truncate px-0.5">{asset.name}</span>
+    </div>
   );
 }

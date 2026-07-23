@@ -141,6 +141,7 @@ export interface AssetFolderDto {
   space_key: string;
   parent_id: number | null;
   created_at: string;
+  count: number;
 }
 
 export interface AssetItemDto {
@@ -180,14 +181,16 @@ export const assetApi = {
     api(`/api/assets/folders/${id}`, { method: "DELETE" }),
 
   // Assets
-  listAssets: (params?: { folder_id?: number; type?: string; search?: string; space_key?: string }) => {
+  listAssets: (params?: { folder_id?: number; type?: string; search?: string; space_key?: string; skip?: number; limit?: number }) => {
     const sp = new URLSearchParams();
     if (params?.folder_id !== undefined) sp.set("folder_id", String(params.folder_id));
     if (params?.type) sp.set("type", params.type);
     if (params?.search) sp.set("search", params.search);
     if (params?.space_key) sp.set("space_key", params.space_key);
+    if (params?.skip !== undefined) sp.set("skip", String(params.skip));
+    if (params?.limit !== undefined) sp.set("limit", String(params.limit));
     const qs = sp.toString();
-    return api<AssetItemDto[]>(`/api/assets/items${qs ? `?${qs}` : ""}`);
+    return api<{ items: AssetItemDto[]; total: number }>(`/api/assets/items${qs ? `?${qs}` : ""}`);
   },
 
   createAsset: (data: {
