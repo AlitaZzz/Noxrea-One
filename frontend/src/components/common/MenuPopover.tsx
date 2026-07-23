@@ -8,12 +8,9 @@ export function MenuItem({ children, onClick, dimmed, iconRight }: {
   children: ReactNode; onClick?: () => void; dimmed?: boolean; iconRight?: ReactNode;
 }) {
   return (
-    <div
-      className="menu-popover-item"
-      style={{ pointerEvents: dimmed ? "none" : "auto" }}
-    >
+    <div className="menu-popover-item">
     <button className="menu-item-btn"
-      style={{ color: dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)", cursor: dimmed ? "default" : "pointer" }}
+      style={{ color: dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)" }}
       onClick={onClick}>
       <span className="flex-1">{children}</span>
       {iconRight}

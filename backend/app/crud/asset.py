@@ -197,6 +197,17 @@ async def get_asset(db: AsyncSession, asset_id: int, user_id: int) -> Optional[A
     return result.scalar_one_or_none()
 
 
+async def get_asset_source_urls(db: AsyncSession, user_id: int, space_key: str = "personal") -> list[str]:
+    """返回用户某个空间下所有资产的 sourceUrl 列表，用于前端轻量级资产检查。"""
+    from sqlalchemy import func
+    q = (
+        select(func.json_extract(AssetItem.extra_data, "$.sourceUrl"))
+        .where(AssetItem.user_id == user_id, AssetItem.space_key == space_key)
+    )
+    result = await db.execute(q)
+    return [row[0] for row in result.all() if row[0] and isinstance(row[0], str)]
+
+
 async def _add_asset_ref(db: AsyncSession, user_id: int, source_url: str | None, asset_id: int):
     """记录 asset 对文件的引用（同一事务中调用，不自己 commit）"""
     if not source_url:

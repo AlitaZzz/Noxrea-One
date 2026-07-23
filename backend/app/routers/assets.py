@@ -116,6 +116,16 @@ async def list_assets(
     )
 
 
+@router.get("/items/source-urls", response_model=UnifiedResponse[list[str]])
+async def list_source_urls(
+    space_key: str = Query("personal"),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    urls = await crud.get_asset_source_urls(db, user.id, space_key)
+    return UnifiedResponse(code=200, data=urls, msg="ok")
+
+
 @router.get("/items/{asset_id}", response_model=UnifiedResponse[AssetOut])
 async def get_asset(
     asset_id: int,

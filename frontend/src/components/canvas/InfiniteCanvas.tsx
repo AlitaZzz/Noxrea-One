@@ -58,18 +58,6 @@ import { useModelStore } from "@/stores/model-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useSelectionStore } from "@/stores/selection-store";
 
-const nodeTypes = {
-  [NODE_TYPE.TEXT]: TextNode,
-  [NODE_TYPE.IMAGE]: ImageNode,
-  [NODE_TYPE.VIDEO]: VideoNode,
-  [NODE_TYPE.GROUP]: GroupNode,
-  [NODE_TYPE.DIRECTOR]: DirectorNode,
-};
-
-const edgeTypes = {
-  deletable: DeletableEdge,
-};
-
 export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -303,6 +291,19 @@ export default function InfiniteCanvas() {
     return () => { flushOnUnload(); };
   }, []);
 
+  // Memoize nodeTypes/edgeTypes to avoid stale references (React Flow #002 warning)
+  const rfNodeTypes = useMemo(() => ({
+    [NODE_TYPE.TEXT]: TextNode,
+    [NODE_TYPE.IMAGE]: ImageNode,
+    [NODE_TYPE.VIDEO]: VideoNode,
+    [NODE_TYPE.GROUP]: GroupNode,
+    [NODE_TYPE.DIRECTOR]: DirectorNode,
+  }), []);
+
+  const rfEdgeTypes = useMemo(() => ({
+    deletable: DeletableEdge,
+  }), []);
+
   return (
     <div
       style={{ width: "100%", height: "100%" }}
@@ -313,8 +314,8 @@ export default function InfiniteCanvas() {
       <ReactFlow
         nodes={nodes}
         edges={highlightedEdges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
+        nodeTypes={rfNodeTypes}
+        edgeTypes={rfEdgeTypes}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}

@@ -120,8 +120,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const foldersRes = await assetApi.listFolders("personal");
-      set({ folders: (foldersRes.data || []).map(dtoToFolder), initialized: true });
+      const [foldersRes, urlsRes] = await Promise.all([
+        assetApi.listFolders("personal"),
+        assetApi.listSourceUrls("personal"),
+      ]);
+      const urls = new Set(urlsRes.data || []);
+      set({ folders: (foldersRes.data || []).map(dtoToFolder), initialized: true, knownAssetUrls: urls });
     } catch {
       set({ folders: [], initialized: true });
     }
@@ -145,8 +149,9 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       description: input.description, tags: input.tags,
       extra_data: input.metadata, folder_id: toIntId(input.folderId || ""), space_key: input.spaceKey || "personal",
     }).then((res) => {
-      if (res.code !== 200 || !res.data) {
-        // rollback handled by caller
+      if (res.code === 200 && res.data) {
+        const url = input.metadata?.sourceUrl;
+        if (url && typeof url === "string") get().markAssetUrlSaved(url);
       }
     }).catch(() => {});
 

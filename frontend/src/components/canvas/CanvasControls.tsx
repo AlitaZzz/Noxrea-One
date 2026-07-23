@@ -7,9 +7,9 @@ import {
   MenuUnfoldOutlined,
   ExpandOutlined,
   FolderOpenOutlined,
+  ApiOutlined,
   MedicineBoxOutlined, // unused — kept for other components
   MoonOutlined,
-  SettingOutlined,
   SunOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
@@ -204,9 +204,9 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       {/* Language toggle */}
       <LanguageToggle />
 
-      {/* Settings */}
-      <Tooltip title={t("settings")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<SettingOutlined />} onClick={onOpenSettings} />
+      {/* API Settings */}
+      <Tooltip title={t("api.settings")}>
+        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ApiOutlined />} onClick={onOpenSettings} />
       </Tooltip>
 
       {/* My Assets */}

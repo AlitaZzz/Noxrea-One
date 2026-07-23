@@ -227,4 +227,7 @@ export const assetApi = {
       method: "PUT",
       body: JSON.stringify({ ids, updates }),
     }),
+
+  listSourceUrls: (spaceKey = "personal") =>
+    api<string[]>(`/api/assets/items/source-urls?space_key=${spaceKey}`),
 };
