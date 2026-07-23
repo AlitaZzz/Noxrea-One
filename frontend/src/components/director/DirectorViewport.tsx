@@ -362,6 +362,13 @@ export default function DirectorViewport() {
         if (idx < 0) return;
         const ent = entities[idx];
         const lbl = _labelEls.get(id); if (lbl) { lbl.remove(); _labelEls.delete(id); }
+        // 删除打组(Crowd)时，一并清理所有成员的标签，避免残留
+        if (ent instanceof Crowd) {
+          for (const m of ent.members) {
+            const mlbl = _labelEls.get(m.id);
+            if (mlbl) { mlbl.remove(); _labelEls.delete(m.id); }
+          }
+        }
         stage.remove(ent.root); ent.dispose?.(); entities.splice(idx, 1); _sync();
         if (_selectedId === id) { gizmo.detach(); selection.highlight(null); useDirectorStore.getState().setSelectedId(null); }
       },
