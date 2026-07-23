@@ -5,7 +5,7 @@ import {
   AppstoreOutlined,
   BgColorsOutlined,
   ExpandOutlined,
-  InboxOutlined,
+  FolderOpenOutlined,
   MedicineBoxOutlined, // unused — kept for other components
   MoonOutlined,
   SettingOutlined,
@@ -147,9 +147,16 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
             type="text"
             className={`canvas-ctrl-btn ${snapToGrid ? "canvas-ctrl-active" : ""}`}
             icon={
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 4v9a6 6 0 0 0 12 0V4" />
-                <path d="M4 4h4v3H4z" /><path d="M16 4h4v3h-4z" />
+              <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {/* 马蹄磁铁 */}
+                <path d="M5 16V10a7 7 0 0 1 14 0v6" />
+                {/* 两极 */}
+                <rect x="3.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
+                <rect x="15.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
+                {/* 被吸附的节点 */}
+                <circle cx="12" cy="20" r="1.8" fill="currentColor" stroke="none" />
+                <circle cx="6.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
+                <circle cx="17.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
               </svg>
             }
             onClick={() => { toggleSnapToGrid(); }}
@@ -189,7 +196,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
       {/* My Assets */}
       <Tooltip title={t("assets")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<InboxOutlined />} onClick={onOpenAssets} />
+        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<FolderOpenOutlined />} onClick={onOpenAssets} />
       </Tooltip>
 
       {/* Canvas Sidebar */}

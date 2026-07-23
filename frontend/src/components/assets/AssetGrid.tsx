@@ -4,6 +4,7 @@ import { Empty, Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 
 import type { AssetFolder,AssetItem } from "@/lib/types";
+import { UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 
 import AssetCard from "./AssetCard";
@@ -77,7 +78,7 @@ export default function AssetGrid({
       <div className="grid gap-3 pb-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
         {/* Folders first */}
         {folders?.map((folder) => (
-          <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={onDeleteFolder} />
+          <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={folder.id === UNCATEGORIZED_FOLDER_ID ? undefined : onDeleteFolder} />
         ))}
         {/* Then assets */}
         {assets.map((asset) => (
