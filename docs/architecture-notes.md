@@ -102,6 +102,18 @@ Zustand store 的 `getState()` 方法可以在组件外和异步回调中获取�
 - 使用 `httpx.AsyncClient` 而非 requests
 - 设置合理的 timeout
 
+### 生成链路（worker 后台协程）的 SSRF 边界
+
+`backend/app/services/worker.py` 在生成任务中也会代发请求，目标分"用户可控 URL"与"管理员配置 URL"两类，必须区别对待：
+
+- **用户可控 URL（`ref_urls` / `bg_removal` 的 `source_url`）**：
+  - 同源 URL（严格比对 `PUBLIC_URL` 的 host+有效端口，**不查私有 IP 黑名单**，避免双机/上云自身地址被误杀）→ 直接读本机磁盘（`_read_self_file`），**不发任何网络请求**，既防 SSRF 又消除 hairpin。
+  - 命中 `ALLOWED_INTERNAL_HOSTS` 白名单 → `dns_pin` 安全 fetch。
+  - 其它外链 → `ref_urls` 透传原串（交由 provider 自行访问）；`source_url` 直接拒绝（`failed`，错误 "Source image must be hosted on this service"）。
+- **管理员配置 URL（`channel.base_url`）**：与用户 URL 同等视为"服务端代发目标"，必须经 `resolve_and_validate`（运行时以 `_validate_worker` 包装），校验失败在后台协程以 `SSREFError` 捕获并标 `failed`，不借用 `HTTPException`。
+- **纯内部服务 URL（`INFERENCE_SERVICE_URL`）**：属可信内部配置、非用户输入，**不在此 SSRF 校验之列**。
+- **跨用户隔离**：`_read_self_file` 校验 URL 中的 `uid` 段必须等于任务 `user_id`，防止越权读取他人文件。
+
 ---
 
 ## 代码规范

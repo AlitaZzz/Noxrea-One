@@ -5,6 +5,7 @@ Background worker that processes generation tasks from the queue.
 import asyncio
 import base64
 import logging
+import os
 import time
 from contextlib import nullcontext as _nullcontext
 from datetime import datetime, timezone
@@ -72,39 +73,107 @@ async def _claim_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask
 # ── Resolve reference images to base64 ────────────────────────
 
 
-def _is_local_url(url: str) -> bool:
-    """判断 url 是否指向本服务（需下载后转 base64，外部 provider 访问不到 localhost）。"""
-    if any(x in url for x in ("localhost", "127.0.0.1")):
-        return True
-    pub = settings.PUBLIC_URL
-    if pub:
-        try:
-            return urlparse(url).hostname == urlparse(pub).hostname
-        except Exception:
-            return False
-    return False
+_MEDIA_TYPE_MAP = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
 
 
-async def _resolve_refs(ref_urls: list[str]) -> list[str]:
-    """Convert local file URLs to base64 data URLs (AI providers can't access localhost)."""
+def _read_self_file(url: str, user_id: int) -> tuple[bytes, str] | None:
+    """同源文件 URL → 直接读本机磁盘，免出网（消除 hairpin）。
+
+    仅接受 /api/files/{uid}/{sub}/{hash}{ext} 或 /api/files/{uid}/frames/{name} 形态。
+    返回 (bytes, mime)，或 None（不读盘）。
+    """
+    from app.services import media
+
+    if "/api/files/" not in url:
+        return None
+    rel = url.split("/api/files/", 1)[-1]
+    parts = [p for p in rel.split("/") if p]
+    if len(parts) < 3:
+        return None
+    try:
+        uid = int(parts[0])
+    except ValueError:
+        return None
+    sub = parts[1]
+    if sub != "frames" and (len(sub) != 2 or not sub.isalnum()):
+        return None
+    if uid != user_id:
+        logger.warning(f"read_self_file uid mismatch: url uid={uid} task uid={user_id}")
+        return None
+    try:
+        full_path = media.validate_user_file(rel, user_id)
+    except (FileNotFoundError, PermissionError, ValueError):
+        return None
+    # 双保险：realpath + 前缀守卫（防符号链接/逃逸）
+    real = os.path.realpath(full_path)
+    root = os.path.realpath(media.UPLOAD_DIR)
+    if not (real == root or real.startswith(root + os.sep)):
+        return None
+    try:
+        with open(real, "rb") as f:
+            data = f.read()
+    except OSError:
+        return None
+    ext = os.path.splitext(real)[1].lower()
+    mime = _MEDIA_TYPE_MAP.get(ext, "application/octet-stream")
+    return data, mime
+
+
+async def _resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
+    """Convert self/allowed file URLs to base64 data URLs (external providers can't reach localhost).
+
+    三档：
+      1) 同源 URL → 直接读本机磁盘转 base64（无出网，消除 hairpin）
+      2) 白名单内 URL → dns_pin 安全 fetch 后转 base64
+      3) 其它外链 → 透传原串（不下载，交由 provider 自行访问）
+    """
     if not ref_urls:
         return []
     resolved: list[str] = []
-    async with httpx.AsyncClient(timeout=30) as client:
-        for url in ref_urls:
-            # Local file → download and convert to base64
-            if _is_local_url(url):
-                try:
-                    resp = await client.get(url)
-                    if resp.is_success:
-                        b64 = base64.b64encode(resp.content).decode()
-                        mime = resp.headers.get("content-type", "image/png")
-                        resolved.append(f"data:{mime};base64,{b64}")
-                        continue
-                except Exception:
-                    pass
-            # Already a data URL or external URL → pass through
-            resolved.append(url)
+    from app.services.ssrf import (
+        is_self_url,
+        is_allowed_ref_host,
+        _validate_worker,
+        dns_pin,
+    )
+
+    for url in ref_urls:
+        # 1) 同源 → 读盘（无出网）
+        if is_self_url(url):
+            pair = _read_self_file(url, user_id)
+            if pair:
+                data, mime = pair
+                b64 = base64.b64encode(data).decode()
+                resolved.append(f"data:{mime};base64,{b64}")
+                continue
+        # 2) 白名单 → dns_pin 安全 fetch
+        if is_allowed_ref_host(url):
+            try:
+                ip, hostname, scheme, port = _validate_worker(url)
+            except Exception:
+                resolved.append(url)
+                continue
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    with dns_pin(hostname, ip, port):
+                        resp = await client.get(url)
+                if resp.is_success:
+                    b64 = base64.b64encode(resp.content).decode()
+                    mime = resp.headers.get("content-type", "image/png")
+                    resolved.append(f"data:{mime};base64,{b64}")
+                    continue
+            except Exception:
+                pass
+        # 3) 其它外链 → 透传
+        resolved.append(url)
     return resolved
 
 
@@ -126,7 +195,7 @@ async def _process_task(task: GenerationTask) -> None:
     if isinstance(raw_refs, str):
         import json as _json
         raw_refs = _json.loads(raw_refs) if raw_refs else []
-    refs = await _resolve_refs(raw_refs)
+    refs = await _resolve_refs(raw_refs, task.user_id)
 
     # image/video 按 channel_id 解析 baseUrl/apiKey（apiKey 不再落库到 task）；
     # bg_removal 走推理服务，不需要 channel。
@@ -155,9 +224,15 @@ async def _process_task(task: GenerationTask) -> None:
         headers["Authorization"] = f"Bearer {api_key}"
 
     # SSRF 校验：对 AI provider 的 base_url 解析并锁定 DNS，防御内网/元数据探测
-    from app.services.ssrf import resolve_and_validate, dns_pin
+    from app.services.ssrf import _validate_worker, dns_pin, SSREFError
     if base_url:
-        ip, hostname, scheme, port = resolve_and_validate(base_url)
+        try:
+            ip, hostname, scheme, port = _validate_worker(base_url)
+        except SSREFError as e:
+            await _update_task_status(
+                task.id, "failed", error=f"Invalid provider base_url: {e}"
+            )
+            return
     else:
         ip = hostname = scheme = port = None  # bg_removal 不发 provider 请求
 
@@ -388,14 +463,42 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
     source_url = ref_urls[0]
 
     try:
-        # 1. Download source image
-        async with httpx.AsyncClient(timeout=60) as client:
-            src_resp = await client.get(source_url)
-            if not src_resp.is_success:
-                await _update_task_status(task.id, "failed",
-                    error=f"Failed to download source image: HTTP {src_resp.status_code}")
-                return None
-            src_bytes = src_resp.content
+        # 1. SSRF 防护：同源读本机磁盘（无出网）；白名单内 dns_pin 安全下载；其它拒绝
+        from app.services.ssrf import (
+            is_self_url,
+            is_allowed_ref_host,
+            _validate_worker,
+            dns_pin,
+            SSREFError,
+        )
+        src_bytes = None
+        if is_self_url(source_url):
+            pair = _read_self_file(source_url, task.user_id)
+            if pair:
+                src_bytes = pair[0]
+        if src_bytes is None and is_allowed_ref_host(source_url):
+            try:
+                ip, hostname, scheme, port = _validate_worker(source_url)
+                async with httpx.AsyncClient(timeout=60) as client:
+                    with dns_pin(hostname, ip, port):
+                        src_resp = await client.get(source_url)
+                if src_resp.is_success:
+                    src_bytes = src_resp.content
+                else:
+                    await _update_task_status(
+                        task.id, "failed",
+                        error=f"Failed to download source image: HTTP {src_resp.status_code}",
+                    )
+                    return None
+            except Exception as e:
+                logger.warning(f"bg_removal download failed task={task.id}: {e}")
+                src_bytes = None
+        if src_bytes is None:
+            await _update_task_status(
+                task.id, "failed",
+                error="Source image must be hosted on this service",
+            )
+            return None
 
         # 2. Call inference service
         inference_url = app_settings.INFERENCE_SERVICE_URL.rstrip("/") + "/process/bg-removal"
