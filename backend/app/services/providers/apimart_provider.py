@@ -8,7 +8,7 @@ from app.config import settings
 #   1. POST /images/generations -> {code, data: [{"status":"submitted", "task_id":...}]}
 #   2. GET  /v1/tasks/{task_id}  -> {code, data: {status, result:{images:[{url:[...]}]}}}
 # size = 比例（1:1），resolution = 档位（2k），official_fallback = false
-# 轮询参数走 settings.ASYNC_POLL_*（可在 .env 调）
+# 轮询参数走 settings.WORKER_ASYNC_POLL_*（可在 .env 调）
 
 
 class ApimartProvider(ProviderConfig):
@@ -17,8 +17,8 @@ class ApimartProvider(ProviderConfig):
             "apimart",
             "/images/generations",
             "",
-            poll_interval=int(settings.ASYNC_POLL_INTERVAL * 1000),   # ms
-            max_poll_attempts=settings.ASYNC_POLL_MAX_ATTEMPTS,
+            poll_interval=int(settings.WORKER_ASYNC_POLL_INTERVAL * 1000),   # ms
+            max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
             presets=[{"name": "APIMart", "baseUrl": "https://api.apimart.ai/v1"}],
         )
 
