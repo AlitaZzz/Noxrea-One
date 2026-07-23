@@ -101,7 +101,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
   const handleConfirm = async () => {
     if (!completedCrop || loading || !imgRef.current) return;
     setLoading(true);
-    useCanvasStore.getState().updateNodeData(sourceId, { _generating: true }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(sourceId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
 
     try {
       const img = imgRef.current;
@@ -134,7 +134,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
     } catch (e) {
       console.error("crop failed:", e);
     } finally {
-      useCanvasStore.getState().updateNodeData(sourceId, { _generating: false }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(sourceId, { taskBinding: undefined }, undefined, { skipHistory: true });
       setLoading(false);
     }
   };

@@ -2,20 +2,15 @@
 
 import { memo, useState, useCallback } from "react";
 import { Input } from "antd";
+import type { NodeProps } from "@xyflow/react";
 import { GroupOutlined } from "@ant-design/icons";
-import type { GroupNodeData } from "@/lib/types";
+import type { GroupNode as GroupNodeType } from "@/lib/types";
 import { GROUP_NODE_MIN_WIDTH, GROUP_NODE_MIN_HEIGHT } from "@/lib/constants";
 import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
 import { EventNames } from "@/lib/eventNames";
 
-interface GroupNodeProps {
-  id: string;
-  data: GroupNodeData;
-  selected?: boolean;
-}
-
-function GroupNode({ id, data, selected }: GroupNodeProps) {
+function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [editing, setEditing] = useState(false);

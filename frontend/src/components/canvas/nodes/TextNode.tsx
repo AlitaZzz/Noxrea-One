@@ -1,22 +1,16 @@
 "use client";
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { FontSizeOutlined } from "@ant-design/icons";
-import type { TextNodeData } from "@/lib/types";
+import type { TextNode as TextNodeType } from "@/lib/types";
 import { TEXT_NODE_MIN_WIDTH, TEXT_NODE_MIN_HEIGHT } from "@/lib/constants";
 import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
 import { EventNames } from "@/lib/eventNames";
 
-interface TextNodeProps {
-  id: string;
-  data: TextNodeData;
-  selected?: boolean;
-}
-
-function TextNode({ id, data, selected }: TextNodeProps) {
+function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [content, setContent] = useState(data.content || "");

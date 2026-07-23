@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Tooltip, Input, Popover } from "antd";
 import {
   UploadOutlined,
@@ -13,6 +13,7 @@ import {
   CaretRightOutlined,
 } from "@ant-design/icons";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { isGenerating, type VideoNodeData, type VideoNode as VideoNodeType } from "@/lib/types";
 import { createImageNode } from "@/lib/node-defaults";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -21,20 +22,6 @@ import { apiUpload, BASE } from "@/lib/api";
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
 import { EventNames } from "@/lib/eventNames";
 
-interface VideoNodeData {
-  label: string;
-  src: string;
-  naturalWidth: number;
-  naturalHeight: number;
-  alt: string;
-}
-
-interface VideoNodeProps {
-  id: string;
-  data: VideoNodeData & { lockAspectRatio?: boolean };
-  selected?: boolean;
-}
-
 function formatTime(s: number): string {
   if (!s || !isFinite(s)) return "0:00";
   const m = Math.floor(s / 60);
@@ -42,7 +29,7 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-function VideoNode({ id, data, selected }: VideoNodeProps) {
+function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [src, setSrc] = useState(data.src || "");
@@ -145,8 +132,8 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
       const label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
       applyThumbnailSettings(node, nw, nh, label);
       // Center the node relative to viewport center
-      node.position.x = cx - (node.style.width as number) / 2;
-      node.position.y = cy - (node.style.height as number) / 2;
+      node.position.x = cx - ((node.style?.width as number) ?? 0) / 2;
+      node.position.y = cy - ((node.style?.height as number) ?? 0) / 2;
       addNodes([node]);
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, addNodes]);
@@ -173,7 +160,7 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
           const { width, height } = computeNodeSize(nw, nh);
           const store = useCanvasStore.getState();
           const currentNode = store.nodes.find((n) => n.id === id);
-          const latestData = (currentNode?.data || data) as any;
+          const latestData = (currentNode?.data || data) as VideoNodeData;
           window.dispatchEvent(
             new CustomEvent(EventNames.NODE_UPDATE_DATA, {
               detail: {
@@ -304,11 +291,11 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {(data as any)._uploading ? (
+        {data.upload?.uploading ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
-            {(data as any)._uploadProgress != null ? (
+            {data.upload?.progress != null ? (
               <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${(data as any)._uploadProgress}%` }} />
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
               </div>
             ) : (
               <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -317,15 +304,10 @@ function VideoNode({ id, data, selected }: VideoNodeProps) {
             )}
             <span className="text-sm text-white/70 font-medium">{t("uploading")}</span>
           </div>
-        ) : (data as any)._generating ? (
+        ) : isGenerating(data.taskBinding) ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{(data as any)._genStatus || t("generating")}</span>
-            {(data as any)._genProgress != null && (
-              <div className="w-3/4 h-1 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${(data as any)._genProgress}%` }} />
-              </div>
-            )}
+            <span className="text-sm text-white/70 font-medium">{t("generating")}</span>
           </div>
         ) : hasVideo ? (
           <div className="w-full h-full relative">

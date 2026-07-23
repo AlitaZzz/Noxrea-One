@@ -8,6 +8,14 @@ import { useHistoryStore } from "@/stores/history-store";
 import { duplicateNode } from "@/lib/node-defaults";
 import { PASTE_OFFSET } from "@/lib/constants";
 import { EventNames } from "@/lib/eventNames";
+import { isGenerating, type MediaGenFields } from "@/lib/types";
+
+/** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点） */
+function hasGeneratingNode(): boolean {
+  return useCanvasStore
+    .getState()
+    .nodes.some((n) => isGenerating((n.data as MediaGenFields).taskBinding));
+}
 
 function getSelectedNodeIds(): string[] {
   return useCanvasStore
@@ -136,12 +144,9 @@ export function useCanvasKeyboard() {
 
       // ---- Undo ----
       if (mod && e.key === "z" && !e.shiftKey) {
-        // 生成期间禁止撤销：undo 全局快照会波及生成中节点的 task_id，
+        // 生成期间禁止撤销：undo 全局快照会波及生成中节点的 taskBinding，
         // 导致 SSE 结果落在过期节点上或白等后 scanAndConnect 复活僵尸任务
-        if (useCanvasStore.getState().nodes.some((n: any) => {
-          const st = n.data?.task_status;
-          return st === "pending" || st === "processing";
-        })) return;
+        if (hasGeneratingNode()) return;
         e.preventDefault();
         // 先捕获现场快照（进 redoStack，供 redo 回到撤销前），再弹出恢复目标
         const prev = undoHistory(takeCanvasSnapshot());
@@ -160,10 +165,7 @@ export function useCanvasKeyboard() {
 
       // ---- Redo ----
       if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-        if (useCanvasStore.getState().nodes.some((n: any) => {
-          const st = n.data?.task_status;
-          return st === "pending" || st === "processing";
-        })) return;
+        if (hasGeneratingNode()) return;
         e.preventDefault();
         // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标
         const next = redoHistory(takeCanvasSnapshot());

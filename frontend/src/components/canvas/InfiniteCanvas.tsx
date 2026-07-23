@@ -50,7 +50,7 @@ import { useRouter } from "next/navigation";
 import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import AssetsModal from "@/components/assets/AssetsModal";
-import { NODE_TYPE } from "@/lib/types";
+import { NODE_TYPE, type AnyNode } from "@/lib/types";
 import { duplicateNode, createEdge } from "@/lib/node-defaults";
 import { useAddNode } from "@/hooks/use-add-node";
 import { useGroupOperations } from "@/hooks/use-group-operations";
@@ -170,8 +170,8 @@ export default function InfiniteCanvas() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const applied = applyNodeChanges(changes, useCanvasStore.getState().nodes);
-      let appliedNodes;
+      const applied = applyNodeChanges(changes, useCanvasStore.getState().nodes) as AnyNode[];
+      let appliedNodes: AnyNode[];
       if (snapToGrid) {
         // Snap position changes to grid
         appliedNodes = applied.map((n) => ({

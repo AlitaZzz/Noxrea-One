@@ -6,7 +6,7 @@ import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@an
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
-import { NODE_TYPE } from "@/lib/types";
+import { NODE_TYPE, isGenerating as isGeneratingBinding, type GenSettings, type MediaGenFields } from "@/lib/types";
 import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
 import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
 import { createImageNode, createEdge } from "@/lib/node-defaults";
@@ -24,8 +24,6 @@ function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
     style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border)" }} />;
 }
 
-interface GenSettings { prompt: string; modelKey: string; quality: string; genSize: string; ratio: string; refOrder: string[]; n: number; }
-
 interface Props { nodeId: string; type?: "image" | "video"; }
 
 const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }: Props) {
@@ -39,7 +37,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   // Read persisted settings from node data
   const saved = useMemo(() => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = (node?.data as any)?._genSettings || {};
+    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<GenSettings>;
     return {
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
@@ -87,8 +85,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   // Button disabled state derived from persistent node.data.task_status
   const isGenerating = useMemo(() => {
     const node = canvasNodes.find((n) => n.id === nodeId);
-    const st = (node?.data as any)?.task_status;
-    return st === "pending" || st === "processing";
+    return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
@@ -103,7 +100,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        _genSettings: { prompt, modelKey, quality, genSize, ratio, refOrder, n },
+        genSettings: { prompt, modelKey, quality, genSize, ratio, refOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
@@ -114,14 +111,14 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     return () => {
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as any)?._genSettings;
+      const saved = (node?.data as MediaGenFields)?.genSettings;
       // 没有已保存值 或 任一字段变化 → flush（refOrder 用 JSON.stringify 比较）
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
           saved.quality === latest.quality && saved.genSize === latest.genSize &&
           saved.ratio === latest.ratio && saved.n === latest.n &&
           JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { _genSettings: { ...latest } }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
       markDirtyImmediate();
     };
   }, []);
@@ -165,11 +162,12 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       const taskId = json.data?.id;
       if (!taskId) return "No task_id returned";
 
-      // 异步回调时检查：取消后 _generating 为 false，丢弃过期结果
+      // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-      if (!cur || !(cur.data as any)?._generating) return null;
+      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+      if (!isGeneratingBinding(curBinding)) return null;
       // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
-      useCanvasStore.getState().updateNodeData(nodeId, { task_id: taskId, task_status: "pending" }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
     } catch (e: any) {
@@ -227,9 +225,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (!channel) return;
 
     setError("");
-    // 先压栈（捕获不含 task_status 的干净状态），再写状态标记
-    useCanvasStore.getState().updateNodeData(nodeId, { _generating: true }, undefined, { forceHistory: true });
-    useCanvasStore.getState().updateNodeData(nodeId, { task_status: "pending" }, undefined, { skipHistory: true });
+    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
     retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
@@ -242,9 +239,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (errMsg === null) {
       setError("");
     } else {
-      useCanvasStore.getState().updateNodeData(nodeId, { task_status: undefined }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      useCanvasStore.getState().updateNodeData(nodeId, { _generating: false }, undefined, { skipHistory: true });
       // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
       useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
       setError(errMsg);
@@ -253,14 +249,14 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   const handleCancel = () => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const tid = (node?.data as any)?.task_id;
+    const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
     if (tid) {
       fetch(`${BASE}/api/generate/task/${tid}/cancel`, {
         method: "POST", headers: { ...getTokenHeader() },
       }).catch(() => {});
     }
     useCanvasStore.getState().updateNodeData(nodeId, {
-      task_status: undefined, task_id: undefined, _generating: false,
+      taskBinding: undefined,
     }, undefined, { skipHistory: true });
     markDirtyImmediate();
     // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销

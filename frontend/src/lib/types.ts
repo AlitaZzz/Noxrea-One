@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyNode = any;
+import type { Node } from "@xyflow/react";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyEdge = any;
 
@@ -28,12 +28,67 @@ export const NODE_TYPE = {
   GROUP: "group-node",
 } as const;
 
-export interface TextNodeData {
-  label: string;
-  content: string;
+// ── 任务绑定（生成 / 异步任务状态）────────────────────
+export type TaskStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface TaskBinding {
+  /** 后端任务 ID（本地处理如裁剪/变换时为空串） */
+  taskId: string;
+  status: TaskStatus;
+  /** 异步任务的语义动作，如 "bg_removal" */
+  pendingAction?: string;
 }
 
-export interface ImageNodeData {
+export const TASK_BINDING_KEY = "taskBinding" as const;
+
+/** 已完成/无任务的空绑定 */
+export const EMPTY_TASK_BINDING: TaskBinding = { taskId: "", status: "completed" };
+
+/** 是否处于生成/处理中——由 taskBinding.status 推导，不再有独立 generating 字段 */
+export function isGenerating(binding: TaskBinding | undefined): boolean {
+  return binding?.status === "pending" || binding?.status === "processing";
+}
+
+// ── 上传状态 ──────────────────────────────────────────
+export interface UploadState {
+  uploading: boolean;
+  /** 上传进度 0-100 */
+  progress?: number;
+  /** 防竞态版本号：每次重新上传自增，回调按版本号丢弃过期结果 */
+  version: number;
+}
+
+export const UPLOAD_KEY = "upload" as const;
+
+/** 初始上传状态 */
+export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
+
+// ── 生成面板设置（持久化到节点）────────────────────────
+export interface GenSettings {
+  prompt: string;
+  modelKey: string;
+  quality: string;
+  genSize: string;
+  ratio: string;
+  refOrder: string[];
+  n: number;
+}
+
+/** 图片/视频节点共享的生成相关子字段 */
+export interface MediaGenFields {
+  taskBinding?: TaskBinding;
+  upload?: UploadState;
+  genSettings?: GenSettings;
+}
+
+export type TextNodeData = {
+  label: string;
+  content: string;
+};
+
+// 注意：node data 采用扁平 type 别名（而非与 interface 交叉），
+// 以获得隐式索引签名，满足 React Flow 基础 Node 的 Record<string, unknown> 约束。
+export type ImageNodeData = {
   label: string;
   src: string;
   lockAspectRatio: boolean;
@@ -46,7 +101,21 @@ export interface ImageNodeData {
   flipH?: boolean;
   /** CSS 垂直翻转，仅影响显示，不修改原图文件 */
   flipV?: boolean;
-}
+  taskBinding?: TaskBinding;
+  upload?: UploadState;
+  genSettings?: GenSettings;
+};
+
+export type VideoNodeData = {
+  label: string;
+  src: string;
+  naturalWidth: number;
+  naturalHeight: number;
+  alt: string;
+  taskBinding?: TaskBinding;
+  upload?: UploadState;
+  genSettings?: GenSettings;
+};
 
 // ============================================================
 // Model configuration
@@ -76,9 +145,9 @@ export interface ModelChannel {
   models: ModelInfo[];
 }
 
-export interface GroupNodeData {
+export type GroupNodeData = {
   label: string;
-}
+};
 
 // ============================================================
 // Director node
@@ -125,10 +194,22 @@ export interface DirectorStateData {
   }>;
 }
 
-export interface DirectorNodeData {
+export type DirectorNodeData = {
   label: string;
   directorState?: DirectorStateData;
-}
+};
+
+// ============================================================
+// 判别联合节点类型（discriminator = type 字段）
+// ============================================================
+
+export type TextNode = Node<TextNodeData, typeof NODE_TYPE.TEXT>;
+export type ImageNode = Node<ImageNodeData, typeof NODE_TYPE.IMAGE>;
+export type VideoNode = Node<VideoNodeData, typeof NODE_TYPE.VIDEO>;
+export type DirectorNode = Node<DirectorNodeData, typeof NODE_TYPE.DIRECTOR>;
+export type GroupNode = Node<GroupNodeData, typeof NODE_TYPE.GROUP>;
+
+export type AnyNode = TextNode | ImageNode | VideoNode | DirectorNode | GroupNode;
 
 // ============================================================
 // My Assets

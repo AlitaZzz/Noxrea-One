@@ -4,6 +4,7 @@ import { useCallback, type DragEvent } from "react";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { apiUploadWithProgress } from "@/lib/api";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
+import type { ImageNode, VideoNode } from "@/lib/types";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
 import { useI18nStore } from "@/stores/i18n-store";
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
@@ -43,7 +44,7 @@ export function useFileDrop(
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
       // 1) 立刻创建占位节点（默认尺寸），先给用户"有反应"的反馈
-      const placeholders: { node: ReturnType<typeof createImageNode>; file: File; idx: number }[] = [];
+      const placeholders: { node: ImageNode | VideoNode; file: File; idx: number }[] = [];
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
         const col = idx % GRID_COLS;
@@ -55,15 +56,13 @@ export function useFileDrop(
           const node = createImageNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data._uploading = true;
-          node.data._uploadProgress = 0;
+          node.data.upload = { uploading: true, progress: 0, version: 0 };
           placeholders.push({ node, file, idx });
         } else if (file.type.startsWith("video/")) {
           const node = createVideoNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data._uploading = true;
-          node.data._uploadProgress = 0;
+          node.data.upload = { uploading: true, progress: 0, version: 0 };
           placeholders.push({ node, file, idx });
         }
       }
@@ -82,7 +81,7 @@ export function useFileDrop(
             const formData = new FormData();
             formData.append("file", file);
             const res = await apiUploadWithProgress<{ url: string }>(`/api/files/upload?category=${category}`, formData, (pct) => {
-              updateNodeData(node.id, { _uploadProgress: pct }, undefined, { skipHistory: true });
+              updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0 } }, undefined, { skipHistory: true });
             });
             if (res.code !== 200 || !res.data?.url) { failedIds.push(node.id); return; }
 
@@ -95,8 +94,7 @@ export function useFileDrop(
               src: res.data.url,
               naturalWidth: nw,
               naturalHeight: nh,
-              _uploading: false,
-              _uploadProgress: undefined,
+              upload: undefined,
             }, { width, height }, { skipHistory: true });
           } catch {
             failedIds.push(node.id);

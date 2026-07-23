@@ -19,7 +19,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useHistoryStore } from "@/stores/history-store";
 import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
-import type { HistorySnapshot } from "@/lib/types";
+import type { HistorySnapshot, ImageNodeData } from "@/lib/types";
 
 function makeSnapshot(nodesCount: number, label = "", edges: any[] = []): HistorySnapshot {
   const nodes = Array.from({ length: nodesCount }, (_, i) => ({
@@ -180,7 +180,7 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     // 上传写入 src 前：改动前压栈（生产中由 updateNodeData 自动完成）
     historyStore.push(takeCanvasSnapshot());
     canvasStore.updateNodeData("img1", { src: "new_url" }, undefined, { skipHistory: true });
-    expect(useCanvasStore.getState().nodes[0].data.src).toBe("new_url");
+    expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).src).toBe("new_url");
 
     // Ctrl+Z：捕获现场 → 弹出目标 → 按键盘 handler 的方式应用
     const liveBeforeUndo = takeCanvasSnapshot();
@@ -191,7 +191,7 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     s.setEdges(snapshot!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
 
     const restored = useCanvasStore.getState().nodes[0];
-    expect(restored.data.src).toBe("old_url");   // src 彻底回退
+    expect((restored.data as ImageNodeData).src).toBe("old_url");   // src 彻底回退
     expect(restored.data.label).toBe("test");
     expect(restored.position.x).toBe(100);
 
@@ -201,7 +201,7 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     const st = useCanvasStore.getState();
     st.setNodes(next!.nodes.map((n: any) => ({ ...n, selected: false })));
     st.setEdges(next!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
-    expect(useCanvasStore.getState().nodes[0].data.src).toBe("new_url");
+    expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).src).toBe("new_url");
   });
 });
 
@@ -222,8 +222,8 @@ describe("异步上传竞态", () => {
 
     // 上传开始：写入版本标记（内部状态，skipHistory，与生产一致）
     const uploadVersion = 1001;
-    canvasStore.updateNodeData("img1", { _uploadVersion: uploadVersion }, undefined, { skipHistory: true });
-    expect(useCanvasStore.getState().nodes[0].data._uploadVersion).toBe(1001);
+    canvasStore.updateNodeData("img1", { upload: { uploading: false, progress: undefined, version: uploadVersion } }, undefined, { skipHistory: true });
+    expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).upload?.version).toBe(1001);
 
     // 构造飞行中的上传
     let resolveUpload: (value: string) => void;
@@ -234,7 +234,7 @@ describe("异步上传竞态", () => {
       const store = useCanvasStore.getState();
       const currentNode = store.nodes.find((n) => n.id === "img1");
       if (!currentNode) return;                                       // 节点不存在则丢弃
-      if (currentNode.data._uploadVersion !== uploadVersion) return;  // 版本不匹配则丢弃
+      if ((currentNode.data as ImageNodeData).upload?.version !== uploadVersion) return;  // 版本不匹配则丢弃
       canvasStore.updateNodeData("img1",
         { ...currentNode.data, src: imgUrl, label: "uploaded", alt: "uploaded" },
         { width: 300, height: 200 },
@@ -246,17 +246,17 @@ describe("异步上传竞态", () => {
     const st = useCanvasStore.getState();
     st.setNodes(snap!.nodes.map((n: any) => ({ ...n, selected: false })));
     st.setEdges(snap!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
-    expect(useCanvasStore.getState().nodes[0].data.src).toBe("");
-    expect(useCanvasStore.getState().nodes[0].data._uploadVersion).toBeUndefined();
+    expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).src).toBe("");
+    expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).upload?.version).toBeUndefined();
 
     // 网络响应到达：回调应被版本标记阻挡
     resolveUpload!("http://example.com/new_uploaded.png");
     await uploadTask;
 
     const final = useCanvasStore.getState().nodes[0];
-    expect(final.data.src).toBe("");
+    expect((final.data as ImageNodeData).src).toBe("");
     expect(final.data.label).toBe("test");
-    expect(final.data._uploadVersion).toBeUndefined();
+    expect((final.data as ImageNodeData).upload?.version).toBeUndefined();
   });
 });
 

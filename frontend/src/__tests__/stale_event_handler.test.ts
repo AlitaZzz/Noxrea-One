@@ -19,7 +19,7 @@ import type { AnyNode } from "@/lib/types";
 /** 快速构造一个节点 */
 function node(id: string, overrides: Record<string, unknown> = {}): AnyNode {
   return {
-    id, type: "text",
+    id, type: "text-node",
     position: { x: 100, y: 200 },
     data: { label: id, content: "" },
     ...overrides,
