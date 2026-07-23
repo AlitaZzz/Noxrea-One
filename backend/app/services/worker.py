@@ -234,7 +234,7 @@ async def _process_task(task: GenerationTask) -> None:
 
                 if result_url:
                     # Download from CDN and save locally（不携带 provider 凭证）
-                    local_url = await download_and_save(result_url, task.user_id, task.type)
+                    local_url = await download_and_save(result_url, task.user_id, task.type, task_id=task.id)
                     if local_url is None:
                         # 下载/存储失败：不把易失效的外链 url 存成结果，标 failed 让用户重试
                         await _update_task_status(

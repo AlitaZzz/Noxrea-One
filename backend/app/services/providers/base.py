@@ -137,7 +137,7 @@ def _is_self_url(url: str) -> bool:
     return False
 
 
-async def download_and_save(cdn_url: str, user_id: int, file_type: str) -> str | None:
+async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id: str = "") -> str | None:
     """Download from CDN and save to local storage. Returns local URL, or None on failure.
 
     若 cdn_url 已是本服务 URL（如 b64 兜底已上传落地的情况），直接返回，避免重复存储。
@@ -150,6 +150,7 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str) -> str |
     对瞬时错误（5xx/429/连接级）退避重试 2 次（1s → 2s），覆盖 CDN 抖动；
     4xx/超时/SSRF 拦截不重试。
     """
+    _tid = f" task={task_id}" if task_id else ""
     # 已是本服务 URL -> 无需下载再上传（防止 b64 路径二次存储）
     if _is_self_url(cdn_url):
         return cdn_url
@@ -157,6 +158,8 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str) -> str |
 
     _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
     _MAX_RETRIES = 2
+
+    logger.info(f"download_and_save start{_tid} user={user_id} type={file_type} url={cdn_url[:100]}")
 
     try:
         ip, hostname, scheme, port = resolve_and_validate(cdn_url)
@@ -180,6 +183,7 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str) -> str |
 
                     if resp.is_success:
                         # 下载成功 -> 直接落盘去重（不再自调 HTTP / 伪造 JWT）
+                        logger.info(f"download_and_save downloaded{_tid} size={len(resp.content)} bytes, saving...")
                         url = await save_upload_bytes(
                             user_id=user_id,
                             content=resp.content,
@@ -187,8 +191,9 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str) -> str |
                             ext="mp4" if file_type == "video" else "png",
                         )
                         if url:
+                            logger.info(f"download_and_save done{_tid} local={url}")
                             return url
-                        logger.warning(f"download_and_save storage failed url={cdn_url[:60]}")
+                        logger.warning(f"download_and_save storage failed{_tid} url={cdn_url[:60]}")
                         return None
 
                     if resp.status_code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
