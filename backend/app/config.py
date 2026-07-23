@@ -52,9 +52,9 @@ class Settings(BaseSettings):
     WORKER_ZOMBIE_INTERVAL: int = 60    # seconds between zombie cleanup checks
 
     # Async polling (used by async providers like APIMart)
-    ASYNC_POLL_INTERVAL: float = 3.0          # seconds between polls
-    ASYNC_POLL_MAX_ATTEMPTS: int = 60         # max poll attempts (60 * 3s = 3min 上限)
-    ASYNC_POLL_INITIAL_DELAY: float = 0.0     # seconds to wait before first poll（0=立即开始）
+    WORKER_ASYNC_POLL_INTERVAL: float = 3.0          # seconds between polls
+    WORKER_ASYNC_POLL_MAX_ATTEMPTS: int = 60         # max poll attempts (60 * 3s = 3min 上限)
+    WORKER_ASYNC_POLL_INITIAL_DELAY: float = 0.0     # seconds to wait before first poll（0=立即开始）
 
     # SSRF
     ALLOWED_INTERNAL_HOSTS: str = ""     # 逗号分隔的内网地址白名单，如 "192.168.1.50,192.168.1.51"

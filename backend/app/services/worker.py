@@ -299,7 +299,7 @@ async def _process_image(
             poll_url = provider.build_image_poll_url(base_url, task_id)
             logger.info(f"image async task={task.id} task_id={task_id} poll_url={poll_url}")
             # 首次轮询前的初始等待（异步任务通常需要处理时间，前几次轮询多半 pending）
-            initial_delay = getattr(settings, "ASYNC_POLL_INITIAL_DELAY", 0.0) or 0.0
+            initial_delay = getattr(settings, "WORKER_ASYNC_POLL_INITIAL_DELAY", 0.0) or 0.0
             if initial_delay > 0:
                 logger.info(f"image async initial delay task={task.id} wait={initial_delay}s")
                 await asyncio.sleep(initial_delay)
