@@ -82,6 +82,11 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
             colorPrimary: "#fff",
             colorPrimaryHover: "#fff",
           } : {},
+          Checkbox: isDark ? {
+            colorPrimary: "#ffffff",
+            colorPrimaryHover: "#e6e6e6",
+            colorWhite: "#1a1a1e",
+          } : {},
         },
       }}
       getPopupContainer={getLayerPopupContainer}

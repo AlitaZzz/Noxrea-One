@@ -3,6 +3,7 @@
 import {
   AppstoreOutlined,
   CloseOutlined,
+  FilterOutlined,
   PartitionOutlined,
   FontSizeOutlined,
   GroupOutlined,
@@ -14,22 +15,19 @@ import {
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { useReactFlow } from "@xyflow/react";
-import { App, Drawer, Empty, Input } from "antd";
-import { useCallback, useEffect, useMemo, useRef,useState } from "react";
+import { useReactFlow, type Node } from "@xyflow/react";
+import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
+import { MenuDivider } from "@/components/common/MenuPopover";
 import { addAssetToCanvas } from "@/lib/add-asset";
 import { assetApi } from "@/lib/api";
-import type { AnyNode, AssetFolder, AssetItem } from "@/lib/types";
+import type { AnyNode, AssetFolder, AssetItem, AssetType } from "@/lib/types";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-
-import type { Edge } from "@xyflow/react";
-
-
 
 // ── 节点类型顺序和标签映射 ──
 const NODE_TYPE_I18N: Record<string, string> = {
@@ -46,6 +44,16 @@ const NODE_TYPE_ORDER = [
   NODE_TYPE.VIDEO,
   NODE_TYPE.TEXT,
   NODE_TYPE.GROUP,
+];
+
+// ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
+const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
+  { key: "character", labelKey: "asset.cat.character" },
+  { key: "scene", labelKey: "asset.cat.scene" },
+  { key: "object", labelKey: "asset.cat.object" },
+  { key: "style", labelKey: "asset.cat.style" },
+  { key: "audio", labelKey: "asset.cat.audio" },
+  { key: "other", labelKey: "asset.cat.other" },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -70,14 +78,16 @@ function getNodeTypeIcon(type: string) {
 }
 
 // ── 视频缩略图提取 hook ──
+// 模块级全局缓存：跨组件实例与 tab 切换复用，避免重复解码视频
+const videoThumbCache = new Map<string, string>();
+
 function useVideoThumbnail(src: string | undefined) {
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const cache = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!src) return;
-    const cached = cache.current.get(src);
+    const cached = videoThumbCache.get(src);
     if (cached) { setThumb(cached); return; }
     let cancelled = false;
     setLoading(true);
@@ -98,7 +108,7 @@ function useVideoThumbnail(src: string | undefined) {
         canvas.height = video.videoHeight;
         canvas.getContext("2d")!.drawImage(video, 0, 0);
         const url = canvas.toDataURL("image/jpeg", 0.6);
-        cache.current.set(src, url);
+        videoThumbCache.set(src, url);
         setThumb(url);
       } catch { /* noop */ }
       setLoading(false);
@@ -127,6 +137,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
   const t = useI18nStore((s) => s.t);
   const lang = useI18nStore((s) => s.lang);
   const [activeTab, setActiveTab] = useState<string>("elements");
+  const isDark = useCanvasStore((s) => s.theme) === "dark";
 
   return (
     <Drawer
@@ -146,6 +157,9 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
           background: "var(--canvas-bg)",
           padding: 0,
         },
+        section: isDark ? {
+          borderRight: "1px solid #2c2c31",
+        } : undefined,
       }}
       closable={false}
       title={
@@ -215,9 +229,14 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
           </button>
         </div>
 
-        {/* Tab 内容 */}
+        {/* Tab 内容：双挂载保留状态，切换 tab 不丢导航/不重复请求 */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {activeTab === "elements" ? <CanvasElementsView /> : <AssetsView />}
+          <div className={activeTab === "elements" ? "h-full" : "hidden"}>
+            <CanvasElementsView />
+          </div>
+          <div className={activeTab === "assets" ? "h-full" : "hidden"}>
+            <AssetsView />
+          </div>
         </div>
       </div>
     </Drawer>
@@ -228,24 +247,12 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
 function CanvasElementsView() {
   const t = useI18nStore((s) => s.t);
   const nodes = useCanvasStore((s) => s.nodes);
-  const edges = useCanvasStore((s) => s.edges);
-  const { setCenter, getNodes } = useReactFlow();
+  const { getNodes } = useReactFlow();
 
   const selectedNodeIds = useMemo(
     () => new Set(getNodes().filter((n) => n.selected).map((n) => n.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes],
-  );
-
-  const handleClickElement = useCallback(
-    (nodeId: string) => {
-      const node = nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      const x = node.position.x + ((node.width as number) ?? 200) / 2;
-      const y = node.position.y + ((node.height as number) ?? 200) / 2;
-      setCenter(x, y, { zoom: 1.0, duration: 300 });
-    },
-    [nodes, setCenter],
   );
 
   // Group nodes by type in defined order
@@ -284,9 +291,7 @@ function CanvasElementsView() {
                 <ElementItem
                   key={node.id}
                   node={node as AnyNode}
-                  edges={edges}
                   selected={selectedNodeIds.has(node.id)}
-                  onClick={() => handleClickElement(node.id)}
                 />
               ))}
             </div>
@@ -304,13 +309,12 @@ function CanvasElementsView() {
   );
 }
 
-function ElementItem({ node, edges, selected, onClick }: {
-  node: AnyNode;
-  edges: Edge[];
-  selected: boolean;
-  onClick: () => void;
-}) {
+type ElementItemProps = { node: Node; selected: boolean };
+
+function ElementItemImpl(props: ElementItemProps) {
+  const { node, selected } = props;
   const t = useI18nStore((s) => s.t);
+  const { setCenter } = useReactFlow();
   const nodeType = node.type || "";
   const typeLabel = nodeType && NODE_TYPE_I18N[nodeType] ? t(NODE_TYPE_I18N[nodeType]) : "";
   const rawLabel = (node.data as { label?: string })?.label;
@@ -320,9 +324,15 @@ function ElementItem({ node, edges, selected, onClick }: {
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = (node.data as { src?: string }).src;
 
+  const handleClick = useCallback(() => {
+    const x = node.position.x + ((node.width as number) ?? 200) / 2;
+    const y = node.position.y + ((node.height as number) ?? 200) / 2;
+    setCenter(x, y, { zoom: 1.0, duration: 300 });
+  }, [node, setCenter]);
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
       style={{
         background: selected ? "var(--canvas-bg-hover)" : "transparent",
@@ -363,6 +373,8 @@ function ElementItem({ node, edges, selected, onClick }: {
   );
 }
 
+const ElementItem = memo(ElementItemImpl);
+
 // ── 资产视图 ──
 function AssetsView() {
   const t = useI18nStore((s) => s.t);
@@ -377,20 +389,21 @@ function AssetsView() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const versionRef = useRef(0);
 
-  const fetchAndReplace = useCallback(async (filters: { search: string; folderId: string | null }) => {
+  const fetchAndReplace = useCallback(async (filters: { search: string; folderId: string | null | undefined; category?: string[] }) => {
     const v = ++versionRef.current;
     setItems([]);
     setTotalCount(0);
     setLoading(true);
     try {
       const result = await fetchAssetPage(
-        { category: "all", search: filters.search, folderId: filters.folderId, spaceKey: "personal" },
+        { category: filters.category && filters.category.length ? filters.category : "all", search: filters.search, folderId: filters.folderId, spaceKey: "personal" },
         0,
       );
       if (v !== versionRef.current) return;
@@ -401,13 +414,16 @@ function AssetsView() {
   }, []);
 
   const fetchNextPage = useCallback(async () => {
-    if (activeFolderId === null) return; // 根视图不展示散落资产
+    // 根视图无搜索且不筛选时不展示散落资产
+    if (activeFolderId === null && !search.trim() && typeFilter.length === 0) return;
     const v = ++versionRef.current;
     setLoadingMore(true);
     try {
-      const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
+      const folderId = typeFilter.length > 0
+        ? undefined
+        : (activeFolderId === null ? undefined : (activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId));
       const result = await fetchAssetPage(
-        { category: "all", search, folderId, spaceKey: "personal" },
+        { category: typeFilter.length ? typeFilter : "all", search, folderId, spaceKey: "personal" },
         items.length,
       );
       if (v !== versionRef.current) return;
@@ -415,23 +431,33 @@ function AssetsView() {
       setTotalCount(result.total);
     } catch { /* ignore */ }
     if (v === versionRef.current) setLoadingMore(false);
-  }, [search, activeFolderId, items.length]);
+  }, [search, activeFolderId, typeFilter, items.length]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      // 根视图：只展示文件夹（含虚拟「未分类」），不拉取散落资产
+      if (typeFilter.length > 0) {
+        // 风格筛选：跨全部个人资产按类型筛选（忽略文件夹层级）
+        fetchAndReplace({ search, folderId: undefined, category: typeFilter });
+        return;
+      }
       if (activeFolderId === null) {
-        setItems([]);
-        setTotalCount(0);
-        setLoading(false);
+        if (!search.trim()) {
+          // 根视图无搜索：仅展示文件夹（含虚拟「未分类」）
+          setItems([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+        // 根视图 + 搜索：跨文件夹全局搜索（folderId 为空）
+        fetchAndReplace({ search, folderId: undefined });
         return;
       }
       const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
       fetchAndReplace({ search, folderId });
     }, 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [search, activeFolderId, fetchAndReplace]);
+  }, [search, activeFolderId, typeFilter, fetchAndReplace]);
 
   // 拉取「未分类」资产数量（仅根视图需要）
   useEffect(() => {
@@ -445,16 +471,20 @@ function AssetsView() {
 
   const hasMore = items.length < totalCount;
 
+  // 用 ref 持有最新 fetchNextPage，避免 items 增长时反复重建 observer
+  const fetchNextPageRef = useRef(fetchNextPage);
+  useEffect(() => { fetchNextPageRef.current = fetchNextPage; });
+
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || !hasMore || loadingMore) return;
     const io = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) fetchNextPage(); },
-      { rootMargin: "100px" },
+      ([entry]) => { if (entry.isIntersecting) fetchNextPageRef.current(); },
+      { root: el.parentElement, rootMargin: "100px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasMore, loadingMore, fetchNextPage]);
+  }, [hasMore, loadingMore]);
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     addAssetToCanvas(asset);
@@ -501,11 +531,12 @@ function AssetsView() {
     ];
   }, [getChildFolders, activeFolderId, uncategorizedCount, recursiveCounts, t, lang]);
 
-  const hasContent = items.length > 0 || gridFolders.length > 0;
+  const showFolderGrid = typeFilter.length === 0 && !search.trim();
+  const hasContent = items.length > 0 || (showFolderGrid ? gridFolders.length : 0) > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* 搜索栏 */}
+      {/* 搜索栏 + 风格筛选 */}
       <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
         <Input
           size="small"
@@ -515,7 +546,51 @@ function AssetsView() {
           onChange={(e) => setSearch(e.target.value)}
           allowClear
           style={{ height: 32 }}
+          className="flex-1"
         />
+        <Popover
+          trigger="click"
+          placement="bottomRight"
+          styles={{ container: { padding: 0, background: "transparent" } }}
+          content={
+            <div className="menu-popover asset-filter-popover">
+              <div style={{ padding: "2px 12px 4px", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
+              {ASSET_STYLE_TYPES.map((st) => (
+                <label key={st.key} className="filter-row">
+                  <Checkbox
+                    checked={typeFilter.includes(st.key)}
+                    onChange={(e) => {
+                      setTypeFilter((prev) =>
+                        e.target.checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
+                      );
+                    }}
+                  >
+                    {t(st.labelKey)}
+                  </Checkbox>
+                </label>
+              ))}
+              {typeFilter.length > 0 && <MenuDivider />}
+              {typeFilter.length > 0 && (
+                <div className="filter-row" onClick={() => setTypeFilter([])} style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>
+                  {t("asset.filter.clear")}
+                </div>
+              )}
+            </div>
+          }
+        >
+          <Tooltip title={t("asset.filter")}>
+            <Button
+              size="small"
+              type="text"
+              icon={<FilterOutlined />}
+              style={{
+                height: 32,
+                background: typeFilter.length > 0 ? "rgba(255,255,255,0.16)" : undefined,
+              }}
+              className="canvas-ctrl-btn"
+            />
+          </Tooltip>
+        </Popover>
       </div>
 
       {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」） */}
@@ -527,7 +602,7 @@ function AssetsView() {
           </span>
         ) : (
           <button
-            onClick={() => setActiveFolderId(null)}
+            onClick={() => { setTypeFilter([]); setActiveFolderId(null); }}
             className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
             style={{ color: "var(--canvas-text-dim)" }}
           >
@@ -545,7 +620,7 @@ function AssetsView() {
                 </span>
               ) : (
                 <button
-                  onClick={() => setActiveFolderId(crumb.id)}
+                  onClick={() => { setTypeFilter([]); setActiveFolderId(crumb.id); }}
                   className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                   style={{ color: "var(--canvas-text-dim)" }}
                 >
@@ -559,17 +634,21 @@ function AssetsView() {
 
       {/* 资产网格 */}
       <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3" style={{ scrollbarGutter: "stable" }}>
-        {!hasContent && !loading ? (
+        {loading && items.length === 0 ? (
+          <div className="flex items-center justify-center h-full min-h-[200px]">
+            <LoadingOutlined style={{ fontSize: 18, color: "var(--canvas-text-dim)" }} />
+          </div>
+        ) : !hasContent ? (
           <div className="flex items-center justify-center h-full min-h-[200px]">
             <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>} />
           </div>
         ) : (
           <>
             <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
-              {!search && gridFolders.map((folder) => (
+              {showFolderGrid && gridFolders.map((folder) => (
                 <div
                   key={folder.id}
-                  onClick={() => setActiveFolderId(folder.id)}
+                  onClick={() => { setTypeFilter([]); setActiveFolderId(folder.id); }}
                   className="relative group rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-1"
                   style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
                 >
@@ -596,8 +675,17 @@ function AssetsView() {
         className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
         style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
       >
-        <FolderOpenOutlined />
-        <span>{totalCount || items.length} {t("asset.count")}</span>
+        {activeFolderId === null && typeFilter.length === 0 ? (
+          <>
+            <FolderOpenOutlined />
+            <span>{gridFolders.length} {t("folders.label")}</span>
+          </>
+        ) : (
+          <>
+            <FolderOpenOutlined />
+            <span>{totalCount || items.length} {t("asset.count")}</span>
+          </>
+        )}
       </div>
     </div>
   );
