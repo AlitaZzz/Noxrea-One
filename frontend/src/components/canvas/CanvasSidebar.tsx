@@ -9,6 +9,7 @@ import {
   InboxOutlined,
   LoadingOutlined,
   PictureOutlined,
+  PlusOutlined,
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
@@ -355,6 +356,7 @@ function ElementItem({ node, edges, selected, onClick }: {
         )}
       </div>
       <span className="flex-1 truncate text-xs">{label || `Node ${node.id}`}</span>
+      <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
     </div>
   );
 }
@@ -552,9 +554,18 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
         onKeyDown={handleKeyDown}
         onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
         onMouseLeave={preview.onLeave}
-        className="relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
+        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
         style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
       >
+        {/* Hover overlay — send to canvas */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-lg z-10">
+          <button
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onInsert(); }}
+          >
+            <PlusOutlined style={{ fontSize: 14 }} />
+          </button>
+        </div>
         {imgSrc && !imgError ? (
           <img src={imgSrc + "?w=160"} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
         ) : (
@@ -563,10 +574,13 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
           </div>
         )}
         {isVideo && !imgError && (
-          <div className="absolute bottom-1 right-1 text-[10px] font-bold text-white/70 bg-black/50 px-1 rounded">▶</div>
+          <div className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded bg-black/50">
+            <VideoCameraOutlined style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }} />
+          </div>
         )}
       </div>
       <span className="text-[10px] leading-tight text-white/50 truncate px-0.5">{asset.name}</span>
+      <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
     </div>
   );
 }

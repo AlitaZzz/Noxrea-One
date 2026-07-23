@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 
 import type { AssetItem } from "@/lib/types";
 
-const PREVIEW_W = 360;
-const SHOW_DELAY = 200;
+const PREVIEW_W = 400;
+const PREVIEW_MAX_H = 340;
+const SHOW_DELAY = 600;
 const HIDE_DELAY = 150;
 const GAP = 12;
 
@@ -137,9 +138,17 @@ export function AssetHoverPreview({
           const nw = img.naturalWidth;
           const nh = img.naturalHeight;
           if (!nw || !nh) return;
-          // 同时受最大宽度(360)与最大高度(70vh)约束，取能容纳图片的最小盒子，避免黑边
-          let w = PREVIEW_W;
-          let h = w * (nh / nw);
+          // 横图以高度为基准，竖图以宽度为基准
+          let w: number, h: number;
+          if (nw >= nh) {
+            // Landscape / square: base on height
+            h = PREVIEW_MAX_H;
+            w = h * (nw / nh);
+          } else {
+            // Portrait: base on width
+            w = PREVIEW_W;
+            h = w * (nh / nw);
+          }
           const maxH = window.innerHeight * 0.7;
           if (h > maxH) {
             h = maxH;

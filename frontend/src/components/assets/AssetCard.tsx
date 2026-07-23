@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioOutlined,PictureOutlined, PlayCircleFilled } from "@ant-design/icons";
+import { AudioOutlined,PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import { useRef,useState } from "react";
@@ -121,7 +121,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
                   <div className="w-full h-full bg-black/40" />
                 )}
                 <div className="absolute top-1 left-1 flex items-center justify-center w-6 h-6 rounded bg-black/50">
-                  <PlayCircleFilled style={{ fontSize: 14, color: "rgba(255,255,255,0.8)" }} />
+                  <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
                 </div>
               </div>
             );
