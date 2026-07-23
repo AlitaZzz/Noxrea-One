@@ -79,16 +79,12 @@ export default function AssetsModal({ open, onClose }: Props) {
     });
   }, []);
 
-  // Set loading immediately when modal opens (avoids empty flash)
-  useEffect(() => {
-    if (open) setLoading(true);
-    else { setLoadError(false); setLoading(false); }
-  }, [open]);
-
   // --- Data fetching ---
 
   const fetchAndReplace = useCallback(async (filters: { category: AssetType | "all"; search: string; folderId: string | null; spaceKey: string }) => {
     const v = ++versionRef.current;
+    setItems([]);
+    setTotalCount(0);
     setLoading(true);
     setLoadError(false);
     try {
@@ -127,10 +123,11 @@ export default function AssetsModal({ open, onClose }: Props) {
     }
   }, [category, search, activeFolderId, activeSpace, items.length]);
 
-  // Reload when filters change
+  // Fetch when modal opens or filters change
   useEffect(() => {
+    if (!open) { setLoadError(false); setLoading(false); return; }
     fetchAndReplace({ category, search, folderId: activeFolderId, spaceKey: activeSpace });
-  }, [category, search, activeFolderId, activeSpace, fetchAndReplace]);
+  }, [open, category, search, activeFolderId, activeSpace, fetchAndReplace]);
 
   const hasMore = items.length < totalCount;
 
@@ -355,30 +352,28 @@ export default function AssetsModal({ open, onClose }: Props) {
 
           {/* Right main content */}
           <div className="flex-1 flex flex-col py-4 pr-4 pl-4 min-w-0">
-            {/* Breadcrumb — placed above toolbar */}
-            {activeFolderId && breadCrumb.length > 0 && (
-              <div className="flex items-center gap-1 pb-2 flex-shrink-0">
-                <button
-                  onClick={() => setActiveFolderId(null)}
-                  className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
-                  style={{ color: "var(--canvas-text-dim)" }}
-                >
-                  ← {t("asset.space.personal")}
-                </button>
-                {breadCrumb.map((f) => (
-                  <span key={f.id} className="flex items-center gap-1">
-                    <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
-                    <button
-                      onClick={() => setActiveFolderId(f.id)}
-                      className="text-sm font-medium transition-colors hover:text-white cursor-pointer"
-                      style={{ color: f.id === activeFolderId ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
-                    >
-                      {f.name}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Breadcrumb — placed above toolbar, always visible */}
+            <div className="flex items-center gap-1 pb-2 flex-shrink-0">
+              <button
+                onClick={() => setActiveFolderId(null)}
+                className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
+                style={{ color: activeFolderId ? "var(--canvas-text-dim)" : "var(--canvas-text)" }}
+              >
+                {activeFolderId ? `← ${t("asset.space.personal")}` : t("asset.space.personal")}
+              </button>
+              {breadCrumb.map((f) => (
+                <span key={f.id} className="flex items-center gap-1">
+                  <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                  <button
+                    onClick={() => setActiveFolderId(f.id)}
+                    className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
+                    style={{ color: f.id === activeFolderId ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+                  >
+                    {f.name}
+                  </button>
+                </span>
+              ))}
+            </div>
 
             {/* Toolbar */}
             <AssetToolbar

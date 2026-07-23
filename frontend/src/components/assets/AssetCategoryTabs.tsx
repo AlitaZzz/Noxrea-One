@@ -14,7 +14,7 @@ export default function AssetCategoryTabs({ active, onChange }: Props) {
   const t = useI18nStore((s) => s.t);
 
   return (
-    <div className="mb-3">
+    <div className="mb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
       <style>{`
         .asset-cat-tabs .ant-segmented-group {
           gap: 12px;

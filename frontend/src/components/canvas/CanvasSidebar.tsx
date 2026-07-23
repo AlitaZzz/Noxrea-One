@@ -2,6 +2,7 @@
 
 import {
   AppstoreOutlined,
+  CloseOutlined,
   PartitionOutlined,
   FontSizeOutlined,
   GroupOutlined,
@@ -145,9 +146,14 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
       }}
       closable={false}
       title={
-        <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>
-          {activeTab === "assets" ? t("asset.title") : t("canvas.sidebar")}
-        </span>
+        <button
+          onClick={onClose}
+          className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-white/10 cursor-pointer"
+          style={{ color: "var(--canvas-text-dim)" }}
+          title={t("close")}
+        >
+          <CloseOutlined />
+        </button>
       }
     >
       <style>{`
@@ -185,7 +191,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
             style={{
               background: "transparent", cursor: "pointer",
               color: activeTab === "elements" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-              borderColor: activeTab === "elements" ? "#1677ff" : "transparent",
+              borderColor: activeTab === "elements" ? "var(--canvas-text)" : "transparent",
             }}
             onClick={() => setActiveTab("elements")}
           >
@@ -197,7 +203,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
             style={{
               background: "transparent", cursor: "pointer",
               color: activeTab === "assets" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-              borderColor: activeTab === "assets" ? "#1677ff" : "transparent",
+              borderColor: activeTab === "assets" ? "var(--canvas-text)" : "transparent",
             }}
             onClick={() => setActiveTab("assets")}
           >

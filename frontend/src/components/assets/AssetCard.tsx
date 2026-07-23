@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayCircleOutlined } from "@ant-design/icons";
+import { AudioOutlined,PictureOutlined, PlayCircleFilled } from "@ant-design/icons";
 import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import { useRef,useState } from "react";
@@ -110,7 +110,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
           const coverUrl = meta?.coverUrl as string | undefined;
           const isVideo = !!sourceUrl?.match(/\.(mp4|webm|mov)$/i);
 
-          // Video: show coverUrl thumbnail with play icon overlay
+          // Video: show coverUrl thumbnail with play icon on top-left
           if (isVideo) {
             const thumbUrl = coverUrl?.includes('/api/files/') ? `${coverUrl}?w=200` : '';
             return (
@@ -120,34 +120,38 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
                 ) : (
                   <div className="w-full h-full bg-black/40" />
                 )}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                  <PlayCircleOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }} />
+                <div className="absolute top-1 left-1 flex items-center justify-center w-6 h-6 rounded bg-black/50">
+                  <PlayCircleFilled style={{ fontSize: 14, color: "rgba(255,255,255,0.8)" }} />
                 </div>
               </div>
             );
           }
           if (asset.type === "audio") {
-            return <div className="w-full h-full flex items-center justify-center text-white/20 text-4xl">🎵</div>;
+            return (
+              <div className="w-full h-full flex items-center justify-center">
+                <AudioOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
+              </div>
+            );
           }
           const imgUrl = sourceUrl ? (sourceUrl.includes('/api/files/') ? `${sourceUrl}?w=200` : sourceUrl) : '';
           return imgUrl ? (
             <img src={imgUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-white/20 text-4xl">🖼</div>
+            <div className="w-full h-full flex items-center justify-center">
+              <PictureOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
+            </div>
           );
         })()}
       </div>
 
       {/* Hover overlay — send to canvas */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-lg">
-        <Tooltip title={t("asset.send")}>
-          <button
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
-            onClick={(e) => { e.stopPropagation(); handleInsert(); }}
-          >
-            <PlusOutlined />
-          </button>
-        </Tooltip>
+        <button
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); handleInsert(); }}
+        >
+          <PlusOutlined />
+        </button>
       </div>
 
       {/* More menu button + dropdown */}

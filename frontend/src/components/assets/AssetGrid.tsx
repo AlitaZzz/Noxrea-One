@@ -104,9 +104,6 @@ export default function AssetGrid({
             {t("asset.retry")}
           </button>
         )}
-        {!hasMore && !loadError && assets.length > 0 && (
-          <span className="text-xs text-white/20">{t("asset.count")}</span>
-        )}
       </div>
     </div>
   );
