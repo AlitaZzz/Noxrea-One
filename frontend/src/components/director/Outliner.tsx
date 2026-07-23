@@ -109,10 +109,7 @@ export default function Outliner() {
                     dangerouslySetInnerHTML={{ __html: S("caret") }} />
                 )}
                 <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(ent.type)) }} />
-                <span className="flex-1 truncate" onDoubleClick={() => {
-                  const n = prompt("重命名", ent.name);
-                  if (n != null) runtime?.rename(ent.id, n);
-                }}>{ent.name}</span>
+                <span className="flex-1 truncate">{ent.name}</span>
                 {isCamera && shotCount > 0 && (
                   <span style={{
                     minWidth: 18, height: 18, borderRadius: 9,
@@ -162,7 +159,6 @@ export default function Outliner() {
                     if (mIsCamera) { runtime?.select(m.id); runtime?.setCameraView(true); }
                     else { runtime?.setCameraView(false); runtime?.select(m.id); }
                   }}
-                  onDoubleClick={() => { const n = prompt("重命名", m.name); if (n != null) runtime?.rename(m.id, n); }}
                 >
                   <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(m.type)) }} />
                   <span className="flex-1 truncate">{m.name}</span>

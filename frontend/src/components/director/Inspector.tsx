@@ -78,7 +78,8 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
     return () => { runtime._setCameraAttrChange(null); };
   }, [runtime, schedulePreview]);
 
-  const targets = entities.filter((e) => e.type === "character" || e.type === "prop");
+  const crowdMembers = entities.flatMap((e) => e._members || []);
+  const targets = [...entities, ...crowdMembers].filter((e) => e.type === "character" || e.type === "prop");
   const aimOpts = [{ value: "manual", label: "手动坐标" }, ...targets.map((t) => ({ value: t.id, label: t.name }))];
 
   return (
@@ -161,7 +162,10 @@ function CameraShots({ cameraId }: { cameraId: string }) {
   const runtime = useDirectorStore((s) => s.runtime);
   const [previewUrl, setPreviewUrl] = useState("");
 
-  const shots = useMemo(() => allShots.filter((s) => s.cameraId === cameraId), [allShots, cameraId]);
+  const shots = useMemo(() => {
+    const seen = new Set<string>();
+    return allShots.filter((s) => s.cameraId === cameraId && !seen.has(s.id) && seen.add(s.id));
+  }, [allShots, cameraId]);
 
   return (
     <div className="dir-field" style={{ marginTop: 8 }}>
@@ -212,6 +216,8 @@ export default function Inspector() {
   const selectedId = useDirectorStore((s) => s.selectedId);
   const entities = useDirectorStore((s) => s.entities);
   const entity = entities.find((e) => e.id === selectedId)
+    || entities.flatMap((e) => e._members || [])
+        .find((m) => m.id === selectedId)
     || null;
   const [activeTab, setActiveTab] = useState("attr");
   const [posePresetKey, setPosePresetKey] = useState<string | null>(null);
