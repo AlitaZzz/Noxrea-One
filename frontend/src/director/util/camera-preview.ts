@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+import type { Stage } from "../core/stage";
+
 // 按需把某相机 POV 渲成 dataURL（用于 Inspector 预览框和全屏预览）。
 
 let _r: THREE.WebGLRenderer | null = null;
@@ -15,7 +17,7 @@ function getRenderer(): THREE.WebGLRenderer {
 }
 
 export function renderCameraThumbnail(
-  stage: any,
+  stage: Stage,
   cam: THREE.PerspectiveCamera,
   w: number = 320,
   h: number = 180,

@@ -1,4 +1,6 @@
 import * as THREE from "three";
+
+import type { DirectorEntity } from "@/stores/director-store";
 import { worldBox } from "../util/measure";
 
 // Raycaster 选择 + 地面蓝环高亮。
@@ -6,14 +8,14 @@ export class Selection {
   renderer: THREE.WebGLRenderer;
   camera: THREE.Camera;
   scene: THREE.Scene;
-  getEntities: () => any[];
+  getEntities: () => DirectorEntity[];
   onSelect: (id: string | null) => void;
 
   ray = new THREE.Raycaster();
   ndc = new THREE.Vector2();
   private _down = new THREE.Vector2();
   ring: THREE.Mesh;
-  selectedEntity: any = null;
+  selectedEntity: DirectorEntity | null = null;
   private _shouldSkip: () => boolean = () => false;
   _filterInvisible = false;
 
@@ -21,7 +23,7 @@ export class Selection {
     renderer: THREE.WebGLRenderer,
     camera: THREE.Camera,
     scene: THREE.Scene,
-    getEntities: () => any[],
+    getEntities: () => DirectorEntity[],
     onSelect: (id: string | null) => void
   ) {
     this.renderer = renderer;
@@ -76,7 +78,7 @@ export class Selection {
     // 机位视角下过滤隐藏的相机 body/helper（仅在 camera view 启用）
     if (this._filterInvisible) {
       hits = hits.filter((h) => {
-        for (let o: any = h.object; o; o = o.parent) { if (o.visible === false) return false; }
+        for (let o: THREE.Object3D | null = h.object; o; o = o.parent) { if (o.visible === false) return false; }
         return true;
       });
     }
@@ -84,18 +86,18 @@ export class Selection {
       this.onSelect(null);
       return;
     }
-    let o: any = hits[0].object;
+    let o: THREE.Object3D | null = hits[0].object;
     while (o && o.userData.entityId == null) o = o.parent;
     this.onSelect(o ? o.userData.entityId : null);
   }
 
-  highlight(entity: any) {
+  highlight(entity: DirectorEntity | null) {
     this.selectedEntity = entity;
     this.ring.visible = !!entity;
     if (entity) this._sizeRing(entity);
   }
 
-  _sizeRing(entity: any) {
+  _sizeRing(entity: DirectorEntity) {
     const box = worldBox(entity.root, { useBones: entity.type === "character" });
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());

@@ -1,12 +1,13 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { Entity } from "./Entity";
-import { JOINTS } from "./jointConfig";
-import { POSE_PRESET_MAP } from "./posePresets";
-import { buildBoneMap } from "../util/boneUtil";
-import { identifyBones } from "../util/boneIdentify";
-import type { RigType, AxisOverride } from "../util/rigAxisTable";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+import { identifyBones } from "../util/bone-identify";
+import { buildBoneMap } from "../util/bone-util";
 import { worldBox } from "../util/measure";
+import type { AxisOverride,RigType } from "../util/rig-axis-table";
+import { Entity } from "./entity";
+import { JOINTS, type Joint } from "./joint-config";
+import { POSE_PRESET_MAP } from "./pose-presets";
 
 // 统一目标身高（单位），多角色视觉一致（§5.2）
 const TARGET_HEIGHT = 1.7;
@@ -33,15 +34,15 @@ export class Character extends Entity {
   private _targetHeight: number;
   private _girth: number;
 
-  bones: Map<string, any>;
-  restQ: Map<any, THREE.Quaternion>;
-  bonesUsed: Map<any, any[]>;
+  bones: Map<string, THREE.Bone>;
+  restQ: Map<THREE.Bone, THREE.Quaternion>;
+  bonesUsed: Map<THREE.Bone, Joint[]>;
   values: Record<string, number> = {};
   rig: RigType = "unknown";
   /** 运行时按模型骨骼本地轴推断的 per-joint 轴向覆盖(替代 rig 预置表)。 */
   axisOverrides: Map<string, AxisOverride> = new Map();
   /** 识别出的语义骨 token -> Bone(供 _inferAxisOverrides 用)。 */
-  private boneMap: Map<string, any> = new Map();
+  private boneMap: Map<string, THREE.Bone> = new Map();
 
   mixer: THREE.AnimationMixer | null;
   clips: Record<string, THREE.AnimationClip> = {};
@@ -52,7 +53,7 @@ export class Character extends Entity {
   _srcUrl?: string;
   _opts?: CharacterOpts;
 
-  constructor(name: string, gltf: any, opts: CharacterOpts = {}) {
+  constructor(name: string, gltf: GLTF, opts: CharacterOpts = {}) {
     const root = new THREE.Group();
     super("character", name, root);
 
@@ -65,8 +66,8 @@ export class Character extends Entity {
     root.add(this.pivot);
 
     // 统一素体材质（单色），SkinnedMesh 仍自动蒙皮
-    this.model.traverse((o: any) => {
-      if (o.isMesh) {
+    this.model.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
         o.castShadow = true;
         o.frustumCulled = false;
         const m = new THREE.MeshStandardMaterial({
@@ -95,7 +96,7 @@ export class Character extends Entity {
     for (const j of JOINTS) this.values[j.key] = 0;
 
     this.mixer = new THREE.AnimationMixer(this.model);
-    (gltf.animations || []).forEach((a: any) => {
+    (gltf.animations || []).forEach((a: THREE.AnimationClip) => {
       this.clips[a.name] = a;
     });
 

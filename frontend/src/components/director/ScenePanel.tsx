@@ -1,6 +1,7 @@
 "use client";
 
-import { Switch, ColorPicker, Slider, InputNumber } from "antd";
+import { ColorPicker, InputNumber,Slider, Switch } from "antd";
+
 import { useDirectorStore } from "@/stores/director-store";
 
 function SliderRow({ label, min, max, step = 1, value, disabled, format, onChange }: {
@@ -51,7 +52,7 @@ export default function ScenePanel() {
                 <span className="dir-ax">{k.toUpperCase()}</span>
                 <InputNumber size="small" className="dir-inputnum flex-1" controls={false}
                   value={parseFloat(sceneState.pos[k].toFixed(2))} step={0.01}
-                  onChange={(v) => v != null && (runtime as any)?.setScenePos?.(k, v)} />
+                  onChange={(v) => v != null && runtime?.setScenePos?.(k, v)} />
               </div>
             ))}
           </div>
@@ -65,7 +66,7 @@ export default function ScenePanel() {
                 <span className="dir-ax">{k.toUpperCase()}</span>
                 <InputNumber size="small" className="dir-inputnum flex-1" controls={false}
                   value={Math.round(sceneState.rot[k])} step={1}
-                  onChange={(v) => v != null && (runtime as any)?.setSceneRot?.(k, v)} />
+                  onChange={(v) => v != null && runtime?.setSceneRot?.(k, v)} />
               </div>
             ))}
           </div>

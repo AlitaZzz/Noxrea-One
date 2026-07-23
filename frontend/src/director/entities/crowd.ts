@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { Character } from "./Character";
+
+import type { Character } from "./character";
 
 let _seq = 0;
 

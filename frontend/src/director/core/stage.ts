@@ -103,8 +103,8 @@ export class Stage {
     groundGroup.add(ground);
 
     const grid = new THREE.GridHelper(40, 40, 0x2a3a5c, 0x1b2540);
-    (grid.material as any).transparent = true;
-    (grid.material as any).opacity = 0.55;
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.55;
     grid.position.y = 0.002;
     groundGroup.add(grid);
 

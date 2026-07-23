@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 
 // TransformControls 封装：模式切换、与 Orbit 互斥、变更回调。
 export class TransformGizmo {
   control: TransformControls;
-  private _helper: any;
+  private _helper: THREE.Object3D;
   private _onObjectChange: (() => void) | null = null;
   attached: THREE.Object3D | null = null;
 
@@ -21,16 +21,15 @@ export class TransformGizmo {
     this.control.setSpace("local");
     this.control.setSize(0.85);
 
-    this._helper =
-      typeof (this.control as any).getHelper === "function"
-        ? (this.control as any).getHelper()
-        : this.control;
+    const ctrl = this.control as unknown as { getHelper?: () => THREE.Object3D };
+    this._helper = ctrl.getHelper?.()!;
     scene.add(this._helper);
     this.control.enabled = false;
     this._setHelperVisible(false);
 
-    this.control.addEventListener("dragging-changed", (e: any) => {
-      orbit.enabled = !e.value && orbitAllowed();
+    this.control.addEventListener("dragging-changed", (e) => {
+      const ev = e as unknown as { value: boolean };
+      orbit.enabled = !ev.value && orbitAllowed();
     });
 
     this.control.addEventListener("objectChange", () => {
@@ -47,15 +46,15 @@ export class TransformGizmo {
   }
 
   get dragging(): boolean {
-    return !!(this.control as any).dragging;
+    return (this.control as unknown as { dragging: boolean }).dragging;
   }
 
   get overAxis(): boolean {
-    return (this.control as any).axis != null;
+    return (this.control as unknown as { axis: unknown }).axis != null;
   }
 
   setMode(mode: string) {
-    this.control.setMode(mode as any);
+    this.control.setMode(mode as "translate" | "rotate" | "scale");
   }
 
   attach(root: THREE.Object3D) {
