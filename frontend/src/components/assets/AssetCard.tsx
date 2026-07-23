@@ -142,7 +142,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-lg">
         <Tooltip title={t("asset.send")}>
           <button
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
             onClick={(e) => { e.stopPropagation(); handleInsert(); }}
           >
             <PlusOutlined />
@@ -158,7 +158,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       >
         <button
           ref={triggerRef}
-          className="w-7 h-7 flex items-center justify-center rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors cursor-pointer"
           onMouseEnter={handleMenuEnter}
         >
           <MoreOutlined />

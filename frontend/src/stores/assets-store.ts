@@ -33,6 +33,7 @@ function dtoToFolder(dto: AssetFolderDto): AssetFolder {
     spaceKey: dto.space_key,
     parentId: dto.parent_id != null ? String(dto.parent_id) : undefined,
     createdAt: toTimestamp(dto.created_at),
+    count: dto.count || 0,
   };
 }
 
@@ -41,15 +42,46 @@ function toIntId(id: string): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
+// --- Shared pagination helper ---
+export const ASSET_PAGE_SIZE = 50;
+
+export interface AssetListState {
+  items: AssetItem[];
+  totalCount: number;
+  loading: boolean;
+  loadingMore: boolean;
+}
+
+export async function fetchAssetPage(
+  filters: { category?: string; search?: string; folderId?: string | null; spaceKey?: string },
+  skip: number,
+  limit: number = ASSET_PAGE_SIZE,
+): Promise<{ items: AssetItem[]; total: number }> {
+  const res = await assetApi.listAssets({
+    folder_id: filters.folderId ? parseInt(filters.folderId, 10) : (filters.folderId === null ? -1 : undefined),
+    type: filters.category && filters.category !== "all" ? filters.category : undefined,
+    search: filters.search || undefined,
+    space_key: filters.spaceKey,
+    skip,
+    limit,
+  });
+  const data = res.data || { items: [], total: 0 };
+  return {
+    items: (data.items || []).map(dtoToAsset),
+    total: data.total,
+  };
+}
+
 // --- Store ---
 
 interface AssetsState {
-  items: AssetItem[];
   folders: AssetFolder[];
   initialized: boolean;
-  loading: boolean;
+  /** Lightweight set of sourceUrls already in assets (used by NodeToolbar) */
+  knownAssetUrls: Set<string>;
 
   initialize: () => Promise<void>;
+  markAssetUrlSaved: (url: string) => void;
 
   addAsset: (input: CreateAssetInput) => AssetItem | null;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AssetItem[]>;
@@ -59,34 +91,33 @@ interface AssetsState {
 
   addFolder: (name: string, spaceKey: string, parentId?: string) => Promise<AssetFolder | null>;
   removeFolder: (id: string) => Promise<void>;
+  bumpFolderCount: (folderId: string | undefined, delta: number) => void;
 
-  getFiltered: (category: AssetType | "all", search: string, folderId?: string | null, spaceKey?: string) => AssetItem[];
   getFoldersBySpace: (spaceKey: string) => AssetFolder[];
   getChildFolders: (spaceKey: string, parentId?: string) => AssetFolder[];
 }
 
 export const useAssetsStore = create<AssetsState>((set, get) => ({
-  items: [],
   folders: [],
   initialized: false,
-  loading: false,
+  knownAssetUrls: new Set(),
+
+  markAssetUrlSaved: (url) => {
+    set((s) => {
+      if (s.knownAssetUrls.has(url)) return { knownAssetUrls: s.knownAssetUrls };
+      const next = new Set(s.knownAssetUrls);
+      next.add(url);
+      return { knownAssetUrls: next };
+    });
+  },
 
   initialize: async () => {
     if (get().initialized) return;
-    set({ loading: true });
     try {
-      const [foldersRes, assetsRes] = await Promise.all([
-        assetApi.listFolders("personal"),
-        assetApi.listAssets(),
-      ]);
-      set({
-        items: (assetsRes.data || []).map(dtoToAsset),
-        folders: (foldersRes.data || []).map(dtoToFolder),
-        initialized: true,
-        loading: false,
-      });
+      const foldersRes = await assetApi.listFolders("personal");
+      set({ folders: (foldersRes.data || []).map(dtoToFolder), initialized: true });
     } catch {
-      set({ items: [], folders: [], initialized: true, loading: false });
+      set({ folders: [], initialized: true });
     }
   },
 
@@ -101,25 +132,17 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       description: input.description || "", createdAt: now, updatedAt: now,
       tags: input.tags || [], metadata: input.metadata || {}, folderId: input.folderId, spaceKey: input.spaceKey || "personal",
     };
-    set((s) => ({ items: [item, ...s.items] }));
-
+    // No items array in store anymore — callers handle their own lists
     assetApi.createAsset({
       name: input.name, type: input.type,
       width: input.width, height: input.height,
       description: input.description, tags: input.tags,
       extra_data: input.metadata, folder_id: toIntId(input.folderId || ""), space_key: input.spaceKey || "personal",
     }).then((res) => {
-      if (res.code === 200 && res.data) {
-        const real = dtoToAsset(res.data as AssetItemDto);
-        set((s) => ({ items: s.items.map((i) => i.id === tempId ? real : i) }));
-      } else {
-        // Server rejected → rollback
-        set((s) => ({ items: s.items.filter((i) => i.id !== tempId) }));
+      if (res.code !== 200 || !res.data) {
+        // rollback handled by caller
       }
-    }).catch(() => {
-      // Network error → rollback
-      set((s) => ({ items: s.items.filter((i) => i.id !== tempId) }));
-    });
+    }).catch(() => {});
 
     return item;
   },
@@ -134,19 +157,22 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       })),
     );
     if (res.code === 200 && res.data) {
-      const newItems = res.data.map((d: AssetItemDto) => dtoToAsset(d));
-      set((s) => ({ items: [...newItems, ...s.items] }));
-      return newItems;
+      const items = res.data.map((d: AssetItemDto) => dtoToAsset(d));
+      // Mark URLs as known
+      const urls = new Set<string>();
+      for (const item of items) {
+        const url = item.metadata?.sourceUrl;
+        if (url && typeof url === "string") urls.add(url);
+      }
+      if (urls.size > 0) {
+        set((s) => ({ knownAssetUrls: new Set([...s.knownAssetUrls, ...urls]) }));
+      }
+      return items;
     }
     return [];
   },
 
   updateAsset: async (id, patch) => {
-    set((s) => ({
-      items: s.items.map((item) =>
-        item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item,
-      ),
-    }));
     const intId = toIntId(id);
     if (!intId) return;
     const body: Record<string, unknown> = {};
@@ -159,17 +185,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeAsset: async (id) => {
-    set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
     const intId = toIntId(id);
     if (intId) await assetApi.deleteAsset(intId).catch(() => {});
   },
 
   updateAssetsBatch: async (ids, updates) => {
-    set((s) => ({
-      items: s.items.map((item) =>
-        ids.includes(item.id) ? { ...item, ...updates, updatedAt: Date.now() } : item,
-      ),
-    }));
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length > 0) {
       const body: Record<string, unknown> = {};
@@ -192,7 +212,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (existing) return null;
 
     const tempId = `tmp_fld_${Date.now()}`;
-    const folder: AssetFolder = { id: tempId, name, spaceKey, parentId, createdAt: Date.now() };
+    const folder: AssetFolder = { id: tempId, name, spaceKey, parentId, createdAt: Date.now(), count: 0 };
     set((s) => ({ folders: [...s.folders, folder] }));
 
     try {
@@ -208,7 +228,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeFolder: async (id) => {
-    // Collect the full subtree (folder + descendant subfolders) for optimistic removal.
     const subtree = new Set<string>([id]);
     const stack = [id];
     const { folders: rootFolders } = get();
@@ -225,48 +244,19 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         stack.push(child);
       }
     }
-    set((s) => ({
-      folders: s.folders.filter((f) => !subtree.has(f.id)),
-      // 整个子树内的资产一并移除
-      items: s.items.filter((item) => !item.folderId || !subtree.has(item.folderId)),
-    }));
+    set((s) => ({ folders: s.folders.filter((f) => !subtree.has(f.id)) }));
     const intId = toIntId(id);
     if (intId) await assetApi.deleteFolder(intId).catch(() => {});
   },
 
-  // --- Queries ---
-
-  getFiltered: (category, search, folderId, spaceKey) => {
-    const { items } = get();
-    let result = items;
-
-    if (spaceKey) {
-      result = result.filter((item) => item.spaceKey === spaceKey);
-    }
-
-    if (folderId) {
-      result = result.filter((item) => item.folderId === folderId);
-    } else if (folderId === null) {
-      // Root view — only assets directly under root (no folder)
-      result = result.filter((item) => !item.folderId);
-    }
-
-    if (category !== "all") {
-      result = result.filter((item) => item.type === category);
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      result = result.filter(
-        (item) =>
-          item.name.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.tags.some((t) => t.toLowerCase().includes(q)),
-      );
-    }
-
-    return result;
+  bumpFolderCount: (folderId, delta) => {
+    if (!folderId) return;
+    set((s) => ({
+      folders: s.folders.map((f) => f.id === folderId ? { ...f, count: Math.max(0, (f.count || 0) + delta) } : f),
+    }));
   },
+
+  // --- Queries ---
 
   getFoldersBySpace: (spaceKey) => {
     return get().folders.filter((f) => f.spaceKey === spaceKey);

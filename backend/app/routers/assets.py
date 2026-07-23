@@ -93,7 +93,7 @@ async def update_assets_batch(
 
 # --- Assets ---
 
-@router.get("/items", response_model=UnifiedResponse[list[AssetOut]])
+@router.get("/items", response_model=UnifiedResponse[dict])
 async def list_assets(
     folder_id: Optional[int] = Query(None),
     asset_type: Optional[str] = Query(None, alias="type"),
@@ -105,9 +105,13 @@ async def list_assets(
     user=Depends(get_current_user),
 ):
     assets = await crud.get_assets(db, user.id, folder_id, asset_type, search, space_key=space_key, skip=skip, limit=limit)
+    total = await crud.count_assets(db, user.id, folder_id, asset_type, search, space_key=space_key)
     return UnifiedResponse(
         code=200,
-        data=[AssetOut.model_validate(a) for a in assets],
+        data={
+            "items": [AssetOut.model_validate(a).model_dump(mode="json") for a in assets],
+            "total": total,
+        },
         msg="ok",
     )
 

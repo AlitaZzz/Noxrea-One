@@ -23,13 +23,23 @@ def _parse_hash_from_url(url: str) -> str | None:
 
 # --- Folder CRUD ---
 
-async def get_folders(db: AsyncSession, user_id: int, space_key: str) -> Sequence[AssetFolder]:
-    q = select(AssetFolder).where(
-        AssetFolder.user_id == user_id,
-        AssetFolder.space_key == space_key,
-    ).order_by(AssetFolder.name)
+async def get_folders(db: AsyncSession, user_id: int, space_key: str) -> list[dict]:
+    from sqlalchemy import func, literal_column
+    count_subq = (
+        select(func.count(AssetItem.id))
+        .where(AssetItem.folder_id == AssetFolder.id, AssetItem.user_id == user_id)
+        .correlate(AssetFolder)
+        .scalar_subquery()
+    )
+    q = (
+        select(AssetFolder, count_subq.label("count"))
+        .where(AssetFolder.user_id == user_id, AssetFolder.space_key == space_key)
+        .order_by(AssetFolder.name)
+    )
     result = await db.execute(q)
-    return result.scalars().all()
+    return [{"id": f.id, "user_id": f.user_id, "name": f.name, "space_key": f.space_key,
+             "parent_id": f.parent_id, "created_at": f.created_at, "count": c}
+            for f, c in result.all()]
 
 
 async def get_folder(db: AsyncSession, folder_id: int, user_id: int) -> Optional[AssetFolder]:
@@ -128,6 +138,23 @@ async def delete_folder(db: AsyncSession, folder_id: int, user_id: int) -> bool:
 
 # --- Asset CRUD ---
 
+
+def _build_asset_filter_query(user_id: int, folder_id: Optional[int] = None, asset_type: Optional[str] = None, search: Optional[str] = None, space_key: Optional[str] = None):
+    q = select(AssetItem).where(AssetItem.user_id == user_id)
+    if space_key:
+        q = q.where(AssetItem.space_key == space_key)
+    if folder_id == -1:
+        q = q.where(AssetItem.folder_id.is_(None))
+    elif folder_id is not None:
+        q = q.where(AssetItem.folder_id == folder_id)
+    if asset_type and asset_type != "all":
+        q = q.where(AssetItem.type == asset_type)
+    if search:
+        like = f"%{search}%"
+        q = q.where(AssetItem.name.ilike(like))
+    return q
+
+
 async def get_assets(
     db: AsyncSession,
     user_id: int,
@@ -138,24 +165,25 @@ async def get_assets(
     skip: int = 0,
     limit: int = 200,
 ) -> Sequence[AssetItem]:
-    q = select(AssetItem).where(AssetItem.user_id == user_id)
-
-    if space_key:
-        q = q.where(AssetItem.space_key == space_key)
-
-    if folder_id is not None:
-        q = q.where(AssetItem.folder_id == folder_id)
-
-    if asset_type and asset_type != "all":
-        q = q.where(AssetItem.type == asset_type)
-
-    if search:
-        like = f"%{search}%"
-        q = q.where(AssetItem.name.ilike(like))
-
+    q = _build_asset_filter_query(user_id, folder_id, asset_type, search, space_key)
     q = q.order_by(AssetItem.updated_at.desc()).offset(skip).limit(limit)
     result = await db.execute(q)
     return result.scalars().all()
+
+
+async def count_assets(
+    db: AsyncSession,
+    user_id: int,
+    folder_id: Optional[int] = None,
+    asset_type: Optional[str] = None,
+    search: Optional[str] = None,
+    space_key: Optional[str] = None,
+) -> int:
+    from sqlalchemy import func
+    q = _build_asset_filter_query(user_id, folder_id, asset_type, search, space_key)
+    q = q.with_only_columns(func.count()).order_by(None)
+    result = await db.execute(q)
+    return result.scalar_one()
 
 
 async def get_asset(db: AsyncSession, asset_id: int, user_id: int) -> Optional[AssetItem]:

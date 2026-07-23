@@ -232,6 +232,7 @@ export interface AssetFolder {
   spaceKey: string;
   parentId?: string;
   createdAt: number;
+  count: number;
 }
 
 export interface AssetItem {

@@ -13,6 +13,7 @@
   --canvas-text: #ececf0;
   --canvas-text-dim: #7d7d86;
   --canvas-text-muted: #6e6e76;
+  --canvas-text-disabled: rgba(236, 236, 240, 0.3);
   --canvas-accent: #3b82f6;
   --nav-active-bg: #232327;
   --nav-hover-bg: #16161a;
@@ -42,6 +43,7 @@
   --canvas-text: #1a1a1a;
   --canvas-text-dim: #888;
   --canvas-text-muted: #aaa;
+  --canvas-text-disabled: rgba(26, 26, 26, 0.3);
   --canvas-accent: #1677ff;
   --nav-active-bg: #e8e8e8;
   --nav-hover-bg: #f0f0f0;
