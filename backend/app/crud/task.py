@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select, update
@@ -77,3 +77,79 @@ async def cancel_task(db: AsyncSession, task_id: str, now: datetime) -> None:
         .values(status="failed", error="Cancelled", updated_at=now)
     )
     await db.commit()
+
+
+async def claim_pending_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask]:
+    """原子批量领取 pending 任务并置为 processing。
+
+    使用声明式 update(...).returning(GenerationTask)：返回的是 ORM 对象，
+    config/ref_urls 按模型声明的 JSON 列自动反序列化为 dict/list，不再出现
+    "字符串伪装成 dict" 的静默类型错位；列映射由 ORM 维护，不再依赖下标。
+    """
+    now = datetime.now(timezone.utc)
+    stmt = (
+        update(GenerationTask)
+        .where(
+            GenerationTask.id.in_(
+                select(GenerationTask.id)
+                .where(GenerationTask.status == "pending")
+                .order_by(GenerationTask.created_at.asc())
+                .limit(limit)
+            )
+        )
+        .values(status="processing", updated_at=now)
+        .returning(GenerationTask)
+    )
+    result = await db.execute(stmt)
+    tasks = list(result.scalars().all())
+    await db.commit()
+    return tasks
+
+
+async def update_task_status(
+    db: AsyncSession,
+    task_id: str,
+    status: str,
+    *,
+    result_url: str | None = None,
+    error: str | None = None,
+) -> None:
+    """更新任务状态。
+
+    取消保护：任务已为 failed（被取消）时，completed 不会被覆盖，
+    避免取消后的任务被误标为完成。
+    """
+    now = datetime.now(timezone.utc)
+    if status == "completed":
+        cur = await db.execute(
+            select(GenerationTask.status).where(GenerationTask.id == task_id)
+        )
+        if cur.scalar_one_or_none() == "failed":
+            return
+    await db.execute(
+        update(GenerationTask)
+        .where(GenerationTask.id == task_id)
+        .values(
+            status=status,
+            updated_at=now,
+            result_url=result_url or "",
+            error=error or "",
+        )
+    )
+    await db.commit()
+
+
+async def cleanup_zombie_tasks(
+    db: AsyncSession, cutoff: datetime, now: datetime
+) -> int:
+    """将卡在 processing 且 updated_at < cutoff 的任务标为失败，返回受影响行数。"""
+    result = await db.execute(
+        update(GenerationTask)
+        .where(
+            GenerationTask.status == "processing",
+            GenerationTask.updated_at < cutoff,
+        )
+        .values(status="failed", error="Task timed out", updated_at=now)
+    )
+    await db.commit()
+    return result.rowcount
