@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.crud import task as crud_task
 from app.database import async_session
 from app.services.storage import save_upload_bytes
 
@@ -41,33 +41,11 @@ ZOMBIE_CHECK_INTERVAL = settings.WORKER_ZOMBIE_INTERVAL
 async def _claim_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask]:
     """原子地批量领取最多 limit 条 pending 任务。
 
-    单条 UPDATE ... WHERE id IN (SELECT ... pending LIMIT N) RETURNING *：
-    - WHERE status='pending' 保证并发下只领取仍为 pending 的行
-    - RETURNING 只返回真正被改成 processing 的行，等价于旧逻辑的二次确认
-    - 一次往返 + 一次 commit，替代旧的逐条 SELECT+UPDATE+re-SELECT
+    委托 crud_task.claim_pending_tasks：声明式 update(...).returning(GenerationTask)
+    返回 ORM 对象，config/ref_urls 已按模型声明反序列化为 dict/list，
+    不再依赖手搓 SQL 的下标映射或 json.loads 补丁。
     """
-    now = datetime.now(timezone.utc)
-    result = await db.execute(
-        text(
-            "UPDATE generation_tasks SET status = 'processing', updated_at = :now "
-            "WHERE id IN (SELECT id FROM generation_tasks WHERE status = 'pending' "
-            "ORDER BY created_at ASC LIMIT :limit) "
-            "RETURNING id, user_id, type, status, prompt, config, ref_urls, "
-            "result_url, error, node_id, created_at, updated_at"
-        ),
-        {"now": now, "limit": limit},
-    )
-    rows = result.fetchall()
-    await db.commit()
-    return [
-        GenerationTask(
-            id=row[0], user_id=row[1], type=row[2], status=row[3],
-            prompt=row[4], config=row[5], ref_urls=row[6],
-            result_url=row[7], error=row[8], node_id=row[9],
-            created_at=row[10], updated_at=row[11],
-        )
-        for row in rows
-    ]
+    return await crud_task.claim_pending_tasks(db, limit)
 
 
 # ── Resolve reference images to base64 ────────────────────────
@@ -183,18 +161,12 @@ async def _resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
 async def _process_task(task: GenerationTask) -> None:
     """Process one task: call AI API, save result, update DB."""
     config = task.config or {}
-    if isinstance(config, str):
-        import json as _json
-        config = _json.loads(config)
     model = config.get("model", "")
     quality = config.get("quality", "auto")
     ratio = config.get("ratio", "1:1")
     size = config.get("size", "1K")
     n = config.get("n", 1)
     raw_refs = task.ref_urls or []
-    if isinstance(raw_refs, str):
-        import json as _json
-        raw_refs = _json.loads(raw_refs) if raw_refs else []
     refs = await _resolve_refs(raw_refs, task.user_id)
 
     # image/video 按 channel_id 解析 baseUrl/apiKey（apiKey 不再落库到 task）；
@@ -453,9 +425,6 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
     from app.config import settings as app_settings
 
     ref_urls = task.ref_urls or []
-    if isinstance(ref_urls, str):
-        import json as _json
-        ref_urls = _json.loads(ref_urls) if ref_urls else []
     if not ref_urls:
         await _update_task_status(task.id, "failed", error="No source image URL provided")
         return None
@@ -548,21 +517,9 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
 async def _update_task_status(task_id: str, status: str, *, result_url: str | None = None, error: str | None = None) -> None:
     """Update task status. Skips if task was cancelled (don't overwrite cancel)."""
     async with async_session() as db:
-        now = datetime.now(timezone.utc)
-        # Don't overwrite "failed" (cancelled) with "completed"
-        if status == "completed":
-            row = await db.execute(
-                text("SELECT status FROM generation_tasks WHERE id = :id"),
-                {"id": task_id},
-            )
-            current = row.scalar()
-            if current == "failed":
-                return  # task was cancelled, don't change status
-        await db.execute(
-            text("UPDATE generation_tasks SET status = :status, result_url = :url, error = :err, updated_at = :now WHERE id = :id"),
-            {"status": status, "url": result_url or "", "err": error or "", "now": now, "id": task_id},
+        await crud_task.update_task_status(
+            db, task_id, status, result_url=result_url, error=error
         )
-        await db.commit()
 
 
 # ── Zombie cleanup ─────────────────────────────────────────────
@@ -570,23 +527,13 @@ async def _update_task_status(task_id: str, status: str, *, result_url: str | No
 
 async def _cleanup_zombies(db: AsyncSession) -> None:
     """Mark tasks stuck in 'processing' for > STUCK_TIMEOUT_MIN as failed."""
-    cutoff = datetime.now(timezone.utc)
-    result = await db.execute(
-        text("""
-            UPDATE generation_tasks
-            SET status = 'failed', error = 'Task timed out', updated_at = :now
-            WHERE status = 'processing'
-              AND updated_at < :cutoff
-        """),
-        {
-            "now": cutoff,
-            "cutoff": datetime.fromtimestamp(cutoff.timestamp() - STUCK_TIMEOUT_MIN * 60, tz=timezone.utc),
-        },
+    now = datetime.now(timezone.utc)
+    cutoff = datetime.fromtimestamp(
+        now.timestamp() - STUCK_TIMEOUT_MIN * 60, tz=timezone.utc
     )
-    if result.rowcount:
-        logger.warning(f"cleaned up {result.rowcount} zombie task(s)")
-
-    await db.commit()
+    n = await crud_task.cleanup_zombie_tasks(db, cutoff, now)
+    if n:
+        logger.warning(f"cleaned up {n} zombie task(s)")
 
 
 # ── Main loop ──────────────────────────────────────────────────
