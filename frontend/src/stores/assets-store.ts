@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { AssetItem, AssetFolder, CreateAssetInput, AssetType } from "@/lib/types";
-import { assetApi, type AssetItemDto, type AssetFolderDto } from "@/lib/api";
+
+import { assetApi, type AssetFolderDto,type AssetItemDto } from "@/lib/api";
+import type { AssetFolder, AssetItem, AssetType,CreateAssetInput } from "@/lib/types";
 
 // --- Helpers ---
 
@@ -208,10 +209,10 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   removeFolder: async (id) => {
     // Collect the full subtree (folder + descendant subfolders) for optimistic removal.
-    const subtree = new Set<number>([id]);
+    const subtree = new Set<string>([id]);
     const stack = [id];
     const { folders: rootFolders } = get();
-    const byParent = new Map<number | undefined, number[]>();
+    const byParent = new Map<string | undefined, string[]>();
     for (const f of rootFolders) {
       const list = byParent.get(f.parentId);
       if (list) list.push(f.id);

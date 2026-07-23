@@ -1,6 +1,13 @@
 import { create } from "zustand";
-import type { ModelChannel, ModelCapability, ProviderPreset } from "@/lib/types";
-import { api, getTokenHeader, BASE } from "@/lib/api";
+
+import { api, BASE,getTokenHeader } from "@/lib/api";
+import type { ModelCapability, ModelChannel, ProviderPreset } from "@/lib/types";
+
+interface RawModelEntry {
+  id?: string;
+  name?: string;
+  suggestedCapabilities?: string[];
+}
 
 interface ModelState {
   channels: ModelChannel[];
@@ -27,7 +34,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const res = await api<any[]>("/api/model-config/channels");
+      const res = await api<ModelChannel[]>("/api/model-config/channels");
       if (res.code === 200 && res.data) {
         set({ channels: res.data, initialized: true });
         await get().fetchPresets();
@@ -111,7 +118,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       method: "POST", body: JSON.stringify({ models }),
     });
     // 后端 set_models 不返回带 id 的模型，重载 channels 拿回完整数据（含 id）
-    const reload = await api<any[]>("/api/model-config/channels");
+    const reload = await api<ModelChannel[]>("/api/model-config/channels");
     if (reload.code === 200 && reload.data) {
       set({ channels: reload.data });
     }
@@ -128,7 +135,9 @@ export const useModelStore = create<ModelState>((set, get) => ({
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
-      const fetched = (json.data || []).map((m: any) => ({
+      const fetched: { name: string; suggested: ModelCapability[] }[] = (
+        json.data || []
+      ).map((m: RawModelEntry) => ({
         name: (m.id || m.name) as string,
         // 推断出的类型：仅作展示提示，不写入 capabilities（不自动勾选进"已启用"）
         suggested: ((m.suggestedCapabilities || []) as string[]).filter((c) =>

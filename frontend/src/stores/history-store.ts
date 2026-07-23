@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { HistorySnapshot } from "@/lib/types";
+
 import { HISTORY_MAX_SIZE } from "@/lib/constants";
+import type { HistorySnapshot } from "@/lib/types";
 
 interface HistoryState {
   undoStack: HistorySnapshot[];

@@ -1,8 +1,9 @@
-import { create } from "zustand";
 import type { Edge } from "@xyflow/react";
-import type { ViewportState, BackgroundType, ThemeMode, HistorySnapshot, AnyNode } from "@/lib/types";
-import { DEFAULT_VIEWPORT, DEFAULT_BACKGROUND, DEFAULT_THEME } from "@/lib/constants";
+import { create } from "zustand";
+
+import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
 import { saveManager } from "@/lib/save-manager";
+import type { AnyNode,BackgroundType, HistorySnapshot, ThemeMode, ViewportState } from "@/lib/types";
 import { useHistoryStore } from "@/stores/history-store";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
