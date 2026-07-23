@@ -288,7 +288,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       title={
         <div className="flex items-center gap-2">
           <ApiOutlined />
-          <span style={{ color: "var(--canvas-text)" }}>{t("settings")}</span>
+          <span style={{ color: "var(--canvas-text)" }}>{t("api.settings")}</span>
         </div>
       }
       open={open}

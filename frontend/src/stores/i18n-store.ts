@@ -13,7 +13,7 @@ const zh: Record<string, string> = {
   // Toolbar
   "minimap.show": "显示小地图", "minimap.hide": "隐藏小地图",
   "snap.on": "吸附开", "snap.off": "吸附关",
-  "background": "背景", "settings": "模型设置", "assets": "资产管理",
+  "background": "背景", "api.settings": "API 设置", "assets": "资产管理",
   "dots": "点阵", "grid": "网格", "blank": "空白",
   "zoom.in": "放大", "zoom.out": "缩小", "fit": "适应屏幕", "zoom.to.50": "缩放到 50%", "zoom.to.100": "缩放到 100%",
   "theme.dark": "深色模式", "theme.light": "浅色模式",
@@ -142,7 +142,7 @@ const zh: Record<string, string> = {
 const en: Record<string, string> = {
   "minimap.show": "Show Minimap", "minimap.hide": "Hide Minimap",
   "snap.on": "Snap On", "snap.off": "Snap Off",
-  "background": "Background", "settings": "Model Settings", "assets": "Assets",
+  "background": "Background", "api.settings": "API Settings", "assets": "Assets",
   "dots": "Dots", "grid": "Grid", "blank": "Blank",
   "zoom.in": "Zoom In", "zoom.out": "Zoom Out", "fit": "Fit to Screen", "zoom.to.50": "Zoom to 50%", "zoom.to.100": "Zoom to 100%",
   "theme.dark": "Dark Mode", "theme.light": "Light Mode",
