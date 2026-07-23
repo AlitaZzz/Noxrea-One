@@ -293,7 +293,7 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">颜色</label>
             <ColorPicker size="small" value={entityColor}
-              onChange={(_, hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
+              onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>可见</span>
@@ -328,7 +328,7 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">颜色</label>
             <ColorPicker size="small" value={entityColor}
-              onChange={(_, hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
+              onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>可见</span>

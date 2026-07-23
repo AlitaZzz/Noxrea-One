@@ -75,7 +75,7 @@ export default function ScenePanel() {
         <div className="dir-field">
           <label className="dir-label">天空颜色</label>
           <ColorPicker size="small" value={sceneState.sky}
-            onChange={(_, hex) => runtime?.setSkyColor(hex)} />
+            onChange={(c) => runtime?.setSkyColor(c.toHexString())} />
         </div>
       </div>
 
