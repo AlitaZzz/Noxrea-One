@@ -37,15 +37,23 @@ frontend/src/
 ├── hooks/            # 自定义 hooks（use-canvas-keyboard）
 ├── lib/              # 工具层（save-manager, api, types, constants, image-utils）
 ├── providers/        # React context providers（AppProviders）
-└── stores/           # Zustand 状态管理
-    ├── canvas-store.ts       # 画布节点/边/视口状态
-    ├── project-store.ts      # 项目管理
-    ├── history-store.ts      # 撤销/重做
-    ├── selection-store.ts    # 选择/剪贴板
-    ├── assets-store.ts       # 资源库
-    ├── auth-store.ts         # 登录鉴权
-    ├── model-store.ts        # AI 模型配置
-    └── i18n-store.ts         # 国际化
+├── stores/           # Zustand 状态管理
+│   ├── canvas-store.ts       # 画布节点/边/视口状态
+│   ├── project-store.ts      # 项目管理
+│   ├── history-store.ts      # 撤销/重做
+│   ├── selection-store.ts    # 选择/剪贴板
+│   ├── assets-store.ts       # 资源库
+│   ├── auth-store.ts         # 登录鉴权
+│   ├── model-store.ts        # AI 模型配置
+│   └── i18n-store.ts         # 国际化
+├── director/         # 3D 引擎逻辑（纯 TS，无 React）
+│   ├── core/         # 场景核心（stage, camera-rig, transform-gizmo, selection, nav-gizmo）
+│   ├── entities/     # 实体模型（camera, character, crowd, entity, prop）
+│   └── util/         # 工具（boneIdentify, measure, rigAxisTable）
+└── __tests__/        # 集中单元测试（*.test.ts，kebab-case）
+```
+
+> `src/director/`（3D 引擎，纯 TS、无 React 依赖）与 `src/components/director/`（引擎配套的 React UI 容器）是两个不同层级的**同名目录**，不要混淆：前者管场景/实体/工具逻辑，后者管画布上的 UI 外壳（Dock、Inspector、PoseSliders 等）。新增引擎能力放 `director/`，新增 UI 放 `components/director/`。
 
 backend/
 ├── app/
@@ -60,6 +68,20 @@ backend/
 │   └── services/     # 业务逻辑（auth, providers, worker）
 └── alembic/          # 数据库迁移版本
 ```
+
+## 前端命名规范
+
+`frontend/src/` 下的文件名约定由 ESLint 规则 `check-file/filename-naming-convention` 强制（已设为 `error`），`simple-import-sort` 强制导入顺序：
+
+| 类型 | 规则 | 示例 |
+|---|---|---|
+| React 组件 `*.tsx`（`components/**`） | PascalCase | `CanvasContextMenu.tsx` |
+| 其余 `*.ts` / 非组件 `*.tsx` | kebab-case | `use-canvas-events.ts`、`app-modal.tsx`、`camera-rig.ts` |
+| 测试 `*.test.ts`（集中 `src/__tests__/`） | kebab-case | `canvas-events.test.ts` |
+| 目录名 | 全小写 | `components/`、`director/` |
+
+- import 排序：`simple-import-sort` 分组为 external → `@/` 绝对路径 → 相对路径，由 `eslint . --fix` 自动整理。
+- 测试集中放在 `src/__tests__/`，随源码改动同步就近命名；`director/util/` 下的测试也已迁入该目录。
 
 ## 关键架构约定
 
