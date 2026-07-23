@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
-import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
+
+import type { Metadata } from "next";
+
+import { AppProviders } from "@/providers/app-providers";
 
 export const metadata: Metadata = {
   title: "Noxrea Canvas — Infinite AI Canvas",

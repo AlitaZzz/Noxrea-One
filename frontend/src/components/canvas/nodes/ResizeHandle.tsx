@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+
+import { EventNames } from "@/lib/event-names";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { EventNames } from "@/lib/eventNames";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 

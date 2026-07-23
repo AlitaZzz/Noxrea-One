@@ -4,9 +4,9 @@
  * 覆盖：单文件/多文件/视频/混合/部分失败。
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
 
-type MockNode = { id: string; type: string; position: { x: number; y: number }; data: any; style?: any };
+type MockNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; style?: Record<string, unknown> };
 
 /** handleDrop 的核心逻辑（去 DOM/上传依赖后的纯函数版本） */
 async function handleFileDrop(
@@ -14,8 +14,8 @@ async function handleFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
   clientX: number,
   clientY: number,
-  pushHistory: () => void,
-  takeCanvasSnapshot: () => any,
+  pushHistory: (snapshot: Record<string, unknown>) => void,
+  takeCanvasSnapshot: () => Record<string, unknown>,
   createImageNode: (pos: { x: number; y: number }, src: string) => MockNode,
   createVideoNode: (pos: { x: number; y: number }, src: string) => MockNode,
   applyThumbnailSettings: (node: MockNode, w: number, h: number, label: string) => MockNode,
@@ -66,7 +66,7 @@ async function handleFileDrop(
 
   const createdNodes = results
     .filter((r) => r.status === "fulfilled" && r.value !== null)
-    .map((r) => (r as PromiseFulfilledResult<any>).value);
+    .map((r) => (r as PromiseFulfilledResult<MockNode>).value);
 
   if (createdNodes.length > 0) {
     pushHistory(takeCanvasSnapshot());
@@ -232,7 +232,7 @@ describe("handleFileDrop", () => {
 
 describe("handleDragOver", () => {
   it("阻止默认行为并设置 dropEffect", () => {
-    const e = { preventDefault: vi.fn(), dataTransfer: { dropEffect: "" } } as any;
+    const e: { preventDefault: ReturnType<typeof vi.fn>; dataTransfer: { dropEffect: string } } = { preventDefault: vi.fn(), dataTransfer: { dropEffect: "" } };
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     expect(e.preventDefault).toHaveBeenCalled();

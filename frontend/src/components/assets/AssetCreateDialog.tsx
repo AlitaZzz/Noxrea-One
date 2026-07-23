@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { Select, Progress, App, Button } from "antd";
-import AppModal from "@/lib/app-modal";
+import { AudioOutlined,CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
+import { App, Button,Progress, Select } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import ModalButton from "@/components/common/ModalButton";
-import { PlusOutlined, CloseOutlined, PlayCircleOutlined, AudioOutlined } from "@ant-design/icons";
-import type { AssetType, AssetFolder, CreateAssetInput } from "@/lib/types";
-import { useI18nStore } from "@/stores/i18n-store";
 import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
+import AppModal from "@/lib/app-modal";
+import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types";
+import { useI18nStore } from "@/stores/i18n-store";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
   { value: "character", labelKey: "asset.cat.character" },
@@ -44,7 +45,7 @@ async function uploadFile(file: File, onProgress: (pct: number) => void): Promis
   const formData = new FormData();
   formData.append("file", file);
   try {
-    const res = await apiUploadWithProgress("/api/files/upload?category=assets", formData, onProgress);
+    const res = await apiUploadWithProgress<{ url: string }>("/api/files/upload?category=assets", formData, onProgress);
     return res.data?.url || "";
   } catch { return ""; }
 }
@@ -74,75 +75,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const activeRef = useRef(0);
   const resolveAllRef = useRef<() => void>(() => {});
   const allDonePromiseRef = useRef<Promise<void>>(Promise.resolve());
+  const scheduleNextRef = useRef<() => void>(() => {});
 
-  const scheduleNext = useCallback(() => {
-    while (activeRef.current < MAX_CONCURRENCY && queueRef.current.length > 0) {
-      const entry = queueRef.current.shift()!;
-      activeRef.current++;
-      processEntry(entry, updateFile).finally(() => {
-        activeRef.current--;
-        scheduleNext();
-        if (activeRef.current === 0) {
-          resolveAllRef.current();
-        }
-      });
-    }
-  }, []);
-
-  const enqueueUpload = useCallback((entry: UploadFile) => {
-    const wasIdle = activeRef.current === 0;
-    if (wasIdle) {
-      allDonePromiseRef.current = new Promise(r => { resolveAllRef.current = r; });
-    }
-    queueRef.current.push(entry);
-    scheduleNext();
-  }, [scheduleNext]);
-
-  const waitAllDone = useCallback((): Promise<void> => {
-    if (activeRef.current > 0 || queueRef.current.length > 0) {
-      return allDonePromiseRef.current;
-    }
-    return Promise.resolve();
-  }, []);
-
-  // Clear local state — 不删物理文件，去重体系下取消上传时文件继续保留
-  const reset = () => {
-    clearState();
-  };
-
-  // Clear local state only — used after save (files are now referenced by asset records)
-  const clearState = () => {
-    setFiles([]);
-    setCategory("other");
-    setSaveFolderId(undefined);
-    setSaving(false);
-  };
-
-  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
-    const entries: UploadFile[] = Array.from(newFiles).map((file) => ({
-      id: uid(),
-      file,
-      previewUrl: URL.createObjectURL(file),
-      url: null,
-      uploadProgress: 0,
-      status: "ready",
-      width: 0,
-      height: 0,
-    }));
-
-    // 立即渲染卡片
-    setFiles((prev) => [...prev, ...entries]);
-
-    // 加入统一队列（共享并发池，不等待）
-    for (const entry of entries) {
-      enqueueUpload(entry);
-    }
-  }, [enqueueUpload]);
-
-  async function processEntry(
+  // 声明在 scheduleNext 之前，避免互相递归的「声明前访问」。
+  const processEntry = useCallback(async (
     entry: UploadFile,
     onUpdate: (id: string, partial: Partial<UploadFile>) => void,
-  ) {
+  ) => {
     const { id, file } = entry;
     onUpdate(id, { status: "processing" });
 
@@ -217,7 +156,75 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     } else {
       onUpdate(id, { status: "error" });
     }
-  }
+  }, []);
+
+  const scheduleNext = useCallback(() => {
+    while (activeRef.current < MAX_CONCURRENCY && queueRef.current.length > 0) {
+      const entry = queueRef.current.shift()!;
+      activeRef.current++;
+      processEntry(entry, updateFile).finally(() => {
+        activeRef.current--;
+        scheduleNextRef.current();
+        if (activeRef.current === 0) {
+          resolveAllRef.current();
+        }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    scheduleNextRef.current = scheduleNext;
+  }, [scheduleNext]);
+
+  const enqueueUpload = useCallback((entry: UploadFile) => {
+    const wasIdle = activeRef.current === 0;
+    if (wasIdle) {
+      allDonePromiseRef.current = new Promise(r => { resolveAllRef.current = r; });
+    }
+    queueRef.current.push(entry);
+    scheduleNext();
+  }, [scheduleNext]);
+
+  const waitAllDone = useCallback((): Promise<void> => {
+    if (activeRef.current > 0 || queueRef.current.length > 0) {
+      return allDonePromiseRef.current;
+    }
+    return Promise.resolve();
+  }, []);
+
+  // Clear local state — 不删物理文件，去重体系下取消上传时文件继续保留
+  const reset = () => {
+    clearState();
+  };
+
+  // Clear local state only — used after save (files are now referenced by asset records)
+  const clearState = () => {
+    setFiles([]);
+    setCategory("other");
+    setSaveFolderId(undefined);
+    setSaving(false);
+  };
+
+  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
+    const entries: UploadFile[] = Array.from(newFiles).map((file) => ({
+      id: uid(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      url: null,
+      uploadProgress: 0,
+      status: "ready",
+      width: 0,
+      height: 0,
+    }));
+
+    // 立即渲染卡片
+    setFiles((prev) => [...prev, ...entries]);
+
+    // 加入统一队列（共享并发池，不等待）
+    for (const entry of entries) {
+      enqueueUpload(entry);
+    }
+  }, [enqueueUpload]);
 
   const removeFile = useCallback((id: string) => {
     const target = files.find((f) => f.id === id);

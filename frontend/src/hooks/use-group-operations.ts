@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useCanvasStore, takeCanvasSnapshot, markDirtyImmediate } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { createGroupNode } from "@/lib/node-defaults";
+
 import { GROUP_NODE_PADDING } from "@/lib/constants";
+import { EventNames } from "@/lib/event-names";
+import { createGroupNode } from "@/lib/node-defaults";
 import { NODE_TYPE } from "@/lib/types";
-import { EventNames } from "@/lib/eventNames";
+import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
 
 /**
  * 编组/取消编组 hook。

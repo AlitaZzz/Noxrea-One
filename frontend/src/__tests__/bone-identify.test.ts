@@ -1,13 +1,20 @@
-import { describe, it, expect } from "vitest";
-import { identifyBones } from "./boneIdentify";
+import * as THREE from "three";
+import { describe, expect,it } from "vitest";
 
-// 伪 model:traverse 依次吐出带 name 的 Bone-like 对象。
+import { identifyBones } from "../director/util/bone-identify";
+
+// 伪 model:traverse 依次吐出真正的 THREE.Bone 对象，通过 instanceof 检查。
 function mockModel(names: string[]) {
+  const bones = names.map((name) => {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    return bone;
+  });
   return {
-    traverse(cb: (o: any) => void) {
-      for (const name of names) cb({ isBone: true, name, userData: {} });
+    traverse(cb: (o: THREE.Object3D) => void) {
+      for (const bone of bones) cb(bone);
     },
-  } as any;
+  };
 }
 
 // jointConfig 需要的全部语义骨(15 个)
@@ -42,19 +49,19 @@ const UE = [
 
 describe("identifyBones 自动识别", () => {
   it("Xbot: mixamo rig,15 语义骨全部命中,干扰骨忽略", () => {
-    const { map, rig } = identifyBones(mockModel(XBOT));
+    const { map, rig } = identifyBones(mockModel(XBOT) as unknown as Object3D);
     expect(rig).toBe("mixamo");
     for (const t of EXPECTED) expect(map.has(t), `缺失 ${t}`).toBe(true);
   });
 
   it("tesla_bot: mixamo 变体(带 _数字 后缀),15 语义骨全部命中", () => {
-    const { map, rig } = identifyBones(mockModel(TESLA));
+    const { map, rig } = identifyBones(mockModel(TESLA) as unknown as Object3D);
     expect(rig).toBe("mixamo");
     for (const t of EXPECTED) expect(map.has(t), `缺失 ${t}`).toBe(true);
   });
 
   it("ue-mannequin: biped rig(Bip001 命名),15 语义骨全部命中", () => {
-    const { map, rig } = identifyBones(mockModel(UE));
+    const { map, rig } = identifyBones(mockModel(UE) as unknown as Object3D);
     expect(rig).toBe("biped");
     for (const t of EXPECTED) expect(map.has(t), `缺失 ${t}`).toBe(true);
   });

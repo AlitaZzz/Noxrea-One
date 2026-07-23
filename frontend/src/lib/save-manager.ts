@@ -12,9 +12,15 @@
  * 仅支持登录用户，画布不允许游客访问。
  */
 
-import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
+import { BASE, checkUnauthorized,getTokenHeader } from "@/lib/api";
+import { takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
-import { BASE, getTokenHeader, checkUnauthorized } from "@/lib/api";
+
+type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
+
+interface ImageRef {
+  url?: unknown;
+}
 
 const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
@@ -34,18 +40,18 @@ function _extractHashFromUrl(url: string): string | null {
   return h.length === 64 ? h : null;
 }
 
-function _collectCanvasHashes(nodes: any[]): string[] {
+function _collectCanvasHashes(nodes: ReadonlyArray<{ data?: Record<string, unknown> }>): string[] {
   const hashes: string[] = [];
   for (const node of nodes) {
-    const d = node?.data || {};
+    const d = node?.data ?? {};
     // image-node / video-node: data.src
     if (typeof d.src === "string") {
       const h = _extractHashFromUrl(d.src);
       if (h) hashes.push(h);
     }
     if (Array.isArray(d.images)) {
-      for (const img of d.images) {
-        if (img?.url) {
+      for (const img of d.images as ImageRef[]) {
+        if (typeof img?.url === "string") {
           const h = _extractHashFromUrl(img.url);
           if (h) hashes.push(h);
         }
@@ -59,15 +65,19 @@ function _collectCanvasHashes(nodes: any[]): string[] {
 const fingerprintMap = new Map<string, string>();
 
 /** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
-function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
+function stripRuntimeFields(snapshot: CanvasSnapshot) {
   return {
     ...snapshot,
-    nodes: snapshot.nodes.map((n: any) => {
-      const { selected, dragging, positionAbsolute, ...rest } = n;
+    nodes: snapshot.nodes.map((n) => {
+      const rest = { ...(n as Record<string, unknown>) };
+      delete rest.selected;
+      delete rest.dragging;
+      delete rest.positionAbsolute;
       return rest;
     }),
-    edges: snapshot.edges.map((e: any) => {
-      const { selected, ...rest } = e;
+    edges: snapshot.edges.map((e) => {
+      const rest = { ...(e as Record<string, unknown>) };
+      delete rest.selected;
       return rest;
     }),
   };

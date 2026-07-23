@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { useCanvasStore, markDirtyImmediate, takeCanvasSnapshot } from "@/stores/canvas-store";
-import { useSelectionStore } from "@/stores/selection-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { duplicateNode } from "@/lib/node-defaults";
+import { useEffect } from "react";
+
 import { PASTE_OFFSET } from "@/lib/constants";
-import { EventNames } from "@/lib/eventNames";
+import { EventNames } from "@/lib/event-names";
+import { duplicateNode } from "@/lib/node-defaults";
 import { isGenerating, type MediaGenFields } from "@/lib/types";
+import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
+import { useSelectionStore } from "@/stores/selection-store";
 
 /** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点） */
 function hasGeneratingNode(): boolean {
@@ -152,8 +153,8 @@ export function useCanvasKeyboard() {
         const prev = undoHistory(takeCanvasSnapshot());
         if (prev) {
           const s = useCanvasStore.getState();
-          s.setNodes(prev.nodes.map((n: any) => ({ ...n, selected: false })));
-          s.setEdges(prev.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
+          s.setNodes(prev.nodes.map((n) => ({ ...n, selected: false })));
+          s.setEdges(prev.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(prev.viewport);
           s.setBackground(prev.background);
           s.setTheme(prev.theme);
@@ -171,8 +172,8 @@ export function useCanvasKeyboard() {
         const next = redoHistory(takeCanvasSnapshot());
         if (next) {
           const s = useCanvasStore.getState();
-          s.setNodes(next.nodes.map((n: any) => ({ ...n, selected: false })));
-          s.setEdges(next.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
+          s.setNodes(next.nodes.map((n) => ({ ...n, selected: false })));
+          s.setEdges(next.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(next.viewport);
           s.setBackground(next.background);
           s.setTheme(next.theme);

@@ -11,10 +11,11 @@
  * 这是 handler 修复"改 store 读"必须跨过的门槛。
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { applyNodeChanges, applyEdgeChanges } from "@xyflow/react";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { applyEdgeChanges,applyNodeChanges } from "@xyflow/react";
+import { beforeEach,describe, expect, it } from "vitest";
+
 import type { AnyNode } from "@/lib/types";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 /** 快速构造一个节点 */
 function node(id: string, overrides: Record<string, unknown> = {}): AnyNode {
@@ -35,7 +36,7 @@ describe("同帧连续两次 onNodesChange：选中 + 位置 → store 实时读
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
 
-    const changes: any[] = [{ type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true }];
+    const changes: Array<{ type: "position"; id: string; position: { x: number; y: number }; dragging: boolean }> = [{ type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true }];
     // 任意基底，只有一条变更，结果相同
     const result = applyNodeChanges(changes, [n0]);
     expect(result[0].position).toEqual({ x: 500, y: 500 });
@@ -45,8 +46,8 @@ describe("同帧连续两次 onNodesChange：选中 + 位置 → store 实时读
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
 
-    const selectChange: any = { type: "select", id: "n0", selected: true };
-    const positionChange: any = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
+    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "n0", selected: true };
+    const positionChange: { type: "position"; id: string; position: { x: number; y: number }; dragging: boolean } = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
 
     // 第一次：选中变更应用到 store
     const afterSelect = applyNodeChanges([selectChange], [n0]);
@@ -65,8 +66,8 @@ describe("同帧连续两次 onNodesChange：选中 + 位置 → store 实时读
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
 
-    const selectChange: any = { type: "select", id: "n0", selected: true };
-    const positionChange: any = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
+    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "n0", selected: true };
+    const positionChange: { type: "position"; id: string; position: { x: number; y: number }; dragging: boolean } = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
 
     // 第一次变更入 store
     const afterSelect = applyNodeChanges([selectChange], [n0]);
@@ -113,14 +114,14 @@ describe("同帧连续两次 onNodesChange：选中 + 位置 → store 实时读
 describe("同帧连续两次 onEdgesChange", () => {
   it("选中边 + 同帧其他变更：过期闭包基底丢失选中状态", () => {
     const e0 = { id: "e0", source: "n0", target: "n1" };
-    useCanvasStore.setState({ edges: [e0 as any] });
+    useCanvasStore.setState({ edges: [e0] });
 
-    const selectChange: any = { type: "select", id: "e0", selected: true };
-    const otherChange: any = { type: "select", id: "e0", selected: false }; // 模拟误派发的二次 select
+    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "e0", selected: true };
+    const otherChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "e0", selected: false }; // 模拟误派发的二次 select
 
     // 第一次变更入 store
     const afterSelect = applyEdgeChanges([selectChange], [e0]);
-    useCanvasStore.setState({ edges: afterSelect as any });
+    useCanvasStore.setState({ edges: afterSelect });
 
     // 过期闭包基底（选中前的 e0）
     const fromStale = applyEdgeChanges([otherChange], [e0]);
@@ -133,11 +134,11 @@ describe("同帧连续两次 onEdgesChange", () => {
 
   it("store 实时读基底保留边选中（修复后期望）", () => {
     const e0 = { id: "e0", source: "n0", target: "n1" };
-    useCanvasStore.setState({ edges: [e0 as any] });
+    useCanvasStore.setState({ edges: [e0] });
 
     // 先选中边
     const afterSelect = applyEdgeChanges([{ type: "select", id: "e0", selected: true }], [e0]);
-    useCanvasStore.setState({ edges: afterSelect as any });
+    useCanvasStore.setState({ edges: afterSelect });
 
     // 一条无关变更（如另一条边变化），用 store 实时读
     const storeBase = useCanvasStore.getState().edges;

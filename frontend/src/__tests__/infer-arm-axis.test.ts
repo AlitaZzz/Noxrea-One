@@ -1,13 +1,15 @@
 // 临时取证:从模型读取手臂/腿骨骼长轴(子骨 translation 主分量)=扭转轴;
 // 再结合 worldQ 看前举/外展轴的世界方向,验证 jointConfig 原始 axis(y/z)是否正确。
-import { describe, it } from "vitest";
-import { Quaternion, Vector3 } from "three";
 import fs from "fs";
 import path from "path";
-import { JOINTS } from "../entities/jointConfig";
+import { Quaternion, Vector3 } from "three";
+import { describe, it } from "vitest";
 
-const ASSETS = path.resolve(__dirname, "../../../public/assets");
-function parseGlbJson(file: string): any {
+import { JOINTS } from "../director/entities/joint-config";
+
+const ASSETS = path.resolve(__dirname, "../../public/assets");
+type GlbJson = { nodes: Array<{ name?: string; children?: number[]; rotation?: number[]; translation?: number[] }>; skins?: Array<{ joints: number[] }>; scenes?: Array<{ nodes: number[] }> };
+function parseGlbJson(file: string): GlbJson {
   const buf = fs.readFileSync(path.join(ASSETS, file));
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   return JSON.parse(buf.toString("utf8", 20, 20 + dv.getUint32(12, true)));
@@ -41,7 +43,7 @@ function detectPart(n: string): PartBase | null {
   if (n.includes("pelvis") || n.includes("hips")) return "Hips";
   return null;
 }
-function buildTokenToWorldQ(json: any): Map<string, Quaternion> {
+function buildTokenToWorldQ(json: GlbJson): Map<string, Quaternion> {
   const nodes = json.nodes || [];
   const skins = json.skins || [];
   const rootIndices = (json.scenes?.[0]?.nodes) || [];
@@ -88,7 +90,7 @@ describe("verify arm axes vs model", () => {
 
     // 2. 长轴(子骨 translation)
     const nodes = json.nodes;
-    const foreIdx = nodes.findIndex((n:any) => normBone(n.name) === "mixamorigleftforearm");
+    const foreIdx = nodes.findIndex((n) => normBone(n.name ?? "") === "mixamorigleftforearm");
     const t = nodes[foreIdx]?.translation;
     if (t) process.stdout.write(`LeftForeArm translation(相对LeftArm): [${t.map((n:number)=>n.toFixed(1))}]\n`);
 
@@ -105,8 +107,8 @@ describe("verify arm axes vs model", () => {
     // 本地z世界方向若接近 Y(上下) → 外展绕z = 手前后摆(前举语义)
     // → 于是得交换y/z。但这需要验证 worldQ 准确。
     process.stdout.write(`\n结论:\n`);
-    process.stdout.write(`  本地y世界近 Z(前后)程度: |z|=${Math.abs(refY.z.toFixed(3))}\n`);
-    process.stdout.write(`  本地z世界近 Y(上下)程度: |y|=${Math.abs(refZ.y.toFixed(3))}\n`);
+    process.stdout.write(`  本地y世界近 Z(前后)程度: |z|=${Math.abs(Number(refY.z.toFixed(3)))}\n`);
+    process.stdout.write(`  本地z世界近 Y(上下)程度: |y|=${Math.abs(Number(refZ.y.toFixed(3)))}\n`);
     process.stdout.write(`  lArmTwist(axis=x) 世界方向 = 长轴方向(子骨位移方向)\n`);
   });
 });

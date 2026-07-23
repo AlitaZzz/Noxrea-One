@@ -1,12 +1,13 @@
 "use client";
 
-import { memo, useState } from "react";
-import { Select, Input, App, Button } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
-import { useModelStore } from "@/stores/model-store";
-import { getTokenHeader, BASE } from "@/lib/api";
-import { EventNames } from "@/lib/eventNames";
+import { App, Button,Input, Select } from "antd";
+import { memo, useState } from "react";
+
 import WheelGuard from "@/components/common/WheelGuard";
+import { BASE,getTokenHeader } from "@/lib/api";
+import { EventNames } from "@/lib/event-names";
+import { useModelStore } from "@/stores/model-store";
 
 interface Props { nodeId: string; currentContent: string; }
 
@@ -46,8 +47,8 @@ const TextAskPanel = memo(function TextAskPanel({ nodeId, currentContent }: Prop
       }));
       setPrompt("");
       message.success("Done!");
-    } catch (err: any) {
-      message.error(err.message || "Failed");
+    } catch (err: unknown) {
+      message.error(err instanceof Error ? err.message : "Failed");
     }
     setLoading(false);
   };

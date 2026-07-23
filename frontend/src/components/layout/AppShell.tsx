@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
+
 import { useCanvasStore } from "@/stores/canvas-store";
 
 export default function AppShell({ children }: { children: ReactNode }) {

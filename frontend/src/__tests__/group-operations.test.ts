@@ -5,7 +5,8 @@
  * 不涉及 store 操作或事件绑定。
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect,it } from "vitest";
+
 import { GROUP_NODE_PADDING } from "@/lib/constants";
 import type { AnyNode } from "@/lib/types";
 

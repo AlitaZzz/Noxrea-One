@@ -1,21 +1,22 @@
 import { MarkerType } from "@xyflow/react";
+
 import {
-  NODE_TYPE,
-  type TextNodeData,
-  type ImageNodeData,
-  type VideoNodeData,
-  type GroupNodeData,
+  DEFAULT_NODE_HEIGHT,
+  DEFAULT_NODE_WIDTH,
+} from "@/lib/constants";
+import {
   type AnyNode,
-  type TextNode,
-  type ImageNode,
-  type VideoNode,
   type DirectorNode,
   type GroupNode,
+  type GroupNodeData,
+  type ImageNode,
+  type ImageNodeData,
+  NODE_TYPE,
+  type TextNode,
+  type TextNodeData,
+  type VideoNode,
+  type VideoNodeData,
 } from "@/lib/types";
-import {
-  DEFAULT_NODE_WIDTH,
-  DEFAULT_NODE_HEIGHT,
-} from "@/lib/constants";
 
 let _idCounter = 0;
 function uid(prefix: string) {

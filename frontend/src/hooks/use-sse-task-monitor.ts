@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+
 import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
 import type { MediaGenFields } from "@/lib/types";
+import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
 
 /**
  * SSE 任务监控 hook。
@@ -16,7 +17,7 @@ import type { MediaGenFields } from "@/lib/types";
  */
 export function useSseTaskMonitor(notif: { success: Function; error: Function }) {
   const notifRef = useRef(notif);
-  notifRef.current = notif;
+  useEffect(() => { notifRef.current = notif; }, [notif]);
   const sseCtrlsRef = useRef<Map<string, AbortController>>(new Map());
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 

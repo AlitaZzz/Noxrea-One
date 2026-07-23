@@ -1,11 +1,12 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConfigProvider, theme as antTheme, App as AntApp } from "antd";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { getLayerPopupContainer } from "@/lib/layer";
+import { App as AntApp,ConfigProvider, theme as antTheme } from "antd";
+import { ReactNode, useEffect } from "react";
+
 import { setGlobalMessageApi } from "@/lib/global-message";
+import { getLayerPopupContainer } from "@/lib/layer";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
