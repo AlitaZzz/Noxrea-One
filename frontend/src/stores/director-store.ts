@@ -1,4 +1,13 @@
 import { create } from "zustand";
+import type { CameraEntity } from "@/director/entities/camera";
+import type { Character } from "@/director/entities/character";
+import type { Crowd } from "@/director/entities/crowd";
+import type { Prop } from "@/director/entities/prop";
+import type { Stage } from "@/director/core/stage";
+
+/** 导演场景中所有实体类型的联合（角色/道具/相机/群众）。 */
+export type DirectorEntity = Character | Prop | CameraEntity | Crowd;
+
 import type { DirectorStateData } from "@/lib/types";
 
 // --- Entity metadata (Three.js objects live in ref, not here) ---
@@ -39,10 +48,10 @@ export interface SceneState {
 // UI calls these, DirectorViewport executes Three.js logic.
 
 export interface DirectorRuntime {
-  addCharacter: (bodyType?: string) => Promise<any>;
-  addProp: (kind: string) => any;
-  addCamera: (presetKey?: string) => any;
-  addCrowd: (rows?: number, cols?: number, spacing?: number) => Promise<any>;
+  addCharacter: (bodyType?: string) => Promise<Character | null>;
+  addProp: (kind: string) => Prop;
+  addCamera: (presetKey?: string) => CameraEntity;
+  addCrowd: (rows?: number, cols?: number, spacing?: number) => Promise<Crowd | null>;
   remove: (id: string) => void;
   select: (id: string | null) => void;
   toggleSelect: (id: string) => void;
@@ -50,6 +59,8 @@ export interface DirectorRuntime {
   setCameraView: (on: boolean) => void;
   setRatio: (ratio: string) => void;
   setSceneScale: (s: number) => void;
+  setScenePos: (axis: string, v: number) => void;
+  setSceneRot: (axis: string, deg: number) => void;
   setSkyColor: (hex: string) => void;
   setLabelsVisible: (v: boolean) => void;
   setGroundVisible: (v: boolean) => void;
@@ -58,6 +69,7 @@ export interface DirectorRuntime {
   applyPosePreset: (characterId: string, presetKey: string) => void;
   setJointValue: (characterId: string, jointKey: string, value: number) => void;
   rename: (id: string, name: string) => void;
+  ungroupCrowd: (id: string) => void;
   toggleVisible: (id: string) => void;
   setEntityColor: (id: string, hex: string) => void;
   groupCharacters: (ids: string[]) => void;
@@ -68,6 +80,18 @@ export interface DirectorRuntime {
   resetView: () => void;
   captureState: () => DirectorStateData;
   restoreState: (data: DirectorStateData) => Promise<void>;
+  // ---- 内部/私有辅助（由 DirectorViewport 实现，供自身与 Inspector 调用）----
+  _resolveShotCamera: () => DirectorEntity | null;
+  _getEntity: (id: string) => DirectorEntity | null;
+  _getStage: () => Stage;
+  _getPoseValues: (id: string) => Record<string, number>;
+  _beginCleanRender: () => void;
+  _endCleanRender: () => void;
+  _setSyncInspector: (cb: (() => void) | null) => void;
+  _setCameraAttrChange: (cb: (() => void) | null) => void;
+  _broadcastPosePreset: (crowdId: string, presetKey: string) => void;
+  _broadcastResetPose: (crowdId: string) => void;
+  _shotSeq?: Record<string, number>;
 }
 
 // --- Zustand Store ---

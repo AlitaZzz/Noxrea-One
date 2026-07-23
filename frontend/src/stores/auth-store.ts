@@ -1,7 +1,8 @@
 import { create } from "zustand";
+
 import { api, setToken } from "@/lib/api";
 
-interface UserInfo {
+export interface UserInfo {
   id: number;
   username: string;
   role: string;

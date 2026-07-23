@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { CanvasProject, ViewportState, BackgroundType, ThemeMode } from "@/lib/types";
-import { DEFAULT_VIEWPORT, DEFAULT_BACKGROUND, DEFAULT_THEME } from "@/lib/constants";
+
 import { api } from "@/lib/api";
+import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
+import type { AnyEdge, AnyNode, BackgroundType, CanvasProject, ThemeMode,ViewportState } from "@/lib/types";
 
 // ===== localStorage helpers (active project only) =====
 
@@ -18,10 +19,20 @@ function saveLocalActiveId(id: string | null) {
 
 // ===== API helpers =====
 
+interface CanvasData {
+  viewport?: ViewportState;
+  background?: BackgroundType;
+  theme?: ThemeMode;
+  minimapVisible?: boolean;
+  snapToGrid?: boolean;
+  nodes?: unknown[];
+  edges?: unknown[];
+}
+
 interface ServerProject {
   id: number;
   name: string;
-  canvas_data: any;
+  canvas_data?: CanvasData;
   updated_at: string;
 }
 
@@ -39,8 +50,8 @@ async function fetchProjects(): Promise<CanvasProject[]> {
         theme: p.canvas_data?.theme || DEFAULT_THEME,
         minimapVisible: p.canvas_data?.minimapVisible ?? true,
         snapToGrid: p.canvas_data?.snapToGrid || false,
-        nodes: p.canvas_data?.nodes || [],
-        edges: p.canvas_data?.edges || [],
+        nodes: (p.canvas_data?.nodes || []) as AnyNode[],
+        edges: (p.canvas_data?.edges || []) as AnyEdge[],
       }));
     }
   } catch { /* offline or error */ }
@@ -161,7 +172,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   syncCanvasState: (id, nodes, edges, viewport, background, theme, minimapVisible, snapToGrid) => {
     set((s) => ({
       projects: s.projects.map((p) =>
-        p.id === id ? { ...p, nodes: nodes as any[], edges: edges as any[], viewport, background, theme, minimapVisible, snapToGrid, updatedAt: Date.now() } : p
+        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, theme, minimapVisible, snapToGrid, updatedAt: Date.now() } : p
       ),
     }));
   },

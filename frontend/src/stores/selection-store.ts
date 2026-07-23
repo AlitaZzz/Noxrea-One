@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { ClipboardData, AnyNode } from "@/lib/types";
+
+import type { AnyNode,ClipboardData } from "@/lib/types";
 
 interface SelectionState {
   clipboard: ClipboardData | null;
