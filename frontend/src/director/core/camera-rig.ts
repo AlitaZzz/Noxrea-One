@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+
+import type { DirectorEntity } from "@/stores/director-store";
 import { worldBox } from "../util/measure";
 
 // OrbitControls + 聚焦选中 + 取景比例 overlay + 重置视角
@@ -45,7 +47,7 @@ export class CameraRig {
   }
 
   /** 用实体包围盒设 target 与相机距离（角色用骨骼世界坐标量真实尺寸）。 */
-  focus(entity: any) {
+  focus(entity: DirectorEntity) {
     if (!entity) return;
     const root = entity.root;
     const box = worldBox(root, { useBones: entity.type === "character" });
@@ -71,7 +73,7 @@ export class CameraRig {
    * 自动取景：把主体（角色/道具，跳过相机）拉到占满画面。
    * 宽度只按主体「身体中心跨度 + 身宽余量」算，忽略 T-pose 张开的手臂。
    */
-  frameAll(entities: any[], { margin = 1.06, bodyPad = 0.32 }: { margin?: number; bodyPad?: number } = {}) {
+  frameAll(entities: DirectorEntity[], { margin = 1.06, bodyPad = 0.32 }: { margin?: number; bodyPad?: number } = {}) {
     const box = new THREE.Box3();
     let any = false;
     let minX = Infinity,

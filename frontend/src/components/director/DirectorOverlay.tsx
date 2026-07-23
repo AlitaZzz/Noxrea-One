@@ -1,13 +1,14 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { CloseOutlined } from "@ant-design/icons";
-import { useDirectorStore } from "@/stores/director-store";
-import { useCanvasStore } from "@/stores/canvas-store";
-import Outliner from "@/components/director/Outliner";
-import Inspector from "@/components/director/Inspector";
-import ScenePanel from "@/components/director/ScenePanel";
+import dynamic from "next/dynamic";
+
 import Dock from "@/components/director/Dock";
+import Inspector from "@/components/director/Inspector";
+import Outliner from "@/components/director/Outliner";
+import ScenePanel from "@/components/director/ScenePanel";
+import { useCanvasStore } from "@/stores/canvas-store";
+import { useDirectorStore } from "@/stores/director-store";
 
 const DirectorViewport = dynamic(() => import("@/components/director/DirectorViewport"), {
   ssr: false,
@@ -60,7 +61,7 @@ export default function DirectorOverlay({ onClose }: Props) {
             if (ds.runtime && nodeId) {
               const state = ds.runtime.captureState();
               if (state) {
-                useCanvasStore.getState().updateNodeData(nodeId, { directorState: state } as any);
+                useCanvasStore.getState().updateNodeData(nodeId, { directorState: state });
               }
             }
             ds.reset();

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Tooltip, Popover, InputNumber, App } from "antd";
-import { useDirectorStore } from "@/stores/director-store";
-import { groupedPresets } from "@/director/core/cameraPresets";
+import { App,InputNumber, Popover, Tooltip } from "antd";
+import { useCallback, useState } from "react";
+
+import { groupedPresets } from "@/director/core/camera-presets";
+import { DirectorRuntime, useDirectorStore } from "@/stores/director-store";
 
 const IC: Record<string, string> = {
   pointer: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 3l15 8-6 1.6L11 19z"/></svg>`,
@@ -29,7 +30,7 @@ const TF_ICON: Record<string,string> = {translate:"move",rotate:"rotate",scale:"
 const cameraPresets = groupedPresets();
 
 // 群众阵列表单
-function CrowdForm({ runtime }: { runtime: any }) {
+function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
   const [rows, setRows] = useState(3);
   const [cols, setCols] = useState(3);
   const [spacing, setSpacing] = useState(1.2);
@@ -79,6 +80,16 @@ export default function Dock() {
   const [panoMenuOpen, setPanoMenuOpen] = useState(false);
   const [camMenuOpen, setCamMenuOpen] = useState(false);
   const [ratioMenuOpen, setRatioMenuOpen] = useState(false);
+
+  const handleShot = useCallback(async () => {
+    const shot = await runtime?.captureShot();
+    if (shot) {
+      useDirectorStore.getState().addShot({
+        id: "s" + Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
+      });
+      notification.success({ title: shot.name, placement: "bottomRight" });
+    }
+  }, [runtime, notification]);
 
   const dockBtn = (icon: string, title: string, onClick: () => void, active = false, hideTooltip = false) => (
     <Tooltip title={title} key={title} mouseEnterDelay={0.5} open={hideTooltip ? false : undefined}>
@@ -134,7 +145,7 @@ export default function Dock() {
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
             <Popover trigger="hover" zIndex={1050} placement="rightTop"
               styles={{ container: { padding: 0, background: "transparent" } }}
-              content={<CrowdForm runtime={runtime} />}>
+              content={<CrowdForm runtime={runtime as DirectorRuntime} />}>
               <div>{menuItem("group", "群众 (3x3)", () => {}, false, true)}</div>
             </Popover>
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
@@ -194,15 +205,7 @@ export default function Dock() {
       </Popover>
 
       {/* 截图 */}
-      {dockBtn("shot", "截图", async () => {
-        const shot = await runtime?.captureShot();
-        if (shot) {
-          useDirectorStore.getState().addShot({
-            id: "s"+Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
-          });
-          notification.success({ title: shot.name, placement: "bottomRight" });
-        }
-      })}
+      {dockBtn("shot", "截图", handleShot, false)}
 
     </div>
   );

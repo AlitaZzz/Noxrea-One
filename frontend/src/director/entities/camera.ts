@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { Entity } from "./Entity";
+
+import { Entity } from "./entity";
 
 const BODY_COLOR = 0xff8a3d;
 const FRUSTUM_COLOR = 0x35a7ff;
@@ -24,16 +25,17 @@ function buildCameraBody(): THREE.Group {
   reel.rotation.x = Math.PI / 2;
   reel.position.set(0.03, 0.085, 0.02);
   g.add(reel);
-  g.traverse((o: any) => { if (o.isMesh) o.castShadow = false; });
+  g.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = false; });
   return g;
 }
 
-function tintHelper(helper: any, color: number) {
-  helper.material.vertexColors = false;
-  helper.material.color = new THREE.Color(color);
-  helper.material.transparent = true;
-  helper.material.opacity = 0.85;
-  helper.material.needsUpdate = true;
+function tintHelper(helper: THREE.CameraHelper, color: number) {
+  const mat = helper.material as THREE.LineBasicMaterial;
+  mat.vertexColors = false;
+  mat.color = new THREE.Color(color);
+  mat.transparent = true;
+  mat.opacity = 0.85;
+  mat.needsUpdate = true;
 }
 
 export interface CameraEntityOpts {

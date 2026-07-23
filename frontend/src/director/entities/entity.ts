@@ -30,8 +30,8 @@ export class Entity {
 
   /** 子类可覆盖以释放 GPU 资源。 */
   dispose() {
-    this.root.traverse((o: any) => {
-      if (o.isMesh) {
+    this.root.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
         o.geometry?.dispose?.();
         const m = o.material;
         if (Array.isArray(m)) m.forEach((x) => x.dispose?.());

@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useCallback, useEffect, useState } from "react";
 import { Slider } from "antd";
-import { groupJoints, type Joint } from "@/director/entities/jointConfig";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { groupJoints, type Joint } from "@/director/entities/joint-config";
 
 interface Props {
   characterId: string;
@@ -14,8 +15,11 @@ interface Props {
 export default function PoseSliders({ characterId: _characterId, values, onChange, syncRef }: Props) {
   const groups = groupJoints();
   const [localVals, setLocalVals] = useState<Record<string, number>>({ ...values });
-
-  useEffect(() => { setLocalVals({ ...values }); }, [values, _characterId]);
+  const [prevValues, setPrevValues] = useState(values);
+  if (values !== prevValues) {
+    setPrevValues(values);
+    setLocalVals({ ...values });
+  }
 
   const syncFromValues = useCallback(() => { setLocalVals({ ...values }); }, [values]);
   useEffect(() => { if (syncRef) syncRef.current = syncFromValues; }, [syncRef, syncFromValues]);

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import { Input, Button } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
+import { Button,Input } from "antd";
+import { useEffect, useRef,useState } from "react";
+import { createPortal } from "react-dom";
+
+import type { Entity } from "@/director/entities/entity";
 import { useDirectorStore } from "@/stores/director-store";
 
 const ICON: Record<string, string> = {
@@ -109,7 +111,7 @@ export default function Outliner() {
                 <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(ent.type)) }} />
                 <span className="flex-1 truncate" onDoubleClick={() => {
                   const n = prompt("重命名", ent.name);
-                  if (n != null) (runtime as any)?.rename?.(ent.id, n);
+                  if (n != null) runtime?.rename(ent.id, n);
                 }}>{ent.name}</span>
                 {isCamera && shotCount > 0 && (
                   <span style={{
@@ -127,14 +129,14 @@ export default function Outliner() {
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); (runtime as any)?.ungroupCrowd?.(ent.id); }} title="解组">⊟</button>}
+                        onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }} title="解组">⊟</button>}
                       <Button type="text" size="small"
                         icon={<span className="w-[14px] flex items-center" dangerouslySetInnerHTML={{ __html: ent.visible ? S("eye") : S("eyeOff") }} />}
                         className="!p-0.5"
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); (runtime as any)?.toggleVisible?.(ent.id); }} />
+                        onClick={(e) => { e.stopPropagation(); runtime?.toggleVisible(ent.id); }} />
                       <Button type="text" size="small"
                         icon={<DeleteOutlined />}
                         className="!p-0.5"
@@ -148,7 +150,7 @@ export default function Outliner() {
               </div>
 
               {/* 群众成员(展开) */}
-              {isCrowd && open && (ent as any)._members?.map((m: any) => {
+              {isCrowd && open && (ent as unknown as { _members?: Entity[] })._members?.map((m: Entity) => {
                 const mIsCamera = m.type === "camera";
                 const mShotCount = mIsCamera ? allShots.filter((s) => s.cameraId === m.id).length : 0;
                 return (
@@ -160,7 +162,7 @@ export default function Outliner() {
                     if (mIsCamera) { runtime?.select(m.id); runtime?.setCameraView(true); }
                     else { runtime?.setCameraView(false); runtime?.select(m.id); }
                   }}
-                  onDoubleClick={() => { const n = prompt("重命名", m.name); if (n != null) (runtime as any)?.rename?.(m.id, n); }}
+                  onDoubleClick={() => { const n = prompt("重命名", m.name); if (n != null) runtime?.rename(m.id, n); }}
                 >
                   <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(m.type)) }} />
                   <span className="flex-1 truncate">{m.name}</span>

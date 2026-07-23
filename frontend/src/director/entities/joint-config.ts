@@ -5,7 +5,7 @@
 // bone 字段为语义 token（SemToken），由 boneIdentify.ts 自动识别映射，不再写死 mixamorig 名。
 // min/max 已对照人体关节活动度校准（2026-07-21）。
 
-import type { SemToken } from "../util/rigAxisTable";
+import type { SemToken } from "../util/rig-axis-table";
 
 export interface Joint {
   group: string;
@@ -60,32 +60,37 @@ export const JOINTS: Joint[] = [
   { group: "踝", side: "右", key: "rFoot", label: "勾绷", bone: "RightFoot", axis: "x", min: -40, max: 40 },
 ];
 
+export interface SideGroup {
+  side: string;
+  joints: Joint[];
+}
+
 export interface JointGroup {
   group: string;
-  sides: { side: string; joints: Joint[] }[];
+  sides: SideGroup[];
 }
 
 /** 按出现顺序分组：[{group, sides:[{side, joints:[...]}]}] -- 供 PoseSliders 渲染。 */
 export function groupJoints(joints: Joint[] = JOINTS): JointGroup[] {
   const groups: JointGroup[] = [];
-  type G = JointGroup & { _smap: Map<string, any> };
+  type G = JointGroup & { _smap?: Map<string, SideGroup> };
   const gmap = new Map<string, G>();
   for (const j of joints) {
-    let g = gmap.get(j.group) as G | undefined;
+    let g = gmap.get(j.group);
     if (!g) {
       g = { group: j.group, sides: [], _smap: new Map() };
       gmap.set(j.group, g);
       groups.push(g);
     }
     const sideKey = j.side || "";
-    let s = g._smap.get(sideKey) as any;
+    let s = g._smap?.get(sideKey);
     if (!s) {
       s = { side: sideKey, joints: [] };
-      g._smap.set(sideKey, s);
+      g._smap?.set(sideKey, s);
       g.sides.push(s);
     }
     s.joints.push(j);
   }
-  for (const g of groups) delete (g as any)._smap;
+  for (const g of groups) delete (g as G)._smap;
   return groups;
 }

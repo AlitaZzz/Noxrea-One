@@ -2,8 +2,9 @@
 // 映射到语义 token(SemToken),与 jointConfig.bone 对接,替代写死 mixamorig 名。
 // 思路:归一化(去末尾 _数字 后缀 + 去非字母数字)+ rig 识别 + 左右识别 + 部位关键词匹配。
 
-import type * as THREE from "three";
-import type { RigType } from "./rigAxisTable";
+import * as THREE from "three";
+
+import type { RigType } from "./rig-axis-table";
 
 type Bone = THREE.Bone;
 
@@ -76,8 +77,8 @@ export function identifyBones(model: THREE.Object3D): IdentifyResult {
   const rawNames: string[] = [];
   const seen = new Set<Bone>();
 
-  model.traverse((o: any) => {
-    if (!o.isBone) return;
+  model.traverse((o) => {
+    if (!(o instanceof THREE.Bone)) return;
     if (seen.has(o)) return;
     seen.add(o);
 

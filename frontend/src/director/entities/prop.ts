@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { Entity } from "./Entity";
+
+import { Entity } from "./entity";
 
 const PRIM_COLORS = [0x7ee787, 0xbc8cff, 0xffb066, 0x68d6c8, 0x4f8ef7, 0xf07b6b];
 let _colorIdx = 0;
@@ -81,8 +82,10 @@ export class Prop extends Entity {
 
   setColor(hex: number) {
     const c = new THREE.Color(hex);
-    this.root.traverse((n: any) => {
-      if (n.isMesh) n.material.color.copy(c);
+    this.root.traverse((n) => {
+      if (n instanceof THREE.Mesh) {
+        (n.material as THREE.MeshStandardMaterial).color.copy(c);
+      }
     });
     this.color = c.getHex();
   }

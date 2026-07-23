@@ -11,8 +11,8 @@ export function worldBox(
   let measured = false;
   root.updateMatrixWorld(true);
   if (useBones) {
-    root.traverse((o: any) => {
-      if (o.isBone) {
+    root.traverse((o) => {
+      if (o instanceof THREE.Bone) {
         o.getWorldPosition(p);
         box.expandByPoint(p);
         measured = true;

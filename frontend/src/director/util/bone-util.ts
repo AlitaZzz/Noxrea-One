@@ -11,10 +11,10 @@ export function norm(s: string): string {
  * 遍历模型，构建归一化骨名 -> Bone 的映射。
  * 同时记录原始 userData.name（GLTFLoader 有时把原名存这里）。
  */
-export function buildBoneMap(model: THREE.Object3D): Map<string, any> {
-  const map = new Map<string, any>();
-  model.traverse((o: any) => {
-    if (!o.isBone) return;
+export function buildBoneMap(model: THREE.Object3D): Map<string, THREE.Bone> {
+  const map = new Map<string, THREE.Bone>();
+  model.traverse((o) => {
+    if (!(o instanceof THREE.Bone)) return;
     const keys = new Set<string>([o.name]);
     const orig = o.userData && o.userData.name;
     if (orig) keys.add(orig);
@@ -27,9 +27,9 @@ export function buildBoneMap(model: THREE.Object3D): Map<string, any> {
 }
 
 /** 在骨骼表里按 jointConfig 的 bone 名查找（自动归一化）。 */
-export function findBone(boneMap: Map<string, any>, boneName: string): any {
+export function findBone(boneMap: Map<string, THREE.Bone>, boneName: string): THREE.Bone | null {
   return boneMap.get(norm(boneName)) || null;
 }
 
 // THREE 仅用于类型，避免被 tree-shake 误删
-import type * as THREE from "three";
+import * as THREE from "three";
