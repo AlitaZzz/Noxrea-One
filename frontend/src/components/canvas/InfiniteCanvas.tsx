@@ -1,61 +1,62 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
-import {
-  ReactFlow,
-  Background,
-  BackgroundVariant,
-  MiniMap,
-  Panel,
-  SelectionMode,
-  NodeToolbar as RfNodeToolbar,
-  type Connection,
-  type NodeChange,
-  type EdgeChange,
-  applyNodeChanges,
-  applyEdgeChanges,
-  MarkerType,
-  Position,
-  useReactFlow,
-} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import {
+  applyEdgeChanges,
+  applyNodeChanges,
+  Background,
+  BackgroundVariant,
+  type Connection,
+  type EdgeChange,
+  MarkerType,
+  MiniMap,
+  type NodeChange,
+  NodeToolbar as RfNodeToolbar,
+  Panel,
+  Position,
+  ReactFlow,
+  SelectionMode,
+  useReactFlow,
+} from "@xyflow/react";
+import { App,Popover } from "antd";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo,useState } from "react";
+
+import AssetsModal from "@/components/assets/AssetsModal";
+import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
+import CanvasControls from "@/components/canvas/CanvasControls";
+import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
+import CenterToolbar from "@/components/canvas/CenterToolbar";
+import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
+import GenerationPanel from "@/components/canvas/GenerationPanel";
+import ModelConfigModal from "@/components/canvas/ModelConfigModal";
+import NodeInspector from "@/components/canvas/NodeInspector";
+import DirectorNode from "@/components/canvas/nodes/DirectorNode";
+import GroupNode from "@/components/canvas/nodes/GroupNode";
 import ImageNode from "@/components/canvas/nodes/ImageNode";
+import NodeToolbarUI from "@/components/canvas/nodes/NodeToolbar";
 import TextNode from "@/components/canvas/nodes/TextNode";
 import VideoNode from "@/components/canvas/nodes/VideoNode";
-import GroupNode from "@/components/canvas/nodes/GroupNode";
-import DirectorNode from "@/components/canvas/nodes/DirectorNode";
-import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
-import { Popover, App } from "antd";
-import NodeToolbarUI from "@/components/canvas/nodes/NodeToolbar";
-import NodeInspector from "@/components/canvas/NodeInspector";
-import CanvasControls from "@/components/canvas/CanvasControls";
-import CenterToolbar from "@/components/canvas/CenterToolbar";
-import GenerationPanel from "@/components/canvas/GenerationPanel";
 import TextAskPanel from "@/components/canvas/TextAskPanel";
-import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
-import ModelConfigModal from "@/components/canvas/ModelConfigModal";
-import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
-import { useCanvasStore, takeCanvasSnapshot, getViewportCenter, markDirty, markDirtyImmediate, flushAndWait, flushOnUnload } from "@/stores/canvas-store";
-import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
-import { useSelectionStore } from "@/stores/selection-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { useModelStore } from "@/stores/model-store";
-import { useAssetsStore } from "@/stores/assets-store";
-import { useProjectStore } from "@/stores/project-store";
-import { useAuthStore } from "@/stores/auth-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { useRouter } from "next/navigation";
-import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 import ConfirmModal from "@/components/common/ConfirmModal";
-import AssetsModal from "@/components/assets/AssetsModal";
-import { NODE_TYPE, type AnyNode } from "@/lib/types";
-import { duplicateNode, createEdge } from "@/lib/node-defaults";
+import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import { useAddNode } from "@/hooks/use-add-node";
-import { useGroupOperations } from "@/hooks/use-group-operations";
 import { useCanvasEvents } from "@/hooks/use-canvas-events";
 import { useFileDrop } from "@/hooks/use-file-drop";
+import { useGroupOperations } from "@/hooks/use-group-operations";
+import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
+import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
+import { createEdge,duplicateNode } from "@/lib/node-defaults";
+import { type AnyNode,NODE_TYPE } from "@/lib/types";
+import { useAssetsStore } from "@/stores/assets-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
+import { useI18nStore } from "@/stores/i18n-store";
+import { useModelStore } from "@/stores/model-store";
+import { useProjectStore } from "@/stores/project-store";
+import { useSelectionStore } from "@/stores/selection-store";
 
 const nodeTypes = {
   [NODE_TYPE.TEXT]: TextNode,
@@ -119,7 +120,12 @@ export default function InfiniteCanvas() {
   const authUser = useAuthStore((s) => s.user);
   const t = useI18nStore((s) => s.t);
 
-  useEffect(() => { setEditName(projectName); }, [projectName]);
+  const [editName, setEditName] = useState(projectName);
+  const [prevProjectName, setPrevProjectName] = useState(projectName);
+  if (projectName !== prevProjectName) {
+    setPrevProjectName(projectName);
+    setEditName(projectName);
+  }
   useEffect(() => {
     const project = useProjectStore.getState().activeProject();
     if (project) {
@@ -152,13 +158,12 @@ export default function InfiniteCanvas() {
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.TEXT) return null;
-    return { id: sel[0].id, content: (sel[0].data as any).content || "" };
+    return { id: sel[0].id, content: (sel[0].data as { content?: string }).content || "" };
   }, [nodes]);
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
   const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false);
-  const [editName, setEditName] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -260,7 +265,7 @@ export default function InfiniteCanvas() {
   const handlePaste = useCallback(() => {
     const clip = useSelectionStore.getState().clipboard;
     if (!clip || !clip.nodes.length) return;
-    const newNodes = clip.nodes.map((n: any) => duplicateNode(n, { x: 30, y: 30 }));
+    const newNodes = clip.nodes.map((n: AnyNode) => duplicateNode(n, { x: 30, y: 30 }));
     addNodes(newNodes);
   }, [addNodes]);
 
