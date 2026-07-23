@@ -185,3 +185,67 @@ class SSRFRedirectValidator:
             parsed_base = urlparse(base)
             target = f"{parsed_base.scheme}://{parsed_base.netloc}{location}"
         resolve_and_validate(target)
+
+
+# ── Worker 生成链路辅助（用户可控 URL：ref_urls / source_url）────────
+
+class SSREFError(ValueError):
+    """后台协程使用的 SSRF 异常：替代 HTTPException，便于协程层 except 后优雅标 failed。"""
+
+
+def _eff_port(parsed: "urlparse") -> int:
+    """返回 URL 的有效端口（无端口按 scheme 补 80/443）。"""
+    if parsed.port:
+        return parsed.port
+    return 443 if parsed.scheme == "https" else 80
+
+
+def _norm_host(host: str) -> str:
+    """归一 host：localhost / 127.0.0.1 / ::1 → 127.0.0.1，便于同源比对。"""
+    h = (host or "").lower()
+    if h in ("localhost", "localhost.localdomain", "127.0.0.1", "::1"):
+        return "127.0.0.1"
+    return h
+
+
+def is_self_url(url: str) -> bool:
+    """判断 url 是否严格指向本服务（PUBLIC_URL 的 host + 有效端口）。
+
+    不查私有 IP 黑名单：双机/上云部署时本服务自身地址可能是 10.x 或公网 IP，
+    查黑名单会误杀自身。同源 URL 由 worker 直接读本机磁盘，根本不发网络请求。
+    """
+    pub = settings.PUBLIC_URL
+    if not pub:
+        return False
+    try:
+        self_p = urlparse(pub)
+        p = urlparse(url)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    return (
+        _norm_host(p.hostname or "") == _norm_host(self_p.hostname or "")
+        and _eff_port(p) == _eff_port(self_p)
+    )
+
+
+def is_allowed_ref_host(url: str) -> bool:
+    """同源，或命中 ALLOWED_INTERNAL_HOSTS 白名单（但仍须走 _validate_worker 做 DNS 校验）。"""
+    if is_self_url(url):
+        return True
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    return (p.hostname or "").lower() in _ALLOWED_INTERNAL_HOSTS
+
+
+def _validate_worker(url: str) -> tuple[str, str, str, int]:
+    """供后台协程使用：内部走 resolve_and_validate，但把 HTTPException 转 SSREFError。"""
+    try:
+        return resolve_and_validate(url)
+    except HTTPException as e:
+        raise SSREFError(e.detail or "ssrf blocked") from e
