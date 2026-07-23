@@ -314,13 +314,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         .upload-drop-zone:hover {
           background: var(--canvas-bg-hover) !important;
         }
-        .upload-select-popup .ant-select-item-option {
-          margin-bottom: 2px;
-          border-radius: 6px;
-        }
-        .upload-select-popup .ant-select-item-option:last-child {
-          margin-bottom: 0;
-        }
       `}</style>
       {/* Hidden file input */}
       <input
@@ -440,7 +433,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               value={saveFolderId ?? "__root__"}
               onChange={(v) => setSaveFolderId(v === "__root__" ? undefined : v)}
               getPopupContainer={(t) => t.parentElement || document.body}
-              popupClassName="upload-select-popup"
               style={{ width: "100%" }}
               options={(() => {
                 const opts: { value: string; label: ReactNode }[] = [
@@ -471,7 +463,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               value={category}
               onChange={(v) => setCategory(v)}
               getPopupContainer={(t) => t.parentElement || document.body}
-              popupClassName="upload-select-popup"
               options={ASSET_TYPE_OPTIONS.map((opt) => ({
                 value: opt.value,
                 label: <span>{t(opt.labelKey)}</span>,

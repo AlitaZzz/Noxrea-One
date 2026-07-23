@@ -4,13 +4,13 @@ import { Popover } from "antd";
 import { ReactNode } from "react";
 
 // Reusable menu item
-export function MenuItem({ children, onClick, dimmed, iconRight }: {
-  children: ReactNode; onClick?: () => void; dimmed?: boolean; iconRight?: ReactNode;
+export function MenuItem({ children, onClick, dimmed, selected, iconRight }: {
+  children: ReactNode; onClick?: () => void; dimmed?: boolean; selected?: boolean; iconRight?: ReactNode;
 }) {
   return (
     <div className="menu-popover-item">
-    <button className="menu-item-btn"
-      style={{ color: dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)" }}
+    <button className={`menu-item-btn${selected ? " selected" : ""}`}
+      style={{ color: selected ? undefined : (dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)") }}
       onClick={onClick}>
       <span className="flex-1">{children}</span>
       {iconRight}
