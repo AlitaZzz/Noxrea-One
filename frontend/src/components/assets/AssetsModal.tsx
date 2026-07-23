@@ -1,7 +1,7 @@
 "use client";
 
 import { DatabaseOutlined, FolderOpenOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Button, Input, Select } from "antd";
+import { App, Button, Input, Select, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
@@ -73,7 +73,11 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
-  const [batchTypeValue, setBatchTypeValue] = useState<AssetType>("character");
+  const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
+  // 每次打开「修改类型」弹窗时重置，默认什么都不选
+  useEffect(() => {
+    if (batchTypeOpen) setBatchTypeValue(undefined);
+  }, [batchTypeOpen]);
 
   const handleToggleSelect = useCallback((asset: AssetItem) => {
     setSelectedIds((prev) => {
@@ -652,7 +656,11 @@ export default function AssetsModal({ open, onClose }: Props) {
           footer={
             <div className="flex justify-end gap-2">
               <ModalButton onClick={() => setBatchTypeOpen(false)}>{t("cancel")}</ModalButton>
-              <ModalButton variant="primary" onClick={() => handleBatchType(batchTypeValue)}>{t("save")}</ModalButton>
+              <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
+                <span>
+                  <ModalButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("save")}</ModalButton>
+                </span>
+              </Tooltip>
             </div>
           }
           styles={{
@@ -666,6 +674,8 @@ export default function AssetsModal({ open, onClose }: Props) {
             onChange={(v) => setBatchTypeValue(v)}
             getPopupContainer={(t) => t.parentElement || document.body}
             style={{ width: "100%" }}
+            placeholder={t("asset.typePlaceholder")}
+            allowClear
             options={ASSET_CATEGORIES.filter((c) => c.key !== "all").map((cat) => ({ value: cat.key, label: t(cat.labelKey) }))}
           />
         </AppModal>
