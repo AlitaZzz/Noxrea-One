@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import ReactCrop, {
-  type Crop,
-  centerCrop,
-  makeAspectCrop,
-  convertToPixelCrop,
-} from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { uploadAndAddNode, canvasToBlob } from "@/lib/image-utils";
-import AppModal from "@/lib/app-modal";
+
+import { useCallback, useEffect, useRef,useState } from "react";
+import ReactCrop, {
+  centerCrop,
+  convertToPixelCrop,
+  type Crop,
+  makeAspectCrop,
+} from "react-image-crop";
+
 import ModalButton from "@/components/common/ModalButton";
 import NavButton from "@/components/common/NavButton";
+import AppModal from "@/lib/app-modal";
+import { canvasToBlob,uploadAndAddNode } from "@/lib/image-utils";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 interface Props {
   src: string;
@@ -54,10 +56,13 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
 
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
-  // Sync crop → completedCrop so it's always set (not just after user drag)
-  useEffect(() => {
+  // Sync crop → completedCrop so it's always set (not just after user drag),
+  // adjusted during render to avoid cascading renders.
+  const [prevCrop, setPrevCrop] = useState(crop);
+  if (crop !== prevCrop) {
+    setPrevCrop(crop);
     if (crop) setCompletedCrop(crop);
-  }, [crop]);
+  }
 
   // Preload to get natural dimensions
   useEffect(() => {

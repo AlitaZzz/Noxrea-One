@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
 import { ReactFlowProvider } from "@xyflow/react";
-import { LayerModal } from "@/lib/layer";
-import AppShell from "@/components/layout/AppShell";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+
 import InfiniteCanvas from "@/components/canvas/InfiniteCanvas";
+import AppShell from "@/components/layout/AppShell";
 import { useCanvasKeyboard } from "@/hooks/use-canvas-keyboard";
-import { useProjectStore } from "@/stores/project-store";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { LayerModal } from "@/lib/layer";
 import { useAuthStore } from "@/stores/auth-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
+import { useProjectStore } from "@/stores/project-store";
 
 const DirectorOverlay = dynamic(
   () => import("@/components/director/DirectorOverlay"),

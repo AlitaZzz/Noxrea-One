@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { LockOutlined,UserOutlined } from "@ant-design/icons";
+import { App,Button, Input } from "antd";
 import { useRouter } from "next/navigation";
-import { Input, Button, App } from "antd";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
-import { useAuthStore } from "@/stores/auth-store";
+import { useEffect,useState } from "react";
+
 import { api, setToken } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,8 +15,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const [mounted] = useState(true);
 
   useEffect(() => {
     useAuthStore.getState().initialize().then(() => {
@@ -28,7 +28,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === "register") {
-        const res = await api<{ token: { access_token: string }; user: any }>(
+        const res = await api<{ token: { access_token: string }; user: unknown }>(
           "/api/auth/register",
           { method: "POST", body: JSON.stringify({ username: username.trim(), password }) }
         );
@@ -44,8 +44,8 @@ export default function LoginPage() {
         message.success("Welcome back!");
         router.replace("/project");
       }
-    } catch (e: any) {
-      message.error(e.message || "Failed");
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "Failed");
     }
     setLoading(false);
   };

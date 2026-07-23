@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, type DragEvent } from "react";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { type DragEvent,useCallback } from "react";
+
 import { apiUploadWithProgress } from "@/lib/api";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
 import type { ImageNode, VideoNode } from "@/lib/types";
-import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
 
 const GRID_COLS = 4;
 const GRID_GAP = 30;

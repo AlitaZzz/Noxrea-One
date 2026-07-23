@@ -1,24 +1,25 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState } from "react";
-import { Button, Tooltip, Popover } from "antd";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useAssetsStore } from "@/stores/assets-store";
 import {
-  DeleteOutlined,
-  InfoCircleOutlined,
-  DownloadOutlined,
-  StarOutlined,
-  StarFilled,
-  ScissorOutlined,
-  RotateRightOutlined,
   CameraOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
   ExperimentOutlined,
+  InfoCircleOutlined,
+  RotateRightOutlined,
+  ScissorOutlined,
+  StarFilled,
+  StarOutlined,
 } from "@ant-design/icons";
+import { Button, Popover,Tooltip } from "antd";
 import { Eraser, FlipHorizontal, FlipVertical } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
+
+import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
+import { EventNames } from "@/lib/event-names";
+import { useAssetsStore } from "@/stores/assets-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-import { EventNames } from "@/lib/eventNames";
-import { MenuItem, MenuDivider, MenuPopover } from "@/components/common/MenuPopover";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
@@ -96,7 +97,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const t = useI18nStore((s) => s.t);
   const nodes = useCanvasStore((s) => s.nodes);
   const items = useAssetsStore((s) => s.items);
-  const assetSrc = (nodes.find(n => n.id === nodeId)?.data as any)?.src;
+  const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
   const isInAssets = useMemo(() => !!assetSrc && items.some(i => i.metadata?.sourceUrl === assetSrc), [assetSrc, items]);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {

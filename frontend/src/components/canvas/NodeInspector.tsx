@@ -1,8 +1,9 @@
 "use client";
 
-import { Descriptions, Typography } from "antd";
-import AppModal from "@/lib/app-modal";
 import type { Node } from "@xyflow/react";
+import { Descriptions, Typography } from "antd";
+
+import AppModal from "@/lib/app-modal";
 
 const { Paragraph } = Typography;
 

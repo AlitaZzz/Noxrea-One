@@ -1,27 +1,28 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Input, Drawer, Empty, Tooltip } from "antd";
 import {
-  SearchOutlined,
-  FontSizeOutlined,
-  PictureOutlined,
-  VideoCameraOutlined,
-  GroupOutlined,
+  AppstoreOutlined,
   CameraOutlined,
+  FontSizeOutlined,
+  GroupOutlined,
   InboxOutlined,
   LoadingOutlined,
-  AppstoreOutlined,
+  PictureOutlined,
   PlusOutlined,
+  SearchOutlined,
+  VideoCameraOutlined,
 } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
-import { useAssetsStore } from "@/stores/assets-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useAssetHoverPreview, AssetHoverPreview } from "@/components/common/AssetHoverPreview";
-import { NODE_TYPE } from "@/lib/types";
+import { Drawer, Empty, Input, Tooltip } from "antd";
+import { useCallback, useEffect, useMemo, useRef,useState } from "react";
+
+import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { addAssetToCanvas } from "@/lib/add-asset";
-import type { AssetItem } from "@/lib/types";
+import type { AnyNode, AssetItem } from "@/lib/types";
+import { NODE_TYPE } from "@/lib/types";
+import { useAssetsStore } from "@/stores/assets-store";
+import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
 
 // ── 节点类型定义 ──
 const NODE_TYPE_ORDER = [
@@ -137,14 +138,14 @@ function CanvasElementsView() {
   const grouped = useMemo(() => {
     const searchLower = search.trim().toLowerCase();
     const filtered = searchLower
-      ? nodes.filter((n: any) => {
+      ? nodes.filter((n) => {
           const label = String(n.data?.label || "");
           return label.toLowerCase().includes(searchLower);
         })
       : nodes;
 
     const groups = NODE_TYPE_ORDER.map((type) => {
-      const items = filtered.filter((n: any) => n.type === type);
+      const items = filtered.filter((n) => n.type === type);
       return { type, items };
     }).filter((g) => g.items.length > 0);
 
@@ -155,13 +156,13 @@ function CanvasElementsView() {
     (nodeId: string) => {
       const allNodes = useCanvasStore.getState().nodes;
       setNodes(
-        allNodes.map((n: any) => ({
+        allNodes.map((n: AnyNode) => ({
           ...n,
           selected: n.id === nodeId,
         }))
       );
       // Center viewport on the node
-      const target = allNodes.find((n: any) => n.id === nodeId);
+      const target = allNodes.find((n: AnyNode) => n.id === nodeId);
       if (target) {
         fitView({
           nodes: [{ id: nodeId }],
@@ -222,7 +223,7 @@ function CanvasElementsView() {
                   : NODE_TYPE_LABELS[group.type]?.en || group.type}
                 <span className="ml-1.5 opacity-50">({group.items.length})</span>
               </div>
-              {group.items.map((node: any) => (
+              {group.items.map((node: AnyNode) => (
                 <NodeListItem
                   key={node.id}
                   node={node}
@@ -249,11 +250,11 @@ function CanvasElementsView() {
 }
 
 // ── 节点列表项 ──
-function NodeListItem({ node, onClick }: { node: any; onClick: () => void }) {
+function NodeListItem({ node, onClick }: { node: AnyNode; onClick: () => void }) {
   const label = String(node.data?.label || node.type || "");
   const nodeType = node.type as string;
   const { thumb, loading } = useVideoThumbnail(
-    nodeType === NODE_TYPE.VIDEO ? node.data?.src : undefined
+    nodeType === NODE_TYPE.VIDEO ? (node.data as { src?: string })?.src : undefined
   );
 
   return (
@@ -273,9 +274,9 @@ function NodeListItem({ node, onClick }: { node: any; onClick: () => void }) {
         className="flex-shrink-0 flex items-center justify-center rounded overflow-hidden"
         style={{ width: 32, height: 32, background: "var(--canvas-bg-elevated)" }}
       >
-        {nodeType === NODE_TYPE.IMAGE && node.data?.src ? (
+        {nodeType === NODE_TYPE.IMAGE && (node.data as { src?: string })?.src ? (
           <img
-            src={node.data.src}
+            src={(node.data as { src?: string }).src}
             alt={label}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
             onError={(e) => {

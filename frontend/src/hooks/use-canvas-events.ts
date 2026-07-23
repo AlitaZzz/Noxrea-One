@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { useCanvasStore, markDirty, markDirtyImmediate } from "@/stores/canvas-store";
-import { useSelectionStore } from "@/stores/selection-store";
+
 import { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
-import { EventNames } from "@/lib/eventNames";
+import { EventNames } from "@/lib/event-names";
+import { markDirty, markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { useSelectionStore } from "@/stores/selection-store";
 
 /**
  * 画布自定义事件监听 hook。

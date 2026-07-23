@@ -1,7 +1,7 @@
 import { showGlobalMessage } from "@/lib/global-message";
 
 export const BASE = (typeof window !== "undefined"
-  ? (window as any).__NEXT_PUBLIC_FASTAPI_URL
+  ? (window as unknown as { __NEXT_PUBLIC_FASTAPI_URL?: string }).__NEXT_PUBLIC_FASTAPI_URL
   : undefined) || process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
 function getToken(): string | null {
@@ -71,7 +71,7 @@ export function checkUnauthorized(status: number): boolean {
   return false;
 }
 
-export async function api<T = any>(
+export async function api<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ code: number; data: T; msg: string }> {
@@ -92,7 +92,7 @@ export async function api<T = any>(
   }
 }
 
-export async function apiUpload<T = any>(path: string, formData: FormData): Promise<{ code: number; data: T; msg: string }> {
+export async function apiUpload<T = unknown>(path: string, formData: FormData): Promise<{ code: number; data: T; msg: string }> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
@@ -107,7 +107,7 @@ export async function apiUpload<T = any>(path: string, formData: FormData): Prom
   }
 }
 
-export function apiUploadWithProgress<T = any>(
+export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
   onProgress?: (pct: number) => void,

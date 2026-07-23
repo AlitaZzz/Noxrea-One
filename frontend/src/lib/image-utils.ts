@@ -1,10 +1,10 @@
 "use client";
 
 import { apiUpload } from "@/lib/api";
-import { createImageNode, createEdge } from "@/lib/node-defaults";
-import { useCanvasStore } from "@/stores/canvas-store";
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
+import { createEdge,createImageNode } from "@/lib/node-defaults";
 import type { AnyNode, ImageNode } from "@/lib/types";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。

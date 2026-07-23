@@ -1,24 +1,25 @@
 "use client";
 
-import { useState, useEffect, memo, useRef, useCallback } from "react";
-import type { ReactNode, Key, CSSProperties } from "react";
-import { Input, Button, App, Checkbox, Select, Drawer } from "antd";
 import {
-  PlusOutlined,
+  ApiOutlined,
+  AudioOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  ApiOutlined,
-  RobotOutlined,
   EditOutlined,
-  PictureOutlined,
   FontSizeOutlined,
+  PictureOutlined,
+  PlusOutlined,
+  RobotOutlined,
   VideoCameraOutlined,
-  AudioOutlined,
 } from "@ant-design/icons";
-import { useModelStore } from "@/stores/model-store";
+import { App, Button, Checkbox, Drawer,Input, Select } from "antd";
+import type { CSSProperties,Key, ReactNode } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+
+import ConfirmModal from "@/components/common/ConfirmModal";
 import type { ModelCapability, ModelInfo } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
-import ConfirmModal from "@/components/common/ConfirmModal";
+import { useModelStore } from "@/stores/model-store";
 
 interface Props {
   open: boolean;
@@ -177,11 +178,16 @@ export default function ModelConfigModal({ open, onClose }: Props) {
 
   const channel = channels.find((c) => c.id === channelId);
 
-  useEffect(() => {
-    if (open && channels.length > 0 && !channelId) {
-      setChannelId(channels[0].id);
-    }
-  }, [open, channels, channelId]);
+  // Pick the first channel when the modal opens without a selection.
+  // Adjusted during render (not in an effect) to avoid cascading renders.
+  // Pick the first channel when the modal opens without a selection.
+  // Adjusted during render (matching the "store previous render" pattern).
+  const [prevNeedChannel, setPrevNeedChannel] = useState(false);
+  const needChannel = !!(open && channels.length > 0 && !channelId);
+  if (needChannel !== prevNeedChannel) {
+    setPrevNeedChannel(needChannel);
+    if (needChannel) setChannelId(channels[0].id);
+  }
 
   const resetChForm = () => {
     setChForm({ name: "", baseUrl: "", apiKey: "" });
@@ -257,11 +263,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   });
   const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
 
-  // 稳定的单行切换回调（memo 行依赖它，避免每次渲染 new function 导致全量重渲染）
-  const onToggleCap = useCallback(
-    (id: string) => toggleModelCapability(channel?.id ?? "", id, activeCap),
-    [channel?.id, activeCap, toggleModelCapability]
-  );
+  // 切换单行能力；交给 React Compiler 自动 memo，移除手写 useCallback 以让其优化。
+  const onToggleCap = (id: string) => toggleModelCapability(channel?.id ?? "", id, activeCap);
 
   // 合并为「已启用 / 可用」两段、带分组标题的扁平数组，交给虚拟列表渲染
   type Row =

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Input, Button, App } from "antd";
-import AppModal from "@/lib/app-modal";
-import { UserOutlined, LockOutlined, CameraOutlined } from "@ant-design/icons";
-import { useAuthStore } from "@/stores/auth-store";
+import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
+import { App,Button, Input } from "antd";
+import { useEffect, useRef,useState } from "react";
+
 import { api } from "@/lib/api";
+import AppModal from "@/lib/app-modal";
+import { useAuthStore, type UserInfo } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
+
 import AvatarCropModal from "./AvatarCropModal";
 
 interface Props {
@@ -28,14 +30,19 @@ export default function SettingsModal({ open, onClose }: Props) {
   const [cropOpen, setCropOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (open && user) {
+  // Resync form fields from user when the modal (re)opens, adjusted during
+  // render to avoid cascading renders from the effect.
+  const [prevUserKey, setPrevUserKey] = useState<number | null>(null);
+  const userKey = open && user ? (user.id ?? null) : null;
+  if (userKey !== prevUserKey) {
+    setPrevUserKey(userKey);
+    if (userKey !== null && user) {
       setNick(user.username || "");
       setAvatarUrl(user.avatar || "");
       setOldPw("");
       setNewPw("");
     }
-  }, [open, user]);
+  }
 
   const is = { background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border-light)", color: "var(--canvas-text)", borderRadius: 8 };
 
@@ -52,13 +59,13 @@ export default function SettingsModal({ open, onClose }: Props) {
         body.old_password = oldPw;
       }
       if (Object.keys(body).length === 0) { message.info(t("nothing.to.save")); setSaving(false); return; }
-      const res = await api<any>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
+      const res = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
       if (res.code === 200 && res.data) {
         useAuthStore.setState({ user: res.data }); // immediate update, no refetch needed
       }
       message.success(t("saved"));
       onClose();
-    } catch (e: any) { message.error(e?.message || t("save.failed")); }
+    } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("save.failed")); }
     setSaving(false);
   };
 

@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback } from "react";
-import { useCanvasStore, getViewportCenter } from "@/stores/canvas-store";
+
 import {
-  createTextNode,
-  createImageNode,
-  createVideoNode,
   createGroupNode,
+  createImageNode,
+  createTextNode,
+  createVideoNode,
   directorNode,
 } from "@/lib/node-defaults";
 import type { AnyNode } from "@/lib/types";
+import { getViewportCenter,useCanvasStore } from "@/stores/canvas-store";
 
 /** 支持的节点类型 */
 export type AddNodeType = "text" | "image" | "video" | "group" | "director";

@@ -1,47 +1,51 @@
 "use client";
 
-import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import ImageCropModal from "@/components/canvas/ImageCropModal";
-import { Tooltip, Popover, Input } from "antd";
 import {
-  UploadOutlined,
-  PictureOutlined,
-  FileImageOutlined,
   DownloadOutlined,
+  FileImageOutlined,
+  PictureOutlined,
   ScissorOutlined,
   StarOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
-import {
-  isGenerating,
-  EMPTY_UPLOAD_STATE,
-  type ImageNodeData,
-  type ImageNode as ImageNodeType,
-} from "@/lib/types";
-import {
-  DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT,
-} from "@/lib/constants";
-import { useCanvasStore, markDirtyImmediate } from "@/stores/canvas-store";
-import { useAssetsStore } from "@/stores/assets-store";
-import { apiUpload } from "@/lib/api";
-import { uploadBlob, createNodeFromUrl, computeNodeSize, computeThumbScale, canvasToBlob } from "@/lib/image-utils";
-import { useI18nStore } from "@/stores/i18n-store";
+import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { Input,Popover, Tooltip } from "antd";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import ImageCropModal from "@/components/canvas/ImageCropModal";
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { EventNames } from "@/lib/eventNames";
+import { apiUpload } from "@/lib/api";
+import {
+DEFAULT_NODE_HEIGHT,
+  DEFAULT_NODE_WIDTH, } from "@/lib/constants";
+import { EventNames } from "@/lib/event-names";
+import { canvasToBlob,computeNodeSize, computeThumbScale, createNodeFromUrl, uploadBlob } from "@/lib/image-utils";
+import {
+  EMPTY_UPLOAD_STATE,
+  type ImageNode as ImageNodeType,
+  type ImageNodeData,
+  isGenerating,
+} from "@/lib/types";
+import { useAssetsStore } from "@/stores/assets-store";
+import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
   const [src, setSrc] = useState(data.src || "");
+  const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
 
-  // Sync local src when data.src changes externally (e.g. from undo/clear)
-  useEffect(() => {
-    if (data.src !== src) setSrc(data.src || "");
-  }, [data.src]);
+  // Resync local src when data.src changes externally (e.g. from undo/clear),
+  // adjusted during render (not in an effect) to avoid cascading renders.
+  if (data.src !== prevDataSrc) {
+    setPrevDataSrc(data.src);
+    setSrc(data.src || "");
+  }
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -276,7 +280,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   // Listen for node action events from NodeToolbar
   const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval });
-  actionRefs.current = { handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
+  useEffect(() => {
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
+  }, [handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;

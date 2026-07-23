@@ -1,26 +1,27 @@
 "use client";
 
-import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Tooltip, Input, Popover } from "antd";
 import {
-  UploadOutlined,
-  VideoCameraOutlined,
   CameraOutlined,
+  CaretRightOutlined,
   DeleteOutlined,
   DownloadOutlined,
   PauseCircleOutlined,
-  CaretRightOutlined,
+  UploadOutlined,
+  VideoCameraOutlined,
 } from "@ant-design/icons";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { isGenerating, type VideoNodeData, type VideoNode as VideoNodeType } from "@/lib/types";
-import { createImageNode } from "@/lib/node-defaults";
-import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
-import { useI18nStore } from "@/stores/i18n-store";
+import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { Input, Popover,Tooltip } from "antd";
+import { memo, useCallback, useEffect,useRef, useState } from "react";
+
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUpload, BASE } from "@/lib/api";
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
-import { EventNames } from "@/lib/eventNames";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { EventNames } from "@/lib/event-names";
+import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
+import { createImageNode } from "@/lib/node-defaults";
+import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
+import { useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
 
 function formatTime(s: number): string {
   if (!s || !isFinite(s)) return "0:00";
@@ -42,10 +43,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [duration, setDuration] = useState(0);
   const addNodes = useCanvasStore((s) => s.addNodes);
 
-  // Sync local src when data.src changes externally (e.g. from undo/clear)
-  useEffect(() => {
-    if (data.src !== src) setSrc(data.src || "");
-  }, [data.src]);
+  // Sync local src when data.src changes externally (e.g. from undo/clear),
+  // adjusted during render to avoid cascading renders.
+  const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
+  if (data.src !== prevDataSrc) {
+    setPrevDataSrc(data.src);
+    setSrc(data.src || "");
+  }
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -72,7 +76,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, []);
 
   const onTimeUpdate = useCallback(() => {
-    if (seekingRef.current) return;
     const v = videoRef.current;
     if (v) setProgress(v.currentTime);
   }, []);
@@ -80,8 +83,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const v = videoRef.current;
     if (v) setDuration(v.duration || 0);
   }, []);
-
-  const seekingRef = useRef(false);
 
   const seekTo = useCallback((clientX: number) => {
     const v = videoRef.current;
@@ -96,11 +97,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const handleSeekDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    seekingRef.current = true;
     seekTo(e.clientX);
     const onMove = (ev: PointerEvent) => { ev.preventDefault(); seekTo(ev.clientX); };
     const onUp = () => {
-      seekingRef.current = false;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -144,7 +143,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const json = await apiUpload("/api/files/upload?category=videos", formData);
+        const json = await apiUpload<{ url: string }>("/api/files/upload?category=videos", formData);
         if (json.code === 200 && json.data?.url) {
           const url = json.data.url;
           setSrc(url);

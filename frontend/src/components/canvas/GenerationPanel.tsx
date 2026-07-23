@@ -1,19 +1,20 @@
 "use client";
 
-import { memo, useState, useEffect, useRef, useMemo } from "react";
-import { Input, Popover, App, Button } from "antd";
-import { ArrowUpOutlined, CloseOutlined, RobotOutlined, PlusOutlined } from "@ant-design/icons";
-import { useModelStore } from "@/stores/model-store";
-import { useCanvasStore, markDirty, markDirtyImmediate, flushAndWait } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { NODE_TYPE, isGenerating as isGeneratingBinding, type GenSettings, type MediaGenFields } from "@/lib/types";
-import { getTokenHeader, apiUpload, BASE } from "@/lib/api";
-import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
-import { createImageNode, createEdge } from "@/lib/node-defaults";
-import { applyThumbnailSettings } from "@/lib/image-utils";
-import { useI18nStore } from "@/stores/i18n-store";
-import { EventNames } from "@/lib/eventNames";
+import { ArrowUpOutlined, CloseOutlined, PlusOutlined,RobotOutlined } from "@ant-design/icons";
+import { App, Button,Input, Popover } from "antd";
+import { memo, useEffect, useMemo,useRef, useState } from "react";
+
+import { MenuItem,MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
+import { apiUpload, BASE,getTokenHeader } from "@/lib/api";
+import { EventNames } from "@/lib/event-names";
+import { applyThumbnailSettings } from "@/lib/image-utils";
+import { createEdge,createImageNode } from "@/lib/node-defaults";
+import { type GenSettings, isGenerating as isGeneratingBinding, type MediaGenFields,ModelChannel, NODE_TYPE } from "@/lib/types";
+import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
+import { useI18nStore } from "@/stores/i18n-store";
+import { useModelStore } from "@/stores/model-store";
 
 function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
   const [w, h] = ratio.split(":").map(Number);
@@ -25,6 +26,12 @@ function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
 }
 
 interface Props { nodeId: string; type?: "image" | "video"; }
+
+interface ModelOption {
+  value: string;
+  channelId: string;
+  modelName: string;
+}
 
 const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }: Props) {
   const t = useI18nStore((s) => s.t);
@@ -72,15 +79,17 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  // Sync refOrder when upstream sources change
-  useEffect(() => {
+  // Sync refOrder when upstream sources change, adjusted during render.
+  const [prevRefImages, setPrevRefImages] = useState(refImages);
+  if (refImages !== prevRefImages) {
+    setPrevRefImages(refImages);
     setRefOrder((prev) => {
       const alive = prev.filter((u) => refImages.includes(u));
       const added = refImages.filter((u) => !prev.includes(u));
       if (added.length === 0 && alive.length === prev.length) return prev;
       return [...alive, ...added];
     });
-  }, [refImages]);
+  }
 
   // Button disabled state derived from persistent node.data.task_status
   const isGenerating = useMemo(() => {
@@ -91,9 +100,11 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   const [error, setError] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryRef = useRef({ count: 0, prompt: "", modelKey: "", quality: "", genSize: "", ratio: "", refImages: [] as string[], n: 1, entry: null as any, channel: null as any });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; genSize: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", genSize: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
   const latestSettingsRef = useRef({ prompt, modelKey, quality, genSize, ratio, refOrder, n });
-  latestSettingsRef.current = { prompt, modelKey, quality, genSize, ratio, refOrder, n };
+  useEffect(() => {
+    latestSettingsRef.current = { prompt, modelKey, quality, genSize, ratio, refOrder, n };
+  }, [prompt, modelKey, quality, genSize, ratio, refOrder, n]);
   const { notification } = App.useApp();
 
   // Persist settings to node data on change (debounced)
@@ -136,7 +147,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, prompt: p, quality: q, genSize: gs, ratio: r, refImages: refs, n: num } = retryRef.current;
+    const { entry, channel, prompt: p, quality: q, genSize: gs, ratio: r, refImages: refs, n: num } = retryRef.current;
+    if (!entry || !channel) return "缺少模型配置";
     try {
       const res = await fetch(`${BASE}/api/generate/task`, {
         method: "POST",
@@ -170,8 +182,8 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
-    } catch (e: any) {
-      return e?.message || "Failed to submit task";
+    } catch (e: unknown) {
+      return e instanceof Error ? e.message : "Failed to submit task";
     }
   };
 

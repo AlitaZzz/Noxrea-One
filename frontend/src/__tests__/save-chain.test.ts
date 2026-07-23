@@ -7,15 +7,15 @@
  *   - 边界情况：空节点/边列表、缺失字段
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect,it } from "vitest";
 
 // ════════════════════════════════════════════════════════════════════
 // 测试辅助：匹配 save-manager.ts stripRuntimeFields 实现
 // ════════════════════════════════════════════════════════════════════
 
 interface HistorySnapshot {
-  nodes: any[];
-  edges: any[];
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
   viewport: { x: number; y: number; zoom: number };
   background: string;
   theme: string;
@@ -30,11 +30,11 @@ interface HistorySnapshot {
 function stripRuntimeFields(snapshot: HistorySnapshot): HistorySnapshot {
   return {
     ...snapshot,
-    nodes: snapshot.nodes.map((n: any) => {
+    nodes: snapshot.nodes.map((n) => {
       const { selected, dragging, positionAbsolute, ...rest } = n;
       return rest;
     }),
-    edges: snapshot.edges.map((e: any) => {
+    edges: snapshot.edges.map((e) => {
       const { selected, ...rest } = e;
       return rest;
     }),
@@ -46,8 +46,8 @@ function stripRuntimeFields(snapshot: HistorySnapshot): HistorySnapshot {
  * 深拷贝 nodes/edges，浅拷贝其他字段。
  */
 function takeCanvasSnapshot(state: {
-  nodes: any[];
-  edges: any[];
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
   viewport: { x: number; y: number; zoom: number };
   background: string;
   theme: string;
@@ -89,7 +89,7 @@ describe("stripRuntimeFields", () => {
     expect(cleaned.nodes[0]).not.toHaveProperty("dragging");
     expect(cleaned.nodes[0]).not.toHaveProperty("positionAbsolute");
     expect(cleaned.nodes[0].position).toEqual({ x: 0, y: 0 });
-    expect(cleaned.nodes[0].data.src).toBe("a.png");
+    expect((cleaned.nodes[0] as unknown as { data: { src: string } }).data.src).toBe("a.png");
   });
 
   it("从边中移除 selected", () => {
@@ -130,7 +130,7 @@ describe("stripRuntimeFields", () => {
     const node = cleaned.nodes[0];
     expect(node.id).toBe("n1");
     expect(node.position).toEqual({ x: 100, y: 200 });
-    expect(node.data.label).toBe("test");
+    expect((node as unknown as { data: { label: string } }).data.label).toBe("test");
     expect(node.style).toEqual({ width: 600 });
     expect(node.type).toBe("text-node");
 
@@ -295,10 +295,10 @@ describe("takeCanvasSnapshot", () => {
     };
 
     const snap = takeCanvasSnapshot(state);
-    expect(snap.nodes[0].data.nested.deep).toBe(true);
+    expect((snap.nodes[0] as unknown as { data: { nested: { deep: boolean } } }).data.nested.deep).toBe(true);
     // 修改原数据不应影响快照
     data.nested.deep = false;
-    expect(snap.nodes[0].data.nested.deep).toBe(true);
+    expect((snap.nodes[0] as unknown as { data: { nested: { deep: boolean } } }).data.nested.deep).toBe(true);
   });
 
   it("空状态的快照", () => {
@@ -369,7 +369,7 @@ describe("stripRuntimeFields(takeCanvasSnapshot(state)) 完整管线", () => {
     state.nodes[0].data.src = "modified.png";
     state.edges[0].type = "straight";
 
-    expect(clean.nodes[0].data.src).toBe("a.png");
+    expect((clean.nodes[0] as unknown as { data: { src: string } }).data.src).toBe("a.png");
     expect(clean.nodes[0]).not.toHaveProperty("selected");
     expect(clean.nodes[0]).not.toHaveProperty("dragging");
     expect(clean.edges[0].type).toBe("deletable"); // 原始值，没被修改影响

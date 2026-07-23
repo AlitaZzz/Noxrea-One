@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode, ComponentProps } from "react";
+import type { ComponentProps,ReactNode } from "react";
+
 import { LayerModal } from "@/lib/layer";
 
 interface AppModalProps {

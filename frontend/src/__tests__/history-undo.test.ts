@@ -16,12 +16,13 @@
  * 历史压栈全部显式调用 store.push，canvas-store 的写操作用 skipHistory。
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { useHistoryStore } from "@/stores/history-store";
-import { useCanvasStore, takeCanvasSnapshot } from "@/stores/canvas-store";
-import type { HistorySnapshot, ImageNodeData } from "@/lib/types";
+import { beforeEach,describe, expect, it } from "vitest";
 
-function makeSnapshot(nodesCount: number, label = "", edges: any[] = []): HistorySnapshot {
+import type { AnyNode, HistorySnapshot, ImageNodeData } from "@/lib/types";
+import { takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
+
+function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unknown>[] = []): HistorySnapshot {
   const nodes = Array.from({ length: nodesCount }, (_, i) => ({
     id: `n${i}`, position: { x: i * 100, y: i * 50 },
     data: { label: `${label || "node"} ${i}` },
@@ -175,7 +176,7 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
       data: { src: "old_url", label: "test", alt: "test" },
       style: { width: 480, height: 360 },
     };
-    useCanvasStore.setState({ nodes: [node as any] });
+    useCanvasStore.setState({ nodes: [node as unknown as AnyNode] });
 
     // 上传写入 src 前：改动前压栈（生产中由 updateNodeData 自动完成）
     historyStore.push(takeCanvasSnapshot());
@@ -187,8 +188,8 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     const snapshot = historyStore.undo(liveBeforeUndo);
     expect(snapshot).not.toBeNull();
     const s = useCanvasStore.getState();
-    s.setNodes(snapshot!.nodes.map((n: any) => ({ ...n, selected: false })));
-    s.setEdges(snapshot!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
+    s.setNodes(snapshot!.nodes.map((n) => ({ ...n, selected: false })));
+    s.setEdges(snapshot!.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
 
     const restored = useCanvasStore.getState().nodes[0];
     expect((restored.data as ImageNodeData).src).toBe("old_url");   // src 彻底回退
@@ -199,8 +200,8 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     const next = historyStore.redo(takeCanvasSnapshot());
     expect(next).toBe(liveBeforeUndo);
     const st = useCanvasStore.getState();
-    st.setNodes(next!.nodes.map((n: any) => ({ ...n, selected: false })));
-    st.setEdges(next!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
+    st.setNodes(next!.nodes.map((n) => ({ ...n, selected: false })));
+    st.setEdges(next!.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
     expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).src).toBe("new_url");
   });
 });
@@ -217,7 +218,7 @@ describe("异步上传竞态", () => {
       data: { src: "", label: "test", alt: "test" },
       style: { width: 480, height: 360 },
     };
-    useCanvasStore.setState({ nodes: [cleanNode as any] });
+    useCanvasStore.setState({ nodes: [cleanNode as unknown as AnyNode] });
     historyStore.push(takeCanvasSnapshot()); // 模拟"下一次改动前"的压栈（快照里节点是干净的）
 
     // 上传开始：写入版本标记（内部状态，skipHistory，与生产一致）
@@ -244,8 +245,8 @@ describe("异步上传竞态", () => {
     // 上传完成前用户按了 Ctrl+Z：恢复到干净快照（无 _uploadVersion）
     const snap = historyStore.undo(takeCanvasSnapshot());
     const st = useCanvasStore.getState();
-    st.setNodes(snap!.nodes.map((n: any) => ({ ...n, selected: false })));
-    st.setEdges(snap!.edges.map((e: any) => ({ ...e, selected: false })), { skipHistory: true });
+    st.setNodes(snap!.nodes.map((n) => ({ ...n, selected: false })));
+    st.setEdges(snap!.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
     expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).src).toBe("");
     expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).upload?.version).toBeUndefined();
 

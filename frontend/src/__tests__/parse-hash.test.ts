@@ -7,7 +7,7 @@
  * 返回 64 字符 SHA256 hex hash 或 null。
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect,it } from "vitest";
 
 // ════════════════════════════════════════════════════════════════════
 // 测试辅助：提取 save-manager.ts _extractHashFromUrl 的逻辑
@@ -34,16 +34,17 @@ function extractHashFromUrl(url: string): string | null {
  * 匹配 save-manager.ts L37-57 的实现。
  * 从节点数组中收集所有文件的 hash。
  */
-function collectCanvasHashes(nodes: any[]): string[] {
+function collectCanvasHashes(nodes: Record<string, unknown>[]): string[] {
   const hashes: string[] = [];
   for (const node of nodes) {
-    const d = node?.data || {};
+    const d = (node?.data || {}) as Record<string, unknown>;
     if (typeof d.src === "string") {
       const h = extractHashFromUrl(d.src);
       if (h) hashes.push(h);
     }
     if (Array.isArray(d.images)) {
-      for (const img of d.images) {
+      for (const rawImg of d.images) {
+        const img = rawImg as { url?: string } | undefined;
         if (img?.url) {
           const h = extractHashFromUrl(img.url);
           if (h) hashes.push(h);
@@ -89,8 +90,8 @@ describe("_extractHashFromUrl（前端 save-manager 版本）", () => {
   });
 
   it("非字符串输入返回 null", () => {
-    expect(extractHashFromUrl(null as any)).toBeNull();
-    expect(extractHashFromUrl(undefined as any)).toBeNull();
+    expect(extractHashFromUrl(null as unknown as string)).toBeNull();
+    expect(extractHashFromUrl(undefined as unknown as string)).toBeNull();
     expect(extractHashFromUrl("")).toBeNull();
   });
 

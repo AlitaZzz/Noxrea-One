@@ -1,7 +1,7 @@
 "use client";
 
-import AppModal from "@/lib/app-modal";
 import ModalButton from "@/components/common/ModalButton";
+import AppModal from "@/lib/app-modal";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

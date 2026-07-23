@@ -1,6 +1,7 @@
 "use client";
 
-import { FolderOpenOutlined, DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined,FolderOpenOutlined } from "@ant-design/icons";
+
 import type { AssetFolder } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 

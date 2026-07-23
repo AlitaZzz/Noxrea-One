@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { EventNames } from "@/lib/eventNames";
+import { useCallback,useState } from "react";
+
+import { EventNames } from "@/lib/event-names";
 
 /**
  * 节点标题编辑 hook。

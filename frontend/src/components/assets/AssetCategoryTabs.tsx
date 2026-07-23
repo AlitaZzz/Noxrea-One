@@ -1,6 +1,7 @@
 "use client";
 
 import { Segmented } from "antd";
+
 import { ASSET_CATEGORIES, type AssetType } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 

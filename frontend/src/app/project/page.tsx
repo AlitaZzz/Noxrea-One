@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
 import { Popover } from "antd";
-import { PlusOutlined, FolderOpenOutlined, DeleteOutlined, EditOutlined, ClockCircleOutlined } from "@ant-design/icons";
-import { useProjectStore } from "@/stores/project-store";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
 import SettingsModal from "@/components/auth/SettingsModal";
 import ConfirmModal from "@/components/common/ConfirmModal";
-import { MenuPopover, MenuItem, MenuDivider } from "@/components/common/MenuPopover";
-import { useI18nStore } from "@/stores/i18n-store";
+import { MenuDivider,MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import type { CanvasProject } from "@/lib/types";
+import { useAuthStore } from "@/stores/auth-store";
+import { useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
+import { useProjectStore } from "@/stores/project-store";
 
 export default function ProjectPage() {
   const router = useRouter();

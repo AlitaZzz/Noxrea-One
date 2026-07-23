@@ -5,7 +5,7 @@
  * 不依赖 jsdom/DOM 事件分发。
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
 
 // ── Handler 逻辑提取为纯函数 ────────────────────────────────
 
@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 function handleCopyNode(
   detail: { nodeId?: string },
   nodes: { id: string }[],
-  copySelected: (targets: any[]) => void,
+  copySelected: (targets: { id: string }[]) => void,
 ) {
   const target = nodes.find((n) => n.id === detail.nodeId);
   if (target) copySelected([target]);
@@ -41,17 +41,17 @@ function handleDeleteEdges(
 
 /** node:update-data handler */
 function handleUpdateData(
-  detail: { nodeId?: string; data?: any; style?: any; position?: any; immediate?: boolean },
-  updateNodeData: (id: string, data: any, style?: any) => void,
+  detail: { nodeId?: string; data?: Record<string, unknown>; style?: Record<string, unknown>; position?: { x: number; y: number }; immediate?: boolean },
+  updateNodeData: (id: string, data?: Record<string, unknown>, style?: Record<string, unknown>) => void,
   markDirty: () => void,
   markDirtyImmediate: () => void,
-  getState: () => { nodes: any[]; setNodes: (ns: any[]) => void },
+  getState: () => { nodes: { id: string; position?: { x: number; y: number } }[]; setNodes: (ns: { id: string; position?: { x: number; y: number } }[]) => void },
 ) {
   const { nodeId, data, style, position, immediate } = detail;
   if (position) {
     const s = getState();
     s.setNodes(
-      s.nodes.map((n: any) =>
+      s.nodes.map((n) =>
         n.id === nodeId ? { ...n, position } : n
       )
     );
@@ -161,7 +161,7 @@ describe("node:update-data handler", () => {
       }),
     );
     const updated = setNodes.mock.calls[0][0];
-    expect(updated.find((n: any) => n.id === "target").position).toEqual({ x: 999, y: 999 });
-    expect(updated.find((n: any) => n.id === "other").position).toEqual({ x: 100, y: 100 });
+    expect(updated.find((n: { id: string; position: { x: number; y: number } }) => n.id === "target").position).toEqual({ x: 999, y: 999 });
+    expect(updated.find((n: { id: string; position: { x: number; y: number } }) => n.id === "other").position).toEqual({ x: 100, y: 100 });
   });
 });

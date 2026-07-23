@@ -1,7 +1,6 @@
-import type { Node } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyEdge = any;
+export type AnyEdge = Edge<Record<string, unknown>, string>;
 
 // ============================================================
 // Canvas state types

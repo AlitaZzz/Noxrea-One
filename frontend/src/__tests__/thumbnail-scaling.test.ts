@@ -5,10 +5,11 @@
  * 素材库、生成、上传、拖放、旋转、宫格等全部走同一算法。
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
+
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
 
-const mockNodes: any[] = [
+const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
   {
     id: "n1", type: "image-node",
     position: { x: 100, y: 200 },
@@ -19,7 +20,7 @@ const mockNodes: any[] = [
 
 vi.mock("@/stores/canvas-store", () => ({
   useCanvasStore: Object.assign(
-    (selector?: any) => {
+    (selector?: (s: Record<string, unknown>) => unknown) => {
       const state = { nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn(), getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }) };
       return selector ? selector(state) : state;
     },
@@ -36,7 +37,7 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { createNodeFromUrl, computeThumbScale } from "@/lib/image-utils";
+import { computeThumbScale,createNodeFromUrl } from "@/lib/image-utils";
 
 const D = NODE_DISPLAY_MAX; // 600
 

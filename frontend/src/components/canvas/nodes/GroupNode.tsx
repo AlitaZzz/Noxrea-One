@@ -1,14 +1,16 @@
 "use client";
 
-import { memo, useState, useCallback } from "react";
-import { Input } from "antd";
-import type { NodeProps } from "@xyflow/react";
 import { GroupOutlined } from "@ant-design/icons";
+import type { NodeProps } from "@xyflow/react";
+import { Input } from "antd";
+import { memo, useCallback,useState } from "react";
+
+import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH } from "@/lib/constants";
+import { EventNames } from "@/lib/event-names";
 import type { GroupNode as GroupNodeType } from "@/lib/types";
-import { GROUP_NODE_MIN_WIDTH, GROUP_NODE_MIN_HEIGHT } from "@/lib/constants";
-import ResizeHandle from "./ResizeHandle";
 import { useI18nStore } from "@/stores/i18n-store";
-import { EventNames } from "@/lib/eventNames";
+
+import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   useI18nStore((s) => s.lang);

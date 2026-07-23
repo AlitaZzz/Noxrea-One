@@ -1,10 +1,11 @@
 "use client";
 
+import { DeleteOutlined,FolderOutlined } from "@ant-design/icons";
 import type { ReactNode } from "react";
-import { FolderOutlined, DeleteOutlined } from "@ant-design/icons";
+
+import NavButton from "@/components/common/NavButton";
 import type { AssetFolder } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
-import NavButton from "@/components/common/NavButton";
 
 interface SpaceItem {
   key: string;

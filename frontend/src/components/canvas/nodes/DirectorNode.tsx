@@ -1,14 +1,15 @@
 "use client";
 
-import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Input } from "antd";
 import { PartitionOutlined } from "@ant-design/icons";
-import { useI18nStore } from "@/stores/i18n-store";
+import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { Input } from "antd";
+import { memo } from "react";
+
+import { useEditableTitle } from "@/hooks/use-editable-title";
+import type { DirectorNode as DirectorNodeType,DirectorStateData } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/stores/director-store";
-import { useEditableTitle } from "@/hooks/use-editable-title";
-import type { DirectorNode as DirectorNodeType } from "@/lib/types";
+import { useI18nStore } from "@/stores/i18n-store";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   useI18nStore((s) => s.lang);
@@ -55,7 +56,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
             onClick={() => {
               const cs = useCanvasStore.getState();
               const node = cs.nodes.find(n => n.id === id);
-              const directorState = (node?.data as any)?.directorState;
+              const directorState = (node?.data as { directorState?: DirectorStateData }).directorState;
               if (directorState) {
                 useDirectorStore.getState().setRestoreState(directorState);
               }

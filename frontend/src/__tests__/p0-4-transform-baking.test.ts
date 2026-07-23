@@ -9,7 +9,7 @@
  *   - 完整流程：uploadBlob → 返回 url → createNodeFromUrl → 创建节点
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
 
 // ── Mock @/lib/api ─────────────────────────────────────────────
 vi.mock("@/lib/api", () => ({
@@ -18,10 +18,10 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { uploadBlob, createNodeFromUrl, uploadAndAddNode } from "@/lib/image-utils";
+import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/image-utils";
 
 // ── Mock Zustand stores ────────────────────────────────────────
-const mockNodes: any[] = [
+const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
   {
     id: "n1",
     type: "image-node",
@@ -33,7 +33,7 @@ const mockNodes: any[] = [
 
 vi.mock("@/stores/canvas-store", () => ({
   useCanvasStore: Object.assign(
-    (selector?: any) => {
+    (selector?: (s: Record<string, unknown>) => unknown) => {
       const state = {
         nodes: mockNodes,
         edges: [],
@@ -70,9 +70,9 @@ function extractHashFromUrl(url: string): string | null {
   return h.length === 64 ? h : null;
 }
 
-function collectCanvasHashes(nodes: any[]): string[] {
+function collectCanvasHashes(nodes: unknown[]): string[] {
   const hashes: string[] = [];
-  for (const node of nodes) {
+  for (const node of (nodes as Array<{ data?: Record<string, unknown> }>)) {
     const d = node?.data || {};
     if (typeof d.src === "string") {
       const h = extractHashFromUrl(d.src);
@@ -80,8 +80,9 @@ function collectCanvasHashes(nodes: any[]): string[] {
     }
     if (Array.isArray(d.images)) {
       for (const img of d.images) {
-        if (img?.url) {
-          const h = extractHashFromUrl(img.url);
+        const imgObj = img as { url?: string } | undefined;
+        if (imgObj?.url) {
+          const h = extractHashFromUrl(imgObj.url);
           if (h) hashes.push(h);
         }
       }
@@ -129,7 +130,7 @@ describe("P0-4: CSS transform baking flow", () => {
       const node = await createNodeFromUrl("n1", "http://img.url/result.png", 100, 100, "",
         { customField: "hello", naturalWidth: 999 }
       );
-      expect((node!.data as any).customField).toBe("hello");
+      expect((node!.data as Record<string, unknown>).customField).toBe("hello");
     });
 
     it("should accept position override explicitly", async () => {
@@ -158,8 +159,8 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should return null for non-string input", () => {
-      expect(extractHashFromUrl(null as any)).toBeNull();
-      expect(extractHashFromUrl(undefined as any)).toBeNull();
+      expect(extractHashFromUrl(null as unknown as string)).toBeNull();
+      expect(extractHashFromUrl(undefined as unknown as string)).toBeNull();
       expect(extractHashFromUrl("")).toBeNull();
     });
 
@@ -203,6 +204,7 @@ describe("P0-4: CSS transform baking flow", () => {
       vi.mocked(apiUpload).mockResolvedValueOnce({
         code: 200,
         data: { url: "http://test/api/files/1/aa/aaaa...png" },
+        msg: "",
       });
 
       const blob = new Blob(["fake-png-data"], { type: "image/png" });
@@ -216,7 +218,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
     it("should return null on upload failure", async () => {
       const { apiUpload } = await import("@/lib/api");
-      vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null });
+      vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null, msg: "" });
 
       const blob = new Blob(["fake"]);
       const url = await uploadBlob(blob);
@@ -232,6 +234,7 @@ describe("P0-4: CSS transform baking flow", () => {
       vi.mocked(apiUpload).mockResolvedValueOnce({
         code: 200,
         data: { url: "http://test/api/files/1/aa/aaaa...png" },
+        msg: "",
       });
 
       const blob = new Blob(["transformed-data"], { type: "image/png" });
@@ -243,7 +246,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
     it("should return null when upload fails", async () => {
       const { apiUpload } = await import("@/lib/api");
-      vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null });
+      vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null, msg: "" });
 
       const blob = new Blob(["fail-data"]);
       const node = await uploadAndAddNode("n1", blob, " (baked)");

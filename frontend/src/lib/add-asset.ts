@@ -1,10 +1,10 @@
 "use client";
 
-import { useCanvasStore } from "@/stores/canvas-store";
-import { createImageNode, createVideoNode } from "@/lib/node-defaults";
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
+import { createImageNode, createVideoNode } from "@/lib/node-defaults";
 import type { AssetItem } from "@/lib/types";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 /**
  * 将资产添加到画布视口中心。

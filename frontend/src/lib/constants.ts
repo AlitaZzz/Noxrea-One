@@ -1,4 +1,4 @@
-import type { ViewportState, BackgroundType, ThemeMode } from "./types";
+import type { BackgroundType, ThemeMode,ViewportState } from "./types";
 
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };
