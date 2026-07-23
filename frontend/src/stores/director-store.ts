@@ -17,6 +17,7 @@ export interface DirectorEntityMeta {
   type: "character" | "prop" | "camera" | "crowd";
   name: string;
   visible: boolean;
+  _members?: DirectorEntityMeta[];
 }
 
 export interface Shot {
@@ -183,7 +184,7 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   setRatio: (ratio) => set({ ratio }),
   setSceneState: (partial) =>
     set((s) => ({ sceneState: { ...s.sceneState, ...partial } })),
-  addShot: (shot) => set((s) => ({ shots: [...s.shots, shot] })),
+  addShot: (shot) => set((s) => ({ shots: s.shots.some((x) => x.id === shot.id) ? s.shots : [...s.shots, shot] })),
   removeShot: (id) => set((s) => ({ shots: s.shots.filter((x) => x.id !== id) })),
   toggleShotSelected: (id) =>
     set((s) => ({

@@ -85,7 +85,7 @@ export default function Dock() {
     const shot = await runtime?.captureShot();
     if (shot) {
       useDirectorStore.getState().addShot({
-        id: "s" + Date.now(), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
+        id: "s" + Date.now() + "_" + Math.random().toString(36).slice(2, 8), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
       });
       notification.success({ title: shot.name, placement: "bottomRight" });
     }
