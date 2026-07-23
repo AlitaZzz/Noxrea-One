@@ -451,6 +451,18 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .menu-divider { height: 1px; background: var(--menu-border); margin: 2px 6px; }
 .menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); }
 
+/* 风格筛选弹层：直接复用右键菜单外观（.menu-popover），仅加宽并定义行样式 */
+.asset-filter-popover { min-width: 210px; }
+.asset-filter-popover .filter-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.asset-filter-popover .filter-row:hover { background: var(--menu-item-hover); }
+.asset-filter-popover .filter-row .ant-checkbox-wrapper { width: 100%; }
+
 /* 工具栏容器 */
 .toolbar-dock { background: var(--toolbar-bg); border: 1px solid var(--toolbar-border); box-shadow: var(--toolbar-shadow); }
 

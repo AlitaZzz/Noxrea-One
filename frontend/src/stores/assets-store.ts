@@ -53,13 +53,19 @@ export interface AssetListState {
 }
 
 export async function fetchAssetPage(
-  filters: { category?: string; search?: string; folderId?: string | null; spaceKey?: string },
+  filters: { category?: string | string[]; search?: string; folderId?: string | null; spaceKey?: string },
   skip: number,
   limit: number = ASSET_PAGE_SIZE,
 ): Promise<{ items: AssetItem[]; total: number }> {
+  let typeParam: string | undefined;
+  if (filters.category && filters.category !== "all") {
+    typeParam = Array.isArray(filters.category)
+      ? filters.category.join(",")
+      : filters.category;
+  }
   const res = await assetApi.listAssets({
     folder_id: filters.folderId ? parseInt(filters.folderId, 10) : (filters.folderId === null ? -1 : undefined),
-    type: filters.category && filters.category !== "all" ? filters.category : undefined,
+    type: typeParam,
     search: filters.search || undefined,
     space_key: filters.spaceKey,
     skip,

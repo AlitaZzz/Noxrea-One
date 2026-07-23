@@ -148,7 +148,11 @@ def _build_asset_filter_query(user_id: int, folder_id: Optional[int] = None, ass
     elif folder_id is not None:
         q = q.where(AssetItem.folder_id == folder_id)
     if asset_type and asset_type != "all":
-        q = q.where(AssetItem.type == asset_type)
+        types = [t.strip() for t in asset_type.split(",") if t.strip()]
+        if len(types) == 1:
+            q = q.where(AssetItem.type == types[0])
+        elif types:
+            q = q.where(AssetItem.type.in_(types))
     if search:
         like = f"%{search}%"
         q = q.where(AssetItem.name.ilike(like))

@@ -20,6 +20,7 @@ import ConfirmModal from "@/components/common/ConfirmModal";
 import type { ModelCapability, ModelInfo } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
+import { useCanvasStore } from "@/stores/canvas-store";
 
 interface Props {
   open: boolean;
@@ -155,6 +156,7 @@ function VirtualList<T>({
 
 export default function ModelConfigModal({ open, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
+  const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
   const channels = useModelStore((s) => s.channels);
   const presets = useModelStore((s) => s.presets);
@@ -293,10 +295,11 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       onClose={onClose}
       size={600}
       placement="right"
-      destroyOnClose
+      destroyOnHidden
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" },
         body: { background: "var(--canvas-bg)", padding: 0, display: "flex", flexDirection: "column", height: "100%" },
+        section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
       }}
     >
     <div className="model-config-wrap flex flex-col h-full">
