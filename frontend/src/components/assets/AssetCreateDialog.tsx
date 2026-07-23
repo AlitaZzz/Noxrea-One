@@ -2,7 +2,7 @@
 
 import { AudioOutlined,CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import ModalButton from "@/components/common/ModalButton";
 import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
@@ -314,6 +314,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         .upload-drop-zone:hover {
           background: var(--canvas-bg-hover) !important;
         }
+        .upload-select-popup .ant-select-item-option {
+          margin-bottom: 2px;
+          border-radius: 6px;
+        }
+        .upload-select-popup .ant-select-item-option:last-child {
+          margin-bottom: 0;
+        }
       `}</style>
       {/* Hidden file input */}
       <input
@@ -433,10 +440,11 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               value={saveFolderId ?? "__root__"}
               onChange={(v) => setSaveFolderId(v === "__root__" ? undefined : v)}
               getPopupContainer={(t) => t.parentElement || document.body}
+              popupClassName="upload-select-popup"
               style={{ width: "100%" }}
               options={(() => {
-                const opts: { value: string; label: string }[] = [
-                  { value: "__root__", label: t("asset.space.personal") },
+                const opts: { value: string; label: ReactNode }[] = [
+                  { value: "__root__", label: <span>{t("asset.space.personal")}</span> },
                 ];
                 const build = (parentId: string | undefined, depth: number) => {
                   const children = (folders || []).filter(
@@ -445,7 +453,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                   for (const f of children) {
                     opts.push({
                       value: f.id,
-                      label: "  ".repeat(depth + 1) + f.name,
+                      label: <span style={{ whiteSpace: "pre" }}>{"  ".repeat(depth + 1) + f.name}</span>,
                     });
                     build(f.id, depth + 1);
                   }
@@ -463,9 +471,10 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               value={category}
               onChange={(v) => setCategory(v)}
               getPopupContainer={(t) => t.parentElement || document.body}
+              popupClassName="upload-select-popup"
               options={ASSET_TYPE_OPTIONS.map((opt) => ({
                 value: opt.value,
-                label: t(opt.labelKey),
+                label: <span>{t(opt.labelKey)}</span>,
               }))}
               style={{ width: "100%" }}
             />
