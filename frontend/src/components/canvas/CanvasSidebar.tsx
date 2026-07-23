@@ -160,7 +160,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
       }
     >
       <style>{`
-        .canvas-sidebar .ant-drawer-body { display:flex; flex-direction:column; height:100%; }
+        .canvas-sidebar .ant-drawer-body { display:flex; flex-direction:column; height:100%; overflow:hidden; }
         .canvas-sidebar .ant-input-affix-wrapper {
           background: var(--canvas-bg-elevated) !important;
           border-color: var(--canvas-border) !important;
@@ -271,7 +271,7 @@ function CanvasElementsView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "12px 16px" }}>
+      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "12px 16px", scrollbarGutter: "stable" }}>
         {grouped.length === 0 ? (
           <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
         ) : (
@@ -466,13 +466,6 @@ function AssetsView() {
     });
   }, [notif, t]);
 
-  const activeFolder = useMemo<AssetFolder | null>(() => {
-    if (activeFolderId === UNCATEGORIZED_FOLDER_ID) {
-      return { id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: 0 };
-    }
-    return activeFolderId ? folders.find((f) => f.id === activeFolderId) ?? null : null;
-  }, [activeFolderId, folders, t, lang]);
-
   // 完整祖先面包屑链（从根到当前文件夹）
   const breadcrumb = useMemo<AssetFolder[]>(() => {
     if (!activeFolderId) return [];
@@ -525,42 +518,47 @@ function AssetsView() {
         />
       </div>
 
-      {/* 面包屑：完整祖先层级，逐级可点击 */}
-      {activeFolder && (
-        <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap">
+      {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」） */}
+      <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap">
+        {/* 根：个人资产库（根视图为当前项，进入文件夹后可点击返回，位置保持一致不加箭头） */}
+        {activeFolderId === null ? (
+          <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
+            {t("asset.space.personal")}
+          </span>
+        ) : (
           <button
             onClick={() => setActiveFolderId(null)}
-            className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+            className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
             style={{ color: "var(--canvas-text-dim)" }}
           >
-            ← {t("asset.space.personal")}
+            {t("asset.space.personal")}
           </button>
-          {breadcrumb.map((crumb) => {
-            const isLast = crumb.id === activeFolderId;
-            return (
-              <span key={crumb.id} className="flex items-center gap-1">
-                <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
-                {isLast ? (
-                  <span className="text-xs font-medium whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
-                    {crumb.name}
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => setActiveFolderId(crumb.id)}
-                    className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                    style={{ color: "var(--canvas-text-dim)" }}
-                  >
-                    {crumb.name}
-                  </button>
-                )}
-              </span>
-            );
-          })}
-        </div>
-      )}
+        )}
+        {breadcrumb.map((crumb) => {
+          const isLast = crumb.id === activeFolderId;
+          return (
+            <span key={crumb.id} className="flex items-center gap-1">
+              <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+              {isLast ? (
+                <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
+                  {crumb.name}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setActiveFolderId(crumb.id)}
+                  className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                  style={{ color: "var(--canvas-text-dim)" }}
+                >
+                  {crumb.name}
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </div>
 
       {/* 资产网格 */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3">
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3" style={{ scrollbarGutter: "stable" }}>
         {!hasContent && !loading ? (
           <div className="flex items-center justify-center h-full min-h-[200px]">
             <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>} />

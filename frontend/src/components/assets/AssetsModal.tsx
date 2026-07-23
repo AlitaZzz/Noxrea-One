@@ -430,25 +430,41 @@ export default function AssetsModal({ open, onClose }: Props) {
           <div className="flex-1 flex flex-col py-4 pr-4 pl-4 min-w-0">
             {/* Breadcrumb — placed above toolbar, always visible */}
             <div className="flex items-center gap-1 pb-2 flex-shrink-0">
-              <button
-                onClick={() => setActiveFolderId(null)}
-                className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
-                style={{ color: activeFolderId ? "var(--canvas-text-dim)" : "var(--canvas-text)" }}
-              >
-                {activeFolderId ? `← ${t("asset.space.personal")}` : t("asset.space.personal")}
-              </button>
-              {breadCrumb.map((f) => (
-                <span key={f.id} className="flex items-center gap-1">
-                  <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
-                  <button
-                    onClick={() => setActiveFolderId(f.id)}
-                    className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 cursor-pointer"
-                    style={{ color: f.id === activeFolderId ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
-                  >
-                    {f.name}
-                  </button>
+              {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
+              {activeFolderId === null ? (
+                <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                  {t("asset.space.personal")}
                 </span>
-              ))}
+              ) : (
+                <button
+                  onClick={() => setActiveFolderId(null)}
+                  className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                  style={{ color: "var(--canvas-text-dim)" }}
+                >
+                  {t("asset.space.personal")}
+                </button>
+              )}
+              {breadCrumb.map((f) => {
+                const isLast = f.id === activeFolderId;
+                return (
+                  <span key={f.id} className="flex items-center gap-1">
+                    <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                    {isLast ? (
+                      <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                        {f.name}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setActiveFolderId(f.id)}
+                        className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                        style={{ color: "var(--canvas-text-dim)" }}
+                      >
+                        {f.name}
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
             </div>
 
             {/* Toolbar */}

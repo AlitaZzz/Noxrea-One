@@ -129,7 +129,7 @@ const zh: Record<string, string> = {
   "file.upload.failed": "上传失败",
   "file.upload.failed.all": "全部文件上传失败",
   // Canvas Sidebar
-  "canvas.sidebar": "画布", "canvas.openSidebar": "打开画布面板",
+  "canvas.sidebar": "画布", "canvas.openSidebar": "打开侧边栏", "canvas.closeSidebar": "收起侧边栏", "canvas.panel": "面板",
   "canvas.tab.elements": "画布元素", "canvas.tab.assets": "资产",
   "canvas.empty": "画布为空，添加节点开始创作吧",
   "canvas.search.placeholder": "搜索节点...",
@@ -248,7 +248,7 @@ const en: Record<string, string> = {
   "file.upload.failed": "Upload failed",
   "file.upload.failed.all": "All files failed to upload",
   // Canvas Sidebar
-  "canvas.sidebar": "Canvas", "canvas.openSidebar": "Open Canvas Panel",
+  "canvas.sidebar": "Canvas", "canvas.openSidebar": "Open Sidebar", "canvas.closeSidebar": "Close Sidebar", "canvas.panel": "Panel",
   "canvas.tab.elements": "Elements", "canvas.tab.assets": "Assets",
   "canvas.empty": "Canvas is empty, add nodes to get started",
   "canvas.search.placeholder": "Search nodes...",

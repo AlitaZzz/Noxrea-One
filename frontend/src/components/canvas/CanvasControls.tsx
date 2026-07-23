@@ -2,8 +2,9 @@
 
 import {
   AimOutlined,
-  AppstoreOutlined,
   BgColorsOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   ExpandOutlined,
   FolderOpenOutlined,
   MedicineBoxOutlined, // unused — kept for other components
@@ -46,9 +47,10 @@ interface Props {
   onOpenSettings?: () => void;
   onOpenAssets?: () => void;
   onOpenCanvasSidebar?: () => void;
+  canvasSidebarOpen?: boolean;
 }
 
-export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar }: Props) {
+export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar, canvasSidebarOpen }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const t = useI18nStore((s) => s.t);
 
@@ -129,6 +131,19 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           border: "1px solid var(--canvas-border, #3a3a3a)",
         }}
       >
+        {/* Canvas Sidebar — 最左侧主面板开关（图标+文字） */}
+        <Tooltip title={canvasSidebarOpen ? t("canvas.closeSidebar") : t("canvas.openSidebar")}>
+          <Button
+            size="small"
+            type="text"
+            className={`canvas-ctrl-btn${canvasSidebarOpen ? " canvas-ctrl-active" : ""}`}
+            icon={canvasSidebarOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+            onClick={onOpenCanvasSidebar}
+          >
+            {t("canvas.panel")}
+          </Button>
+        </Tooltip>
+
         {/* Minimap toggle */}
         <Tooltip title={minimapVisible ? t("minimap.hide") : t("minimap.show")}>
           <Button
@@ -197,11 +212,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       {/* My Assets */}
       <Tooltip title={t("assets")}>
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<FolderOpenOutlined />} onClick={onOpenAssets} />
-      </Tooltip>
-
-      {/* Canvas Sidebar */}
-      <Tooltip title={t("canvas.openSidebar")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AppstoreOutlined />} onClick={onOpenCanvasSidebar} />
       </Tooltip>
 
       {/* Zoom display + menu */}
