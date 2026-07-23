@@ -1,6 +1,6 @@
 "use client";
 
-import { DeleteOutlined,FolderOpenOutlined } from "@ant-design/icons";
+import { DeleteOutlined, FolderOutlined } from "@ant-design/icons";
 
 import type { AssetFolder } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -35,7 +35,7 @@ export default function FolderCard({ folder, count, onClick, onDelete }: Props) 
           <DeleteOutlined />
         </button>
       )}
-      <FolderOpenOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+      <FolderOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
       <div className="text-white/70 text-xs px-2 text-center truncate w-full">{folder.name}</div>
       <div className="text-white/25 text-[10px]">{count ?? 0} {t("asset.count")}</div>
     </div>

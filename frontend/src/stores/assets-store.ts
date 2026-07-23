@@ -268,3 +268,29 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     );
   },
 }));
+
+/**
+ * 计算每个文件夹的递归资产数量（含其所有子孙子文件夹）。
+ * 返回 { [folderId]: 含子孙的总数 }。
+ */
+export function computeRecursiveFolderCounts(folders: AssetFolder[]): Record<string, number> {
+  const childrenOf = new Map<string | undefined, AssetFolder[]>();
+  for (const f of folders) {
+    const key = f.parentId || undefined;
+    const list = childrenOf.get(key);
+    if (list) list.push(f);
+    else childrenOf.set(key, [f]);
+  }
+  const result: Record<string, number> = {};
+  const calc = (f: AssetFolder): number => {
+    let total = f.count || 0;
+    for (const child of childrenOf.get(f.id) ?? []) total += calc(child);
+    result[f.id] = total;
+    return total;
+  };
+  // 从每个根（无父级）开始累加
+  for (const f of childrenOf.get(undefined) ?? []) calc(f);
+  // 兜底：父级缺失（断链）的文件夹也单独计算
+  for (const f of folders) if (result[f.id] === undefined) calc(f);
+  return result;
+}

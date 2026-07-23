@@ -6,7 +6,8 @@ import {
   PartitionOutlined,
   FontSizeOutlined,
   GroupOutlined,
-  InboxOutlined,
+  FolderOpenOutlined,
+  FolderOutlined,
   LoadingOutlined,
   PictureOutlined,
   PlusOutlined,
@@ -19,9 +20,10 @@ import { useCallback, useEffect, useMemo, useRef,useState } from "react";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { addAssetToCanvas } from "@/lib/add-asset";
-import type { AnyNode, AssetItem } from "@/lib/types";
-import { NODE_TYPE } from "@/lib/types";
-import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
+import { assetApi } from "@/lib/api";
+import type { AnyNode, AssetFolder, AssetItem } from "@/lib/types";
+import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
+import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
@@ -114,7 +116,7 @@ function useVideoThumbnail(src: string | undefined) {
   return { thumb, loading };
 }
 
-export const DRAWER_WIDTH = 300;
+export const DRAWER_WIDTH = 360;
 
 interface CanvasSidebarProps {
   open: boolean;
@@ -208,7 +210,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
             }}
             onClick={() => setActiveTab("assets")}
           >
-            <InboxOutlined />
+            <FolderOpenOutlined />
             {t("canvas.tab.assets")}
           </button>
         </div>
@@ -364,6 +366,7 @@ function ElementItem({ node, edges, selected, onClick }: {
 // ── 资产视图 ──
 function AssetsView() {
   const t = useI18nStore((s) => s.t);
+  const lang = useI18nStore((s) => s.lang);
   const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
@@ -375,6 +378,7 @@ function AssetsView() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const versionRef = useRef(0);
@@ -397,11 +401,13 @@ function AssetsView() {
   }, []);
 
   const fetchNextPage = useCallback(async () => {
+    if (activeFolderId === null) return; // 根视图不展示散落资产
     const v = ++versionRef.current;
     setLoadingMore(true);
     try {
+      const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
       const result = await fetchAssetPage(
-        { category: "all", search, folderId: activeFolderId, spaceKey: "personal" },
+        { category: "all", search, folderId, spaceKey: "personal" },
         items.length,
       );
       if (v !== versionRef.current) return;
@@ -414,10 +420,28 @@ function AssetsView() {
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      fetchAndReplace({ search, folderId: activeFolderId });
+      // 根视图：只展示文件夹（含虚拟「未分类」），不拉取散落资产
+      if (activeFolderId === null) {
+        setItems([]);
+        setTotalCount(0);
+        setLoading(false);
+        return;
+      }
+      const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
+      fetchAndReplace({ search, folderId });
     }, 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [search, activeFolderId, fetchAndReplace]);
+
+  // 拉取「未分类」资产数量（仅根视图需要）
+  useEffect(() => {
+    if (activeFolderId !== null) { setUncategorizedCount(0); return; }
+    let cancelled = false;
+    assetApi.listAssets({ space_key: "personal", folder_id: -1, skip: 0, limit: 1 })
+      .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeFolderId]);
 
   const hasMore = items.length < totalCount;
 
@@ -442,17 +466,49 @@ function AssetsView() {
     });
   }, [notif, t]);
 
-  const activeFolder = useMemo(
-    () => activeFolderId ? folders.find((f) => f.id === activeFolderId) : null,
-    [activeFolderId, folders],
+  const activeFolder = useMemo<AssetFolder | null>(() => {
+    if (activeFolderId === UNCATEGORIZED_FOLDER_ID) {
+      return { id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: 0 };
+    }
+    return activeFolderId ? folders.find((f) => f.id === activeFolderId) ?? null : null;
+  }, [activeFolderId, folders, t, lang]);
+
+  // 完整祖先面包屑链（从根到当前文件夹）
+  const breadcrumb = useMemo<AssetFolder[]>(() => {
+    if (!activeFolderId) return [];
+    if (activeFolderId === UNCATEGORIZED_FOLDER_ID) {
+      return [{ id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: 0 }];
+    }
+    const crumbs: AssetFolder[] = [];
+    let cur: string | undefined = activeFolderId;
+    while (cur) {
+      const f = folders.find((x) => x.id === cur);
+      if (!f) break;
+      crumbs.unshift(f);
+      cur = f.parentId || undefined;
+    }
+    return crumbs;
+  }, [activeFolderId, folders, t, lang]);
+
+  // 文件夹递归计数（含所有子孙子文件夹），仅取 personal 空间
+  const recursiveCounts = useMemo(
+    () => computeRecursiveFolderCounts(folders.filter((f) => f.spaceKey === "personal")),
+    [folders],
   );
 
-  const childFolders = useMemo(
-    () => getChildFolders("personal", activeFolderId ?? undefined),
-    [getChildFolders, activeFolderId],
-  );
+  const gridFolders = useMemo<AssetFolder[]>(() => {
+    const childFolders = getChildFolders("personal", activeFolderId ?? undefined).map((f) => ({
+      ...f,
+      count: recursiveCounts[f.id] ?? f.count ?? 0,
+    }));
+    if (activeFolderId !== null) return childFolders;
+    return [
+      ...childFolders,
+      { id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: uncategorizedCount },
+    ];
+  }, [getChildFolders, activeFolderId, uncategorizedCount, recursiveCounts, t, lang]);
 
-  const hasContent = items.length > 0 || childFolders.length > 0;
+  const hasContent = items.length > 0 || gridFolders.length > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -469,20 +525,37 @@ function AssetsView() {
         />
       </div>
 
-      {/* 面包屑 */}
+      {/* 面包屑：完整祖先层级，逐级可点击 */}
       {activeFolder && (
-        <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0">
+        <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap">
           <button
             onClick={() => setActiveFolderId(null)}
-            className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/5"
+            className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
             style={{ color: "var(--canvas-text-dim)" }}
           >
             ← {t("asset.space.personal")}
           </button>
-          <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
-          <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>
-            {activeFolder.name}
-          </span>
+          {breadcrumb.map((crumb) => {
+            const isLast = crumb.id === activeFolderId;
+            return (
+              <span key={crumb.id} className="flex items-center gap-1">
+                <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                {isLast ? (
+                  <span className="text-xs font-medium whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
+                    {crumb.name}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setActiveFolderId(crumb.id)}
+                    className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                    style={{ color: "var(--canvas-text-dim)" }}
+                  >
+                    {crumb.name}
+                  </button>
+                )}
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -495,15 +568,18 @@ function AssetsView() {
         ) : (
           <>
             <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
-              {!search && !activeFolderId && childFolders.map((folder) => (
+              {!search && gridFolders.map((folder) => (
                 <div
                   key={folder.id}
                   onClick={() => setActiveFolderId(folder.id)}
                   className="relative group rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-1"
                   style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
                 >
-                  <InboxOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.2)" }} />
+                  <FolderOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.2)" }} />
                   <span className="text-white/60 text-[11px] px-1 text-center truncate w-full">{folder.name}</span>
+                  {folder.count > 0 && (
+                    <span className="absolute top-1.5 right-2 text-[10px] px-1 rounded bg-white/10" style={{ color: "rgba(255,255,255,0.6)" }}>{folder.count}</span>
+                  )}
                 </div>
               ))}
               {items.map((asset) => (
@@ -522,7 +598,7 @@ function AssetsView() {
         className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
         style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
       >
-        <InboxOutlined />
+        <FolderOpenOutlined />
         <span>{totalCount || items.length} {t("asset.count")}</span>
       </div>
     </div>
@@ -550,11 +626,10 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
         tabIndex={0}
         role="button"
         aria-label={t("asset.insert") + " " + asset.name}
-        onClick={onInsert}
         onKeyDown={handleKeyDown}
         onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
         onMouseLeave={preview.onLeave}
-        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
+        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all"
         style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
       >
         {/* Hover overlay — send to canvas */}
