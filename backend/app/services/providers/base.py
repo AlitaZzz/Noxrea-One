@@ -297,9 +297,8 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id:
                         category="generated",
                         ext="mp4" if file_type == "video" else "png",
                     )
-                    logger.info(f"download save ok{_tid} cost={time.monotonic()-_t2:.2f}s local={url}")
                     if url:
-                        logger.info(f"download_and_save done{_tid} local={url}")
+                        logger.info(f"download_and_save done{_tid} local={url} cost={time.monotonic()-_t2:.2f}s")
                         return url
                     logger.warning(f"download_and_save storage failed{_tid} url={cdn_url}")
                     return None
