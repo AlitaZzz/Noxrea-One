@@ -11,19 +11,18 @@ import {
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input,Popover, Tooltip } from "antd";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import ImageCropModal from "@/components/canvas/ImageCropModal";
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUpload } from "@/lib/api";
+import { apiUploadWithProgress } from "@/lib/api";
 import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH, } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/image-utils";
 import {
-  EMPTY_UPLOAD_STATE,
   type ImageNode as ImageNodeType,
   type ImageNodeData,
   isGenerating,
@@ -32,11 +31,35 @@ import { useAssetsStore } from "@/stores/assets-store";
 import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
+/**
+ * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
+ * 2 列网格排布，溢出节点边界之上方与右侧。抽成纯函数便于单独测试与阅读。
+ */
+interface MultiCardLayout { left: string; top: string; z: number }
+function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
+  const GAP = 8;
+  const layouts: MultiCardLayout[] = [];
+  let remainingIdx = 0;
+  for (const url of urls) {
+    if (url === mainUrl) {
+      layouts.push({ left: "0px", top: "0px", z: 0 });
+    } else {
+      const ri = remainingIdx++;
+      const col = (ri + 1) % 2;
+      const row = -Math.floor((ri + 1) / 2);
+      layouts.push({
+        left: col > 0 ? `calc(100% + ${GAP}px)` : "0px",
+        top: `calc(${row * 100}% + ${row * GAP}px)`,
+        z: -1,
+      });
+    }
+  }
+  return layouts;
+}
+
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   useI18nStore((s) => s.lang);
   const t = useI18nStore((s) => s.t);
-  const [src, setSrc] = useState(data.src || "");
-  const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
@@ -55,30 +78,33 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     return () => document.removeEventListener("mousedown", handler, true);
   }, [expanded]);
 
+  // 主图真相统一为 data.src（不再有本地 src state / 渲染期 setState hack）。
+  // 多图模式约定：src 必为 multiResultUrls 的成员；撤销会把整个 data 快照替换，故无需额外同步。
+  const src = data.src || "";
+
   // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
   const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
 
-  // Resync local src when data.src changes externally (e.g. from undo/clear),
-  // adjusted during render (not in an effect) to avoid cascading renders.
-  if (data.src !== prevDataSrc) {
-    setPrevDataSrc(data.src);
-    setSrc(data.src || "");
-  }
+  // 展开网格的卡片布局（纯函数计算，仅在多图+展开时有效）
+  const multiExpandedLayouts = useMemo(
+    () => (expanded && isMulti && data.multiResultUrls ? layoutMultiCards(data.multiResultUrls, src) : []),
+    [expanded, isMulti, data.multiResultUrls, src]
+  );
 
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) return;
 
-      // 生成本次上传的版本标记。版本号存储在 node.data 中，
+      // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
       // 撤销时整个 node.data 被快照替换，版本号自动失效。
       const uploadVersion = Date.now();
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
-        const prevUpload = (nodeBefore.data as ImageNodeData).upload;
+        // 立即进入 uploading 状态，让节点进度条出现（与拖到画布路径一致）
         store.updateNodeData(
           id,
-          { upload: { ...(prevUpload ?? EMPTY_UPLOAD_STATE), version: uploadVersion } },
+          { upload: { uploading: true, progress: 0, version: uploadVersion } },
           undefined,
           { skipHistory: true }
         );
@@ -87,10 +113,21 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", formData);
+        const res = await apiUploadWithProgress<{ url: string }>(
+          "/api/files/upload?category=images",
+          formData,
+          (pct) => {
+            // 上传进度回传，更新进度条
+            useCanvasStore.getState().updateNodeData(
+              id,
+              { upload: { uploading: true, progress: pct, version: uploadVersion } },
+              undefined,
+              { skipHistory: true }
+            );
+          }
+        );
         if (res.code === 200 && res.data?.url) {
           const imgUrl = res.data.url;
-          setSrc(imgUrl);
           const img = new window.Image();
           img.onload = () => {
             // 异步回调时校验：节点存在且版本号匹配（未被撤销/重置）
@@ -102,11 +139,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             const nw = img.naturalWidth, nh = img.naturalHeight;
             const { width, height } = computeNodeSize(nw, nh);
             const latestData = currentNode.data as ImageNodeData;
+            // 上传完成：清空 upload（进度条消失），写回图片主信息；
+            // 同时清掉可能残留的 multiResultUrls，避免旧多图层叠在新主图后。
             window.dispatchEvent(
               new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: {
                   nodeId: id,
-                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined },
                   style: { width, height },
                   immediate: true,
                 },
@@ -114,10 +153,25 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             );
           };
           img.src = imgUrl;
+        } else {
+          // 后端返回非 200：清除 uploading 状态，避免卡在"上传中"
+          const s = useCanvasStore.getState();
+          const currentNode = s.nodes.find((n) => n.id === id);
+          if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
+            s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
+          }
         }
-      } catch (e) { console.error("Image upload failed:", e); }
+      } catch (e) {
+        console.error("Image upload failed:", e);
+        // 失败时清除 uploading 状态（进度条消失），避免卡在"上传中"
+        const s = useCanvasStore.getState();
+        const currentNode = s.nodes.find((n) => n.id === id);
+        if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
+          s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
+        }
+      }
     },
-    [id, data]
+    [id]
   );
 
   const handleDownload = useCallback(async () => {
@@ -190,7 +244,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -252,7 +305,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useCallback(async (rows: number, cols: number) => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
@@ -293,7 +345,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleBgRemoval = useCallback(async () => {
     if (!src) return;
-    useCanvasStore.getState().updateNodeData(id, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     try {
       // Create task via existing generation task queue
       const { BASE, getTokenHeader } = await import("@/lib/api");
@@ -324,10 +375,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id, src]);
 
   const handleClear = useCallback(() => {
-    setSrc("");
     useCanvasStore.getState().updateNodeData(id, {
       src: "", label: t("image.node"), alt: "", naturalWidth: 0, naturalHeight: 0,
       rotation: undefined, flipH: undefined, flipV: undefined,
+      upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
     markDirtyImmediate();
   }, [id]);
@@ -448,39 +499,24 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           </div>
         ) : isMulti && hasImage ? (
             expanded ? (
-              // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界
-              (() => {
-                const urls = data.multiResultUrls!;
-                const GAP = 8;
-                let remainingIdx = 0;
-                return (
-                  <div className="absolute inset-0 overflow-visible">
-                    {urls.map((url, i) => {
-                      const isMain = url === src;
-                      let left: string, top: string, z: number;
-                      if (isMain) {
-                        left = "0px"; top = "0px"; z = 0;
-                      } else {
-                        const ri = remainingIdx++;
-                        const col = (ri + 1) % 2;
-                        const row = -Math.floor((ri + 1) / 2);
-                        left = col > 0 ? `calc(100% + ${GAP}px)` : "0px";
-                        top = `calc(${row * 100}% + ${row * GAP}px)`;
-                        z = -1;
-                      }
-                      return (
-                        <div
-                          key={i}
-                          className="absolute rounded-lg overflow-hidden border border-white/15 shadow-xl"
-                          style={{
-                            left,
-                            top,
-                            width: "100%",
-                            height: "100%",
-                            zIndex: z,
-                            background: "#262626",
-                          }}
-                        >
+              // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）
+              <div className="absolute inset-0 overflow-visible">
+                {data.multiResultUrls!.map((url, i) => {
+                  const isMain = url === src;
+                  const { left, top, z } = multiExpandedLayouts[i] ?? { left: "0px", top: "0px", z: 0 };
+                  return (
+                    <div
+                      key={i}
+                      className="absolute rounded-lg overflow-hidden border border-white/15 shadow-xl"
+                      style={{
+                        left,
+                        top,
+                        width: "100%",
+                        height: "100%",
+                        zIndex: z,
+                        background: "#262626",
+                      }}
+                    >
                           <img src={url} alt={`${i + 1}`} className="w-full h-full object-cover" draggable={false} />
                           {/* 操作按钮 */}
                           <div className="absolute top-1 right-1 flex gap-1 z-10 nodrag">
@@ -517,8 +553,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                       );
                     })}
                   </div>
-                );
-              })()
             ) : (
               // 折叠堆叠卡片：排除当前主图，取最多 3 张作为背景卡
               <div className="relative w-full h-full overflow-visible rounded-lg">

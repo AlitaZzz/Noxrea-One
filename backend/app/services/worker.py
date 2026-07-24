@@ -162,6 +162,11 @@ async def _resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
 
 async def _process_task(task: GenerationTask) -> None:
     """Process one task: call AI API, save result, update DB."""
+    # 开发联调：mock 模式直接返回两条测试图，跳过真实 AI 调用
+    if settings.MOCK_IMAGE_GENERATE and task.type == "image":
+        await _process_mock_images(task)
+        return
+
     config = task.config or {}
     model = config.get("model", "")
     quality = config.get("quality", "auto")
@@ -272,6 +277,61 @@ async def _process_task(task: GenerationTask) -> None:
             except Exception as e:
                 logger.error(f"error task={task.id} type={task.type} err={str(e)[:300]}")
                 await _update_task_status(task.id, "failed", error=str(e)[:500])
+
+
+async def _process_mock_images(task: GenerationTask) -> None:
+    """Mock 生图：跳过真实 AI，按前台设置的 n 返回对应张数测试图，便于前端联调多图/角标/主图切换。"""
+    config = task.config or {}
+    # n 已在路由层限幅到 [1,4]，这里再做一次兜底，避免脏数据
+    n = max(1, min(4, int(config.get("n", 1) or 1)))
+    urls = await _collect_mock_image_bytes(task.user_id, n)
+    if urls:
+        await _update_task_status(task.id, "completed", result_urls=urls)
+        logger.info(f"mock image done task={task.id} urls={len(urls)}")
+    else:
+        await _update_task_status(task.id, "failed", error="mock 模式未找到可用测试图")
+
+
+async def _collect_mock_image_bytes(user_id: int, count: int = 1) -> list[str]:
+    """从 uploads 目录挑内容不同的真实图片，落本地存储并返回公开 URL。
+    count 控制返回张数：候选不足时循环复用，超过时截断。"""
+    from app.services.media import UPLOAD_DIR
+
+    candidates: list[str] = []
+    for root, _, files in os.walk(UPLOAD_DIR):
+        for fn in files:
+            if fn.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+                candidates.append(os.path.join(root, fn))
+        if len(candidates) >= 50:
+            break
+
+    unique: list[bytes] = []
+    seen: set[bytes] = set()
+    for path in candidates:
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+        except OSError:
+            continue
+        if data in seen:
+            continue
+        seen.add(data)
+        unique.append(data)
+        if len(unique) >= 50:
+            break
+
+    if not unique:
+        return []
+
+    # 按 count 取：候选不足则循环复用，超过则截断
+    chosen = [unique[i % len(unique)] for i in range(count)]
+
+    urls: list[str] = []
+    for data in chosen:
+        url = await save_upload_bytes(user_id=user_id, content=data, category="generated")
+        if url:
+            urls.append(url)
+    return urls
 
 
 async def _process_image(
