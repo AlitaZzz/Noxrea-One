@@ -56,7 +56,10 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                   if (!line.startsWith("data: ")) continue;
                   try {
                     const evt = JSON.parse(line.slice(6));
-                    if (evt.status === "completed" && evt.result_url) {
+                    const completedUrls: string[] = (evt.result_urls && evt.result_urls.length)
+                      ? evt.result_urls
+                      : (evt.result_url ? [evt.result_url] : []);
+                    if (evt.status === "completed" && completedUrls.length) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
                       if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
@@ -66,7 +69,8 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         // 抠图 → 创建新节点，不覆盖原图
                         const { createNodeFromUrl } = await import("@/lib/image-utils");
                         const defW = 1024, defH = 1024;
-                        const newNode = await createNodeFromUrl(nodeId, evt.result_url, defW, defH, " (bg-removed)");
+                        const url = completedUrls[0];
+                        const newNode = await createNodeFromUrl(nodeId, url, defW, defH, " (bg-removed)");
                         // Clear source node state
                         useCanvasStore.getState().updateNodeData(nodeId, {
                           taskBinding: undefined,
@@ -74,7 +78,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         markDirtyImmediate();
                         // Load real dimensions for the new node
                         if (newNode) {
-                          loadMediaDimensions(evt.result_url, false).then((dims) => {
+                          loadMediaDimensions(url, false).then((dims) => {
                             if (dims.w > 0) {
                               const { width, height } = computeNodeSize(dims.w, dims.h);
                               useCanvasStore.getState().updateNodeData(newNode.id, {
@@ -95,17 +99,18 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
                       const label = prompt.slice(0, 20);
                       const isVideoNode = cur.type === "video-node";
-                      // Immediately show result with default size
+                      // Immediately show first result with default size
                       const defW = isVideoNode ? 1152 : 1024;
                       const defH = isVideoNode ? 768 : 1024;
+                      const firstUrl = completedUrls[0];
                       useCanvasStore.getState().updateNodeData(nodeId, {
-                        src: evt.result_url, label, alt: label,
+                        src: firstUrl, label, alt: label,
                         naturalWidth: defW, naturalHeight: defH,
                         lockAspectRatio: true, taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();
-                      // Async load real dimensions
-                      loadMediaDimensions(evt.result_url, isVideoNode).then((dims) => {
+                      // Async load real dimensions for the first result
+                      loadMediaDimensions(firstUrl, isVideoNode).then((dims) => {
                         if (dims.w > 0) {
                           const { width, height } = computeNodeSize(dims.w, dims.h);
                           useCanvasStore.getState().updateNodeData(nodeId, {
@@ -116,6 +121,32 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       });
                       const t = useI18nStore.getState().t;
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
+                      // 多图：首张以外的图各自创建新节点（向右错开排列）
+                      if (completedUrls.length > 1) {
+                        const { createNodeFromUrl } = await import("@/lib/image-utils");
+                        for (let i = 1; i < completedUrls.length; i++) {
+                          const extraUrl = completedUrls[i];
+                          const pos = {
+                            x: (cur.position.x || 0) + (defW + 60) * i,
+                            y: cur.position.y || 0,
+                          };
+                          const extra = await createNodeFromUrl(
+                            nodeId, extraUrl, defW, defH, ` (${i + 1})`,
+                            undefined, pos,
+                          );
+                          if (extra) {
+                            loadMediaDimensions(extraUrl, isVideoNode).then((dims) => {
+                              if (dims.w > 0) {
+                                const { width, height } = computeNodeSize(dims.w, dims.h);
+                                useCanvasStore.getState().updateNodeData(extra.id, {
+                                  naturalWidth: dims.w, naturalHeight: dims.h,
+                                }, { width, height }, { skipHistory: true });
+                                markDirtyImmediate();
+                              }
+                            });
+                          }
+                        }
+                      }
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 15 });

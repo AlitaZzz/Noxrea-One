@@ -90,7 +90,7 @@ async def test_bg_removal_rejects_external_source(monkeypatch):
     monkeypatch.setattr("app.services.ssrf.is_allowed_ref_host", lambda *a, **k: False)
 
     calls = []
-    async def fake_update(task_id, status, error=None, result_url=None):
+    async def fake_update(task_id, status, error=None, result_urls=None):
         calls.append((status, error))
     monkeypatch.setattr(worker, "_update_task_status", fake_update)
 
@@ -131,8 +131,8 @@ async def test_bg_removal_self_source_reads_disk(monkeypatch):
                         AsyncMock(return_value="http://testserver/api/files/7/result.png"))
 
     calls = []
-    async def fake_update(task_id, status, error=None, result_url=None):
-        calls.append((status, result_url))
+    async def fake_update(task_id, status, error=None, result_urls=None):
+        calls.append((status, result_urls))
     monkeypatch.setattr(worker, "_update_task_status", fake_update)
 
     res = await worker._process_bg_removal(task)
@@ -179,7 +179,7 @@ async def test_process_task_base_url_internal_fails(monkeypatch):
     monkeypatch.setattr(worker, "async_session", lambda: FakeSession())
 
     calls = []
-    async def fake_update(task_id, status, error=None, result_url=None):
+    async def fake_update(task_id, status, error=None, result_urls=None):
         calls.append((status, error))
     monkeypatch.setattr(worker, "_update_task_status", fake_update)
 

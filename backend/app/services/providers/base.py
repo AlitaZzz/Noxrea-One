@@ -82,16 +82,21 @@ class ProviderConfig:
     def build_video_body(self, model: str, prompt: str, ratio: str, refs: Optional[list[str]] = None) -> dict[str, Any]:
         raise NotImplementedError
 
-    def extract_image(self, data: dict[str, Any]) -> tuple[Optional[str], Optional[bytes]]:
-        """从响应抽取结果，返回 (url, raw_bytes)：优先 url，其次 b64_json。
-        返回 (None, None) 表示异步模式——worker 会调用 extract_image_task_id 等走轮询。"""
+    def extract_image(self, data: dict[str, Any]) -> tuple[list[str], list[bytes]]:
+        """从响应抽取所有结果，返回 (urls, raw_bytes_list)。
+
+        遍历 data[] 收集全部 url 与 b64，不再只取第一张——支持一次返回多张图。
+        返回 ([], []) 表示异步模式——worker 会调用 extract_image_task_id 等走轮询。
+        """
+        urls: list[str] = []
+        raw_list: list[bytes] = []
         for item in (data.get("data") or []):
             if item.get("url"):
-                return item["url"], None
+                urls.append(item["url"])
             b64 = item.get("b64_json")
             if b64:
-                return None, base64.b64decode(b64)
-        return None, None
+                raw_list.append(base64.b64decode(b64))
+        return urls, raw_list
 
     # ── 异步生图轮询（覆写后由 worker._process_image 调用） ──────────
 

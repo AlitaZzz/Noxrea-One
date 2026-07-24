@@ -215,37 +215,48 @@ async def _process_task(task: GenerationTask) -> None:
             try:
                 logger.info(f"processing task={task.id} type={task.type}")
                 if task.type == "image":
-                    result_url, image_error = await _process_image(
+                    result_urls, image_error = await _process_image(
                         client, provider, task, model, base_url, headers,
                         quality, ratio, size, n, refs,
                     )
+                    already_handled = False
                 elif task.type == "video":
                     result_url = await _process_video(
                         client, provider, task, model, base_url, headers,
                         ratio, refs,
                     )
+                    result_urls = [result_url] if result_url else []
                     image_error = ""
+                    already_handled = False
                 elif task.type == "bg_removal":
                     result_url = await _process_bg_removal(task)
+                    result_urls = [result_url] if result_url else []
                     image_error = ""
+                    # bg_removal 失败路径已自行 _update_task_status 并 return None
+                    already_handled = result_url is None
                 else:
                     await _update_task_status(task.id, "failed", error=f"Unknown type: {task.type}")
                     return
 
-                if result_url:
-                    # Download from CDN and save locally（不携带 provider 凭证）
-                    local_url = await download_and_save(result_url, task.user_id, task.type, task_id=task.id)
-                    if local_url is None:
-                        # 下载/存储失败：不把易失效的外链 url 存成结果，标 failed 让用户重试
+                if result_urls:
+                    # 批量下载 CDN 图并落本地（不携带 provider 凭证）；
+                    # 部分下载失败也保留已成功的图，至少传一张就标 completed。
+                    local_urls: list[str] = []
+                    for u in result_urls:
+                        local = await download_and_save(u, task.user_id, task.type, task_id=task.id)
+                        if local:
+                            local_urls.append(local)
+                    if local_urls:
+                        await _update_task_status(task.id, "completed", result_urls=local_urls)
+                        logger.info(f"completed task={task.id} urls={len(local_urls)}")
+                    else:
+                        # 全部下载/存储失败：不把易失效的外链 url 存成结果
                         await _update_task_status(
                             task.id, "failed",
-                            error=f"结果下载或本地存储失败，原始 url: {result_url[:120]}",
+                            error=f"结果下载或本地存储失败，原始 url: {result_urls[0][:120]}",
                         )
-                        logger.warning(f"download failed task={task.id} url={result_url[:60]}")
-                    else:
-                        await _update_task_status(task.id, "completed", result_url=local_url)
-                        logger.info(f"completed task={task.id}")
-                else:
+                        logger.warning(f"download failed task={task.id} url={result_urls[0][:60]}")
+                elif not already_handled:
                     # 优先透传 provider 返回的真实失败原因，否则兜底
                     fail_reason = image_error or "No result from provider"
                     await _update_task_status(task.id, "failed", error=fail_reason)
@@ -263,9 +274,10 @@ async def _process_task(task: GenerationTask) -> None:
 async def _process_image(
     client, provider, task, model, base_url, headers,
     quality, ratio, size, n, refs,
-) -> tuple[str | None, str]:
-    """Call image generation API and return (cdn_url, error_reason)。
-    成功 -> (url, "")；失败 -> (None, reason)，reason 透传给上层写入 DB。"""
+) -> tuple[list[str], str]:
+    """Call image generation API and return (cdn_urls, error_reason)。
+    成功 -> (urls[], "")；失败 -> ([], reason)，reason 透传给上层写入 DB。
+    支持一次返回多张图：urls 为结果 URL 列表。"""
     body = provider.build_image_body(model, task.prompt, n, ratio, size, quality, refs or None)
     suffix = (
         provider.image_edit_endpoint
@@ -279,19 +291,23 @@ async def _process_image(
     try:
         data = await _post_with_retry(client, endpoint, body, headers, task.id)
 
-        result_url, raw_bytes = provider.extract_image(data)
-        if result_url:
-            logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms")
-            return result_url, ""
+        urls, raw_bytes = provider.extract_image(data)
+        if urls:
+            logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms urls={len(urls)}")
+            return urls, ""
 
-        # provider 返回 b64 -> 解码后直落本地存储
+        # provider 返回 b64 -> 解码后直落本地存储（可能多张）
         if raw_bytes:
-            local_url = await save_upload_bytes(user_id=task.user_id, content=raw_bytes, category="generated", ext="png")
-            if local_url:
-                logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms (b64)")
-                return local_url, ""
+            local_urls: list[str] = []
+            for rb in raw_bytes:
+                lu = await save_upload_bytes(user_id=task.user_id, content=rb, category="generated", ext="png")
+                if lu:
+                    local_urls.append(lu)
+            if local_urls:
+                logger.info(f"image done task={task.id} took={int((time.perf_counter()-t0)*1000)}ms (b64) urls={len(local_urls)}")
+                return local_urls, ""
             logger.error(f"image base64 upload failed task={task.id}")
-            return None, "结果图片本地存储失败"
+            return [], "结果图片本地存储失败"
 
         # 异步任务模式：提交后没有立即返回图片，走轮询
         task_id = provider.extract_image_task_id(data) if is_async_provider(provider) else None
@@ -320,9 +336,14 @@ async def _process_image(
                         poll_failed_reason = reason or "上游任务执行失败"
                         logger.warning(f"image async failed task={task.id} task_id={task_id} reason={reason}")
                         break
-                    if result:
+                    if isinstance(result, list):
+                        if result:
+                            logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt} urls={len(result)}")
+                            return result, ""
+                    elif result:
+                        # 单 URL 兜底（理论上已是 list，这里防御性包裹）
                         logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt}")
-                        return result, ""
+                        return [result], ""
                     # pending：每 5 次记一次进度，方便判断任务是否在推进
                     if attempt % 5 == 0:
                         payload = poll_data.get("data") if isinstance(poll_data, dict) and isinstance(poll_data.get("data"), dict) else poll_data
@@ -335,12 +356,12 @@ async def _process_image(
             # 轮询结束仍未出图：优先用已捕获的失败原因，否则是超时
             if poll_failed_reason:
                 logger.warning(f"image async failed task={task.id} task_id={task_id}")
-                return None, poll_failed_reason
+                return [], poll_failed_reason
             logger.warning(f"image async timeout task={task.id} task_id={task_id}")
-            return None, f"异步生图超时（task_id={task_id}）"
+            return [], f"异步生图超时（task_id={task_id}）"
 
         logger.warning(f"image no result task={task.id} data_keys={list(data.keys())}")
-        return None, "provider 未返回图片结果"
+        return [], "provider 未返回图片结果"
     except asyncio.TimeoutError:
         # 超时上下文由 _process_task 的 TimeoutError 分支统一记录，这里不重复
         raise
@@ -499,7 +520,7 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
             ext="png",
         )
         if local_url:
-            await _update_task_status(task.id, "completed", result_url=local_url)
+            # 不在此自标完成：交由 _process_task 统一写入 result_urls 列表
             return local_url
 
         await _update_task_status(task.id, "failed", error="Failed to save processed image")
@@ -514,11 +535,11 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         return None
 
 
-async def _update_task_status(task_id: str, status: str, *, result_url: str | None = None, error: str | None = None) -> None:
+async def _update_task_status(task_id: str, status: str, *, result_urls: list[str] | None = None, error: str | None = None) -> None:
     """Update task status. Skips if task was cancelled (don't overwrite cancel)."""
     async with async_session() as db:
         await crud_task.update_task_status(
-            db, task_id, status, result_url=result_url, error=error
+            db, task_id, status, result_urls=result_urls, error=error
         )
 
 

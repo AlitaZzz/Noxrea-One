@@ -23,6 +23,7 @@ class TaskOut(BaseModel):
     prompt: str
     config: dict
     ref_urls: Optional[list[str]] = None
+    result_urls: Optional[list[str]] = None
     result_url: Optional[str] = None
     error: Optional[str] = None
     node_id: str
