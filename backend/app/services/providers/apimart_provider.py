@@ -51,16 +51,14 @@ class ApimartProvider(ProviderConfig):
             return inner if isinstance(inner, (dict, list)) else data
         return data if isinstance(data, (dict, list)) else None
 
-    def _first_url(self, url_value: Any) -> Optional[str]:
-        """url 字段可能是字符串或数组，统一取第一个有效值。"""
-        if isinstance(url_value, list):
-            for u in url_value:
-                if isinstance(u, str) and u:
-                    return u
-            return None
-        if isinstance(url_value, str) and url_value:
-            return url_value
-        return None
+    def _all_urls(self, url_value: Any) -> list[str]:
+        """url 字段可能是字符串或数组，返回其中所有有效 URL（保序去重）。"""
+        out: list[str] = []
+        items = url_value if isinstance(url_value, list) else [url_value]
+        for u in items:
+            if isinstance(u, str) and u and u not in out:
+                out.append(u)
+        return out
 
     def extract_image(self, data: dict[str, Any]) -> tuple[list[str], list[bytes]]:
         """同步兜底：极少情况下 APIMart 直接返回图片。返回 ([],[]) 触发异步轮询。"""
@@ -75,9 +73,9 @@ class ApimartProvider(ProviderConfig):
         for item in items:
             if not isinstance(item, dict):
                 continue
-            url = self._first_url(item.get("url"))
-            if url:
-                urls.append(url)
+            found = self._all_urls(item.get("url"))
+            if found:
+                urls.extend(found)
                 continue
             b64 = item.get("b64_json")
             if b64:
@@ -113,18 +111,14 @@ class ApimartProvider(ProviderConfig):
             if isinstance(result, dict):
                 for img in (result.get("images") or []):
                     if isinstance(img, dict):
-                        url = self._first_url(img.get("url"))
-                        if url:
-                            urls.append(url)
+                        urls.extend(self._all_urls(img.get("url")))
             # 兜底：其他常见结构（output_images / images / output / data[]）
             for key in ("output_images", "images", "output", "data"):
                 items = payload.get(key)
                 if isinstance(items, list):
                     for it in items:
                         if isinstance(it, dict):
-                            url = self._first_url(it.get("url"))
-                            if url:
-                                urls.append(url)
+                            urls.extend(self._all_urls(it.get("url")))
                         elif isinstance(it, str) and it:
                             urls.append(it)
             if urls:

@@ -121,14 +121,13 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       });
                       const t = useI18nStore.getState().t;
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
-                      // 多图结果：把全部结果 URL 写入节点，由 ImageNode 以「堆叠卡片 / 展开网格」模式展示
-                      if (completedUrls.length >= 2) {
-                        useCanvasStore.getState().updateNodeData(nodeId, {
-                          multiResultUrls: completedUrls,
-                          multiResultTotalCount: completedUrls.length,
-                        }, undefined, { skipHistory: true });
-                        markDirtyImmediate();
-                      }
+                      // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
+                      // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
+                      useCanvasStore.getState().updateNodeData(nodeId, {
+                        multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,
+                        multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
+                      }, undefined, { skipHistory: true });
+                      markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 15 });
