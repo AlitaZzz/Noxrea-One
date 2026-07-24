@@ -35,7 +35,7 @@ class ApimartProvider(ProviderConfig):
         body: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
-            "n": 1,
+            "n": n,
             "size": ratio,                          # 比例，如 "1:1"
             "resolution": (size or "1K").lower(),   # 档位，如 "2k"
             "official_fallback": False,
