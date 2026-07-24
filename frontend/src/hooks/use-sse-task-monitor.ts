@@ -121,31 +121,13 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       });
                       const t = useI18nStore.getState().t;
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
-                      // 多图：首张以外的图各自创建新节点（向右错开排列）
-                      if (completedUrls.length > 1) {
-                        const { createNodeFromUrl } = await import("@/lib/image-utils");
-                        for (let i = 1; i < completedUrls.length; i++) {
-                          const extraUrl = completedUrls[i];
-                          const pos = {
-                            x: (cur.position.x || 0) + (defW + 60) * i,
-                            y: cur.position.y || 0,
-                          };
-                          const extra = await createNodeFromUrl(
-                            nodeId, extraUrl, defW, defH, ` (${i + 1})`,
-                            undefined, pos,
-                          );
-                          if (extra) {
-                            loadMediaDimensions(extraUrl, isVideoNode).then((dims) => {
-                              if (dims.w > 0) {
-                                const { width, height } = computeNodeSize(dims.w, dims.h);
-                                useCanvasStore.getState().updateNodeData(extra.id, {
-                                  naturalWidth: dims.w, naturalHeight: dims.h,
-                                }, { width, height }, { skipHistory: true });
-                                markDirtyImmediate();
-                              }
-                            });
-                          }
-                        }
+                      // 多图结果：把全部结果 URL 写入节点，由 ImageNode 以「堆叠卡片 / 展开网格」模式展示
+                      if (completedUrls.length >= 2) {
+                        useCanvasStore.getState().updateNodeData(nodeId, {
+                          multiResultUrls: completedUrls,
+                          multiResultTotalCount: completedUrls.length,
+                        }, undefined, { skipHistory: true });
+                        markDirtyImmediate();
                       }
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);

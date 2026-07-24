@@ -103,6 +103,10 @@ export type ImageNodeData = {
   taskBinding?: TaskBinding;
   upload?: UploadState;
   genSettings?: GenSettings;
+  /** 多图结果：所有结果图的 URL 列表（children）。存在且长度>=2 时，节点以「堆叠卡片/展开网格」模式展示 */
+  multiResultUrls?: string[];
+  /** 多图结果：生成总张数（用于角标，缺省回退到 multiResultUrls.length） */
+  multiResultTotalCount?: number;
 };
 
 export type VideoNodeData = {
