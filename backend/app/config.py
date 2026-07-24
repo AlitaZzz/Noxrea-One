@@ -62,6 +62,37 @@ class Settings(BaseSettings):
     # Upload
     MAX_UPLOAD_SIZE_MB: int = 30  # 单文件上传上限（MB），超限返回 413
 
+    # ── 场景化 HTTP 超时（秒）：不同场景用不同预设，替代一刀切全局超时 ──
+    # 1. 下载/CDN
+    HTTP_DL_CONNECT: float = 15       # CDN 建连给更多时间
+    HTTP_DL_READ: float = 30         # read 放短，总兜底由 asyncio.wait_for 控制
+    HTTP_DL_WRITE: float = 10
+    HTTP_DL_POOL: float = 10
+
+    # 2. 异步轮询（GET /v1/tasks/{id}）：极短超时，轮询失败快速重试
+    HTTP_POLL_CONNECT: float = 5
+    HTTP_POLL_READ: float = 10
+    HTTP_POLL_WRITE: float = 10
+    HTTP_POLL_POOL: float = 5
+
+    # 3. 同步普通 API（/models, /chat/completions）
+    HTTP_API_CONNECT: float = 10
+    HTTP_API_READ: float = 120       # 聊天/模型列表可能较慢
+    HTTP_API_WRITE: float = 30
+    HTTP_API_POOL: float = 10
+
+    # 4. 异步创建任务（POST /v1/images/generations）——只发请求不等出图
+    HTTP_ASYNC_CONNECT: float = 10
+    HTTP_ASYNC_READ: float = 30
+    HTTP_ASYNC_WRITE: float = 30
+    HTTP_ASYNC_POOL: float = 10
+
+    # 5. AI 生图/生视频（同步）的 read 仍沿用 WORKER_API_TIMEOUT (240s)，不做额外配置
+    #    推理服务的总超时仍沿用 HTTP_TIMEOUT_INFERENCE (300s)，不做额外配置
+
+    # 6. 推理服务（bg_removal 等）：本地推理较慢，总耗时硬上限
+    HTTP_TIMEOUT_INFERENCE: float = 300
+
     # Inference Service (background removal, etc.)
     INFERENCE_SERVICE_URL: str = "http://localhost:8100"
     INFERENCE_SERVICE_API_KEY: str = ""

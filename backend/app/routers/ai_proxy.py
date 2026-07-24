@@ -22,6 +22,7 @@ from app.deps import get_current_user, get_db
 from app.schemas.common import UnifiedResponse
 from app.services.ssrf import resolve_and_validate, dns_pin
 from app.services.model_capabilities import infer_capabilities, load_records, load_whitelist
+from app.services.http import TIMEOUT_API
 from app.crud import model_config as crud_model_config
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ async def chat_completions(
 
     with dns_pin(hostname, ip, port):
         async with httpx.AsyncClient(
-            timeout=60,
+            timeout=TIMEOUT_API,
             follow_redirects=False,
         ) as client:
             try:
@@ -117,7 +118,7 @@ async def models_list(
 
     with dns_pin(hostname, ip, port):
         async with httpx.AsyncClient(
-            timeout=30,
+            timeout=TIMEOUT_API,
             follow_redirects=False,
         ) as client:
             try:

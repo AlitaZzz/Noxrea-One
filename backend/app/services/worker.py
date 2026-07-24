@@ -4,6 +4,7 @@ Background worker that processes generation tasks from the queue.
 
 import asyncio
 import base64
+import json
 import logging
 import os
 import time
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.crud import task as crud_task
 from app.database import async_session
+from app.services.http import HTTPX_TIMEOUT, TIMEOUT_DOWNLOAD, TIMEOUT_POLL, TIMEOUT_AI_GENERATE, TIMEOUT_INFERENCE
 from app.services.storage import save_upload_bytes
 
 logger = logging.getLogger(__name__)
@@ -140,7 +142,7 @@ async def _resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
                 resolved.append(url)
                 continue
             try:
-                async with httpx.AsyncClient(timeout=30) as client:
+                async with httpx.AsyncClient(timeout=TIMEOUT_DOWNLOAD) as client:
                     with dns_pin(hostname, ip, port):
                         resp = await client.get(url)
                 if resp.is_success:
@@ -211,7 +213,7 @@ async def _process_task(task: GenerationTask) -> None:
     # dns_pin 是同步上下文管理器（@contextmanager），用 with；httpx 用 async with
     pin_ctx = dns_pin(hostname, ip, port) if hostname else _nullcontext()
     with pin_ctx:
-        async with httpx.AsyncClient(timeout=API_TIMEOUT_SEC) as client:
+        async with httpx.AsyncClient(timeout=TIMEOUT_AI_GENERATE) as client:
             try:
                 logger.info(f"processing task={task.id} type={task.type}")
                 if task.type == "image":
@@ -246,12 +248,7 @@ async def _process_task(task: GenerationTask) -> None:
                         local = await download_and_save(u, task.user_id, task.type, task_id=task.id)
                         if local:
                             local_urls.append(local)
-                    # DEBUG: 追加测试多图 URL（开发环境用，模拟上游返回多张结果）
-                    local_urls.extend([
-                        "http://localhost:8000/api/files/1/7f/7f43023e55509bc70bbbb11b99ed8142df2b8590bd5c406d3a8300b89151a0b4.jpg",
-                        "http://localhost:8000/api/files/1/dc/dc384da231088bf70e7cf83eff496da94f73bc3aa500ea5d6317770bb9228890.png",
-                        "http://localhost:8000/api/files/1/34/34ccba4c1f1800bdf171e6d4a039571d6f62a68daad6aaa03ac16fa622f7ebda.png",
-                    ])
+
                     if local_urls:
                         await _update_task_status(task.id, "completed", result_urls=local_urls)
                         logger.info(f"completed task={task.id} urls={len(local_urls)}")
@@ -261,7 +258,7 @@ async def _process_task(task: GenerationTask) -> None:
                             task.id, "failed",
                             error=f"结果下载或本地存储失败，原始 url: {result_urls[0][:120]}",
                         )
-                        logger.warning(f"download failed task={task.id} url={result_urls[0][:60]}")
+                        logger.warning(f"download failed task={task.id} url={result_urls[0]}")
                 elif not already_handled:
                     # 优先透传 provider 返回的真实失败原因，否则兜底
                     fail_reason = image_error or "No result from provider"
@@ -292,7 +289,13 @@ async def _process_image(
     )
     endpoint = build_endpoint(base_url, suffix)
 
-    logger.info(f"image request task={task.id} endpoint={endpoint} model={model} n={n}")
+    log_body = dict(body)
+    if "prompt" in log_body and len(log_body["prompt"]) > 50:
+        log_body["prompt"] = log_body["prompt"][:50] + "..."
+    if "image_urls" in log_body:
+        log_body["image_urls"] = f"{len(log_body['image_urls'])}张参考图"
+
+    logger.info(f"image request task={task.id} endpoint={endpoint} body={json.dumps(log_body, ensure_ascii=False)}")
     t0 = time.perf_counter()
     try:
         data = await _post_with_retry(client, endpoint, body, headers, task.id)
@@ -326,10 +329,11 @@ async def _process_image(
                 logger.info(f"image async initial delay task={task.id} wait={initial_delay}s")
                 await asyncio.sleep(initial_delay)
             poll_failed_reason = ""
+            logger.info(f"image start poll task={task.id} task_id={task_id} max_attempts={provider.max_poll_attempts} interval={provider.poll_interval}ms")
             for attempt in range(provider.max_poll_attempts):
                 await asyncio.sleep(provider.poll_interval / 1000)
                 try:
-                    poll_resp = await client.get(poll_url, headers=headers)
+                    poll_resp = await client.get(poll_url, headers=headers, timeout=TIMEOUT_POLL)
                     if not poll_resp.is_success:
                         logger.warning(f"image poll bad status task={task.id} attempt={attempt} status={poll_resp.status_code} task_id={task_id}")
                         continue
@@ -350,12 +354,6 @@ async def _process_image(
                         # 单 URL 兜底（理论上已是 list，这里防御性包裹）
                         logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt}")
                         return [result], ""
-                    # pending：每 5 次记一次进度，方便判断任务是否在推进
-                    if attempt % 5 == 0:
-                        payload = poll_data.get("data") if isinstance(poll_data, dict) and isinstance(poll_data.get("data"), dict) else poll_data
-                        pstatus = str(payload.get("status") or payload.get("task_status") or "") if isinstance(payload, dict) else ""
-                        progress = payload.get("progress") if isinstance(payload, dict) else None
-                        logger.info(f"image polling task={task.id} attempt={attempt} status={pstatus} progress={progress} task_id={task_id}")
                 except Exception as e:
                     logger.warning(f"image poll error task={task.id} attempt={attempt} err={str(e)[:80]}")
                     continue
@@ -398,7 +396,7 @@ async def _process_video(
     poll_url = provider.build_poll_url(api_base, video_id)
     for _ in range(provider.max_poll_attempts):
         await asyncio.sleep(provider.poll_interval / 1000)
-        poll_resp = await client.get(poll_url, headers=headers)
+        poll_resp = await client.get(poll_url, headers=headers, timeout=TIMEOUT_POLL)
         if not poll_resp.is_success:
             continue
         poll_data = poll_resp.json()
@@ -475,9 +473,12 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         if src_bytes is None and is_allowed_ref_host(source_url):
             try:
                 ip, hostname, scheme, port = _validate_worker(source_url)
-                async with httpx.AsyncClient(timeout=60) as client:
+                async with httpx.AsyncClient(timeout=TIMEOUT_DOWNLOAD) as client:
                     with dns_pin(hostname, ip, port):
-                        src_resp = await client.get(source_url)
+                        src_resp = await asyncio.wait_for(
+                            client.get(source_url),
+                            timeout=app_settings.HTTP_DL_READ,
+                        )
                 if src_resp.is_success:
                     src_bytes = src_resp.content
                 else:
@@ -500,11 +501,14 @@ async def _process_bg_removal(task: GenerationTask) -> str | None:
         inference_url = app_settings.INFERENCE_SERVICE_URL.rstrip("/") + "/process/bg-removal"
         api_key = app_settings.INFERENCE_SERVICE_API_KEY
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=TIMEOUT_INFERENCE) as client:
             headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
             files = {"file": ("input.png", src_bytes, "image/png")}
             data = {"model": "rembg"}
-            resp = await client.post(inference_url, files=files, data=data, headers=headers)
+            resp = await asyncio.wait_for(
+                client.post(inference_url, files=files, data=data, headers=headers),
+                timeout=app_settings.HTTP_TIMEOUT_INFERENCE,
+            )
 
             if not resp.is_success:
                 err_detail = f"Inference service returned HTTP {resp.status_code}"
