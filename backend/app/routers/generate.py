@@ -134,6 +134,7 @@ async def stream_task(
                     "type": "status",
                     "task_id": task_id,
                     "status": status,
+                    "result_urls": task.result_urls or ([task.result_url] if task.result_url else []),
                     "result_url": task.result_url,
                     "error": task.error,
                     "config": task.config,

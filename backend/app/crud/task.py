@@ -111,13 +111,15 @@ async def update_task_status(
     task_id: str,
     status: str,
     *,
-    result_url: str | None = None,
+    result_urls: list[str] | None = None,
     error: str | None = None,
 ) -> None:
     """更新任务状态。
 
     取消保护：任务已为 failed（被取消）时，completed 不会被覆盖，
     避免取消后的任务被误标为完成。
+
+    result_urls 为结果 URL 列表；result_url 作为兼容镜像保留（= 列表首张）。
     """
     now = datetime.now(timezone.utc)
     if status == "completed":
@@ -132,7 +134,8 @@ async def update_task_status(
         .values(
             status=status,
             updated_at=now,
-            result_url=result_url or "",
+            result_urls=result_urls or None,
+            result_url=(result_urls[0] if result_urls else ""),
             error=error or "",
         )
     )

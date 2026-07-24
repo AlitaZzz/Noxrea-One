@@ -40,7 +40,7 @@ async def test_process_image_task_no_context_manager_error(monkeypatch):
 
     # mock provider 调用链：_process_image 返回一个 cdn url
     async def fake_process_image(*a, **kw):
-        return "https://cdn.example.com/x.png"
+        return ["https://cdn.example.com/x.png"], ""
 
     monkeypatch.setattr(worker, "_process_image", fake_process_image)
 
@@ -59,7 +59,7 @@ async def test_process_image_task_no_context_manager_error(monkeypatch):
     monkeypatch.setattr(worker, "_update_task_status", fake_update)
 
     # mock _resolve_refs
-    async def fake_refs(urls):
+    async def fake_refs(urls, user_id):
         return urls or []
 
     monkeypatch.setattr(worker, "_resolve_refs", fake_refs)
@@ -91,7 +91,7 @@ async def test_process_bg_removal_task_no_context_manager_error(monkeypatch):
 
     monkeypatch.setattr(worker, "_update_task_status", fake_update)
 
-    async def fake_refs(urls):
+    async def fake_refs(urls, user_id):
         return urls or []
 
     monkeypatch.setattr(worker, "_resolve_refs", fake_refs)
@@ -117,7 +117,7 @@ async def test_image_failure_logs_error_once(monkeypatch, caplog):
     import app.crud.model_config as crud_mc
     monkeypatch.setattr(crud_mc, "get_channel", fake_get_channel)
 
-    async def fake_refs(urls):
+    async def fake_refs(urls, user_id):
         return urls or []
 
     monkeypatch.setattr(worker, "_resolve_refs", fake_refs)
@@ -166,7 +166,7 @@ async def test_download_failure_marks_task_failed(monkeypatch):
     monkeypatch.setattr(crud_mc, "get_channel", fake_get_channel)
 
     async def fake_process_image(*a, **kw):
-        return "https://cdn.example.com/x.png"  # provider 返回外链
+        return ["https://cdn.example.com/x.png"], ""  # provider 返回外链
 
     monkeypatch.setattr(worker, "_process_image", fake_process_image)
 
@@ -176,7 +176,7 @@ async def test_download_failure_marks_task_failed(monkeypatch):
 
     monkeypatch.setattr(worker, "download_and_save", fake_download)
 
-    async def fake_refs(urls):
+    async def fake_refs(urls, user_id):
         return urls or []
 
     monkeypatch.setattr(worker, "_resolve_refs", fake_refs)

@@ -62,9 +62,11 @@ class ApimartProvider(ProviderConfig):
             return url_value
         return None
 
-    def extract_image(self, data: dict[str, Any]) -> tuple[Optional[str], Optional[bytes]]:
-        """同步兜底：极少情况下 APIMart 直接返回图片。返回 (None,None) 触发异步轮询。"""
+    def extract_image(self, data: dict[str, Any]) -> tuple[list[str], list[bytes]]:
+        """同步兜底：极少情况下 APIMart 直接返回图片。返回 ([],[]) 触发异步轮询。"""
         payload = self._unwrap(data)
+        urls: list[str] = []
+        raw_list: list[bytes] = []
         items = []
         if isinstance(payload, list):
             items = payload
@@ -75,11 +77,12 @@ class ApimartProvider(ProviderConfig):
                 continue
             url = self._first_url(item.get("url"))
             if url:
-                return url, None
+                urls.append(url)
+                continue
             b64 = item.get("b64_json")
             if b64:
-                return None, base64.b64decode(b64)
-        return None, None
+                raw_list.append(base64.b64decode(b64))
+        return urls, raw_list
 
     def extract_image_task_id(self, data: dict[str, Any]) -> Optional[str]:
         payload = self._unwrap(data)
@@ -94,7 +97,8 @@ class ApimartProvider(ProviderConfig):
         # baseUrl = https://api.apimart.ai/v1 -> /v1/tasks/{id}
         return f"{base_url}/tasks/{task_id}"
 
-    def extract_image_poll_result(self, data: dict[str, Any]) -> Optional[str]:
+    def extract_image_poll_result(self, data: dict[str, Any]) -> Union[list[str], str, None]:
+        """轮询成功返回 url 列表（支持多张）；失败返回 '__FAILED__'；仍在处理返回 None。"""
         payload = self._unwrap(data)
         if not isinstance(payload, dict):
             return None
@@ -102,6 +106,7 @@ class ApimartProvider(ProviderConfig):
         if isinstance(data, dict) and isinstance(data.get("error"), dict):
             return "__FAILED__"
         status = str(payload.get("status") or payload.get("task_status") or "").upper()
+        urls: list[str] = []
         if status in {"SUCCESS", "SUCCEEDED", "SUCCEED", "COMPLETED"}:
             # 首选路径：result.images[].url[]（url 可能是数组或字符串）
             result = payload.get("result") or {}
@@ -110,18 +115,20 @@ class ApimartProvider(ProviderConfig):
                     if isinstance(img, dict):
                         url = self._first_url(img.get("url"))
                         if url:
-                            return url
+                            urls.append(url)
             # 兜底：其他常见结构（output_images / images / output / data[]）
             for key in ("output_images", "images", "output", "data"):
                 items = payload.get(key)
-                if isinstance(items, list) and items:
-                    first = items[0]
-                    if isinstance(first, dict):
-                        url = self._first_url(first.get("url"))
-                        if url:
-                            return url
-                    elif isinstance(first, str) and first:
-                        return first
+                if isinstance(items, list):
+                    for it in items:
+                        if isinstance(it, dict):
+                            url = self._first_url(it.get("url"))
+                            if url:
+                                urls.append(url)
+                        elif isinstance(it, str) and it:
+                            urls.append(it)
+            if urls:
+                return urls
         if status in {"FAILED", "FAIL", "ERROR", "TIMEOUT"}:
             return "__FAILED__"
         return None  # still pending

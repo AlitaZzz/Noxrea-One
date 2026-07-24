@@ -70,7 +70,7 @@ async def test_update_status_cancelled_not_overwritten(db):
     await crud_task.create_task(db, "c", 1, "image", "p", CONFIG, None, "node1", now)
     await crud_task.update_task_status(db, "c", "failed", error="Cancelled")
     # provider 完成回调不应覆盖已取消状态
-    await crud_task.update_task_status(db, "c", "completed", result_url="http://x/y.png")
+    await crud_task.update_task_status(db, "c", "completed", result_urls=["http://x/y.png"])
     final = await crud_task.get_task(db, "c")
     assert final.status == "failed"
     assert final.error == "Cancelled"
@@ -81,9 +81,10 @@ async def test_update_status_completes_when_pending(db):
     """pending 任务可被正常标为 completed 并写入 result_url。"""
     now = datetime.now(timezone.utc)
     await crud_task.create_task(db, "d", 1, "image", "p", CONFIG, None, "node1", now)
-    await crud_task.update_task_status(db, "d", "completed", result_url="http://x/y.png")
+    await crud_task.update_task_status(db, "d", "completed", result_urls=["http://x/y.png"])
     final = await crud_task.get_task(db, "d")
     assert final.status == "completed"
+    assert final.result_urls == ["http://x/y.png"]
     assert final.result_url == "http://x/y.png"
 
 
@@ -143,13 +144,13 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
         # 到达真实处理函数时，ref_urls 必须是 list（而非 str）
         seen["ref_urls"] = t.ref_urls
         await worker._update_task_status(
-            t.id, "completed", result_url="http://testserver/api/files/1/gen/r.png"
+            t.id, "completed", result_urls=["http://testserver/api/files/1/gen/r.png"]
         )
         return "http://testserver/api/files/1/gen/r.png"
 
     monkeypatch.setattr(worker, "_process_bg_removal", fake_bg)
     monkeypatch.setattr(worker, "download_and_save",
-                        lambda url, user_id, typ: _await(url))
+                        lambda url, user_id, typ, task_id="": _await(url))
 
     await worker._process_task(task)
 
