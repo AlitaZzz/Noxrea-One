@@ -46,8 +46,8 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
       </div>
 
       {/* Body */}
-      <div className={`flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-        ${selected ? "outline outline-1 outline-white/30 shadow-lg" : "outline outline-1 outline-white/10"}`}
+      <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
+        ${selected ? "node-selected" : ""}`}
         style={{ background: "var(--canvas-bg)" }}>
         <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
           <PartitionOutlined className="text-5xl" />

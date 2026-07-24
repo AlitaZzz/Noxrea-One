@@ -2,10 +2,11 @@
 
 import {
   DownloadOutlined,
+  FullscreenOutlined,
   FileImageOutlined,
   PictureOutlined,
   ScissorOutlined,
-  StarOutlined,
+  CrownOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
@@ -20,7 +21,7 @@ import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH, } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
-import { canvasToBlob,computeNodeSize, computeThumbScale, createNodeFromUrl, uploadBlob } from "@/lib/image-utils";
+import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/image-utils";
 import {
   EMPTY_UPLOAD_STATE,
   type ImageNode as ImageNodeType,
@@ -39,6 +40,23 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  // 点击节点外部时收起展开视图（捕获阶段，绕过 ReactFlow 事件拦截）
+  useEffect(() => {
+    if (!expanded) return;
+    const handler = (e: MouseEvent) => {
+      if (nodeRef.current && !nodeRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener("mousedown", handler, true);
+    return () => document.removeEventListener("mousedown", handler, true);
+  }, [expanded]);
+
+  // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
+  const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
 
   // Resync local src when data.src changes externally (e.g. from undo/clear),
   // adjusted during render (not in an effect) to avoid cascading renders.
@@ -102,17 +120,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     [id, data]
   );
 
-  const handleReplace = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) handleFile(file);
-    };
-    input.click();
-  }, [handleFile]);
-
   const handleDownload = useCallback(async () => {
     if (!src) return;
     try {
@@ -130,6 +137,53 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       }
     } catch {}
   }, [src, data.alt]);
+
+  /** 多图模式：下载指定 URL 的结果图 */
+  const handleDownloadUrl = useCallback(async (url: string) => {
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = data.alt || "image.png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch {}
+  }, [data.alt]);
+
+  /** 多图模式：把某张结果图设为主图（更新 src 与真实尺寸，并收起网格） */
+  const handleSetMain = useCallback((url: string) => {
+    if (!url) return;
+    const store = useCanvasStore.getState();
+    store.updateNodeData(id, { src: url }, undefined, { skipHistory: true });
+    markDirtyImmediate();
+    const node = store.nodes.find((n) => n.id === id);
+    const d = node?.data as ImageNodeData | undefined;
+    const { width, height } = computeNodeSize(d?.naturalWidth || 1024, d?.naturalHeight || 1024);
+    store.updateNodeData(id, {}, { width, height }, { skipHistory: true });
+    markDirtyImmediate();
+    setExpanded(false);
+    loadMediaDimensions(url, false).then((dims) => {
+      if (dims.w > 0) {
+        const s = useCanvasStore.getState();
+        s.updateNodeData(id, { naturalWidth: dims.w, naturalHeight: dims.h }, undefined, { skipHistory: true });
+        const { width: w2, height: h2 } = computeNodeSize(dims.w, dims.h);
+        s.updateNodeData(id, {}, { width: w2, height: h2 }, { skipHistory: true });
+        markDirtyImmediate();
+      }
+    });
+  }, [id]);
+
+  /** 多图模式：展开/收起——浮层展示，节点尺寸不变 */
+  const toggleExpand = useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
 
   const addAsset = useAssetsStore((s) => s.addAsset);
 
@@ -279,10 +333,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
-  }, [handleDownload, handleSaveToAssets, handleReplace, handleClear, handleTransform, handleGridSplit, handleBgRemoval]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
+  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -292,7 +346,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
         case "crop-interactive": setCropOpen(true); break;
-        case "replace": a.handleReplace(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
@@ -320,7 +373,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   return (
     <>
-    <div className="group relative w-full h-full flex flex-col">
+    <div ref={nodeRef} className="group relative w-full h-full flex flex-col">
       {/* Title */}
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
         {editingTitle ? (
@@ -352,9 +405,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       {/* Body */}
       <div
         className={`
-          flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-          ${selected ? "outline outline-1 outline-white/30 shadow-lg" : "outline outline-1 outline-white/10"}
-          ${isDragOver ? "outline-2 outline-white/50" : ""}
+          node-body flex-1 flex items-center justify-center rounded-lg relative group/body
+          ${isMulti ? "overflow-visible" : "overflow-hidden"}
+          ${selected ? "node-selected" : ""}
+          ${isDragOver ? "node-drag-over" : ""}
         `}
         style={{ background: hasImage ? "transparent" : "var(--canvas-bg, #262626)" }}
         onDragOver={handleDragOver}
@@ -362,6 +416,18 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         onDrop={handleDrop}
         ref={dropRef}
       >
+        {isMulti && !expanded && (
+          <div className="absolute top-2 right-2 z-20 nodrag">
+            <Tooltip title={t("expand")}>
+              <button
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+                onClick={toggleExpand}
+              >
+                <FullscreenOutlined style={{ fontSize: 12 }} />
+              </button>
+            </Tooltip>
+          </div>
+        )}
         {data.upload?.uploading ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 px-8" style={{ background: "var(--canvas-bg)" }}>
             {data.upload?.progress != null ? (
@@ -380,27 +446,141 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-white/50">{t("generating")}</span>
           </div>
-        ) : hasImage ? (
-          <>
-            <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
-            {/* 替换按钮 — hover 时显示在内容右上角 */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover/body:opacity-100 transition-opacity z-10 nodrag">
-              <Tooltip title={t("replace")}>
-                <button
-                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
-                  onClick={handleReplace}
+        ) : isMulti && hasImage ? (
+            expanded ? (
+              // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界
+              (() => {
+                const urls = data.multiResultUrls!;
+                const GAP = 8;
+                let remainingIdx = 0;
+                return (
+                  <div className="absolute inset-0 overflow-visible">
+                    {urls.map((url, i) => {
+                      const isMain = url === src;
+                      let left: string, top: string, z: number;
+                      if (isMain) {
+                        left = "0px"; top = "0px"; z = 0;
+                      } else {
+                        const ri = remainingIdx++;
+                        const col = (ri + 1) % 2;
+                        const row = -Math.floor((ri + 1) / 2);
+                        left = col > 0 ? `calc(100% + ${GAP}px)` : "0px";
+                        top = `calc(${row * 100}% + ${row * GAP}px)`;
+                        z = -1;
+                      }
+                      return (
+                        <div
+                          key={i}
+                          className="absolute rounded-lg overflow-hidden border border-white/15 shadow-xl"
+                          style={{
+                            left,
+                            top,
+                            width: "100%",
+                            height: "100%",
+                            zIndex: z,
+                            background: "#262626",
+                          }}
+                        >
+                          <img src={url} alt={`${i + 1}`} className="w-full h-full object-cover" draggable={false} />
+                          {/* 操作按钮 */}
+                          <div className="absolute top-1 right-1 flex gap-1 z-10 nodrag">
+                            <Tooltip title={t("download")}>
+                              <button
+                                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                onClick={() => handleDownloadUrl(url)}
+                              >
+                                <DownloadOutlined style={{ fontSize: 13 }} />
+                              </button>
+                            </Tooltip>
+                            {!isMain && (
+                              <Tooltip title={t("set.as.main")}>
+                                <button
+                                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                  onClick={() => handleSetMain(url)}
+                                >
+                                  <CrownOutlined style={{ fontSize: 13 }} />
+                                </button>
+                              </Tooltip>
+                            )}
+                            {isMain && (
+                              <Tooltip title={t("collapse")}>
+                                <button
+                                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                  onClick={toggleExpand}
+                                >
+                                  <FullscreenOutlined style={{ fontSize: 13 }} />
+                                </button>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()
+            ) : (
+              // 折叠堆叠卡片：排除当前主图，取最多 3 张作为背景卡
+              <div className="relative w-full h-full overflow-visible rounded-lg">
+                {data.multiResultUrls!.filter((u) => u !== src).slice(0, 3).map((url, i) => {
+                  const depth = i + 1;
+                  const left = depth * 12;
+                  const top = depth * 4;
+                  const scale = 1 - depth * 0.035;
+                  const rotate = depth * 2.5;
+                  return (
+                    <div
+                      key={i}
+                      className="absolute rounded-lg overflow-hidden shadow-xl border border-white/15"
+                      style={{
+                        left: `${left}px`,
+                        top: `${top}px`,
+                        width: "100%",
+                        height: "100%",
+                        transform: `scale(${scale}) rotate(${rotate}deg)`,
+                        transformOrigin: "center center",
+                        zIndex: -depth,
+                        background: "#262626",
+                      }}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+                    </div>
+                  );
+                })}
+                {/* 主卡：scale=1，在最上层，覆盖大部分面积 */}
+                <div
+                  className="absolute rounded-lg overflow-hidden shadow-2xl border border-white/15"
+                  style={{
+                    left: 0,
+                    top: 0,
+                    width: "100%",
+                    height: "100%",
+                    transform: "scale(1)",
+                    zIndex: 0,
+                  }}
                 >
-                  <UploadOutlined style={{ fontSize: 13 }} />
-                </button>
-              </Tooltip>
-            </div>
-          </>
+                  <img src={src} alt={data.alt || ""} className="w-full h-full object-cover" draggable={false} />
+                </div>
+              </div>
+            )
+          )
+        : hasImage ? (
+          <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <PictureOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.upload")}</span>
             <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={handleReplace}>
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "image/*";
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) handleFile(file);
+                };
+                input.click();
+              }}>
               <UploadOutlined className="text-lg" /> {t("upload")}
             </button>
           </div>

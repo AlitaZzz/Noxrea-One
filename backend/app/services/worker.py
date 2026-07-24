@@ -246,6 +246,12 @@ async def _process_task(task: GenerationTask) -> None:
                         local = await download_and_save(u, task.user_id, task.type, task_id=task.id)
                         if local:
                             local_urls.append(local)
+                    # DEBUG: 追加测试多图 URL（开发环境用，模拟上游返回多张结果）
+                    local_urls.extend([
+                        "http://localhost:8000/api/files/1/7f/7f43023e55509bc70bbbb11b99ed8142df2b8590bd5c406d3a8300b89151a0b4.jpg",
+                        "http://localhost:8000/api/files/1/dc/dc384da231088bf70e7cf83eff496da94f73bc3aa500ea5d6317770bb9228890.png",
+                        "http://localhost:8000/api/files/1/34/34ccba4c1f1800bdf171e6d4a039571d6f62a68daad6aaa03ac16fa622f7ebda.png",
+                    ])
                     if local_urls:
                         await _update_task_status(task.id, "completed", result_urls=local_urls)
                         logger.info(f"completed task={task.id} urls={len(local_urls)}")

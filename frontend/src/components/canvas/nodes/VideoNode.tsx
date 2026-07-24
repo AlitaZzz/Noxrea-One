@@ -176,17 +176,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     [id, data]
   );
 
-  const handleReplace = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "video/*";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) handleFile(file);
-    };
-    input.click();
-  }, [handleFile]);
-
   const handleDownload = useCallback(async () => {
     if (!src) return;
     try {
@@ -221,7 +210,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (detail.nodeId !== id) return;
       switch (detail.action) {
         case "download": handleDownload(); break;
-        case "replace": handleReplace(); break;
         case "clear": handleClear(); break;
         case "capture-frame": {
           const v = videoRef.current;
@@ -236,7 +224,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleReplace, handleClear, captureFrame]);
+  }, [id, handleDownload, handleClear, captureFrame]);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.alt || data.label || t("video.node"), { syncAlt: true });
@@ -274,9 +262,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
       <div
         className={`
-          flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-          ${selected ? "outline outline-1 outline-white/30 shadow-lg" : "outline outline-1 outline-white/10"}
-          ${isDragOver ? "outline-2 outline-white/50" : ""}
+          node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
+          ${selected ? "node-selected" : ""}
+          ${isDragOver ? "node-drag-over" : ""}
         `}
         style={{ background: hasVideo ? "transparent" : "var(--canvas-bg, #262626)" }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
@@ -322,17 +310,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               onEnded={() => setPlaying(false)}
               onContextMenu={(e) => e.preventDefault()}
             />
-            {/* 替换按钮 — hover 时显示在内容右上角 */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover/body:opacity-100 transition-opacity z-10 nodrag">
-              <Tooltip title={t("replace")}>
-                <button
-                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors"
-                  onClick={handleReplace}
-                >
-                  <UploadOutlined style={{ fontSize: 13 }} />
-                </button>
-              </Tooltip>
-            </div>
             {/* Controls bar */}
             <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex items-center gap-2 px-2 ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
               <button
@@ -417,7 +394,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <VideoCameraOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.video")}</span>
             <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={handleReplace}>
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "video/*";
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) handleFile(file);
+                };
+                input.click();
+              }}>
               <UploadOutlined className="text-lg" /> {t("upload")}
             </button>
           </div>

@@ -64,8 +64,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       {/* Body */}
       <div
         className={`
-          flex-1 flex flex-col overflow-hidden rounded-lg border
-          ${selected ? "border-white/30 shadow-lg" : "border-white/10"}
+          node-body flex-1 flex flex-col overflow-hidden rounded-lg
+          ${selected ? "node-selected" : ""}
         `}
         style={{ background: "var(--canvas-bg, #262626)" }}
       >

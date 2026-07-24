@@ -105,6 +105,18 @@
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
 
+/* Shared node body styles — selected / unselected border */
+.node-body {
+  outline: 1px solid rgba(255, 255, 255, 0.1);
+}
+.node-body.node-selected {
+  outline: 1px solid rgba(255, 255, 255, 1);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+.node-body.node-drag-over {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+}
+
 /* Group node: completely invisible container */
 .react-flow__node-group.react-flow__node,
 .react-flow__node-group.react-flow__node.selected {
@@ -137,6 +149,7 @@
 /* Base font size */
 body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease; }
 .react-flow__node { font-size: 14px; }
+.react-flow__node-image-node { overflow: visible !important; }
 .ant-btn-sm { font-size: 13px; }
 
 /* Button sizing (global) */
