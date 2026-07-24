@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     WORKER_STUCK_TIMEOUT: int = 20      # minutes before a processing task is considered stuck
     WORKER_ZOMBIE_INTERVAL: int = 60    # seconds between zombie cleanup checks
 
+    # 开发联调：mock 生图按前台设置的 n 返回对应张数测试图（跳过真实 AI 调用）；测试完毕请设回 false
+    MOCK_IMAGE_GENERATE: bool = False
+
     # Async polling (used by async providers like APIMart)
     WORKER_ASYNC_POLL_INTERVAL: float = 3.0          # seconds between polls
     WORKER_ASYNC_POLL_MAX_ATTEMPTS: int = 60         # max poll attempts (60 * 3s = 3min 上限)
