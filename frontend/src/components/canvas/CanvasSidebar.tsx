@@ -247,11 +247,9 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
 function CanvasElementsView() {
   const t = useI18nStore((s) => s.t);
   const nodes = useCanvasStore((s) => s.nodes);
-  const { getNodes } = useReactFlow();
 
   const selectedNodeIds = useMemo(
-    () => new Set(getNodes().filter((n) => n.selected).map((n) => n.id)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
     [nodes],
   );
 

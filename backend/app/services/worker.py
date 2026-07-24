@@ -348,7 +348,7 @@ async def _process_image(
                         break
                     if isinstance(result, list):
                         if result:
-                            logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt} urls={len(result)}")
+                            logger.info(f"image async done task={task.id} task_id={task_id} attempt={attempt} urls={len(result)} poll={json.dumps(poll_data, ensure_ascii=False)} req_n={body.get('n')}")
                             return result, ""
                     elif result:
                         # 单 URL 兜底（理论上已是 list，这里防御性包裹）
