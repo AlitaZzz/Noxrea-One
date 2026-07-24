@@ -14,13 +14,13 @@ import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUpload, BASE } from "@/lib/api";
+import { apiUploadWithProgress, BASE } from "@/lib/api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
 import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
 function formatTime(s: number): string {
@@ -140,13 +140,46 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("video/")) return;
+
+      // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
+      // 撤销/清除时整个 node.data 被替换，版本号自动失效，从而丢弃过期回调。
+      const uploadVersion = Date.now();
+      const store = useCanvasStore.getState();
+      const nodeBefore = store.nodes.find((n) => n.id === id);
+      if (nodeBefore) {
+        // 立即进入 uploading 状态，让节点进度条出现（与拖到画布路径一致）
+        store.updateNodeData(
+          id,
+          { upload: { uploading: true, progress: 0, version: uploadVersion } },
+          undefined,
+          { skipHistory: true }
+        );
+      }
+
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const json = await apiUpload<{ url: string }>("/api/files/upload?category=videos", formData);
+        const json = await apiUploadWithProgress<{ url: string }>(
+          "/api/files/upload?category=videos",
+          formData,
+          (pct) => {
+            // 上传进度回传，更新进度条
+            useCanvasStore.getState().updateNodeData(
+              id,
+              { upload: { uploading: true, progress: pct, version: uploadVersion } },
+              undefined,
+              { skipHistory: true }
+            );
+          }
+        );
         if (json.code === 200 && json.data?.url) {
           const url = json.data.url;
-          setSrc(url);
+          const s = useCanvasStore.getState();
+          const currentNode = s.nodes.find((n) => n.id === id);
+          if (!currentNode) return;
+          // 异步回调时校验：节点存在且版本号匹配（未被撤销/重置）
+          if ((currentNode.data as VideoNodeData).upload?.version !== uploadVersion) return;
+
           const dims = await new Promise<{ w: number; h: number }>((resolve) => {
             const v = document.createElement("video");
             v.preload = "metadata";
@@ -157,23 +190,37 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           const nw = dims.w || 1280;
           const nh = dims.h || 720;
           const { width, height } = computeNodeSize(nw, nh);
-          const store = useCanvasStore.getState();
-          const currentNode = store.nodes.find((n) => n.id === id);
-          const latestData = (currentNode?.data || data) as VideoNodeData;
+          const latestData = currentNode.data as VideoNodeData;
+          // 上传完成：清空 upload（进度条消失），写回视频主信息
           window.dispatchEvent(
             new CustomEvent(EventNames.NODE_UPDATE_DATA, {
               detail: {
                 nodeId: id,
-                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh },
+                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh, upload: undefined },
                 style: { width, height },
                 immediate: true,
               },
             })
           );
+        } else {
+          // 后端返回非 200：清除 uploading 状态，避免卡在"上传中"
+          const s = useCanvasStore.getState();
+          const currentNode = s.nodes.find((n) => n.id === id);
+          if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
+            s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
+          }
         }
-      } catch (e) { console.error("Video upload failed:", e); }
+      } catch (e) {
+        console.error("Video upload failed:", e);
+        // 失败时清除 uploading 状态（进度条消失），避免卡在"上传中"
+        const s = useCanvasStore.getState();
+        const currentNode = s.nodes.find((n) => n.id === id);
+        if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
+          s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
+        }
+      }
     },
-    [id, data]
+    [id]
   );
 
   const handleDownload = useCallback(async () => {
@@ -196,12 +243,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const handleClear = useCallback(() => {
     setSrc("");
-    window.dispatchEvent(
-      new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-        detail: { nodeId: id, data: { ...data, src: "", label: t("video.node"), alt: "", naturalWidth: 0, naturalHeight: 0 }, style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }, immediate: true },
-      })
-    );
-  }, [id, data]);
+    useCanvasStore.getState().updateNodeData(id, {
+      src: "", label: t("video.node"), alt: "", naturalWidth: 0, naturalHeight: 0,
+      upload: undefined,
+    }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
+    markDirtyImmediate();
+  }, [id]);
 
   // Listen for node action events from NodeToolbar
   useEffect(() => {
