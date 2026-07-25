@@ -129,6 +129,8 @@ export type ModelCapability = "text" | "image" | "video" | "audio";
 export interface ProviderPreset {
   name: string;
   baseUrl: string;
+  protocol?: string;
+  config?: Record<string, unknown>;
 }
 
 export interface ModelInfo {
@@ -145,6 +147,8 @@ export interface ModelChannel {
   name: string;
   baseUrl: string;
   apiKey: string;
+  protocol?: string;
+  config?: Record<string, unknown>;
   models: ModelInfo[];
 }
 

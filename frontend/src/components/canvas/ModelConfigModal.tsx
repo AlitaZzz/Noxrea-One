@@ -172,7 +172,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const [activeCap, setActiveCap] = useState<ModelCapability>("image");
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [editChannelId, setEditChannelId] = useState<string | null>(null);
-  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "" });
+  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [newModelName, setNewModelName] = useState("");
   const [fetching, setFetching] = useState(false);
   const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null);
@@ -192,18 +193,25 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   }
 
   const resetChForm = () => {
-    setChForm({ name: "", baseUrl: "", apiKey: "" });
+    setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
+    setShowAdvanced(false);
     setEditChannelId(null);
     setShowAddChannel(false);
   };
 
   const handleSaveChannel = () => {
     if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
+    const parseJson = (s: string) => { if (!s.trim()) return undefined; try { return JSON.parse(s); } catch { return undefined; } };
+    const configObj = parseJson(chForm.config);
     if (editChannelId) {
-      updateChannel(editChannelId, { name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), apiKey: chForm.apiKey.trim() });
+      updateChannel(editChannelId, { 
+        name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
+        apiKey: chForm.apiKey.trim() || undefined,
+        config: configObj,
+      });
       message.success("Channel updated");
     } else {
-      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim());
+      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol, configObj);
       message.success("Channel added");
     }
     resetChForm();
@@ -213,7 +221,12 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     const ch = channels.find((c) => c.id === id);
     if (!ch) return;
     // apiKey 不预填（后端返回的是掩码）：留空表示保持原 key 不变，用户需改时重新输入完整值
-    setChForm({ name: ch.name, baseUrl: ch.baseUrl, apiKey: "" });
+    const fmt = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v, null, 2) : "");
+    setChForm({ 
+      name: ch.name, baseUrl: ch.baseUrl, apiKey: "",
+      protocol: ch.protocol || "openai",
+      config: fmt(ch.config),
+    });
     setEditChannelId(id);
     setShowAddChannel(true);
   };
@@ -304,11 +317,14 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     >
     <div className="model-config-wrap flex flex-col h-full">
       <style>{`
-        .model-config-wrap input:not([type]), .model-config-wrap .ant-input, .model-config-wrap .ant-input-password, .model-config-wrap .ant-select-selector { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; color: var(--canvas-text) !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
+        .model-config-wrap input:not([type]), .model-config-wrap .ant-input, .model-config-wrap .ant-input-password { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; color: var(--canvas-text) !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
+        .model-config-wrap textarea.ant-input { height: auto !important; padding: 8px 11px !important; }
+        .model-config-wrap .ant-select.ant-select, .model-config-wrap .ant-select-selector.ant-select-selector { height: 36px !important; background: var(--canvas-bg) !important; color: var(--canvas-text) !important; }
         .model-config-wrap .ant-input-affix-wrapper { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; border-radius: 8px !important; height: 36px !important; }
         .model-config-wrap .ant-input-affix-wrapper .ant-input { background: transparent !important; border: none !important; height: 34px !important; }
-        .model-config-wrap input:not([type]):focus, .model-config-wrap .ant-input:focus, .model-config-wrap .ant-input-password:focus, .model-config-wrap .ant-select-focused .ant-select-selector { border-color: var(--canvas-border) !important; box-shadow: none !important; }
-        .model-config-wrap input:not([type]):hover, .model-config-wrap .ant-input:hover, .model-config-wrap .ant-input-password:hover, .model-config-wrap .ant-select-selector:hover { border-color: var(--canvas-border) !important; }
+        .model-config-wrap input:not([type]):focus, .model-config-wrap .ant-input:focus, .model-config-wrap .ant-input-password:focus { border-color: var(--canvas-border) !important; box-shadow: none !important; }
+        .model-config-wrap input:not([type]):hover, .model-config-wrap .ant-input:hover, .model-config-wrap .ant-input-password:hover { border-color: var(--canvas-border) !important; }
+        .model-config-wrap textarea::placeholder, .model-config-wrap input::placeholder { color: var(--canvas-text-muted) !important; opacity: 1 !important; }
         .model-config-wrap .ant-input-password { display: flex !important; align-items: center !important; }
         .model-config-wrap .ant-input-password .ant-input-suffix { display: flex; align-items: center; }
         .model-config-wrap .ant-input-password input { height: 34px !important; line-height: 34px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -326,6 +342,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           size="small"
           value={channelId}
           onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
+          disabled={showAddChannel}
           style={{ width: 150, height: 32 }}
           options={channels.map((c) => ({ label: c.name, value: c.id }))}
           notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
@@ -354,24 +371,55 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       {/* ===== Add/Edit channel form ===== */}
       {showAddChannel && (
         <div className="px-4 py-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
-            <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
-            <div className="flex gap-1">
-              <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ flex: 1 }} />
-              <Select
-                  size="small" style={{ width: 110 }}
-                  placeholder={t("preset")}
-                  options={presets.map((p) => ({ label: p.name, value: p.baseUrl }))}
-                  onChange={(url) => setChForm((f) => ({ ...f, baseUrl: url }))}
-                />
+          <div className="flex gap-1">
+            <div className="flex flex-col gap-2" style={{ flex: 1 }}>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
+                <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
+                <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ width: "100%" }} />
               </div>
             </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
+            <div className="flex flex-col gap-2" style={{ flex: 1 }}>
+              <div className="flex gap-1">
+                <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
+                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("protocol")}</span>
+                  <Select
+                    size="small"
+                    value={chForm.protocol}
+                    onChange={(v) => setChForm((f) => ({ ...f, protocol: v }))}
+                    style={{ width: "100%" }}
+                    options={[
+                      { label: t("protocol.openai"), value: "openai" },
+                      { label: t("protocol.gemini"), value: "gemini" },
+                      { label: t("protocol.ark"), value: "ark" },
+                    ]}
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
+                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("preset")}</span>
+                  <Select
+                    size="small" style={{ width: "100%" }}
+                    placeholder={t("preset")}
+                    options={presets.map((p) => ({ label: p.name, value: p.name }))}
+                    onChange={(name) => {
+                      const p = presets.find((pr) => pr.name === name);
+                      if (!p) return;
+                      const fmt = (v: unknown) => (v && typeof v === "object" && Object.keys(v as object).length > 0 ? JSON.stringify(v, null, 2) : "");
+                      setChForm((f) => ({
+                        ...f,
+                        baseUrl: p.baseUrl,
+                        protocol: p.protocol || "openai",
+                        config: fmt(p.config),
+                      }));
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
             <Input.Password
               placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
               onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
@@ -393,6 +441,62 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                 </svg>
               )}
             />
+          </div>
+          </div>
+          </div>
+          {/* 高级设置折叠区 */}
+          <div className="flex flex-col gap-0.5">
+            <button
+              className="flex items-center gap-1 text-[12px] cursor-pointer"
+              style={{ color: "var(--canvas-text-muted)", background: "transparent", border: "none", padding: 0, width: "fit-content", outline: "none", boxShadow: "none" }}
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              <span style={{ display: "inline-block", width: 0, height: 0, borderLeft: "5px solid var(--canvas-text)", borderTop: "4px solid transparent", borderBottom: "4px solid transparent", transition: "transform 0.2s", transform: showAdvanced ? "rotate(90deg)" : "rotate(0deg)" }} />
+              {t("advanced.settings")}
+            </button>
+            {showAdvanced && (
+              <div className="flex flex-col gap-1.5 mt-0.5">
+                {/* 合并后的 config 编辑器 */}
+                <Input.TextArea
+                  size="small"
+                  placeholder={
+                    '渠道高级配置，用于适配不同供应商的 API 格式\n' +
+                    '三项均可留空 {}，未配置则不生效\n' +
+                    '\n' +
+                    'params    字段重映射：把标准字段改名或移动到嵌套路径\n' +
+                    '          {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
+                    '          {"待删除字段": null}          删除该字段\n' +
+                    '\n' +
+                    'endpoints 端点路径覆盖：覆盖默认的接口路径\n' +
+                    '          {"image.generations": "/images/generations"}\n' +
+                    '          {"image.edits":      "/images/edits"}\n' +
+                    '\n' +
+                    'body      请求体注入：直接合并进最终发给上游的请求体\n' +
+                    '          {"extra_body": {"return_base64": true}}\n' +
+                    '          {"response_format": {"type": "json_object"}}\n' +
+                    '\n' +
+                    '示例：\n' +
+                    '{\n' +
+                    '  "params": {\n' +
+                    '    "image_urls": "extra_body.image"\n' +
+                    '  },\n' +
+                    '  "endpoints": {\n' +
+                    '    "image.generations": "/images/generations"\n' +
+                    '  },\n' +
+                    '  "body": {\n' +
+                    '    "extra_body": {\n' +
+                    '      "response_format": "url"\n' +
+                    '    }\n' +
+                    '  }\n' +
+                    '}'
+                  }
+                  value={chForm.config}
+                  onChange={(e) => setChForm((f) => ({ ...f, config: e.target.value }))}
+                  rows={20}
+                  style={{ fontSize: 12, fontFamily: "monospace", resize: "none", overflow: "auto" }}
+                />
+              </div>
+            )}
           </div>
           <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("cancel")}</Button>

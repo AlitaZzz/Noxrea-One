@@ -202,6 +202,19 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 .ant-input-sm { font-size: 13px; }
 .ant-select-sm { font-size: 13px; }
+
+/* Select 全局统一样式（双类名提特异性，压过 antd cssinjs） */
+.ant-select.ant-select { height: 36px !important; }
+.ant-select-selector.ant-select-selector {
+  background: var(--canvas-bg) !important;
+  border-color: var(--canvas-border) !important;
+  color: var(--canvas-text) !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  height: 36px !important;
+}
+.ant-select-selector.ant-select-selector:hover { border-color: var(--canvas-border) !important; }
+.ant-select-focused .ant-select-selector.ant-select-selector { border-color: var(--canvas-border) !important; box-shadow: none !important; }
 .ant-tag { font-size: 13px; }
 
 /* Tech grid animations */

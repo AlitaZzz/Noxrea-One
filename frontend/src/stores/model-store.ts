@@ -15,8 +15,8 @@ interface ModelState {
   initialized: boolean;
   initialize: () => Promise<void>;
 
-  addChannel: (name: string, baseUrl: string, apiKey: string) => Promise<void>;
-  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey">>) => Promise<void>;
+  addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
+  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol" | "config">>) => Promise<void>;
   deleteChannel: (id: string) => Promise<void>;
 
   addModel: (channelId: string, name: string) => Promise<void>;
@@ -55,13 +55,18 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
   },
 
-  addChannel: async (name, baseUrl, apiKey) => {
+  addChannel: async (name, baseUrl, apiKey, protocol, config) => {
+    const body: Record<string, unknown> = { name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey };
+    if (protocol) body.protocol = protocol;
+    if (config) body.config = config;
     const res = await api<{ id: string }>("/api/model-config/channels", {
       method: "POST",
-      body: JSON.stringify({ name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey }),
+      body: JSON.stringify(body),
     });
     if (res.code === 200 && res.data) {
       const channel: ModelChannel = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey, models: [] };
+      if (protocol) channel.protocol = protocol;
+      if (config) channel.config = config;
       set((s) => ({ channels: [...s.channels, channel] }));
     }
   },
