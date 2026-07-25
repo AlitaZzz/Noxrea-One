@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     MOCK_IMAGE_GENERATE: bool = False
 
     # Async polling (used by async providers like APIMart)
-    WORKER_ASYNC_POLL_INTERVAL: float = 3.0          # seconds between polls
-    WORKER_ASYNC_POLL_MAX_ATTEMPTS: int = 60         # max poll attempts (60 * 3s = 3min 上限)
-    WORKER_ASYNC_POLL_INITIAL_DELAY: float = 0.0     # seconds to wait before first poll（0=立即开始）
+    WORKER_ASYNC_POLL_INTERVAL: float = 3.0          # seconds between polls（初始间隔）
+    WORKER_ASYNC_POLL_MAX_ATTEMPTS: int = 120        # max poll attempts（120 * 3s = 6min 上限，覆盖大部分异步生图）
+    WORKER_ASYNC_POLL_INITIAL_DELAY: float = 0.5     # seconds to wait before first poll（给上游一点时间）
 
     # SSRF
     ALLOWED_INTERNAL_HOSTS: str = ""     # 逗号分隔的内网地址白名单，如 "192.168.1.50,192.168.1.51"
@@ -72,9 +72,9 @@ class Settings(BaseSettings):
     HTTP_DL_WRITE: float = 10
     HTTP_DL_POOL: float = 10
 
-    # 2. 异步轮询（GET /v1/tasks/{id}）：极短超时，轮询失败快速重试
-    HTTP_POLL_CONNECT: float = 5
-    HTTP_POLL_READ: float = 10
+    # 2. 异步轮询（GET /v1/tasks/{id}）：适中超时，兼顾慢代理与快速重试
+    HTTP_POLL_CONNECT: float = 10
+    HTTP_POLL_READ: float = 15
     HTTP_POLL_WRITE: float = 10
     HTTP_POLL_POOL: float = 5
 

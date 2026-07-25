@@ -144,3 +144,7 @@ def infer_capabilities(model_id: str, records: list | None = None, whitelist: li
         return {"suggested": wl_caps, "source": "whitelist"}
 
     return {"suggested": [], "source": "none"}
+
+
+# 协议推断已移除：协议现在由数据库 channel.protocol 配置决定，不再自动猜测。
+

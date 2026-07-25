@@ -8,6 +8,8 @@ class ModelChannelCreate(BaseModel):
     name: str = Field(max_length=100)
     baseUrl: str = Field(max_length=500)
     apiKey: str = Field(default="", max_length=500)
+    protocol: str = Field(default="openai", max_length=30)
+    config: Optional[dict] = Field(default=None)
 
 
 class ModelChannelUpdate(BaseModel):
@@ -15,6 +17,8 @@ class ModelChannelUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=100)
     baseUrl: Optional[str] = Field(default=None, max_length=500)
     apiKey: Optional[str] = Field(default=None, max_length=500)
+    protocol: Optional[str] = Field(default=None, max_length=30)
+    config: Optional[dict] = Field(default=None)
 
 
 class ModelInfoCreate(BaseModel):

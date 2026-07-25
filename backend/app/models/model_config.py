@@ -18,6 +18,11 @@ class ModelChannel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     api_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    # 协议名：用户创建渠道时手动选择（openai / gemini / ark）
+    protocol: Mapped[str] = mapped_column(String(30), nullable=False, default="openai")
+    # 渠道高级配置（JSON），合并原 parameter_mapping / endpoint_mapping / override_json：
+    #   {"params": {...}, "endpoints": {...}, "body": {...}}
+    config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

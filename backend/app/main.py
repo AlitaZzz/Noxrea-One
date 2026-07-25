@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
         "create_all 已执行（仅建缺失表、不动已有表结构）。"
         "生产环境应以 `alembic upgrade head` 作为唯一表结构变更入口。"
     )
+
+    # 开发兜底：补齐已存在表缺失的新列（create_all 不会给旧表加列）
+    from app.services.db_migrate import ensure_schema_migrations
+
+    await ensure_schema_migrations(engine)
+    logger.info("schema migration check done")
     from app.services.auth import ensure_admin_exists
 
     async with async_session() as db:
@@ -44,15 +50,36 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"enable WAL failed (ignored): {e}")
 
+    # 初始化 AI Gateway 注册中心（Capability/Protocol/Adapter Registry）。
+    # 必须在 worker 启动前调用，否则注册表为空，所有网关任务都会因
+    # "Unknown capability" 而失败（重构引入的注册模式依赖此初始化）。
+    from app.services.gateway.registry import init_gateway
+
+    init_gateway()
+    logger.info("gateway registry initialized")
+
     # Start background worker for generation task queue
     from app.services.worker import worker_loop
 
-    worker_task = asyncio.create_task(worker_loop())
+    worker_stop = asyncio.Event()
+    worker_task = asyncio.create_task(worker_loop(worker_stop))
     logger.info("worker started")
     yield
-    # Shutdown: cancel worker and clean up connection pool
+    # Shutdown: signal worker to stop, drain in-flight tasks, THEN dispose pool.
+    # 顺序很关键：必须在 engine.dispose() 之前让 worker 真正退出，否则在途子任务
+    # 仍会访问已销毁的连接池（sqlite3.OperationalError: no active connection）。
     logger.info("shutdown")
-    worker_task.cancel()
+    worker_stop.set()
+    try:
+        await asyncio.wait_for(worker_task, timeout=15.0)
+    except asyncio.TimeoutError:
+        # 优雅退出超时（如有任务卡在无法取消的 IO）：强制取消兜底
+        logger.warning("worker did not stop in 15s, cancelling")
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
     await engine.dispose()
 
 

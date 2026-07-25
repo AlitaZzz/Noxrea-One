@@ -11,19 +11,28 @@ router = APIRouter(prefix="/api/model-config", tags=["model-config"])
 
 @router.get("/presets")
 async def list_presets(user=Depends(get_current_user)):
-    """返回 provider 预设下拉项，由 PROVIDERS 注册表派生（单一来源）。
-    每项 {"name", "baseUrl"}；按 baseUrl 去重。"""
-    from app.services.providers import PROVIDERS
+    """返回 provider 预设下拉项（来自 app/data/presets.json）。
+    每项包含 name, baseUrl, protocol, config；
+    按 baseUrl 去重。"""
+    import json
+    from pathlib import Path
+
+    _presets_path = Path(__file__).parent.parent / "data" / "presets.json"
+    presets_data = json.loads(_presets_path.read_text(encoding="utf-8"))
 
     seen: set[str] = set()
     data = []
-    for p in PROVIDERS:
-        for entry in p.presets:
-            url = entry.get("baseUrl", "")
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            data.append({"name": entry.get("name", ""), "baseUrl": url})
+    for entry in presets_data:
+        url = entry.get("baseUrl", "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        data.append({
+            "name": entry.get("name", ""),
+            "baseUrl": url,
+            "protocol": entry.get("protocol", "openai"),
+            "config": entry.get("config", {}),
+        })
     return UnifiedResponse(code=200, data=data, msg="ok")
 
 
@@ -38,6 +47,8 @@ async def list_channels(
         data.append({
             "id": str(ch.id), "name": ch.name, "baseUrl": ch.base_url,
             "apiKey": crud.mask_api_key(ch.api_key),  # 掩码回显，避免明文泄漏
+            "protocol": ch.protocol or "openai",
+            "config": ch.config,
             "models": [{"id": str(m.id), "name": m.name, "capabilities": m.capabilities or [],
                         "inferredCapabilities": m.inferred_capabilities or []} for m in ch.models],
         })
@@ -53,7 +64,11 @@ async def create_channel(
     # SSRF：创建时即校验 base_url，尽早拒绝内网/元数据地址（机制同 ai_proxy）
     from app.services.ssrf import resolve_and_validate
     resolve_and_validate(body.baseUrl)
-    ch = await crud.create_channel(db, user.id, body.name, body.baseUrl, body.apiKey)
+    ch = await crud.create_channel(
+        db, user.id, body.name, body.baseUrl, body.apiKey,
+        protocol=body.protocol,
+        config=body.config,
+    )
     return UnifiedResponse(code=200, data={"id": str(ch.id)}, msg="created")
 
 
@@ -76,6 +91,8 @@ async def update_channel(
     ch = await crud.update_channel(
         db, int(channel_id), user.id,
         name=body.name, base_url=body.baseUrl, api_key=new_api_key,
+        protocol=body.protocol,
+        config=body.config,
     )
     if not ch:
         raise HTTPException(status_code=404, detail="Not found")
