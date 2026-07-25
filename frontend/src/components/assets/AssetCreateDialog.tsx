@@ -314,6 +314,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         .upload-drop-zone:hover {
           background: var(--canvas-bg-hover) !important;
         }
+        .asset-dialog .ant-select.ant-select { height: 36px !important; }
+        .asset-dialog .ant-select-selector.ant-select-selector {
+          background: var(--canvas-bg) !important;
+          border-color: var(--canvas-border) !important;
+          color: var(--canvas-text) !important;
+          border-radius: 8px !important;
+          font-size: 13px !important;
+          height: 36px !important;
+        }
       `}</style>
       {/* Hidden file input */}
       <input

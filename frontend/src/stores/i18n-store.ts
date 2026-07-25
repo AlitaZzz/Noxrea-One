@@ -89,6 +89,9 @@ const zh: Record<string, string> = {
   "delete.asset": "删除资产", "delete.channel": "删除渠道", "delete.folder": "删除文件夹", "delete.folder.warn": "此操作将永久删除该文件夹及其所有子文件夹与资产（含文件），且不可恢复。",
   "asset.count": "项",
   "my.api": "我的 API", "preset": "预设", "add.model.placeholder": "手动添加模型名称...",
+  "protocol": "协议", "protocol.openai": "OpenAI", "protocol.gemini": "Gemini", "protocol.ark": "Ark",
+  "advanced.settings": "高级设置",
+  "adv.config": "高级配置",
   "session.expired": "登录已过期，请重新登录",
   // Assets
   "asset.title": "资产管理",
@@ -206,6 +209,9 @@ const en: Record<string, string> = {
   "delete.asset": "Delete Asset", "delete.channel": "Delete Channel", "delete.folder": "Delete Folder", "delete.folder.warn": "This will permanently delete the folder and all its subfolders and assets (including files), and cannot be undone.",
   "asset.count": "items",
   "my.api": "My API", "preset": "Preset", "add.model.placeholder": "Add model name manually...",
+  "protocol": "Protocol", "protocol.openai": "OpenAI", "protocol.gemini": "Gemini", "protocol.ark": "Ark",
+  "advanced.settings": "Advanced Settings",
+  "adv.config": "Advanced Config",
   "session.expired": "Session expired, please log in again",
   // Assets
   "asset.title": "Asset Management",

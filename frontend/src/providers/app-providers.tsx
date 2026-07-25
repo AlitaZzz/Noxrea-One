@@ -56,6 +56,7 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
         },
         components: {
           Select: {
+            colorBgContainer: isDark ? "#1a1a1e" : "#ffffff",
             activeBorderColor: isDark ? "#2c2c31" : "#d9d9d9",
             hoverBorderColor: isDark ? "#2c2c31" : "#d9d9d9",
             activeOutlineColor: "transparent",

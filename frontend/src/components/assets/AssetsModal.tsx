@@ -408,6 +408,15 @@ export default function AssetsModal({ open, onClose }: Props) {
             border-color: var(--canvas-border) !important;
             box-shadow: none !important;
           }
+          .asset-library-modal .ant-select.ant-select { height: 36px !important; }
+          .asset-library-modal .ant-select-selector.ant-select-selector {
+            background: var(--canvas-bg) !important;
+            border-color: var(--canvas-border) !important;
+            color: var(--canvas-text) !important;
+            border-radius: 8px !important;
+            font-size: 13px !important;
+            height: 36px !important;
+          }
           .ant-modal-confirm .ant-modal-mask {
             background: rgba(0,0,0,0.6) !important;
           }
