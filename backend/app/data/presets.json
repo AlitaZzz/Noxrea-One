@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Exellome",
+    "baseUrl": "https://new.exellome.online/v1",
+    "protocol": "openai",
+    "config": {
+      "params": {},
+      "endpoints": {
+        "image.edits": "/images/edits"
+      },
+      "body": {}
+    }
+  },
+  {
+    "name": "APIMart",
+    "baseUrl": "https://api.apimart.ai/v1",
+    "protocol": "openai",
+    "config": {
+      "params": {"image": "image_urls"},
+      "endpoints": {},
+      "body": { "official_fallback": false }
+    }
+  },
+  {
+    "name": "Agnes",
+    "baseUrl": "https://apihub.agnes-ai.com/v1",
+    "protocol": "openai",
+    "config": {
+      "params": { "image": "extra_body.image" },
+      "endpoints": {},
+      "body": { "extra_body": { "response_format": "url" } }
+    }
+  }
+]
