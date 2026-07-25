@@ -19,6 +19,10 @@ class TaskOut(BaseModel):
     id: str
     user_id: int
     type: str
+    capability: Optional[str] = None
+    protocol: Optional[str] = None
+    model: Optional[str] = None
+    upstream_task_id: Optional[str] = None
     status: str
     prompt: str
     config: dict

@@ -55,10 +55,23 @@ async def get_channel(
 
 
 async def create_channel(
-    db: AsyncSession, user_id: int, name: str, base_url: str, api_key: str
+    db: AsyncSession,
+    user_id: int,
+    name: str,
+    base_url: str,
+    api_key: str,
+    protocol: str = "openai",
+    config: Optional[dict] = None,
 ) -> ModelChannel:
     """创建频道。"""
-    ch = ModelChannel(user_id=user_id, name=name, base_url=base_url, api_key=api_key)
+    ch = ModelChannel(
+        user_id=user_id,
+        name=name,
+        base_url=base_url,
+        api_key=api_key,
+        protocol=protocol,
+        config=config,
+    )
     db.add(ch)
     await db.commit()
     await db.refresh(ch)
@@ -72,6 +85,8 @@ async def update_channel(
     name: Optional[str] = None,
     base_url: Optional[str] = None,
     api_key: Optional[str] = None,
+    protocol: Optional[str] = None,
+    config: Optional[dict] = None,
 ) -> Optional[ModelChannel]:
     """更新频道字段。不存在的字段不修改。返回 None 表示未找到。"""
     ch = await get_channel(db, channel_id, user_id)
@@ -83,6 +98,10 @@ async def update_channel(
         ch.base_url = base_url
     if api_key is not None:
         ch.api_key = api_key
+    if protocol is not None:
+        ch.protocol = protocol
+    if config is not None:
+        ch.config = config if config else None
     await db.commit()
     return ch
 

@@ -29,9 +29,11 @@ _LEVEL_COLOR = {
 
 
 def _short_name(name: str) -> str:
-    """app.services.worker -> worker；app.routers.generate -> generate；main -> main。"""
+    """app.services.worker.executor → worker.executor；app.routers.generate → routers.generate。
+    取最后 2 层作为短名，避免同名冲突（多个 executor/service/manager）。"""
     parts = name.split(".")
-    # 去掉 app/services/routers/crud 等层级前缀，取最后一段
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
     return parts[-1] if parts else name
 
 

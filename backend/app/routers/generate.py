@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
 
 
-# ── Submit image generation task ────────────────────────────────
+# ── Submit generation task ───────────────────────────────────────
 
 
 @router.post("/task", response_model=UnifiedResponse[TaskOut])
@@ -28,15 +28,22 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    task_type = body.get("type", "image")
+    # 向后兼容：capability 优先，回退到 type
+    task_type = body.get("capability") or body.get("type", "image")
+    logger.info(
+        f"[generate] request received task_type={task_type} "
+        f"channel_id={body.get('channelId')} model={body.get('model', '')}"
+    )
 
-    # bg_removal tasks use the inference service directly (no AI provider config needed)
+    # bg_removal tasks use the inference service directly
     if task_type == "bg_removal":
         prompt = ""
         config = {}
+        protocol_name = ""
+        model_name = ""
     else:
         prompt = (body.get("prompt") or "").strip()
-        if not prompt:
+        if not prompt and task_type not in ("llm", "audio"):
             raise HTTPException(status_code=400, detail="Missing prompt")
 
         channel_id = body.get("channelId")
@@ -46,20 +53,30 @@ async def create_task(
             channel_id_int = 0
         if not channel_id_int:
             raise HTTPException(status_code=400, detail="Missing or invalid channelId")
-        # 校验 channel 归属当前用户；apiKey/baseUrl 不再存进 task，处理时按 channel_id 解析
         channel = await crud_model_config.get_channel(db, channel_id_int, user.id)
         if not channel:
             raise HTTPException(status_code=400, detail="Channel not found")
 
+        model_name = body.get("model", "")
+        # 协议直接读取 channel 配置（用户创建渠道时手动选择），不做自动猜测
+        protocol_name = channel.protocol or "openai"
+        if not protocol_name:
+            raise HTTPException(status_code=400, detail="Channel 未配置 protocol")
+
         config = {
             "channel_id": channel_id_int,
-            "model": body.get("model", ""),
+            "model": model_name,
             "quality": body.get("quality", "auto"),
             "size": body.get("size", "1K"),
             "ratio": body.get("ratio", "1:1"),
-            # n 限幅到 [1,4]，防止前端传超大值放大计费/触发限流
             "n": max(1, min(4, int(body.get("n", 1) or 1))),
+            "protocol": protocol_name,
+            "capability": task_type,
         }
+        # 仅当前端明确传入时才写入（避免图片任务 config 里出现 voice/stream 等无关字段）
+        for k in ("stream", "voice", "messages"):
+            if body.get(k) is not None:
+                config[k] = body[k]
 
     task_id = uuid.uuid4().hex
     now = datetime.now(timezone.utc)
@@ -68,8 +85,13 @@ async def create_task(
 
     task = await crud.create_task(
         db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
+        capability=task_type, protocol=protocol_name, model=model_name,
     )
-    logger.info(f"task created id={task_id} type={task_type} user={user.id} node={node_id} prompt_len={len(prompt)}")
+    logger.info(
+        f"[generate] task created id={task_id} capability={task_type} "
+        f"protocol={protocol_name} model={model_name} user={user.id} "
+        f"node={node_id} prompt_len={len(prompt)}"
+    )
 
     return UnifiedResponse(
         code=200,
@@ -106,7 +128,6 @@ async def stream_task(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    # Verify task exists and belongs to user
     task = await crud.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -117,11 +138,9 @@ async def stream_task(
         logger.debug(f"SSE stream opened task_id={task_id} user={user.id}")
         last_status = ""
         while True:
-            # 客户端断连则退出，避免连接/内存堆积
             if await request.is_disconnected():
                 logger.debug(f"SSE client disconnected task_id={task_id}")
                 break
-            # Use fresh session per poll + filter by user_id (secondary guard)
             async with _sse_session() as sse_db:
                 task = await crud.get_task_for_user(sse_db, task_id, user.id)
             if not task:
@@ -147,7 +166,6 @@ async def stream_task(
                     logger.debug(f"SSE stream ended task_id={task_id} status={status}")
                     break
 
-            # 1s 轮询：让 completed/failed 更快推给前端（DB 查询频率略升可接受）
             await asyncio.sleep(1)
 
     return StreamingResponse(
@@ -178,5 +196,3 @@ async def cancel_task(
     await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
     logger.info(f"task cancelled id={task_id} user={user.id}")
     return UnifiedResponse(code=200, msg="cancelled")
-
-

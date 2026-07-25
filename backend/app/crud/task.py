@@ -17,8 +17,12 @@ async def create_task(
     ref_urls: list[str],
     node_id: str,
     now: datetime,
+    *,
+    capability: str | None = None,
+    protocol: str | None = None,
+    model: str | None = None,
 ) -> GenerationTask:
-    """创建生成任务。"""
+    """创建生成任务（支持新架构 capability/protocol/model 字段）。"""
     task = GenerationTask(
         id=task_id,
         user_id=user_id,
@@ -30,6 +34,9 @@ async def create_task(
         node_id=node_id,
         created_at=now,
         updated_at=now,
+        capability=capability or type_,  # 默认从 type 推断
+        protocol=protocol,
+        model=model,
     )
     db.add(task)
     await db.commit()
