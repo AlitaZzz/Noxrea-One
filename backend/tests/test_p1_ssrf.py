@@ -9,7 +9,31 @@ P1: SSRF 防护接入生成链路。
 import pytest
 import httpx
 
-import app.services.providers.base as base_mod
+import app.services.storage.download as base_mod
+
+
+class _FakeStream:
+    """模拟 httpx 的 client.stream()：异步上下文管理器 + aiter_bytes。
+
+    download_and_save 用 client.stream("GET", url) 流式下载，
+    FakeClient 需实现该方法才能让测试走真实代码路径。
+    """
+
+    def __init__(self, resp):
+        self._resp = resp
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def raise_for_status(self):
+        if getattr(self._resp, "status_code", 200) >= 400:
+            raise httpx.HTTPStatusError("fake status", request=None, response=self._resp)
+
+    async def aiter_bytes(self, n):
+        yield getattr(self._resp, "content", b"")
 
 
 # ── create_channel / update_channel SSRF ────────────
@@ -87,6 +111,10 @@ async def test_download_and_save_no_credential_leak(monkeypatch):
             captured_get_headers.update(kw.get("headers", {}) or {})
             return FakeResp()
 
+        def stream(self, method, url, **kw):
+            captured_get_headers.update(kw.get("headers", {}) or {})
+            return _FakeStream(FakeResp())
+
         async def post(self, url, **kw):
             captured_post_headers.update(kw.get("headers", {}) or {})
             return FakeUploadResp()
@@ -105,12 +133,14 @@ async def test_download_and_save_no_credential_leak(monkeypatch):
         "https://cdn.example.com/x.png", "user-jwt", "image"
     )
 
-    # 发往 cdn_url 的 GET 不应带任何 Authorization（provider apiKey 不泄漏）
+    # 发往 cdn_url 的 GET/stream 不应带任何 Authorization（provider apiKey 不泄漏）
     assert "Authorization" not in captured_get_headers, \
         f"download GET leaked credentials: {captured_get_headers}"
-    # 上传到本服务 POST 才带 user_jwt（这是允许的）
-    assert captured_post_headers.get("Authorization") == "Bearer user-jwt"
-    assert result.endswith("saved.png")
+    # 上传到本服务同样不应带 provider 凭证（上传走本地 save_upload_bytes，不经 httpx）
+    assert "Authorization" not in captured_post_headers, \
+        f"upload leaked credentials: {captured_post_headers}"
+    # 上传成功，返回本地存储 URL
+    assert result and result.startswith("http")
 
 
 @pytest.mark.asyncio
@@ -171,13 +201,19 @@ async def test_download_retry_transport_error_rescued(monkeypatch):
             if call_count == 1:
                 raise httpx.RemoteProtocolError("Server disconnected")
             return FakeResp()
+        def stream(self, method, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.RemoteProtocolError("Server disconnected")
+            return _FakeStream(FakeResp())
         async def post(self, url, **kw):
             return FakeUploadResp()
 
     monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
     result = await base_mod.download_and_save("https://cdn.example.com/x.png", "user-jwt", "image")
     assert result is not None
-    assert "retry_rescued.png" in result
+    assert result.startswith("http")
     assert call_count == 2, f"expected 2 calls (1 fail + 1 retry), got {call_count}"
 
 
@@ -220,12 +256,16 @@ async def test_download_retry_503_rescued(monkeypatch):
             nonlocal call_count
             call_count += 1
             return FakeResp503() if call_count == 1 else FakeResp200()
+        def stream(self, method, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            return _FakeStream(FakeResp503() if call_count == 1 else FakeResp200())
         async def post(self, url, **kw):
             return FakeUploadResp()
 
     monkeypatch.setattr(base_mod.httpx, "AsyncClient", FakeClient)
     result = await base_mod.download_and_save("https://cdn.example.com/x.png", "user-jwt", "image")
-    assert result is not None and "retry_503_rescued.png" in result
+    assert result is not None and result.startswith("http")
     assert call_count == 2
 
 
@@ -248,6 +288,10 @@ async def test_download_retry_exhausted(monkeypatch):
         async def __aexit__(self, *a):
             return False
         async def get(self, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            raise httpx.RemoteProtocolError("Still down")
+        def stream(self, method, url, **kw):
             nonlocal call_count
             call_count += 1
             raise httpx.RemoteProtocolError("Still down")
@@ -288,6 +332,10 @@ async def test_download_does_not_retry_404(monkeypatch):
             nonlocal call_count
             call_count += 1
             return FakeResp404()
+        def stream(self, method, url, **kw):
+            nonlocal call_count
+            call_count += 1
+            return _FakeStream(FakeResp404())
         async def post(self, url, **kw):
             return None
 

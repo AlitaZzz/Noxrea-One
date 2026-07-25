@@ -21,12 +21,12 @@ async def test_n_clamped_to_range(monkeypatch):
         id = 1
 
     class FakeChannel:
-        pass
+        protocol = "openai"
 
     async def fake_get_channel(db, cid, uid):
         return FakeChannel()
 
-    async def fake_create_task(db, task_id, user_id, ttype, prompt, config, ref_urls, node_id, now):
+    async def fake_create_task(db, task_id, user_id, ttype, prompt, config, ref_urls, node_id, now, **kwargs):
         captured["config"] = config
         # 返回一个最小可 model_validate 的对象
         class T:
