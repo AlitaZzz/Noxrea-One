@@ -4,11 +4,12 @@
     "baseUrl": "https://new.exellome.online/v1",
     "protocol": "openai",
     "config": {
-      "params": {},
-      "endpoints": {
-        "image.edits": "/images/edits"
-      },
-      "body": {}
+      "request": {},
+      "protocol": {
+        "endpoints": {
+          "image.edits": "/images/edits"
+        }
+      }
     }
   },
   {
@@ -16,9 +17,11 @@
     "baseUrl": "https://api.apimart.ai/v1",
     "protocol": "openai",
     "config": {
-      "params": {"image": "image_urls"},
-      "endpoints": {},
-      "body": { "official_fallback": false }
+      "request": {
+        "mapping": {"image": "image_urls"},
+        "body_patch": { "official_fallback": false }
+      },
+      "protocol": {}
     }
   },
   {
@@ -26,9 +29,15 @@
     "baseUrl": "https://apihub.agnes-ai.com/v1",
     "protocol": "openai",
     "config": {
-      "params": { "image": "extra_body.image" },
-      "endpoints": {},
-      "body": { "extra_body": { "response_format": "url" } }
+      "request": {
+        "mapping": { "image": "extra_body.image" },
+        "body_patch": { "extra_body": { "response_format": "url" } }
+      },
+      "protocol": {
+        "endpoints": {
+          "image.edits": "/images/generations"
+        }
+      }
     }
   }
 ]

@@ -1,10 +1,10 @@
 """
-AI Gateway 重构回归测试（新架构：Capability + Adapter(按Provider) + Mapping + Protocol + TaskManager）。
+AI Gateway 重构回归测试（新架构：Capability + request_builder + ChannelConfig + Protocol + TaskManager）。
 
 覆盖点：
-- 注册中心（CapabilityRegistry / ProtocolRegistry / AdapterRegistry）在 init_gateway 后非空
-- Adapter 层：Provider 级参数转换（openai / gemini / ark）
-- Mapping 层：parameter_mapping / override_json / endpoint_mapping
+- 注册中心（CapabilityRegistry / ProtocolRegistry）在 init_gateway 后非空
+- request_builder 层：mapping → transforms → patch 固定顺序
+- ChannelConfig：parse / get_endpoint_override
 - Protocol 层：同步结果提取 / 异步 task_id 提取 / 轮询响应解析
 - TaskManager：同步优先 + 异步轮询兜底（mock httpx）
 - EventBus：发布/订阅
@@ -19,27 +19,19 @@ import base64
 
 import pytest
 
+from app.schemas.channel_config import ChannelConfig, RequestConfig, ProtocolConfig
 from app.services.gateway.registry import init_gateway
 from app.services.capabilities.base import CapabilityRegistry
 from app.services.protocols.base import ProtocolRegistry
-from app.services.adapters.base import AdapterRegistry
 from app.services.gateway.router import CapabilityRouter
 from app.services.tasks.manager import TaskManager
 from app.services.events.bus import event_bus
 from app.services.events.types import TaskEvent, EventType
-from app.services.adapters.openai import OpenAIAdapter
-# TODO: Ark/Gemini 暂未实现
-# from app.services.adapters.gemini import GeminiAdapter
-# from app.services.adapters.ark import ArkAdapter
-from app.services.adapters.mapping import (
-    apply_parameter_mapping,
-    apply_override_json,
-    get_endpoint_override,
-    parse_channel_config,
-)
+from app.services.request_builder import build
+from app.services.request_builder.mapping import apply_mapping
+from app.services.request_builder.patch import apply_patch
 from app.services.capabilities.requests import ImageRequest
 from app.services.capabilities.image.service import ImageService
-from app.services.adapters.common import resolve_image_size
 from app.services.protocols.base import BaseProtocol, PollResult
 
 
@@ -49,7 +41,6 @@ from app.services.protocols.base import BaseProtocol, PollResult
 def _gateway_ready():
     CapabilityRegistry._services.clear()
     ProtocolRegistry._protocols.clear()
-    AdapterRegistry._adapters.clear()
     init_gateway()
     yield
 
@@ -63,28 +54,13 @@ def test_capability_registry_populated():
 
 def test_protocol_registry_populated():
     assert ProtocolRegistry.get("openai", "image") is not None
-    # TODO: Ark/Gemini 暂未实现
-    # assert ProtocolRegistry.get("gemini", "image") is not None
-    # assert ProtocolRegistry.get("ark", "image") is not None
-    # assert ProtocolRegistry.get("ark", "video") is not None
     assert ProtocolRegistry.get("openai", "video") is not None
     assert ProtocolRegistry.get("openai", "llm") is not None
-    # assert ProtocolRegistry.get("gemini", "llm") is not None
     assert ProtocolRegistry.get("openai", "audio") is not None
 
 
 def test_protocol_capability_isolation():
     assert ProtocolRegistry.get("openai", "video") is not None
-    # TODO: Ark/Gemini 暂未实现
-    # assert ProtocolRegistry.get("gemini", "audio") is None
-
-
-def test_adapter_registry():
-    assert AdapterRegistry.get("openai") is not None
-    # TODO: Ark/Gemini 暂未实现
-    # assert AdapterRegistry.get("gemini") is not None
-    # assert AdapterRegistry.get("ark") is not None
-    assert AdapterRegistry.get("nonexistent") is None
 
 
 # ── 2. Protocol 层 ────────────────────────────────────────────
@@ -126,106 +102,112 @@ def test_openai_image_parse_poll_pending_and_failed():
     assert f.error == "boom"
 
 
-# ── 3. Adapter 层（按 Provider） ──────────────────────────────
+# ── 3. request_builder 层 ─────────────────────────────────────
 
-def test_openai_adapter_image():
-    body = OpenAIAdapter().adapt_params(
-        {"model": "gpt-image-1", "prompt": "p", "size_level": "2K",
-         "ratio": "1:1", "quality": "high", "n": 1,
-         "ref_urls": ["data:img1"]}, "image"
-    )
-    assert body["size"] == "2048x2048"
-    assert "size_level" not in body
-    assert body["quality"] == "high"
-    assert body["image"] == ["data:img1"]
-
-
-# TODO: Ark/Gemini 暂未实现
-# def test_gemini_adapter_image():
-#     body = GeminiAdapter().adapt_params(
-#         {"model": "banana-x", "prompt": "p", "size_level": "1K",
-#          "ratio": "1:1", "ref_urls": ["data:img2"]}, "image"
-#     )
-#     assert body["size"] == "1024x1024"
-#     assert "size_level" not in body
-#     assert body["reference_images"] == ["data:img2"]
-
-
-# TODO: Ark/Gemini 暂未实现
-# def test_ark_adapter_image():
-#     body = ArkAdapter().adapt_params(
-#         {"model": "seedance", "prompt": "p", "size_level": "2K",
-#          "ratio": "1:1", "ref_urls": ["data:img3"]}, "image"
-#     )
-#     assert body["size"] == "2048x2048"  # index 1 of 1:1
-#     assert "size_level" not in body
-#     assert body["image"] == ["data:img3"]
-
-
-# ── 4. Mapping 层 ─────────────────────────────────────────
-
-def test_parameter_mapping_move_field():
+def test_request_builder_mapping_move_field():
+    """mapping：移动字段到嵌套路径。"""
     body = {"image": ["a.png"], "n": 1}
-    result = apply_parameter_mapping(body, {"image": "extra_body.image"})
+    result = apply_mapping(body, {"image": "extra_body.image"})
     assert "image" not in result
     assert result["extra_body"]["image"] == ["a.png"]
     assert result["n"] == 1
 
 
-def test_parameter_mapping_remove_field():
+def test_request_builder_mapping_remove_field():
+    """mapping：target=None 即删除字段。"""
     body = {"n": 1, "quality": "high"}
-    result = apply_parameter_mapping(body, {"n": None})
+    result = apply_mapping(body, {"n": None})
     assert "n" not in result
     assert result["quality"] == "high"
 
 
-def test_override_json_merge():
+def test_request_builder_patch_merge():
+    """patch：注入新字段。"""
     body = {"size": "1024x1024", "quality": "high"}
-    result = apply_override_json(body, {"extra_body": {"response_format": "url"}})
+    result = apply_patch(body, {"extra_body": {"response_format": "url"}})
     assert result["extra_body"]["response_format"] == "url"
     assert result["size"] == "1024x1024"
 
 
-def test_override_json_deep_merge():
+def test_request_builder_patch_deep_merge():
+    """patch：嵌套 dict 递归合并。"""
     body = {"extra_body": {"image": ["a.png"]}}
-    result = apply_override_json(body, {"extra_body": {"response_format": "url"}})
+    result = apply_patch(body, {"extra_body": {"response_format": "url"}})
     assert result["extra_body"]["image"] == ["a.png"]
     assert result["extra_body"]["response_format"] == "url"
 
 
-def test_endpoint_override():
-    mapping = {"image.generations": "/custom/images", "image.edits": "/custom/edits"}
-    assert get_endpoint_override(mapping, "image.generations") == "/custom/images"
-    assert get_endpoint_override(mapping, "image.edits") == "/custom/edits"
-    assert get_endpoint_override(mapping, "video.generate") is None
+def test_request_builder_engine_fixed_order():
+    """engine.build 按 mapping → transforms → patch 顺序执行。"""
+    internal = {"model": "gpt-image-1", "prompt": "p", "size": "1024x1024", "n": 2}
+    cfg = ChannelConfig(
+        request=RequestConfig(
+            mapping={"n": "extra_body.n"},
+            body_patch={"response_format": "url"},
+        ),
+    )
+    result = build(internal, cfg, "image")
+    # mapping 把 n 移到 extra_body.n
+    assert "n" not in result
+    assert result["extra_body"]["n"] == 2
+    # patch 注入了 response_format
+    assert result["response_format"] == "url"
+    # 原始字段保留
+    assert result["size"] == "1024x1024"
 
 
-def test_parse_channel_config_empty():
-    """parse_channel_config 空/None → 三个空 dict。"""
-    assert parse_channel_config(None) == ({}, {}, {})
-    assert parse_channel_config({}) == ({}, {}, {})
+# ── 4. ChannelConfig ──────────────────────────────────────────
+
+def test_channel_config_parse_empty():
+    """ChannelConfig.parse(None/空) → 全默认。"""
+    c1 = ChannelConfig.parse(None)
+    assert c1.request.mapping == {}
+    assert c1.request.body_patch == {}
+    assert c1.protocol.endpoints == {}
+    c2 = ChannelConfig.parse({})
+    assert c2.request.mapping == {}
+    assert c2.protocol.endpoints == {}
 
 
-def test_parse_channel_config_full():
-    """parse_channel_config 完整拆包。"""
+def test_channel_config_parse_full():
+    """ChannelConfig.parse 完整解析。"""
     raw = {
-        "params": {"image": "extra_body.image"},
-        "endpoints": {"image.generations": "/custom/images"},
-        "body": {"extra_body": {"response_format": "url"}},
+        "request": {
+            "mapping": {"image": "extra_body.image"},
+            "body_patch": {"response_format": "url"},
+        },
+        "protocol": {
+            "endpoints": {"image.generations": "/custom/images"},
+            "unwrap": True,
+        },
     }
-    params, endpoints, body = parse_channel_config(raw)
-    assert params == {"image": "extra_body.image"}
-    assert endpoints == {"image.generations": "/custom/images"}
-    assert body == {"extra_body": {"response_format": "url"}}
+    c = ChannelConfig.parse(raw)
+    assert c.request.mapping == {"image": "extra_body.image"}
+    assert c.request.body_patch == {"response_format": "url"}
+    assert c.protocol.endpoints == {"image.generations": "/custom/images"}
+    assert c.protocol.unwrap is True
 
 
-def test_parse_channel_config_partial():
-    """parse_channel_config 只有部分 key。"""
-    raw = {"params": {"n": None, "size": "resolution"}}
-    params, endpoints, body = parse_channel_config(raw)
-    assert params == {"n": None, "size": "resolution"}
-    assert endpoints == {}
-    assert body == {}
+def test_channel_config_parse_broken():
+    """ChannelConfig.parse 非法格式 → 静默降级为默认。"""
+    c = ChannelConfig.parse("not a dict")
+    assert c.request.mapping == {}
+    assert c.protocol.endpoints == {}
+
+
+def test_channel_config_get_endpoint_override():
+    """get_endpoint_override：按 operation 获取自定义端点。"""
+    c = ChannelConfig(
+        protocol=ProtocolConfig(
+            endpoints={
+                "image.generations": "/custom/images",
+                "image.edits": "/custom/edits",
+            },
+        ),
+    )
+    assert c.get_endpoint_override("image.generations") == "/custom/images"
+    assert c.get_endpoint_override("image.edits") == "/custom/edits"
+    assert c.get_endpoint_override("video.generate") is None
 
 
 # ── 5. TaskManager：同步优先 / 异步轮询（mock httpx）───────────
@@ -356,7 +338,7 @@ async def test_router_dispatch_unknown_capability():
         "does_not_exist",
         task_id="t3", user_id=1, prompt="p", params={},
         base_url="http://up", api_key="k", protocol_name="openai",
-        adapter_name="openai", model="m",
+        model="m",
     )
     assert result["status"] == "failed"
     assert "Unknown capability" in result["error"]
@@ -378,7 +360,7 @@ async def test_router_dispatch_routes_to_service(monkeypatch):
         task_id="t4", user_id=1, prompt="p",
         params={"model": "gpt-image-1"},
         base_url="http://up", api_key="k", protocol_name="openai",
-        adapter_name="openai", model="gpt-image-1",
+        model="gpt-image-1",
     )
     assert result["status"] == "completed"
     assert result["urls"] == ["http://x/a.png"]
@@ -398,28 +380,26 @@ def test_generation_task_effective_capability_fallback():
     assert no_cap.effective_capability == "image"
 
 
-# ── 9. 三层参数模型 ─────────────────────────────────────────
+# ── 9. ImageRequest（OpenAI 官方参数名） ──────────────────────
 
-def test_resolve_image_size_levels():
-    assert resolve_image_size("1K", "1:1") == "1024x1024"
-    assert resolve_image_size("2K", "1:1") == "2048x2048"
-    assert resolve_image_size("4K", "16:9") == "6144x3456"
-    assert resolve_image_size("1K", "16:9") == "1536x864"
-
-
-def test_image_request_business_semantics_only():
+def test_image_request_openai_standard():
+    """ImageRequest 使用 OpenAI 官方参数名（size 而非 size_level）。"""
     r = ImageRequest(model="m", prompt="p")
-    assert r.size_level == "1K"
+    assert r.size == "1024x1024"
     assert r.ratio == "1:1"
-    assert r.quality == "auto"
+    assert r.quality == "standard"
     assert r.n == 1
-    assert r.ref_urls is None
+    assert r.image is None
     import pydantic
     with pytest.raises(pydantic.ValidationError):
         ImageRequest(model="m", prompt="p", n=99)
 
 
-async def test_image_service_adapter_flow(monkeypatch):
+# ── 10. ImageService（新流程：request_builder + ChannelConfig） ──
+
+async def test_image_service_no_adapter(monkeypatch):
+    """ImageService 不再依赖 AdapterRegistry，
+    所有 body 构造由 request_builder 完成。"""
     captured: dict = {}
 
     class _FakeProto(BaseProtocol):
@@ -443,19 +423,20 @@ async def test_image_service_adapter_flow(monkeypatch):
     svc = ImageService()
     res = await svc.execute(
         task_id="t1", user_id=1, prompt="a cat",
-        params={"model": "gpt-image-1", "size": "2K", "ratio": "1:1",
-                "quality": "high", "n": 1},
+        params={"size": "1024x1024", "ratio": "1:1", "quality": "standard", "n": 1},
         base_url="http://up", api_key="k", protocol_name="openai",
-        adapter_name="openai", model="gpt-image-1",
+        model="gpt-image-1",
     )
     assert res["status"] == "completed"
     pb = captured["body"]
-    assert pb["size"] == "2048x2048"
+    # size 保持 OpenAI 原始格式，不再被 adapter 转换
+    assert pb["size"] == "1024x1024"
+    # 旧字段名 size_level 不再存在
     assert "size_level" not in pb
 
 
-async def test_image_service_mapping_flow(monkeypatch):
-    """测试 parameter_mapping + override_json 流程。"""
+async def test_image_service_channel_config_flow(monkeypatch):
+    """测试 ChannelConfig（mapping + body_patch）流经整个 pipeline。"""
     captured: dict = {}
 
     class _FakeProto(BaseProtocol):
@@ -479,14 +460,19 @@ async def test_image_service_mapping_flow(monkeypatch):
     svc = ImageService()
     await svc.execute(
         task_id="t2", user_id=1, prompt="p", ref_urls=["data:img1"],
-        params={"model": "gpt-image-1", "size": "1K", "ratio": "1:1",
-                "quality": "auto", "n": 1},
+        params={"size": "1024x1024", "ratio": "1:1", "quality": "standard", "n": 1},
         base_url="http://up", api_key="k", protocol_name="openai",
-        adapter_name="openai", model="gpt-image-1",
-        parameter_mapping={"image": "extra_body.image"},
-        override_json={"extra_body": {"response_format": "url"}},
+        model="gpt-image-1",
+        channel_config=ChannelConfig(
+            request=RequestConfig(
+                mapping={"image": "extra_body.image"},
+                body_patch={"extra_body": {"response_format": "url"}},
+            ),
+        ),
     )
     pb = captured["body"]
+    # mapping 把 image 移到了 extra_body.image
     assert "image" not in pb
     assert pb["extra_body"]["image"] == ["data:img1"]
+    # body_patch 注入了 response_format
     assert pb["extra_body"]["response_format"] == "url"

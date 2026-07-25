@@ -461,32 +461,42 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                   size="small"
                   placeholder={
                     '渠道高级配置，用于适配不同供应商的 API 格式\n' +
-                    '三项均可留空 {}，未配置则不生效\n' +
+                    '所有字段均可留空 {}，未配置则不生效\n' +
                     '\n' +
-                    'params    字段重映射：把标准字段改名或移动到嵌套路径\n' +
-                    '          {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
-                    '          {"待删除字段": null}          删除该字段\n' +
+                    'request  请求构造配置\n' +
+                    '  .mapping       字段重映射：改名或移动到嵌套路径\n' +
+                    '                 {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
+                    '                 {"待删除字段": null}          删除该字段\n' +
+                    '  .body_patch    请求体注入：深度合并进最终请求体\n' +
+                    '                 {"extra_body": {"return_base64": true}}\n' +
+                    '  .transforms    值变换（可选）：如 base64 编码\n' +
+                    '                 {"字段路径": "base64"}\n' +
+                    '  .submit_style  提交方式："json"（默认）| "multipart"\n' +
+                    '  .ref_encode     参考图编码：""不编码 | "base64" 内联\n' +
+                    '  .ref_field      参考图字段名，默认 "image"\n' +
                     '\n' +
-                    'endpoints 端点路径覆盖：覆盖默认的接口路径\n' +
-                    '          {"image.generations": "/images/generations"}\n' +
-                    '          {"image.edits":      "/images/edits"}\n' +
-                    '\n' +
-                    'body      请求体注入：直接合并进最终发给上游的请求体\n' +
-                    '          {"extra_body": {"return_base64": true}}\n' +
-                    '          {"response_format": {"type": "json_object"}}\n' +
+                    'protocol 协议配置\n' +
+                    '  .endpoints     端点路径覆盖\n' +
+                    '                 {"image.generate": "/images/generations"}\n' +
+                    '                 {"image.edit":    "/images/edits"}\n' +
+                    '  .unwrap        解包 data 包裹（true/false）\n' +
+                    '  .result_mode   结果模式："url"（默认）| "content_endpoint"\n' +
+                    '  .result_path   结果路径，如 "output.choices.0"\n' +
                     '\n' +
                     '示例：\n' +
                     '{\n' +
-                    '  "params": {\n' +
-                    '    "image_urls": "extra_body.image"\n' +
-                    '  },\n' +
-                    '  "endpoints": {\n' +
-                    '    "image.generations": "/images/generations"\n' +
-                    '  },\n' +
-                    '  "body": {\n' +
-                    '    "extra_body": {\n' +
-                    '      "response_format": "url"\n' +
+                    '  "request": {\n' +
+                    '    "mapping": {\n' +
+                    '      "image_urls": "extra_body.image"\n' +
+                    '    },\n' +
+                    '    "body_patch": {\n' +
+                    '      "extra_body": {\n' +
+                    '        "response_format": "url"\n' +
+                    '      }\n' +
                     '    }\n' +
+                    '  },\n' +
+                    '  "protocol": {\n' +
+                    '    "endpoints": {}\n' +
                     '  }\n' +
                     '}'
                   }

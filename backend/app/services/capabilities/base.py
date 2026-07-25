@@ -2,7 +2,7 @@
 Capability 基础层 — BaseCapabilityService + CapabilityRegistry。
 
 Capability 表示"用户想做什么"（image / video / llm / audio / bg_removal），
-不感知厂商、不感知具体协议，只负责协调 Adapter → Protocol → TaskManager 流程。
+不感知厂商、不感知具体协议，只负责协调 request_builder → Protocol → TaskManager 流程。
 
 强制隔离：
 - ✗ Capability 不知道 OpenAI / Gemini / Ark
@@ -14,12 +14,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.schemas.channel_config import ChannelConfig
+
 
 class BaseCapabilityService(ABC):
     """能力服务基类。
 
     每个能力（Image / Video / LLM / Audio / BgRemoval）实现 execute() 方法，
-    调用链：Adapter → Protocol → TaskManager。
+    调用链：request_builder.build() → Protocol → TaskManager。
     """
 
     capability: str = ""  # "image" / "video" / "llm" / "audio" / "bg_removal"
@@ -40,14 +42,23 @@ class BaseCapabilityService(ABC):
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict[str, Any]:
         """执行一次能力调用。
+
+        Args:
+            task_id: 任务 ID
+            user_id: 用户 ID
+            prompt: 用户提示词
+            params: 业务参数（从 task.config 提取）
+            base_url: 渠道基础 URL
+            api_key: 渠道 API 密钥
+            protocol_name: 协议名称（"openai" / "gemini" / "ark"）
+            channel_config: 渠道高级配置（request + protocol 两块）
+            model: 模型名称
+            ref_urls: 参考图 URL 列表
 
         Returns:
             {

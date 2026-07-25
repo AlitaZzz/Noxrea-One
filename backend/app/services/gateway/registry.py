@@ -1,24 +1,18 @@
 """
-Gateway Registry — 能力注册表 + 协议注册表 + 适配器注册表的管理中心。
+Gateway Registry — 能力注册表 + 协议注册表的管理中心。
 
 网关启动时在此完成所有注册，Router 通过注册表动态分发。
+
+重构后移除 AdapterRegistry（由 request_builder + ChannelConfig 替代），
+仅保留 ProtocolRegistry 和 CapabilityRegistry 的初始化。
 """
 
 from app.services.capabilities.base import CapabilityRegistry
 from app.services.protocols.base import ProtocolRegistry
-from app.services.adapters.base import AdapterRegistry
 
 
 def init_gateway() -> None:
-    """初始化网关：注册所有能力、协议和适配器。在应用启动时调用一次。"""
-    # ── 注册 Adapter（按 Provider 维度） ──
-    from app.services.adapters.openai import OpenAIAdapter
-    # TODO: Ark/Gemini 暂未实现
-    # from app.services.adapters.gemini import GeminiAdapter
-    # from app.services.adapters.ark import ArkAdapter
-    AdapterRegistry.register(OpenAIAdapter())
-    # AdapterRegistry.register(GeminiAdapter())
-    # AdapterRegistry.register(ArkAdapter())
+    """初始化网关：注册所有能力和协议。在应用启动时调用一次。"""
 
     # ── 注册图片协议 ──
     from app.services.protocols.openai.image import OpenAIImageProtocol
@@ -63,6 +57,5 @@ def init_gateway() -> None:
 __all__ = [
     "CapabilityRegistry",
     "ProtocolRegistry",
-    "AdapterRegistry",
     "init_gateway",
 ]

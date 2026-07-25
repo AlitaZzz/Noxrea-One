@@ -1,20 +1,23 @@
+
 """
 CapabilityRouter — 网关路由分发。
 
 根据 capability 动态查找 CapabilityService，不硬编码 if/else。
 
-调用链：
-  CapabilityRouter.dispatch(capability, adapter_name, ...)
+调用链（重构后）：
+  CapabilityRouter.dispatch(capability, ...)
       → CapabilityRegistry.get(capability)
-          → BaseCapabilityService.execute(adapter_name, ...)
+          → BaseCapabilityService.execute(protocol_name, channel_config, ...)
 
-Worker 传入的 channel 配置（protocol / adapter / mappings）由本层透传到 CapabilityService。
+Worker 传入的 channel 配置（ChannelConfig）由本层透传到 CapabilityService。
 """
 
 from __future__ import annotations
 
 import logging
 
+from app.logging_config import log_event
+from app.schemas.channel_config import ChannelConfig
 from app.services.capabilities.base import BaseCapabilityService, CapabilityRegistry
 
 logger = logging.getLogger(__name__)
@@ -34,12 +37,9 @@ class CapabilityRouter:
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict:
         """分发到对应能力服务并执行。
 
@@ -53,7 +53,8 @@ class CapabilityRouter:
             }
         """
         if not CapabilityRegistry.has(capability):
-            logger.warning(f"[router] task_id={task_id} unknown capability={capability}")
+            logger.warning(log_event("gateway", task_id=task_id, stage="failed",
+                                     category="invalid_request", message=f'"unknown capability: {capability}"'))
             return {
                 "status": "failed",
                 "urls": [],
@@ -62,12 +63,8 @@ class CapabilityRouter:
             }
 
         service: BaseCapabilityService = CapabilityRegistry.get(capability)
-        # adapter_name 默认与 protocol_name 一致
-        effective_adapter = adapter_name or protocol_name
-        logger.info(
-            f"[router] task_id={task_id} dispatch capability={capability} "
-            f"-> {type(service).__name__} protocol={protocol_name} adapter={effective_adapter} model={model}"
-        )
+        logger.info(log_event("gateway", task_id=task_id, stage="route",
+                              capability=capability, model=model, protocol=protocol_name))
         return await service.execute(
             task_id=task_id,
             user_id=user_id,
@@ -76,10 +73,7 @@ class CapabilityRouter:
             base_url=base_url,
             api_key=api_key,
             protocol_name=protocol_name,
-            adapter_name=effective_adapter,
+            channel_config=channel_config,
             model=model,
             ref_urls=ref_urls,
-            parameter_mapping=parameter_mapping,
-            endpoint_mapping=endpoint_mapping,
-            override_json=override_json,
         )

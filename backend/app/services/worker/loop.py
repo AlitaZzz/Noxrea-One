@@ -86,9 +86,7 @@ async def worker_loop(stop_event: asyncio.Event | None = None) -> None:
                 async with async_session() as db:
                     tasks = await _claim_tasks(db)
                 if tasks:
-                    logger.info(
-                        f"[worker] claimed {len(tasks)} task(s): {[t.id for t in tasks]}"
-                    )
+                    logger.info(f"[worker] claimed={len(tasks)}")
 
                 # ── Process tasks concurrently (Semaphore limits to MAX_CONCURRENCY) ──
                 for task in tasks:
