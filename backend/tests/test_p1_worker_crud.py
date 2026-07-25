@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select, update
 
-import app.services.worker as worker
+import app.services.worker.executor as executor
 from app.crud import task as crud_task
 from app.models.task import GenerationTask
 
@@ -119,7 +119,7 @@ async def test_cleanup_zombies_marks_stuck_processing(db):
 
 @pytest.mark.asyncio
 async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch):
-    """端到端验证：claim 给的 dict config / list ref_urls 流到 _process_task，无需 json.loads。"""
+    """端到端验证：claim 给的 dict config / list ref_urls 流到 executor.process_task，无需 json.loads。"""
     now = datetime.now(timezone.utc)
     await crud_task.create_task(
         db, "bg1", 1, "bg_removal", "p",
@@ -131,33 +131,30 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
     assert isinstance(task.config, dict)
     assert isinstance(task.ref_urls, list)
 
-    # 把 worker 内部的 async_session 重定向到测试 session，保证状态可见
+    # 把 executor 内部的 async_session 重定向到测试 session，保证状态可见
     @asynccontextmanager
     async def _same_session():
         yield db
 
-    monkeypatch.setattr(worker, "async_session", _same_session)
+    monkeypatch.setattr(executor, "async_session", _same_session)
 
     seen: dict = {}
 
     async def fake_bg(t):
-        # 到达真实处理函数时，ref_urls 必须是 list（而非 str）
+        # 到达内部推理封装时，ref_urls 必须是 list（而非 str）
         seen["ref_urls"] = t.ref_urls
-        await worker._update_task_status(
-            t.id, "completed", result_urls=["http://testserver/api/files/1/gen/r.png"]
-        )
-        return "http://testserver/api/files/1/gen/r.png"
+        return "http://testserver/api/files/1/gen/r.png", None
 
-    monkeypatch.setattr(worker, "_process_bg_removal", fake_bg)
-    monkeypatch.setattr(worker, "download_and_save",
-                        lambda url, user_id, typ, task_id="": _await(url))
+    monkeypatch.setattr("app.services.inference.bg_removal.process", fake_bg)
 
-    await worker._process_task(task)
+    async def fake_download(url, user_id, typ, task_id=""):
+        return url
+
+    monkeypatch.setattr(executor.StorageService, "download_and_save",
+                        staticmethod(fake_download))
+
+    await executor.process_task(task)
 
     assert isinstance(seen["ref_urls"], list)
     final = await crud_task.get_task(db, "bg1")
     assert final.status == "completed"
-
-
-async def _await(value):
-    return value
