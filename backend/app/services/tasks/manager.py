@@ -23,6 +23,7 @@ from app.crud import task as crud_task
 from app.database import async_session
 from app.schemas.result import AsyncSubmission, GenerationResult, PollResult
 from app.services.protocols.base import BaseProtocol, PENDING_STATUSES
+from app.logging_config import classify_error
 from app.services.events.bus import event_bus
 from app.services.events.types import EventType, TaskEvent
 from app.services.http import TIMEOUT_POLL, TIMEOUT_AI_GENERATE
@@ -73,7 +74,7 @@ class TaskManager:
         """
         # 1. 提交上游请求
         try:
-            logger.info(
+            logger.debug(
                 f"[taskmgr] task={task_id} http POST -> {endpoint} "
                 f"protocol={protocol.protocol_name} capability={capability}"
             )
@@ -97,7 +98,9 @@ class TaskManager:
                             "status": "failed",
                             "urls": [],
                             "error": "Cancelled",
-                            "metadata": {},
+                            "category": "cancelled",
+                            "retry": False,
+                            "message": "Cancelled",
                         }
                     return await TaskManager._poll(
                         task_id=task_id,
@@ -111,18 +114,31 @@ class TaskManager:
                         max_poll_attempts=max_poll_attempts,
                         initial_delay=initial_delay,
                     )
+                # 附带上游响应详情
+                detail = ""
+                if err_data:
+                    detail = f" — {err_data}"
+                else:
+                    try:
+                        detail = f" — {resp.text[:500]}"
+                    except Exception:
+                        pass
+                category, retry = classify_error(f"HTTP {resp.status_code}", resp.status_code)
                 return {
                     "status": "failed",
                     "urls": [],
-                    "error": f"Upstream returned HTTP {resp.status_code}",
-                    "metadata": {},
+                    "error": f"Upstream returned HTTP {resp.status_code}{detail}",
+                    "http_status": resp.status_code,
+                    "category": category,
+                    "retry": retry,
+                    "message": f"HTTP {resp.status_code}",
                 }
 
             # 二进制响应（如 TTS 返回 audio/mpeg）→ 直接返回 bytes
             content_type = resp.headers.get("content-type", "")
             if _is_binary_response(content_type, body):
                 ext = _infer_ext(content_type)
-                logger.info(f"[taskmgr] task={task_id} binary response content_type={content_type} size={len(resp.content)}")
+                logger.debug(f"[taskmgr] task={task_id} binary response content_type={content_type} size={len(resp.content)}")
                 return {
                     "status": "completed",
                     "urls": [],
@@ -136,14 +152,18 @@ class TaskManager:
                 "status": "failed",
                 "urls": [],
                 "error": "API call timed out",
-                "metadata": {},
+                "category": "timeout",
+                "retry": True,
+                "message": "API call timed out",
             }
         except Exception as e:
             return {
                 "status": "failed",
                 "urls": [],
                 "error": str(e)[:500],
-                "metadata": {},
+                "category": "protocol_error",
+                "retry": False,
+                "message": str(e)[:200],
             }
 
         # 2. 尝试同步提结果
@@ -159,14 +179,16 @@ class TaskManager:
         # 3. 尝试提取异步 task_id → 进入轮询
         upstream_task_id = protocol.extract_task_id(data)
         if upstream_task_id:
-            logger.info(f"TaskManager async detected task={task_id} upstream_id={upstream_task_id}")
+            logger.debug(f"TaskManager async detected task={task_id} upstream_id={upstream_task_id}")
             # 进入轮询前先检查是否已被取消
             if await TaskManager._check_cancelled(task_id):
                 return {
                     "status": "failed",
                     "urls": [],
                     "error": "Cancelled",
-                    "metadata": {},
+                    "category": "cancelled",
+                    "retry": False,
+                    "message": "Cancelled",
                 }
             return await TaskManager._poll(
                 task_id=task_id,
@@ -182,12 +204,19 @@ class TaskManager:
             )
 
         # 4. 两者都无 → 失败
-        logger.warning(f"TaskManager no result task={task_id} keys={list(data.keys())}")
+        sample = str(data)[:500]
+        logger.warning(
+            f"TaskManager no result task={task_id} "
+            f"keys={list(data.keys())} response={sample}"
+        )
         return {
             "status": "failed",
             "urls": [],
-            "error": "Upstream returned neither result nor task_id",
-            "metadata": {"raw_keys": list(data.keys())},
+            "error": f"Upstream returned neither result nor task_id; response={sample}",
+            "category": "protocol_error",
+            "retry": False,
+            "message": "no result or task_id",
+            "metadata": {"raw_keys": list(data.keys()), "raw_sample": sample},
         }
 
     @staticmethod
@@ -276,11 +305,13 @@ class TaskManager:
                         "status": "failed",
                         "urls": [],
                         "error": "Cancelled",
-                        "metadata": {},
+                        "category": "cancelled",
+                        "retry": False,
+                        "message": "Cancelled",
                     }
             # 每 10 次打印进度
             if attempt % 10 == 0:
-                logger.info(f"polling task={task_id} attempt={attempt+1}/{max_poll_attempts} upstream_id={upstream_task_id}")
+                logger.debug(f"polling task={task_id} attempt={attempt+1}/{max_poll_attempts} upstream_id={upstream_task_id}")
             try:
                 async with httpx.AsyncClient(timeout=TIMEOUT_POLL) as client:
                     poll_resp = await client.get(poll_url, headers=headers)
@@ -291,11 +322,11 @@ class TaskManager:
                     continue
 
                 poll_data = poll_resp.json()
-                logger.info(f"poll task={task_id} attempt={attempt+1} body={poll_data}")
+                logger.debug(f"poll task={task_id} attempt={attempt+1} body={poll_data}")
                 parsed: PollResult = protocol.parse_poll_response(poll_data, capability)
 
                 if parsed.status == "completed":
-                    logger.info(f"poll completed task={task_id} attempt={attempt+1}")
+                    logger.debug(f"poll completed task={task_id} attempt={attempt+1}")
                     return {
                         "status": "completed",
                         "urls": parsed.urls,
@@ -308,7 +339,9 @@ class TaskManager:
                         "status": "failed",
                         "urls": [],
                         "error": parsed.error or "上游任务执行失败",
-                        "metadata": {},
+                        "category": "upstream_failed",
+                        "retry": False,
+                        "message": parsed.error or "upstream task failed",
                     }
                 # else: pending, continue polling
 
@@ -322,7 +355,9 @@ class TaskManager:
             "status": "failed",
             "urls": [],
             "error": f"异步轮询超时（upstream_task_id={upstream_task_id}）",
-            "metadata": {},
+            "category": "timeout",
+            "retry": True,
+            "message": "异步轮询超时",
         }
 
     @staticmethod

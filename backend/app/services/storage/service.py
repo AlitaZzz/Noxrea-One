@@ -1,37 +1,29 @@
 """
-StorageService — 资源存储服务。
+StorageService - 资源存储编排层（供 worker/executor 调用）。
 
-包装 storage.py 的 save_upload_bytes，提供统一的资源下载+落盘入口。
+纯编排，不包含实际逻辑：
+- download_and_save / batch_download_and_save -> download.py
+- save_bytes -> download.py -> persist.py
 
-未来可扩展为 Storage 接口 + 多种后端实现（本地 / MinIO / OSS / S3）。
-
-架构隔离：Storage 不感知生成类型（image/video/audio），只关心字节流存储。
+依赖方向：service -> download -> persist（单向链路，不跨层）。
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 
-import httpx
-
-from app.config import settings
-from app.services.storage import save_upload_bytes
-from app.services import ssrf
-from app.services.http import HTTPX_TIMEOUT
+from .download import download_and_save as _download_and_save
+from .download import save_bytes as _save_bytes
 
 logger = logging.getLogger(__name__)
-
-# ── 复用 base.py 中的下载逻辑（已稳定，不重复造轮子）──
-from app.services.storage.download import download_and_save as _download_and_save
 
 
 class StorageService:
     """存储服务：下载资源并落本地/对象存储。
 
-    当前实现复用 download_and_save（本地存储 + SHA256 去重），
-    后续可替换为 MinIO / OSS / S3。
+    纯编排层，所有实际逻辑在 download.py（下载+落盘）和 persist.py（落盘+去重）。
+    依赖方向：service -> download -> persist（单向，不跨层）。
     """
 
     @staticmethod
@@ -41,18 +33,7 @@ class StorageService:
         capability: str,
         task_id: str = "",
     ) -> str | None:
-        """从 CDN 下载资源并保存，返回本地 URL。
-
-        Args:
-            cdn_url: 上游返回的资源 URL
-            user_id: 用户 ID
-            capability: 能力类型（image/video/audio，用于日志和类型推断）
-            task_id: 任务 ID（日志用）
-
-        Returns:
-            本地 URL，失败返回 None
-        """
-        # 复用经过充分验证的下载+存储逻辑
+        """从 CDN 下载资源并保存，返回本地 URL。"""
         return await _download_and_save(cdn_url, user_id, capability, task_id)
 
     @staticmethod
@@ -62,13 +43,8 @@ class StorageService:
         ext: str = "png",
         category: str = "generated",
     ) -> str | None:
-        """直接存储 bytes 内容。"""
-        return await save_upload_bytes(
-            user_id=user_id,
-            content=content,
-            category=category,
-            ext=ext,
-        )
+        """直接存储 bytes 内容（不经下载）。"""
+        return await _save_bytes(content, user_id, ext=ext, category=category)
 
     @staticmethod
     async def batch_download_and_save(

@@ -1,11 +1,10 @@
 """
 ImageService — 图片生成能力服务。
 
-调用链：
+调用链（重构后）：
   ImageService.execute()
-      → 构建 ImageRequest（业务语义：size_level / ratio / quality / n / ref_urls）
-      → AdapterRegistry.get(adapter_name) → adapt_params()
-      → apply_parameter_mapping() + apply_override_json()（渠道自定义）
+      → 构建 ImageRequest（OpenAI 官方参数名：size / quality / n / image）
+      → request_builder.engine.build()（mapping → transforms → patch）
       → ProtocolRegistry.get(protocol_name, "image") → build_request()
       → TaskManager.submit_and_wait()
 
@@ -22,14 +21,11 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.config import settings
+from app.schemas.channel_config import ChannelConfig
 from app.services.capabilities.base import BaseCapabilityService
 from app.services.capabilities.requests import ImageRequest
-from app.services.adapters.base import AdapterRegistry
-from app.services.adapters.mapping import (
-    apply_parameter_mapping,
-    apply_override_json,
-    get_endpoint_override,
-)
+from app.services.request_builder import build
+from app.logging_config import log_event, run_upstream
 from app.services.protocols.base import ProtocolRegistry
 from app.services.tasks.manager import TaskManager
 
@@ -39,7 +35,8 @@ logger = logging.getLogger(__name__)
 class ImageService(BaseCapabilityService):
     """图片生成能力服务。
 
-    不感知厂商（OpenAI/Gemini/Ark），通过注册表动态查找协议和适配器。
+    不感知厂商（OpenAI/Gemini/Ark），通过注册表动态查找协议，
+    通过 request_builder + ChannelConfig 统一生成 Provider 请求体。
     """
 
     capability: str = "image"
@@ -54,32 +51,26 @@ class ImageService(BaseCapabilityService):
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict[str, Any]:
         """执行图片生成。"""
-        logger.info(
-            f"[service] task={task_id} image execute protocol={protocol_name} "
-            f"adapter={adapter_name} model={model} ref_count={len(ref_urls or [])}"
-        )
 
-        # ── 第 1 层：构建 Capability Internal Request（业务语义，无厂商字段） ──
+        # ── 第 1 层：构建 Capability Internal Request（OpenAI 官方参数名） ──
         try:
             req = ImageRequest(
                 model=model,
                 prompt=prompt,
-                size_level=params.get("size", "1K"),
+                size=params.get("size", "1024x1024"),
                 ratio=params.get("ratio", "1:1"),
-                quality=params.get("quality", "auto"),
+                quality=params.get("quality", "standard"),
                 n=params.get("n", 1),
-                ref_urls=ref_urls,
+                image=ref_urls,
             )
         except ValidationError as e:
-            logger.warning("image request 校验失败 task=%s: %s", task_id, e)
+            logger.info(log_event(self.capability, task_id=task_id, stage="failed",
+                                  category="invalid_request", retry=False, message=f'"{e}"'))
             return {
                 "status": "failed",
                 "urls": [],
@@ -89,12 +80,8 @@ class ImageService(BaseCapabilityService):
 
         internal = req.model_dump()
 
-        # ── 第 2 层：Adapter 把内部请求转换为 Provider 请求（厂商差异） ──
-        provider_body = AdapterRegistry.apply(adapter_name, internal, self.capability)
-
-        # ── 第 2.5 层：渠道自定义字段映射 ──
-        provider_body = apply_parameter_mapping(provider_body, parameter_mapping)
-        provider_body = apply_override_json(provider_body, override_json)
+        # ── 第 2 层：request_builder 一步完成 body 构造（mapping → transforms → patch） ──
+        provider_body = build(internal, channel_config, self.capability, task_id=task_id)
 
         # ── 第 3 层：Protocol 仅负责 HTTP 通信 ──
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
@@ -110,29 +97,33 @@ class ImageService(BaseCapabilityService):
             base_url, api_key, provider_body, self.capability
         )
 
-        # 渠道自定义端点覆盖
+        # 渠道自定义端点覆盖（从 ChannelConfig 读取）
         # 无参考图（纯文本生图）→ image.generations；有参考图（图生图/编辑）→ image.edits
         operation = "image.edits" if ref_urls else "image.generations"
-        override_endpoint = get_endpoint_override(endpoint_mapping, operation)
-        if override_endpoint:
-            endpoint = base_url.rstrip("/") + override_endpoint
-
-        logger.info(f"[service] task={task_id} adapter applied endpoint={endpoint[:80]}")
+        override = channel_config.get_endpoint_override(operation)
+        if override:
+            endpoint = base_url.rstrip("/") + override
+        elif ref_urls:
+            # 无手动覆盖但有参考图：自动把 /images/generations 替换为 /images/edits
+            endpoint = endpoint.replace("/images/generations", "/images/edits")
 
         # ── TaskManager: 提交 + 同步优先异步兜底 ──
-        result = await TaskManager.submit_and_wait(
-            task_id=task_id,
-            user_id=user_id,
-            protocol=protocol,
-            capability=self.capability,
-            base_url=base_url,
-            api_key=api_key,
-            endpoint=endpoint,
-            headers=headers,
-            body=request_body,
-            poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
-            max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
-            initial_delay=settings.WORKER_ASYNC_POLL_INITIAL_DELAY,
+        result = await run_upstream(
+            logger, self.capability, task_id, endpoint,
+            TaskManager.submit_and_wait(
+                task_id=task_id,
+                user_id=user_id,
+                protocol=protocol,
+                capability=self.capability,
+                base_url=base_url,
+                api_key=api_key,
+                endpoint=endpoint,
+                headers=headers,
+                body=request_body,
+                poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
+                max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
+                initial_delay=settings.WORKER_ASYNC_POLL_INITIAL_DELAY,
+            ),
         )
 
         # 注意：files/urls 统一由 executor._finalize_result 处理下载落盘，

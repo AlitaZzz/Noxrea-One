@@ -4,11 +4,14 @@
 无业务逻辑、无 Provider 参数转换、无协议猜测。
 
 存储统一在 _finalize_result 中处理，CapabilityService 返回 urls/files 后由 executor 落盘。
+
+重构后使用 ChannelConfig 替代旧的 parse_channel_config 三元组。
 """
 
 import asyncio
 import logging
 from contextlib import nullcontext as _nullcontext
+from urllib.parse import urlparse
 
 import httpx
 
@@ -16,8 +19,10 @@ from app.config import settings
 from app.crud import task as crud_task
 from app.database import async_session
 from app.models.task import GenerationTask
+from app.schemas.channel_config import ChannelConfig
 from app.services.gateway.router import CapabilityRouter
 from app.services.http import TIMEOUT_AI_GENERATE
+from app.logging_config import log_event, classify_error
 from app.services.storage.service import StorageService
 from app.services.worker.context import ExecutionContext
 
@@ -48,20 +53,18 @@ async def update_task_status(
 
 async def process_task(task: GenerationTask) -> None:
     """Process one task: call AI API / inference, save result, update DB."""
-    logger.info(
-        f"[executor] task={task.id} start type={task.type} "
-        f"capability={getattr(task, 'capability', None)}"
-    )
+    config = task.config or {}
+    model = config.get("model", "")
+    capability = getattr(task, "capability", None) or task.type
+
+    logger.info(log_event("executor", task_id=task.id, stage="processing",
+                          type=task.type, model=model, prompt_len=len(task.prompt or "")))
 
     # 开发联调：mock 模式
     if settings.MOCK_IMAGE_GENERATE and task.type == "image":
         from app.services.capabilities.mock.service import process_mock_images
         await process_mock_images(task)
         return
-
-    config = task.config or {}
-    model = config.get("model", "")
-    capability = getattr(task, "capability", None) or task.type
 
     # bg_removal 走推理服务，不需要 channel
     if task.type == "bg_removal":
@@ -76,6 +79,8 @@ async def process_task(task: GenerationTask) -> None:
         channel_id_int = 0
     if not channel_id_int:
         await update_task_status(task.id, "failed", error="Missing or invalid channel_id in task config")
+        logger.info(log_event("executor", task_id=task.id, stage="failed",
+                              category="invalid_request", retry=False, message='"missing channel_id"'))
         return
 
     from app.crud import model_config as crud_mc
@@ -83,35 +88,34 @@ async def process_task(task: GenerationTask) -> None:
         channel = await crud_mc.get_channel(db, channel_id_int, task.user_id)
     if not channel:
         await update_task_status(task.id, "failed", error="Channel not found")
+        logger.info(log_event("executor", task_id=task.id, stage="failed",
+                              category="invalid_request", retry=False, message='"channel not found"'))
         return
 
     base_url = channel.base_url
     api_key = channel.api_key
     protocol_name = channel.protocol or getattr(task, "protocol", None) or "openai"
-    adapter_name = protocol_name  # 默认 adapter 与 protocol 一致
-    from app.services.adapters.mapping import parse_channel_config
-    parameter_mapping, endpoint_mapping, override_json = parse_channel_config(channel.config)
+    channel_config = ChannelConfig.parse(channel.config)
 
-    logger.info(
-        f"[executor] task={task.id} resolved channel_id={channel_id_int} "
-        f"base_url={base_url[:80]} protocol={protocol_name} adapter={adapter_name}"
-    )
+    provider = urlparse(base_url).hostname or base_url
+    logger.info(log_event("executor", task_id=task.id, stage="dispatch",
+                          provider=provider, channel=channel_id_int,
+                          protocol=protocol_name, refs=len(task.ref_urls or [])))
 
     # ── SSRF 校验 ──
     from app.services.ssrf import _validate_worker, dns_pin, SSREFError
     try:
         ip, hostname, scheme, port = _validate_worker(base_url)
-        logger.info(f"[executor] task={task.id} ssrf validated host={hostname} ip={ip} port={port}")
     except SSREFError as e:
         await update_task_status(task.id, "failed", error=f"Invalid provider base_url: {e}")
+        logger.info(log_event("executor", task_id=task.id, stage="failed",
+                              category="invalid_request", retry=False, message=f'"SSRF rejected: {e}"'))
         return
 
     pin_ctx = dns_pin(hostname, ip, port) if hostname else _nullcontext()
     with pin_ctx:
         async with httpx.AsyncClient(timeout=TIMEOUT_AI_GENERATE) as client:
             try:
-                logger.info(f"[executor] task={task.id} entering gateway dispatch")
-
                 ctx = ExecutionContext(
                     task=task,
                     config=config,
@@ -119,21 +123,21 @@ async def process_task(task: GenerationTask) -> None:
                     base_url=base_url,
                     api_key=api_key,
                     protocol=protocol_name,
-                    adapter=adapter_name,
                     capability=capability,
-                    parameter_mapping=parameter_mapping,
-                    endpoint_mapping=endpoint_mapping,
-                    override_json=override_json,
+                    channel_config=channel_config,
                 )
                 result_urls, error_reason = await _process_via_gateway(client, ctx)
 
                 await _finalize_result(task, result_urls, error_reason)
 
             except asyncio.TimeoutError:
-                logger.error(f"TIMEOUT task={task.id} type={task.type} url={base_url[:60]} model={model}")
+                category, _ = classify_error("timeout")
+                logger.info(log_event("executor", task_id=task.id, stage="failed",
+                                      category=category, retry=True, duration=f"{API_TIMEOUT_SEC}s"))
                 await update_task_status(task.id, "failed", error="API call timed out")
             except Exception as e:
-                logger.error(f"error task={task.id} type={task.type} err={str(e)[:300]}")
+                logger.info(log_event("executor", task_id=task.id, stage="failed",
+                                      category="protocol_error", retry=False, message=f'"{str(e)[:200]}"'))
                 await update_task_status(task.id, "failed", error=str(e)[:500])
 
 
@@ -166,17 +170,20 @@ async def _finalize_result(
 
         if local_urls:
             await update_task_status(task.id, "completed", result_urls=local_urls)
-            logger.info(f"completed task={task.id} urls={len(local_urls)}")
+            logger.info(log_event("executor", task_id=task.id, stage="storage_saved",
+                                  local_urls=len(local_urls)))
         else:
             await update_task_status(
                 task.id, "failed",
                 error=f"结果下载或本地存储失败，原始 url: {result_urls[0][:120]}",
             )
-            logger.warning(f"download failed task={task.id} url={result_urls[0]}")
+            logger.info(log_event("executor", task_id=task.id, stage="storage_failed",
+                                  category="storage_error", retry=False, message='"download failed"'))
     else:
         fail_reason = error_reason or "No result from provider"
         await update_task_status(task.id, "failed", error=fail_reason)
-        logger.warning(f"no result task={task.id} reason={fail_reason}")
+        logger.info(log_event("executor", task_id=task.id, stage="failed",
+                              category="protocol_error", retry=False, message=f'"{fail_reason}"'))
 
 
 async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str], str]:
@@ -187,12 +194,6 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
     task = ctx.task
     capability = ctx.capability or task.type
     protocol_name = ctx.protocol or "openai"
-    adapter_name = ctx.adapter or protocol_name
-
-    logger.info(
-        f"[executor] task={task.id} gateway dispatch capability={capability} "
-        f"protocol={protocol_name} adapter={adapter_name} model={ctx.model}"
-    )
 
     # 从 config 提取纯业务参数
     from app.services.capabilities.params import extract_execution_params
@@ -201,8 +202,6 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
     # 参考图解析（前置到 gateway 调用前，但由 resolver 模块处理）
     from app.services.resolvers.reference import resolve_refs
     refs = await resolve_refs(task.ref_urls or [], task.user_id)
-
-    logger.info(f"[executor] task={task.id} params={params} ref_count={len(refs)}")
 
     result = await CapabilityRouter.dispatch(
         capability=capability,
@@ -213,17 +212,9 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
         base_url=ctx.base_url,
         api_key=ctx.api_key,
         protocol_name=protocol_name,
-        adapter_name=adapter_name,
+        channel_config=ctx.channel_config,
         model=ctx.model,
         ref_urls=refs,
-        parameter_mapping=ctx.parameter_mapping,
-        endpoint_mapping=ctx.endpoint_mapping,
-        override_json=ctx.override_json,
-    )
-
-    logger.info(
-        f"[executor] task={task.id} gateway result status={result.get('status')} "
-        f"urls={len(result.get('urls') or [])} files={len(result.get('files') or [])}"
     )
 
     if result.get("status") == "completed":

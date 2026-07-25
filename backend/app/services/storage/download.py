@@ -14,9 +14,10 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from app.config import settings
-from app.services.http import HTTPX_TIMEOUT
-from app.services.storage import save_upload_bytes
+from ...config import settings
+from ...logging_config import log_event
+from ..http import HTTPX_TIMEOUT
+from .persist import save_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,18 @@ async def _stream_download(client, cdn_url: str, _tid: str) -> bytes:
     return bytes(buf)
 
 
+async def save_bytes(
+    content: bytes,
+    user_id: int,
+    ext: str = "png",
+    category: str = "generated",
+) -> str | None:
+    """直接存储 bytes（不经下载），委托给 persist.save_upload_bytes。"""
+    return await save_upload_bytes(
+        user_id=user_id, content=content, category=category, ext=ext,
+    )
+
+
 async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id: str = "") -> str | None:
     """Download from CDN and save to local storage. Returns local URL, or None on failure.
 
@@ -102,12 +115,12 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id:
     _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
     _MAX_RETRIES = 2
 
-    logger.info(f"download_and_save start{_tid} user={user_id} type={file_type} url={cdn_url}")
+    logger.info(log_event("download", task_id=task_id or None, stage="start", user=user_id, type=file_type, url=cdn_url))
 
     try:
         _t0 = time.monotonic()
         ip, hostname, scheme, port = resolve_and_validate(cdn_url)
-        logger.info(f"download dns ok{_tid} ip={ip} cost={time.monotonic()-_t0:.2f}s")
+        logger.info(log_event("download", task_id=task_id or None, stage="dns_ok", ip=ip, cost=f"{time.monotonic()-_t0:.2f}s"))
         with dns_pin(hostname, ip, port):
             async with httpx.AsyncClient(
                 timeout=HTTPX_TIMEOUT,
@@ -127,60 +140,57 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id:
                             _stream_download(client, cdn_url, _tid),
                             timeout=settings.HTTP_DL_READ,
                         )
-                        logger.info(
-                            f"download http ok{_tid} size={len(content)} "
-                            f"cost={time.monotonic()-_t1:.2f}s"
-                        )
+                        logger.info(log_event("download", task_id=task_id or None, stage="http_ok", size=len(content), cost=f"{time.monotonic()-_t1:.2f}s"))
                     except asyncio.TimeoutError as e:
                         # 总耗时超上限（含 connect/read 在 Windows 下不触发的兜底）
                         if attempt < _MAX_RETRIES:
-                            logger.warning(f"download total-timeout attempt={_n} url={cdn_url} err={_exc(e, 80)}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="total_timeout", attempt=_n, url=cdn_url, err=_exc(e, 80)))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download total-timeout after retries url={cdn_url} err={_exc(e, 120)}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="total_timeout", url=cdn_url, err=_exc(e, 120)))
                         return None
                     except (httpx.ConnectTimeout, httpx.ConnectError) as e:
                         # CDN 不可达：TCP 连不上，通常需等待更久恢复
                         if attempt < _MAX_RETRIES:
-                            logger.warning(f"download unreachable attempt={_n} url={cdn_url} err={_exc(e, 80)}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="unreachable", attempt=_n, url=cdn_url, err=_exc(e, 80)))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download unreachable after retries url={cdn_url} err={_exc(e, 120)}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="unreachable", url=cdn_url, err=_exc(e, 120)))
                         return None
                     except (httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
                         # 传输中断：连上了但读到一半断/协议错误
                         if attempt < _MAX_RETRIES:
-                            logger.warning(f"download transport err attempt={_n} url={cdn_url} err={_exc(e, 80)}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="transport_err", attempt=_n, url=cdn_url, err=_exc(e, 80)))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download transport failed after retries url={cdn_url} err={_exc(e, 120)}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="transport_err", url=cdn_url, err=_exc(e, 120)))
                         return None
                     except httpx.HTTPStatusError as e:
                         if e.response.status_code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
-                            logger.warning(f"download retryable status={e.response.status_code} attempt={_n} url={cdn_url}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="retryable_status", status=e.response.status_code, attempt=_n, url=cdn_url))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download_and_save bad status={e.response.status_code} url={cdn_url}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="bad_status", status=e.response.status_code, url=cdn_url))
                         return None
                     except httpx.TransportError as e:
                         # 其它传输层错误（WriteTimeout / PoolTimeout 等）
                         if attempt < _MAX_RETRIES:
-                            logger.warning(f"download transport err attempt={_n} url={cdn_url} err={_exc(e, 80)}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="transport_err", attempt=_n, url=cdn_url, err=_exc(e, 80)))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download failed after retries url={cdn_url} err={_exc(e, 120)}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="transport_err", url=cdn_url, err=_exc(e, 120)))
                         return None
                     except Exception as e:
                         # 慢速检测 raise 的 Exception 等其它瞬时错误
                         if attempt < _MAX_RETRIES:
-                            logger.warning(f"download too slow retry attempt={_n} url={cdn_url} err={_exc(e, 80)}")
+                            logger.warning(log_event("download", task_id=task_id or None, stage="too_slow", attempt=_n, url=cdn_url, err=_exc(e, 80)))
                             await asyncio.sleep(_backoff(attempt))
                             continue
-                        logger.warning(f"download failed after retries url={cdn_url} err={_exc(e, 120)}")
+                        logger.warning(log_event("download", task_id=task_id or None, stage="too_slow", url=cdn_url, err=_exc(e, 120)))
                         return None
 
                     # 流式下载成功 -> 直接落盘去重（不再自调 HTTP / 伪造 JWT）
-                    logger.info(f"download_and_save downloaded{_tid} size={len(content)} bytes, saving...")
+                    logger.info(log_event("download", task_id=task_id or None, stage="downloaded", size=len(content)))
                     _t2 = time.monotonic()
                     url = await save_upload_bytes(
                         user_id=user_id,
@@ -189,15 +199,15 @@ async def download_and_save(cdn_url: str, user_id: int, file_type: str, task_id:
                         ext="mp4" if file_type == "video" else "png",
                     )
                     if url:
-                        logger.info(f"download_and_save done{_tid} local={url} cost={time.monotonic()-_t2:.2f}s")
+                        logger.info(log_event("download", task_id=task_id or None, stage="done", local=url, cost=f"{time.monotonic()-_t2:.2f}s"))
                         return url
-                    logger.warning(f"download_and_save storage failed{_tid} url={cdn_url}")
+                    logger.warning(log_event("download", task_id=task_id or None, stage="storage_failed", url=cdn_url))
                     return None
     except HTTPException:
         # SSRF 校验拦截（cdn_url 或重定向目标指向内网/元数据）-> 不落地
-        logger.warning(f"download_and_save ssrf blocked url={cdn_url}")
+        logger.warning(log_event("download", task_id=task_id or None, stage="ssrf_blocked", url=cdn_url))
         return None
     except Exception as e:
-        logger.warning(f"download_and_save failed url={cdn_url} err={_exc(e, 120)}")
+        logger.warning(log_event("download", task_id=task_id or None, stage="failed", url=cdn_url, err=_exc(e, 120)))
         return None
     return None

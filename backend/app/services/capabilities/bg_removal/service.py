@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.schemas.channel_config import ChannelConfig
 from app.services.capabilities.base import BaseCapabilityService
 
 logger = logging.getLogger(__name__)
@@ -30,12 +31,9 @@ class BgRemovalService(BaseCapabilityService):
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict[str, Any]:
         """执行背景移除。
 

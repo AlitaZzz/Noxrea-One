@@ -1,10 +1,10 @@
 """
 VideoService — 视频生成能力服务。
 
-调用链：
+调用链（重构后）：
   VideoService.execute()
-      → AdapterRegistry.get(adapter_name) → adapt_params()
-      → apply_parameter_mapping() + apply_override_json()
+      → 构建 VideoRequest（OpenAI 官方参数名：size / seconds / frame_rate）
+      → request_builder.engine.build()（mapping → transforms → patch）
       → ProtocolRegistry.get(protocol_name, "video") → build_request()
       → TaskManager.submit_and_wait()
 """
@@ -15,13 +15,10 @@ import logging
 from typing import Any
 
 from app.config import settings
+from app.schemas.channel_config import ChannelConfig
 from app.services.capabilities.base import BaseCapabilityService
-from app.services.adapters.base import AdapterRegistry
-from app.services.adapters.mapping import (
-    apply_parameter_mapping,
-    apply_override_json,
-    get_endpoint_override,
-)
+from app.services.request_builder import build
+from app.logging_config import log_event, run_upstream
 from app.services.protocols.base import ProtocolRegistry
 from app.services.tasks.manager import TaskManager
 
@@ -43,34 +40,28 @@ class VideoService(BaseCapabilityService):
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict[str, Any]:
         """执行视频生成。"""
-        # 1. 准备基础参数
+        # 1. 准备基础参数（OpenAI 官方参数名）
         body = {
             "model": model,
             "prompt": prompt,
-            "ratio": params.get("ratio", "16:9"),
+            "size": params.get("size", "1920x1080"),
+            "seconds": params.get("seconds", 5),
         }
 
-        for key in ("duration", "width", "height", "num_frames", "frame_rate", "fps"):
+        for key in ("width", "height", "frame_rate"):
             if key in params:
                 body[key] = params[key]
 
         if ref_urls:
             body["ref_urls"] = ref_urls
 
-        # 2. Adapter: Provider 参数转换
-        body = AdapterRegistry.apply(adapter_name, body, self.capability)
-
-        # 2.5 渠道自定义映射
-        body = apply_parameter_mapping(body, parameter_mapping)
-        body = apply_override_json(body, override_json)
+        # 2. request_builder 一步完成 body 构造（mapping → transforms → patch）
+        body = build(body, channel_config, self.capability, task_id=task_id)
 
         # 3. Protocol: 构造请求
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
@@ -87,24 +78,27 @@ class VideoService(BaseCapabilityService):
         )
 
         # 渠道自定义端点覆盖
-        override_endpoint = get_endpoint_override(endpoint_mapping, "video.generate")
-        if override_endpoint:
-            endpoint = base_url.rstrip("/") + override_endpoint
+        override = channel_config.get_endpoint_override("video.generate")
+        if override:
+            endpoint = base_url.rstrip("/") + override
 
-        # 4. TaskManager: 提交+轮询
-        result = await TaskManager.submit_and_wait(
-            task_id=task_id,
-            user_id=user_id,
-            protocol=protocol,
-            capability=self.capability,
-            base_url=base_url,
-            api_key=api_key,
-            endpoint=endpoint,
-            headers=headers,
-            body=request_body,
-            poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
-            max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
-            initial_delay=2.0,
+        # 4. TaskManager: 提交 + 轮询
+        result = await run_upstream(
+            logger, self.capability, task_id, endpoint,
+            TaskManager.submit_and_wait(
+                task_id=task_id,
+                user_id=user_id,
+                protocol=protocol,
+                capability=self.capability,
+                base_url=base_url,
+                api_key=api_key,
+                endpoint=endpoint,
+                headers=headers,
+                body=request_body,
+                poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
+                max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
+                initial_delay=2.0,
+            ),
         )
 
         return result

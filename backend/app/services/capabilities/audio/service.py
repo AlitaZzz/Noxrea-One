@@ -11,13 +11,10 @@ import logging
 from typing import Any
 
 from app.config import settings
+from app.schemas.channel_config import ChannelConfig
 from app.services.capabilities.base import BaseCapabilityService
-from app.services.adapters.base import AdapterRegistry
-from app.services.adapters.mapping import (
-    apply_parameter_mapping,
-    apply_override_json,
-    get_endpoint_override,
-)
+from app.services.request_builder import build
+from app.logging_config import run_upstream
 from app.services.protocols.base import ProtocolRegistry
 from app.services.tasks.manager import TaskManager
 
@@ -39,18 +36,16 @@ class AudioService(BaseCapabilityService):
         base_url: str,
         api_key: str,
         protocol_name: str,
-        adapter_name: str = "",
+        channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_urls: list[str] | None = None,
-        parameter_mapping: dict | None = None,
-        endpoint_mapping: dict | None = None,
-        override_json: dict | None = None,
     ) -> dict[str, Any]:
         """执行音频生成/识别。"""
         mode = params.get("mode", "tts")
+
         body = {
             "model": model,
-            "_audio_mode": mode,
+            "mode": mode,
         }
 
         if mode == "tts":
@@ -61,10 +56,8 @@ class AudioService(BaseCapabilityService):
             if audio:
                 body["file"] = audio
 
-        # Adapter
-        body = AdapterRegistry.apply(adapter_name, body, self.capability)
-        body = apply_parameter_mapping(body, parameter_mapping)
-        body = apply_override_json(body, override_json)
+        # request_builder 一步完成 body 构造（mapping → transforms → patch）
+        body = build(body, channel_config, self.capability, task_id=task_id)
 
         # Protocol
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
@@ -80,23 +73,27 @@ class AudioService(BaseCapabilityService):
             base_url, api_key, body, self.capability
         )
 
-        override_endpoint = get_endpoint_override(endpoint_mapping, "audio.speech")
-        if override_endpoint:
-            endpoint = base_url.rstrip("/") + override_endpoint
+        # 渠道自定义端点覆盖
+        override = channel_config.get_endpoint_override("audio.speech")
+        if override:
+            endpoint = base_url.rstrip("/") + override
 
         # 统一走 TaskManager
-        result = await TaskManager.submit_and_wait(
-            task_id=task_id,
-            user_id=user_id,
-            protocol=protocol,
-            capability=self.capability,
-            base_url=base_url,
-            api_key=api_key,
-            endpoint=endpoint,
-            headers=headers,
-            body=request_body,
-            poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
-            max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
+        result = await run_upstream(
+            logger, self.capability, task_id, endpoint,
+            TaskManager.submit_and_wait(
+                task_id=task_id,
+                user_id=user_id,
+                protocol=protocol,
+                capability=self.capability,
+                base_url=base_url,
+                api_key=api_key,
+                endpoint=endpoint,
+                headers=headers,
+                body=request_body,
+                poll_interval=settings.WORKER_ASYNC_POLL_INTERVAL,
+                max_poll_attempts=settings.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
+            ),
         )
 
         # 处理 TTS 的二进制 bytes 响应

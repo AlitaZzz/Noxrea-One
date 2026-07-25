@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db, get_current_user
+from app.logging_config import log_event
 from app.schemas.common import UnifiedResponse
 from app.schemas.task import TaskOut
 from app.crud import task as crud
@@ -30,7 +31,7 @@ async def create_task(
 ):
     # 向后兼容：capability 优先，回退到 type
     task_type = body.get("capability") or body.get("type", "image")
-    logger.info(
+    logger.debug(
         f"[generate] request received task_type={task_type} "
         f"channel_id={body.get('channelId')} model={body.get('model', '')}"
     )
@@ -78,7 +79,7 @@ async def create_task(
             if body.get(k) is not None:
                 config[k] = body[k]
 
-    task_id = uuid.uuid4().hex
+    task_id = uuid.uuid4().hex[:8]
     now = datetime.now(timezone.utc)
     ref_urls = body.get("refUrls") or body.get("ref_urls") or []
     node_id = body.get("nodeId") or body.get("node_id") or ""
@@ -87,11 +88,8 @@ async def create_task(
         db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
         capability=task_type, protocol=protocol_name, model=model_name,
     )
-    logger.info(
-        f"[generate] task created id={task_id} capability={task_type} "
-        f"protocol={protocol_name} model={model_name} user={user.id} "
-        f"node={node_id} prompt_len={len(prompt)}"
-    )
+    logger.info(log_event("generate", task_id=task_id, stage="created",
+                          type=task_type, model=model_name, prompt_len=len(prompt)))
 
     return UnifiedResponse(
         code=200,
@@ -194,5 +192,5 @@ async def cancel_task(
         raise HTTPException(status_code=400, detail="Task already finished")
 
     await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
-    logger.info(f"task cancelled id={task_id} user={user.id}")
+    logger.info(log_event("generate", task_id=task_id, stage="cancelled"))
     return UnifiedResponse(code=200, msg="cancelled")
