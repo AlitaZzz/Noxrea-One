@@ -67,7 +67,7 @@ export interface GenSettings {
   prompt: string;
   modelKey: string;
   quality: string;
-  genSize: string;
+  resolution: string;
   ratio: string;
   refOrder: string[];
   n: number;

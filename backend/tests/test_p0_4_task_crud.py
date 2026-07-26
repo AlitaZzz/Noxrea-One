@@ -44,7 +44,7 @@ class TestTaskCreateAndRead:
             "channelId": channel_id,
             "model": "gpt-4",
             "quality": "standard",
-            "size": "1K",
+            "resolution": "1K",
             "ratio": "1:1",
             "n": 1,
             "refUrls": ["http://example.com/ref1.png", "http://example.com/ref2.png"],
@@ -192,7 +192,7 @@ class TestTaskCreateAndRead:
         complex_config = {
             "model": "gpt-4",
             "quality": "hd",
-            "size": "2K",
+            "resolution": "2K",
             "ratio": "16:9",
             "n": 3,
             "extra": {"nested": {"key": [1, 2, 3]}},
@@ -200,7 +200,7 @@ class TestTaskCreateAndRead:
         data = await self._create_task(async_client, channel_id, {
             "model": complex_config["model"],
             "quality": complex_config["quality"],
-            "size": complex_config["size"],
+            "resolution": complex_config["resolution"],
             "ratio": complex_config["ratio"],
             "n": complex_config["n"],
         })
@@ -209,6 +209,6 @@ class TestTaskCreateAndRead:
         # config 中的 dict 字段
         assert isinstance(task["config"], dict)
         assert task["config"]["model"] == "gpt-4"
-        assert task["config"]["size"] == "2K"
+        assert task["config"]["resolution"] == "2K"
         # ref_urls
         assert isinstance(task["ref_urls"], list)

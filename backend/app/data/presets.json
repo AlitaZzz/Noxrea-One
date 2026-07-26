@@ -4,7 +4,10 @@
     "baseUrl": "https://new.exellome.online/v1",
     "protocol": "openai",
     "config": {
-      "request": {},
+      "request": {
+        "mapping": { "image": "image_urls", "ratio": "aspect_ratio"},
+        "body_patch": {}
+      },
       "protocol": {
         "endpoints": {
           "image.edits": "/images/edits"
@@ -18,7 +21,7 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": {"image": "image_urls"},
+        "mapping": { "image": "image_urls", "ratio": "size"},
         "body_patch": { "official_fallback": false }
       },
       "protocol": {}
@@ -30,8 +33,8 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": { "image": "extra_body.image" },
-        "body_patch": { "extra_body": { "response_format": "url" } }
+        "mapping": { "image": "extra_body.image", "resolution": "size"},
+        "body_patch": {}
       },
       "protocol": {
         "endpoints": {

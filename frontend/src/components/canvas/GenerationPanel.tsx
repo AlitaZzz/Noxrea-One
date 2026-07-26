@@ -49,7 +49,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
       quality: s.quality || "auto",
-      genSize: s.genSize || "1K",
+      resolution: s.resolution || "1K",
       ratio: s.ratio || "1:1",
       refOrder: s.refOrder || [],
       n: s.n || 1,
@@ -59,7 +59,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   const [prompt, setPrompt] = useState(saved.prompt);
   const [modelKey, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
   const [quality, setQuality] = useState(saved.quality);
-  const [genSize, setGenSize] = useState(saved.genSize);
+  const [resolution, setResolution] = useState(saved.resolution);
   const [ratio, setRatio] = useState(saved.ratio);
   const [n, setN] = useState(saved.n);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
@@ -100,22 +100,22 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   const [error, setError] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; genSize: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", genSize: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
-  const latestSettingsRef = useRef({ prompt, modelKey, quality, genSize, ratio, refOrder, n });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
+  const latestSettingsRef = useRef({ prompt, modelKey, quality, resolution, ratio, refOrder, n });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, quality, genSize, ratio, refOrder, n };
-  }, [prompt, modelKey, quality, genSize, ratio, refOrder, n]);
+    latestSettingsRef.current = { prompt, modelKey, quality, resolution, ratio, refOrder, n };
+  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n]);
   const { notification } = App.useApp();
 
   // Persist settings to node data on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, quality, genSize, ratio, refOrder, n },
+        genSettings: { prompt, modelKey, quality, resolution, ratio, refOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, quality, genSize, ratio, refOrder, n, nodeId]);
+  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n, nodeId]);
 
   // Flush pending settings on component unmount (not on dep changes)
   useEffect(() => {
@@ -126,7 +126,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       // 没有已保存值 或 任一字段变化 → flush（refOrder 用 JSON.stringify 比较）
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
-          saved.quality === latest.quality && saved.genSize === latest.genSize &&
+          saved.quality === latest.quality && saved.resolution === latest.resolution &&
           saved.ratio === latest.ratio && saved.n === latest.n &&
           JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
       useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
@@ -147,7 +147,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, quality: q, genSize: gs, ratio: r, refImages: refs, n: num } = retryRef.current;
+    const { entry, channel, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
       const res = await fetch(`${BASE}/api/generate/task`, {
@@ -159,7 +159,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           model: entry.modelName,
           channelId: entry.channelId,
           quality: q === "auto" ? undefined : q,
-          size: gs,
+          resolution,
           ratio: r,
           n: num,
           refUrls: refs.length > 0 ? refs : undefined,
@@ -241,7 +241,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt, modelKey, quality, genSize, ratio, refImages: refOrder, n, entry, channel };
+    retryRef.current = { count: 0, prompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -418,13 +418,13 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                 <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
                 <div className="grid grid-cols-3 gap-1">
                   {["1K", "2K", "4K"].map((v) => {
-                    const active = genSize === v;
+                    const active = resolution === v;
                     return (
                       <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
                         style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setGenSize(v)}>{v}</Button>
+                        onClick={() => setResolution(v)}>{v}</Button>
                     );
                   })}
                 </div>
@@ -478,7 +478,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
             <RatioIcon ratio={ratio} active />
-            {ratio} · {t(`quality.${quality}`)} · {genSize} · {n}张
+            {ratio} · {t(`quality.${quality}`)} · {resolution} · {n}张
           </Button>
         </Popover>
         <div className="flex-1" />

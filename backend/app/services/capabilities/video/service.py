@@ -3,7 +3,7 @@ VideoService — 视频生成能力服务。
 
 调用链（重构后）：
   VideoService.execute()
-      → 构建 VideoRequest（OpenAI 官方参数名：size / seconds / frame_rate）
+      → 构建 VideoRequest（业务参数：resolution / ratio / seconds / frame_rate）
       → request_builder.engine.build()（mapping → transforms → patch）
       → ProtocolRegistry.get(protocol_name, "video") → build_request()
       → TaskManager.submit_and_wait()
@@ -45,17 +45,17 @@ class VideoService(BaseCapabilityService):
         ref_urls: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行视频生成。"""
-        # 1. 准备基础参数（OpenAI 官方参数名）
+        # 1. 准备基础参数（业务语义）
         body = {
             "model": model,
             "prompt": prompt,
-            "size": params.get("size", "1920x1080"),
+            "resolution": params.get("resolution", "1K"),
+            "ratio": params.get("ratio", "16:9"),
             "seconds": params.get("seconds", 5),
         }
 
-        for key in ("width", "height", "frame_rate"):
-            if key in params:
-                body[key] = params[key]
+        if "frame_rate" in params:
+            body["frame_rate"] = params["frame_rate"]
 
         if ref_urls:
             body["ref_urls"] = ref_urls
