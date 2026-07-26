@@ -3,7 +3,7 @@ ImageService — 图片生成能力服务。
 
 调用链（重构后）：
   ImageService.execute()
-      → 构建 ImageRequest（OpenAI 官方参数名：size / quality / n / image）
+      → 构建 ImageRequest（业务参数：resolution / ratio / quality / n / image）
       → request_builder.engine.build()（mapping → transforms → patch）
       → ProtocolRegistry.get(protocol_name, "image") → build_request()
       → TaskManager.submit_and_wait()
@@ -57,12 +57,12 @@ class ImageService(BaseCapabilityService):
     ) -> dict[str, Any]:
         """执行图片生成。"""
 
-        # ── 第 1 层：构建 Capability Internal Request（OpenAI 官方参数名） ──
+        # ── 第 1 层：构建 Capability Internal Request（业务参数） ──
         try:
             req = ImageRequest(
                 model=model,
                 prompt=prompt,
-                size=params.get("size", "1024x1024"),
+                resolution=params.get("resolution", "1K"),
                 ratio=params.get("ratio", "1:1"),
                 quality=params.get("quality", "standard"),
                 n=params.get("n", 1),

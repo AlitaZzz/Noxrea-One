@@ -123,10 +123,10 @@ def test_request_builder_mapping_remove_field():
 
 def test_request_builder_patch_merge():
     """patch：注入新字段。"""
-    body = {"size": "1024x1024", "quality": "high"}
+    body = {"resolution": "1K", "quality": "high"}
     result = apply_patch(body, {"extra_body": {"response_format": "url"}})
     assert result["extra_body"]["response_format"] == "url"
-    assert result["size"] == "1024x1024"
+    assert result["resolution"] == "1K"
 
 
 def test_request_builder_patch_deep_merge():
@@ -139,7 +139,7 @@ def test_request_builder_patch_deep_merge():
 
 def test_request_builder_engine_fixed_order():
     """engine.build 按 mapping → transforms → patch 顺序执行。"""
-    internal = {"model": "gpt-image-1", "prompt": "p", "size": "1024x1024", "n": 2}
+    internal = {"model": "gpt-image-1", "prompt": "p", "resolution": "1K", "n": 2}
     cfg = ChannelConfig(
         request=RequestConfig(
             mapping={"n": "extra_body.n"},
@@ -153,7 +153,7 @@ def test_request_builder_engine_fixed_order():
     # patch 注入了 response_format
     assert result["response_format"] == "url"
     # 原始字段保留
-    assert result["size"] == "1024x1024"
+    assert result["resolution"] == "1K"
 
 
 # ── 4. ChannelConfig ──────────────────────────────────────────
@@ -380,12 +380,12 @@ def test_generation_task_effective_capability_fallback():
     assert no_cap.effective_capability == "image"
 
 
-# ── 9. ImageRequest（OpenAI 官方参数名） ──────────────────────
+# ── 9. ImageRequest（业务参数） ──────────────────────────────
 
-def test_image_request_openai_standard():
-    """ImageRequest 使用 OpenAI 官方参数名（size 而非 size_level）。"""
+def test_image_request_defaults():
+    """ImageRequest 使用 resolution 字段。"""
     r = ImageRequest(model="m", prompt="p")
-    assert r.size == "1024x1024"
+    assert r.resolution == "1K"
     assert r.ratio == "1:1"
     assert r.quality == "standard"
     assert r.n == 1
@@ -423,14 +423,14 @@ async def test_image_service_no_adapter(monkeypatch):
     svc = ImageService()
     res = await svc.execute(
         task_id="t1", user_id=1, prompt="a cat",
-        params={"size": "1024x1024", "ratio": "1:1", "quality": "standard", "n": 1},
+        params={"resolution": "1K", "ratio": "1:1", "quality": "standard", "n": 1},
         base_url="http://up", api_key="k", protocol_name="openai",
         model="gpt-image-1",
     )
     assert res["status"] == "completed"
     pb = captured["body"]
-    # size 保持 OpenAI 原始格式，不再被 adapter 转换
-    assert pb["size"] == "1024x1024"
+    # resolution 保持原始值，不再被 adapter 转换
+    assert pb["resolution"] == "1K"
     # 旧字段名 size_level 不再存在
     assert "size_level" not in pb
 
@@ -460,7 +460,7 @@ async def test_image_service_channel_config_flow(monkeypatch):
     svc = ImageService()
     await svc.execute(
         task_id="t2", user_id=1, prompt="p", ref_urls=["data:img1"],
-        params={"size": "1024x1024", "ratio": "1:1", "quality": "standard", "n": 1},
+        params={"resolution": "1K", "ratio": "1:1", "quality": "standard", "n": 1},
         base_url="http://up", api_key="k", protocol_name="openai",
         model="gpt-image-1",
         channel_config=ChannelConfig(

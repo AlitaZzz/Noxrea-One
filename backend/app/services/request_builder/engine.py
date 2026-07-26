@@ -30,7 +30,7 @@ def build(internal: dict, channel_config: ChannelConfig, capability: str = "", *
     """将 Internal Request 转换为 Provider Request 体。
 
     Args:
-        internal: 内部请求 dict（OpenAI 官方参数名）
+        internal: 内部请求 dict（业务参数）
         channel_config: 渠道配置对象
         capability: 能力名称（"image"/"video"/"llm"/"audio"），供特殊逻辑使用
         task_id: 任务 ID，用于日志关联
@@ -56,11 +56,16 @@ def build(internal: dict, channel_config: ChannelConfig, capability: str = "", *
     if cfg.body_patch:
         body = apply_patch(body, cfg.body_patch)
 
-    # 日志：回显前端传入的所有参数（敏感字段做脱敏摘要）
+    # 日志：回显前端传入的业务参数（转换前）
     kb = max(1, len(json.dumps(body, ensure_ascii=False)) // 1024)
     fields: dict[str, Any] = {"payload_size": f"{kb}KB"}
     fields.update(_summarize_internal(internal))
     logger.info(log_event("builder", task_id=task_id, stage="request_built", **fields))
+
+    # 日志：回显厂商请求体（转换后）
+    provider_fields: dict[str, Any] = {"payload_size": f"{kb}KB"}
+    provider_fields.update(_summarize_internal(body))
+    logger.info(log_event("builder", task_id=task_id, stage="provider_built", **provider_fields))
 
     return body
 
