@@ -26,18 +26,21 @@ const GRID_GAP = 30;
 export function useFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
   notif?: { error: Function; warning?: Function; info?: Function },
+  shouldIgnore?: (target: HTMLElement) => boolean,
 ) {
   const addNodes = useCanvasStore((s) => s.addNodes);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
 
   const handleDragOver = useCallback((e: DragEvent) => {
+    if (shouldIgnore?.(e.target as HTMLElement)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-  }, []);
+  }, [shouldIgnore]);
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
+      if (shouldIgnore?.(e.target as HTMLElement)) return;
       e.preventDefault();
       const files = Array.from(e.dataTransfer.files || []);
       if (files.length === 0) return;
@@ -116,7 +119,7 @@ export function useFileDrop(
         notif.error({ title: t("file.upload.failed"), description: `${failedIds.length}/${files.length}`, placement: "bottomRight", duration: 4 });
       }
     },
-    [addNodes, removeNodes, updateNodeData, screenToFlowPosition],
+    [addNodes, removeNodes, updateNodeData, screenToFlowPosition, shouldIgnore],
   );
 
   return { handleDragOver, handleDrop };

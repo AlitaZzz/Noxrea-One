@@ -270,7 +270,11 @@ export default function InfiniteCanvas() {
 
   // ---- File drop on canvas → create image node ----
 
-  const { handleDragOver, handleDrop } = useFileDrop(screenToFlowPosition, notif);
+  const shouldIgnoreFileDrop = useCallback((target: HTMLElement) => {
+    return target.closest('.asset-library-modal') !== null;
+  }, []);
+
+  const { handleDragOver, handleDrop } = useFileDrop(screenToFlowPosition, notif, shouldIgnoreFileDrop);
 
   // ---- Highlight selected node's connections ----
 
