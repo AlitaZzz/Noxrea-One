@@ -174,41 +174,29 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     [id]
   );
 
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(() => {
     if (!src) return;
-    try {
-      const res = await fetch(src);
-      if (res.ok) {
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = data.alt || "image.png";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      }
-    } catch {}
+    const a = document.createElement("a");
+    const sep = src.includes("?") ? "&" : "?";
+    const params = new URLSearchParams({ download: "true" });
+    if (data.alt) params.set("filename", data.alt);
+    a.href = `${src}${sep}${params.toString()}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }, [src, data.alt]);
 
   /** 多图模式：下载指定 URL 的结果图 */
-  const handleDownloadUrl = useCallback(async (url: string) => {
+  const handleDownloadUrl = useCallback((url: string) => {
     if (!url) return;
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = data.alt || "image.png";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      }
-    } catch {}
+    const a = document.createElement("a");
+    const sep = url.includes("?") ? "&" : "?";
+    const params = new URLSearchParams({ download: "true" });
+    if (data.alt) params.set("filename", data.alt);
+    a.href = `${url}${sep}${params.toString()}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }, [data.alt]);
 
   /** 多图模式：把某张结果图设为主图（更新 src 与真实尺寸，并收起网格） */
