@@ -14,7 +14,7 @@ async def create_task(
     type_: str,
     prompt: str,
     config: dict,
-    ref_urls: list[str],
+    ref_images: list[str],
     node_id: str,
     now: datetime,
     *,
@@ -30,7 +30,7 @@ async def create_task(
         status="pending",
         prompt=prompt,
         config=config,
-        ref_urls=ref_urls or None,
+        ref_images=ref_images or None,
         node_id=node_id,
         created_at=now,
         updated_at=now,
@@ -90,7 +90,7 @@ async def claim_pending_tasks(db: AsyncSession, limit: int = 10) -> list[Generat
     """原子批量领取 pending 任务并置为 processing。
 
     使用声明式 update(...).returning(GenerationTask)：返回的是 ORM 对象，
-    config/ref_urls 按模型声明的 JSON 列自动反序列化为 dict/list，不再出现
+    config/ref_images 按模型声明的 JSON 列自动反序列化为 dict/list，不再出现
     "字符串伪装成 dict" 的静默类型错位；列映射由 ORM 维护，不再依赖下标。
     """
     now = datetime.now(timezone.utc)

@@ -106,9 +106,9 @@ def test_openai_image_parse_poll_pending_and_failed():
 
 def test_request_builder_mapping_move_field():
     """mapping：移动字段到嵌套路径。"""
-    body = {"image": ["a.png"], "n": 1}
-    result = apply_mapping(body, {"image": "extra_body.image"})
-    assert "image" not in result
+    body = {"ref_images": ["a.png"], "n": 1}
+    result = apply_mapping(body, {"ref_images": "extra_body.image"})
+    assert "ref_images" not in result
     assert result["extra_body"]["image"] == ["a.png"]
     assert result["n"] == 1
 
@@ -173,7 +173,7 @@ def test_channel_config_parse_full():
     """ChannelConfig.parse 完整解析。"""
     raw = {
         "request": {
-            "mapping": {"image": "extra_body.image"},
+            "mapping": {"ref_images": "extra_body.image"},
             "body_patch": {"response_format": "url"},
         },
         "protocol": {
@@ -182,7 +182,7 @@ def test_channel_config_parse_full():
         },
     }
     c = ChannelConfig.parse(raw)
-    assert c.request.mapping == {"image": "extra_body.image"}
+    assert c.request.mapping == {"ref_images": "extra_body.image"}
     assert c.request.body_patch == {"response_format": "url"}
     assert c.protocol.endpoints == {"image.generations": "/custom/images"}
     assert c.protocol.unwrap is True
@@ -389,7 +389,7 @@ def test_image_request_defaults():
     assert r.ratio is None
     assert r.quality is None
     assert r.n == 1
-    assert r.image is None
+    assert r.ref_images is None
     import pydantic
     with pytest.raises(pydantic.ValidationError):
         ImageRequest(model="m", prompt="p", n=99)
@@ -459,20 +459,20 @@ async def test_image_service_channel_config_flow(monkeypatch):
 
     svc = ImageService()
     await svc.execute(
-        task_id="t2", user_id=1, prompt="p", ref_urls=["data:img1"],
+        task_id="t2", user_id=1, prompt="p", ref_images=["data:img1"],
         params={"resolution": "1K", "ratio": "1:1", "quality": "standard", "n": 1},
         base_url="http://up", api_key="k", protocol_name="openai",
         model="gpt-image-1",
         channel_config=ChannelConfig(
             request=RequestConfig(
-                mapping={"image": "extra_body.image"},
+                mapping={"ref_images": "extra_body.image"},
                 body_patch={"extra_body": {"response_format": "url"}},
             ),
         ),
     )
     pb = captured["body"]
-    # mapping 把 image 移到了 extra_body.image
-    assert "image" not in pb
+    # mapping 把 ref_images 移到了 extra_body.image
+    assert "ref_images" not in pb
     assert pb["extra_body"]["image"] == ["data:img1"]
     # body_patch 注入了 response_format
     assert pb["extra_body"]["response_format"] == "url"

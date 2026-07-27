@@ -45,7 +45,7 @@ class ImageRequest(BaseInternalRequest):
     ratio: Optional[str] = Field(default=None)        # 宽高比："1:1" / "9:16" 等
     quality: Optional[str] = Field(default=None)      # "auto" | "high" | "medium" | "low"
     n: int = Field(default=1, ge=1, le=4)
-    image: Optional[list[str]] = None                # 参考图列表
+    ref_images: Optional[list[str]] = None           # 参考图列表
 
 
 class VideoRequest(BaseInternalRequest):
@@ -60,7 +60,7 @@ class VideoRequest(BaseInternalRequest):
     ratio: Optional[str] = Field(default=None)        # 宽高比："16:9" / "9:16" 等
     seconds: int = Field(default=5)                    # 时长（秒）
     frame_rate: int = Field(default=24)                # 帧率
-    ref_urls: Optional[list[str]] = None              # 参考图
+    ref_images: Optional[list[str]] = None             # 参考图
 
 
 class AudioRequest(BaseInternalRequest):

@@ -24,7 +24,7 @@ def _make_task(task_type="image", config=None, capability="image") -> Generation
         id="t1", user_id=1, type=task_type, status="processing",
         capability=capability, protocol="openai",
         prompt="p", config=config or {"channel_id": 1, "model": "m"},
-        ref_urls=None, result_url=None, error=None, node_id="n1",
+        ref_images=None, result_url=None, error=None, node_id="n1",
         created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
     )
 

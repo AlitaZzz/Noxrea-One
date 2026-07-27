@@ -33,11 +33,11 @@ class BgRemovalService(BaseCapabilityService):
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行背景移除。
 
-        实际调用在 executor._process_bg_removal 中完成（需要 task 对象获取 ref_urls），
+        实际调用在 executor._process_bg_removal 中完成（需要 task 对象获取 ref_images），
         此处仅作为能力占位注册。
         """
         return {

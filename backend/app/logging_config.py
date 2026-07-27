@@ -256,7 +256,7 @@ def _sanitize_value(val: Any, ref_key: bool = False) -> Any:
     """递归清理：替换 base64/data URI 和参考图数组。
 
     - 字符串以 "data:" 开头 → "(data URI, N chars)"
-    - ref_urls 类列表 → "(N refs)"
+    - ref_images 类列表 → "(N refs)"
     - 嵌套 dict 递归处理
     """
     if isinstance(val, str):
@@ -273,7 +273,7 @@ def _sanitize_value(val: Any, ref_key: bool = False) -> Any:
 
 
 # 可能含参考图/base64 数据的字段名
-_REF_KEYS: set[str] = {"ref_urls", "image", "image_url", "image_urls", "b64_json", "reference_images"}
+_REF_KEYS: set[str] = {"ref_images", "image", "image_url", "image_urls", "b64_json", "reference_images"}
 
 
 def summarize_body(body: dict) -> dict:
@@ -281,7 +281,7 @@ def summarize_body(body: dict) -> dict:
 
     - prompt / input / content → 长文本截断显示字数
     - data:xxx;base64,... → 替换为 "(data URI, N chars)"
-    - ref_urls 列表 → 替换为 "(N refs)"
+    - ref_images 列表 → 替换为 "(N refs)"
     - 不修改原始 dict
     """
     if not body:

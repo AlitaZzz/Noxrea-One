@@ -42,7 +42,7 @@ class VideoService(BaseCapabilityService):
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行视频生成。"""
         # 1. 准备基础参数（业务语义）
@@ -57,8 +57,8 @@ class VideoService(BaseCapabilityService):
         if "frame_rate" in params:
             body["frame_rate"] = params["frame_rate"]
 
-        if ref_urls:
-            body["ref_urls"] = ref_urls
+        if ref_images:
+            body["ref_images"] = ref_images
 
         # 2. request_builder 一步完成 body 构造（mapping → transforms → patch）
         body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)

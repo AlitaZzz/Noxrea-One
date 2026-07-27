@@ -25,11 +25,11 @@ logger = logging.getLogger(__name__)
 
 async def process(task: GenerationTask) -> tuple[str | None, str | None]:
     """处理 bg_removal 任务：获取源图 → 调推理服务 → 结果落本地。"""
-    ref_urls = task.ref_urls or []
-    if not ref_urls:
+    ref_images = task.ref_images or []
+    if not ref_images:
         return None, "No source image URL provided"
 
-    source_url = ref_urls[0]
+    source_url = ref_images[0]
 
     try:
         # 1. SSRF 防护：同源读本机磁盘（无出网）；白名单内 dns_pin 安全下载；其它拒绝

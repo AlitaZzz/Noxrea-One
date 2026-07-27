@@ -2,7 +2,7 @@
 test_p0_4_task_crud — 生成任务 CRUD 测试。
 
 重点覆盖：
-  - JSON 字段（config、ref_urls）读写一致性
+  - JSON 字段（config、ref_images）读写一致性
   - 跨用户隔离
   - 取消任务流程
 """
@@ -47,7 +47,7 @@ class TestTaskCreateAndRead:
             "resolution": "1K",
             "ratio": "1:1",
             "n": 1,
-            "refUrls": ["http://example.com/ref1.png", "http://example.com/ref2.png"],
+            "ref_images": ["http://example.com/ref1.png", "http://example.com/ref2.png"],
         }
         if overrides:
             body.update(overrides)
@@ -57,7 +57,7 @@ class TestTaskCreateAndRead:
 
     @pytest.mark.asyncio
     async def test_create_and_read_back(self, async_client: AsyncClient, channel_id: str):
-        """创建任务后读取，config/ref_urls 应为 dict/list 而非字符串。"""
+        """创建任务后读取，config/ref_images 应为 dict/list 而非字符串。"""
         data = await self._create_task(async_client, channel_id)
         task_id = data["id"]
 
@@ -71,10 +71,10 @@ class TestTaskCreateAndRead:
         assert task["config"]["model"] == "gpt-4"
         assert task["config"]["channel_id"] == int(channel_id)
 
-        # ref_urls 应该是 list，不是字符串
-        assert isinstance(task["ref_urls"], list), f"ref_urls is {type(task['ref_urls'])}: {task['ref_urls']}"
-        assert len(task["ref_urls"]) == 2
-        assert task["ref_urls"][0] == "http://example.com/ref1.png"
+        # ref_images 应该是 list，不是字符串
+        assert isinstance(task["ref_images"], list), f"ref_images is {type(task['ref_images'])}: {task['ref_images']}"
+        assert len(task["ref_images"]) == 2
+        assert task["ref_images"][0] == "http://example.com/ref1.png"
 
     @pytest.mark.asyncio
     async def test_bg_removal_task_empty_config(self, async_client: AsyncClient, channel_id: str):
@@ -88,10 +88,10 @@ class TestTaskCreateAndRead:
         assert data["config"] == {}
 
     @pytest.mark.asyncio
-    async def test_no_ref_urls(self, async_client: AsyncClient, channel_id: str):
-        """不传 ref_urls 时字段应为 None。"""
-        data = await self._create_task(async_client, channel_id, {"refUrls": None})
-        assert data["ref_urls"] is None or data["ref_urls"] == []
+    async def test_no_ref_images(self, async_client: AsyncClient, channel_id: str):
+        """不传 ref_images 时字段应为 None。"""
+        data = await self._create_task(async_client, channel_id, {"ref_images": None})
+        assert data["ref_images"] is None or data["ref_images"] == []
 
     @pytest.mark.asyncio
     async def test_config_with_extra_fields(self, async_client: AsyncClient, channel_id: str):
@@ -210,5 +210,5 @@ class TestTaskCreateAndRead:
         assert isinstance(task["config"], dict)
         assert task["config"]["model"] == "gpt-4"
         assert task["config"]["resolution"] == "2K"
-        # ref_urls
-        assert isinstance(task["ref_urls"], list)
+        # ref_images
+        assert isinstance(task["ref_images"], list)

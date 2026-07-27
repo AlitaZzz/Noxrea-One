@@ -76,7 +76,7 @@ def read_self_file(url: str, user_id: int) -> tuple[bytes, str] | None:
     return data, mime
 
 
-async def resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
+async def resolve_refs(ref_images: list[str], user_id: int) -> list[str]:
     """Convert self/allowed file URLs to base64 data URLs (external providers can't reach localhost).
 
     三档：
@@ -84,7 +84,7 @@ async def resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
       2) 白名单内 URL → dns_pin 安全 fetch 后转 base64
       3) 其它外链 → 透传原串（不下载，交由 provider 自行访问）
     """
-    if not ref_urls:
+    if not ref_images:
         return []
     resolved: list[str] = []
     from app.services.ssrf import (
@@ -94,7 +94,7 @@ async def resolve_refs(ref_urls: list[str], user_id: int) -> list[str]:
         dns_pin,
     )
 
-    for url in ref_urls:
+    for url in ref_images:
         # 1) 同源 → 读盘（无出网）
         if is_self_url(url):
             pair = read_self_file(url, user_id)

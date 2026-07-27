@@ -3,7 +3,7 @@ ImageService — 图片生成能力服务。
 
 调用链（重构后）：
   ImageService.execute()
-      → 构建 ImageRequest（业务参数：resolution / ratio / quality / n / image）
+      → 构建 ImageRequest（业务参数：resolution / ratio / quality / n / ref_images）
       → request_builder.engine.build()（mapping → transforms → patch）
       → ProtocolRegistry.get(protocol_name, "image") → build_request()
       → TaskManager.submit_and_wait()
@@ -53,7 +53,7 @@ class ImageService(BaseCapabilityService):
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行图片生成。"""
 
@@ -66,7 +66,7 @@ class ImageService(BaseCapabilityService):
                 ratio=params.get("ratio"),
                 quality=params.get("quality"),
                 n=params.get("n", 1),
-                image=ref_urls,
+                ref_images=ref_images,
             )
         except ValidationError as e:
             logger.info(log_event(self.capability, task_id=task_id, stage="failed",
@@ -99,11 +99,11 @@ class ImageService(BaseCapabilityService):
 
         # 渠道自定义端点覆盖（从 ChannelConfig 读取）
         # 无参考图（纯文本生图）→ image.generations；有参考图（图生图/编辑）→ image.edits
-        operation = "image.edits" if ref_urls else "image.generations"
+        operation = "image.edits" if ref_images else "image.generations"
         override = channel_config.get_endpoint_override(operation)
         if override:
             endpoint = base_url.rstrip("/") + override
-        elif ref_urls:
+        elif ref_images:
             # 无手动覆盖但有参考图：自动把 /images/generations 替换为 /images/edits
             endpoint = endpoint.replace("/images/generations", "/images/edits")
 

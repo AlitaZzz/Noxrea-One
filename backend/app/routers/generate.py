@@ -81,11 +81,11 @@ async def create_task(
 
     task_id = uuid.uuid4().hex[:8]
     now = datetime.now(timezone.utc)
-    ref_urls = body.get("refUrls") or body.get("ref_urls") or []
+    ref_images = body.get("ref_images") or []
     node_id = body.get("nodeId") or body.get("node_id") or ""
 
     task = await crud.create_task(
-        db, task_id, user.id, task_type, prompt, config, ref_urls, node_id, now,
+        db, task_id, user.id, task_type, prompt, config, ref_images, node_id, now,
         capability=task_type, protocol=protocol_name, model=model_name,
     )
     logger.info(log_event("generate", task_id=task_id, stage="created",

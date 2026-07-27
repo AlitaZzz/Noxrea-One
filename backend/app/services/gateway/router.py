@@ -39,7 +39,7 @@ class CapabilityRouter:
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict:
         """分发到对应能力服务并执行。
 
@@ -75,5 +75,5 @@ class CapabilityRouter:
             protocol_name=protocol_name,
             channel_config=channel_config,
             model=model,
-            ref_urls=ref_urls,
+            ref_images=ref_images,
         )

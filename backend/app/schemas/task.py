@@ -11,7 +11,7 @@ class TaskCreate(BaseModel):
     type: TaskTypeValue = "image"
     prompt: str = ""
     config: dict = {}
-    ref_urls: Optional[list[str]] = None
+    ref_images: Optional[list[str]] = None
     node_id: str = ""
 
 
@@ -26,7 +26,7 @@ class TaskOut(BaseModel):
     status: str
     prompt: str
     config: dict
-    ref_urls: Optional[list[str]] = None
+    ref_images: Optional[list[str]] = None
     result_urls: Optional[list[str]] = None
     result_url: Optional[str] = None
     error: Optional[str] = None
