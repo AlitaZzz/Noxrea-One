@@ -82,7 +82,9 @@ export function useCanvasKeyboard() {
       // ---- Copy ----
       if (mod && e.key === "c") {
         const selIds = getSelectedNodeIds();
-        if (selIds.length > 0) {
+        // 如果用户在画布外（如通知、弹窗文本）选中了文字，交给浏览器原生复制
+        const textSelection = window.getSelection()?.toString() ?? "";
+        if (selIds.length > 0 && !textSelection) {
           e.preventDefault();
           const allNodes = useCanvasStore.getState().nodes;
           const selNodes = allNodes.filter((n) => selIds.includes(n.id));

@@ -198,7 +198,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           prompt: p.trim(),
           model: entry.modelName,
           channelId: entry.channelId,
-          quality: (!modelParams || modelParams.params.includes("quality")) ? (q === "auto" ? undefined : q) : undefined,
+          quality: (!modelParams || modelParams.params.includes("quality")) ? q : undefined,
           resolution: (!modelParams || modelParams.params.includes("resolution")) ? resolution : undefined,
           ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
           n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
