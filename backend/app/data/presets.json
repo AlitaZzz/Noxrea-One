@@ -5,7 +5,7 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": { "image": "image", "ratio": "size"},
+        "mapping": { "ref_images": "image", "ratio": "size"},
         "body_patch": {}
       },
       "protocol": {
@@ -21,7 +21,7 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": { "image": "image_urls", "ratio": "size"},
+        "mapping": { "ref_images": "image_urls", "ratio": "size"},
         "body_patch": { "official_fallback": false }
       },
       "protocol": {}
@@ -33,7 +33,7 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": { "image": "extra_body.image", "resolution": "size"},
+        "mapping": { "ref_images": "extra_body.image", "resolution": "size"},
         "body_patch": {}
       },
       "protocol": {
@@ -45,12 +45,12 @@
   },
   {
     "name": "FHL",
-    "baseUrl": "",
+    "baseUrl": "https://www.fhl.mom/v1",
     "protocol": "openai",
     "config": {
       "request": {
         "mapping": {
-          "image": "images[].image_url",
+          "ref_images": "images[].image_url",
           "ratio": "size"
         },
         "body_patch": {}

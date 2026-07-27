@@ -100,7 +100,7 @@ async def process_task(task: GenerationTask) -> None:
     provider = urlparse(base_url).hostname or base_url
     logger.info(log_event("executor", task_id=task.id, stage="dispatch",
                           provider=provider, channel=channel_id_int,
-                          protocol=protocol_name, refs=len(task.ref_urls or [])))
+                          protocol=protocol_name, refs=len(task.ref_images or [])))
 
     # ── SSRF 校验 ──
     from app.services.ssrf import _validate_worker, dns_pin, SSREFError
@@ -201,7 +201,7 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
 
     # 参考图解析（前置到 gateway 调用前，但由 resolver 模块处理）
     from app.services.resolvers.reference import resolve_refs
-    refs = await resolve_refs(task.ref_urls or [], task.user_id)
+    refs = await resolve_refs(task.ref_images or [], task.user_id)
 
     result = await CapabilityRouter.dispatch(
         capability=capability,
@@ -214,7 +214,7 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
         protocol_name=protocol_name,
         channel_config=ctx.channel_config,
         model=ctx.model,
-        ref_urls=refs,
+        ref_images=refs,
     )
 
     if result.get("status") == "completed":

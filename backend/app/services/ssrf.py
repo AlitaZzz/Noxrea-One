@@ -187,7 +187,7 @@ class SSRFRedirectValidator:
         resolve_and_validate(target)
 
 
-# ── Worker 生成链路辅助（用户可控 URL：ref_urls / source_url）────────
+# ── Worker 生成链路辅助（用户可控 URL：ref_images / source_url）────────
 
 class SSREFError(ValueError):
     """后台协程使用的 SSRF 异常：替代 HTTPException，便于协程层 except 后优雅标 failed。"""

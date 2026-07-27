@@ -199,7 +199,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           seconds: (!modelParams || modelParams.params.includes("seconds")) ? sec : undefined,
           generateAudio: audio,
           n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
-          refUrls: refs.length > 0 ? refs : undefined,
+          ref_images: refs.length > 0 ? refs : undefined,
           nodeId,
         }),
       });

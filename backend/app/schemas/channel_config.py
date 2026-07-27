@@ -7,7 +7,7 @@ ChannelConfig - 渠道高级设置配置模型。
 config JSON 格式示例：
 {
     "request": {
-        "mapping": {"reference_images": "extra_body.image"},
+        "mapping": {"ref_images": "extra_body.image"},
         "body_patch": {"response_format": "url"},
         "model_overrides": {
             "gpt-image-*": {"mapping": {"ratio": "size"}}
@@ -39,7 +39,7 @@ class RequestConfig(BaseModel):
     submit_style: str = Field(default="json")
 
     # 字段映射：{"内部字段名": "目标嵌套路径"} -- 支持改名 + 挪到嵌套位置
-    # 例：{"reference_images": "extra_body.image"}
+    # 例：{"ref_images": "extra_body.image"}
     # target=None 即删除该字段
     mapping: dict[str, str | None] = Field(default_factory=dict)
 

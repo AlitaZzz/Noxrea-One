@@ -1,5 +1,5 @@
 """
-P0: worker 生成链路 SSRF 防护（用户可控 ref_urls / source_url）。
+P0: worker 生成链路 SSRF 防护（用户可控 ref_images / source_url）。
 
 - 同源文件 URL → 读本机磁盘转 base64，且不发任何网络请求（消除 hairpin）
 - 同源越权（他人 uid）→ 不读盘
@@ -90,7 +90,7 @@ async def test_bg_removal_rejects_external_source(monkeypatch):
     """非同源源图 → 返回 (None, 'must be hosted')，且根本不会去 fetch 外网。"""
     task = SimpleNamespace(
         id="t1", user_id=7, type="bg_removal",
-        ref_urls=["https://evil.com/x.png"], config={}, prompt="",
+        ref_images=["https://evil.com/x.png"], config={}, prompt="",
     )
     monkeypatch.setattr(bg_removal, "read_self_file", lambda *a, **k: None)
     monkeypatch.setattr("app.services.ssrf.is_self_url", lambda *a, **k: False)
@@ -106,7 +106,7 @@ async def test_bg_removal_self_source_reads_disk(monkeypatch):
     """同源源图 → 读盘成功，走到推理服务（可信 INFERENCE_SERVICE_URL），不 fetch 外网。"""
     task = SimpleNamespace(
         id="t1", user_id=7, type="bg_removal",
-        ref_urls=["http://testserver/api/files/7/ab/deadbeef.png"], config={}, prompt="",
+        ref_images=["http://testserver/api/files/7/ab/deadbeef.png"], config={}, prompt="",
     )
     monkeypatch.setattr(bg_removal, "read_self_file", lambda *a, **k: (b"IMGDATA", "image/png"))
     monkeypatch.setattr("app.services.ssrf.is_self_url", lambda *a, **k: True)
@@ -157,7 +157,7 @@ async def test_process_task_base_url_internal_fails(monkeypatch):
     """channel.base_url 配内网 → task failed（显式 SSREFError 路径，文案清晰）。"""
     task = SimpleNamespace(
         id="t1", user_id=7, type="image", capability="image", protocol="openai",
-        ref_urls=[], config={"channel_id": 1, "model": "m"}, prompt="",
+        ref_images=[], config={"channel_id": 1, "model": "m"}, prompt="",
     )
 
     class FakeChannel:

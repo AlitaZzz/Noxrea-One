@@ -96,7 +96,7 @@ def build(
 
 
 # 参考图/大体积字段：只统计数量，不把 base64/URL 打进日志
-_REF_KEYS = {"ref_urls", "image", "image_url", "image_urls", "b64_json", "reference_images"}
+_REF_KEYS = {"ref_images", "image", "image_url", "image_urls", "b64_json", "reference_images"}
 # 长文本字段：只记录字符数
 _TRUNCATE_KEYS = {"prompt", "input", "content", "text"}
 
@@ -105,7 +105,7 @@ def _summarize_internal(internal: dict) -> dict[str, Any]:
     """把前端传入的参数全部回显到日志，对敏感/大体积字段做脱敏。
 
     - prompt 等长文本 -> prompt_len / input_len …（字符数）
-    - image / ref_urls 等 -> refs=N（数量）
+    - image / ref_images 等 -> refs=N（数量）
     - 标量 -> 原值；list -> (N items)；dict -> (N keys)
     - None 值跳过
     """

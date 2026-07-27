@@ -28,7 +28,7 @@ async def _claim_tasks(db: AsyncSession, limit: int = 10) -> list[GenerationTask
     """原子地批量领取最多 limit 条 pending 任务。
 
     委托 crud_task.claim_pending_tasks：声明式 update(...).returning(GenerationTask)
-    返回 ORM 对象，config/ref_urls 已按模型声明反序列化为 dict/list。
+    返回 ORM 对象，config/ref_images 已按模型声明反序列化为 dict/list。
     """
     return await crud_task.claim_pending_tasks(db, limit)
 

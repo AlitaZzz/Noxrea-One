@@ -2,12 +2,12 @@
 P1: Worker 改走 crud 层 + 声明式 JSON 列，消除手搓 SQL 导致的静默失效。
 
 覆盖点：
-- claim_pending_tasks 返回 ORM 对象：config 为 dict、ref_urls 为 list（而非 str）
+- claim_pending_tasks 返回 ORM 对象：config 为 dict、ref_images 为 list（而非 str）
   —— 直接验证根因 1（"字符串伪装成 dict"）已消除
 - claim 仅领 pending、按 created_at 排序、受 limit 限制
 - update_task_status 取消保护：failed（已取消）不被 completed 覆盖
 - cleanup_zombie_tasks：老 processing 标 failed、新 processing 不动、返回正确行数
-- _process_task 集成：claim 给的 dict config / list ref_urls 流到处理函数，
+- _process_task 集成：claim 给的 dict config / list ref_images 流到处理函数，
   不再依赖 json.loads 补丁也能正确解析
 """
 from contextlib import asynccontextmanager
@@ -39,7 +39,7 @@ async def test_claim_returns_orm_with_deserialized_json(db):
     assert len(claimed) == 2
     for t in claimed:
         assert isinstance(t.config, dict), "config 必须是 dict，不能是 str（根因已修复）"
-        assert isinstance(t.ref_urls, (list, type(None))), "ref_urls 必须是 list/None，不能是 str"
+        assert isinstance(t.ref_images, (list, type(None))), "ref_images 必须是 list/None，不能是 str"
     # 按 created_at ASC 排序：a 先创建，应在前
     assert [t.id for t in claimed] == ["a", "b"]
 
@@ -119,7 +119,7 @@ async def test_cleanup_zombies_marks_stuck_processing(db):
 
 @pytest.mark.asyncio
 async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch):
-    """端到端验证：claim 给的 dict config / list ref_urls 流到 executor.process_task，无需 json.loads。"""
+    """端到端验证：claim 给的 dict config / list ref_images 流到 executor.process_task，无需 json.loads。"""
     now = datetime.now(timezone.utc)
     await crud_task.create_task(
         db, "bg1", 1, "bg_removal", "p",
@@ -129,7 +129,7 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
     claimed = await crud_task.claim_pending_tasks(db, 10)
     task = claimed[0]
     assert isinstance(task.config, dict)
-    assert isinstance(task.ref_urls, list)
+    assert isinstance(task.ref_images, list)
 
     # 把 executor 内部的 async_session 重定向到测试 session，保证状态可见
     @asynccontextmanager
@@ -141,8 +141,8 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
     seen: dict = {}
 
     async def fake_bg(t):
-        # 到达内部推理封装时，ref_urls 必须是 list（而非 str）
-        seen["ref_urls"] = t.ref_urls
+        # 到达内部推理封装时，ref_images 必须是 list（而非 str）
+        seen["ref_images"] = t.ref_images
         return "http://testserver/api/files/1/gen/r.png", None
 
     monkeypatch.setattr("app.services.inference.bg_removal.process", fake_bg)
@@ -155,6 +155,6 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
 
     await executor.process_task(task)
 
-    assert isinstance(seen["ref_urls"], list)
+    assert isinstance(seen["ref_images"], list)
     final = await crud_task.get_task(db, "bg1")
     assert final.status == "completed"

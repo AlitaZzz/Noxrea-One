@@ -44,7 +44,7 @@ class BaseCapabilityService(ABC):
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行一次能力调用。
 
@@ -58,7 +58,7 @@ class BaseCapabilityService(ABC):
             protocol_name: 协议名称（"openai" / "gemini" / "ark"）
             channel_config: 渠道高级配置（request + protocol 两块）
             model: 模型名称
-            ref_urls: 参考图 URL 列表
+            ref_images: 参考图 URL 列表
 
         Returns:
             {

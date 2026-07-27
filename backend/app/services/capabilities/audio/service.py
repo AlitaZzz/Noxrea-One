@@ -38,7 +38,7 @@ class AudioService(BaseCapabilityService):
         protocol_name: str,
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
-        ref_urls: list[str] | None = None,
+        ref_images: list[str] | None = None,
     ) -> dict[str, Any]:
         """执行音频生成/识别。"""
         mode = params.get("mode", "tts")

@@ -26,7 +26,7 @@ async def test_n_clamped_to_range(monkeypatch):
     async def fake_get_channel(db, cid, uid):
         return FakeChannel()
 
-    async def fake_create_task(db, task_id, user_id, ttype, prompt, config, ref_urls, node_id, now, **kwargs):
+    async def fake_create_task(db, task_id, user_id, ttype, prompt, config, ref_images, node_id, now, **kwargs):
         captured["config"] = config
         # 返回一个最小可 model_validate 的对象
         class T:
@@ -38,7 +38,7 @@ async def test_n_clamped_to_range(monkeypatch):
         t.status = "pending"
         t.prompt = prompt
         t.config = config
-        t.ref_urls = ref_urls
+        t.ref_images = ref_images
         t.node_id = node_id
         t.created_at = now
         t.updated_at = now

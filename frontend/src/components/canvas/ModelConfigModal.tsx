@@ -483,34 +483,64 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '渠道高级配置，用于适配不同供应商的 API 格式\n' +
                     '所有字段均可留空 {}，未配置则不生效\n' +
                     '\n' +
-                    'request  请求构造配置\n' +
-                    '  .mapping         字段重映射：改名或移动到嵌套路径\n' +
-                    '                   {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
-                    '                   {"待删除字段": null}          删除该字段\n' +
-                    '  .body_patch      请求体注入：深度合并进最终请求体\n' +
+                    '━━━ request 请求构造 ━━━\n' +
+                    '执行顺序：transforms(后端 model_params.json) → auto-clean → mapping → body_patch\n' +
+                    '\n' +
+                    '  mapping          字段重映射：改名或移动到嵌套路径\n' +
+                    '                   {"源字段": "目标.路径"}             移动并重命名\n' +
+                    '                   {"ratio": "size"}                  ratio → size\n' +
+                    '                   {"ref_images": "extra_body.image"}  挪到嵌套\n' +
+                    '                   {"images": "images[].image_url"}  数组展开（见下方）\n' +
+                    '                   {"待删除字段": null}              删除该字段\n' +
+                    '\n' +
+                    '  body_patch       固定注入：deep merge 到最终请求体\n' +
+                    '                   {"response_format": "url"}\n' +
                     '                   {"extra_body": {"return_base64": true}}\n' +
-                    '  .model_overrides 按模型覆盖（key 支持通配符 * ?，可选）\n' +
-                    '                   {"gpt-image-*": {"mapping": {...}, "body_patch": {...}}}\n' +
                     '\n' +
-                    'protocol 协议配置\n' +
-                    '  .endpoints       端点路径覆盖\n' +
-                    '                   {"image.generate": "/images/generations"}\n' +
-                    '                   {"image.edit":    "/images/edits"}\n' +
-                    '  .unwrap          解包 data 包裹（true/false）\n' +
+                    '  model_overrides  按模型覆盖（key 支持 fnmatch 通配符 * ?）\n' +
+                    '                   匹配优先级：精确名 > 通配符\n' +
+                    '                   可覆盖 mapping 和 body_patch\n' +
                     '\n' +
-                    '示例：\n' +
+                    '━━━ protocol 协议配置 ━━━\n' +
+                    '\n' +
+                    '  endpoints        端点路径覆盖，可用 key：\n' +
+                    '                   image.generations  纯文本生图\n' +
+                    '                   image.edits        图生图/编辑（有参考图）\n' +
+                    '                   video.generate     视频生成\n' +
+                    '                   llm.chat           LLM 对话\n' +
+                    '                   audio.speech       语音合成\n' +
+                    '                   例：{"image.generations": "/v1/images/generations"}\n' +
+                    '\n' +
+                    '  unwrap           解包响应外层 data 包裹（true/false）\n' +
+                    '                   当 API 返回 {"data": {...}} 时设为 true\n' +
+                    '\n' +
+                    '━━━ 数组映射语法 ━━━\n' +
+                    '  {"images": "images[]"}            → images: ["u1","u2"]\n' +
+                    '  {"images": "images[].image_url"}  → images: [{"image_url":"u1"},...]\n' +
+                    '\n' +
+                    '━━━ 完整示例 ━━━\n' +
                     '{\n' +
                     '  "request": {\n' +
                     '    "mapping": {\n' +
-                    '      "ratio": "size"\n' +
+                    '      "ratio": "size",\n' +
+                    '      "ref_images": "extra_body.image"\n' +
                     '    },\n' +
-                    '    "body_patch": {},\n' +
+                    '    "body_patch": {\n' +
+                    '      "response_format": "url"\n' +
+                    '    },\n' +
                     '    "model_overrides": {\n' +
-                    '      "gpt-image-*": {"mapping": {"ratio": "image_size"}}\n' +
+                    '      "gpt-image-*": {\n' +
+                    '        "mapping": {"ratio": "image_size"},\n' +
+                    '        "body_patch": {"quality": "hd"}\n' +
+                    '      }\n' +
                     '    }\n' +
                     '  },\n' +
                     '  "protocol": {\n' +
-                    '    "endpoints": {}\n' +
+                    '    "endpoints": {\n' +
+                    '      "image.generations": "/v1/images/generations",\n' +
+                    '      "image.edits": "/v1/images/edits"\n' +
+                    '    },\n' +
+                    '    "unwrap": true\n' +
                     '  }\n' +
                     '}'
                   }

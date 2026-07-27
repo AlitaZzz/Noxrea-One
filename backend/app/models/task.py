@@ -27,7 +27,7 @@ class GenerationTask(Base):
     )  # pending → processing → completed / failed
     prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    ref_urls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    ref_images: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     # 多图结果：URL 列表（一次生成可返回多张）。result_url 仅作兼容镜像（= 列表首张）。
     result_urls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     result_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
