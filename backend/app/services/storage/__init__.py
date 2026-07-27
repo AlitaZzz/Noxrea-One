@@ -11,6 +11,6 @@ __init__.py - app.services.storage 包的对外入口。
 本文件再导出 save_upload_bytes，保持 `from app.services.storage import save_upload_bytes` 可用。
 """
 
-from .persist import save_upload_bytes
+from .persist import save_upload_bytes, save_upload_from_path, sniff_mime, normalize_ext
 
-__all__ = ["save_upload_bytes"]
+__all__ = ["save_upload_bytes", "save_upload_from_path", "sniff_mime", "normalize_ext"]

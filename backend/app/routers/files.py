@@ -1,6 +1,8 @@
 import os
 import hashlib
 import logging
+import tempfile
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Query
 from fastapi.responses import FileResponse
@@ -15,7 +17,7 @@ from app.services.media import (
     extract_video_frame,
     validate_user_file,
 )
-from app.services.storage import save_upload_bytes
+from app.services.storage import save_upload_from_path, sniff_mime, normalize_ext
 
 logger = logging.getLogger(__name__)
 
@@ -41,49 +43,94 @@ async def upload_file(
     category: str = Query(...),
     user=Depends(get_current_user),
 ):
-    # 分块读取 + 大小限制（避免一次性 read 大文件导致 OOM）
+    # 流式上传：边读边写 temp file + 增量 SHA256，避免大文件全量加载到内存
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    chunks: list[bytes] = []
+    chunk_size = 1024 * 1024  # 1MB per chunk
+
+    hasher = hashlib.sha256()
     total = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
+    first_chunk = b""
+
+    # temp 文件与 UPLOAD_DIR 同文件系统（os.replace 需要同分区才能原子移动）
+    fd, temp_path = tempfile.mkstemp(suffix=".tmp", dir=UPLOAD_DIR)
+
+    try:
+        with os.fdopen(fd, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        detail=f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)",
+                    )
+                f.write(chunk)
+                hasher.update(chunk)
+                if not first_chunk:
+                    first_chunk = chunk
+
+        if total == 0:
             raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty file",
             )
-        chunks.append(chunk)
-    content = b"".join(chunks)
 
-    # 落盘 + 去重 + DB 记录统一交给 storage 处理（含 magic bytes 校验与类型白名单）
-    url = await save_upload_bytes(
-        user_id=user.id,
-        content=content,
-        category=category,
-        filename=file.filename,
-    )
-    if url is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported or invalid file type",
+        # magic bytes 校验（只需首个 chunk）
+        sniffed = sniff_mime(first_chunk)
+        if not sniffed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported or invalid file type",
+            )
+
+        ext = normalize_ext(
+            os.path.splitext(file.filename or "")[1] or None,
+            sniffed,
         )
+        file_hash = hasher.hexdigest()
 
-    ext = os.path.splitext(file.filename or "image.png")[1] or ".png"
-    file_hash = hashlib.sha256(content).hexdigest()
-    logger.info(f"upload ok user={user.id} size={len(content)} url={url}")
-    return UnifiedResponse(code=200, data={"url": url, "filename": f"{file_hash}{ext}"}, msg="uploaded")
+        url = await save_upload_from_path(
+            user_id=user.id,
+            temp_path=temp_path,
+            file_hash=file_hash,
+            size=total,
+            content_type=sniffed,
+            ext=ext,
+            category=category,
+        )
+        if url is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported or invalid file type",
+            )
+
+        logger.info(f"upload ok user={user.id} size={total} url={url}")
+        return UnifiedResponse(
+            code=200,
+            data={"url": url, "filename": f"{file_hash}{ext}"},
+            msg="uploaded",
+        )
+    except Exception:
+        # 异常时清理 temp 文件
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
 
 
 @router.get("/{filepath:path}")
 async def get_file(
     filepath: str,
     w: int = Query(None, ge=1, le=4096, description="Resize image width in pixels"),
+    download: bool = Query(False, description="Trigger browser download via Content-Disposition"),
+    filename: str = Query(None, description="Override download filename (URL-decoded by FastAPI)"),
 ):
     """
-    TODO: 文件访问鉴权 — 当前完全公开，任何人拿到 URL 可读取任意用户文件。
+    TODO: 文件访问鉴权 - 当前完全公开，任何人拿到 URL 可读取任意用户文件。
     已知安全缺口，等独立方案确定后再处理（当前进度的阶段性决策，非疏忽）。
     """
     full_path = os.path.realpath(os.path.join(UPLOAD_DIR, filepath))
@@ -108,18 +155,29 @@ async def get_file(
 
     headers = {"Access-Control-Allow-Origin": "*"}
 
+    # ?download=true -> 浏览器原生下载（Content-Disposition: attachment）
+    # 绕开 fetch+blob 路径，避免 Chrome blob_storage 大文件限制
+    # 使用 FileResponse 的 filename 参数让 Starlette 自动生成 Content-Disposition
+    download_filename = None
+    if download:
+        safe_name = os.path.basename(filename) if filename else os.path.basename(filepath)
+        # 确保文件名以原始扩展名结尾
+        if not safe_name.lower().endswith(ext):
+            safe_name += ext
+        download_filename = safe_name
+        logger.info(f"download filename={download_filename}, ext={ext}, filename param={filename}")
+
     # Serve resized image when ?w= is specified
     if w is not None and ext in IMAGE_EXTS:
         cache_path = resize_and_cache_image(full_path, w, CACHE_DIR)
         if cache_path:
-            return FileResponse(cache_path, media_type="image/webp", headers=headers)
+            return FileResponse(cache_path, media_type="image/webp", headers=headers, filename=download_filename)
         # Fallback to original on any processing error
 
-    # For video, support range requests
-    if ext in (".mp4", ".webm"):
-        headers["Accept-Ranges"] = "bytes"
+    # Starlette FileResponse 自动设置 Accept-Ranges: bytes 并处理 Range 请求（206）
+    # 无需手动设置，此处直接返回 FileResponse 即可支持视频断点播放
 
-    return FileResponse(full_path, media_type=media_type, headers=headers)
+    return FileResponse(full_path, media_type=media_type, headers=headers, filename=download_filename)
 
 
 @router.post("/capture-frame")

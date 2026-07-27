@@ -82,7 +82,7 @@
       }
     }
   },
-  "nanobanana": {
+  "*nano-banana*": {
     "image": {
       "params": ["quality", "ratio", "n"],
       "defaults": { "quality": "auto", "ratio": "1:1", "n": 1 },
