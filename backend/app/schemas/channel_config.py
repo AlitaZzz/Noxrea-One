@@ -47,9 +47,15 @@ class RequestConfig(BaseModel):
     # 例：{"response_format": "url"}
     body_patch: dict[str, Any] = Field(default_factory=dict)
 
-    # 按模型覆盖：key 支持通配符（fnmatch），value 为 {mapping, body_patch} 覆盖
+    # 按模型覆盖：key 支持通配符（fnmatch），value 为 {mapping, body_patch, param_ref} 覆盖
     # 例：{"gpt-image-*": {"mapping": {"ratio": "size"}}}
     model_overrides: dict[str, dict] = Field(default_factory=dict)
+
+    # 参数引用：仅在 model_overrides 内使用
+    # 指定用哪个模型名去查 model_params.json 的 transforms/params/defaults/constraints
+    # 空字符串 = 不覆盖，用前端原始模型名查表
+    # 例："ABC": {"param_ref": "gpt-image-2"} -> 选 ABC 时用 gpt-image-2 的 transforms
+    param_ref: str = Field(default="")
 
 
 class ProtocolConfig(BaseModel):
@@ -148,4 +154,5 @@ class ChannelConfig(BaseModel):
             body_patch=_deep_merge_dicts(
                 self.request.body_patch, override.get("body_patch", {})
             ),
+            param_ref=override.get("param_ref", ""),
         )

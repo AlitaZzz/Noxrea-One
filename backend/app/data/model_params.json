@@ -18,7 +18,7 @@
       }
     }
   },
-  "gpt-image-2": {
+  "*gpt-image-2*": {
     "image": {
       "params": ["quality", "resolution", "ratio", "n"],
       "defaults": { "quality": "auto", "resolution": "1K", "ratio": "1:1", "n": 1 },
