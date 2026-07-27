@@ -49,8 +49,8 @@ class VideoService(BaseCapabilityService):
         body = {
             "model": model,
             "prompt": prompt,
-            "resolution": params.get("resolution", "1K"),
-            "ratio": params.get("ratio", "16:9"),
+            "resolution": params.get("resolution"),
+            "ratio": params.get("ratio"),
             "seconds": params.get("seconds", 5),
         }
 
@@ -61,7 +61,7 @@ class VideoService(BaseCapabilityService):
             body["ref_urls"] = ref_urls
 
         # 2. request_builder 一步完成 body 构造（mapping → transforms → patch）
-        body = build(body, channel_config, self.capability, task_id=task_id)
+        body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # 3. Protocol: 构造请求
         protocol = ProtocolRegistry.get(protocol_name, self.capability)

@@ -1,14 +1,16 @@
 """
-Request Builder 引擎 —— 将内部请求体转换为 Provider 请求体。
+Request Builder 引擎 -- 将内部请求体转换为 Provider 请求体。
 
 固定执行顺序（不可变更）：
-    1. mapping   —— 字段改名/移动到嵌套路径
-    2. transforms —— 值变换（base64 编码等）
-    3. patch     —— 固定参数注入（deep merge）
+    1. transforms -- 值变换（从 model_params.json 按模型加载，如 ratio->像素尺寸查表）
+    2. auto-clean -- 引擎内置清理：删内部字段、删 None 值、删 composite 已消费字段
+    3. mapping   -- 字段改名/移动到嵌套路径（渠道级，含 model_overrides）
+    4. patch     -- 固定参数注入（deep merge）
 
-调用方只需传入内部请求 dict 和 ChannelConfig，引擎自动按顺序执行。
+调用方只需传入内部请求 dict、ChannelConfig、model_name 和 capability，
+引擎自动按顺序执行。
 
-每个步骤都输出 info 日志，显示 原始 → 步骤 → 结果 的完整转换管线。
+每个步骤都输出 info 日志，显示 原始 -> 步骤 -> 结果 的完整转换管线。
 """
 
 from __future__ import annotations
@@ -19,40 +21,63 @@ from typing import Any
 
 from app.logging_config import log_event
 from app.schemas.channel_config import ChannelConfig
+from app.services.model_params import ModelParamsRegistry
 from app.services.request_builder.mapping import apply_mapping
 from app.services.request_builder.transforms import apply_transforms
 from app.services.request_builder.patch import apply_patch
 
 logger = logging.getLogger(__name__)
 
+# 引擎内置清理：这些内部字段不传给 Provider
+_INTERNAL_FIELDS = {"capability"}
 
-def build(internal: dict, channel_config: ChannelConfig, capability: str = "", *, task_id: str | None = None) -> dict:
+
+def build(
+    internal: dict,
+    channel_config: ChannelConfig,
+    capability: str = "",
+    model_name: str = "",
+    *,
+    task_id: str | None = None,
+) -> dict:
     """将 Internal Request 转换为 Provider Request 体。
 
     Args:
         internal: 内部请求 dict（业务参数）
         channel_config: 渠道配置对象
-        capability: 能力名称（"image"/"video"/"llm"/"audio"），供特殊逻辑使用
+        capability: 能力名称（"image"/"video"/"llm"/"audio"）
+        model_name: 模型名称，用于加载模型级 transforms
         task_id: 任务 ID，用于日志关联
 
     Returns:
         Provider 格式的请求体 dict
 
-    执行顺序：mapping → transforms → patch
+    执行顺序：transforms -> auto-clean -> mapping -> patch
     """
     # 拷贝避免修改入参
     body = dict(internal)
-    cfg = channel_config.request
 
-    # 1. 字段映射：改名/移动到嵌套路径
+    # 1. transforms（模型级，从 model_params.json 加载）
+    consumed: set = set()
+    model_params = ModelParamsRegistry().get(model_name, capability)
+    if model_params and model_params.transforms:
+        body, consumed = apply_transforms(body, model_params.transforms)
+
+    # 2. auto-clean（引擎内置，无需配置）
+    for key in list(body.keys()):
+        if key in _INTERNAL_FIELDS:
+            del body[key]
+        elif body[key] is None:
+            del body[key]
+        elif key in consumed:
+            del body[key]
+
+    # 3. mapping（渠道级，含 model_overrides）
+    cfg = channel_config.resolve_request(model_name)
     if cfg.mapping:
         body = apply_mapping(body, cfg.mapping)
 
-    # 2. 值变换：base64 编码等
-    if cfg.transforms:
-        body = apply_transforms(body, cfg.transforms)
-
-    # 3. 固定注入：deep merge body_patch
+    # 4. patch（渠道级）
     if cfg.body_patch:
         body = apply_patch(body, cfg.body_patch)
 
@@ -79,9 +104,9 @@ _TRUNCATE_KEYS = {"prompt", "input", "content", "text"}
 def _summarize_internal(internal: dict) -> dict[str, Any]:
     """把前端传入的参数全部回显到日志，对敏感/大体积字段做脱敏。
 
-    - prompt 等长文本 → prompt_len / input_len …（字符数）
-    - image / ref_urls 等 → refs=N（数量）
-    - 标量 → 原值；list → (N items)；dict → (N keys)
+    - prompt 等长文本 -> prompt_len / input_len …（字符数）
+    - image / ref_urls 等 -> refs=N（数量）
+    - 标量 -> 原值；list -> (N items)；dict -> (N keys)
     - None 值跳过
     """
     fields: dict[str, Any] = {}
@@ -130,36 +155,3 @@ def _prompt_chars(prompt: Any) -> int:
                                 total += len(sub)
         return total
     return len(str(prompt))
-
-
-def _describe_mapping(body: dict, mapping: dict[str, str | None]) -> list[str]:
-    """生成映射变更描述，如 ["size → extra_body.size", "n → 删除"]"""
-    changes = []
-    for src, target in mapping.items():
-        if target is None:
-            changes.append(f"{src} → 删除")
-        elif src in body:
-            changes.append(f"{src} → {target}")
-        else:
-            changes.append(f"{src} (不存在) → {target}")
-    return changes
-
-
-def _describe_transforms(body: dict, transforms: dict[str, str]) -> list[str]:
-    """生成变换变更描述，如 ["image → base64"]"""
-    changes = []
-    for path, ttype in transforms.items():
-        exists = "✓" if _path_exists(body, path) else "✗"
-        changes.append(f"{path}[{exists}] → {ttype}")
-    return changes
-
-
-def _path_exists(d: dict, path: str) -> bool:
-    """检查嵌套路径是否存在。"""
-    parts = path.split(".")
-    current = d
-    for part in parts:
-        if not isinstance(current, dict) or part not in current:
-            return False
-        current = current[part]
-    return True

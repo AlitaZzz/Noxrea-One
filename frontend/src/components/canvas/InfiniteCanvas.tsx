@@ -29,9 +29,10 @@ import CanvasControls from "@/components/canvas/CanvasControls";
 import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
 import CenterToolbar from "@/components/canvas/CenterToolbar";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
-import GenerationPanel from "@/components/canvas/GenerationPanel";
+import ImageGenerationPanel from "@/components/canvas/ImageGenerationPanel";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
 import NodeInspector from "@/components/canvas/NodeInspector";
+import VideoGenerationPanel from "@/components/canvas/VideoGenerationPanel";
 import DirectorNode from "@/components/canvas/nodes/DirectorNode";
 import GroupNode from "@/components/canvas/nodes/GroupNode";
 import ImageNode from "@/components/canvas/nodes/ImageNode";
@@ -492,14 +493,14 @@ export default function InfiniteCanvas() {
         {/* Generation panel — follows selected empty image node */}
         {genTargetId && (
           <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12}>
-            <GenerationPanel key={genTargetId} nodeId={genTargetId} type="image" />
+            <ImageGenerationPanel key={genTargetId} nodeId={genTargetId} />
           </RfNodeToolbar>
         )}
 
         {/* Generation panel — follows selected video node */}
         {genTargetVideoId && (
           <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12}>
-            <GenerationPanel key={genTargetVideoId} nodeId={genTargetVideoId} type="video" />
+            <VideoGenerationPanel key={genTargetVideoId} nodeId={genTargetVideoId} />
           </RfNodeToolbar>
         )}
 
