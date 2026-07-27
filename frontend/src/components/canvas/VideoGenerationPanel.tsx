@@ -1,17 +1,16 @@
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined,RobotOutlined } from "@ant-design/icons";
-import { App, Button,Input, Popover } from "antd";
-import { memo, useEffect, useMemo,useRef, useState } from "react";
+import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
+import { App, Button, Input, Popover, Slider } from "antd";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
-import { MenuItem,MenuPopover } from "@/components/common/MenuPopover";
+import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
-import { apiUpload, BASE,getTokenHeader } from "@/lib/api";
-import { EventNames } from "@/lib/event-names";
+import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
-import { createEdge,createImageNode } from "@/lib/node-defaults";
-import { type GenSettings, isGenerating as isGeneratingBinding, type MediaGenFields,ModelChannel, NODE_TYPE } from "@/lib/types";
-import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { createEdge, createImageNode } from "@/lib/node-defaults";
+import { isGenerating as isGeneratingBinding, type MediaGenFields, ModelChannel, NODE_TYPE, type VideoGenSettings } from "@/lib/types";
+import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
@@ -21,11 +20,10 @@ function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
   const maxDim = 14;
   const boxW = Math.max(3, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
   const boxH = Math.max(3, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
-  return <div className="border flex-shrink-0"
-    style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border)" }} />;
+  return <span className="inline-flex items-center justify-center" style={{ width: 17, height: 17, marginRight: 3, flexShrink: 0 }}>
+    <span className="rounded-[2px]" style={{ width: boxW, height: boxH, border: `1.5px solid currentColor` }} />
+  </span>;
 }
-
-interface Props { nodeId: string; type?: "image" | "video"; }
 
 interface ModelOption {
   value: string;
@@ -33,39 +31,78 @@ interface ModelOption {
   modelName: string;
 }
 
-const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }: Props) {
+interface Props { nodeId: string; }
+
+const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
   const t = useI18nStore((s) => s.t);
-  const capability = type === "video" ? "video" : "image";
   const channels = useModelStore((s) => s.channels);
+  const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = channels.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes(capability)).map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name }))
+    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
   // Read persisted settings from node data
   const saved = useMemo(() => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<GenSettings>;
+    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
+    const mk = s.modelKey || allModels[0]?.value || "";
+    const entry = allModels.find((m) => m.value === mk);
+    const mp = entry ? findModelParams(entry.modelName, "video") : null;
+    const d = mp?.defaults ?? {};
     return {
       prompt: s.prompt || "",
-      modelKey: s.modelKey || allModels[0]?.value || "",
-      quality: s.quality || "auto",
-      resolution: s.resolution || "1K",
-      ratio: s.ratio || "1:1",
+      modelKey: mk,
+      resolution: s.resolution || (d.resolution as string) || "720p",
+      ratio: s.ratio || (d.ratio as string) || "16:9",
+      seconds: s.seconds ?? (d.seconds as number) ?? 5,
+      generateAudio: s.generateAudio ?? true,
       refOrder: s.refOrder || [],
-      n: s.n || 1,
+      n: s.n || (d.n as number) || 1,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId]);
   const [prompt, setPrompt] = useState(saved.prompt);
   const [modelKey, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
-  const [quality, setQuality] = useState(saved.quality);
   const [resolution, setResolution] = useState(saved.resolution);
   const [ratio, setRatio] = useState(saved.ratio);
+  const [seconds, setSeconds] = useState(saved.seconds);
+  const [generateAudio, setGenerateAudio] = useState(saved.generateAudio);
   const [n, setN] = useState(saved.n);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
 
-  // Upstream reference images — derived live from current edges.
+  // 查找当前模型的参数配置
+  const modelParams = useMemo(() => {
+    const entry = allModels.find((m) => m.value === modelKey);
+    return entry ? findModelParams(entry.modelName, "video") : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelKey, allModels, findModelParams]);
+
+  const ratioOptions = modelParams?.constraints?.ratio ?? ["1:1", "9:16", "16:9", "3:4", "4:3"];
+  const resolutionOptions = modelParams?.constraints?.resolution ?? ["480p", "720p", "1080p", "4K"];
+  const showRatio = !modelParams || modelParams.params.includes("ratio");
+  const showResolution = !modelParams || modelParams.params.includes("resolution");
+  const showSeconds = !modelParams || modelParams.params.includes("seconds");
+  const showN = !modelParams || modelParams.params.includes("n");
+
+  // 模型切换时：重置不在新模型 constraints 中的参数
+  useEffect(() => {
+    if (!modelParams) return;
+    const d = modelParams.defaults;
+    const c = modelParams.constraints;
+    const p = modelParams.params;
+    if (p.includes("ratio") && c.ratio && !c.ratio.includes(ratio)) {
+      setRatio((d.ratio as string) || "16:9");
+    }
+    if (!p.includes("resolution")) {
+      setResolution("");
+    } else if (c.resolution && !c.resolution.includes(resolution)) {
+      setResolution((d.resolution as string) || "720p");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelParams]);
+
+  // Upstream reference images - derived live from current edges.
   const canvasNodes = useCanvasStore((s) => s.nodes);
   const canvasEdges = useCanvasStore((s) => s.edges);
   const refImages = useMemo(() => {
@@ -79,7 +116,6 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  // Sync refOrder when upstream sources change, adjusted during render.
   const [prevRefImages, setPrevRefImages] = useState(refImages);
   if (refImages !== prevRefImages) {
     setPrevRefImages(refImages);
@@ -100,34 +136,34 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   const [error, setError] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
-  const latestSettingsRef = useRef({ prompt, modelKey, quality, resolution, ratio, refOrder, n });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], n: 1, entry: null, channel: null });
+  const latestSettingsRef = useRef({ prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, quality, resolution, ratio, refOrder, n };
-  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n]);
+    latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n };
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n]);
   const { notification } = App.useApp();
 
   // Persist settings to node data on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, quality, resolution, ratio, refOrder, n },
+        genSettings: { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n, nodeId]);
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n, nodeId]);
 
   // Flush pending settings on component unmount (not on dep changes)
   useEffect(() => {
     return () => {
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings;
-      // 没有已保存值 或 任一字段变化 → flush（refOrder 用 JSON.stringify 比较）
+      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<VideoGenSettings> | undefined;
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
-          saved.quality === latest.quality && saved.resolution === latest.resolution &&
-          saved.ratio === latest.ratio && saved.n === latest.n &&
+          saved.resolution === latest.resolution && saved.ratio === latest.ratio &&
+          saved.seconds === latest.seconds && saved.generateAudio === latest.generateAudio &&
+          saved.n === latest.n &&
           JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
       useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
       markDirtyImmediate();
@@ -147,38 +183,37 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
+    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
-      const res = await fetch(`${BASE}/api/generate/task`, {
+      const res2 = await fetch(`${BASE}/api/generate/task`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({
-          type,
+          type: "video",
           prompt: p.trim(),
           model: entry.modelName,
           channelId: entry.channelId,
-          quality: q === "auto" ? undefined : q,
-          resolution,
-          ratio: r,
-          n: num,
+          resolution: (!modelParams || modelParams.params.includes("resolution")) ? res : undefined,
+          ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
+          seconds: (!modelParams || modelParams.params.includes("seconds")) ? sec : undefined,
+          generateAudio: audio,
+          n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
           refUrls: refs.length > 0 ? refs : undefined,
           nodeId,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return err.error || `HTTP ${res.status}`;
+      if (!res2.ok) {
+        const err = await res2.json().catch(() => ({}));
+        return err.error || `HTTP ${res2.status}`;
       }
-      const json = await res.json();
+      const json = await res2.json();
       const taskId = json.data?.id;
       if (!taskId) return "No task_id returned";
 
-      // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
       if (!isGeneratingBinding(curBinding)) return null;
-      // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
@@ -187,7 +222,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     }
   };
 
-  /** Upload image → create ImageNode + auto-connect to the selected node */
+  /** Upload image -> create ImageNode + auto-connect to the selected node */
   const handleRefUpload = () => {
     const input = document.createElement("input");
     input.type = "file"; input.accept = "image/*";
@@ -214,7 +249,6 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
           imgUrl,
         );
         applyThumbnailSettings(newNode, nw, nh, file.name);
-        // Position relative to target: left side, vertically centered
         const dw = newNode.style?.width as number || nw;
         const dh = newNode.style?.height as number || nh;
         newNode.position.x = targetNode.position.x - dw - 50;
@@ -237,11 +271,10 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     if (!channel) return;
 
     setError("");
-    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, channel };
+    retryRef.current = { count: 0, prompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -253,7 +286,6 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
       useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
       setError(errMsg);
     }
@@ -271,7 +303,6 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       taskBinding: undefined,
     }, undefined, { skipHistory: true });
     markDirtyImmediate();
-    // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
     useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
     setError("");
   };
@@ -373,7 +404,7 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
       )}
       <Input.TextArea
         className="gen-textarea"
-        size="small" placeholder={t("prompt.placeholder")} value={prompt}
+        size="small" placeholder={t("prompt.placeholder.video")} value={prompt}
         onChange={(e) => setPrompt(e.target.value)} autoSize={{ minRows: 4, maxRows: 8 }}
         style={{ ...is, resize: "vertical", minHeight: 100, outline: "none", boxShadow: "none" }}
       />
@@ -396,44 +427,13 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="flex flex-col gap-3 p-2" style={{ width: 320, margin: -12, background: "var(--menu-bg, #262626)", border: "1px solid var(--menu-border, #3a3a3a)", borderRadius: 12 }}>
-              {/* ── ① 画质 ── */}
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("quality")}</div>
-                <div className="grid grid-cols-4 gap-1">
-                  {["auto", "high", "medium", "low"].map((v) => {
-                    const active = quality === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setQuality(v)}>{t(`quality.${v}`)}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* ── ② 清晰度 ── */}
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
-                <div className="grid grid-cols-3 gap-1">
-                  {["1K", "2K", "4K"].map((v) => {
-                    const active = resolution === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setResolution(v)}>{v}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* ── ③ 比例 ── */}
+            <div className="flex flex-col gap-3 p-2" style={{ width: 360, margin: -12, background: "var(--menu-bg, #262626)", border: "1px solid var(--menu-border, #3a3a3a)", borderRadius: 12 }}>
+              {/* ── ① 比例 ── */}
+              {showRatio && (
               <div>
                 <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("ratio")}</div>
                 <div className="grid grid-cols-5 gap-1">
-                  {(["1:1", "1:2", "2:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21"] as const).map((v) => {
+                  {ratioOptions.map((v) => {
                     const [w, h] = v.split(":").map(Number);
                     const maxDim = 18;
                     const boxW = Math.max(4, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
@@ -455,7 +455,58 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                   })}
                 </div>
               </div>
-              {/* ── ④ 生成数量 ── */}
+              )}
+              {/* ── ② 清晰度 ── */}
+              {showResolution && (
+              <div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
+                <div className="grid grid-cols-4 gap-1">
+                  {resolutionOptions.map((v) => {
+                    const active = resolution === v;
+                    return (
+                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
+                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
+                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        onClick={() => setResolution(v)}>{v}</Button>
+                    );
+                  })}
+                </div>
+              </div>
+              )}
+              {/* ── ③ 时长 (Slider) ── */}
+              {showSeconds && (
+              <div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.seconds")}</div>
+                <Slider
+                  min={1} max={15} step={1}
+                  value={seconds}
+                  onChange={(v) => setSeconds(v)}
+                  style={{ margin: "0 4px" }}
+                  marks={{ 5: "5s", 10: "10s", 15: "15s" }}
+                  tooltip={{ formatter: (v) => `${v}s` }}
+                />
+              </div>
+              )}
+              {/* ── ④ 生成音频 ── */}
+              <div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.audio")}</div>
+                <div className="grid grid-cols-2 gap-1">
+                  {[true, false].map((v) => {
+                    const active = generateAudio === v;
+                    const label = v ? t("gen.audio.on") : t("gen.audio.off");
+                    return (
+                      <Button size="small" type="text" key={String(v)} className="rounded-md text-[13px] transition-colors"
+                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
+                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        onClick={() => setGenerateAudio(v)}>{label}</Button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* ── ⑤ 生成数量 ── */}
+              {showN && (
               <div>
                 <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.count")}</div>
                 <div className="grid grid-cols-3 gap-1">
@@ -463,23 +514,27 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
                     const active = n === v;
                     return (
                       <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
+                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setN(v)}>{v}{t("count.unit")}</Button>
+                        onClick={() => setN(v)}>{v}{t("count.unit.video")}</Button>
                     );
                   })}
                 </div>
               </div>
+              )}
             </div>
           }
           trigger="click" placement="bottomLeft"
         >
-          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 px-3 py-1.5 rounded flex-shrink-0 text-xs"
-            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
-            <RatioIcon ratio={ratio} active />
-            {ratio} · {t(`quality.${quality}`)} · {resolution} · {n}张
-          </Button>
+          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
+            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
+            {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
+            {showResolution && <> · {resolution}</>}
+            {showSeconds && <> · {seconds}{t("seconds.unit")}</>}
+            <> · {generateAudio ? t("gen.audio.on.short") : t("gen.audio.off.short")}</>
+            {showN && <> · {n}{t("count.unit.video")}</>}
+          </button>
         </Popover>
         <div className="flex-1" />
         <Button size="small" type="text"
@@ -501,4 +556,4 @@ const GenerationPanel = memo(function GenerationPanel({ nodeId, type = "image" }
   );
 });
 
-export default GenerationPanel;
+export default VideoGenerationPanel;

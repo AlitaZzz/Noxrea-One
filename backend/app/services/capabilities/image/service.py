@@ -62,9 +62,9 @@ class ImageService(BaseCapabilityService):
             req = ImageRequest(
                 model=model,
                 prompt=prompt,
-                resolution=params.get("resolution", "1K"),
-                ratio=params.get("ratio", "1:1"),
-                quality=params.get("quality", "standard"),
+                resolution=params.get("resolution"),
+                ratio=params.get("ratio"),
+                quality=params.get("quality"),
                 n=params.get("n", 1),
                 image=ref_urls,
             )
@@ -81,7 +81,7 @@ class ImageService(BaseCapabilityService):
         internal = req.model_dump()
 
         # ── 第 2 层：request_builder 一步完成 body 构造（mapping → transforms → patch） ──
-        provider_body = build(internal, channel_config, self.capability, task_id=task_id)
+        provider_body = build(internal, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # ── 第 3 层：Protocol 仅负责 HTTP 通信 ──
         protocol = ProtocolRegistry.get(protocol_name, self.capability)

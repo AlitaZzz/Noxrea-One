@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import { api, BASE,getTokenHeader } from "@/lib/api";
-import type { ModelCapability, ModelChannel, ProviderPreset } from "@/lib/types";
+import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types";
 
 interface RawModelEntry {
   id?: string;
@@ -12,8 +12,10 @@ interface RawModelEntry {
 interface ModelState {
   channels: ModelChannel[];
   presets: ProviderPreset[];
+  modelParamsCache: Record<string, Record<string, ModelParamConfig>>;
   initialized: boolean;
   initialize: () => Promise<void>;
+  findModelParams: (modelName: string, capability: string) => ModelParamConfig | null;
 
   addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
   updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol" | "config">>) => Promise<void>;
@@ -29,6 +31,7 @@ interface ModelState {
 export const useModelStore = create<ModelState>((set, get) => ({
   channels: [],
   presets: [],
+  modelParamsCache: {},
   initialized: false,
 
   initialize: async () => {
@@ -38,10 +41,40 @@ export const useModelStore = create<ModelState>((set, get) => ({
       if (res.code === 200 && res.data) {
         set({ channels: res.data, initialized: true });
         await get().fetchPresets();
+        // 拉取模型参数配置（params + defaults + constraints）
+        try {
+          const mpRes = await api<Record<string, Record<string, ModelParamConfig>>>("/api/model-params");
+          if (mpRes.code === 200 && mpRes.data) {
+            set({ modelParamsCache: mpRes.data });
+          }
+        } catch {
+          // 模型参数拉取失败不阻塞
+        }
         return;
       }
     } catch {}
     set({ initialized: true });
+  },
+
+  findModelParams: (modelName: string, capability: string) => {
+    const cache = get().modelParamsCache;
+    // 1. 精确匹配
+    const exact = cache[modelName]?.[capability];
+    if (exact) return exact;
+    // 2. 通配符匹配
+    for (const [pattern, caps] of Object.entries(cache)) {
+      if (pattern === "_default" || pattern === modelName) continue;
+      if (pattern.includes("*") || pattern.includes("?")) {
+        const regex = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+        if (regex.test(modelName)) {
+          const match = caps[capability];
+          if (match) return match;
+        }
+      }
+    }
+    // 3. _default 兜底
+    const def = cache["_default"]?.[capability];
+    return def || null;
   },
 
   fetchPresets: async () => {

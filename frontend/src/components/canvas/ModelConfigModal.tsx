@@ -158,6 +158,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
+  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const channels = useModelStore((s) => s.channels);
   const presets = useModelStore((s) => s.presets);
   const addChannel = useModelStore((s) => s.addChannel);
@@ -167,6 +168,12 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const toggleModelCapability = useModelStore((s) => s.toggleModelCapability);
   const setChannelModels = useModelStore((s) => s.setChannelModels);
   const fetchModels = useModelStore((s) => s.fetchModels);
+
+  // Drawer 打开时阻止画布快捷键透传
+  useEffect(() => {
+    setModalOpen(open);
+    return () => setModalOpen(false);
+  }, [open, setModalOpen]);
 
   const [channelId, setChannelId] = useState<string | null>(null);
   const [activeCap, setActiveCap] = useState<ModelCapability>("image");
@@ -201,18 +208,31 @@ export default function ModelConfigModal({ open, onClose }: Props) {
 
   const handleSaveChannel = () => {
     if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
-    const parseJson = (s: string) => { if (!s.trim()) return undefined; try { return JSON.parse(s); } catch { return undefined; } };
-    const configObj = parseJson(chForm.config);
+    // 校验高级设置 JSON 合法性
+    let configObj: Record<string, unknown> | undefined = undefined;
+    if (chForm.config.trim()) {
+      try {
+        const parsed = JSON.parse(chForm.config);
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          message.error(t("modelConfig.configMustBeObject"));
+          return;
+        }
+        configObj = parsed as Record<string, unknown>;
+      } catch {
+        message.error(t("modelConfig.configJsonInvalid"));
+        return;
+      }
+    }
     if (editChannelId) {
-      updateChannel(editChannelId, { 
+      updateChannel(editChannelId, {
         name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
         apiKey: chForm.apiKey.trim() || undefined,
         config: configObj,
       });
-      message.success("Channel updated");
+      message.success(t("modelConfig.channelUpdated"));
     } else {
       addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol, configObj);
-      message.success("Channel added");
+      message.success(t("modelConfig.channelAdded"));
     }
     resetChForm();
   };
@@ -464,35 +484,29 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '所有字段均可留空 {}，未配置则不生效\n' +
                     '\n' +
                     'request  请求构造配置\n' +
-                    '  .mapping       字段重映射：改名或移动到嵌套路径\n' +
-                    '                 {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
-                    '                 {"待删除字段": null}          删除该字段\n' +
-                    '  .body_patch    请求体注入：深度合并进最终请求体\n' +
-                    '                 {"extra_body": {"return_base64": true}}\n' +
-                    '  .transforms    值变换（可选）：如 base64 编码\n' +
-                    '                 {"字段路径": "base64"}\n' +
-                    '  .submit_style  提交方式："json"（默认）| "multipart"\n' +
-                    '  .ref_encode     参考图编码：""不编码 | "base64" 内联\n' +
-                    '  .ref_field      参考图字段名，默认 "image"\n' +
+                    '  .mapping         字段重映射：改名或移动到嵌套路径\n' +
+                    '                   {"源字段": "目标.嵌套.路径"}  移动并重命名\n' +
+                    '                   {"待删除字段": null}          删除该字段\n' +
+                    '  .body_patch      请求体注入：深度合并进最终请求体\n' +
+                    '                   {"extra_body": {"return_base64": true}}\n' +
+                    '  .model_overrides 按模型覆盖（key 支持通配符 * ?，可选）\n' +
+                    '                   {"gpt-image-*": {"mapping": {...}, "body_patch": {...}}}\n' +
                     '\n' +
                     'protocol 协议配置\n' +
-                    '  .endpoints     端点路径覆盖\n' +
-                    '                 {"image.generate": "/images/generations"}\n' +
-                    '                 {"image.edit":    "/images/edits"}\n' +
-                    '  .unwrap        解包 data 包裹（true/false）\n' +
-                    '  .result_mode   结果模式："url"（默认）| "content_endpoint"\n' +
-                    '  .result_path   结果路径，如 "output.choices.0"\n' +
+                    '  .endpoints       端点路径覆盖\n' +
+                    '                   {"image.generate": "/images/generations"}\n' +
+                    '                   {"image.edit":    "/images/edits"}\n' +
+                    '  .unwrap          解包 data 包裹（true/false）\n' +
                     '\n' +
                     '示例：\n' +
                     '{\n' +
                     '  "request": {\n' +
                     '    "mapping": {\n' +
-                    '      "image_urls": "extra_body.image"\n' +
+                    '      "ratio": "size"\n' +
                     '    },\n' +
-                    '    "body_patch": {\n' +
-                    '      "extra_body": {\n' +
-                    '        "response_format": "url"\n' +
-                    '      }\n' +
+                    '    "body_patch": {},\n' +
+                    '    "model_overrides": {\n' +
+                    '      "gpt-image-*": {"mapping": {"ratio": "image_size"}}\n' +
                     '    }\n' +
                     '  },\n' +
                     '  "protocol": {\n' +

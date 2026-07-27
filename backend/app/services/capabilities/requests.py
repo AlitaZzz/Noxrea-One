@@ -7,7 +7,7 @@ Capability 内部请求（Capability Internal Request）-- 三层参数模型的
         │  CapabilityService：校验 + 默认值 + 规范化
         ▼
   Capability Internal Request   ← 本模块定义                    纯业务语义参数
-        │  request_builder.engine.build()：mapping -> transforms -> patch
+        │  request_builder.engine.build()：transforms -> auto-clean -> mapping -> patch
         ▼
   Provider Request           引擎输出的 dict                    厂商 API 格式（由 ChannelConfig 决定）
 
@@ -41,11 +41,11 @@ class ImageRequest(BaseInternalRequest):
     """
 
     capability: str = "image"
-    resolution: str = Field(default="1K")        # 清晰度档位："1K" / "2K" / "4K"
-    ratio: str = Field(default="1:1")            # 宽高比："1:1" / "9:16" 等
-    quality: str = Field(default="standard")     # "standard" | "hd" | "low"
+    resolution: Optional[str] = Field(default=None)   # 清晰度档位："1K" / "2K" / "4K"
+    ratio: Optional[str] = Field(default=None)        # 宽高比："1:1" / "9:16" 等
+    quality: Optional[str] = Field(default=None)      # "auto" | "high" | "medium" | "low"
     n: int = Field(default=1, ge=1, le=4)
-    image: Optional[list[str]] = None            # 参考图列表
+    image: Optional[list[str]] = None                # 参考图列表
 
 
 class VideoRequest(BaseInternalRequest):
@@ -56,11 +56,11 @@ class VideoRequest(BaseInternalRequest):
     """
 
     capability: str = "video"
-    resolution: str = Field(default="1K")        # 清晰度档位："1K" / "2K" / "4K"
-    ratio: str = Field(default="16:9")           # 宽高比："16:9" / "9:16" 等
-    seconds: int = Field(default=5)               # 时长（秒）
-    frame_rate: int = Field(default=24)           # 帧率
-    ref_urls: Optional[list[str]] = None          # 参考图
+    resolution: Optional[str] = Field(default=None)   # 清晰度档位："1K" / "2K" / "4K"
+    ratio: Optional[str] = Field(default=None)        # 宽高比："16:9" / "9:16" 等
+    seconds: int = Field(default=5)                    # 时长（秒）
+    frame_rate: int = Field(default=24)                # 帧率
+    ref_urls: Optional[list[str]] = None              # 参考图
 
 
 class AudioRequest(BaseInternalRequest):

@@ -73,11 +73,23 @@ export interface GenSettings {
   n: number;
 }
 
+/** 视频生成面板设置 */
+export interface VideoGenSettings {
+  prompt: string;
+  modelKey: string;
+  resolution: string;
+  ratio: string;
+  seconds: number;
+  generateAudio: boolean;
+  refOrder: string[];
+  n: number;
+}
+
 /** 图片/视频节点共享的生成相关子字段 */
 export interface MediaGenFields {
   taskBinding?: TaskBinding;
   upload?: UploadState;
-  genSettings?: GenSettings;
+  genSettings?: GenSettings | VideoGenSettings;
 }
 
 export type TextNodeData = {
@@ -117,7 +129,7 @@ export type VideoNodeData = {
   alt: string;
   taskBinding?: TaskBinding;
   upload?: UploadState;
-  genSettings?: GenSettings;
+  genSettings?: VideoGenSettings;
 };
 
 // ============================================================
@@ -131,6 +143,12 @@ export interface ProviderPreset {
   baseUrl: string;
   protocol?: string;
   config?: Record<string, unknown>;
+}
+
+export interface ModelParamConfig {
+  params: string[];
+  defaults: Record<string, unknown>;
+  constraints: Record<string, string[]>;
 }
 
 export interface ModelInfo {

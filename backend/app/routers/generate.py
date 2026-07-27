@@ -67,9 +67,9 @@ async def create_task(
         config = {
             "channel_id": channel_id_int,
             "model": model_name,
-            "quality": body.get("quality", "auto"),
-            "resolution": body.get("resolution", "1K"),
-            "ratio": body.get("ratio", "1:1"),
+            "quality": body.get("quality"),
+            "resolution": body.get("resolution"),
+            "ratio": body.get("ratio"),
             "n": max(1, min(4, int(body.get("n", 1) or 1))),
             "protocol": protocol_name,
             "capability": task_type,

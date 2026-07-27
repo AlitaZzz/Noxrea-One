@@ -146,7 +146,7 @@ def test_request_builder_engine_fixed_order():
             body_patch={"response_format": "url"},
         ),
     )
-    result = build(internal, cfg, "image")
+    result = build(internal, cfg, "image", model_name="gpt-image-1")
     # mapping 把 n 移到 extra_body.n
     assert "n" not in result
     assert result["extra_body"]["n"] == 2
@@ -383,11 +383,11 @@ def test_generation_task_effective_capability_fallback():
 # ── 9. ImageRequest（业务参数） ──────────────────────────────
 
 def test_image_request_defaults():
-    """ImageRequest 使用 resolution 字段。"""
+    """ImageRequest 默认值：resolution/ratio/quality 为 None（由 model_params 控制）。"""
     r = ImageRequest(model="m", prompt="p")
-    assert r.resolution == "1K"
-    assert r.ratio == "1:1"
-    assert r.quality == "standard"
+    assert r.resolution is None
+    assert r.ratio is None
+    assert r.quality is None
     assert r.n == 1
     assert r.image is None
     import pydantic

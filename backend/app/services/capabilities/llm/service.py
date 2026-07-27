@@ -57,7 +57,7 @@ class LLMService(BaseCapabilityService):
                 body[key] = params[key]
 
         # request_builder 一步完成 body 构造（mapping → transforms → patch）
-        body = build(body, channel_config, self.capability, task_id=task_id)
+        body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # Protocol
         protocol = ProtocolRegistry.get(protocol_name, self.capability)

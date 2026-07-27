@@ -5,7 +5,7 @@
     "protocol": "openai",
     "config": {
       "request": {
-        "mapping": { "image": "image_urls", "ratio": "aspect_ratio"},
+        "mapping": { "image": "image", "ratio": "size"},
         "body_patch": {}
       },
       "protocol": {
@@ -40,6 +40,23 @@
         "endpoints": {
           "image.edits": "/images/generations"
         }
+      }
+    }
+  },
+  {
+    "name": "FHL",
+    "baseUrl": "",
+    "protocol": "openai",
+    "config": {
+      "request": {
+        "mapping": {
+          "image": "images[].image_url",
+          "ratio": "size"
+        },
+        "body_patch": {}
+      },
+      "protocol": {
+        "endpoints": {}
       }
     }
   }
