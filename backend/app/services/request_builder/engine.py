@@ -57,9 +57,14 @@ def build(
     # 拷贝避免修改入参
     body = dict(internal)
 
+    # 0. 提前 resolve，拿到 param_ref（用于 transforms 查表）
+    cfg = channel_config.resolve_request(model_name)
+
     # 1. transforms（模型级，从 model_params.json 加载）
+    # param_ref 不为空时，用它代替 model_name 查 transforms/params/defaults/constraints
+    transforms_name = cfg.param_ref or model_name
     consumed: set = set()
-    model_params = ModelParamsRegistry().get(model_name, capability)
+    model_params = ModelParamsRegistry().get(transforms_name, capability)
     if model_params and model_params.transforms:
         body, consumed = apply_transforms(body, model_params.transforms)
 
@@ -72,8 +77,7 @@ def build(
         elif key in consumed:
             del body[key]
 
-    # 3. mapping（渠道级，含 model_overrides）
-    cfg = channel_config.resolve_request(model_name)
+    # 3. mapping（渠道级，含 model_overrides，复用已 resolve 的 cfg）
     if cfg.mapping:
         body = apply_mapping(body, cfg.mapping)
 
