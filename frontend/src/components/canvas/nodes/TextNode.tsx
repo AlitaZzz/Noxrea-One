@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import type { TextNode as TextNodeType } from "@/lib/types";
+import { isGenerating } from "@/lib/types";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";
@@ -31,6 +32,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       el.setSelectionRange(len, len);
       el.blur();
     }
+    window.getSelection()?.removeAllRanges();
     setEditingContent(false);
   }, []);
 
@@ -68,6 +70,21 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id]);
 
+  // 编辑状态下阻止 wheel / mousedown 冒泡到 React Flow 画布
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || !editingContent) return;
+    const stopWheel = (e: WheelEvent) => e.stopPropagation();
+    const stopMouse = (e: MouseEvent) => e.stopPropagation();
+    el.addEventListener("wheel", stopWheel, { passive: false });
+    el.addEventListener("mousedown", stopMouse);
+    return () => {
+      el.removeEventListener("wheel", stopWheel);
+      el.removeEventListener("mousedown", stopMouse);
+    };
+  }, [editingContent]);
+
+  const generating = isGenerating(data.taskBinding);
   const charCount = content.length;
 
   return (
@@ -109,7 +126,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
       {/* Body */}
       <div
-        className={`node-body flex-1 flex flex-col overflow-hidden rounded-lg ${selected ? "node-selected" : ""}`}
+        className={`node-body relative flex-1 flex flex-col overflow-hidden rounded-lg ${selected ? "node-selected" : ""}`}
         style={{ background: "var(--canvas-bg, #262626)" }}
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -141,6 +158,12 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
             }
           }}
         />
+        {generating && (
+          <div className="absolute inset-0 rounded-lg flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg, #262626)" }}>
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-white/50">{t("generating")}</span>
+          </div>
+        )}
       </div>
 
       {selected && (
