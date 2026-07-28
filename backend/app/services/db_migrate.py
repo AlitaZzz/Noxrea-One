@@ -22,6 +22,7 @@ _EXPECTED_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("protocol", "VARCHAR(30)"),
         ("model", "VARCHAR(200)"),
         ("upstream_task_id", "VARCHAR(200)"),
+        ("result_text", "TEXT"),
     ],
     "model_channels": [
         ("protocol", "VARCHAR(30)"),

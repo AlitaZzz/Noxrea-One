@@ -1,7 +1,7 @@
 """
 SSRF 防护公共服务。
 
-从 routers/ai_proxy.py 抽出，供 ai_proxy 与 worker 生成链路共用：
+从 routers/models.py 抽出，供 models 与 worker 生成链路共用：
   - DNS Pinning：防御 DNS rebinding（协程级 ContextVar，并发安全）
   - 私网 IP 检测 + hostname 黑名单 + 内网白名单
   - resolve_and_validate(base_url)：解析并校验，返回 (ip, hostname, scheme, port)

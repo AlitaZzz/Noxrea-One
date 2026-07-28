@@ -31,8 +31,8 @@ class GenerationResult:
 
     @property
     def is_empty(self) -> bool:
-        """无 url 也无 file 视为空结果。"""
-        return not self.urls and not self.files
+        """无 url、file 或文本内容视为空结果。"""
+        return not self.urls and not self.files and not (self.metadata.get("text"))
 
     @classmethod
     def from_url(cls, url: str, **meta) -> "GenerationResult":
