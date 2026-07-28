@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.schemas.common import UnifiedResponse
 from app.services.model_params import ModelParamsRegistry
 
 router = APIRouter(tags=["model-params"])
 
 
 @router.get("/api/model-params")
-async def get_model_params() -> dict:
+async def get_model_params() -> UnifiedResponse:
     """返回所有模型的参数配置（params + defaults + constraints）。"""
-    return ModelParamsRegistry().get_public()
+    return UnifiedResponse(code=200, data=ModelParamsRegistry().get_public(), msg="ok")
