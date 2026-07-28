@@ -12,9 +12,51 @@ Capability 表示"用户想做什么"（image / video / llm / audio / bg_removal
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from dataclasses import dataclass, field
 
 from app.schemas.channel_config import ChannelConfig
+
+
+@dataclass
+class CapabilityResult:
+    """能力服务执行结果。
+
+    所有 CapabilityService.execute() 统一返回此类型，
+    替代之前松散的 dict 契约。
+    """
+    status: str = "failed"  # "completed" | "failed" | "processing"
+    urls: list[str] = field(default_factory=list)
+    files: list = field(default_factory=list)  # list[tuple[bytes, str] | bytes]
+    error: str = ""
+    upstream_task_id: str = ""
+    metadata: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "CapabilityResult":
+        """从 TaskManager.submit_and_wait() 返回的 dict 构造。"""
+        return cls(
+            status=d.get("status", "failed"),
+            urls=d.get("urls") or [],
+            files=d.get("files") or [],
+            error=d.get("error", ""),
+            upstream_task_id=d.get("upstream_task_id", ""),
+            metadata=d.get("metadata") or {},
+        )
+
+    @classmethod
+    def completed(
+        cls, *, urls=None, files=None, metadata=None
+    ) -> "CapabilityResult":
+        return cls(
+            status="completed",
+            urls=urls or [],
+            files=files or [],
+            metadata=metadata or {},
+        )
+
+    @classmethod
+    def failed(cls, error: str, *, metadata=None) -> "CapabilityResult":
+        return cls(status="failed", error=error, metadata=metadata or {})
 
 
 class BaseCapabilityService(ABC):
@@ -45,7 +87,7 @@ class BaseCapabilityService(ABC):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行一次能力调用。
 
         Args:
@@ -61,14 +103,7 @@ class BaseCapabilityService(ABC):
             ref_images: 参考图 URL 列表
 
         Returns:
-            {
-                "status": "completed" | "failed" | "processing",
-                "urls": [...],
-                "files": [...],      # raw bytes（如 TTS），由 executor 落本地
-                "error": "...",      # 仅 failed
-                "upstream_task_id": "...",  # 仅 processing（异步等待）
-                "metadata": {...},
-            }
+            CapabilityResult
         """
         ...
 

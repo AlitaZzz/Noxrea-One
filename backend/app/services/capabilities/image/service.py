@@ -16,13 +16,12 @@ ImageService — 图片生成能力服务。
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from pydantic import ValidationError
 
 from app.config import settings
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult
 from app.services.capabilities.requests import ImageRequest
 from app.services.request_builder import build
 from app.logging_config import log_event, run_upstream
@@ -54,7 +53,7 @@ class ImageService(BaseCapabilityService):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行图片生成。"""
 
         # ── 第 1 层：构建 Capability Internal Request（业务参数） ──
@@ -71,12 +70,7 @@ class ImageService(BaseCapabilityService):
         except ValidationError as e:
             logger.info(log_event(self.capability, task_id=task_id, stage="failed",
                                   category="invalid_request", retry=False, message=f'"{e}"'))
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"参数校验失败: {e}",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(f"参数校验失败: {e}")
 
         internal = req.model_dump()
 
@@ -86,12 +80,9 @@ class ImageService(BaseCapabilityService):
         # ── 第 3 层：Protocol 仅负责 HTTP 通信 ──
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
         if not protocol:
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"Protocol '{protocol_name}' does not support image",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(
+                f"Protocol '{protocol_name}' does not support image"
+            )
 
         endpoint, headers, request_body = protocol.build_request(
             base_url, api_key, provider_body, self.capability
@@ -128,7 +119,7 @@ class ImageService(BaseCapabilityService):
 
         # 注意：files/urls 统一由 executor._finalize_result 处理下载落盘，
         # 本 Service 不再调用 StorageService.save_bytes。
-        return result
+        return CapabilityResult.from_dict(result)
 
 
 # ── CapabilityRegistry 注册 ─────────────────────────────────

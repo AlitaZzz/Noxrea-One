@@ -1,22 +1,22 @@
 """
-VideoService — 视频生成能力服务。
+VideoService - 视频生成能力服务。
 
 调用链（重构后）：
   VideoService.execute()
-      → 构建 VideoRequest（业务参数：resolution / ratio / seconds / frame_rate）
-      → request_builder.engine.build()（mapping → transforms → patch）
-      → ProtocolRegistry.get(protocol_name, "video") → build_request()
-      → TaskManager.submit_and_wait()
+      -> 构建 VideoRequest（业务参数：resolution / ratio / seconds / frame_rate）
+      -> request_builder.engine.build()（mapping -> transforms -> patch）
+      -> ProtocolRegistry.get(protocol_name, "video") -> build_request()
+      -> TaskManager.submit_and_wait()
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.config import settings
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult
+from app.services.capabilities.requests import VideoRequest
 from app.services.request_builder import build
 from app.logging_config import log_event, run_upstream
 from app.services.protocols.base import ProtocolRegistry
@@ -43,35 +43,29 @@ class VideoService(BaseCapabilityService):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行视频生成。"""
-        # 1. 准备基础参数（业务语义）
-        body = {
-            "model": model,
-            "prompt": prompt,
-            "resolution": params.get("resolution"),
-            "ratio": params.get("ratio"),
-            "seconds": params.get("seconds", 5),
-        }
+        # 1. 构建 VideoRequest（业务参数）
+        req = VideoRequest(
+            model=model,
+            prompt=prompt,
+            resolution=params.get("resolution"),
+            ratio=params.get("ratio"),
+            seconds=params.get("seconds", 5),
+            frame_rate=params.get("frame_rate", 24),
+            ref_images=ref_images,
+        )
+        internal = req.model_dump(exclude_none=True)
 
-        if "frame_rate" in params:
-            body["frame_rate"] = params["frame_rate"]
-
-        if ref_images:
-            body["ref_images"] = ref_images
-
-        # 2. request_builder 一步完成 body 构造（mapping → transforms → patch）
-        body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)
+        # 2. request_builder 一步完成 body 构造（mapping -> transforms -> patch）
+        body = build(internal, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # 3. Protocol: 构造请求
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
         if not protocol:
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"Protocol '{protocol_name}' does not support video",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(
+                f"Protocol '{protocol_name}' does not support video"
+            )
 
         endpoint, headers, request_body = protocol.build_request(
             base_url, api_key, body, self.capability
@@ -101,7 +95,7 @@ class VideoService(BaseCapabilityService):
             ),
         )
 
-        return result
+        return CapabilityResult.from_dict(result)
 
 
 # ── CapabilityRegistry 注册 ─────────────────────────────────

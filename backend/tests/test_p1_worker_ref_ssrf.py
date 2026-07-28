@@ -157,6 +157,7 @@ async def test_process_task_base_url_internal_fails(monkeypatch):
     """channel.base_url 配内网 → task failed（显式 SSREFError 路径，文案清晰）。"""
     task = SimpleNamespace(
         id="t1", user_id=7, type="image", capability="image", protocol="openai",
+        effective_capability="image",
         ref_images=[], config={"channel_id": 1, "model": "m"}, prompt="",
     )
 
@@ -178,8 +179,9 @@ async def test_process_task_base_url_internal_fails(monkeypatch):
     monkeypatch.setattr(executor, "async_session", lambda: FakeSession())
 
     calls = []
-    async def fake_update(task_id, status, error=None, result_urls=None):
+    async def fake_update(task_id, status, error=None, result_urls=None, result_text=None):
         calls.append((status, error))
+        return True
     monkeypatch.setattr(executor, "update_task_status", fake_update)
 
     await executor.process_task(task)

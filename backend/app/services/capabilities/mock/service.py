@@ -15,16 +15,16 @@ logger = logging.getLogger(__name__)
 
 async def process_mock_images(task: GenerationTask) -> None:
     """Mock 生图：跳过真实 AI，按前台设置的 n 返回对应张数测试图。"""
-    from app.services.worker.executor import update_task_status
+    from app.services.worker.executor import update_and_emit
 
     config = task.config or {}
     n = max(1, min(4, int(config.get("n", 1) or 1)))
     urls = await _collect_mock_image_bytes(task.user_id, n)
     if urls:
-        await update_task_status(task.id, "completed", result_urls=urls)
+        await update_and_emit(task, "completed", result_urls=urls)
         logger.info(f"mock image done task={task.id} urls={len(urls)}")
     else:
-        await update_task_status(task.id, "failed", error="mock 模式未找到可用测试图")
+        await update_and_emit(task, "failed", error="mock 模式未找到可用测试图")
 
 
 async def _collect_mock_image_bytes(user_id: int, count: int = 1) -> list[str]:

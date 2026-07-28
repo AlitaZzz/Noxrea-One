@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import uuid
@@ -15,6 +14,8 @@ from app.schemas.task import TaskOut
 from app.crud import task as crud
 from app.crud import model_config as crud_model_config
 from app.database import async_session as _sse_session
+from app.services.events.bus import event_bus
+from app.services.events.types import EventType, TaskEvent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/generate", tags=["generate"])
@@ -36,7 +37,7 @@ async def create_task(
         f"channel_id={body.get('channelId')} model={body.get('model', '')}"
     )
 
-    # bg_removal tasks use the inference service directly
+    # bg_removal: internal capability, no external channel needed
     if task_type == "bg_removal":
         prompt = ""
         config = {}
@@ -134,37 +135,68 @@ async def stream_task(
 
     async def event_stream():
         logger.debug(f"SSE stream opened task_id={task_id} user={user.id}")
-        last_status = ""
-        while True:
-            if await request.is_disconnected():
-                logger.debug(f"SSE client disconnected task_id={task_id}")
-                break
-            async with _sse_session() as sse_db:
-                task = await crud.get_task_for_user(sse_db, task_id, user.id)
-            if not task:
-                yield f"data: {json.dumps({'type': 'error', 'error': 'Task deleted'})}\n\n"
-                break
 
-            status = task.status
-            if status != last_status:
+        # 1. 预创建订阅者队列，防止 emit 在 subscribe 之前丢失事件
+        queue = await event_bus.ensure_queue(task_id)
+
+        # 2. 查 DB：任务可能已完成（竞态保护）
+        async with _sse_session() as sse_db:
+            current = await crud.get_task_for_user(sse_db, task_id, user.id)
+        if not current:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Task deleted'})}\n\n"
+            await event_bus.unsubscribe(task_id, queue)
+            return
+
+        if current.status in ("completed", "failed"):
+            # 任务已结束，直接推送结果
+            event = {
+                "type": "status",
+                "task_id": task_id,
+                "status": current.status,
+                "result_urls": current.result_urls or [],
+                "result_text": current.result_text,
+                "error": current.error,
+                "config": current.config,
+                "prompt": current.prompt,
+            }
+            yield f"data: {json.dumps(event)}\n\n"
+            await event_bus.unsubscribe(task_id, queue)
+            return
+
+        # 3. 推送当前 processing/pending 状态
+        yield f"data: {json.dumps({'type': 'status', 'task_id': task_id, 'status': current.status})}\n\n"
+
+        # 4. 订阅 EventBus，带超时轮询检测客户端断开
+        try:
+            while True:
+                if await request.is_disconnected():
+                    logger.debug(f"SSE client disconnected task_id={task_id}")
+                    break
+
+                evt = await event_bus.wait_event(queue, timeout=5.0)
+                if evt is None:
+                    # 超时，无事件，继续循环检查断开
+                    continue
+
+                # 构造 SSE 事件
                 event = {
                     "type": "status",
                     "task_id": task_id,
-                    "status": status,
-                    "result_urls": task.result_urls or [],
-                    "result_text": task.result_text,
-                    "error": task.error,
-                    "config": task.config,
-                    "prompt": task.prompt,
+                    "status": "completed" if evt.event_type == EventType.TASK_COMPLETED else "failed",
+                    "result_urls": evt.data.get("result_urls", []),
+                    "result_text": evt.data.get("result_text"),
+                    "error": evt.data.get("error"),
+                    "config": current.config,
+                    "prompt": current.prompt,
                 }
                 yield f"data: {json.dumps(event)}\n\n"
-                last_status = status
 
-                if status in ("completed", "failed"):
-                    logger.debug(f"SSE stream ended task_id={task_id} status={status}")
+                if evt.event_type in (EventType.TASK_COMPLETED, EventType.TASK_FAILED):
+                    logger.debug(f"SSE stream ended task_id={task_id} status={event['status']}")
                     break
-
-            await asyncio.sleep(1)
+        finally:
+            await event_bus.unsubscribe(task_id, queue)
+            logger.debug(f"SSE stream closed task_id={task_id}")
 
     return StreamingResponse(
         event_stream(),
@@ -192,5 +224,13 @@ async def cancel_task(
         raise HTTPException(status_code=400, detail="Task already finished")
 
     await crud.cancel_task(db, task_id, datetime.now(timezone.utc))
+    # 发布取消事件，通知 SSE 客户端
+    await event_bus.publish(TaskEvent(
+        event_type=EventType.TASK_FAILED,
+        task_id=task_id,
+        user_id=user.id,
+        capability="",
+        data={"status": "failed", "error": "Cancelled"},
+    ))
     logger.info(log_event("generate", task_id=task_id, stage="cancelled"))
     return UnifiedResponse(code=200, msg="cancelled")

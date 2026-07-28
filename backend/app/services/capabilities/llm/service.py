@@ -1,5 +1,5 @@
 """
-LLMService — 大语言模型能力服务。
+LLMService - 大语言模型能力服务。
 
 统一走 TaskManager（同步提交），不再直接使用 httpx。
 """
@@ -7,11 +7,11 @@ LLMService — 大语言模型能力服务。
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.config import settings
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult
+from app.services.capabilities.requests import LlmRequest
 from app.services.request_builder import build
 from app.logging_config import run_upstream
 from app.services.protocols.base import ProtocolRegistry
@@ -38,14 +38,14 @@ class LLMService(BaseCapabilityService):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行 LLM 调用。"""
         # 构造 messages（OpenAI 标准格式）
         messages = params.get("messages")
         if not messages and prompt:
             messages = [{"role": "user", "content": prompt}]
         if not messages:
-            return {"status": "failed", "urls": [], "error": "No messages or prompt"}
+            return CapabilityResult.failed("No messages or prompt")
 
         # messages 中的 image_url（本地 HTTP URL）转为 base64 data URI，
         # 复用 resolve_refs 三档策略：同源读盘 / 白名单安全 fetch / 外链透传
@@ -72,27 +72,24 @@ class LLMService(BaseCapabilityService):
                     if orig in url_map:
                         part["image_url"]["url"] = url_map[orig]
 
-        body = {
-            "model": model,
-            "messages": messages,
-        }
+        # 构造 LlmRequest（业务参数）
+        req_kwargs: dict = {"model": model, "prompt": prompt, "messages": messages}
         for key in ("temperature", "max_tokens", "top_p", "stream", "stop",
                      "frequency_penalty", "presence_penalty"):
             if key in params:
-                body[key] = params[key]
+                req_kwargs[key] = params[key]
+        req = LlmRequest(**req_kwargs)
+        internal = req.model_dump(exclude_none=True)
 
-        # request_builder 一步完成 body 构造（mapping → transforms → patch）
-        body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)
+        # request_builder 一步完成 body 构造（mapping -> transforms -> patch）
+        body = build(internal, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # Protocol
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
         if not protocol:
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"Protocol '{protocol_name}' does not support LLM",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(
+                f"Protocol '{protocol_name}' does not support LLM"
+            )
 
         endpoint, headers, request_body = protocol.build_request(
             base_url, api_key, body, self.capability
@@ -121,7 +118,7 @@ class LLMService(BaseCapabilityService):
             ),
         )
 
-        return result
+        return CapabilityResult.from_dict(result)
 
 
 # ── CapabilityRegistry 注册 ─────────────────────────────────
