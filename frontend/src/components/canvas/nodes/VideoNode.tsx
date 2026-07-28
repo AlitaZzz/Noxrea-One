@@ -20,7 +20,7 @@ import { EventNames } from "@/lib/event-names";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
 import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
-import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
 function formatTime(s: number): string {
@@ -123,16 +123,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const imgUrl = json.data?.url;
       if (!imgUrl) return;
 
-      const st = useCanvasStore.getState();
-      const cx = -st.viewport.x / st.viewport.zoom + (window.innerWidth / 2) / st.viewport.zoom;
-      const cy = -st.viewport.y / st.viewport.zoom + (window.innerHeight / 2) / st.viewport.zoom;
       const nw = v.videoWidth, nh = v.videoHeight;
-      const node = createImageNode({ x: cx, y: cy }, imgUrl);
+      const node = createImageNode({ x: 0, y: 0 }, imgUrl);
       const label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
       applyThumbnailSettings(node, nw, nh, label);
-      // Center the node relative to viewport center
-      node.position.x = cx - ((node.style?.width as number) ?? 0) / 2;
-      node.position.y = cy - ((node.style?.height as number) ?? 0) / 2;
+      const w = (node.style?.width as number) ?? 0;
+      const h = (node.style?.height as number) ?? 0;
+      node.position = findFreePosition({ width: w, height: h });
       addNodes([node]);
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, addNodes]);
