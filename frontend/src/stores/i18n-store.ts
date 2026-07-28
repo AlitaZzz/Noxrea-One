@@ -148,6 +148,26 @@ const zh: Record<string, string> = {
   "canvas.empty": "画布为空，添加节点开始创作吧",
   "canvas.search.placeholder": "搜索节点...",
   "canvas.total": "共 {n} 个节点",
+  // Multi-Angle Editor
+  "angle.editor": "多角度编辑器",
+  "angle.editor.title": "多角度编辑器",
+  "angle.custom": "自定义",
+  "angle.fisheye": "鱼眼视角",
+  "angle.tilt": "倾斜视角",
+  "angle.frontTop": "正面俯拍",
+  "angle.frontBottom": "正面仰拍",
+  "angle.panoTop": "全景俯拍",
+  "angle.back": "背面视角",
+  "angle.azimuth": "水平环绕",
+  "angle.elevation": "垂直俯仰",
+  "angle.zoom": "景别缩放",
+  "angle.camera.pos": "镜头位置",
+  "angle.drag.hint": "拖动球体调整视角",
+  "angle.zoom.near": "近景",
+  "angle.zoom.mid": "中景",
+  "angle.zoom.far": "远景",
+  "angle.prompt": "提示词",
+  "angle.reset": "重置参数",
 };
 
 const en: Record<string, string> = {
@@ -281,6 +301,26 @@ const en: Record<string, string> = {
   "canvas.empty": "Canvas is empty, add nodes to get started",
   "canvas.search.placeholder": "Search nodes...",
   "canvas.total": "{n} nodes total",
+  // Multi-Angle Editor
+  "angle.editor": "Multi-Angle Editor",
+  "angle.editor.title": "Multi-Angle Editor",
+  "angle.custom": "Custom",
+  "angle.fisheye": "Fisheye",
+  "angle.tilt": "Tilt",
+  "angle.frontTop": "Front Top",
+  "angle.frontBottom": "Front Low",
+  "angle.panoTop": "Pano Top",
+  "angle.back": "Back",
+  "angle.azimuth": "Azimuth",
+  "angle.elevation": "Elevation",
+  "angle.zoom": "Zoom",
+  "angle.camera.pos": "Camera Position",
+  "angle.drag.hint": "Drag sphere to adjust view",
+  "angle.zoom.near": "Near",
+  "angle.zoom.mid": "Mid",
+  "angle.zoom.far": "Far",
+  "angle.prompt": "Prompt",
+  "angle.reset": "Reset",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({
