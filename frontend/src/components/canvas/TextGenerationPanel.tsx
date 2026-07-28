@@ -24,10 +24,23 @@ interface ModelOption {
   modelName: string;
 }
 
+/** Convert an image URL to a base64 data URI */
+async function urlToBase64(url: string): Promise<string> {
+  const fullUrl = url.startsWith("/") ? `${BASE}${url}` : url;
+  const res = await fetch(fullUrl);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
   const t = useI18nStore((s) => s.t);
   const channels = useModelStore((s) => s.channels);
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   const allModels = channels
     .flatMap((c) =>
@@ -179,13 +192,19 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
 
     try {
       // Build message content (multimodal if ref images exist)
-      const content =
-        refOrder.length > 0
-          ? [
-              { type: "text", text: prompt },
-              ...refOrder.map((url) => ({ type: "image_url", image_url: { url } })),
-            ]
-          : prompt;
+      // Convert reference image URLs to base64 data URIs
+      let content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+      if (refOrder.length > 0) {
+        const imageParts = await Promise.all(
+          refOrder.map(async (url) => {
+            const dataUri = await urlToBase64(url);
+            return { type: "image_url", image_url: { url: dataUri } };
+          }),
+        );
+        content = [{ type: "text", text: prompt }, ...imageParts];
+      } else {
+        content = prompt;
+      }
 
       const res = await fetch(`${BASE}/api/chat/completions`, {
         method: "POST",
@@ -203,10 +222,10 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const reply = json.data?.choices?.[0]?.message?.content || "";
       useCanvasStore.getState().updateNodeData(nodeId, { content: reply });
       markDirtyImmediate();
-      message.success(t("generation.text.success"));
+      notification.success({ title: t("generation.text.success"), placement: "bottomRight", duration: 5 });
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      message.error(err instanceof Error ? err.message : t("generation.failed"));
+      notification.error({ title: t("generation.failed"), description: err instanceof Error ? err.message : "", placement: "bottomRight", duration: 15 });
     } finally {
       setLoading(false);
       abortRef.current = null;
