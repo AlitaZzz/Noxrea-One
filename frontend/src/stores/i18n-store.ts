@@ -149,8 +149,8 @@ const zh: Record<string, string> = {
   "canvas.search.placeholder": "搜索节点...",
   "canvas.total": "共 {n} 个节点",
   // Multi-Angle Editor
-  "angle.editor": "多角度编辑器",
-  "angle.editor.title": "多角度编辑器",
+  "angle.editor": "多角度",
+  "angle.editor.title": "多角度",
   "angle.custom": "自定义",
   "angle.fisheye": "鱼眼视角",
   "angle.tilt": "倾斜视角",
@@ -302,8 +302,8 @@ const en: Record<string, string> = {
   "canvas.search.placeholder": "Search nodes...",
   "canvas.total": "{n} nodes total",
   // Multi-Angle Editor
-  "angle.editor": "Multi-Angle Editor",
-  "angle.editor.title": "Multi-Angle Editor",
+  "angle.editor": "Multi-Angle",
+  "angle.editor.title": "Multi-Angle",
   "angle.custom": "Custom",
   "angle.fisheye": "Fisheye",
   "angle.tilt": "Tilt",
