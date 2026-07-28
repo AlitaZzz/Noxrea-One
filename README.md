@@ -29,6 +29,7 @@
 | **3D 导演模式** | 纯 TS 3D 引擎，支持角色/道具/摄像机/人群编辑 |
 | **多厂商接入** | 通过渠道（Channel）配置支持 OpenAI / Gemini / Ark 等多厂商 |
 | **资源管理** | 上传图片/音频、文件夹归类、标签系统 |
+| **实时事件推送** | EventBus 发布/订阅 + SSE，任务状态变更即时推送前端 |
 | **撤销/重做** | 完整的画布操作历史 |
 
 ## 系统架构
@@ -57,8 +58,8 @@
 │  └──────────────┬──────────────────────┬─────────────────┘   │
 │                 │                      │                      │
 │  ┌──────────────┴──────┐  ┌───────────┴───────────────┐     │
-│  │   Worker Loop       │  │   SSE / EventBus           │     │
-│  │   轮询领取任务        │  │   实时推送任务状态          │     │
+│  │   Worker Loop       │  │   EventBus + SSE           │     │
+│  │   轮询领取任务        │  │   发布/订阅广播任务事件      │     │
 │  └──────────┬──────────┘  └───────────────────────────┘     │
 │             │                                                 │
 │  ┌──────────┴──────────────────────────────────────────┐     │
@@ -93,7 +94,7 @@ Noxrea-AI-Canvas/
 │       │   ├── director/        # 3D 引擎 React UI 容器
 │       │   ├── common/          # 通用 UI（ConfirmModal, NavButton）
 │       │   └── auth/            # 认证组件
-│       ├── stores/              # Zustand 状态管理（8 个 store）
+│       ├── stores/              # Zustand 状态管理（9 个 store）
 │       ├── lib/                 # 工具层（api, types, save-manager 等）
 │       ├── hooks/               # 自定义 hooks
 │       ├── director/            # 3D 引擎纯 TS 逻辑（core/entities/util）
@@ -212,17 +213,22 @@ Noxrea-AI-Canvas/
                                ▼
 ┌─ 后端 Storage ─────────────────────────────────────────────────┐
 │ 7. _finalize_result()  统一结果处理                              │
-│    ├── CDN URL → download_and_save() 下载落本地                 │
-│    ├── base64 data URL → save_bytes() 解码存盘                  │
-│    ├── raw bytes → save_bytes() 直接落盘                        │
-│    └── update_task_status() 更新 DB (completed / failed)        │
+│    ├── 取消检查 _check_cancelled() (被取消则跳过下载)              │
+│    ├── CDN URL -> download_and_save() 下载落本地                 │
+│    ├── base64 data URL -> save_bytes() 解码存盘                  │
+│    ├── raw bytes -> save_bytes() 直接落盘                        │
+│    ├── LLM 文本 -> 直接写入 result_text (不下载)               │
+│    └── update_and_emit() 更新 DB + publish 事件到 EventBus       │
+│        completed -> TASK_COMPLETED  failed -> TASK_FAILED       │
 └────────────────────────────────────────────────────────────────┘
   │
   ▼
 ┌─ 前端 SSE ─────────────────────────────────────────────────────┐
-│ 8. GET /api/generate/task/{id}/stream                          │
-│    轮询任务状态 → completed → 取 resultUrls → 更新节点           │
-│    → 生成 image/video node 展示结果                              │
+│ 8. GET /api/generate/task/{id}/stream (SSE)                   │
+│    ensure_queue() 先建订阅队列（防竞态）-> 查 DB 当前状态          │
+│    -> wait_event() 5s 超时轮询 EventBus 事件                     │
+│    -> 收到 TASK_COMPLETED -> 取 resultUrls -> 更新节点            │
+│    -> 生成 image/video node 展示结果                              │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -330,31 +336,77 @@ Noxrea-AI-Canvas/
 
 ### 链路四：SSE 实时推送
 
-任务状态变更的实时通知机制。
+基于 EventBus（asyncio.Queue 发布/订阅）的实时事件推送，取代旧的 DB 轮询。
+
+**事件类型**：
+
+| EventType | 触发位置 | 说明 |
+|-----------|---------|------|
+| `TASK_COMPLETED` | executor `update_and_emit("completed")` | 任务完成，含 result_urls/result_text |
+| `TASK_FAILED` | executor `update_and_emit("failed")` / `cancel_task()` | 任务失败或被取消 |
 
 ```
-┌─ 后端 TaskManager ───────────┐  ┌─ 前端 InfiniteCanvas ──────┐
-│                               │  │                            │
-│ submit_and_wait()             │  │ 提交任务拿到 taskId 后      │
-│   ↓                           │  │   → 建立 EventSource       │
-│ 提取结果 / 轮询                │  │   → GET /api/generate/     │
-│   ↓                           │  │     task/{id}/stream       │
-│ event_bus.publish(            │  │                            │
-│   TaskEvent(                  │  │                            │
-│     event_type=COMPLETED,     │  │  读 SSE 事件:              │
-│     task_id="a1b2",           │  │  { type:"status",          │
-│     result_urls=[...]         │  │    status:"completed",     │
-│   )                           │  │    result_urls:[...] }     │
-│ )                             │  │  → 更新节点数据             │
-│   ↓                           │  │  → 创建结果节点             │
-│ event_bus.send_end("a1b2")    │──│  → 断开 SSE 连接           │
-└───────────────────────────────┘  └────────────────────────────┘
-
-generate.py stream_task():
-  每个 task 一个 asyncio.Queue
-  → 轮询 DB status 变化 → yield SSE event
-  → completed/failed → 发送结束哨兵 → 断开连接
+┌─ 事件发布（后端 executor / generate.py）──────────────────────┐
+│                                                                 │
+│ update_and_emit(task, "completed", result_urls=[...])          │
+│   -> update_task_status() 更新 DB                               │
+│   -> event_bus.publish(TaskEvent(                               │
+│        event_type=TASK_COMPLETED,                               │
+│        task_id="a1b2", result_urls=[...] ))                     │
+│                                                                 │
+│ cancel_task():                                                  │
+│   -> DB 标记 status=failed, error="Cancelled"                   │
+│   -> event_bus.publish(TaskEvent(                               │
+│        event_type=TASK_FAILED, error="Cancelled" ))             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ publish 广播到所有订阅者队列
+                            ▼
+┌─ EventBus（bus.py）──────────────────────────────────────────┐
+│                                                              │
+│ _subscribers: { task_id: [Queue, Queue, ...] }              │
+│                                                              │
+│ ensure_queue(task_id):  先建队列再查 DB（防竞态丢事件）        │
+│ publish(event):         广播到该 task_id 的所有订阅者         │
+│ wait_event(queue, 5s):  等待事件，超时返回 None（检测断开）     │
+│ send_end(task_id):      发送 None 哨兵结束迭代                │
+│ unsubscribe(task_id,q): 移除队列，无订阅者时自动清理           │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                            ▼
+┌─ SSE 端点 stream_task() ─────────────────────────────────────┐
+│                                                              │
+│ 1. ensure_queue(task_id)    ← 先建队列                        │
+│ 2. 查 DB 当前 status         ← 防止漏掉已完成的任务           │
+│ 3. yield 初始状态 SSE 事件                                    │
+│ 4. 循环: wait_event(queue, timeout=5s)                      │
+│      ├── 收到事件 -> yield SSE event                         │
+│      ├── 超时 None -> 检测客户端是否断开 -> 续传 keepalive     │
+│      └── 收到 None 哨兵 -> 任务结束 -> 退出循环                │
+│ 5. unsubscribe(task_id, queue)  清理                          │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                            ▼
+┌─ 前端 InfiniteCanvas ───────────────────────────────────────┐
+│                                                              │
+│ 提交任务拿到 taskId 后                                        │
+│   -> new EventSource("/api/generate/task/{id}/stream")       │
+│                                                              │
+│ onmessage:                                                   │
+│   { status:"completed", result_urls:[...] }                 │
+│   -> 更新节点数据 / 创建结果节点                               │
+│   -> eventSource.close()                                     │
+│                                                              │
+│   { status:"failed", error:"..." }                          │
+│   -> 显示错误 / 节点标记失败                                  │
+│   -> eventSource.close()                                     │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+**关键设计**：
+- `ensure_queue` 在查 DB 之前调用，防止事件在订阅建立前丢失（竞态保护）
+- 同一 task_id 支持多订阅者（多标签页同时监听），publish 广播到所有队列
+- `wait_event` 5s 超时返回 None，SSE 端点借此周期性检测客户端是否已断开
+- 取消传播：前端 cancel -> DB 标记 + EventBus 推送 TASK_FAILED -> SSE 即时通知 + Worker 多级检查（领取前/轮询中/finalize 前）
 
 ### 链路五：渠道配置与自定义请求体
 
