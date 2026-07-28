@@ -15,6 +15,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import ImageCropModal from "@/components/canvas/ImageCropModal";
+import MultiAngleEditor from "@/components/canvas/MultiAngleEditor";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import {
@@ -63,6 +64,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+  const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -385,6 +387,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
         case "crop-interactive": setCropOpen(true); break;
+        case "angle-editor": setAngleEditorOpen(true); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
@@ -615,6 +618,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     </div>
     {cropOpen && src && createPortal(
       <ImageCropModal src={src} sourceId={id} onClose={() => setCropOpen(false)} />,
+      document.body
+    )}
+    {angleEditorOpen && src && createPortal(
+      <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
       document.body
     )}
     </>
