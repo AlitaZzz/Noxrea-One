@@ -29,7 +29,7 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
     id: uid("text"),
     type: NODE_TYPE.TEXT,
     position,
-    data: { label: "Text", content: "" } as TextNodeData,
+    data: { label: "", content: "" } as TextNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };
 }
