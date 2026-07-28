@@ -38,6 +38,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const t = useI18nStore((s) => s.t);
   const channels = useModelStore((s) => s.channels);
   const findModelParams = useModelStore((s) => s.findModelParams);
+  const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const allModels = channels.flatMap((c) =>
     c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
@@ -74,7 +75,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const entry = allModels.find((m) => m.value === modelKey);
     return entry ? findModelParams(entry.modelName, "image") : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelKey, allModels, findModelParams]);
+  }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
   // 从 modelParams 获取约束值，fallback 到硬编码
   const qualityOptions = modelParams?.constraints?.quality ?? ["auto", "high", "medium", "low"];
