@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  FontSizeOutlined,
   GroupOutlined,
   PictureOutlined,
   PlusOutlined,
@@ -11,6 +10,7 @@ import { Button,Popover, Tooltip } from "antd";
 import { useCallback, useEffect,useState } from "react";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
+import { TextIcon } from "@/components/common/TextIcon";
 import { useAddNode } from "@/hooks/use-add-node";
 import { useI18nStore } from "@/stores/i18n-store";
 
@@ -36,7 +36,7 @@ export default function CenterToolbar() {
 
   const menuContent = (
     <div className="menu-popover flex flex-col gap-0.5" style={{ minWidth: 160 }}>
-      <MenuItem onClick={() => addNode("text")}><FontSizeOutlined /> {t("text.node")}</MenuItem>
+      <MenuItem onClick={() => addNode("text")}><TextIcon /> {t("text.node")}</MenuItem>
       <MenuItem onClick={() => addNode("image")}><PictureOutlined /> {t("image.node")}</MenuItem>
       <MenuItem onClick={() => addNode("video")}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
       <MenuDivider />
@@ -89,7 +89,7 @@ export default function CenterToolbar() {
       {ctxMenu && (
         <div className="fixed z-50" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={() => setCtxMenu(null)}>
           <div className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg" style={{ background: "var(--menu-bg)", border: "1px solid var(--menu-border)" }}>
-            <MenuItem onClick={() => { addNode("text"); setCtxMenu(null); }}><FontSizeOutlined /> {t("text.node")}</MenuItem>
+            <MenuItem onClick={() => { addNode("text"); setCtxMenu(null); }}><TextIcon /> {t("text.node")}</MenuItem>
             <MenuItem onClick={() => { addNode("image"); setCtxMenu(null); }}><PictureOutlined /> {t("image.node")}</MenuItem>
             <MenuItem onClick={() => { addNode("video"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
             <MenuDivider />
