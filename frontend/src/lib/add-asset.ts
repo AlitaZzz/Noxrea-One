@@ -4,7 +4,7 @@ import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
 import type { AssetItem } from "@/lib/types";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 /**
  * 将资产添加到画布视口中心。
@@ -17,10 +17,7 @@ export function addAssetToCanvas(asset: AssetItem) {
   const nh = asset.height || DEFAULT_NODE_HEIGHT;
   const { width: dw, height: dh } = computeNodeSize(nw, nh);
 
-  const cx =
-    -s.viewport.x / s.viewport.zoom + window.innerWidth / 2 / s.viewport.zoom;
-  const cy =
-    -s.viewport.y / s.viewport.zoom + window.innerHeight / 2 / s.viewport.zoom;
+  const pos = findFreePosition({ width: dw, height: dh });
 
   // 检查资产是否带源 URL（视频 → VideoNode，图片 → ImageNode）
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
@@ -32,7 +29,7 @@ export function addAssetToCanvas(asset: AssetItem) {
 
   const addNodes = s.addNodes;
   if (isVideo) {
-    const node = createVideoNode({ x: cx - dw / 2, y: cy - dh / 2 }, sourceUrl);
+    const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
     node.data.alt = asset.name;
     node.data.naturalWidth = nw || 320;
@@ -44,7 +41,7 @@ export function addAssetToCanvas(asset: AssetItem) {
     addNodes([node]);
   } else {
     const imgSrc = asset.metadata?.sourceUrl as string;
-    const node = createImageNode({ x: cx - dw / 2, y: cy - dh / 2 }, imgSrc);
+    const node = createImageNode(pos, imgSrc);
     node.data.label = asset.name;
     node.data.alt = asset.name;
     node.data.naturalWidth = nw;

@@ -10,7 +10,7 @@ import {
   directorNode,
 } from "@/lib/node-defaults";
 import type { AnyNode } from "@/lib/types";
-import { getViewportCenter,useCanvasStore } from "@/stores/canvas-store";
+import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 /** 支持的节点类型 */
 export type AddNodeType = "text" | "image" | "video" | "group" | "director";
@@ -28,29 +28,32 @@ export function useAddNode() {
 
   const addNode = useCallback(
     (type: AddNodeType) => {
-      const { x: cx, y: cy } = getViewportCenter();
-
       let node: AnyNode;
       switch (type) {
         case "text":
-          node = createTextNode({ x: cx - 120, y: cy - 80 });
+          node = createTextNode({ x: 0, y: 0 });
           break;
         case "image":
-          node = createImageNode({ x: cx - 120, y: cy - 80 });
+          node = createImageNode({ x: 0, y: 0 });
           break;
         case "video":
-          node = createVideoNode({ x: cx - 200, y: cy - 100 });
+          node = createVideoNode({ x: 0, y: 0 });
           break;
         case "group":
           node = createGroupNode(
-            { x: cx - 200, y: cy - 100 },
+            { x: 0, y: 0 },
             { width: 400, height: 200 },
           );
           break;
         case "director":
-          node = directorNode({ x: cx - 200, y: cy - 150 });
+          node = directorNode({ x: 0, y: 0 });
           break;
       }
+
+      const w = (node.style?.width as number) ?? 300;
+      const h = (node.style?.height as number) ?? 200;
+      node.position = findFreePosition({ width: w, height: h });
+
       addNodes([node]);
     },
     [addNodes],
