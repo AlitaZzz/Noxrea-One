@@ -28,9 +28,9 @@ class GenerationTask(Base):
     prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     ref_images: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
-    # 多图结果：URL 列表（一次生成可返回多张）。result_url 仅作兼容镜像（= 列表首张）。
+    # 多图结果：URL 列表（一次生成可返回多张）。
     result_urls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
-    result_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    result_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     node_id: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(

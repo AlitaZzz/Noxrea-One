@@ -1,12 +1,10 @@
 """
-AI 代理接口 - 带鉴权和 SSRF 防护的转发层。
+模型列表代理接口 - 带鉴权和 SSRF 防护的转发层。
 
-与 /api/generate 的任务队列不同，这里直接转发请求到 AI Provider：
-  - POST /api/chat/completions  -> {channel 的 baseUrl}/chat/completions
-  - POST /api/models/list       -> {channel 的 baseUrl}/models
+  - POST /api/models/list -> {channel 的 baseUrl}/models
 
-所有接口均需 JWT 鉴权 (Depends(get_current_user))。
 按 channel_id 取该用户 channel 的 baseUrl/apiKey 转发，前端不再持有明文 apiKey。
+所有接口均需 JWT 鉴权 (Depends(get_current_user))。
 SSRF 防护逻辑统一在 app.services.ssrf。
 """
 
@@ -26,16 +24,10 @@ from app.services.http import TIMEOUT_API
 from app.crud import model_config as crud_model_config
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api", tags=["ai-proxy"])
+router = APIRouter(prefix="/api/models", tags=["models"])
 
 
 # ── 请求体 ──────────────────────────────────────────
-
-class ChatCompletionRequest(BaseModel):
-    channelId: str
-    model: str
-    messages: list[dict]
-
 
 class ModelListRequest(BaseModel):
     channelId: str
@@ -56,52 +48,7 @@ async def _resolve_channel(db: AsyncSession, channel_id: str, user_id: int):
 
 # ── 接口 ────────────────────────────────────────────
 
-@router.post("/chat/completions")
-async def chat_completions(
-    body: ChatCompletionRequest,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    base_url, api_key, ip, hostname, port = await _resolve_channel(db, body.channelId, user.id)
-    logger.debug(f"chat proxy user={user.id} model={body.model} host={hostname}")
-
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    url = base_url.rstrip("/")
-
-    with dns_pin(hostname, ip, port):
-        async with httpx.AsyncClient(
-            timeout=TIMEOUT_API,
-            follow_redirects=False,
-        ) as client:
-            try:
-                res = await client.post(
-                    f"{url}/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": body.model,
-                        "messages": body.messages,
-                        "stream": False,
-                    },
-                )
-                data = res.json()
-                if not res.is_success:
-                    return UnifiedResponse(
-                        code=res.status_code,
-                        data=None,
-                        msg=data.get("error", {}).get("message", str(res.status_code)),
-                    )
-                return UnifiedResponse(code=200, data=data, msg="ok")
-            except httpx.RequestError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to reach AI provider: {e}",
-                )
-
-
-@router.post("/models/list")
+@router.post("/list")
 async def models_list(
     body: ModelListRequest,
     db: AsyncSession = Depends(get_db),

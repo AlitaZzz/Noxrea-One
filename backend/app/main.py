@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base, async_session
-from app.routers import auth, canvas, files, model_config, assets, generate, ai_proxy, model_params
+from app.routers import auth, canvas, files, model_config, assets, generate, models, model_params
 
 
 @asynccontextmanager
@@ -104,5 +104,5 @@ app.include_router(files.router)
 app.include_router(model_config.router)
 app.include_router(assets.router)
 app.include_router(generate.router)
-app.include_router(ai_proxy.router)
+app.include_router(models.router)
 app.include_router(model_params.router)

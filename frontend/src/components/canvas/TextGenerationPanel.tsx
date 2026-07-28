@@ -9,8 +9,9 @@ import WheelGuard from "@/components/common/WheelGuard";
 import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/node-defaults";
-import { type GenSettings, NODE_TYPE } from "@/lib/types";
-import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { type GenSettings, isGenerating as isGeneratingBinding, NODE_TYPE, type TextNodeData } from "@/lib/types";
+import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 
@@ -22,19 +23,6 @@ interface ModelOption {
   value: string;
   channelId: string;
   modelName: string;
-}
-
-/** Convert an image URL to a base64 data URI */
-async function urlToBase64(url: string): Promise<string> {
-  const fullUrl = url.startsWith("/") ? `${BASE}${url}` : url;
-  const res = await fetch(fullUrl);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
@@ -65,12 +53,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   const [prompt, setPrompt] = useState(saved.prompt);
   const [modelKey, setModelKey] = useState(saved.modelKey);
   const [modelOpen, setModelOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
 
   // Upstream reference images - derived live from current edges
   const canvasNodes = useCanvasStore((s) => s.nodes);
   const canvasEdges = useCanvasStore((s) => s.edges);
+
+  const isGenerating = useMemo(() => {
+    const node = canvasNodes.find((n) => n.id === nodeId);
+    return isGeneratingBinding((node?.data as TextNodeData)?.taskBinding);
+  }, [canvasNodes, nodeId]);
   const refImages = useMemo(() => {
     const upstreamIds = new Set(canvasEdges.filter((e) => e.target === nodeId).map((e) => e.source));
     return canvasNodes
@@ -93,7 +85,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     });
   }
 
-  const abortRef = useRef<AbortController | null>(null);
   const latestSettingsRef = useRef({ prompt, modelKey, refOrder });
   useEffect(() => {
     latestSettingsRef.current = { prompt, modelKey, refOrder };
@@ -182,62 +173,80 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !modelKey || loading) return;
+    if (!prompt.trim() || !modelKey || isGenerating) return;
     const entry: ModelOption | undefined = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
 
-    setLoading(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
+    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
+    markDirtyImmediate();
 
     try {
       // Build message content (multimodal if ref images exist)
-      // Convert reference image URLs to base64 data URIs
-      let content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-      if (refOrder.length > 0) {
-        const imageParts = await Promise.all(
-          refOrder.map(async (url) => {
-            const dataUri = await urlToBase64(url);
-            return { type: "image_url", image_url: { url: dataUri } };
-          }),
-        );
-        content = [{ type: "text", text: prompt }, ...imageParts];
-      } else {
-        content = prompt;
-      }
+      // image_url 传原始 URL，由后端 resolve_refs 转 base64
+      const content =
+        refOrder.length > 0
+          ? [
+              { type: "text", text: prompt },
+              ...refOrder.map((url) => ({ type: "image_url", image_url: { url } })),
+            ]
+          : prompt;
 
-      const res = await fetch(`${BASE}/api/chat/completions`, {
+      const messages = [{ role: "user", content }];
+
+      const res = await fetch(`${BASE}/api/generate/task`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({
-          channelId: entry.channelId,
+          type: "llm",
+          prompt,
           model: entry.modelName,
-          messages: [{ role: "user", content }],
+          channelId: entry.channelId,
+          nodeId,
+          messages,
         }),
-        signal: controller.signal,
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
 
-      const reply = json.data?.choices?.[0]?.message?.content || "";
-      useCanvasStore.getState().updateNodeData(nodeId, { content: reply });
-      markDirtyImmediate();
-      notification.success({ title: t("generation.text.success"), placement: "bottomRight", duration: 5 });
+      const taskId: string | undefined = json.data?.id;
+      if (!taskId) throw new Error("No taskId returned");
+
+      // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
+      const cur = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const curBinding = cur ? (cur.data as TextNodeData)?.taskBinding : undefined;
+      if (!isGeneratingBinding(curBinding)) return;
+
+      // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
+      await flushAndWait();
     } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      notification.error({ title: t("generation.failed"), description: err instanceof Error ? err.message : "", placement: "bottomRight", duration: 15 });
-    } finally {
-      setLoading(false);
-      abortRef.current = null;
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
+      useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+      notification.error({
+        title: t("generation.failed"),
+        description: err instanceof Error ? err.message : "",
+        placement: "bottomRight",
+        duration: 15,
+      });
     }
   };
 
-  const handleCancel = () => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
+  const handleCancel = async () => {
+    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+    const tid = (node?.data as TextNodeData)?.taskBinding?.taskId;
+    if (tid) {
+      fetch(`${BASE}/api/generate/task/${tid}/cancel`, {
+        method: "POST",
+        headers: { ...getTokenHeader() },
+      }).catch(() => {});
     }
-    setLoading(false);
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
+    markDirtyImmediate();
+    // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
+    useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
   };
 
   return (
@@ -398,15 +407,15 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             style={{
               width: 36,
               height: 36,
-              background: loading ? "#e74c3c" : !prompt.trim() || !modelKey ? "var(--canvas-border)" : "var(--canvas-text)",
-              color: loading ? "#fff" : !prompt.trim() || !modelKey ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
+              background: isGenerating ? "#e74c3c" : !prompt.trim() || !modelKey ? "var(--canvas-border)" : "var(--canvas-text)",
+              color: isGenerating ? "#fff" : !prompt.trim() || !modelKey ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
               border: "none",
               cursor: "pointer",
-              opacity: (!prompt.trim() || !modelKey) && !loading ? 0.5 : 1,
+              opacity: (!prompt.trim() || !modelKey) && !isGenerating ? 0.5 : 1,
             }}
-            onClick={loading ? handleCancel : handleGenerate}
+            onClick={isGenerating ? handleCancel : handleGenerate}
           >
-            {loading ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}
+            {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}
           </Button>
         </div>
       </WheelGuard>

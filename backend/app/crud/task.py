@@ -119,6 +119,7 @@ async def update_task_status(
     status: str,
     *,
     result_urls: list[str] | None = None,
+    result_text: str | None = None,
     error: str | None = None,
 ) -> None:
     """更新任务状态。
@@ -126,7 +127,8 @@ async def update_task_status(
     取消保护：任务已为 failed（被取消）时，completed 不会被覆盖，
     避免取消后的任务被误标为完成。
 
-    result_urls 为结果 URL 列表；result_url 作为兼容镜像保留（= 列表首张）。
+    result_urls 为结果 URL 列表。
+    result_text 为 LLM 文本结果。
     """
     now = datetime.now(timezone.utc)
     if status == "completed":
@@ -135,16 +137,18 @@ async def update_task_status(
         )
         if cur.scalar_one_or_none() == "failed":
             return
+    values: dict = {
+        "status": status,
+        "updated_at": now,
+        "result_urls": result_urls or None,
+        "error": error or "",
+    }
+    if result_text is not None:
+        values["result_text"] = result_text
     await db.execute(
         update(GenerationTask)
         .where(GenerationTask.id == task_id)
-        .values(
-            status=status,
-            updated_at=now,
-            result_urls=result_urls or None,
-            result_url=(result_urls[0] if result_urls else ""),
-            error=error or "",
-        )
+        .values(**values)
     )
     await db.commit()
 

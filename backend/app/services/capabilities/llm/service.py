@@ -47,6 +47,31 @@ class LLMService(BaseCapabilityService):
         if not messages:
             return {"status": "failed", "urls": [], "error": "No messages or prompt"}
 
+        # messages 中的 image_url（本地 HTTP URL）转为 base64 data URI，
+        # 复用 resolve_refs 三档策略：同源读盘 / 白名单安全 fetch / 外链透传
+        from app.services.resolvers.reference import resolve_refs
+        for msg in messages:
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            urls: list[str] = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    url = (part.get("image_url") or {}).get("url", "")
+                    if url and not url.startswith("data:"):
+                        urls.append(url)
+            if not urls:
+                continue
+            resolved = await resolve_refs(urls, user_id)
+            url_map = dict(zip(urls, resolved))
+            for part in content:
+                if (isinstance(part, dict)
+                        and part.get("type") == "image_url"
+                        and isinstance(part.get("image_url"), dict)):
+                    orig = part["image_url"].get("url", "")
+                    if orig in url_map:
+                        part["image_url"]["url"] = url_map[orig]
+
         body = {
             "model": model,
             "messages": messages,

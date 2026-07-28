@@ -39,12 +39,13 @@ async def update_task_status(
     status: str,
     *,
     result_urls: list[str] | None = None,
+    result_text: str | None = None,
     error: str | None = None,
 ) -> None:
     """Update task status. Skips if task was cancelled."""
     async with async_session() as db:
         await crud_task.update_task_status(
-            db, task_id, status, result_urls=result_urls, error=error
+            db, task_id, status, result_urls=result_urls, result_text=result_text, error=error
         )
 
 
@@ -126,15 +127,22 @@ async def process_task(task: GenerationTask) -> None:
                     capability=capability,
                     channel_config=channel_config,
                 )
-                result_urls, error_reason = await _process_via_gateway(client, ctx)
+                result_urls, error_reason, metadata = await _process_via_gateway(client, ctx)
 
-                await _finalize_result(task, result_urls, error_reason)
+                await _finalize_result(task, result_urls, error_reason, metadata)
 
             except asyncio.TimeoutError:
                 category, _ = classify_error("timeout")
                 logger.info(log_event("executor", task_id=task.id, stage="failed",
                                       category=category, retry=True, duration=f"{API_TIMEOUT_SEC}s"))
                 await update_task_status(task.id, "failed", error="API call timed out")
+            except httpx.TimeoutException as e:
+                timeout_type = type(e).__name__
+                detail = str(e) or "timed out"
+                msg = f"Provider {timeout_type}: {detail}"
+                logger.info(log_event("executor", task_id=task.id, stage="failed",
+                                      category="timeout", retry=True, message=f'"{msg}"'))
+                await update_task_status(task.id, "failed", error=msg)
             except Exception as e:
                 logger.info(log_event("executor", task_id=task.id, stage="failed",
                                       category="protocol_error", retry=False, message=f'"{str(e)[:200]}"'))
@@ -147,11 +155,11 @@ async def _process_bg_removal(task: GenerationTask) -> None:
 
     result_url, bg_error = await run_bg_removal(task)
     result_urls = [result_url] if result_url else []
-    await _finalize_result(task, result_urls, bg_error or "")
+    await _finalize_result(task, result_urls, bg_error or "", {})
 
 
 async def _finalize_result(
-    task: GenerationTask, result_urls: list[str], error_reason: str
+    task: GenerationTask, result_urls: list[str], error_reason: str, metadata: dict
 ) -> None:
     """结果处理：下载落本地 → 更新完成/失败状态。
 
@@ -159,6 +167,14 @@ async def _finalize_result(
     的结果存储都在此处处理。
     """
     capability = getattr(task, "capability", None) or task.type
+
+    # LLM 文本结果：直接写入 result_text，不走 URL 下载
+    if not result_urls and capability == "llm" and metadata.get("text"):
+        text = metadata["text"]
+        await update_task_status(task.id, "completed", result_text=text)
+        logger.info(log_event("executor", task_id=task.id, stage="completed",
+                              text_len=len(text)))
+        return
 
     if result_urls:
         # 批量下载 CDN 图并落本地
@@ -181,15 +197,18 @@ async def _finalize_result(
                                   category="storage_error", retry=False, message='"download failed"'))
     else:
         fail_reason = error_reason or "No result from provider"
+        raw_sample = (metadata or {}).get("raw_sample") or ""
+        if raw_sample:
+            fail_reason = f"{fail_reason} | upstream_response={raw_sample[:300]}"
         await update_task_status(task.id, "failed", error=fail_reason)
         logger.info(log_event("executor", task_id=task.id, stage="failed",
                               category="protocol_error", retry=False, message=f'"{fail_reason}"'))
 
 
-async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str], str]:
+async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str], str, dict]:
     """通过 CapabilityRouter 处理任务。
 
-    返回 (local_urls, error_reason)。
+    返回 (local_urls, error_reason, metadata)。
     """
     task = ctx.task
     capability = ctx.capability or task.type
@@ -220,6 +239,7 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
     if result.get("status") == "completed":
         urls = result.get("urls") or []
         files = result.get("files") or []
+        metadata = result.get("metadata") or {}
 
         local_urls: list[str] = []
 
@@ -262,7 +282,8 @@ async def _process_via_gateway(client, ctx: ExecutionContext) -> tuple[list[str]
             if local:
                 local_urls.append(local)
 
-        return local_urls, ""
+        return local_urls, "", metadata
     else:
         error = result.get("error", "Gateway processing failed")
-        return [], error
+        metadata = result.get("metadata") or {}
+        return [], error, metadata

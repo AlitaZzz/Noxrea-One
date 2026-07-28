@@ -4,7 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 
-TaskTypeValue = Literal["image", "video", "bg_removal"]
+TaskTypeValue = Literal["image", "video", "llm", "bg_removal"]
 
 
 class TaskCreate(BaseModel):
@@ -28,7 +28,7 @@ class TaskOut(BaseModel):
     config: dict
     ref_images: Optional[list[str]] = None
     result_urls: Optional[list[str]] = None
-    result_url: Optional[str] = None
+    result_text: Optional[str] = None
     error: Optional[str] = None
     node_id: str
     created_at: datetime.datetime

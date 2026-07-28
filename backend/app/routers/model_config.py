@@ -61,7 +61,7 @@ async def create_channel(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # SSRF：创建时即校验 base_url，尽早拒绝内网/元数据地址（机制同 ai_proxy）
+    # SSRF：创建时即校验 base_url，尽早拒绝内网/元数据地址（机制同 models）
     from app.services.ssrf import resolve_and_validate
     resolve_and_validate(body.baseUrl)
     ch = await crud.create_channel(

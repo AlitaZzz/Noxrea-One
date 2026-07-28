@@ -56,9 +56,27 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                   if (!line.startsWith("data: ")) continue;
                   try {
                     const evt = JSON.parse(line.slice(6));
-                    const completedUrls: string[] = (evt.result_urls && evt.result_urls.length)
-                      ? evt.result_urls
-                      : (evt.result_url ? [evt.result_url] : []);
+                    const completedUrls: string[] = evt.result_urls || [];
+
+                    // LLM 文本结果：从 result_text 更新 content
+                    if (evt.status === "completed" && evt.result_text) {
+                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      useCanvasStore.getState().updateNodeData(nodeId, {
+                        content: evt.result_text,
+                        taskBinding: undefined,
+                      }, undefined, { skipHistory: true });
+                      markDirtyImmediate();
+                      const t = useI18nStore.getState().t;
+                      if (!notifiedTasksRef.current.has(taskId)) {
+                        notifiedTasksRef.current.add(taskId);
+                        notifRef.current.success({ title: t("generation.text.success"), placement: "bottomRight", duration: 5 });
+                      }
+                      sseCtrlsRef.current.delete(taskId);
+                      return;
+                    }
+
                     if (evt.status === "completed" && completedUrls.length) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
@@ -139,6 +157,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
                       if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       const isVideoNode = cur.type === "video-node";
+                      const isTextNode = cur.type === "text-node";
                       useCanvasStore.getState().updateNodeData(nodeId, {
                         taskBinding: undefined,
                       }, undefined, { skipHistory: true });
@@ -146,7 +165,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: curBinding?.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
+                        notifRef.current.error({ title: curBinding?.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : isTextNode ? "generation.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

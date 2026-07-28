@@ -147,6 +147,11 @@ class TaskManager:
                 }
 
             data = resp.json()
+            logger.info(
+                f"[taskmgr] task={task_id} upstream_response "
+                f"keys={list(data.keys()) if isinstance(data, dict) else type(data).__name__} "
+                f"sample={str(data)[:300]}"
+            )
         except asyncio.TimeoutError:
             return {
                 "status": "failed",
@@ -155,6 +160,17 @@ class TaskManager:
                 "category": "timeout",
                 "retry": True,
                 "message": "API call timed out",
+            }
+        except httpx.TimeoutException as e:
+            timeout_type = type(e).__name__
+            detail = str(e) or "timed out"
+            return {
+                "status": "failed",
+                "urls": [],
+                "error": f"Provider {timeout_type}: {detail}",
+                "category": "timeout",
+                "retry": True,
+                "message": f"{timeout_type}: {detail}",
             }
         except Exception as e:
             return {
@@ -347,6 +363,8 @@ class TaskManager:
 
             except asyncio.TimeoutError:
                 logger.warning(f"poll timeout task={task_id} attempt={attempt+1}")
+            except httpx.TimeoutException as e:
+                logger.warning(f"poll httpx timeout task={task_id} attempt={attempt+1} type={type(e).__name__}")
             except Exception as e:
                 logger.warning(f"poll error task={task_id} attempt={attempt+1} err={str(e)[:120]}")
 

@@ -78,14 +78,13 @@ async def test_update_status_cancelled_not_overwritten(db):
 
 @pytest.mark.asyncio
 async def test_update_status_completes_when_pending(db):
-    """pending 任务可被正常标为 completed 并写入 result_url。"""
+    """pending 任务可被正常标为 completed 并写入 result_urls。"""
     now = datetime.now(timezone.utc)
     await crud_task.create_task(db, "d", 1, "image", "p", CONFIG, None, "node1", now)
     await crud_task.update_task_status(db, "d", "completed", result_urls=["http://x/y.png"])
     final = await crud_task.get_task(db, "d")
     assert final.status == "completed"
     assert final.result_urls == ["http://x/y.png"]
-    assert final.result_url == "http://x/y.png"
 
 
 @pytest.mark.asyncio
