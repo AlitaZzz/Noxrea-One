@@ -340,8 +340,8 @@ async def test_router_dispatch_unknown_capability():
         base_url="http://up", api_key="k", protocol_name="openai",
         model="m",
     )
-    assert result["status"] == "failed"
-    assert "Unknown capability" in result["error"]
+    assert result.status == "failed"
+    assert "Unknown capability" in result.error
 
 
 async def test_router_dispatch_routes_to_service(monkeypatch):
@@ -362,8 +362,8 @@ async def test_router_dispatch_routes_to_service(monkeypatch):
         base_url="http://up", api_key="k", protocol_name="openai",
         model="gpt-image-1",
     )
-    assert result["status"] == "completed"
-    assert result["urls"] == ["http://x/a.png"]
+    assert result.status == "completed"
+    assert result.urls == ["http://x/a.png"]
 
 
 # ── 8. 向后兼容 ────────────────────────────────────────────────
@@ -427,10 +427,12 @@ async def test_image_service_no_adapter(monkeypatch):
         base_url="http://up", api_key="k", protocol_name="openai",
         model="gpt-image-1",
     )
-    assert res["status"] == "completed"
+    assert res.status == "completed"
     pb = captured["body"]
-    # resolution 保持原始值，不再被 adapter 转换
-    assert pb["resolution"] == "1K"
+    # resolution 被 model transforms 消费（ratio + resolution -> pixel dimensions）
+    assert "resolution" not in pb
+    # ratio 被转换为像素值
+    assert pb["ratio"] == "1024x1024"
     # 旧字段名 size_level 不再存在
     assert "size_level" not in pb
 

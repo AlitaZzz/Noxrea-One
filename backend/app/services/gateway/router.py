@@ -18,7 +18,7 @@ import logging
 
 from app.logging_config import log_event
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService, CapabilityRegistry
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult, CapabilityRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -40,27 +40,12 @@ class CapabilityRouter:
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict:
-        """分发到对应能力服务并执行。
-
-        Returns:
-            {
-                "status": "completed" | "failed" | "processing",
-                "urls": [...],
-                "error": "...",
-                "upstream_task_id": "...",
-                "metadata": {...},
-            }
-        """
+    ) -> CapabilityResult:
+        """分发到对应能力服务并执行。"""
         if not CapabilityRegistry.has(capability):
             logger.warning(log_event("gateway", task_id=task_id, stage="failed",
                                      category="invalid_request", message=f'"unknown capability: {capability}"'))
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"Unknown capability: {capability}",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(f"Unknown capability: {capability}")
 
         service: BaseCapabilityService = CapabilityRegistry.get(capability)
         logger.info(log_event("gateway", task_id=task_id, stage="route",

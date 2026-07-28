@@ -69,7 +69,7 @@ async def test_process_image_task_no_context_manager_error(monkeypatch):
     _patch_channel(monkeypatch)
 
     async def fake_gateway(client, ctx):
-        return ["https://cdn.example.com/x.png"], ""
+        return ["https://cdn.example.com/x.png"], "", {}
 
     monkeypatch.setattr(executor, "_process_via_gateway", fake_gateway)
 
@@ -82,6 +82,7 @@ async def test_process_image_task_no_context_manager_error(monkeypatch):
 
     async def fake_update(task_id, status, **kw):
         updates.append((task_id, status, kw))
+        return True
 
     monkeypatch.setattr(executor, "update_task_status", fake_update)
 
@@ -95,10 +96,10 @@ async def test_process_image_task_no_context_manager_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_process_bg_removal_task_no_context_manager_error(monkeypatch):
     """bg_removal 走 _nullcontext 路径（无 base_url），同样不应抛 TypeError。"""
-    async def fake_bg(task):
-        return "https://cdn.example.com/y.png", None
+    async def fake_gateway(client, ctx):
+        return ["https://cdn.example.com/y.png"], "", {}
 
-    monkeypatch.setattr("app.services.inference.bg_removal.process", fake_bg)
+    monkeypatch.setattr(executor, "_process_via_gateway", fake_gateway)
 
     async def fake_download(url, user_id, typ, task_id=""):
         return "http://localhost:8000/api/files/1/ab/LOCAL.png"
@@ -109,6 +110,7 @@ async def test_process_bg_removal_task_no_context_manager_error(monkeypatch):
 
     async def fake_update(task_id, status, **kw):
         updates.append((task_id, status))
+        return True
 
     monkeypatch.setattr(executor, "update_task_status", fake_update)
 
@@ -134,20 +136,19 @@ async def test_image_failure_logs_error_once(monkeypatch, caplog):
 
     async def fake_update(task_id, status, **kw):
         updates.append((task_id, status, kw))
+        return True
 
     monkeypatch.setattr(executor, "update_task_status", fake_update)
 
-    caplog.set_level(logging.ERROR, logger="app.services.worker.executor")
+    caplog.set_level(logging.INFO, logger="app.services.worker.executor")
     await executor.process_task(_make_task("image"))
 
     # task 标 failed
     assert any(u[1] == "failed" for u in updates), f"expected failed, got {updates}"
 
-    # "error task=" 只出现一次
-    error_lines = [r for r in caplog.records if "error task=" in r.getMessage()]
-    assert len(error_lines) == 1, f"expected 1 error log, got {len(error_lines)}: {[r.getMessage() for r in error_lines]}"
-    # 不再有旧的 "image failed" 重复日志
-    assert not any("image failed" in r.getMessage() for r in caplog.records)
+    # "stage=failed" 只出现一次
+    fail_lines = [r for r in caplog.records if "stage=failed" in r.getMessage()]
+    assert len(fail_lines) == 1, f"expected 1 failed log, got {len(fail_lines)}: {[r.getMessage() for r in fail_lines]}"
 
 
 @pytest.mark.asyncio
@@ -160,7 +161,7 @@ async def test_download_failure_marks_task_failed(monkeypatch):
     _patch_channel(monkeypatch)
 
     async def fake_gateway(client, ctx):
-        return ["https://cdn.example.com/x.png"], ""  # provider 返回外链
+        return ["https://cdn.example.com/x.png"], "", {}  # provider 返回外链
 
     monkeypatch.setattr(executor, "_process_via_gateway", fake_gateway)
 
@@ -174,6 +175,7 @@ async def test_download_failure_marks_task_failed(monkeypatch):
 
     async def fake_update(task_id, status, **kw):
         updates.append((task_id, status, kw))
+        return True
 
     monkeypatch.setattr(executor, "update_task_status", fake_update)
 

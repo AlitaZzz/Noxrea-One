@@ -1,5 +1,5 @@
 """
-AudioService — 音频能力服务。
+AudioService - 音频能力服务。
 
 支持 TTS（文字转语音）和 STT（语音转文字）。
 统一走 TaskManager 提交请求。
@@ -8,11 +8,11 @@ AudioService — 音频能力服务。
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.config import settings
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult
+from app.services.capabilities.requests import AudioRequest
 from app.services.request_builder import build
 from app.logging_config import run_upstream
 from app.services.protocols.base import ProtocolRegistry
@@ -39,35 +39,35 @@ class AudioService(BaseCapabilityService):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行音频生成/识别。"""
         mode = params.get("mode", "tts")
 
-        body = {
-            "model": model,
-            "mode": mode,
-        }
-
+        req = AudioRequest(
+            model=model,
+            prompt=prompt,
+            mode=mode,
+        )
         if mode == "tts":
-            body["input"] = prompt or params.get("input", "")
-            body["voice"] = params.get("voice", "alloy")
+            req.input = prompt or params.get("input", "")
+            req.voice = params.get("voice", "alloy")
         elif mode == "stt":
-            audio = params.get("audio_file") or ""
-            if audio:
-                body["file"] = audio
+            req.audio_file = params.get("audio_file") or ""
 
-        # request_builder 一步完成 body 构造（mapping → transforms → patch）
-        body = build(body, channel_config, self.capability, model_name=model, task_id=task_id)
+        internal = req.model_dump(exclude_none=True)
+        # STT: provider 期望 "file" 键
+        if mode == "stt" and internal.get("audio_file"):
+            internal["file"] = internal.pop("audio_file")
+
+        # request_builder 一步完成 body 构造（mapping -> transforms -> patch）
+        body = build(internal, channel_config, self.capability, model_name=model, task_id=task_id)
 
         # Protocol
         protocol = ProtocolRegistry.get(protocol_name, self.capability)
         if not protocol:
-            return {
-                "status": "failed",
-                "urls": [],
-                "error": f"Protocol '{protocol_name}' does not support audio",
-                "metadata": {},
-            }
+            return CapabilityResult.failed(
+                f"Protocol '{protocol_name}' does not support audio"
+            )
 
         endpoint, headers, request_body = protocol.build_request(
             base_url, api_key, body, self.capability
@@ -97,11 +97,13 @@ class AudioService(BaseCapabilityService):
         )
 
         # 处理 TTS 的二进制 bytes 响应
-        files = result.pop("files", [])
-        if files and not result.get("urls"):
-            result["files"] = files  # 保留 files，由 executor 落盘
+        result_obj = CapabilityResult.from_dict(result)
+        if result_obj.files and not result_obj.urls:
+            pass  # files 已在 result_obj 中，由 executor 落盘
+        else:
+            result_obj.files = []  # 有 urls 时清空 files
 
-        return result
+        return result_obj
 
 
 # ── CapabilityRegistry 注册 ─────────────────────────────────

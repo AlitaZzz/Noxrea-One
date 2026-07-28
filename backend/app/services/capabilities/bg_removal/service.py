@@ -1,23 +1,21 @@
-"""
-BgRemovalService — 背景移除能力服务。
+"""BgRemovalService - 背景移除能力服务。
 
-不经过 Gateway / Adapter / Protocol，直接调用内部推理服务。
-返回结果由 executor 统一更新任务状态。
+作为内部能力注册到 CapabilityRegistry，通过 Gateway 统一分发。
+实际推理逻辑委托给 inference/bg_removal.py:remove_bg()。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.schemas.channel_config import ChannelConfig
-from app.services.capabilities.base import BaseCapabilityService
+from app.services.capabilities.base import BaseCapabilityService, CapabilityResult
 
 logger = logging.getLogger(__name__)
 
 
 class BgRemovalService(BaseCapabilityService):
-    """背景移除能力服务。"""
+    """背景移除能力服务（内部推理，不需要外部渠道）。"""
 
     capability: str = "bg_removal"
 
@@ -34,23 +32,26 @@ class BgRemovalService(BaseCapabilityService):
         channel_config: ChannelConfig = ChannelConfig(),
         model: str = "",
         ref_images: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> CapabilityResult:
         """执行背景移除。
 
-        实际调用在 executor._process_bg_removal 中完成（需要 task 对象获取 ref_images），
-        此处仅作为能力占位注册。
+        调用内部推理服务，不需要外部渠道（base_url / api_key / protocol_name 均为空）。
         """
-        return {
-            "status": "failed",
-            "urls": [],
-            "error": "BgRemoval 由 executor 直接处理，不走 Gateway 分发",
-            "metadata": {},
-        }
+        if not ref_images:
+            return CapabilityResult.failed("bg_removal requires at least one reference image")
+
+        from app.services.inference.bg_removal import remove_bg
+        local_url, error = await remove_bg(ref_images[0], user_id)
+
+        if error:
+            return CapabilityResult.failed(error)
+
+        return CapabilityResult.completed(urls=[local_url])
 
 
 # ── CapabilityRegistry 注册 ─────────────────────────────────
 
 def register():
-    """注册 BgRemovalService 到全局能力注册表（仅作为能力声明占位）。"""
+    """注册 BgRemovalService 到全局能力注册表。"""
     from app.services.capabilities.base import CapabilityRegistry
     CapabilityRegistry.register("bg_removal", BgRemovalService())

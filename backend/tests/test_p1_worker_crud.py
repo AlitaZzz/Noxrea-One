@@ -139,12 +139,13 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
 
     seen: dict = {}
 
-    async def fake_bg(t):
-        # 到达内部推理封装时，ref_images 必须是 list（而非 str）
-        seen["ref_images"] = t.ref_images
-        return "http://testserver/api/files/1/gen/r.png", None
+    async def fake_gateway(client, ctx):
+        # 到达 gateway 时，config 必须是 dict（而非 str）、ref_images 必须是 list
+        seen["config"] = ctx.task.config
+        seen["ref_images"] = ctx.task.ref_images
+        return ["http://testserver/api/files/1/gen/r.png"], "", {}
 
-    monkeypatch.setattr("app.services.inference.bg_removal.process", fake_bg)
+    monkeypatch.setattr(executor, "_process_via_gateway", fake_gateway)
 
     async def fake_download(url, user_id, typ, task_id=""):
         return url
@@ -155,5 +156,6 @@ async def test_process_task_uses_dict_config_without_json_loads(db, monkeypatch)
     await executor.process_task(task)
 
     assert isinstance(seen["ref_images"], list)
+    assert isinstance(seen["config"], dict)
     final = await crud_task.get_task(db, "bg1")
     assert final.status == "completed"

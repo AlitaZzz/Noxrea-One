@@ -24,8 +24,6 @@ from app.database import async_session
 from app.schemas.result import AsyncSubmission, GenerationResult, PollResult
 from app.services.protocols.base import BaseProtocol, PENDING_STATUSES
 from app.logging_config import classify_error
-from app.services.events.bus import event_bus
-from app.services.events.types import EventType, TaskEvent
 from app.services.http import TIMEOUT_POLL, TIMEOUT_AI_GENERATE
 
 logger = logging.getLogger(__name__)
@@ -185,6 +183,10 @@ class TaskManager:
         # 2. 尝试同步提结果
         result = protocol.extract_result(data, capability)
         if result and not result.is_empty:
+            logger.info(
+                f"[taskmgr] task={task_id} sync_completed "
+                f"urls={len(result.urls)} files={len(result.files)}"
+            )
             return {
                 "status": "completed",
                 "urls": result.urls,
@@ -235,32 +237,6 @@ class TaskManager:
             "metadata": {"raw_keys": list(data.keys()), "raw_sample": sample},
         }
 
-    @staticmethod
-    async def poll_existing(
-        *,
-        task_id: str,
-        user_id: int,
-        protocol: BaseProtocol,
-        capability: str,
-        base_url: str,
-        api_key: str,
-        upstream_task_id: str,
-        poll_interval: float = DEFAULT_POLL_INTERVAL,
-        max_poll_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    ) -> dict:
-        """对已有 upstream_task_id 的任务执行轮询。"""
-        return await TaskManager._poll(
-            task_id=task_id,
-            user_id=user_id,
-            protocol=protocol,
-            capability=capability,
-            base_url=base_url,
-            api_key=api_key,
-            upstream_task_id=upstream_task_id,
-            poll_interval=poll_interval,
-            max_poll_attempts=max_poll_attempts,
-        )
-
     # ── 内部轮询 ──────────────────────────────────────────
 
     @staticmethod
@@ -296,6 +272,11 @@ class TaskManager:
         initial_delay: float = 0.0,
     ) -> dict:
         """执行异步轮询。"""
+        logger.info(
+            f"[taskmgr] task={task_id} poll_start "
+            f"upstream_id={upstream_task_id} "
+            f"max_attempts={max_poll_attempts} interval={poll_interval}s"
+        )
         poll_url = protocol.build_poll_url(base_url, upstream_task_id)
         headers = {"Content-Type": "application/json"}
         if api_key:
@@ -316,7 +297,10 @@ class TaskManager:
             # 每 5 次检查是否已被取消
             if attempt % 5 == 0:
                 if await TaskManager._check_cancelled(task_id):
-                    logger.info(f"poll cancelled by user task={task_id} attempt={attempt+1}")
+                    logger.info(
+                        f"[taskmgr] task={task_id} poll_end reason=cancelled "
+                        f"attempt={attempt+1}"
+                    )
                     return {
                         "status": "failed",
                         "urls": [],
@@ -342,7 +326,10 @@ class TaskManager:
                 parsed: PollResult = protocol.parse_poll_response(poll_data, capability)
 
                 if parsed.status == "completed":
-                    logger.debug(f"poll completed task={task_id} attempt={attempt+1}")
+                    logger.info(
+                        f"[taskmgr] task={task_id} poll_end reason=completed "
+                        f"attempt={attempt+1} urls={len(parsed.urls)}"
+                    )
                     return {
                         "status": "completed",
                         "urls": parsed.urls,
@@ -351,6 +338,10 @@ class TaskManager:
                     }
                 elif parsed.status == "failed":
                     logger.warning(f"poll failed task={task_id} attempt={attempt+1} err={parsed.error}")
+                    logger.info(
+                        f"[taskmgr] task={task_id} poll_end reason=upstream_failed "
+                        f"attempt={attempt+1}"
+                    )
                     return {
                         "status": "failed",
                         "urls": [],
@@ -369,6 +360,10 @@ class TaskManager:
                 logger.warning(f"poll error task={task_id} attempt={attempt+1} err={str(e)[:120]}")
 
         # 超时
+        logger.info(
+            f"[taskmgr] task={task_id} poll_end reason=timeout "
+            f"attempts={max_poll_attempts}"
+        )
         return {
             "status": "failed",
             "urls": [],
@@ -394,21 +389,6 @@ class TaskManager:
         except Exception:
             pass  # 非关键路径
 
-    # ── 事件发布 ──────────────────────────────────────────
-
-    @staticmethod
-    async def emit(event_type: EventType, task_id: str, user_id: int, capability: str, **data) -> None:
-        """发布任务事件。"""
-        try:
-            await event_bus.publish(TaskEvent(
-                event_type=event_type,
-                task_id=task_id,
-                user_id=user_id,
-                capability=capability,
-                data=data,
-            ))
-        except Exception:
-            pass  # 事件发布失败不影响主流程
 
 
 # ── 工具函数 ──────────────────────────────────────────────────

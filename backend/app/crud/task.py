@@ -121,14 +121,13 @@ async def update_task_status(
     result_urls: list[str] | None = None,
     result_text: str | None = None,
     error: str | None = None,
-) -> None:
+) -> bool:
     """更新任务状态。
 
     取消保护：任务已为 failed（被取消）时，completed 不会被覆盖，
     避免取消后的任务被误标为完成。
 
-    result_urls 为结果 URL 列表。
-    result_text 为 LLM 文本结果。
+    返回 True 表示已更新，False 表示因取消保护被跳过。
     """
     now = datetime.now(timezone.utc)
     if status == "completed":
@@ -136,7 +135,7 @@ async def update_task_status(
             select(GenerationTask.status).where(GenerationTask.id == task_id)
         )
         if cur.scalar_one_or_none() == "failed":
-            return
+            return False
     values: dict = {
         "status": status,
         "updated_at": now,
@@ -151,6 +150,7 @@ async def update_task_status(
         .values(**values)
     )
     await db.commit()
+    return True
 
 
 async def cleanup_zombie_tasks(
