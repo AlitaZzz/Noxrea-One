@@ -1,6 +1,7 @@
 "use client";
 
 import "react-image-crop/dist/ReactCrop.css";
+import "./react-crop-custom.css";
 
 import { useCallback, useEffect, useRef,useState } from "react";
 import ReactCrop, {
@@ -177,6 +178,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
                 aspect={aspect}
                 minWidth={10}
                 minHeight={10}
+                ruleOfThirds
               >
                 <img ref={imgRef} src={src} crossOrigin="anonymous" onLoad={onImageLoad} style={{ maxHeight: 480 }} />
               </ReactCrop>
