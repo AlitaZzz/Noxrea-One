@@ -386,8 +386,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
-        case "crop-interactive": setCropOpen(true); break;
-        case "angle-editor": setAngleEditorOpen(true); break;
+        case "crop-interactive": if (src) setCropOpen(true); break;
+        case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
