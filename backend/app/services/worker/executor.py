@@ -206,6 +206,12 @@ async def _finalize_result(
     """
     capability = task.effective_capability
 
+    # 取消保护：如果任务已被用户取消，跳过下载和存储
+    from app.services.tasks.manager import TaskManager
+    if await TaskManager._check_cancelled(task.id):
+        logger.info(log_event("executor", task_id=task.id, stage="cancelled_skip_finalize"))
+        return
+
     # LLM 文本结果：直接写入 result_text，不走 URL 下载
     if not result_urls and capability == "llm" and metadata.get("text"):
         text = metadata["text"]
