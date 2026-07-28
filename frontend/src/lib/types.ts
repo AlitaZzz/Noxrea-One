@@ -95,6 +95,7 @@ export interface MediaGenFields {
 export type TextNodeData = {
   label: string;
   content: string;
+  genSettings?: GenSettings;
 };
 
 // 注意：node data 采用扁平 type 别名（而非与 interface 交叉），

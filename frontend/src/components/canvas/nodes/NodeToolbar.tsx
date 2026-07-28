@@ -24,6 +24,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
   VIDEO: "video-node" as const,
+  TEXT: "text-node" as const,
 };
 
 interface NodeToolbarProps {
@@ -98,6 +99,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const nodes = useCanvasStore((s) => s.nodes);
   const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
+  const textContent = (nodes.find(n => n.id === nodeId)?.data as { content?: string })?.content;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
@@ -217,6 +219,17 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           </Tooltip>
           <Tooltip title={t("clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
+              onClick={() => dispatchNodeAction(nodeId, "clear")} />
+          </Tooltip>
+        </>
+      )}
+
+      {/* Text node actions */}
+      {nodeType === NODE_ACTIONS.TEXT && (
+        <>
+          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={t("clear")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />} disabled={!textContent}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>

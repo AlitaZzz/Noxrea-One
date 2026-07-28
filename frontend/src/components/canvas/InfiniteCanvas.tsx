@@ -39,7 +39,7 @@ import ImageNode from "@/components/canvas/nodes/ImageNode";
 import NodeToolbarUI from "@/components/canvas/nodes/NodeToolbar";
 import TextNode from "@/components/canvas/nodes/TextNode";
 import VideoNode from "@/components/canvas/nodes/VideoNode";
-import TextAskPanel from "@/components/canvas/TextAskPanel";
+import TextGenerationPanel from "@/components/canvas/TextGenerationPanel";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import { useAddNode } from "@/hooks/use-add-node";
@@ -147,7 +147,7 @@ export default function InfiniteCanvas() {
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.TEXT) return null;
-    return { id: sel[0].id, content: (sel[0].data as { content?: string }).content || "" };
+    return { id: sel[0].id };
   }, [nodes]);
 
   // Inspector state
@@ -510,7 +510,7 @@ export default function InfiniteCanvas() {
 
         {textTarget && (
           <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12}>
-            <TextAskPanel nodeId={textTarget.id} currentContent={textTarget.content} />
+            <TextGenerationPanel nodeId={textTarget.id} />
           </RfNodeToolbar>
         )}
 
