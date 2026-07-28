@@ -5,7 +5,6 @@ import {
   CloseOutlined,
   FilterOutlined,
   PartitionOutlined,
-  FontSizeOutlined,
   GroupOutlined,
   FolderOpenOutlined,
   FolderOutlined,
@@ -18,6 +17,8 @@ import {
 import { useReactFlow, type Node } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { TextIcon } from "@/components/common/TextIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { MenuDivider } from "@/components/common/MenuPopover";
@@ -68,7 +69,7 @@ function getNodeTypeIcon(type: string) {
   const color = TYPE_COLORS[type] || "var(--canvas-text-dim)";
   const s = { fontSize: 18, color };
   switch (type) {
-    case NODE_TYPE.TEXT:     return <FontSizeOutlined style={s} />;
+    case NODE_TYPE.TEXT:     return <TextIcon style={s} />;
     case NODE_TYPE.IMAGE:    return <PictureOutlined style={s} />;
     case NODE_TYPE.VIDEO:    return <VideoCameraOutlined style={s} />;
     case NODE_TYPE.DIRECTOR: return <PartitionOutlined style={s} />;

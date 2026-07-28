@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
-import { App, Button, Input } from "antd";
+import { App, Button, Input, Tooltip } from "antd";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
@@ -70,6 +70,21 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       .map((n) => (n.data as { src?: string }).src)
       .filter(Boolean) as string[];
   }, [nodeId, canvasNodes, canvasEdges]);
+
+  // 上游 Text 节点（按连接顺序），仅保留 content 非空的
+  const upstreamTexts = useMemo(() => {
+    return canvasEdges
+      .filter((e) => e.target === nodeId)
+      .map((e) => canvasNodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
+      .map((n) => ({ id: n.id, content: ((n.data as { content?: string }).content || "").trim() }))
+      .filter((t) => t.content !== "");
+  }, [nodeId, canvasNodes, canvasEdges]);
+
+  // 最终 prompt = 上游文本内容 + 面板输入，按连接顺序拼接
+  const finalPrompt = useMemo(() => {
+    return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
+  }, [upstreamTexts, prompt]);
 
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
@@ -173,7 +188,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !modelKey || isGenerating) return;
+    if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey || isGenerating) return;
     const entry: ModelOption | undefined = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
 
@@ -187,10 +202,10 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const content =
         refOrder.length > 0
           ? [
-              { type: "text", text: prompt },
+              { type: "text", text: finalPrompt },
               ...refOrder.map((url) => ({ type: "image_url", image_url: { url } })),
             ]
-          : prompt;
+          : finalPrompt;
 
       const messages = [{ role: "user", content }];
 
@@ -199,7 +214,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({
           type: "llm",
-          prompt,
+          prompt: finalPrompt,
           model: entry.modelName,
           channelId: entry.channelId,
           nodeId,
@@ -271,7 +286,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         >
           <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
         </Button>
-        {refOrder.length > 0 && (
+        {(refOrder.length > 0 || upstreamTexts.length > 0) && (
           <div
             className="flex gap-2 flex-wrap"
             onDragOver={(e) => {
@@ -292,6 +307,23 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               });
             }}
           >
+            {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
+            {upstreamTexts.map((txt) => (
+              <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
+                <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="14" height="15" viewBox="0 0 16 16" className="pointer-events-none" style={{ color: "var(--canvas-text)" }}>
+                    <g transform="translate(1 0.5)"><path d="M9.33 14.62H0v-2.1h9.33zM14 10.44H0v-2.1h14zm0-4.17H0v-2.1h14zm0-4.17H0V0h14z" fill="currentColor"></path></g>
+                  </svg>
+                  <Button type="text" size="small"
+                    className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+                    onClick={() => {
+                      const store = useCanvasStore.getState();
+                      const edge = store.edges.find((e) => e.target === nodeId && e.source === txt.id);
+                      if (edge) store.removeEdges([edge.id]);
+                    }}>✕</Button>
+                </div>
+              </Tooltip>
+            ))}
             {refOrder.map((img, i) => (
               <div
                 key={img}
@@ -407,11 +439,11 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             style={{
               width: 36,
               height: 36,
-              background: isGenerating ? "#e74c3c" : !prompt.trim() || !modelKey ? "var(--canvas-border)" : "var(--canvas-text)",
-              color: isGenerating ? "#fff" : !prompt.trim() || !modelKey ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
+              background: isGenerating ? "#e74c3c" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-border)" : "var(--canvas-text)",
+              color: isGenerating ? "#fff" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
               border: "none",
               cursor: "pointer",
-              opacity: (!prompt.trim() || !modelKey) && !isGenerating ? 0.5 : 1,
+              opacity: (!prompt.trim() && upstreamTexts.length === 0 || !modelKey) && !isGenerating ? 0.5 : 1,
             }}
             onClick={isGenerating ? handleCancel : handleGenerate}
           >

@@ -1,6 +1,6 @@
 "use client";
 
-import { FontSizeOutlined } from "@ant-design/icons";
+import { TextIcon } from "@/components/common/TextIcon";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -93,7 +93,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       <div className="flex items-center px-3 py-1 text-[13px] font-medium text-white/80 z-10">
         {editingTitle ? (
           <span className="flex items-center gap-1 flex-1 min-w-0">
-            <FontSizeOutlined className="shrink-0" />
+            <TextIcon className="shrink-0" />
             <Input
               size="small"
               variant="borderless"
@@ -108,7 +108,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           </span>
         ) : (
           <span className="flex items-center gap-1 flex-1 min-w-0">
-            <FontSizeOutlined className="shrink-0 mr-1" />
+            <TextIcon className="shrink-0 mr-1" />
             <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
               {data.label || t("text.node")}
             </span>

@@ -1,9 +1,10 @@
 "use client";
 
-import { CopyOutlined, ExpandOutlined,FontSizeOutlined, PictureOutlined, SelectOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { CopyOutlined, ExpandOutlined, PictureOutlined, SelectOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
+import { TextIcon } from "@/components/common/TextIcon";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface CtxState {
@@ -49,7 +50,7 @@ export default function CanvasContextMenu(props: Props) {
         }}
       >
         <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("add.node")}</div>
-        <MenuItem onClick={() => { props.onAddText(); hide(); }}><FontSizeOutlined /> {t("text.node")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("text.node")}</MenuItem>
         <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("image.node")}</MenuItem>
         <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
         <MenuDivider />

@@ -6,7 +6,6 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
-  FontSizeOutlined,
   PictureOutlined,
   PlusOutlined,
   RobotOutlined,
@@ -17,6 +16,7 @@ import type { CSSProperties,Key, ReactNode } from "react";
 import { memo, useEffect, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
+import { TextIcon } from "@/components/common/TextIcon";
 import type { ModelCapability, ModelInfo } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
@@ -34,7 +34,7 @@ const CAPABILITY_TABS: {
   icon: ReactNode;
   color: string;
 }[] = [
-  { key: "text", labelKey: "text.cap", icon: <FontSizeOutlined />, color: "#1677ff" },
+  { key: "text", labelKey: "text.cap", icon: <TextIcon />, color: "#1677ff" },
   { key: "image", labelKey: "image.cap", icon: <PictureOutlined />, color: "#52c41a" },
   { key: "video", labelKey: "video.cap", icon: <VideoCameraOutlined />, color: "#13c2c2" },
   { key: "audio", labelKey: "audio.cap", icon: <AudioOutlined />, color: "#fa8c16" },

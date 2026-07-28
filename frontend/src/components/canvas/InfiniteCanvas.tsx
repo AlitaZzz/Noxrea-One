@@ -203,6 +203,24 @@ export default function InfiniteCanvas() {
     [setEdges]
   );
 
+  // IMAGE / TEXT 节点的上游仅接受 TEXT / IMAGE 类型
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      const srcId = connection.source;
+      const tgtId = connection.target;
+      if (!srcId || !tgtId) return true;
+      const allNodes = useCanvasStore.getState().nodes;
+      const sourceNode = allNodes.find((n) => n.id === srcId);
+      const targetNode = allNodes.find((n) => n.id === tgtId);
+      if (!sourceNode || !targetNode) return true;
+      if (targetNode.type === NODE_TYPE.IMAGE || targetNode.type === NODE_TYPE.TEXT) {
+        return sourceNode.type === NODE_TYPE.TEXT || sourceNode.type === NODE_TYPE.IMAGE;
+      }
+      return true;
+    },
+    []
+  );
+
   const handleViewportChange = useCallback(
     (vp: { x: number; y: number; zoom: number }) => {
       setViewport({ x: vp.x, y: vp.y, zoom: vp.zoom });
@@ -324,6 +342,7 @@ export default function InfiniteCanvas() {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
