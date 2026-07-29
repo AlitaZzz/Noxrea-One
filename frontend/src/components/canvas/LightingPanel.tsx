@@ -422,12 +422,6 @@ export default function LightingPanel({ src, onClose }: Props) {
             {/* Right: Parameters */}
             <div className="flex flex-col gap-4" style={{ width: 240 }}>
               <div>
-                <div className="text-xs font-medium mb-2" style={{ color: "var(--canvas-text)" }}>
-                  {t("lighting.global")}
-                </div>
-              </div>
-
-              <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
                   <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>{state.intensity}</span>
@@ -500,8 +494,8 @@ export default function LightingPanel({ src, onClose }: Props) {
             <button
               type="button"
               onClick={handleReset}
-              className="px-4 py-1.5 rounded text-xs transition-all hover:bg-[var(--canvas-bg-hover)]"
-              style={{ border: "1px solid var(--canvas-border)", background: "transparent", color: "var(--canvas-text-dim)", cursor: "pointer" }}
+              className="panel-reset-btn px-4 py-1.5 rounded text-xs transition-all"
+              style={{ border: "1px solid var(--canvas-border)", cursor: "pointer" }}
             >
               {t("lighting.reset")}
             </button>

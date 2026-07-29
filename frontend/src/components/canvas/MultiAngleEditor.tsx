@@ -426,8 +426,8 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
             <button
               type="button"
               onClick={handleReset}
-              className="px-4 py-1.5 rounded text-xs transition-all"
-              style={{ border: "1px solid var(--canvas-border)", background: "transparent", color: "var(--canvas-text-dim)", cursor: "pointer" }}
+              className="panel-reset-btn px-4 py-1.5 rounded text-xs transition-all"
+              style={{ border: "1px solid var(--canvas-border)", cursor: "pointer" }}
             >
               {t("angle.reset")}
             </button>

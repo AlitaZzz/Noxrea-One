@@ -172,7 +172,7 @@ const zh: Record<string, string> = {
   "angle.prompt": "提示词",
   "angle.reset": "重置参数",
   // Lighting Panel
-  "lighting.title": "打光效果",
+  "lighting.title": "光照",
   "lighting.global": "全局",
   "lighting.smartMode": "智能模式",
   "lighting.intensity": "亮度",
@@ -344,7 +344,7 @@ const en: Record<string, string> = {
   "angle.prompt": "Prompt",
   "angle.reset": "Reset",
   // Lighting Panel
-  "lighting.title": "Lighting",
+  "lighting.title": "Light",
   "lighting.global": "Global",
   "lighting.smartMode": "Smart Mode",
   "lighting.intensity": "Intensity",

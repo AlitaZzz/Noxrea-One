@@ -2,6 +2,7 @@
 
 import "react-image-crop/dist/ReactCrop.css";
 import "./react-crop-custom.css";
+import { ScissorOutlined } from "@ant-design/icons";
 
 import { useCallback, useEffect, useRef,useState } from "react";
 import ReactCrop, {
@@ -160,7 +161,12 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
 
   return (
     <AppModal
-      title="裁剪图片"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <ScissorOutlined />
+          裁剪图片
+        </span>
+      }
       open
       onCancel={onClose}
       width={900}
