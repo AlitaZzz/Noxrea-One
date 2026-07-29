@@ -105,6 +105,16 @@
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
 
+/* Shared reset button hover (matches modal close button hover) */
+.panel-reset-btn {
+  background: transparent;
+  color: var(--canvas-text-dim);
+}
+.panel-reset-btn:hover {
+  background: var(--canvas-bg-hover) !important;
+  color: var(--canvas-text) !important;
+}
+
 /* Shared node body styles — selected / unselected border */
 .node-body {
   outline: 1px solid rgba(255, 255, 255, 0.1);
