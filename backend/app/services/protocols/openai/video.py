@@ -55,12 +55,28 @@ class OpenAIVideoProtocol(OpenAIBaseProtocol):
         norm = self.normalize_status(state)
 
         if norm == "completed":
-            url = payload.get("video_url") or payload.get("url") or payload.get("output")
+            url = (
+                payload.get("video_url")
+                or payload.get("url")
+                or payload.get("output")
+            )
+            # 尝试从 metadata 中提取（如 agnes-video 返回 metadata.url）
+            if not url:
+                meta = payload.get("metadata")
+                if isinstance(meta, dict):
+                    url = meta.get("url") or meta.get("video_url") or meta.get("output")
             if url:
                 duration = payload.get("duration") or payload.get("duration_seconds")
                 meta = {"mime_type": "video/mp4"}
                 if duration:
                     meta["duration"] = duration
+                # 保留上游 metadata 中的额外信息
+                upstream_meta = payload.get("metadata")
+                if isinstance(upstream_meta, dict):
+                    if "duration" not in meta and upstream_meta.get("duration"):
+                        meta["duration"] = upstream_meta["duration"]
+                    if upstream_meta.get("size"):
+                        meta["size"] = upstream_meta["size"]
                 return PollResult(status="completed", urls=[url], metadata=meta)
             # 也尝试从 data[] 中提取
             items = payload.get("data") or payload.get("results") or []

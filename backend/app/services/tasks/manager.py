@@ -290,6 +290,7 @@ class TaskManager:
             await asyncio.sleep(initial_delay)
 
         # 轮询循环（TaskManager 负责 while/sleep，Protocol 不负责）
+        last_poll_data: dict | None = None
         for attempt in range(max_poll_attempts):
             # 自适应间隔：前 60 次用初始间隔，之后翻倍（给慢 Provider 更多时间）
             delay = poll_interval * 2 if attempt >= 60 else poll_interval
@@ -322,6 +323,7 @@ class TaskManager:
                     continue
 
                 poll_data = poll_resp.json()
+                last_poll_data = poll_data
                 logger.debug(f"poll task={task_id} attempt={attempt+1} body={poll_data}")
                 parsed: PollResult = protocol.parse_poll_response(poll_data, capability)
 
@@ -364,13 +366,19 @@ class TaskManager:
             f"[taskmgr] task={task_id} poll_end reason=timeout "
             f"attempts={max_poll_attempts}"
         )
+        last_resp_info = ""
+        if last_poll_data:
+            try:
+                last_resp_info = f" - 上游最后返回: {str(last_poll_data)[:500]}"
+            except Exception:
+                pass
         return {
             "status": "failed",
             "urls": [],
-            "error": f"异步轮询超时（upstream_task_id={upstream_task_id}）",
+            "error": f"异步轮询超时（upstream_task_id={upstream_task_id}）{last_resp_info}",
             "category": "timeout",
             "retry": True,
-            "message": "异步轮询超时",
+            "message": f"异步轮询超时{last_resp_info}",
         }
 
     @staticmethod
