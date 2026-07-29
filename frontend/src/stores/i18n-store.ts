@@ -171,6 +171,22 @@ const zh: Record<string, string> = {
   "angle.zoom.far": "远景",
   "angle.prompt": "提示词",
   "angle.reset": "重置参数",
+  // Lighting Panel
+  "lighting.title": "打光效果",
+  "lighting.global": "全局",
+  "lighting.smartMode": "智能模式",
+  "lighting.intensity": "亮度",
+  "lighting.color": "颜色",
+  "lighting.mainDirection": "主光源方向",
+  "lighting.dir.left": "左侧",
+  "lighting.dir.top": "顶部",
+  "lighting.dir.right": "右侧",
+  "lighting.dir.front": "前方",
+  "lighting.dir.bottom": "底部",
+  "lighting.dir.back": "后方",
+  "lighting.rimLight": "轮廓光",
+  "lighting.reset": "重置参数",
+  "lighting.dragHint": "\u2196 \u62D6\u52A8\u8C03\u6574\u5149\u6E90",
 };
 
 const en: Record<string, string> = {
@@ -327,6 +343,22 @@ const en: Record<string, string> = {
   "angle.zoom.far": "Far",
   "angle.prompt": "Prompt",
   "angle.reset": "Reset",
+  // Lighting Panel
+  "lighting.title": "Lighting",
+  "lighting.global": "Global",
+  "lighting.smartMode": "Smart Mode",
+  "lighting.intensity": "Intensity",
+  "lighting.color": "Color",
+  "lighting.mainDirection": "Main Light Direction",
+  "lighting.dir.left": "Left",
+  "lighting.dir.top": "Top",
+  "lighting.dir.right": "Right",
+  "lighting.dir.front": "Front",
+  "lighting.dir.bottom": "Bottom",
+  "lighting.dir.back": "Back",
+  "lighting.rimLight": "Rim Light",
+  "lighting.reset": "Reset",
+  "lighting.dragHint": "\u2196 drag to move light",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({
