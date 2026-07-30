@@ -48,7 +48,7 @@ import { useFileDrop } from "@/hooks/use-file-drop";
 import { useGroupOperations } from "@/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
-import { createEdge,duplicateNode } from "@/lib/node-defaults";
+import { createEdge } from "@/lib/node-defaults";
 import { type AnyNode,NODE_TYPE } from "@/lib/types";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -274,25 +274,13 @@ export default function InfiniteCanvas() {
     [setNodes]
   );
 
-  const clipboard = useSelectionStore((s) => s.clipboard);
-
   useGroupOperations();
   useCanvasEvents();
   const { addNode: addNodeAtCenter } = useAddNode();
   const handleAddText = useCallback(() => addNodeAtCenter("text"), [addNodeAtCenter]);
   const handleAddImage = useCallback(() => addNodeAtCenter("image"), [addNodeAtCenter]);
   const handleAddVideo = useCallback(() => addNodeAtCenter("video"), [addNodeAtCenter]);
-
-  const handlePaste = useCallback(() => {
-    const clip = useSelectionStore.getState().clipboard;
-    if (!clip || !clip.nodes.length) return;
-    const newNodes = clip.nodes.map((n: AnyNode) => duplicateNode(n, { x: 30, y: 30 }));
-    addNodes(newNodes);
-  }, [addNodes]);
-
-  const handleSelectAll = useCallback(() => {
-    setNodes(nodes.map((n) => ({ ...n, selected: true })));
-  }, [nodes, setNodes]);
+  const handleAddDirector = useCallback(() => addNodeAtCenter("director"), [addNodeAtCenter]);
 
   const handleResetView = useCallback(() => {
     const s = useCanvasStore.getState();
@@ -573,10 +561,8 @@ export default function InfiniteCanvas() {
         onAddText={handleAddText}
         onAddImage={handleAddImage}
         onAddVideo={handleAddVideo}
-        onSelectAll={handleSelectAll}
-        onPaste={handlePaste}
+        onAddDirector={handleAddDirector}
         onResetView={handleResetView}
-        hasClipboard={!!clipboard?.nodes?.length}
       />
 
       <NodeInspector
