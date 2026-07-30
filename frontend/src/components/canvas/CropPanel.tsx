@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckOutlined, CloseOutlined, ScissorOutlined, UndoOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
 import { useViewport } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";

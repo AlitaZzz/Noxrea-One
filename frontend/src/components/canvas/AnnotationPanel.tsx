@@ -1,9 +1,21 @@
 "use client";
 
-import { CheckOutlined, CloseOutlined, HighlightOutlined, UndoOutlined, RedoOutlined, BorderOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, HighlightOutlined, BorderOutlined } from "@ant-design/icons";
 import { useViewport } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+const UndoIcon = () => (
+  <svg viewBox="0 0 16 16" width="1em" height="1em" fill="currentColor">
+    <path d="M5.67 1.39 2.85 4.2h6.8a3.99 3.99 0 0 1 0 7.97H7.19v-1.05h2.46a2.94 2.94 0 0 0 0-5.87h-6.8l2.82 2.82-.75.74L.84 4.73 4.92.64z" />
+  </svg>
+);
+
+const RedoIcon = () => (
+  <svg viewBox="0 0 16 16" width="1em" height="1em" fill="currentColor">
+    <path d="m8.55 2.05 2.82 2.81h-6.8a3.99 3.99 0 0 0 0 7.97h2.45v-1.05H4.57a2.94 2.94 0 0 1 0-5.87h6.8L8.55 8.73l.74.74 4.09-4.08L9.29 1.3z" />
+  </svg>
+);
 
 import WheelGuard from "@/components/common/WheelGuard";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/image-utils";
@@ -19,6 +31,12 @@ interface Props {
 const MAX_UNDO = 50;
 
 type AnnotateMode = "brush" | "rect";
+
+const BrushSizeIcon = () => (
+  <svg viewBox="0 0 16 16" width="1em" height="1em" fill="currentColor" style={{ fontSize: 12 }}>
+    <path d="M8.631 1.304c.394-.142.802-.22 1.196-.168.409.054.774.245 1.058.583.334.397.374.874.273 1.32-.098.43-.335.875-.622 1.305-.576.863-1.473 1.834-2.324 2.763-.872.95-1.699 1.857-2.21 2.641-.257.393-.406.715-.458.963-.047.231-.004.354.073.443.093.108.191.149.345.14.184-.012.443-.1.78-.293.672-.385 1.462-1.076 2.285-1.844.799-.745 1.632-1.566 2.33-2.128.348-.28.7-.527 1.027-.668.288-.125.706-.23 1.078 0l.073.05.129.106c.286.256.46.57.519.926.064.388-.017.778-.149 1.136-.26.702-.794 1.463-1.283 2.153-.513.724-.985 1.384-1.235 1.964-.252.58-.197.872.004 1.07a.58.58 0 0 0 .38.187c.137.01.312-.025.532-.124.451-.203.946-.61 1.442-1.056l.348.387.348.386c-.49.44-1.093.953-1.71 1.232-.315.142-.668.239-1.035.212a1.62 1.62 0 0 1-1.037-.485c-.672-.665-.53-1.52-.227-2.222.304-.703.855-1.465 1.342-2.152.511-.722.953-1.366 1.156-1.913.098-.268.12-.464.097-.606a.54.54 0 0 0-.216-.344.6.6 0 0 0-.143.047q-.293.127-.789.524c-.658.53-1.435 1.299-2.272 2.08-.814.759-1.686 1.531-2.477 1.984-.394.227-.817.402-1.234.428a1.41 1.41 0 0 1-1.198-.5c-.34-.396-.395-.874-.301-1.329.09-.437.32-.887.604-1.322.569-.871 1.463-1.847 2.315-2.776.873-.952 1.704-1.857 2.226-2.638.262-.391.416-.711.473-.958.052-.23.01-.342-.054-.419a.6.6 0 0 0-.4-.221c-.172-.023-.405.006-.707.114-.612.22-1.365.712-2.199 1.382C5.116 5.005 3.326 6.88 1.911 8.206l-.711-.76c1.347-1.262 3.226-3.22 4.933-4.592.854-.687 1.717-1.27 2.498-1.55" />
+  </svg>
+);
 
 export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
@@ -302,7 +320,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
         {/* Brush size slider */}
         <div className="flex items-center gap-1.5" style={{ width: 90 }}>
-          <HighlightOutlined style={{ fontSize: 12, color: "var(--canvas-text-dim)" }} />
+          <BrushSizeIcon />
           <Slider
             min={1}
             max={50}
@@ -321,10 +339,10 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
         {/* Undo / Redo */}
         <Tooltip title={t("annotation.undo")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<UndoOutlined />} disabled={undoCount <= 1} onClick={handleUndo} />
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<UndoIcon />} disabled={undoCount <= 1} onClick={handleUndo} />
         </Tooltip>
         <Tooltip title={t("annotation.redo")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<RedoOutlined />} disabled={redoCount === 0} onClick={handleRedo} />
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<RedoIcon />} disabled={redoCount === 0} onClick={handleRedo} />
         </Tooltip>
 
         {/* Divider */}
