@@ -520,7 +520,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                   return (
                     <div
                       key={i}
-                      className="absolute rounded-lg overflow-hidden border border-white/15 shadow-xl"
+                      className="absolute rounded-lg overflow-hidden shadow-xl"
                       style={{
                         left,
                         top,
@@ -528,9 +528,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                         height: "100%",
                         zIndex: z,
                         background: "#262626",
+                        outline: "1px solid rgba(255,255,255,0.15)",
                       }}
                     >
-                          <img src={url} alt={`${i + 1}`} className="w-full h-full object-cover" draggable={false} />
+                          <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
                           {/* 操作按钮 */}
                           <div className="absolute top-1 right-1 flex gap-1 z-10 nodrag">
                             <Tooltip title={t("download")}>
@@ -578,7 +579,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                   return (
                     <div
                       key={i}
-                      className="absolute rounded-lg overflow-hidden shadow-xl border border-white/15"
+                      className="absolute rounded-lg overflow-hidden shadow-xl"
                       style={{
                         left: `${left}px`,
                         top: `${top}px`,
@@ -588,15 +589,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                         transformOrigin: "center center",
                         zIndex: -depth,
                         background: "#262626",
+                        outline: "1px solid rgba(255,255,255,0.15)",
                       }}
                     >
-                      <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+                      <img src={url} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
                     </div>
                   );
                 })}
                 {/* 主卡：scale=1，在最上层，覆盖大部分面积 */}
                 <div
-                  className="absolute rounded-lg overflow-hidden shadow-2xl border border-white/15"
+                  className="absolute rounded-lg overflow-hidden shadow-2xl"
                   style={{
                     left: 0,
                     top: 0,
@@ -606,7 +608,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                     zIndex: 0,
                   }}
                 >
-                  <img src={src} alt={data.alt || ""} className="w-full h-full object-cover" draggable={false} />
+                  <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
                 </div>
               </div>
             )
