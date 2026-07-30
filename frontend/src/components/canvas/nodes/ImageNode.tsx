@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import ImageCropModal from "@/components/canvas/ImageCropModal";
 import MultiAngleEditor from "@/components/canvas/MultiAngleEditor";
 import LightingPanel from "@/components/canvas/LightingPanel";
+import AnnotationPanel from "@/components/canvas/AnnotationPanel";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import {
@@ -67,6 +68,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const [cropOpen, setCropOpen] = useState(false);
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [lightingOpen, setLightingOpen] = useState(false);
+  const [annotateOpen, setAnnotateOpenInternal] = useState(false);
+  // annotateOpen is driven by the store's annotatingNodeId so that clicking
+  // other nodes or the pane can close annotation mode externally.
+  const setAnnotateOpen = useCallback((open: boolean) => {
+    useCanvasStore.getState().setAnnotatingNodeId(open ? id : null);
+  }, [id]);
+  const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
+  useEffect(() => {
+    setAnnotateOpenInternal(annotatingNodeId === id);
+  }, [annotatingNodeId, id]);
   const [expanded, setExpanded] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -391,6 +402,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "crop-interactive": if (src) setCropOpen(true); break;
         case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "lighting": if (src) setLightingOpen(true); break;
+        case "annotate": if (src) setAnnotateOpen(true); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
@@ -447,11 +459,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         )}
       </div>
 
-      {/* Body */}
+      {/* Body wrapper - relative container for body + overlay layer */}
+      <div className="relative flex-1">
       <div
         className={`
-          node-body flex-1 flex items-center justify-center rounded-lg relative group/body
-          ${isMulti ? "overflow-visible" : "overflow-hidden"}
+          node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
+          overflow-hidden
           ${selected ? "node-selected" : ""}
           ${isDragOver ? "node-drag-over" : ""}
         `}
@@ -614,7 +627,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           </div>
         )}
       </div>
-
+      {annotateOpen && src && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          <AnnotationPanel src={src} sourceId={id} onClose={() => setAnnotateOpen(false)} />
+        </div>
+      )}
+      </div>
 
       <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a" }} />
       <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a" }} />

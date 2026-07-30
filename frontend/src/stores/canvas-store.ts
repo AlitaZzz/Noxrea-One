@@ -82,6 +82,10 @@ interface CanvasState {
   modalOpen: boolean;
   setModalOpen: (v: boolean) => void;
 
+  // Annotation mode (hides node toolbar for the annotating node)
+  annotatingNodeId: string | null;
+  setAnnotatingNodeId: (id: string | null) => void;
+
   // Director overlay
   directorOverlayOpen: boolean;
   setDirectorOverlayOpen: (v: boolean) => void;
@@ -174,6 +178,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   modalOpen: false,
   setModalOpen: (v) => set({ modalOpen: v }),
+
+  annotatingNodeId: null,
+  setAnnotatingNodeId: (id) => set({ annotatingNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
