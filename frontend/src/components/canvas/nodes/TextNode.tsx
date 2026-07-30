@@ -142,10 +142,16 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           });
         }}
       >
+        <style>{`
+          [data-text-node] { cursor: auto; }
+          [data-text-node]::-webkit-scrollbar { cursor: default; }
+          [data-text-node]::-webkit-scrollbar-thumb { cursor: default; }
+        `}</style>
         <textarea
           ref={textareaRef}
+          data-text-node
           className={`flex-1 w-full resize-none border-none outline-none p-3 text-sm text-white/80 placeholder:text-white/20 ${editingContent ? "nodrag" : ""}`}
-          style={{ background: "transparent", pointerEvents: editingContent ? "auto" : "none", cursor: editingContent ? "text" : "inherit" }}
+          style={{ background: "transparent", pointerEvents: editingContent ? "auto" : "none", cursor: "auto" }}
           placeholder={t("text.placeholder")}
           value={content}
           onChange={(e) => handleChange(e.target.value)}
