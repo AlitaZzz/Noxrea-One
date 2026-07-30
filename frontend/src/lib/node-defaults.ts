@@ -4,6 +4,8 @@ import {
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
   TEXT_NODE_DEFAULT_WIDTH,
+  TEXT_NODE_MIN_WIDTH,
+  TEXT_NODE_MIN_HEIGHT,
 } from "@/lib/constants";
 import {
   type AnyNode,
@@ -31,7 +33,12 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
     type: NODE_TYPE.TEXT,
     position,
     data: { label: "", content: "" } as TextNodeData,
-    style: { width: TEXT_NODE_DEFAULT_WIDTH, height: DEFAULT_NODE_HEIGHT },
+    style: {
+      width: TEXT_NODE_DEFAULT_WIDTH,
+      height: DEFAULT_NODE_HEIGHT,
+      minWidth: TEXT_NODE_MIN_WIDTH,
+      minHeight: TEXT_NODE_MIN_HEIGHT,
+    },
   };
 }
 
