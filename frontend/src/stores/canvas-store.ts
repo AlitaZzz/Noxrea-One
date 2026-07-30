@@ -96,6 +96,8 @@ interface CanvasState {
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
   snapGridSize: number;
+  /** 节点间对齐吸附阈值（px），默认 5 */
+  snapThreshold: number;
 
   // Persistence
   restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode }) => void;
@@ -195,6 +197,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     saveManager.markDirtyImmediate();
   },
   snapGridSize: 20,
+  snapThreshold: 5,
 
   /** 从项目恢复画布状态 */
   restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean }) => {

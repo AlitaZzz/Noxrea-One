@@ -23,6 +23,7 @@ import { App,Popover } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo,useState } from "react";
 
+import AlignmentGuides from "@/components/canvas/AlignmentGuides";
 import AssetsModal from "@/components/assets/AssetsModal";
 import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
 import CanvasControls from "@/components/canvas/CanvasControls";
@@ -33,6 +34,8 @@ import ImageGenerationPanel from "@/components/canvas/ImageGenerationPanel";
 import ModelConfigModal from "@/components/canvas/ModelConfigModal";
 import NodeInspector from "@/components/canvas/NodeInspector";
 import VideoGenerationPanel from "@/components/canvas/VideoGenerationPanel";
+import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
+import { computeAlignment } from "@/hooks/use-alignment-guides";
 import DirectorNode from "@/components/canvas/nodes/DirectorNode";
 import GroupNode from "@/components/canvas/nodes/GroupNode";
 import ImageNode from "@/components/canvas/nodes/ImageNode";
@@ -81,6 +84,7 @@ export default function InfiniteCanvas() {
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const snapGridSize = useCanvasStore((s) => s.snapGridSize);
+  const snapThreshold = useCanvasStore((s) => s.snapThreshold);
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
 
@@ -160,6 +164,7 @@ export default function InfiniteCanvas() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [canvasSidebarOpen, setCanvasSidebarOpen] = useState(false);
+  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
   // ---- Change handlers ----
@@ -168,26 +173,76 @@ export default function InfiniteCanvas() {
     (changes: NodeChange[]) => {
       const applied = applyNodeChanges(changes, useCanvasStore.getState().nodes) as AnyNode[];
       let appliedNodes: AnyNode[];
+      let newGuides: AlignmentGuide[] = [];
+
       if (snapToGrid) {
-        // Snap position changes to grid
-        appliedNodes = applied.map((n) => ({
-          ...n,
-          position: {
-            x: Math.round(n.position.x / snapGridSize) * snapGridSize,
-            y: Math.round(n.position.y / snapGridSize) * snapGridSize,
-          },
-        }));
+        // 检查是否有节点正在被拖拽
+        const positionChanges = changes.filter(
+          (c) => c.type === "position" && (c as unknown as { dragging?: boolean }).dragging,
+        );
+        const draggedNodeIds = new Set(positionChanges.map((c) => (c as { id: string }).id));
+
+        appliedNodes = applied.map((n) => {
+          let posX = n.position.x;
+          let posY = n.position.y;
+
+          // 对于拖拽中的节点，先尝试节点间对齐吸附
+          if (draggedNodeIds.has(n.id) && draggedNodeIds.size <= 3) {
+            const nodeSize = {
+              width: Number(n.style?.width) || Number(n.measured?.width) || 200,
+              height: Number(n.style?.height) || Number(n.measured?.height) || 120,
+            };
+            const nodeBounds = applied.map((m) => ({
+              id: m.id,
+              position: { x: m.position.x, y: m.position.y },
+              width: Number(m.style?.width) || Number(m.measured?.width) || 200,
+              height: Number(m.style?.height) || Number(m.measured?.height) || 120,
+            }));
+
+            const result = computeAlignment(
+              { id: n.id, position: { x: posX, y: posY }, ...nodeSize },
+              nodeBounds,
+              snapThreshold,
+            );
+
+            if (result.snapX !== null) {
+              posX = result.snapX;
+            } else {
+              posX = Math.round(posX / snapGridSize) * snapGridSize;
+            }
+
+            if (result.snapY !== null) {
+              posY = result.snapY;
+            } else {
+              posY = Math.round(posY / snapGridSize) * snapGridSize;
+            }
+
+            newGuides = result.guides;
+          } else {
+            // 非拖拽变更：仅网格吸附
+            posX = Math.round(posX / snapGridSize) * snapGridSize;
+            posY = Math.round(posY / snapGridSize) * snapGridSize;
+          }
+
+          return {
+            ...n,
+            position: { x: posX, y: posY },
+          };
+        });
       } else {
         appliedNodes = applied;
       }
+
       setNodes(appliedNodes);
+      setAlignmentGuides(newGuides);
+
       // Only mark dirty for position changes (user drag).
       // Exclude select (pure UI) and dimensions (React Flow internal DOM measurement).
       if (changes.some((c) => c.type === "position")) {
         markDirty();
       }
     },
-    [setNodes, snapToGrid, snapGridSize]
+    [setNodes, snapToGrid, snapGridSize, snapThreshold],
   );
 
   const handleEdgesChange = useCallback(
@@ -239,6 +294,7 @@ export default function InfiniteCanvas() {
     // 只在拖拽开始时压栈（改动前压栈约定）。此前这里的第二次 pushHistory
     // 是为了掩盖 undo() 的偏移，修复后必须移除，否则会产生一次"空撤销"。
     markDirtyImmediate();
+    setAlignmentGuides([]);
   }, []);
 
   const handlePaneClick = useCallback(() => {
@@ -331,10 +387,11 @@ export default function InfiniteCanvas() {
 
   return (
     <div
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      <AlignmentGuides guides={alignmentGuides} />
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <ReactFlow
         nodes={nodes}
