@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
-import { App, Button, Input, Popover, Slider } from "antd";
+import { App, Button, Popover, Slider } from "antd";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
@@ -14,6 +14,7 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canva
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
+import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
 
 function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
   const [w, h] = ratio.split(":").map(Number);
@@ -126,6 +127,15 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       return [...alive, ...added];
     });
   }
+
+  // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）
+  const references = useMemo<ReferenceItem[]>(() => {
+    return refOrder.map((src, i) => ({
+      src,
+      thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
+      index: i,
+    }));
+  }, [refOrder]);
 
   // Button disabled state derived from persistent node.data.task_status
   const isGenerating = useMemo(() => {
@@ -402,11 +412,12 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           ))}
         </div>
       )}
-      <Input.TextArea
-        className="gen-textarea"
-        size="small" placeholder={t("prompt.placeholder.video")} value={prompt}
-        onChange={(e) => setPrompt(e.target.value)} autoSize={{ minRows: 4, maxRows: 8 }}
-        style={{ ...is, resize: "vertical", minHeight: 100, outline: "none", boxShadow: "none" }}
+      <MentionPrompt
+        references={references}
+        value={prompt}
+        onChange={setPrompt}
+        placeholder={t("prompt.placeholder.video")}
+        style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
         <MenuPopover
