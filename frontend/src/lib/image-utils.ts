@@ -30,8 +30,8 @@ export function computeThumbScale(
   };
 }
 
-/** 节点头部标题栏高度（px） */
-const TITLE_H = 24;
+/** 节点头部标题栏高度（px），需与 ImageNode title bar 的实际高度一致 */
+const TITLE_H = 28;
 
 /**
  * 计算节点的显示尺寸（等比缩放 + 标题栏高度）。
