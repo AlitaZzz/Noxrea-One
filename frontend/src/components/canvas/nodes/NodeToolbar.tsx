@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   ExperimentOutlined,
+  HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
   ScissorOutlined,
@@ -163,6 +164,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Tooltip title={t("crop")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
+          </Tooltip>
+          <Tooltip title={t("annotation.title")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<HighlightOutlined />} disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "annotate")} />
           </Tooltip>
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>

@@ -187,6 +187,19 @@ const zh: Record<string, string> = {
   "lighting.rimLight": "轮廓光",
   "lighting.reset": "重置参数",
   "lighting.dragHint": "\u2196 \u62D6\u52A8\u8C03\u6574\u5149\u6E90",
+  // Annotation
+  "annotation.title": "标注",
+  "annotation.color": "颜色",
+  "annotation.brushSize": "笔刷大小",
+  "annotation.mode.brush": "画笔",
+  "annotation.mode.rect": "矩形",
+  "annotation.mode.text": "文字",
+  "annotation.text.placeholder": "输入文字",
+  "annotation.undo": "撤销",
+  "annotation.redo": "重做",
+  "annotation.save": "保存",
+  "annotation.cancel": "取消",
+  "annotation.saving": "保存中",
 };
 
 const en: Record<string, string> = {
@@ -359,6 +372,19 @@ const en: Record<string, string> = {
   "lighting.rimLight": "Rim Light",
   "lighting.reset": "Reset",
   "lighting.dragHint": "\u2196 drag to move light",
+  // Annotation
+  "annotation.title": "Annotate",
+  "annotation.color": "Color",
+  "annotation.brushSize": "Brush Size",
+  "annotation.mode.brush": "Brush",
+  "annotation.mode.rect": "Rectangle",
+  "annotation.mode.text": "Text",
+  "annotation.text.placeholder": "Type text",
+  "annotation.undo": "Undo",
+  "annotation.redo": "Redo",
+  "annotation.save": "Save",
+  "annotation.cancel": "Cancel",
+  "annotation.saving": "Saving",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({

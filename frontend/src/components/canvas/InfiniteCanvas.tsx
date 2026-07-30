@@ -81,6 +81,7 @@ export default function InfiniteCanvas() {
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const snapGridSize = useCanvasStore((s) => s.snapGridSize);
+  const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -240,6 +241,8 @@ export default function InfiniteCanvas() {
   }, []);
 
   const handlePaneClick = useCallback(() => {
+    // Exit annotation mode when clicking the canvas pane
+    useCanvasStore.getState().setAnnotatingNodeId(null);
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
@@ -250,6 +253,11 @@ export default function InfiniteCanvas() {
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Record<string, unknown>) => {
       const nodeId = node.id as string;
+      // Exit annotation mode when clicking a different node
+      const currentAnnotating = useCanvasStore.getState().annotatingNodeId;
+      if (currentAnnotating && currentAnnotating !== nodeId) {
+        useCanvasStore.getState().setAnnotatingNodeId(null);
+      }
       setNodes(
         useCanvasStore.getState().nodes.map((n) => ({
           ...n,
@@ -543,11 +551,13 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={-8}>
-            <NodeToolbarUI
-              nodeId={nid}
-              nodeType={n?.type}
-              onShowInspector={(id) => setInspectedNodeId(id)}
-            />
+            {annotatingNodeId === nid ? null : (
+              <NodeToolbarUI
+                nodeId={nid}
+                nodeType={n?.type}
+                onShowInspector={(id) => setInspectedNodeId(id)}
+              />
+            )}
           </RfNodeToolbar>
         )})}
       </ReactFlow>
