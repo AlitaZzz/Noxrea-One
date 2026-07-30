@@ -277,7 +277,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   return (
     <div className="group relative w-full h-full flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: 28, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <VideoCameraOutlined className="shrink-0" />

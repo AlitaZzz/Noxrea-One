@@ -101,7 +101,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   // 主图真相统一为 data.src（不再有本地 src state / 渲染期 setState hack）。
   // 多图模式约定：src 必为 multiResultUrls 的成员；撤销会把整个 data 快照替换，故无需额外同步。
-  const src = data.src || "";
+  // Fallback: if src is missing but multiResultUrls exists, use first URL
+  const src = data.src || (Array.isArray(data.multiResultUrls) && data.multiResultUrls.length > 0 ? data.multiResultUrls[0] : "") || "";
 
   // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
   const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
@@ -417,7 +418,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id]);
+  }, [id, src, setCroppingNodeId, setAnnotateOpen]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
@@ -438,7 +439,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     <>
     <div ref={nodeRef} className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: 28, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <FileImageOutlined className="shrink-0" />
