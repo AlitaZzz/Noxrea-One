@@ -85,6 +85,8 @@ interface CanvasState {
   // Annotation mode (hides node toolbar for the annotating node)
   annotatingNodeId: string | null;
   setAnnotatingNodeId: (id: string | null) => void;
+  croppingNodeId: string | null;
+  setCroppingNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -181,6 +183,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   annotatingNodeId: null,
   setAnnotatingNodeId: (id) => set({ annotatingNodeId: id }),
+  croppingNodeId: null,
+  setCroppingNodeId: (id) => set({ croppingNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),

@@ -14,10 +14,10 @@ import { Input,Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import ImageCropModal from "@/components/canvas/ImageCropModal";
 import MultiAngleEditor from "@/components/canvas/MultiAngleEditor";
 import LightingPanel from "@/components/canvas/LightingPanel";
 import AnnotationPanel from "@/components/canvas/AnnotationPanel";
+import CropPanel from "@/components/canvas/CropPanel";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import {
@@ -66,6 +66,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+  // cropOpen driven by store's croppingNodeId (same pattern as annotateOpen)
+  const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
+  const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
+  useEffect(() => {
+    setCropOpen(croppingNodeId === id);
+  }, [croppingNodeId, id]);
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [lightingOpen, setLightingOpen] = useState(false);
   const [annotateOpen, setAnnotateOpenInternal] = useState(false);
@@ -399,7 +405,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
-        case "crop-interactive": if (src) setCropOpen(true); break;
+        case "crop-interactive": if (src) setCroppingNodeId(id); break;
         case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "lighting": if (src) setLightingOpen(true); break;
         case "annotate": if (src) setAnnotateOpen(true); break;
@@ -464,7 +470,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       <div
         className={`
           node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
-          overflow-hidden
+          ${isMulti ? "overflow-visible" : "overflow-hidden"}
           ${selected ? "node-selected" : ""}
           ${isDragOver ? "node-drag-over" : ""}
         `}
@@ -632,15 +638,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           <AnnotationPanel src={src} sourceId={id} onClose={() => setAnnotateOpen(false)} />
         </div>
       )}
+      {cropOpen && src && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          <CropPanel src={src} sourceId={id} onClose={() => setCroppingNodeId(null)} />
+        </div>
+      )}
       </div>
 
       <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a" }} />
       <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a" }} />
     </div>
-    {cropOpen && src && createPortal(
-      <ImageCropModal src={src} sourceId={id} onClose={() => setCropOpen(false)} />,
-      document.body
-    )}
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
       document.body

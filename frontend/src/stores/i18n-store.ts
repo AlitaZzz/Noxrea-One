@@ -200,6 +200,15 @@ const zh: Record<string, string> = {
   "annotation.save": "保存",
   "annotation.cancel": "取消",
   "annotation.saving": "保存中",
+  "crop.aspect.free": "自由",
+  "crop.aspect.1_1": "1:1",
+  "crop.aspect.4_3": "4:3",
+  "crop.aspect.3_4": "3:4",
+  "crop.aspect.16_9": "16:9",
+  "crop.aspect.9_16": "9:16",
+  "crop.reset": "重置",
+  "crop.confirm": "确认",
+  "crop.cancel": "取消",
 };
 
 const en: Record<string, string> = {
@@ -385,6 +394,15 @@ const en: Record<string, string> = {
   "annotation.save": "Save",
   "annotation.cancel": "Cancel",
   "annotation.saving": "Saving",
+  "crop.aspect.free": "Free",
+  "crop.aspect.1_1": "1:1",
+  "crop.aspect.4_3": "4:3",
+  "crop.aspect.3_4": "3:4",
+  "crop.aspect.16_9": "16:9",
+  "crop.aspect.9_16": "9:16",
+  "crop.reset": "Reset",
+  "crop.confirm": "Confirm",
+  "crop.cancel": "Cancel",
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({
