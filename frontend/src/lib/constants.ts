@@ -13,8 +13,8 @@ export const HISTORY_MAX_SIZE = 50;
 export const DEFAULT_NODE_WIDTH = 600;
 export const DEFAULT_NODE_HEIGHT = 338; // 16:9
 export const TEXT_NODE_DEFAULT_WIDTH = 450; // 4:3 (338 * 4 / 3)
-export const TEXT_NODE_MIN_WIDTH = 120;
-export const TEXT_NODE_MIN_HEIGHT = 60;
+export const TEXT_NODE_MIN_WIDTH = 450; // 同初始化宽度
+export const TEXT_NODE_MIN_HEIGHT = 338; // 同初始化高度
 
 // Copy/paste offset
 export const PASTE_OFFSET = { x: 30, y: 30 };
