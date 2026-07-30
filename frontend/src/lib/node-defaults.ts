@@ -3,7 +3,10 @@ import { MarkerType } from "@xyflow/react";
 import {
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
+  DIRECTOR_NODE_DEFAULT_WIDTH,
+  DIRECTOR_NODE_DEFAULT_HEIGHT,
   TEXT_NODE_DEFAULT_WIDTH,
+  TEXT_NODE_DEFAULT_HEIGHT,
   TEXT_NODE_MIN_WIDTH,
   TEXT_NODE_MIN_HEIGHT,
 } from "@/lib/constants";
@@ -35,7 +38,7 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
     data: { label: "", content: "" } as TextNodeData,
     style: {
       width: TEXT_NODE_DEFAULT_WIDTH,
-      height: DEFAULT_NODE_HEIGHT,
+      height: TEXT_NODE_DEFAULT_HEIGHT,
       minWidth: TEXT_NODE_MIN_WIDTH,
       minHeight: TEXT_NODE_MIN_HEIGHT,
     },
@@ -87,7 +90,7 @@ export function directorNode(position: { x: number; y: number }): DirectorNode {
     type: NODE_TYPE.DIRECTOR,
     position,
     data: { label: "" },
-    style: { width: TEXT_NODE_DEFAULT_WIDTH, height: DEFAULT_NODE_HEIGHT },
+    style: { width: DIRECTOR_NODE_DEFAULT_WIDTH, height: DIRECTOR_NODE_DEFAULT_HEIGHT },
   };
 }
 
