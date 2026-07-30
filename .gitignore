@@ -154,6 +154,7 @@ backend/app/data/openrouter_models.json
 
 .vscode/
 .idea/
+.codebuddy/
 
 # JetBrains
 *.iml
