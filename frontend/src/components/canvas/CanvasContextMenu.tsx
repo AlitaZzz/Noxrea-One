@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyOutlined, ExpandOutlined, PictureOutlined, SelectOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
@@ -23,10 +23,8 @@ interface Props {
   onAddText: () => void;
   onAddImage: () => void;
   onAddVideo: () => void;
-  onSelectAll: () => void;
-  onPaste: () => void;
+  onAddDirector: () => void;
   onResetView: () => void;
-  hasClipboard: boolean;
 }
 
 export default function CanvasContextMenu(props: Props) {
@@ -54,8 +52,7 @@ export default function CanvasContextMenu(props: Props) {
         <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("image.node")}</MenuItem>
         <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
         <MenuDivider />
-        <MenuItem onClick={() => { props.onSelectAll(); hide(); }}><SelectOutlined /> {t("shortcuts.desc.selectall")}</MenuItem>
-        <MenuItem onClick={() => { if (props.hasClipboard) props.onPaste(); hide(); }}><CopyOutlined /> {t("shortcuts.desc.paste")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("director.node")}</MenuItem>
         <MenuDivider />
         <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("fit")}</MenuItem>
       </div>
