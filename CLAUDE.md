@@ -53,7 +53,7 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   ├── crud/                   # 数据访问层（task/user/model-config/canvas/asset/file）
 │   ├── schemas/                # Zod schema + toXxxOut() mapper（唯一 snake_case 转换点）
 │   ├── services/               # 业务逻辑
-│   │   ├── capabilities/       # 能力服务（image/video/llm/audio/bg-removal/mock）
+│   │   ├── capabilities/       # 能力服务（image/video/llm/audio/bg-removal）
 │   │   ├── protocols/          # 协议适配（openai/gemini/ark）
 │   │   ├── request-builder/    # 请求构建管线（transforms/mapping/patch）
 │   │   ├── gateway/            # Gateway 注册中心 + 路由

@@ -96,11 +96,6 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       params: rawParams,
     };
 
-    // Mock 模式
-    if (cfg.MOCK_IMAGE_GENERATE && capability === "image") {
-      routeCtx.capability = "mock";
-    }
-
     // 调用 CapabilityService（同步/异步由内部 TaskManager 自动判定）
     const result = await routeGenerate(routeCtx);
 
