@@ -33,12 +33,6 @@ const configSchema = z.object({
   WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(20),
   WORKER_ZOMBIE_INTERVAL: z.coerce.number().int().positive().default(60),
 
-  // Mock
-  MOCK_IMAGE_GENERATE: z
-    .enum(["true", "false", "1", "0"])
-    .transform((v) => v === "true" || v === "1")
-    .default("false"),
-
   // Async polling
   WORKER_ASYNC_POLL_INTERVAL: z.coerce.number().positive().default(3.0),
   WORKER_ASYNC_POLL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(120),

@@ -74,7 +74,7 @@ Noxrea-AI-Canvas/
 │   ├── crud/                    # 数据访问层
 │   ├── schemas/                 # Zod schema + snake_case 映射
 │   ├── services/                # 业务逻辑
-│   │   ├── capabilities/        # 能力服务（image/video/llm/audio/bg-removal/mock）
+│   │   ├── capabilities/        # 能力服务（image/video/llm/audio/bg-removal）
 │   │   ├── protocols/           # 协议适配（openai/gemini/ark）
 │   │   ├── request-builder/     # 请求构建管线
 │   │   ├── gateway/             # Gateway 注册中心 + 路由
@@ -176,7 +176,6 @@ npm run dev
 | `JWT_SECRET_KEY` | JWT 签名密钥（必填） |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 初始管理员账号（必填） |
 | `FFMPEG_PATH` | ffmpeg 路径，默认 `bin/ffmpeg`（视频截帧） |
-| `MOCK_IMAGE_GENERATE` | 开发模式：mock 图片生成 |
 | `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
 
 ## 文档
