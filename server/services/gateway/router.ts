@@ -1,0 +1,44 @@
+// ── Gateway Router（对应 backend/app/services/gateway/router.py） ──
+
+import { getCapability } from "@server/services/capabilities/base";
+import type { GenerationResult } from "@server/schemas/result";
+
+export interface RouteContext {
+  capability: string;
+  protocol: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  channelId: number;
+  userId: number;
+  taskId: string;
+  config?: Record<string, unknown>;
+  params: Record<string, unknown>;
+}
+
+/**
+ * 统一路由分发。
+ *
+ * 同步/异步判定由 CapabilityService 内部的 TaskManager.submitAndWait 完成，
+ * Executor 只需调用此路由一次即可（对齐 Python CapabilityRouter.dispatch）。
+ */
+export async function routeGenerate(ctx: RouteContext): Promise<GenerationResult> {
+  const capService = getCapability(ctx.capability);
+  if (!capService) {
+    throw new Error(`Unknown capability: ${ctx.capability}`);
+  }
+
+  return capService.generate(
+    {
+      channelId: ctx.channelId,
+      baseUrl: ctx.baseUrl,
+      apiKey: ctx.apiKey,
+      protocol: ctx.protocol,
+      model: ctx.model,
+      config: ctx.config,
+      userId: ctx.userId,
+      taskId: ctx.taskId,
+    },
+    ctx.params as Record<string, unknown> & { prompt: string }
+  );
+}

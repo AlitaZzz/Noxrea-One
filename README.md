@@ -36,7 +36,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Frontend (Next.js)                       │
+│                     Web (Next.js)                            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐  │
 │  │ 画布组件  │ │ 生成面板  │ │ 资源管理  │ │ Directer(3D) │  │
 │  │ Canvas    │ │ GenPanel  │ │ Assets    │ │ Engine(纯TS) │  │
@@ -81,7 +81,7 @@
 
 ```
 Noxrea-AI-Canvas/
-├── frontend/                    # Next.js 前端
+├── web/                         # Next.js 前端
 │   └── src/
 │       ├── app/                 # App Router 页面
 │       │   ├── canvas/          # 画布主页
@@ -488,18 +488,22 @@ request_builder 管线执行顺序（不可变更）:
 | 状态管理 | Zustand | ^5 |
 | UI 组件库 | Ant Design | ^6.5 |
 | 请求/缓存 | @tanstack/react-query | ^5 |
-| 后端框架 | FastAPI + Uvicorn | >=0.115 |
-| 数据库 | SQLAlchemy (async) + aiosqlite | >=2 |
-| 鉴权 | JWT (python-jose) + bcrypt | >=3.3 |
-| 迁移 | Alembic | >=1.13 |
-| HTTP 客户端 | httpx | >=0.27 |
+| 后端运行时 | Node.js 18+ / TypeScript 5+ | — |
+| ORM | Prisma | ^6 |
+| 数据库 | SQLite（开发）/ PostgreSQL（生产） | — |
+| 鉴权 | JWT (jose) + bcryptjs | ^5.9 |
+| 校验 | Zod | ^3.24 |
+| HTTP 客户端 | Node 内置 fetch + undici | — |
+| 日志 | pino + pino-pretty | ^9.5 |
+| 图像处理 | sharp | ^0.33 |
+| 进程管理 | tsx（worker）/ concurrently（dev） | — |
 
 ## 本地开发
 
 ### 前置条件
 
 - Node.js >= 18
-- Python >= 3.11
+- （可选）Python >= 3.11（仅 inference_service 需要）
 
 ### 一键启动
 
@@ -510,41 +514,42 @@ start.bat          # 或 start.ps1
 
 ### 手动启动
 
-**后端**：
 ```bash
-cd backend
-cp .env.example .env   # 编辑 .env 配置
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
+# 1. 安装依赖
+npm install                    # 根目录（自动处理 workspace + prisma generate）
 
-**前端**：
-```bash
-cd frontend
-cp .env.example .env.local   # 配置 API 地址
-npm install
-npm run dev                   # 默认 http://localhost:3000
+# 2. 初始化数据库
+cp .env.example .env           # 编辑 .env，设置 JWT_SECRET_KEY 和 ADMIN_PASSWORD
+npx prisma migrate dev --name init
+npm run prisma:seed            # 创建管理员账号
+
+# 3. 启动（Next.js + Worker 同时启动）
+npm run dev                    # 前端 http://localhost:3000，API 同源
+
+# 或分别启动
+npm run dev:next               # 仅前端
+npm run worker                 # 仅 Worker
 ```
 
 ### 关键配置
 
 | 配置项 | 说明 |
 |--------|------|
-| `DATABASE_URL` | sqlite+aiosqlite 连接串 |
-| `JWT_SECRET_KEY` | JWT 签名密钥 |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | 初始管理员账号 |
-| `CORS_ORIGINS` | 允许的前端域名 |
-| `UPLOAD_DIR` | 文件上传目录 |
+| `DATABASE_URL` | SQLite `file:./prisma/dev.db` 或 PG 连接串 |
+| `JWT_SECRET_KEY` | JWT 签名密钥（必填，占位符拒绝启动） |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 初始管理员账号（必填） |
+| `PUBLIC_URL` | 文件公开访问 URL，默认 `http://localhost:3000` |
+| `UPLOAD_DIR` | 文件上传目录，默认仓库根 `uploads/` |
 | `MOCK_IMAGE_GENERATE` | 开发模式：mock 图片生成 |
+| `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
 
 ### 项目初始化
 
-首次启动后端会自动：
-1. 建表（`create_all`）
-2. 执行 schema 补齐（`ensure_schema_migrations`）
-3. 创建管理员账号（`ensure_admin_exists`）
-4. 初始化 Gateway 注册中心（注册所有 Capability/Protocol）
-5. SQLite 开启 WAL 模式
+首次启动：
+1. `prisma migrate dev` 建表
+2. `prisma:seed` 创建管理员账号
+3. 启动时自动执行 `PRAGMA journal_mode=WAL`（SQLite）
+4. 启动时自动初始化 Gateway 注册中心（注册所有 Capability/Protocol）
 
 ## 文档与规范
 

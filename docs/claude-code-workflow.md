@@ -10,7 +10,7 @@ Claude Code 的上下文窗口有限，以下规则旨在减少每次会话的 t
 
 ```bash
 # ✅ 好：先 grep 定位，再 offset/limit 只读相关片段
-grep -n "saveManager" frontend/src/stores/ --include="*.ts"
+grep -n "saveManager" web/src/stores/ --include="*.ts"
 # 然后 Read file_path + offset + limit
 
 # ❌ 差：不找定位直接读，大文件（如 canvas-store.ts >500 行）一次拉满

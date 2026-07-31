@@ -1,0 +1,106 @@
+import { NextRequest } from "next/server";
+import { authenticateRequest } from "@server/core/auth/middleware";
+import { taskCreateSchema } from "@server/schemas/task";
+import { toTaskOut } from "@server/schemas/task";
+import { createTask } from "@server/crud/task";
+import { getChannel } from "@server/crud/model-config";
+import { ok, fail } from "@server/core/response";
+
+/**
+ * 创建生成任务（对齐 backend/app/routers/generate.py create_task）
+ */
+export async function POST(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Invalid JSON body");
+  }
+
+  // 前端传 camelCase（channelId/nodeId），映射到后端期望的 snake_case
+  const raw = body as Record<string, unknown>;
+  const mapped = {
+    ...raw,
+    channel_id: raw.channelId ?? raw.channel_id,
+    node_id: raw.nodeId ?? raw.node_id,
+    ref_images: raw.ref_images ?? raw.refImages,
+  };
+
+  const parsed = taskCreateSchema.safeParse(mapped);
+  if (!parsed.success) {
+    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const data = parsed.data;
+
+  // capability 回退：优先用 capability，其次 type
+  const capability = data.capability ?? data.type ?? "image";
+
+  // bg_removal 内部能力：不需要渠道
+  if (capability !== "bg_removal") {
+    if (!data.channel_id) {
+      return fail(400, "channel_id is required");
+    }
+    const channel = await getChannel(data.channel_id);
+    if (!channel) {
+      return fail(400, "Channel not found");
+    }
+    // protocol 检查（对齐 Python）
+    if (!channel.protocol) {
+      return fail(400, "Channel 未配置 protocol");
+    }
+  }
+
+  // config 白名单构建（对齐 Python 精确字段控制）
+  const config: Record<string, unknown> = {};
+  if (data.channel_id) config.channel_id = data.channel_id;
+  if (data.model) config.model = data.model;
+  if (data.protocol) config.protocol = data.protocol;
+
+  // 从 raw body 中提取业务参数（对齐 Python _BUSINESS_PARAM_KEYS）
+  const paramFields = new Set([
+    "resolution", "ratio", "quality", "n", "strength", "seed", "background",
+    "seconds", "frame_rate",
+    "messages", "temperature", "max_tokens", "top_p", "stream", "stop",
+    "frequency_penalty", "presence_penalty",
+    "mode", "input", "voice", "audio_file",
+    "references",
+  ]);
+  for (const [key, val] of Object.entries(raw)) {
+    if (paramFields.has(key) && val !== undefined && val !== null) {
+      config[key] = val;
+    }
+  }
+
+  // 用户显式传入的 config 对象合并（允许透传额外参数）
+  if (data.config && typeof data.config === "object") {
+    Object.assign(config, data.config as Record<string, unknown>);
+  }
+
+  // n 值钳位 1-4（对齐 Python max(1, min(4, ...))）
+  if (typeof config.n === "number") {
+    config.n = Math.max(1, Math.min(4, config.n as number));
+  } else {
+    config.n = 1;
+  }
+
+  // prompt 优先级：顶层 prompt > config.prompt
+  const prompt = data.prompt ?? (config.prompt as string) ?? "";
+
+  const task = await createTask({
+    userId: auth.user.id,
+    type: data.type ?? capability,
+    capability,
+    protocol: data.protocol ?? undefined,
+    model: data.model ?? undefined,
+    prompt,
+    config,
+    refImages: data.ref_images,
+    nodeId: data.node_id ?? "",
+  });
+
+  return Response.json(ok(toTaskOut(task)));
+}

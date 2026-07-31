@@ -1,0 +1,44 @@
+{
+  "name": "noxrea-ai-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n next,worker -c cyan,magenta \"npm run dev:next\" \"npm run dev:worker\"",
+    "dev:next": "npm -w web run dev",
+    "dev:worker": "tsx watch --env-file=.env server/index.ts",
+    "worker": "tsx --env-file=.env server/index.ts",
+    "build": "npm -w web run build",
+    "start": "npm -w web run start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.9.0",
+    "p-limit": "^6.1.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "sharp": "^0.33.0",
+    "undici": "^7.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "concurrently": "^9.1.0",
+    "prisma": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}
