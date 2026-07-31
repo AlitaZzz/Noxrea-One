@@ -13,81 +13,127 @@
 | UI 组件库 | Ant Design | ^6.5.0 |
 | 请求/缓存 | @tanstack/react-query | ^5.101.2 |
 | 图标 | lucide-react | ^1.24.0 |
-| 后端框架 | FastAPI + Uvicorn | >=0.115.0 |
-| 数据库 | SQLAlchemy (async) + aiosqlite | >=2.0.30 |
-| 鉴权 | JWT (python-jose) + bcrypt | >=3.3.0 |
-| 迁移 | Alembic | >=1.13.0 |
-| HTTP 客户端 | httpx | >=0.27.0 |
+| 后端运行时 | Node.js 18+ / TypeScript 5+ | — |
+| ORM | Prisma | ^6.0.0 |
+| 数据库 | SQLite（开发）/ PostgreSQL（生产） | — |
+| 鉴权 | JWT (jose) + bcryptjs | ^5.9.0 / ^2.4.3 |
+| 校验 | Zod | ^3.24.0 |
+| HTTP 客户端 | Node 内置 fetch + undici | — |
+| 日志 | pino + pino-pretty | ^9.5.0 |
+| 图像处理 | sharp | ^0.33.0 |
+| 进程管理 | tsx（worker）/ concurrently（dev） | — |
 
 ## 目录结构
 
 ```
-frontend/src/
-├── app/              # Next.js App Router 页面
-│   ├── canvas/       # 画布主页面
-│   ├── login/        # 登录页
-│   └── project/      # 项目管理页
-├── components/
-│   ├── assets/       # 资源管理（AssetSidebar, AssetGrid 等）
-│   ├── auth/         # 认证相关（SettingsModal, AvatarCropModal）
-│   ├── canvas/       # 画布核心（InfiniteCanvas, NodeToolbar 等）
-│   │   └── nodes/    # 节点组件（Text/Image/Video/Group/ImageGroup）
-│   ├── common/       # 通用 UI（ConfirmModal, NavButton, WheelGuard）
-│   └── layout/       # AppShell
-├── hooks/            # 自定义 hooks（use-canvas-keyboard）
-├── lib/              # 工具层（save-manager, api, types, constants, image-utils）
-├── providers/        # React context providers（AppProviders）
-├── stores/           # Zustand 状态管理
-│   ├── canvas-store.ts       # 画布节点/边/视口状态
-│   ├── project-store.ts      # 项目管理
-│   ├── history-store.ts      # 撤销/重做
-│   ├── selection-store.ts    # 选择/剪贴板
-│   ├── assets-store.ts       # 资源库
-│   ├── auth-store.ts         # 登录鉴权
-│   ├── model-store.ts        # AI 模型配置
-│   └── i18n-store.ts         # 国际化
-├── director/         # 3D 引擎逻辑（纯 TS，无 React）
-│   ├── core/         # 场景核心（stage, camera-rig, transform-gizmo, selection, nav-gizmo）
-│   ├── entities/     # 实体模型（camera, character, crowd, entity, prop）
-│   └── util/         # 工具（boneIdentify, measure, rigAxisTable）
-└── __tests__/        # 集中单元测试（*.test.ts，kebab-case）
-```
-
-> `src/director/`（3D 引擎，纯 TS、无 React 依赖）与 `src/components/director/`（引擎配套的 React UI 容器）是两个不同层级的**同名目录**，不要混淆：前者管场景/实体/工具逻辑，后者管画布上的 UI 外壳（Dock、Inspector、PoseSliders 等）。新增引擎能力放 `director/`，新增 UI 放 `components/director/`。
-
-backend/
-├── app/
-│   ├── main.py       # FastAPI 应用入口、CORS、路由注册
-│   ├── config.py     # pydantic-settings 配置
-│   ├── database.py   # 异步 SQLAlchemy 引擎与会话
-│   ├── deps.py       # 依赖注入（get_current_user）
-│   ├── crud/         # CRUD 操作
-│   ├── models/       # SQLAlchemy ORM 模型
-│   ├── routers/      # API 路由（auth, canvas, files, model_config, assets, generate, ai_proxy）
-│   ├── schemas/      # Pydantic 请求/响应模型
-│   └── services/     # 业务逻辑（auth, providers, worker）
-└── alembic/          # 数据库迁移版本
+Noxrea-AI-Canvas/               # Monorepo 根
+├── package.json                # 唯一 Node 项目入口，workspaces=["web"]
+├── tsconfig.base.json          # 共享 TS 配置，paths @server/*
+├── tsconfig.json               # 根 TS 配置（server/ + prisma/）
+├── .env                        # 环境变量
+├── .env.example                # 环境变量样例
+│
+├── prisma/
+│   ├── schema.prisma           # 数据建模（9张表，camelCase+@map）
+│   ├── migrations/             # 迁移文件
+│   └── seed.ts                 # 管理员账号初始化
+│
+├── server/                     # Node.js 后端业务层（纯 Node，无 Next/React 依赖）
+│   ├── index.ts                # Worker 独立进程入口
+│   ├── core/                   # 基础设施
+│   │   ├── config/             # Zod 配置解析
+│   │   ├── database/           # PrismaClient 单例 + PRAGMA
+│   │   ├── auth/               # JWT / bcrypt / withAuth
+│   │   ├── logger/             # pino 日志 + logEvent/summarizeBody
+│   │   ├── response/           # UnifiedResponse + ok/fail
+│   │   ├── http/               # 场景化超时预设
+│   │   ├── ssrf/               # SSRF 防护 + DNS pinning
+│   │   ├── events/             # EventBus（进程内）+ TaskWatcher（跨进程）
+│   │   └── ratelimit/          # 内存限流
+│   ├── crud/                   # 数据访问层（task/user/model-config/canvas/asset/file）
+│   ├── schemas/                # Zod schema + toXxxOut() mapper（唯一 snake_case 转换点）
+│   ├── services/               # 业务逻辑
+│   │   ├── capabilities/       # 能力服务（image/video/llm/audio/bg-removal/mock）
+│   │   ├── protocols/          # 协议适配（openai/gemini/ark）
+│   │   ├── request-builder/    # 请求构建管线（transforms/mapping/patch）
+│   │   ├── gateway/            # Gateway 注册中心 + 路由
+│   │   ├── tasks/              # 异步轮询管理器
+│   │   ├── worker/             # Worker 循环 + 任务执行器
+│   │   ├── storage/            # 存储后端抽象 + 本地/S3 + 下载/哈希/媒体处理
+│   │   ├── resolvers/          # 参考图解析
+│   │   ├── inference/          # 推理服务调用
+│   │   └── model-config/       # 预设/参数/白名单加载
+│   └── resources/              # JSON 数据文件（presets/model_params/whitelist）
+│
+├── web/
+│   ├── package.json            # 唯一的 workspace package，只含前端依赖
+│   ├── tsconfig.json           # extends ../tsconfig.base.json
+│   ├── next.config.ts          # monorepo 配置
+│   ├── eslint.config.mjs       # server/** no-restricted-imports 规则
+│   └── src/
+│       ├── app/                # Next.js App Router 页面
+│       │   ├── api/            # Route Handlers（controller 层）
+│       │   ├── canvas/         # 画布主页面
+│       │   ├── login/          # 登录页
+│       │   └── project/        # 项目管理页
+│       ├── components/         # React 组件
+│       ├── hooks/              # 自定义 hooks
+│       ├── lib/                # 工具层（api.ts BASE 为空字符串，同源请求）
+│       ├── providers/          # React context providers
+│       ├── stores/             # Zustand 状态管理
+│       ├── director/           # 3D 引擎逻辑（纯 TS，无 React）
+│       └── __tests__/          # 单元测试
+│
+├── inference_service/          # 独立推理服务（背景移除等），保持不动
+├── backend/                    # [待删除] 原 Python FastAPI 后端（迁移参考源）
+├── docs/                       # 项目文档
+├── CLAUDE.md                   # 本文件
+├── README.md                   # 项目说明
+├── start.bat                   # Windows 一键启动
+└── start.ps1                   # PowerShell 一键启动
 ```
 
 ## 前端命名规范
 
-`frontend/src/` 下的文件名约定由 ESLint 规则 `check-file/filename-naming-convention` 强制（已设为 `error`），`simple-import-sort` 强制导入顺序：
+`web/src/` 下的文件名约定由 ESLint 规则 `check-file/filename-naming-convention` 强制（已设为 `error`），`simple-import-sort` 强制导入顺序：
 
 | 类型 | 规则 | 示例 |
 |---|---|---|
 | React 组件 `*.tsx`（`components/**`） | PascalCase | `CanvasContextMenu.tsx` |
-| 其余 `*.ts` / 非组件 `*.tsx` | kebab-case | `use-canvas-events.ts`、`app-modal.tsx`、`camera-rig.ts` |
+| 其余 `*.ts` / 非组件 `*.tsx` | kebab-case | `use-canvas-events.ts`、`app-modal.tsx` |
 | 测试 `*.test.ts`（集中 `src/__tests__/`） | kebab-case | `canvas-events.test.ts` |
 | 目录名 | 全小写 | `components/`、`director/` |
 
-- import 排序：`simple-import-sort` 分组为 external → `@/` 绝对路径 → 相对路径，由 `eslint . --fix` 自动整理。
-- 测试集中放在 `src/__tests__/`，随源码改动同步就近命名；`director/util/` 下的测试也已迁入该目录。
+- import 排序：`simple-import-sort` 分组为 external → `@/` / `@server/` 绝对路径 → 相对路径
+- 测试集中放在 `src/__tests__/`
+
+## 命名边界
+
+| 边界 | 规则 |
+|---|---|
+| Prisma model | 字段 camelCase + `@map("snake_case")`，表 `@@map` |
+| CRUD | 入参/返回使用 Prisma camelCase 对象 + 已解析 JSON |
+| Service / Worker / Gateway | 全 camelCase |
+| Route 出口 | 由 `schemas/*.ts` 的 `toXxxOut()` mapper 统一转回 snake_case JSON |
+| Protocol | 第三方参数保持官方原格式 |
+| API 响应 | 成功 `{ code, data, msg }`，错误 `{ detail }` |
 
 ## 关键架构约定
 
-画布保存机制（SaveManager 触发规则）、生命周期兜底、常见 Bug 模式（useEffect cleanup 陷阱、闭包捕获过期数据）、SSRF 防护实现、代码规范，详见 [docs/architecture-notes.md](docs/architecture-notes.md)。
+- **调用链**：`API Route -> Service -> CRUD -> Prisma`；`Worker -> Executor -> Gateway -> Capability -> Protocol`
+- **Service 禁止直接调用 Prisma**，必须经过 CRUD 层
+- **server/ 纯 Node.js 边界**：禁止导入 `next/*`、`react/*`、`@/*`（由 ESLint 规则强制）
+- **跨进程 SSE**：Worker 进程写 DB → TaskWatcher 读 DB → SSE 推送（非进程内 EventBus）
+- 画布保存机制、SSRF 防护实现等详见 [docs/architecture-notes.md](docs/architecture-notes.md)
 
-**改动画布保存逻辑、节点数据持久化、或新增网络请求转发功能之前，务必先看这份文档**——这些是本项目反复踩过坑的地方。
+## 配置与运行
+
+- 复制 `.env.example` 为 `.env`，设置 `JWT_SECRET_KEY` 和 `ADMIN_PASSWORD`
+- 安装依赖：`npm install`（根目录，自动处理 workspace + postinstall prisma generate）
+- 初始化数据库：`npx prisma migrate dev --name init` → `npm run prisma:seed`
+- 启动开发：`npm run dev`（同时启动 Next.js + Worker）
+- 单独启动 Worker：`npm run worker`
+- 类型检查：`npm run typecheck`
 
 ## 协作规则
 
@@ -104,16 +150,3 @@ backend/
 - **不自动提交**，等用户确认后才 `git add + commit + push`
 - Commit message 用简洁中文，说明改了啥、为啥改
 - 不相关的改动拆成多个 commit
-- 提交前检查是否有遗留的调试代码
-
-## Token 使用规则
-
-见 [docs/claude-code-workflow.md](docs/claude-code-workflow.md)。核心原则：
-- 大文件先用 Grep 定位，再用 `offset`/`limit` 只读片段
-- 长输出命令默认追加 `head`/`tail`/`grep` 过滤
-
-## 配置与运行
-
-- 前端 `frontend/`：`.env.local` 配置 API 地址，`npm run dev` 启动
-- 后端 `backend/`：`.env` 配置数据库/JWT/管理员账号，`uvicorn app.main:app` 启动
-- CORS 默认允许 `localhost:3000` 和 `localhost:5173`，通过 `CORS_ORIGINS` 配置

@@ -1,0 +1,208 @@
+// ── Noxrea AI Canvas - Prisma Schema ──
+// 字段 camelCase + @map("snake_case")，表名 @@map
+// JSON 列在 SQLite 下声明为 String(TEXT)，CRUD 层集中序列化
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────
+// 1. User
+// ──────────────────────────────────────────
+model User {
+  id             Int      @id @default(autoincrement())
+  username       String   @unique @map("username")
+  hashedPassword String   @map("password_hash")
+  avatarUrl      String?  @map("avatar")
+  role           String   @default("user") @map("role")
+  theme          String   @default("dark") @map("theme")
+  language       String   @default("zh") @map("lang")
+  isActive       Boolean  @default(true) @map("is_active")
+  isSuperuser    Boolean  @default(false) @map("is_superuser")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  canvasProjects  CanvasProject[]
+  generationTasks GenerationTask[]
+  modelChannels   ModelChannel[]
+  assetFolders    AssetFolder[]
+  assetItems      AssetItem[]
+
+  @@map("users")
+}
+
+// ──────────────────────────────────────────
+// 2. GenerationTask
+// ──────────────────────────────────────────
+model GenerationTask {
+  id             String   @id @map("id") // UUID 字符串主键
+  userId         Int      @map("user_id")
+  type           String   @map("type") // 旧字段，向后兼容
+  capability     String?  @map("capability")
+  protocol       String?  @map("protocol")
+  model          String?  @map("model")
+  upstreamTaskId String?  @map("upstream_task_id")
+  status         String   @default("pending") @map("status")
+  prompt         String   @default("") @map("prompt")
+  config         String   @default("{}") @map("config") // JSON TEXT
+  refImages      String?  @map("ref_images") // JSON TEXT
+  resultUrls     String?  @map("result_urls") // JSON TEXT
+  resultText     String?  @map("result_text")
+  error          String?  @map("error")
+  nodeId         String   @map("node_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("generation_tasks")
+}
+
+// ──────────────────────────────────────────
+// 3. CanvasProject
+// ──────────────────────────────────────────
+model CanvasProject {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  name       String   @default("Untitled") @map("name")
+  canvasData String   @default("{}") @map("canvas_data") // JSON TEXT
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("canvas_projects")
+}
+
+// ──────────────────────────────────────────
+// 4. ModelChannel
+// ──────────────────────────────────────────
+model ModelChannel {
+  id        Int       @id @default(autoincrement())
+  userId    Int?      @map("user_id")
+  name      String    @map("name")
+  baseUrl   String    @map("base_url")
+  apiKey    String    @default("") @map("api_key")
+  protocol  String    @default("openai") @map("protocol")
+  config    String?   @map("config") // JSON TEXT
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  user   User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  models ModelInfo[]
+
+  @@index([userId])
+  @@map("model_channels")
+}
+
+// ──────────────────────────────────────────
+// 5. ModelInfo
+// ──────────────────────────────────────────
+model ModelInfo {
+  id                   Int      @id @default(autoincrement())
+  channelId            Int      @map("channel_id")
+  name                 String   @map("name")
+  capabilities         String   @default("[]") @map("capabilities") // JSON TEXT
+  inferredCapabilities String   @default("[]") @map("inferred_capabilities") // JSON TEXT
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  // 关系
+  channel ModelChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("model_infos")
+}
+
+// ──────────────────────────────────────────
+// 6. AssetFolder
+// ──────────────────────────────────────────
+model AssetFolder {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @map("name")
+  spaceKey  String   @default("personal") @map("space_key")
+  parentId  Int?     @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关系
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   AssetFolder? @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children AssetFolder[] @relation("FolderHierarchy")
+  items    AssetItem[]
+
+  @@index([userId])
+  @@index([parentId])
+  @@map("asset_folders")
+}
+
+// ──────────────────────────────────────────
+// 7. AssetItem
+// ──────────────────────────────────────────
+model AssetItem {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  folderId    Int?     @map("folder_id")
+  spaceKey    String   @default("personal") @map("space_key")
+  name        String   @default("Untitled") @map("name")
+  type        String   @default("other") @map("type")
+  width       Int      @default(0) @map("width")
+  height      Int      @default(0) @map("height")
+  description String   @default("") @map("description")
+  tags        String   @default("[]") @map("tags") // JSON TEXT
+  extraData   String   @default("{}") @map("extra_data") // JSON TEXT
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder AssetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([folderId])
+  @@map("asset_items")
+}
+
+// ──────────────────────────────────────────
+// 8. FileObject
+// ──────────────────────────────────────────
+model FileObject {
+  userId    Int      @map("user_id")
+  hash      String   @map("hash") // SHA256 hex
+  size      BigInt   @default(0) @map("size")
+  mimeType  String   @default("") @map("mime_type")
+  ext       String   @default("") @map("ext")
+  source    String   @default("unknown") @map("source")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@id([userId, hash])
+  @@map("file_objects")
+}
+
+// ──────────────────────────────────────────
+// 9. FileReference
+// ──────────────────────────────────────────
+model FileReference {
+  id        Int      @id @default(autoincrement())
+  fileHash  String   @map("file_hash")
+  userId    Int      @map("user_id")
+  refType   String   @map("ref_type")
+  refId     Int      @map("ref_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([fileHash, userId, refType, refId], name: "uq_file_ref")
+  @@index([fileHash, userId], name: "idx_fr_hash_user")
+  @@index([refType, refId], name: "idx_fr_type_id")
+  @@map("file_references")
+}

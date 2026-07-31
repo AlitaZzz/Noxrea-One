@@ -6,41 +6,56 @@
 
 
 # =====================================================
-# Frontend - Next.js
+# Node.js - Monorepo
 # =====================================================
 
 # Dependencies
-frontend/node_modules/
-
-# vitest 从仓库根目录运行时产生的缓存（node_modules/.vite）
 node_modules/
 
-# Next.js build
-frontend/.next/
-frontend/out/
-
-# Environment variables
-frontend/.env
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
-
-# Next.js generated
-frontend/next-env.d.ts
+# Build
+dist/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
 
-
-
-# =====================================================
-# Backend - Python FastAPI
-# =====================================================
-
 # Environment variables
 .env
-backend/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+
+
+# =====================================================
+# Frontend - Next.js
+# =====================================================
+
+# Next.js build
+web/.next/
+web/out/
+
+# Next.js generated
+web/next-env.d.ts
+
+
+
+# =====================================================
+# Prisma
+# =====================================================
+
+prisma/dev.db
+prisma/dev.db-shm
+prisma/dev.db-wal
+prisma/migrations/
+
+
+
+# =====================================================
+# Backend - Python FastAPI (kept locally as reference, not committed to Git)
+# =====================================================
+
+backend/
 
 # Python cache
 __pycache__/
@@ -55,15 +70,11 @@ build/
 # Virtual environments
 venv/
 .venv/
-backend/venv/
-backend/.venv/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
-# 后端测试运行时产生的临时上传目录（conftest.TEST_UPLOAD_DIR）
-backend/tests/fixtures/.test_uploads/
 
 
 
@@ -71,14 +82,10 @@ backend/tests/fixtures/.test_uploads/
 # Database
 # =====================================================
 
-# SQLite
+# SQLite (any location)
 *.db
 *.db-shm
 *.db-wal
-
-backend/**/*.db
-backend/**/*.db-shm
-backend/**/*.db-wal
 
 
 
@@ -91,12 +98,12 @@ inference_service/.env
 # =====================================================
 
 # Upload files
-backend/uploads/
+uploads/
 
 # Generated assets
-backend/storage/
-backend/output/
-backend/outputs/
+storage/
+output/
+outputs/
 
 # Temporary files
 tmp/
@@ -183,5 +190,5 @@ Thumbs.db
 # FFmpeg
 # =====================================================
 
-# 如果 ffmpeg.exe 是项目运行依赖，不要取消下面注释，ffmpeg 体积过大 (>100MB)，不提交到 Git
-backend/bin/
+# 项目根目录 bin/，存放 ffmpeg 等平台相关二进制依赖（体积大，不提交到 Git）
+bin/

@@ -7,7 +7,7 @@
 
 ## 画布保存机制
 
-所有画布状态变化最终都要经过 SaveManager（`frontend/src/lib/save-manager.ts`），全局单例 `saveManager`。
+所有画布状态变化最终都要经过 SaveManager（`web/src/lib/save-manager.ts`），全局单例 `saveManager`。
 
 ### 触发方式
 
@@ -88,31 +88,30 @@ Zustand store 的 `getState()` 方法可以在组件外和异步回调中获取�
 
 ## SSRF 防护
 
-新增网络请求转发功能时，参考 `backend/app/routers/ai_proxy.py` 中的实现：
+新增网络请求转发功能时，参考 `server/core/ssrf/index.ts` 中的实现：
 
-1. **DNS Pinning**：请求前解析域名到 IP 并锁定 DNS（`_dns_pin` 上下文管理器），防御 DNS rebinding 攻击
-2. **私网 IP 检测**：检查解析到的所有 IP 是否属于内网段（10.\*, 192.168.\*, 172.16-31.\*, 127.\*, fc00:/fd00: 等）
-3. **Hostname 黑名单**：禁止 localhost、localhost.localdomain、metadata.google.internal 等
+1. **DNS Pinning**：请求前用 `dns.promises.resolve4()` 解析域名到 IP，通过 undici Agent 的 `connect.lookup` 锁定 DNS，防御 DNS rebinding 攻击
+2. **私网 IP 检测**：检查解析到的所有 IP 是否属于内网段（10.\*, 192.168.\*, 172.16-31.\*, 127.\*, fc00:/fd00: 等），沿用 `_PRIVATE_IP_PREFIXES` 列表
+3. **Hostname 黑名单**：禁止 localhost、127.0.0.1、::1、0.0.0.0 等
 4. **内网白名单**：通过 `ALLOWED_INTERNAL_HOSTS` 环境变量配置例外
-5. **关闭重定向**：`follow_redirects=False` 防止跳转到内网地址
+5. **重定向逐跳校验**：`redirect: "manual"` + 手动跟随每个 `Location`，对每个跳转目标重新 `resolveAndValidate`
 
 ### 新增接口注意事项
 
-- 所有 AI 代理接口需 `Depends(get_current_user)` 鉴权
-- 使用 `httpx.AsyncClient` 而非 requests
-- 设置合理的 timeout
+- 所有 API 接口需 `authenticateRequest()` 鉴权
+- 使用 Node 内置 `fetch` + undici Agent
+- 通过 `fetchWithTimeout()` 设置合理超时
 
-### 生成链路（worker 后台协程）的 SSRF 边界
+### 生成链路（Worker 进程）的 SSRF 边界
 
-`backend/app/services/worker.py` 在生成任务中也会代发请求，目标分"用户可控 URL"与"管理员配置 URL"两类，必须区别对待：
+`server/services/worker/executor.ts` 在生成任务中也会代发请求，目标分"用户可控 URL"与"管理员配置 URL"两类：
 
 - **用户可控 URL（`ref_images` / `bg_removal` 的 `source_url`）**：
-  - 同源 URL（严格比对 `PUBLIC_URL` 的 host+有效端口，**不查私有 IP 黑名单**，避免双机/上云自身地址被误杀）→ 直接读本机磁盘（`_read_self_file`），**不发任何网络请求**，既防 SSRF 又消除 hairpin。
-  - 命中 `ALLOWED_INTERNAL_HOSTS` 白名单 → `dns_pin` 安全 fetch。
-  - 其它外链 → `ref_images` 透传原串（交由 provider 自行访问）；`source_url` 直接拒绝（`failed`，错误 "Source image must be hosted on this service"）。
-- **管理员配置 URL（`channel.base_url`）**：与用户 URL 同等视为"服务端代发目标"，必须经 `resolve_and_validate`（运行时以 `_validate_worker` 包装），校验失败在后台协程以 `SSREFError` 捕获并标 `failed`，不借用 `HTTPException`。
-- **纯内部服务 URL（`INFERENCE_SERVICE_URL`）**：属可信内部配置、非用户输入，**不在此 SSRF 校验之列**。
-- **跨用户隔离**：`_read_self_file` 校验 URL 中的 `uid` 段必须等于任务 `user_id`，防止越权读取他人文件。
+  - 同源 URL（严格比对 `PUBLIC_URL`）→ 直接读本机磁盘（`isSelfUrl`），**不发任何网络请求**
+  - 命中 `ALLOWED_INTERNAL_HOSTS` 白名单 → 安全 fetch
+  - 其它外链 → `ref_images` 透传原串；`source_url` 直接拒绝
+- **管理员配置 URL（`channel.base_url`）**：必须经 `resolveAndValidate` 校验
+- **纯内部服务 URL（`INFERENCE_SERVICE_URL`）**：属可信内部配置，不在此 SSRF 校验之列
 
 ---
 

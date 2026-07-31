@@ -1,0 +1,27 @@
+// ── OpenAI 音频协议 ──
+
+import type { ProtocolRequestResult, ProtocolResponse, ProtocolService } from "@server/services/protocols/base";
+
+export class OpenAiAudioProtocol implements ProtocolService {
+  readonly name = "openai_audio";
+
+  buildAudioRequest(
+    baseUrl: string,
+    apiKey: string,
+    body: Record<string, unknown>
+  ): ProtocolRequestResult {
+    return {
+      url: `${baseUrl}/audio/speech`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body,
+    };
+  }
+
+  parseAudioResponse(_response: unknown): ProtocolResponse {
+    return { urls: [] };
+  }
+}
