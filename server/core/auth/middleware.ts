@@ -37,7 +37,7 @@ export async function authenticateRequest(
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return {
       error: Response.json(
-        { detail: "Not authenticated" },
+        { detail: "未登录" },
         { status: 401 }
       ),
     };
@@ -59,7 +59,7 @@ export async function authenticateRequest(
   if (isNaN(userId)) {
     return {
       error: Response.json(
-        { detail: "Invalid token payload" },
+        { detail: "无效的令牌" },
         { status: 401 }
       ),
     };
@@ -69,7 +69,7 @@ export async function authenticateRequest(
   if (!dbUser || !dbUser.isActive) {
     return {
       error: Response.json(
-        { detail: "User not found" },
+        { detail: "用户不存在" },
         { status: 401 }
       ),
     };
