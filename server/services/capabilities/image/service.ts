@@ -49,7 +49,7 @@ class ImageCapabilityService implements CapabilityService {
       body: { ...body, prompt: summarizeText(body.prompt as string) },
     });
 
-    const req = protocol.buildImageRequest(ctx.baseUrl, ctx.apiKey, body);
+    const req = protocol.buildImageRequest(ctx.baseUrl, ctx.apiKey, body, ctx.config);
 
     logEvent("capability.image", {
       stage: "dispatch",
@@ -71,6 +71,7 @@ class ImageCapabilityService implements CapabilityService {
       baseUrl: ctx.baseUrl,
       apiKey: ctx.apiKey,
       body,
+      channelConfig: ctx.config,
       buildRequest: () => req,
       parseResponse: (data) => {
         const parsed = protocol.parseImageResponse

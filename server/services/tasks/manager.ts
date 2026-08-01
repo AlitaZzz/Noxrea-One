@@ -26,6 +26,8 @@ export interface SubmitAndWaitInput {
   baseUrl: string;
   apiKey: string;
   body: Record<string, unknown>;
+  /** 渠道配置（含 protocol.endpoints） */
+  channelConfig?: Record<string, unknown>;
   /** 构建请求的回调（capability 自己决定怎么发） */
   buildRequest: () => { url: string; method: string; headers: Record<string, string>; body?: unknown };
   /** 解析同步响应 */
@@ -103,6 +105,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     capability,
     baseUrl,
     apiKey,
+    channelConfig,
     pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL,
     maxPollAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
     initialDelay = cfg.WORKER_ASYNC_POLL_INITIAL_DELAY,
@@ -140,6 +143,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
         return await _poll({
           taskId, protocol, capability, baseUrl, apiKey,
           upstreamTaskId: extractedId,
+          channelConfig,
           pollInterval, maxPollAttempts, initialDelay,
         });
       }
@@ -179,6 +183,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     return await _poll({
       taskId, protocol, capability, baseUrl, apiKey,
       upstreamTaskId,
+      channelConfig,
       pollInterval, maxPollAttempts, initialDelay,
     });
   }
@@ -202,6 +207,7 @@ interface PollInput {
   baseUrl: string;
   apiKey: string;
   upstreamTaskId: string;
+  channelConfig?: Record<string, unknown>;
   pollInterval: number;
   maxPollAttempts: number;
   initialDelay: number;
@@ -210,7 +216,7 @@ interface PollInput {
 async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   const {
     taskId, protocol, capability, baseUrl, apiKey,
-    upstreamTaskId, pollInterval, maxPollAttempts, initialDelay,
+    upstreamTaskId, channelConfig, pollInterval, maxPollAttempts, initialDelay,
   } = input;
 
   // 若协议完全不支持轮询，直接失败，避免无限 pending
@@ -228,7 +234,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     };
   }
 
-  const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId)
+  const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig)
     ?? `${baseUrl}/tasks/${upstreamTaskId}`;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
