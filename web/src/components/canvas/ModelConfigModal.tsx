@@ -490,7 +490,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '  mapping          字段重映射：改名或移动到嵌套路径\n' +
                     '                   {"源字段": "目标.路径"}             移动并重命名\n' +
                     '                   {"ratio": "size"}                  ratio → size\n' +
-                    '                   {"ref_images": "extra_body.image"}  挪到嵌套\n' +
+                    '                   {"refImages": "extra_body.image"}  挪到嵌套\n' +
                     '                   {"images": "images[].image_url"}  数组展开（见下方）\n' +
                     '                   {"待删除字段": null}              删除该字段\n' +
                     '\n' +
@@ -507,10 +507,10 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '  endpoints        端点路径覆盖，可用 key：\n' +
                     '                   image.generations  纯文本生图\n' +
                     '                   image.edits        图生图/编辑（有参考图）\n' +
-                    '                   video.generate     视频生成\n' +
-                    '                   llm.chat           LLM 对话\n' +
-                    '                   audio.speech       语音合成\n' +
-                    '                   例：{"image.generations": "/v1/images/generations"}\n' +
+                    '                   video.generations  视频生成\n' +
+                    '                   poll               异步轮询地址\n' +
+                    '                   例：{"image.generations": "/v1/images/generations",\n' +
+                    '                        "poll": "/v1/tasks/{task_id}"}\n' +
                     '\n' +
                     '  unwrap           解包响应外层 data 包裹（true/false）\n' +
                     '                   当 API 返回 {"data": {...}} 时设为 true\n' +
@@ -524,7 +524,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '  "request": {\n' +
                     '    "mapping": {\n' +
                     '      "ratio": "size",\n' +
-                    '      "ref_images": "extra_body.image"\n' +
+                    '      "refImages": "extra_body.image"\n' +
                     '    },\n' +
                     '    "body_patch": {\n' +
                     '      "response_format": "url"\n' +
@@ -539,7 +539,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '  "protocol": {\n' +
                     '    "endpoints": {\n' +
                     '      "image.generations": "/v1/images/generations",\n' +
-                    '      "image.edits": "/v1/images/edits"\n' +
+                    '      "image.edits": "/v1/images/edits",\n' +
+                    '      "poll": "/v1/tasks/{task_id}"\n' +
                     '    },\n' +
                     '    "unwrap": true\n' +
                     '  }\n' +
