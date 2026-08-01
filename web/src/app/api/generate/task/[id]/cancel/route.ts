@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { cancelTask, getTask } from "@server/crud/task";
-import { bus } from "@server/core/events/bus";
-import { EventType } from "@server/core/events/types";
 import { ok, fail } from "@server/core/response";
 
 export async function POST(
@@ -25,14 +23,6 @@ export async function POST(
 
   await cancelTask(taskId);
 
-  // 发布进程内事件通知 SSE
-  bus.publish(taskId, {
-    type: EventType.TASK_FAILED,
-    taskId,
-    status: "failed",
-    error: "Cancelled",
-    timestamp: new Date().toISOString(),
-  });
-
+  // 状态已写入 SQLite（cancelled 终态），由 TaskWatcher 轮询兜底推送至 SSE
   return Response.json(ok(null, "cancelled"));
 }

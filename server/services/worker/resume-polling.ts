@@ -1,13 +1,12 @@
 // ── 异步任务恢复轮询（Worker 重启后继续轮询已有 upstreamTaskId 的任务） ──
 
 import { prisma } from "@server/core/database/client";
-import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
+import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
-import { bus } from "@server/core/events/bus";
-import { EventType } from "@server/core/events/types";
 import { getChannel } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
+import type { PollResult } from "@server/services/protocols/base";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http";
 import type { GenerationTask } from "@prisma/client";
@@ -113,7 +112,7 @@ async function _doResumePoll(
 
       const raw = await pollResp.json();
       logEvent("resume_poll", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(raw).slice(0, 300) });
-      const parsed = protocol?.parsePollResponse
+      const parsed: PollResult = protocol?.parsePollResponse
         ? protocol.parsePollResponse(raw)
         : { status: "pending", urls: [] };
 
@@ -133,17 +132,7 @@ async function _doResumePoll(
 
         await prisma.generationTask.update({
           where: { id: taskId },
-          data: { status: "completed", resultUrls: JSON.stringify(resultUrls), updatedAt: new Date() },
-        });
-
-        bus.publish(taskId, {
-          type: EventType.TASK_COMPLETED,
-          taskId,
-          status: "completed",
-          resultUrls,
-          resultText: parsed.text,
-          prompt: task.prompt,
-          timestamp: new Date().toISOString(),
+          data: { status: "completed", resultUrls: JSON.stringify(resultUrls), completedAt: new Date(), updatedAt: new Date() },
         });
         return;
       }
@@ -171,9 +160,9 @@ async function _checkCancelled(taskId: string): Promise<boolean> {
   try {
     const t = await prisma.generationTask.findUnique({
       where: { id: taskId },
-      select: { status: true, error: true },
+      select: { status: true },
     });
-    return t?.status === "cancelled" || (t?.status === "failed" && t?.error === "Cancelled");
+    return t?.status === "cancelled";
   } catch {
     return false;
   }
@@ -183,15 +172,7 @@ async function _failTask(taskId: string, error: string): Promise<void> {
   try {
     await prisma.generationTask.update({
       where: { id: taskId },
-      data: { status: "failed", error, updatedAt: new Date() },
-    });
-
-    bus.publish(taskId, {
-      type: EventType.TASK_FAILED,
-      taskId,
-      status: "failed",
-      error,
-      timestamp: new Date().toISOString(),
+      data: { status: "failed", error, completedAt: new Date(), updatedAt: new Date() },
     });
   } catch (err) {
     logger.error({ err, taskId }, "Failed to update failed task");

@@ -12,8 +12,6 @@ import { logEvent, classifyError, summarizeText } from "@server/core/logger/util
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { prisma } from "@server/core/database/client";
-import { bus } from "@server/core/events/bus";
-import { EventType } from "@server/core/events/types";
 import type { GenerationTask } from "@prisma/client";
 
 /**
@@ -104,15 +102,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       await updateTaskStatus(task.id, {
         status: "completed",
         resultText: result.text,
-      });
-
-      bus.publish(task.id, {
-        type: EventType.TASK_COMPLETED,
-        taskId: task.id,
-        status: "completed",
-        resultText: result.text,
-        prompt: task.prompt,
-        timestamp: new Date().toISOString(),
+        completedAt: new Date(),
       });
 
       logEvent("executor", {
@@ -145,17 +135,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       status: "completed",
       resultUrls,
       resultText: result?.text,
-    });
-
-    // 发送进程内事件
-    bus.publish(task.id, {
-      type: EventType.TASK_COMPLETED,
-      taskId: task.id,
-      status: "completed",
-      resultUrls,
-      resultText: result?.text,
-      prompt: task.prompt,
-      timestamp: new Date().toISOString(),
+      completedAt: new Date(),
     });
 
     logEvent("executor", {
@@ -170,14 +150,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     await updateTaskStatus(task.id, {
       status: "failed",
       error: errorMsg,
-    });
-
-    bus.publish(task.id, {
-      type: EventType.TASK_FAILED,
-      taskId: task.id,
-      status: "failed",
-      error: errorMsg,
-      timestamp: new Date().toISOString(),
+      completedAt: new Date(),
     });
 
     logEvent("executor", {

@@ -27,11 +27,12 @@ const configSchema = z.object({
   LOG_LEVEL: z.string().default("INFO"),
 
   // Worker
-  WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(2),
+  WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(1),
   WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(10),
   WORKER_API_TIMEOUT: z.coerce.number().int().positive().default(240),
-  WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(20),
+  WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(5),
   WORKER_ZOMBIE_INTERVAL: z.coerce.number().int().positive().default(60),
+  WORKER_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
 
   // Async polling
   WORKER_ASYNC_POLL_INTERVAL: z.coerce.number().positive().default(3.0),
