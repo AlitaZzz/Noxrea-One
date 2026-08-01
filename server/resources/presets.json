@@ -43,7 +43,7 @@
       "protocol": {
         "endpoints": {
           "image.edits": "/images/generations",
-          "poll": "/videos/{task_id}"          
+          "poll": "/videos/"          
         }
       }
     }
