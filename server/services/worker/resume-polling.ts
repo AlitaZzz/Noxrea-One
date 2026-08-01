@@ -9,7 +9,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http";
-import { parseJsonObject } from "@server/crud/_json";
+import { updateTaskStatus } from "@server/crud/task";
 import type { GenerationTask } from "@prisma/client";
 import type { StopSignal } from "./loop";
 
@@ -48,8 +48,8 @@ async function _doResumePoll(
   let protocol: ReturnType<typeof getProtocol>;
 
   try {
-    const config = parseJsonObject(task.config);
-    const channelId = config.channel_id as number;
+    const config = (task.config as Record<string, unknown>) ?? {};
+    const channelId = config.channelId as number;
     const channel = await getChannel(channelId);
     if (!channel) throw new Error(`Channel ${channelId} not found`);
 
@@ -131,14 +131,10 @@ async function _doResumePoll(
           }
         }
 
-        await prisma.generationTask.update({
-          where: { id: taskId },
-          data: {
-            status: "completed",
-            resultUrls: JSON.stringify(resultUrls),
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          },
+        await updateTaskStatus(taskId, {
+          status: "completed",
+          resultUrls,
+          completedAt: new Date(),
         });
         return;
       }
@@ -177,9 +173,10 @@ async function _checkCancelled(taskId: string): Promise<boolean> {
 
 async function _failTask(taskId: string, error: string): Promise<void> {
   try {
-    await prisma.generationTask.update({
-      where: { id: taskId },
-      data: { status: "failed", error, completedAt: new Date(), updatedAt: new Date() },
+    await updateTaskStatus(taskId, {
+      status: "failed",
+      error,
+      completedAt: new Date(),
     });
   } catch (err) {
     logger.error({ err, taskId }, "Failed to update failed task");
