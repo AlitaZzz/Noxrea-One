@@ -1,5 +1,15 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonObject } from "./_json";
+import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
+
+// ── 反序列化工具 ──
+
+function deserializeAsset(item: { tags: unknown; extraData: unknown }) {
+  return {
+    ...item,
+    tags: parseJsonArray(item.tags),
+    extraData: parseJsonObject(item.extraData),
+  };
+}
 
 // ── Asset CRUD（对应 backend/app/crud/asset.py） ──
 
@@ -89,11 +99,12 @@ export async function getAssets(params: {
     prisma.assetItem.count({ where }),
   ]);
 
-  return { items, total };
+  return { items: items.map(deserializeAsset), total };
 }
 
 export async function getAsset(id: number) {
-  return prisma.assetItem.findUnique({ where: { id } });
+  const item = await prisma.assetItem.findUnique({ where: { id } });
+  return item ? deserializeAsset(item) : null;
 }
 
 export async function createAsset(data: {
@@ -108,7 +119,7 @@ export async function createAsset(data: {
   folderId?: number | null;
   spaceKey?: string;
 }) {
-  return prisma.assetItem.create({
+  const item = await prisma.assetItem.create({
     data: {
       userId: data.userId,
       name: data.name ?? "Untitled",
@@ -122,6 +133,7 @@ export async function createAsset(data: {
       spaceKey: data.spaceKey ?? "personal",
     },
   });
+  return deserializeAsset(item);
 }
 
 export async function createAssetsBatch(
@@ -153,11 +165,12 @@ export async function createAssetsBatch(
 
   await prisma.assetItem.createMany({ data });
 
-  return prisma.assetItem.findMany({
+  const created = await prisma.assetItem.findMany({
     where: { userId: items[0]?.userId },
     orderBy: { id: "desc" },
     take: items.length,
   });
+  return created.map(deserializeAsset);
 }
 
 export async function updateAsset(
@@ -173,10 +186,10 @@ export async function updateAsset(
     width: "width",
     height: "height",
     description: "description",
-    folder_id: "folderId",
-    space_key: "spaceKey",
+    folderId: "folderId",
+    spaceKey: "spaceKey",
     tags: "tags",
-    extra_data: "extraData",
+    extraData: "extraData",
   };
 
   for (const [key, value] of Object.entries(updates)) {
@@ -189,7 +202,8 @@ export async function updateAsset(
     }
   }
 
-  return prisma.assetItem.update({ where: { id }, data });
+  const updated = await prisma.assetItem.update({ where: { id }, data });
+  return deserializeAsset(updated);
 }
 
 export async function updateAssetsBatch(
@@ -201,11 +215,11 @@ export async function updateAssetsBatch(
   if (updates.tags !== undefined) {
     data.tags = stringifyJson(updates.tags);
   }
-  if (updates.extra_data !== undefined) {
-    data.extraData = stringifyJson(updates.extra_data);
+  if (updates.extraData !== undefined) {
+    data.extraData = stringifyJson(updates.extraData);
   }
-  if (updates.folder_id !== undefined) {
-    data.folderId = updates.folder_id;
+  if (updates.folderId !== undefined) {
+    data.folderId = updates.folderId;
   }
 
   const result = await prisma.assetItem.updateMany({

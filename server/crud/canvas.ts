@@ -1,30 +1,43 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson } from "./_json";
+import { stringifyJson, parseJsonObject } from "./_json";
 
 // ── Canvas CRUD（对应 backend/app/crud/canvas.py） ──
 
 export async function getProjects(userId: number) {
-  return prisma.canvasProject.findMany({
+  const projects = await prisma.canvasProject.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
   });
+  return projects.map((p) => ({
+    ...p,
+    canvasData: parseJsonObject(p.canvasData),
+  }));
 }
 
 export async function getProject(id: number) {
-  return prisma.canvasProject.findUnique({ where: { id } });
+  const project = await prisma.canvasProject.findUnique({ where: { id } });
+  if (!project) return null;
+  return {
+    ...project,
+    canvasData: parseJsonObject(project.canvasData),
+  };
 }
 
 export async function createProject(
   userId: number,
   data: { name?: string; canvasData?: Record<string, unknown> }
 ) {
-  return prisma.canvasProject.create({
+  const project = await prisma.canvasProject.create({
     data: {
       userId,
       name: data.name ?? "Untitled",
       canvasData: stringifyJson(data.canvasData ?? {}),
     },
   });
+  return {
+    ...project,
+    canvasData: parseJsonObject(project.canvasData),
+  };
 }
 
 export async function updateProject(
@@ -42,10 +55,14 @@ export async function updateProject(
     updateData.canvasData = stringifyJson(data.canvasData);
   }
 
-  return prisma.canvasProject.update({
+  const updated = await prisma.canvasProject.update({
     where: { id },
     data: updateData,
   });
+  return {
+    ...updated,
+    canvasData: parseJsonObject(updated.canvasData),
+  };
 }
 
 export async function deleteProject(id: number) {

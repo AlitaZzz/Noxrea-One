@@ -1,23 +1,42 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson } from "./_json";
+import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 
 // ── Model Config CRUD（对应 backend/app/crud/model_config.py） ──
+
+// ── 反序列化工具 ──
+
+function deserializeChannel(ch: {
+  config: unknown;
+  models: Array<{ capabilities: unknown; inferredCapabilities: unknown }>;
+}) {
+  return {
+    ...ch,
+    config: ch.config ? parseJsonObject(ch.config) : null,
+    models: ch.models.map((m) => ({
+      ...m,
+      capabilities: parseJsonArray(m.capabilities),
+      inferredCapabilities: parseJsonArray(m.inferredCapabilities),
+    })),
+  };
+}
 
 // Channel
 export async function getChannels(userId?: number) {
   const where = userId ? { userId } : {};
-  return prisma.modelChannel.findMany({
+  const channels = await prisma.modelChannel.findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: { models: true },
   });
+  return channels.map(deserializeChannel);
 }
 
 export async function getChannel(id: number) {
-  return prisma.modelChannel.findUnique({
+  const channel = await prisma.modelChannel.findUnique({
     where: { id },
     include: { models: true },
   });
+  return channel ? deserializeChannel(channel) : null;
 }
 
 export async function createChannel(data: {
@@ -28,7 +47,7 @@ export async function createChannel(data: {
   protocol?: string;
   config?: Record<string, unknown>;
 }) {
-  return prisma.modelChannel.create({
+  const channel = await prisma.modelChannel.create({
     data: {
       userId: data.userId ?? null,
       name: data.name,
@@ -39,6 +58,7 @@ export async function createChannel(data: {
     },
     include: { models: true },
   });
+  return deserializeChannel(channel);
 }
 
 export async function updateChannel(
@@ -62,11 +82,12 @@ export async function updateChannel(
   if (data.config !== undefined)
     updateData.config = stringifyJson(data.config);
 
-  return prisma.modelChannel.update({
+  const channel = await prisma.modelChannel.update({
     where: { id },
     data: updateData,
     include: { models: true },
   });
+  return deserializeChannel(channel);
 }
 
 export async function deleteChannel(id: number) {
@@ -78,7 +99,7 @@ export async function addModel(
   channelId: number,
   data: { name: string; capabilities?: string[]; inferredCapabilities?: string[] }
 ) {
-  return prisma.modelInfo.create({
+  const model = await prisma.modelInfo.create({
     data: {
       channelId,
       name: data.name,
@@ -86,6 +107,11 @@ export async function addModel(
       inferredCapabilities: stringifyJson(data.inferredCapabilities ?? []),
     },
   });
+  return {
+    ...model,
+    capabilities: parseJsonArray(model.capabilities),
+    inferredCapabilities: parseJsonArray(model.inferredCapabilities),
+  };
 }
 
 export async function deleteModel(modelId: number) {
@@ -112,7 +138,12 @@ export async function batchSetModels(
 
     await tx.modelInfo.createMany({ data });
 
-    return tx.modelInfo.findMany({ where: { channelId } });
+    const result = await tx.modelInfo.findMany({ where: { channelId } });
+    return result.map((m) => ({
+      ...m,
+      capabilities: parseJsonArray(m.capabilities),
+      inferredCapabilities: parseJsonArray(m.inferredCapabilities),
+    }));
   });
 }
 
@@ -120,8 +151,13 @@ export async function updateModelCapability(
   modelId: number,
   capabilities: string[]
 ) {
-  return prisma.modelInfo.update({
+  const model = await prisma.modelInfo.update({
     where: { id: modelId },
     data: { capabilities: stringifyJson(capabilities) },
   });
+  return {
+    ...model,
+    capabilities: parseJsonArray(model.capabilities),
+    inferredCapabilities: parseJsonArray(model.inferredCapabilities),
+  };
 }
