@@ -134,7 +134,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
         } catch { /* ignore */ }
       }
 
-      const extractedId = protocol.extractTaskId?.(errData);
+      const extractedId = protocol.extractTaskId?.(errData, channelConfig);
       if (extractedId) {
         // 检查是否已被取消
         if (await _checkCancelled(taskId)) {
@@ -174,7 +174,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   }
 
   // 3. 尝试提取异步 task_id → 进入轮询
-  const upstreamTaskId = protocol.extractTaskId?.(data);
+  const upstreamTaskId = protocol.extractTaskId?.(data, channelConfig);
   if (upstreamTaskId) {
     logEvent("taskmgr", { stage: "async_detected", taskId, upstreamTaskId });
     if (await _checkCancelled(taskId)) {

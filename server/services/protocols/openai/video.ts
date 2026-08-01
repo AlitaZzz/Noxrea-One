@@ -21,6 +21,15 @@ function normalizeStatus(raw: string): string {
   return s;
 }
 
+/** 从 channelConfig.protocol.endpoints.poll 中提取占位符名，如 "/videos/{task_id}" → "task_id" */
+function getPollFieldName(channelConfig?: Record<string, unknown>): string | null {
+  const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+  const pollPath = endpoints?.["poll"];
+  if (!pollPath) return null;
+  const match = pollPath.match(/\{([^}]+)\}/);
+  return match ? match[1] : null;
+}
+
 export class OpenAiVideoProtocol implements ProtocolService {
   readonly name = "openai_video";
 
@@ -61,22 +70,38 @@ export class OpenAiVideoProtocol implements ProtocolService {
 
   // ── 异步任务支持（对齐 OpenAiImageProtocol） ──
 
-  extractTaskId(data: unknown): string | null {
+  extractTaskId(data: unknown, channelConfig?: Record<string, unknown>): string | null {
     if (!data || typeof data !== "object") return null;
     const d = data as Record<string, unknown>;
 
-    // 1. 顶层 task_id
-    if (d.task_id) return String(d.task_id);
+    // 0. 从 poll 路径占位符推导字段名（如 {video_id} → "video_id"），优先匹配
+    const pollField = getPollFieldName(channelConfig);
 
-    // 2. data.task_id 或 data[0].task_id
-    const inner = d.data;
-    if (inner && typeof inner === "object" && !Array.isArray(inner)) {
-      const tid = (inner as Record<string, unknown>).task_id;
-      if (tid) return String(tid);
-    } else if (Array.isArray(inner) && inner.length > 0 && typeof inner[0] === "object") {
-      const tid = (inner[0] as Record<string, unknown>).task_id;
-      if (tid) return String(tid);
+    // 辅助：按指定字段名在顶层和 data 嵌套中查找
+    const findField = (fieldName: string): string | null => {
+      // 顶层
+      if (d[fieldName]) return String(d[fieldName]);
+      // data.{fieldName}
+      const inner = d.data;
+      if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+        const val = (inner as Record<string, unknown>)[fieldName];
+        if (val) return String(val);
+      } else if (Array.isArray(inner) && inner.length > 0 && typeof inner[0] === "object") {
+        const val = (inner[0] as Record<string, unknown>)[fieldName];
+        if (val) return String(val);
+      }
+      return null;
+    };
+
+    // 1. 如果 poll 路径指定了字段名（如 task_id / video_id / request_id），优先使用
+    if (pollField) {
+      const found = findField(pollField);
+      if (found) return found;
     }
+
+    // 2. 兜底：task_id
+    const taskId = findField("task_id");
+    if (taskId) return taskId;
 
     // 3. "id" 字段：仅当 status 为 pending 类时才接受
     const idVal = d.id;
@@ -92,6 +117,15 @@ export class OpenAiVideoProtocol implements ProtocolService {
     const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
     const customPath = endpoints?.["poll"];
     if (customPath) {
+      // 如果已是完整 URL（含协议头），直接替换占位符返回
+      if (/^https?:\/\//.test(customPath)) {
+        return customPath.replace(/\{[^}]+\}/, upstreamTaskId);
+      }
+      // 如果包含 {xxx} 占位符，拼接 baseUrl 后替换
+      if (/\{[^}]+\}/.test(customPath)) {
+        return `${baseUrl}${customPath.replace(/\{[^}]+\}/, upstreamTaskId)}`;
+      }
+      // 无占位符：追加到路径末尾
       return `${baseUrl}${customPath}/${upstreamTaskId}`;
     }
     return `${baseUrl}/tasks/${upstreamTaskId}`;
@@ -138,27 +172,20 @@ export class OpenAiVideoProtocol implements ProtocolService {
     return { status: "pending", urls: [] };
   }
 
-  /** 提取视频 URL */
+  /** 提取视频 URL：扫描 JSON 中所有 https:// 开头的 URL */
   private _extractVideoUrls(payload: Record<string, unknown>): string[] {
+    return this._scanUrls(JSON.stringify(payload));
+  }
+
+  /** 从字符串中提取所有 https:// 和 data: 开头的 URL */
+  private _scanUrls(raw: string): string[] {
     const urls: string[] = [];
-
-    // 标准格式：data[].url
-    const items = payload.data as Array<Record<string, unknown>> | undefined;
-    if (Array.isArray(items)) {
-      for (const item of items) {
-        if (!item || typeof item !== "object") continue;
-        const u = item.url as string | undefined;
-        if (u) urls.push(u);
-      }
+    const re = /(?:https?:\/\/|data:)[^\s"',;}\]<>]+/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(raw)) !== null) {
+      const u = match[0].replace(/[)\]}>.,;!?]+$/, "");
+      if (!urls.includes(u)) urls.push(u);
     }
-
-    // 兜底格式：result.video_url / video_url
-    if (urls.length === 0) {
-      const result = payload.result as Record<string, unknown> | undefined;
-      const videoUrl = result?.video_url ?? payload.video_url;
-      if (typeof videoUrl === "string") urls.push(videoUrl);
-    }
-
     return urls;
   }
 }

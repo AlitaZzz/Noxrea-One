@@ -70,7 +70,7 @@ export interface ProtocolService {
   // ── 异步任务支持 ──
 
   /** 从响应中提取上游异步 task_id（对应 Python extract_task_id） */
-  extractTaskId?(data: unknown): string | null;
+  extractTaskId?(data: unknown, channelConfig?: Record<string, unknown>): string | null;
 
   /** 构造轮询 URL（对应 Python build_poll_url） */
   buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string;
