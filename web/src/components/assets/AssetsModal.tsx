@@ -154,7 +154,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (activeFolderId !== null) { setUncategorizedCount(0); return; }
     if (!open) return;
     let cancelled = false;
-    assetApi.listAssets({ space_key: activeSpace, folder_id: -1, skip: 0, limit: 1 })
+    assetApi.listAssets({ spaceKey: activeSpace, folderId: -1, skip: 0, limit: 1 })
       .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })
       .catch(() => {});
     return () => { cancelled = true; };

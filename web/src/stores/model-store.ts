@@ -17,14 +17,14 @@ interface ModelState {
   initialize: () => Promise<void>;
   findModelParams: (modelName: string, capability: string) => ModelParamConfig | null;
 
-  addChannel: (name: string, base_url: string, api_key: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
-  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "base_url" | "api_key" | "protocol" | "config">>) => Promise<void>;
+  addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
+  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol" | "config">>) => Promise<void>;
   deleteChannel: (id: string) => Promise<void>;
 
-  addModel: (channel_id: string, name: string) => Promise<void>;
-  toggleModelCapability: (channel_id: string, modelId: string, cap: ModelCapability) => Promise<void>;
-  setChannelModels: (channel_id: string, models: { name: string; capabilities: ModelCapability[]; inferred_capabilities?: ModelCapability[] }[]) => Promise<void>;
-  fetchModels: (channel_id: string) => Promise<void>;
+  addModel: (channelId: string, name: string) => Promise<void>;
+  toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
+  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[]; inferredCapabilities?: ModelCapability[] }[]) => Promise<void>;
+  fetchModels: (channelId: string) => Promise<{ success: boolean; error?: string }>;
   fetchPresets: () => Promise<void>;
 }
 
@@ -39,7 +39,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     try {
       const res = await api<ModelChannel[]>("/api/model-config/channels");
       if (res.code === 200 && res.data) {
-        // API 返回 snake_case，与前端 ModelChannel 类型一致，直接使用
+        // API 返回 camelCase，与前端 ModelChannel 类型一致，直接使用
         set({ channels: res.data, initialized: true });
         await get().fetchPresets();
         // 拉取模型参数配置（params + defaults + constraints）
@@ -89,8 +89,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
   },
 
-  addChannel: async (name, base_url, api_key, protocol, config) => {
-    const body: Record<string, unknown> = { name, baseUrl: base_url.replace(/\/$/, ""), apiKey: api_key };
+  addChannel: async (name, baseUrl, apiKey, protocol, config) => {
+    const body: Record<string, unknown> = { name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey };
     if (protocol) body.protocol = protocol;
     if (config) body.config = config;
     const res = await api<{ id: string }>("/api/model-config/channels", {
@@ -98,7 +98,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       body: JSON.stringify(body),
     });
     if (res.code === 200 && res.data) {
-      const channel: ModelChannel = { id: res.data.id, name, base_url: base_url.replace(/\/$/, ""), api_key, models: [] };
+      const channel: ModelChannel = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
       if (protocol) channel.protocol = protocol;
       if (config) channel.config = config;
       set((s) => ({ channels: [...s.channels, channel] }));
@@ -106,11 +106,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   updateChannel: async (id, patch) => {
-    // 前端 snake_case → API body（后端 route 接受 camelCase 后自行映射）
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
-    if (patch.base_url !== undefined) body.baseUrl = patch.base_url;
-    if (patch.api_key !== undefined) body.apiKey = patch.api_key;
+    if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
+    if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
     if (patch.config !== undefined) body.config = patch.config;
     await api(`/api/model-config/channels/${id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -122,35 +121,35 @@ export const useModelStore = create<ModelState>((set, get) => ({
     set((s) => ({ channels: s.channels.filter((c) => c.id !== id) }));
   },
 
-  addModel: async (channel_id, name) => {
-    const res = await api<{ id: string }>(`/api/model-config/channels/${channel_id}/models`, {
+  addModel: async (channelId, name) => {
+    const res = await api<{ id: string }>(`/api/model-config/channels/${channelId}/models`, {
       method: "POST",
       body: JSON.stringify({ name, capabilities: [] }),
     });
     if (res.code === 200 && res.data) {
       set((s) => ({
         channels: s.channels.map((c) =>
-          c.id === channel_id ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
+          c.id === channelId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
         ),
       }));
     }
   },
 
-  toggleModelCapability: async (channel_id, modelId, cap) => {
+  toggleModelCapability: async (channelId, modelId, cap) => {
     const channels = get().channels;
-    const ch = channels.find((c) => c.id === channel_id);
+    const ch = channels.find((c) => c.id === channelId);
     if (!ch) return;
     const model = ch.models.find((m) => m.id === modelId);
     if (!model) return;
     const has = model.capabilities?.includes(cap);
     const caps = has ? (model.capabilities || []).filter((x) => x !== cap) : [...(model.capabilities || []), cap];
 
-    await api(`/api/model-config/channels/${channel_id}/models/${modelId}/capability`, {
+    await api(`/api/model-config/channels/${channelId}/models/${modelId}/capability`, {
       method: "PUT", body: JSON.stringify({ capabilities: caps }),
     });
     set((s) => ({
       channels: s.channels.map((c) =>
-        c.id === channel_id ? {
+        c.id === channelId ? {
           ...c,
           models: c.models.map((m) => (m.id === modelId ? { ...m, capabilities: caps } : m)),
         } : c
@@ -158,8 +157,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }));
   },
 
-  setChannelModels: async (channel_id, models) => {
-    await api(`/api/model-config/channels/${channel_id}/models/set`, {
+  setChannelModels: async (channelId, models) => {
+    await api(`/api/model-config/channels/${channelId}/models/set`, {
       method: "POST", body: JSON.stringify({ models }),
     });
     const reload = await api<ModelChannel[]>("/api/model-config/channels");
@@ -168,20 +167,28 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
   },
 
-  fetchModels: async (channel_id) => {
-    const ch = get().channels.find((c) => c.id === channel_id);
-    if (!ch || !ch.base_url) {
-      if (!ch) throw new Error("Channel not found in store");
-      throw new Error("Channel has no base_url configured. Please update the channel URL.");
+  fetchModels: async (channelId) => {
+      const ch = get().channels.find((c) => c.id === channelId);
+    if (!ch) {
+      console.error("Channel not found in store");
+      return { success: false, error: "Channel not found in store" };
+    }
+    if (!ch.baseUrl) {
+      console.error("Channel has no baseUrl configured");
+      return { success: false, error: "Channel has no baseUrl configured. Please update the channel URL." };
     }
     try {
       const res = await fetch(`${BASE}/api/models/list`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify({ channelId: channel_id }),
+        body: JSON.stringify({ channelId: channelId }),
       });
       const json = await res.json();
-      if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
+      if (json.code !== 200) {
+        const msg = json.msg || `HTTP ${res.status}`;
+        console.error("Fetch models failed:", msg);
+        return { success: false, error: msg };
+      }
       const fetched: { name: string; suggested: ModelCapability[] }[] = (
         json.data || []
       ).map((m: RawModelEntry) => ({
@@ -195,20 +202,24 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const merged: {
         name: string;
         capabilities: ModelCapability[];
-        inferred_capabilities: ModelCapability[];
+        inferredCapabilities: ModelCapability[];
       }[] = [];
       for (const ex of existing) {
         if (fetchedSet.has(ex.name)) {
           const sug = fetched.find((f) => f.name === ex.name)?.suggested || [];
-          merged.push({ name: ex.name, capabilities: ex.capabilities || [], inferred_capabilities: sug });
+          merged.push({ name: ex.name, capabilities: ex.capabilities || [], inferredCapabilities: sug });
         }
       }
       for (const f of fetched) {
         if (!existing.some((e) => e.name === f.name)) {
-          merged.push({ name: f.name, capabilities: [], inferred_capabilities: f.suggested });
+          merged.push({ name: f.name, capabilities: [], inferredCapabilities: f.suggested });
         }
       }
-      await get().setChannelModels(channel_id, merged);
-    } catch (e) { console.error("Fetch models failed:", e); throw e; }
+      await get().setChannelModels(channelId, merged);
+      return { success: true };
+    } catch (e: any) {
+      console.error("Fetch models failed:", e);
+      return { success: false, error: e?.message ?? "Unknown error" };
+    }
   },
 }));

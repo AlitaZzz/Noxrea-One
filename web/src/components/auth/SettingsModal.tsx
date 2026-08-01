@@ -38,7 +38,7 @@ export default function SettingsModal({ open, onClose }: Props) {
     setPrevUserKey(userKey);
     if (userKey !== null && user) {
       setNick(user.username || "");
-      setAvatarUrl(user.avatar_url || "");
+      setAvatarUrl(user.avatarUrl || "");
       setOldPw("");
       setNewPw("");
     }
@@ -52,11 +52,11 @@ export default function SettingsModal({ open, onClose }: Props) {
     try {
       const body: Record<string, string> = {};
       if (nick.trim() && nick.trim() !== user?.username) body.username = nick.trim();
-      if (avatarUrl.trim() && avatarUrl !== user?.avatar_url) body.avatar_url = avatarUrl.trim();
+      if (avatarUrl.trim() && avatarUrl !== user?.avatarUrl) body.avatarUrl = avatarUrl.trim();
       if (newPw.trim()) {
         if (!oldPw) { message.error(t("old.pw.required")); setSaving(false); return; }
         body.password = newPw;
-        body.old_password = oldPw;
+        body.oldPassword = oldPw;
       }
       if (Object.keys(body).length === 0) { message.info(t("nothing.to.save")); setSaving(false); return; }
       const res = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });

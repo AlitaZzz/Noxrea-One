@@ -153,22 +153,22 @@ export interface ModelParamConfig {
   constraints: Record<string, string[]>;
 }
 
-/** 模型信息（与 API 契约一致，snake_case） */
+/** 模型信息（与 API 契约一致，camelCase） */
 export interface ModelInfo {
   id: string;
   name: string;
-  channel_id?: string;
+  channelId?: string;
   capabilities: ModelCapability[];
   // 拉取时推断出的类型（如 image/video），仅作展示提示，不自动勾选进「已启用」
-  inferred_capabilities?: ModelCapability[];
+  inferredCapabilities?: ModelCapability[];
 }
 
-/** 渠道信息（与 API 契约一致，snake_case） */
+/** 渠道信息（与 API 契约一致，camelCase） */
 export interface ModelChannel {
   id: string;
   name: string;
-  base_url: string;
-  api_key: string;
+  baseUrl: string;
+  apiKey: string;
   protocol?: string;
   config?: Record<string, unknown>;
   models: ModelInfo[];

@@ -228,7 +228,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           resolution: (!modelParams || modelParams.params.includes("resolution")) ? resolution : undefined,
           ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
           n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
-          ref_images: refs.length > 0 ? refs : undefined,
+          refImages: refs.length > 0 ? refs : undefined,
           nodeId,
         }),
       });

@@ -32,8 +32,8 @@ interface CanvasData {
 interface ServerProject {
   id: number;
   name: string;
-  canvas_data?: CanvasData;
-  updated_at: string;
+  canvasData?: CanvasData;
+  updatedAt: string;
 }
 
 async function fetchProjects(): Promise<CanvasProject[]> {
@@ -44,14 +44,14 @@ async function fetchProjects(): Promise<CanvasProject[]> {
         id: String(p.id),
         name: p.name,
         createdAt: Date.now(),
-        updatedAt: new Date(p.updated_at).getTime(),
-        viewport: p.canvas_data?.viewport || DEFAULT_VIEWPORT,
-        background: p.canvas_data?.background || DEFAULT_BACKGROUND,
-        theme: p.canvas_data?.theme || DEFAULT_THEME,
-        minimapVisible: p.canvas_data?.minimapVisible ?? true,
-        snapToGrid: p.canvas_data?.snapToGrid || false,
-        nodes: (p.canvas_data?.nodes || []) as AnyNode[],
-        edges: (p.canvas_data?.edges || []) as AnyEdge[],
+        updatedAt: new Date(p.updatedAt).getTime(),
+        viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
+        background: p.canvasData?.background || DEFAULT_BACKGROUND,
+        theme: p.canvasData?.theme || DEFAULT_THEME,
+        minimapVisible: p.canvasData?.minimapVisible ?? true,
+        snapToGrid: p.canvasData?.snapToGrid || false,
+        nodes: (p.canvasData?.nodes || []) as AnyNode[],
+        edges: (p.canvasData?.edges || []) as AnyEdge[],
       }));
     }
   } catch { /* offline or error */ }
@@ -62,7 +62,7 @@ async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
     const res = await api<ServerProject>("/api/canvas/projects", {
       method: "POST",
-      body: JSON.stringify({ name, canvas_data: { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] } }),
+      body: JSON.stringify({ name, canvasData: { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] } }),
     });
     if (res.code === 200 && res.data) {
       return {

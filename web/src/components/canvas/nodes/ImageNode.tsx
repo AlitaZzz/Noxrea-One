@@ -366,7 +366,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         body: JSON.stringify({
           type: "bg_removal",
           prompt: "",
-          ref_images: [src],
+          refImages: [src],
           nodeId: id,
         }),
       });

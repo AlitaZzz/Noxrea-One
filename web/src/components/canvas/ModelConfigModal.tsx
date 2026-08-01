@@ -80,9 +80,9 @@ const ModelRow = memo(function ModelRow({
       <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
       <span className="flex-1 truncate">{m.name}</span>
       {/* 推断类型徽章：勾选与否都显示；未探测到则无徽章 */}
-      {m.inferred_capabilities && m.inferred_capabilities.length > 0 && (
+      {m.inferredCapabilities && m.inferredCapabilities.length > 0 && (
         <span className="flex gap-1 flex-shrink-0 items-center">
-          {m.inferred_capabilities.map((c) => renderCapIcon(c, `inf-${m.id}`))}
+          {m.inferredCapabilities.map((c) => renderCapIcon(c, `inf-${m.id}`))}
         </span>
       )}
     </label>
@@ -179,7 +179,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   const [activeCap, setActiveCap] = useState<ModelCapability>("image");
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [editChannelId, setEditChannelId] = useState<string | null>(null);
-  const [chForm, setChForm] = useState({ name: "", base_url: "", api_key: "", protocol: "openai", config: "" });
+  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [newModelName, setNewModelName] = useState("");
   const [fetching, setFetching] = useState(false);
@@ -200,14 +200,14 @@ export default function ModelConfigModal({ open, onClose }: Props) {
   }
 
   const resetChForm = () => {
-    setChForm({ name: "", base_url: "", api_key: "", protocol: "openai", config: "" });
+    setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
     setShowAdvanced(false);
     setEditChannelId(null);
     setShowAddChannel(false);
   };
 
   const handleSaveChannel = () => {
-    if (!chForm.name.trim() || !chForm.base_url.trim()) return;
+    if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
     // 校验高级设置 JSON 合法性
     let configObj: Record<string, unknown> | undefined = undefined;
     if (chForm.config.trim()) {
@@ -225,13 +225,13 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     }
     if (editChannelId) {
       updateChannel(editChannelId, {
-        name: chForm.name.trim(), base_url: chForm.base_url.trim(), protocol: chForm.protocol,
-        api_key: chForm.api_key.trim() || undefined,
+        name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
+        apiKey: chForm.apiKey.trim() || undefined,
         config: configObj,
       });
       message.success(t("modelConfig.channelUpdated"));
     } else {
-      addChannel(chForm.name.trim(), chForm.base_url.trim(), chForm.api_key.trim(), chForm.protocol, configObj);
+      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol, configObj);
       message.success(t("modelConfig.channelAdded"));
     }
     resetChForm();
@@ -243,7 +243,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     // apiKey 不预填（后端返回的是掩码）：留空表示保持原 key 不变，用户需改时重新输入完整值
     const fmt = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v, null, 2) : "");
     setChForm({ 
-      name: ch.name, base_url: ch.base_url, api_key: "",
+      name: ch.name, baseUrl: ch.baseUrl, apiKey: "",
       protocol: ch.protocol || "openai",
       config: fmt(ch.config),
     });
@@ -255,11 +255,11 @@ export default function ModelConfigModal({ open, onClose }: Props) {
     if (!channelId) return;
     console.log("[UI] handleFetch called with channelId:", channelId);
     setFetching(true);
-    try {
-      await fetchModels(channelId);
+    const result = await fetchModels(channelId);
+    if (result.success) {
       message.success("Models fetched");
-    } catch (err: any) {
-      message.error(err?.message ?? "Failed to fetch models");
+    } else {
+      message.error(result.error ?? "Failed to fetch models");
     }
     setFetching(false);
   };
@@ -400,7 +400,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
-                <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.base_url} onChange={(e) => setChForm((f) => ({ ...f, base_url: e.target.value }))} style={{ width: "100%" }} />
+                <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ width: "100%" }} />
               </div>
             </div>
             <div className="flex flex-col gap-2" style={{ flex: 1 }}>
@@ -431,7 +431,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                       const fmt = (v: unknown) => (v && typeof v === "object" && Object.keys(v as object).length > 0 ? JSON.stringify(v, null, 2) : "");
                       setChForm((f) => ({
                         ...f,
-                        base_url: p.baseUrl ?? "",
+                        baseUrl: p.baseUrl ?? "",
                         protocol: p.protocol || "openai",
                         config: fmt(p.config),
                       }));
@@ -442,8 +442,8 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
             <Input.Password
-              placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.api_key}
-              onChange={(e) => setChForm((f) => ({ ...f, api_key: e.target.value }))}
+              placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
+              onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
               style={{ width: "100%" }}
               iconRender={(v) => (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
@@ -555,7 +555,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
           </div>
           <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("cancel")}</Button>
-            <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.base_url.trim()} style={{ height: 36, fontSize: 13 }}>
+            <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
               {editChannelId ? t("save.changes") : t("add.channel")}
             </Button>
           </div>

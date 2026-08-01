@@ -373,6 +373,7 @@ export default function LoginPage() {
 
   const toggleMode = useCallback(() => {
     setMode((prev) => (prev === "signin" ? "signup" : "signin"));
+    setUsername("");
     setPassword("");
     setErrors({});
   }, []);

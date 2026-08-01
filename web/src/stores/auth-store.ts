@@ -6,7 +6,7 @@ export interface UserInfo {
   id: number;
   username: string;
   role: string;
-  avatar_url: string | null;
+  avatarUrl: string | null;
   theme: string;
   language: string;
 }
@@ -46,9 +46,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
+    const password = rawPassword.trim();
     const res = await api<{ access_token: string; token_type: string; user: UserInfo }>(
       "/api/auth/login",
-      { method: "POST", body: JSON.stringify({ username, password: rawPassword }), skipUnauthorized: true }
+      { method: "POST", body: JSON.stringify({ username, password }), skipUnauthorized: true }
     );
     if (res.code === 200) {
       setToken(res.data.access_token);
@@ -61,9 +62,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
+    const password = rawPassword.trim();
     const res = await api<{ access_token: string; token_type: string; user: UserInfo }>(
       "/api/auth/register",
-      { method: "POST", body: JSON.stringify({ username, password: rawPassword }), skipUnauthorized: true }
+      { method: "POST", body: JSON.stringify({ username, password }), skipUnauthorized: true }
     );
     if (res.code === 200 && res.data.access_token && res.data.user) {
       setToken(res.data.access_token);
@@ -93,7 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = get().user;
     if (!user) return;
     set({ user: { ...user, [key]: value } });
-    // 前端用 avatar_url / language，后端 updateMeSchema 也接受这些字段
+    // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
     api("/api/auth/me", { method: "PUT", body: JSON.stringify({ [key]: value }) }).catch(() => {});
   },
 }));

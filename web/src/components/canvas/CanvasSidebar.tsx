@@ -462,7 +462,7 @@ function AssetsView() {
   useEffect(() => {
     if (activeFolderId !== null) { setUncategorizedCount(0); return; }
     let cancelled = false;
-    assetApi.listAssets({ space_key: "personal", folder_id: -1, skip: 0, limit: 1 })
+    assetApi.listAssets({ spaceKey: "personal", folderId: -1, skip: 0, limit: 1 })
       .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })
       .catch(() => {});
     return () => { cancelled = true; };
