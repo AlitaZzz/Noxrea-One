@@ -47,7 +47,7 @@ web/next-env.d.ts
 prisma/dev.db
 prisma/dev.db-shm
 prisma/dev.db-wal
-prisma/migrations/
+# prisma/migrations/ 已纳入版本控制（共享迁移历史，不在此忽略）
 
 
 
