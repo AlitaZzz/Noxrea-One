@@ -50,7 +50,7 @@ function handleUnauthorized() {
     useAuthStore.getState().logout();
   });
 
-  showGlobalMessage().error("Session expired, please log in again");
+  showGlobalMessage().error("登录已过期，请重新登录");
 
   // 延迟跳转，让 toast 可见
   // TODO: 多 Tab 同步 — 监听 window "storage" 事件，token 被清除时同步 logout

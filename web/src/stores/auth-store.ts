@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setToken(res.data.access_token);
       set({ user: res.data.user });
     } else {
-      throw new Error(res.msg || "Login failed");
+      throw new Error(res.msg || "登录失败");
     }
   },
 

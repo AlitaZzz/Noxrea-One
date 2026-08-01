@@ -101,6 +101,16 @@ const zh: Record<string, string> = {
   "advanced.settings": "高级设置",
   "adv.config": "高级配置",
   "session.expired": "登录已过期，请重新登录",
+  // Login / Register
+  "login.title": "登录", "login.subtitle": "欢迎回到 Noxrea Canvas",
+  "login.signIn": "登录", "login.signUp": "注册",
+  "login.username": "用户名", "login.password": "密码",
+  "login.usernamePlaceholder": "请输入用户名", "login.passwordPlaceholder": "请输入密码",
+  "login.noAccount": "还没有账号？", "login.hasAccount": "已有账号？",
+  "login.registerNow": "立即注册", "login.loginNow": "立即登录",
+  "login.createAccount": "创建账号", "login.createSubtitle": "开启你的创作之旅",
+  "login.accountCreated": "账号创建成功！", "login.welcomeBack": "欢迎回来！",
+  "login.tagline": "AI 驱动的无限创意画布",
   // Assets
   "asset.title": "资产管理",
   "asset.spaces": "资产空间",
@@ -287,6 +297,16 @@ const en: Record<string, string> = {
   "advanced.settings": "Advanced Settings",
   "adv.config": "Advanced Config",
   "session.expired": "Session expired, please log in again",
+  // Login / Register
+  "login.title": "Login", "login.subtitle": "Welcome back to Noxrea Canvas",
+  "login.signIn": "Sign In", "login.signUp": "Sign Up",
+  "login.username": "Username", "login.password": "Password",
+  "login.usernamePlaceholder": "Enter username", "login.passwordPlaceholder": "Enter password",
+  "login.noAccount": "Don't have an account?", "login.hasAccount": "Already have an account?",
+  "login.registerNow": "Register now", "login.loginNow": "Login now",
+  "login.createAccount": "Create Account", "login.createSubtitle": "Start your creative journey",
+  "login.accountCreated": "Account created successfully!", "login.welcomeBack": "Welcome back!",
+  "login.tagline": "AI-powered infinite creative canvas",
   // Assets
   "asset.title": "Asset Management",
   "asset.spaces": "Asset Spaces",
