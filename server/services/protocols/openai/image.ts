@@ -30,8 +30,8 @@ export class OpenAiImageProtocol implements ProtocolService {
     body: Record<string, unknown>
   ): ProtocolRequestResult {
     // 有参考图（图生图/编辑）→ /images/edits，否则 → /images/generations
-    // 检查 mapping 前后两种字段名：ref_images（原始）或 images（mapping 后）
-    const refImages = body.ref_images ?? body.images;
+    // 检查 mapping 前后两种字段名：refImages（原始）或 images（mapping 后）
+    const refImages = body.refImages ?? body.images;
     const hasRef = Array.isArray(refImages) && refImages.length > 0;
     const endpoint = hasRef ? "/images/edits" : "/images/generations";
 
