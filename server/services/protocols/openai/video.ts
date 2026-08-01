@@ -27,10 +27,14 @@ export class OpenAiVideoProtocol implements ProtocolService {
   buildVideoRequest(
     baseUrl: string,
     apiKey: string,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    channelConfig?: Record<string, unknown>
   ): ProtocolRequestResult {
+    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const endpoint = endpoints?.["video.generations"] ?? "/videos";
+
     return {
-      url: `${baseUrl}/videos`,
+      url: `${baseUrl}${endpoint}`,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -84,7 +88,12 @@ export class OpenAiVideoProtocol implements ProtocolService {
     return null;
   }
 
-  buildPollUrl(baseUrl: string, upstreamTaskId: string): string {
+  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string {
+    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const customPath = endpoints?.["poll"];
+    if (customPath) {
+      return `${baseUrl}${customPath.replace("{task_id}", upstreamTaskId)}`;
+    }
     return `${baseUrl}/tasks/${upstreamTaskId}`;
   }
 

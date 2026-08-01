@@ -59,7 +59,7 @@ async function _doResumePoll(
     if (!protocol?.buildPollUrl) throw new Error("Protocol does not support polling");
 
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
-    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId);
+    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, (channel as Record<string, unknown>).config as Record<string, unknown> | undefined);
   } catch (err: unknown) {
     await _failTask(taskId, `Failed to resume polling: ${(err as Error).message}`);
     return;

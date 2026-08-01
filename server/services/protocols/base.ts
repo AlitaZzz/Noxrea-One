@@ -29,14 +29,16 @@ export interface ProtocolService {
   buildImageRequest?(
     baseUrl: string,
     apiKey: string,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    channelConfig?: Record<string, unknown>
   ): ProtocolRequestResult;
 
   /** 构建视频生成请求 */
   buildVideoRequest?(
     baseUrl: string,
     apiKey: string,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    channelConfig?: Record<string, unknown>
   ): ProtocolRequestResult;
 
   /** 构建 LLM 请求 */
@@ -71,7 +73,7 @@ export interface ProtocolService {
   extractTaskId?(data: unknown): string | null;
 
   /** 构造轮询 URL（对应 Python build_poll_url） */
-  buildPollUrl?(baseUrl: string, upstreamTaskId: string): string;
+  buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string;
 
   /** 解析轮询响应（对应 Python parse_poll_response） */
   parsePollResponse?(data: unknown): PollResult;

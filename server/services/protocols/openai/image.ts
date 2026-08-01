@@ -27,13 +27,24 @@ export class OpenAiImageProtocol implements ProtocolService {
   buildImageRequest(
     baseUrl: string,
     apiKey: string,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    channelConfig?: Record<string, unknown>
   ): ProtocolRequestResult {
+    // 解析 channel config 中的 endpoints
+    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+
     // 有参考图（图生图/编辑）→ /images/edits，否则 → /images/generations
     // 检查 mapping 前后两种字段名：refImages（原始）或 images（mapping 后）
     const refImages = body.refImages ?? body.images;
     const hasRef = Array.isArray(refImages) && refImages.length > 0;
-    const endpoint = hasRef ? "/images/edits" : "/images/generations";
+
+    // 渠道自定义 endpoint 优先，否则用默认逻辑
+    let endpoint: string;
+    if (hasRef) {
+      endpoint = endpoints?.["image.edits"] ?? "/images/edits";
+    } else {
+      endpoint = endpoints?.["image.generations"] ?? "/images/generations";
+    }
 
     return {
       url: `${baseUrl}${endpoint}`,
@@ -108,7 +119,12 @@ export class OpenAiImageProtocol implements ProtocolService {
     return null;
   }
 
-  buildPollUrl(baseUrl: string, upstreamTaskId: string): string {
+  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string {
+    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const customPath = endpoints?.["poll"];
+    if (customPath) {
+      return `${baseUrl}${customPath.replace("{task_id}", upstreamTaskId)}`;
+    }
     return `${baseUrl}/tasks/${upstreamTaskId}`;
   }
 

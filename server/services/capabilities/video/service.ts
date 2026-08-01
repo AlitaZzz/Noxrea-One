@@ -41,7 +41,7 @@ class VideoCapabilityService implements CapabilityService {
       taskId: ctx.taskId,
     });
 
-    const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body);
+    const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, ctx.config);
 
     logEvent("capability.video", {
       stage: "dispatch",
@@ -62,6 +62,7 @@ class VideoCapabilityService implements CapabilityService {
       baseUrl: ctx.baseUrl,
       apiKey: ctx.apiKey,
       body,
+      channelConfig: ctx.config,
       buildRequest: () => req,
       parseResponse: (data) => {
         const parsed = protocol.parseVideoResponse
