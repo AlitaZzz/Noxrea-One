@@ -58,7 +58,12 @@ export async function POST(request: NextRequest) {
         url: `/api/files/${frameKey}`,
       })
     );
-  } catch (err: any) {
-    return fail(500, err.message ?? "Frame capture failed");
+  } catch (err: unknown) {
+    const e = err as Error & { code?: string };
+    // ENOENT 通常表示 ffmpeg 未安装或路径错误
+    if (e.code === "ENOENT" || e.message?.includes("ENOENT")) {
+      return fail(500, "ffmpeg not found — please install ffmpeg and set FFMPEG_PATH in .env");
+    }
+    return fail(500, e.message ?? "Frame capture failed");
   }
 }
