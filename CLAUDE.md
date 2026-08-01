@@ -35,8 +35,7 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │
 ├── prisma/
 │   ├── schema.prisma           # 数据建模（9张表，camelCase+@map）
-│   ├── migrations/             # 迁移文件
-│   └── seed.ts                 # 管理员账号初始化
+│   └── migrations/             # 迁移历史（已纳入版本控制）
 │
 ├── server/                     # Node.js 后端业务层（纯 Node，无 Next/React 依赖）
 │   ├── index.ts                # Worker 独立进程入口
@@ -128,9 +127,9 @@ Noxrea-AI-Canvas/               # Monorepo 根
 
 ## 配置与运行
 
-- 复制 `.env.example` 为 `.env`，设置 `JWT_SECRET_KEY` 和 `ADMIN_PASSWORD`
+- 复制 `.env.example` 为 `.env`，设置 `JWT_SECRET_KEY`（必填），`ALLOW_REGISTRATION` 控制是否开放注册
 - 安装依赖：`npm install`（根目录，自动处理 workspace + postinstall prisma generate）
-- 初始化数据库：`npx prisma migrate dev --name init` → `npm run prisma:seed`
+- 初始化数据库：`npx prisma migrate deploy`（应用迁移、创建表结构；开发期可用 `npx prisma migrate dev`）
 - 启动开发：`npm run dev`（同时启动 Next.js + Worker）
 - 单独启动 Worker：`npm run worker`
 - 类型检查：`npm run typecheck`
