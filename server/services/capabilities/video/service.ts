@@ -8,7 +8,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
+import { submitAndWait } from "@server/services/tasks/manager";
 import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
 
@@ -54,24 +54,28 @@ class VideoCapabilityService implements CapabilityService {
       },
     });
 
-    const response = await fetchWithTimeout(req.url, {
-      method: req.method,
-      headers: req.headers,
-      body: JSON.stringify(req.body),
-      timeoutMs: getWorkerApiTimeout(),
+    const result = await submitAndWait({
+      taskId: ctx.taskId,
+      userId: ctx.userId,
+      protocol,
+      capability: "video",
+      baseUrl: ctx.baseUrl,
+      apiKey: ctx.apiKey,
+      body,
+      buildRequest: () => req,
+      parseResponse: (data) => {
+        const parsed = protocol.parseVideoResponse
+          ? protocol.parseVideoResponse(data)
+          : { urls: [] };
+        return parsed;
+      },
     });
 
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      throw new Error(`Video generation failed: ${response.status} ${errBody}`);
+    if (result.status === "failed") {
+      throw new Error(result.error ?? "Video generation failed");
     }
 
-    const data = await response.json();
-    const parsed = protocol.parseVideoResponse
-      ? protocol.parseVideoResponse(data)
-      : { urls: [] };
-
-    return { urls: parsed.urls, text: parsed.text };
+    return { urls: result.urls, text: result.text };
   }
 }
 

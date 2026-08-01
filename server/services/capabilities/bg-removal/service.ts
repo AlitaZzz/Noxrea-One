@@ -22,11 +22,11 @@ class BgRemovalCapabilityService implements CapabilityService {
     const inferenceUrl = cfg.INFERENCE_SERVICE_URL;
     const apiKey = cfg.INFERENCE_SERVICE_API_KEY;
 
-    // 优先用 ref_images[0]（对齐 Python），回退 image_url
-    const refImages = params.ref_images as string[] | undefined;
+    // 优先用 refImages[0]（对齐 Python），回退 image_url
+    const refImages = params.refImages as string[] | undefined;
     const imageUrl = (refImages && refImages.length > 0 ? refImages[0] : null) ?? params.image_url as string | undefined;
     if (!imageUrl) {
-      throw new Error("ref_images[0] or image_url is required for background removal");
+      throw new Error("refImages[0] or image_url is required for background removal");
     }
 
     logEvent("capability.bg_removal", {
