@@ -10,7 +10,7 @@ export const generationResultSchema = z.object({
 
 // 异步提交结果
 export const asyncSubmissionSchema = z.object({
-  upstream_task_id: z.string(),
+  upstreamTaskId: z.string(),
   status: z.string(),
 });
 

@@ -20,11 +20,11 @@ export const loginResponseSchema = z.object({
 
 export const updateMeSchema = z.object({
   username: z.string().min(1).max(50).optional(),
-  avatar_url: z.string().max(500).optional(),
+  avatarUrl: z.string().max(500).optional(),
   theme: z.string().max(10).optional(),
   language: z.string().max(10).optional(),
   password: z.string().min(6).optional(),
-  old_password: z.string().optional(),
+  oldPassword: z.string().optional(),
 });
 
 export type LoginRequest = z.infer<typeof loginRequestSchema>;

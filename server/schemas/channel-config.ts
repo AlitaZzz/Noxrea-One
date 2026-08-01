@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { toISO } from "./common";
 
 // ── Channel Config schemas（对应 backend/app/schemas/channel_config.py） ──
 
@@ -38,50 +37,20 @@ export type RequestConfig = z.infer<typeof requestConfigSchema>;
 export const modelInfoCreateSchema = z.object({
   name: z.string().min(1).max(200),
   capabilities: z.array(z.string()).optional(),
-  inferred_capabilities: z.array(z.string()).optional(),
+  inferredCapabilities: z.array(z.string()).optional(),
 });
 
 export const modelInfoOutSchema = z.object({
   id: z.number(),
-  channel_id: z.number(),
+  channelId: z.number(),
   name: z.string(),
   capabilities: z.array(z.string()),
-  inferred_capabilities: z.array(z.string()),
-  created_at: z.string(),
+  inferredCapabilities: z.array(z.string()),
+  createdAt: z.string(),
 });
 
 export type ModelInfoCreate = z.infer<typeof modelInfoCreateSchema>;
 export type ModelInfoOut = z.infer<typeof modelInfoOutSchema>;
-
-/** Prisma camelCase → API snake_case（兼容两种格式） */
-export function toModelInfoOut(model: {
-  id: number;
-  channelId?: number;
-  channel_id?: number;
-  name: string;
-  capabilities: unknown;
-  inferredCapabilities?: unknown;
-  inferred_capabilities?: unknown;
-  createdAt?: Date | string;
-  created_at?: Date | string;
-}): ModelInfoOut {
-  const parseArr = (raw: unknown): string[] => {
-    if (typeof raw === "string") {
-      try { return JSON.parse(raw); } catch { return []; }
-    }
-    if (Array.isArray(raw)) return raw as string[];
-    return [];
-  };
-
-  return {
-    id: model.id,
-    channel_id: model.channelId ?? model.channel_id ?? 0,
-    name: model.name,
-    capabilities: parseArr(model.capabilities),
-    inferred_capabilities: parseArr(model.inferredCapabilities ?? model.inferred_capabilities),
-    created_at: toISO(model.createdAt ?? model.created_at) ?? "",
-  };
-}
 
 // ── 批量设置模型 ──
 
@@ -90,7 +59,7 @@ export const batchSetModelsSchema = z.object({
     z.object({
       name: z.string().min(1).max(200),
       capabilities: z.array(z.string()).optional(),
-      inferred_capabilities: z.array(z.string()).optional(),
+      inferredCapabilities: z.array(z.string()).optional(),
     })
   ),
 });
