@@ -50,7 +50,10 @@ function handleUnauthorized() {
     useAuthStore.getState().logout();
   });
 
-  showGlobalMessage().error("登录已过期，请重新登录");
+  // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不弹提示，避免重复提示
+  if (window.location.pathname !== "/login") {
+    showGlobalMessage().error("登录已过期，请重新登录");
+  }
 
   // 延迟跳转，让 toast 可见
   // TODO: 多 Tab 同步 — 监听 window "storage" 事件，token 被清除时同步 logout
@@ -72,18 +75,19 @@ export function checkUnauthorized(status: number): boolean {
 
 export async function api<T = unknown>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & { skipUnauthorized?: boolean } = {}
 ): Promise<{ code: number; data: T; msg: string }> {
+  const { skipUnauthorized, ...fetchOptions } = options;
   try {
     const res = await fetch(`${BASE}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
         ...getTokenHeader(),
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
     });
-    if (checkUnauthorized(res.status)) throw new UnauthorizedError();
+    if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
     return await res.json();
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
@@ -91,14 +95,14 @@ export async function api<T = unknown>(
   }
 }
 
-export async function apiUpload<T = unknown>(path: string, formData: FormData): Promise<{ code: number; data: T; msg: string }> {
+export async function apiUpload<T = unknown>(path: string, formData: FormData, skipUnauthorized = false): Promise<{ code: number; data: T; msg: string }> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
       headers: getTokenHeader(),
       body: formData,
     });
-    if (checkUnauthorized(res.status)) throw new UnauthorizedError();
+    if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
     return await res.json();
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;

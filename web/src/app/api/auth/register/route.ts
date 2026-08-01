@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   // 限流
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   if (!getRegisterRateLimiter().check(`register:${ip}`)) {
-    return fail(429, "Too many registration attempts. Please try again later.");
+    return fail(429, "注册尝试过于频繁，请稍后再试。");
   }
 
   // 解析
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   // 查重
   const existing = await getUserByUsername(username);
   if (existing) {
-    return fail(409, "Username already exists");
+    return fail(409, "用户名已存在");
   }
 
   // 哈希密码

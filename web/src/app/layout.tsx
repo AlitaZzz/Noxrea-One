@@ -16,8 +16,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const initialLang = "zh";
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={initialLang} suppressHydrationWarning>
       <body className="m-0 p-0 overflow-hidden">
         <AppProviders>{children}</AppProviders>
       </body>
