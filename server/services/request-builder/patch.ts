@@ -6,12 +6,9 @@
  */
 export function applyPatch(
   params: Record<string, unknown>,
-  channelConfig: Record<string, unknown>
+  bodyPatch: Record<string, unknown>
 ): Record<string, unknown> {
-  const extraBody = channelConfig.extra_body as Record<string, unknown> | undefined;
-  if (!extraBody) return params;
-
-  return deepMerge(params, extraBody);
+  return deepMerge(params, bodyPatch);
 }
 
 function deepMerge(
