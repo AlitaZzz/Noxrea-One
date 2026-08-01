@@ -1,5 +1,5 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson } from "./_json";
+import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 import crypto from "crypto";
 import type { GenerationTask } from "@prisma/client";
 
@@ -18,7 +18,7 @@ export async function createTask(data: {
 }) {
   const id = crypto.randomUUID();
 
-  return prisma.generationTask.create({
+  const task = await prisma.generationTask.create({
     data: {
       id,
       userId: data.userId,
@@ -32,10 +32,19 @@ export async function createTask(data: {
       nodeId: data.nodeId ?? "",
     },
   });
+  return deserializeTask(task);
 }
 
 export async function getTask(id: string) {
-  return prisma.generationTask.findUnique({ where: { id } });
+  const task = await prisma.generationTask.findUnique({ where: { id } });
+  return task ? deserializeTask(task) : null;
+}
+
+export async function getTasksByIds(ids: string[]) {
+  const tasks = await prisma.generationTask.findMany({
+    where: { id: { in: ids } },
+  });
+  return tasks.map(deserializeTask);
 }
 
 export async function getTasksByUser(
@@ -43,12 +52,13 @@ export async function getTasksByUser(
   skip = 0,
   limit = 20
 ) {
-  return prisma.generationTask.findMany({
+  const tasks = await prisma.generationTask.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     skip,
     take: limit,
   });
+  return tasks.map(deserializeTask);
 }
 
 export async function updateTaskStatus(
@@ -92,10 +102,11 @@ export async function updateTaskStatus(
     updateData.completedAt = data.completedAt;
   }
 
-  return prisma.generationTask.update({
+  const task = await prisma.generationTask.update({
     where: { id },
     data: updateData,
   });
+  return deserializeTask(task);
 }
 
 // ── 原子领取任务（对应 claim_pending_tasks） ──
@@ -129,9 +140,10 @@ export async function claimPendingTasks(limit = 10) {
     // 3. 返回完整任务
     if (claimed.length === 0) return [];
 
-    return tx.generationTask.findMany({
+    const tasks = await tx.generationTask.findMany({
       where: { id: { in: claimed } },
     });
+    return tasks.map(deserializeTask);
   });
 }
 
@@ -210,7 +222,7 @@ export async function recoverProcessingTasks(): Promise<{
     });
   }
 
-  return { recovered: syncIds.length, asyncTasks };
+  return { recovered: syncIds.length, asyncTasks: asyncTasks.map(deserializeTask) };
 }
 
 // ── 取消任务 ──
@@ -226,4 +238,15 @@ export async function cancelTask(id: string) {
       updatedAt: new Date(),
     },
   });
+}
+
+// ── 反序列化工具：将 SQLite JSON 字符串解析为对象 ──
+
+function deserializeTask(task: GenerationTask) {
+  return {
+    ...task,
+    config: parseJsonObject(task.config),
+    refImages: parseJsonArray(task.refImages),
+    resultUrls: parseJsonArray(task.resultUrls),
+  };
 }
