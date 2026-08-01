@@ -8,11 +8,6 @@ import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
 import { updateTaskStatus } from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
 
-// ── 异步轮询默认参数 ─────────────────────────────────────────
-const DEFAULT_POLL_INTERVAL = 3;
-const DEFAULT_MAX_ATTEMPTS = 60;
-const DEFAULT_INITIAL_DELAY = 0;
-
 // ── 导出类型 ──────────────────────────────────────────────────
 
 export interface SubmitAndWaitResult {
@@ -101,15 +96,16 @@ export async function pollUntilResult<T>(
  * 4. 都没有 → 失败
  */
 export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAndWaitResult> {
+  const cfg = getConfig();
   const {
     taskId,
     protocol,
     capability,
     baseUrl,
     apiKey,
-    pollInterval = DEFAULT_POLL_INTERVAL,
-    maxPollAttempts = DEFAULT_MAX_ATTEMPTS,
-    initialDelay = DEFAULT_INITIAL_DELAY,
+    pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL,
+    maxPollAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
+    initialDelay = cfg.WORKER_ASYNC_POLL_INITIAL_DELAY,
   } = input;
 
   // 1. 提交上游请求
