@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* ===== Animations ===== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ===== Dark theme (default) ===== */
 :root, [data-theme="dark"] {
   --canvas-app-bg: #000000;
