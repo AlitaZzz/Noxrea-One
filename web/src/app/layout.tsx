@@ -4,8 +4,10 @@ import type { Metadata } from "next";
 
 import { AppProviders } from "@/providers/app-providers";
 
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
+
 export const metadata: Metadata = {
-  title: "Noxrea Canvas — Infinite AI Canvas",
+  title: APP_NAME,
   description: "AI-powered infinite canvas workspace",
 };
 
