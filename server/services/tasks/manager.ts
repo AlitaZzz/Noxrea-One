@@ -5,6 +5,7 @@ import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { prisma } from "@server/core/database/client";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
+import { updateTaskStatus } from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
 
 // ── 异步轮询默认参数 ─────────────────────────────────────────
@@ -248,10 +249,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
 
   // 保存 upstream_task_id
   try {
-    await prisma.generationTask.update({
-      where: { id: taskId },
-      data: { upstreamTaskId },
-    });
+    await updateTaskStatus(taskId, { status: "processing", upstreamTaskId });
   } catch { /* non-critical */ }
 
   // 初始等待
