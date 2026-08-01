@@ -92,7 +92,7 @@ export class OpenAiVideoProtocol implements ProtocolService {
     const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
     const customPath = endpoints?.["poll"];
     if (customPath) {
-      return `${baseUrl}${customPath.replace("{task_id}", upstreamTaskId)}`;
+      return `${baseUrl}${customPath}/${upstreamTaskId}`;
     }
     return `${baseUrl}/tasks/${upstreamTaskId}`;
   }

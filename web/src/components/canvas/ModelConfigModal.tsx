@@ -508,9 +508,9 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '                   image.generations  纯文本生图\n' +
                     '                   image.edits        图生图/编辑（有参考图）\n' +
                     '                   video.generations  视频生成\n' +
-                    '                   poll               异步轮询地址\n' +
+                    '                   poll               异步轮询路径（自动拼接 taskId）\n' +
                     '                   例：{"image.generations": "/v1/images/generations",\n' +
-                    '                        "poll": "/v1/tasks/{task_id}"}\n' +
+                    '                        "poll": "/v1/tasks"}\n' +
                     '\n' +
                     '  unwrap           解包响应外层 data 包裹（true/false）\n' +
                     '                   当 API 返回 {"data": {...}} 时设为 true\n' +
@@ -540,7 +540,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '    "endpoints": {\n' +
                     '      "image.generations": "/v1/images/generations",\n' +
                     '      "image.edits": "/v1/images/edits",\n' +
-                    '      "poll": "/v1/tasks/{task_id}"\n' +
+                    '      "poll": "/v1/tasks"\n' +
                     '    },\n' +
                     '    "unwrap": true\n' +
                     '  }\n' +
