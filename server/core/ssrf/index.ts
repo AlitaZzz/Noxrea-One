@@ -12,13 +12,52 @@ const PRIVATE_IP_PREFIXES = [
   "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
   "192.0.0.", "192.0.2.", "192.88.99.", "192.168.",
   "198.18.", "198.19.", "198.51.100.", "203.0.113.",
-  "::1", "fc", "fd", "fe80",
 ];
 
-function isPrivateIp(ip: string): boolean {
+// IPv6 私有地址前缀（精确匹配）
+const PRIVATE_IPV6_PREFIXES = [
+  "::1",          // loopback
+  "fc00:",        // Unique Local Address (fc00::/7)
+  "fd",           // ULA 前缀的一部分
+  "fe80:",        // Link-local (fe80::/10)
+  "fe90:", "fea0:", "feb0:", // fe80::/10 范围内的变体
+];
+
+// IPv6 ULA 精确范围: fc00::/7（fc 或 fd 开头）
+const IPV6_ULA_FIRST_BYTE = new Set(["fc", "fd"]);
+
+function isPrivateIPv6(ip: string): boolean {
   if (ip === "::1") return true;
+  const lower = ip.toLowerCase();
+
+  // fc00::/7 ULA 范围（fc 或 fd 开头，后面跟 00-ff）
+  const firstTwo = lower.slice(0, 2);
+  if (IPV6_ULA_FIRST_BYTE.has(firstTwo)) {
+    // 必须后面跟着冒号分隔的组，避免误匹配
+    const rest = lower.slice(2);
+    return rest.startsWith("0") || rest.startsWith("1") ||
+           rest.startsWith("2") || rest.startsWith("3") ||
+           rest.startsWith("4") || rest.startsWith("5") ||
+           rest.startsWith("6") || rest.startsWith("7") ||
+           rest.startsWith("8") || rest.startsWith("9") ||
+           rest.startsWith("a") || rest.startsWith("b") ||
+           rest.startsWith("c") || rest.startsWith("d") ||
+           rest.startsWith("e") || rest.startsWith("f") ||
+           rest.startsWith(":");
+  }
+
+  // fe80::/10 link-local
+  if (lower.startsWith("fe8") || lower.startsWith("fe9") ||
+      lower.startsWith("fea") || lower.startsWith("feb")) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPrivateIp(ip: string): boolean {
   if (net.isIPv4(ip)) return PRIVATE_IP_PREFIXES.some((p) => ip.startsWith(p));
-  if (net.isIPv6(ip)) return PRIVATE_IP_PREFIXES.some((p) => ip.toLowerCase().startsWith(p));
+  if (net.isIPv6(ip)) return isPrivateIPv6(ip);
   return false;
 }
 

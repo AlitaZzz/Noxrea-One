@@ -6,12 +6,31 @@ import path from "path";
 import { localStorage } from "@server/services/storage/backends/local";
 
 /**
+ * 路径穿越防护：校验用户文件访问是否在允许的目录内。
+ */
+function isPathWithin(base: string, target: string): boolean {
+  const resolvedBase = path.resolve(base).replace(/\\/g, "/");
+  const resolvedTarget = path.resolve(target).replace(/\\/g, "/");
+  return resolvedTarget.startsWith(resolvedBase + "/") || resolvedTarget === resolvedBase;
+}
+
+/**
  * 将存储路径转为完整的 data: URL（base64）。
  * 对应 Python read_self_file + base64 encode。
  */
 async function readSelfFile(relPath: string, userId: number): Promise<string | null> {
   try {
     const fullPath = path.resolve(localStorage.baseDir, relPath);
+
+    // 路径穿越防护
+    if (!isPathWithin(localStorage.baseDir, fullPath)) {
+      logEvent("resolver.reference", {
+        stage: "path_traversal_blocked",
+        path: relPath.slice(0, 80),
+      });
+      return null;
+    }
+
     const data = await fs.readFile(fullPath);
     const ext = path.extname(relPath).toLowerCase();
     const mimeMap: Record<string, string> = {

@@ -9,10 +9,6 @@ export interface TimeoutPreset {
   pool: number;
 }
 
-function toMs(seconds: number): number {
-  return Math.round(seconds * 1000);
-}
-
 export function getTimeoutPreset(scene: "dl" | "poll" | "api" | "async"): TimeoutPreset {
   const cfg = getConfig();
 
@@ -81,7 +77,29 @@ export async function fetchWithTimeout(
     // 合并已有 signal
     const existingSignal = fetchOptions.signal;
     if (existingSignal) {
-      existingSignal.addEventListener("abort", () => controller.abort());
+      const onExternalAbort = () => controller.abort();
+      existingSignal.addEventListener("abort", onExternalAbort, { once: true });
+      // 清理：超时后移除外部信号监听，防止内存泄漏
+      const cleanup = () => {
+        existingSignal.removeEventListener("abort", onExternalAbort);
+      };
+      const originalTimer = setTimeout(() => {
+        cleanup();
+        controller.abort();
+      }, timeoutMs);
+
+      fetchOptions.signal = signal;
+
+      try {
+        const response = await fetch(url, fetchOptions);
+        clearTimeout(originalTimer);
+        cleanup();
+        return response;
+      } catch (err) {
+        clearTimeout(originalTimer);
+        cleanup();
+        throw err;
+      }
     }
 
     fetchOptions.signal = signal;

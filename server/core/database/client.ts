@@ -31,6 +31,17 @@ export async function applyPragmas(): Promise<void> {
   if (!dbUrl.startsWith("file:")) return; // 非 SQLite 跳过
 
   const dbTimeout = parseInt(process.env.DB_TIMEOUT ?? "30", 10);
+  // 防止 NaN 导致无效 SQL
+  if (isNaN(dbTimeout) || dbTimeout <= 0) {
+    // fallback 到默认 30 秒
+    try {
+      await prisma.$queryRawUnsafe("PRAGMA journal_mode=WAL");
+      await prisma.$queryRawUnsafe("PRAGMA busy_timeout=30000");
+    } catch {
+      // WAL/busy_timeout 失败不阻塞启动
+    }
+    return;
+  }
 
   try {
     // PRAGMA 语句在 SQLite 中会返回结果，需要用 $queryRawUnsafe
