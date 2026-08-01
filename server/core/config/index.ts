@@ -3,7 +3,6 @@ import { z } from "zod";
 // 占位符密钥（对应 Python _PLACEHOLDER_SECRETS）
 const PLACEHOLDER_SECRETS: Record<string, string> = {
   JWT_SECRET_KEY: "change-me-to-a-random-secret",
-  ADMIN_PASSWORD: "change-me-to-a-strong-password",
 };
 
 // ── Zod schema 定义 ──
@@ -17,10 +16,6 @@ const configSchema = z.object({
   JWT_SECRET_KEY: z.string().min(1, "JWT_SECRET_KEY is required"),
   JWT_ALGORITHM: z.string().default("HS256"),
   JWT_EXPIRE_MINUTES: z.coerce.number().int().positive().default(1440),
-
-  // Admin
-  ADMIN_USERNAME: z.string().default("admin"),
-  ADMIN_PASSWORD: z.string().min(1, "ADMIN_PASSWORD is required"),
 
   // App
   APP_NAME: z.string().default("Noxrea AI Canvas"),
