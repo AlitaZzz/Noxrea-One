@@ -6,6 +6,7 @@ import { workerLoop } from "@server/services/worker/loop";
 import { prisma } from "@server/core/database/client";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
+import { getConfig } from "@server/core/config";
 
 async function main(): Promise<void> {
   logEvent("worker", { stage: "starting" });
@@ -22,7 +23,8 @@ async function main(): Promise<void> {
 
     stopSignal.stopped = true;
 
-    await new Promise((r) => setTimeout(r, 15_000));
+    // 等待 Worker 排空在途任务
+    await new Promise((r) => setTimeout(r, getConfig().WORKER_DRAIN_TIMEOUT * 1000));
     await prisma.$disconnect();
     logEvent("worker", { stage: "shutdown_complete" });
     process.exit(0);

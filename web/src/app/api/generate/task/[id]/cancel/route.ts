@@ -16,8 +16,8 @@ export async function POST(
   if (!task) return fail(404, "Task not found");
   if (task.userId !== auth.user.id) return fail(403, "Access denied");
 
-  // 终态检查（对齐 Python）
-  if (task.status === "completed" || task.status === "failed") {
+  // 终态检查（对齐 Python，包含 cancelled 防止重复取消）
+  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
     return fail(400, "Task already finished");
   }
 
