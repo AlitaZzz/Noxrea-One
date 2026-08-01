@@ -2,10 +2,31 @@
 
 import path from "path";
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import { spawn } from "child_process";
 import { localStorage } from "./backends/local";
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
+
+/** 解析 ffmpeg 路径：相对路径 → 项目根目录下的绝对路径 */
+function resolveFfmpegPath(configPath: string): string {
+  if (path.isAbsolute(configPath)) return configPath;
+  // Windows 上 spawn 需要 .exe 扩展名
+  const candidates = process.platform === "win32"
+    ? [configPath, `${configPath}.exe`]
+    : [configPath];
+  // 向上查找项目根目录（包含 package.json 和 server/）
+  let dir = process.cwd();
+  for (let i = 0; i < 3; i++) {
+    for (const c of candidates) {
+      const candidate = path.resolve(dir, c);
+      if (existsSync(candidate)) return candidate;
+    }
+    dir = path.resolve(dir, "..");
+  }
+  // fallback：当前 cwd 下的相对路径
+  return path.resolve(process.cwd(), candidates[candidates.length - 1]);
+}
 
 /**
  * 图片等比缩放 WebP 缓存
@@ -60,7 +81,7 @@ export async function captureVideoFrame(
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   return new Promise((resolve, reject) => {
-    const ffmpegBin = getConfig().FFMPEG_PATH;
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
     const ffmpeg = spawn(ffmpegBin, [
       "-ss", String(timeSeconds),
       "-i", videoPath,
@@ -83,11 +104,26 @@ export async function captureVideoFrame(
         });
         resolve();
       } else {
-        reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`));
+        const errMsg = `ffmpeg exited with code ${code}: ${stderr.slice(-200)}`;
+        logEvent("media", {
+          stage: "capture_frame_failed",
+          video: path.basename(videoPath),
+          exitCode: code,
+          stderr: stderr.slice(-200),
+        });
+        reject(new Error(errMsg));
       }
     });
 
-    ffmpeg.on("error", reject);
+    ffmpeg.on("error", (err) => {
+      logEvent("media", {
+        stage: "capture_frame_spawn_failed",
+        video: path.basename(videoPath),
+        error: err.message,
+        ffmpegBin,
+      });
+      reject(err);
+    });
   });
 }
 
