@@ -1,5 +1,6 @@
 import { prisma } from "@server/core/database/client";
 import { logger } from "@server/core/logger";
+import { parseJsonArray } from "@server/crud/_json";
 
 // ── TaskWatcher：跨进程任务状态同步 ──
 
@@ -92,7 +93,6 @@ export class TaskWatcher {
           resultUrls: true,
           resultText: true,
           error: true,
-          config: true,
           prompt: true,
         },
       });
@@ -103,14 +103,9 @@ export class TaskWatcher {
 
         const prompt: string | undefined = task.prompt || undefined;
 
-        let resultUrls: string[] | undefined;
-        try {
-          resultUrls = task.resultUrls
-            ? JSON.parse(task.resultUrls)
-            : undefined;
-        } catch {
-          // ignore
-        }
+        const resultUrls: string[] | undefined = task.resultUrls
+          ? parseJsonArray(task.resultUrls)
+          : undefined;
 
         const state: TerminalTaskState = {
           taskId: task.id,
