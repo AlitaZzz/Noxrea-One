@@ -157,11 +157,12 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
 
     data = await response.json();
     logger.debug({ taskId, keys: Object.keys(data as object) }, "upstream response");
-  } catch (err: any) {
-    if (err.name === "TimeoutError" || err.code === "UND_ERR_HEADERS_TIMEOUT") {
+  } catch (err: unknown) {
+    const e = err as Error & { code?: string };
+    if (e.name === "TimeoutError" || e.code === "UND_ERR_HEADERS_TIMEOUT") {
       return { status: "failed", urls: [], error: "API call timed out" };
     }
-    return { status: "failed", urls: [], error: err.message?.slice(0, 500) ?? "Unknown error" };
+    return { status: "failed", urls: [], error: e.message?.slice(0, 500) ?? "Unknown error" };
   }
 
   // 2. 尝试同步提取结果
@@ -214,6 +215,21 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     taskId, protocol, capability, baseUrl, apiKey,
     upstreamTaskId, pollInterval, maxPollAttempts, initialDelay,
   } = input;
+
+  // 若协议完全不支持轮询，直接失败，避免无限 pending
+  if (!protocol.buildPollUrl && !protocol.parsePollResponse) {
+    logEvent("taskmgr", {
+      stage: "poll_no_support",
+      taskId,
+      upstreamTaskId,
+      protocol: (protocol as unknown as Record<string, unknown>).name,
+    });
+    return {
+      status: "failed",
+      urls: [],
+      error: `Protocol does not support polling for upstream task ${upstreamTaskId}`,
+    };
+  }
 
   const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId)
     ?? `${baseUrl}/tasks/${upstreamTaskId}`;
@@ -299,11 +315,12 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       }
 
       // pending: continue
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as Error & { code?: string; name?: string };
       logger.warn({
         taskId,
         attempt: attempt + 1,
-        err: err.message?.slice(0, 120) || err.code || err.name || String(err).slice(0, 120),
+        err: e.message?.slice(0, 120) || e.code || e.name || String(err).slice(0, 120),
       }, "poll error");
     }
   }

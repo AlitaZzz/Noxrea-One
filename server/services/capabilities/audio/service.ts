@@ -10,7 +10,12 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
 import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
+import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
+import { buildStorageKey } from "@server/services/storage/service";
+import { persistFileObject } from "@server/services/storage/persist";
 import type { GenerationResult } from "@server/schemas/result";
+import path from "path";
+import fs from "fs/promises";
 
 class AudioCapabilityService implements CapabilityService {
   readonly name = "audio";
@@ -66,12 +71,37 @@ class AudioCapabilityService implements CapabilityService {
       throw new Error(`Audio generation failed: ${response.status} ${errBody}`);
     }
 
-    // TTS 可能返回二进制数据
+    // TTS 可能返回二进制数据 — 直接落盘为本地文件
     const contentType = response.headers.get("content-type") ?? "";
     if (contentType.includes("audio") || contentType.includes("octet-stream")) {
-      // 二进制数据由 executor 处理写入磁盘
       const blob = await response.blob();
-      return { urls: [], text: undefined };
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      const hash = computeBufferHash(buffer);
+      const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
+      const fileExt = normalizeExt(sniffedExt) || ".mp3";
+      const storageKey = buildStorageKey(ctx.userId, hash, fileExt);
+      const targetPath = path.resolve("uploads", storageKey);
+
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, buffer);
+
+      await persistFileObject({
+        userId: ctx.userId,
+        hash,
+        size: buffer.length,
+        mimeType: mime,
+        ext: fileExt,
+        source: "ai_generated",
+      });
+
+      logEvent("capability.audio", {
+        stage: "binary_saved",
+        taskId: ctx.taskId,
+        key: storageKey,
+        size: buffer.length,
+      });
+
+      return { urls: [storageKey], text: undefined };
     }
 
     const data = await response.json();
