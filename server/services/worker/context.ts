@@ -1,6 +1,5 @@
 // ── Worker 上下文（对应 backend/app/services/worker/context.py） ──
 
-import { getConfig } from "@server/core/config";
 import type { GenerationTask } from "@prisma/client";
 
 export interface WorkerContext {
@@ -9,22 +8,13 @@ export interface WorkerContext {
   refImages: string[];
 }
 
-/** 从 Prisma GenerationTask 构建 WorkerContext */
+/** 从 Prisma GenerationTask 构建 WorkerContext
+ *  CRUD 层已通过 deserializeTask 反序列化 JSON 字段，这里直接使用即可。
+ */
 export function buildContext(task: GenerationTask): WorkerContext {
-  let config: Record<string, unknown> = {};
-  let refImages: string[] = [];
-
-  try {
-    config = task.config ? JSON.parse(task.config) : {};
-  } catch {
-    // ignore
-  }
-
-  try {
-    refImages = task.refImages ? JSON.parse(task.refImages) : [];
-  } catch {
-    // ignore
-  }
-
-  return { task, config, refImages };
+  return {
+    task,
+    config: (task.config as Record<string, unknown>) ?? {},
+    refImages: (task.refImages as string[]) ?? [],
+  };
 }
