@@ -11,7 +11,7 @@ const DATA_URL_RE = /^data:[^;]*;base64,[A-Za-z0-9+/=]+$/;
  * 脱敏字符串中的 base64 内容。
  * 检测 data:...;base64,... 模式并替换为占位符。
  */
-function sanitizeString(v: string, maxLen = 200): string {
+function sanitizeString(v: string): string {
   // 如果整串是 data URL → 占位
   if (DATA_URL_RE.test(v)) {
     return `[base64 data, ${v.length} chars]`;
@@ -23,10 +23,6 @@ function sanitizeString(v: string, maxLen = 200): string {
       /data:[^;]*;base64,[A-Za-z0-9+/=]+/g,
       (match) => `[base64 data, ${match.length} chars]`
     );
-  }
-  // 长文本截断
-  if (v.length > maxLen) {
-    return v.slice(0, maxLen) + "...";
   }
   return v;
 }
@@ -58,7 +54,7 @@ export function logEvent(
     } else {
       // 对象/数组 → JSON.stringify 后再脱敏 base64
       const raw = JSON.stringify(v);
-      parts.push(`${k}=${sanitizeString(raw, 300)}`);
+      parts.push(`${k}=${sanitizeString(raw)}`);
     }
   }
 
