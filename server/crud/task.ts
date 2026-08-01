@@ -1,6 +1,7 @@
 import { prisma } from "@server/core/database/client";
 import { stringifyJson } from "./_json";
 import crypto from "crypto";
+import type { GenerationTask } from "@prisma/client";
 
 // ── Task CRUD（对应 backend/app/crud/task.py） ──
 
@@ -58,6 +59,9 @@ export async function updateTaskStatus(
     resultText?: string;
     error?: string;
     upstreamTaskId?: string;
+    retryCount?: number;
+    startedAt?: Date | null;
+    completedAt?: Date | null;
     updatedAt?: Date;
   }
 ) {
@@ -77,6 +81,15 @@ export async function updateTaskStatus(
   }
   if (data.upstreamTaskId !== undefined) {
     updateData.upstreamTaskId = data.upstreamTaskId;
+  }
+  if (data.retryCount !== undefined) {
+    updateData.retryCount = data.retryCount;
+  }
+  if (data.startedAt !== undefined) {
+    updateData.startedAt = data.startedAt;
+  }
+  if (data.completedAt !== undefined) {
+    updateData.completedAt = data.completedAt;
   }
 
   return prisma.generationTask.update({
@@ -105,7 +118,7 @@ export async function claimPendingTasks(limit = 10) {
     for (const { id } of candidates) {
       const result = await tx.generationTask.updateMany({
         where: { id, status: "pending" },
-        data: { status: "processing", updatedAt: now },
+        data: { status: "processing", startedAt: now, updatedAt: now },
       });
 
       if (result.count === 1) {
@@ -123,23 +136,44 @@ export async function claimPendingTasks(limit = 10) {
 }
 
 // ── 僵尸任务清理 ──
+// 超过最大重试次数的任务直接判死；未超限则重置为 pending 并递增 retryCount
 
-export async function cleanupZombieTasks(stuckMinutes: number) {
+export async function cleanupZombieTasks(
+  stuckMinutes: number,
+  maxRetries: number
+) {
   const cutoff = new Date(Date.now() - stuckMinutes * 60 * 1000);
 
-  const result = await prisma.generationTask.updateMany({
+  // 1. 超过重试上限 → 判失败
+  const dead = await prisma.generationTask.updateMany({
     where: {
       status: "processing",
       updatedAt: { lt: cutoff },
+      retryCount: { gte: maxRetries },
     },
     data: {
       status: "failed",
-      error: "Task stuck (zombie cleanup)",
+      error: "Task stuck (zombie cleanup, exceeded max retries)",
       updatedAt: new Date(),
     },
   });
 
-  return result.count;
+  // 2. 未超限 → 重置为 pending，retryCount + 1
+  const retried = await prisma.generationTask.updateMany({
+    where: {
+      status: "processing",
+      updatedAt: { lt: cutoff },
+      retryCount: { lt: maxRetries },
+    },
+    data: {
+      status: "pending",
+      error: null,
+      retryCount: { increment: 1 },
+      updatedAt: new Date(),
+    },
+  });
+
+  return dead.count + retried.count;
 }
 
 // ── 启动时恢复未完成的任务 ──
@@ -180,13 +214,15 @@ export async function recoverProcessingTasks(): Promise<{
 }
 
 // ── 取消任务 ──
+// 取消使用独立的 cancelled 终态，不再复用 failed，便于前端区分
 
 export async function cancelTask(id: string) {
   return prisma.generationTask.updateMany({
     where: { id, status: { in: ["pending", "processing"] } },
     data: {
-      status: "failed",
+      status: "cancelled",
       error: "Task cancelled by user",
+      completedAt: new Date(),
       updatedAt: new Date(),
     },
   });

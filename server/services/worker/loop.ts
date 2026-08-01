@@ -45,7 +45,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
       // 1. 僵尸任务清理
       const now = Date.now();
       if (now - lastZombieCheck > cfg.WORKER_ZOMBIE_INTERVAL * 1000) {
-        const count = await cleanupZombieTasks(cfg.WORKER_STUCK_TIMEOUT);
+        const count = await cleanupZombieTasks(cfg.WORKER_STUCK_TIMEOUT, cfg.WORKER_MAX_RETRIES);
         if (count > 0) {
           logEvent("worker.loop", { stage: "zombie_cleanup", count });
         }

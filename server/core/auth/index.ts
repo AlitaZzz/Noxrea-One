@@ -6,4 +6,4 @@ export {
   ensureAdminExists,
   toAuthUser,
 } from "./middleware";
-export type { AuthHandler, AuthHandlerContext, AuthUser } from "./middleware";
+export type { AuthUser } from "./middleware";

@@ -5,7 +5,7 @@ import { logger } from "@server/core/logger";
 
 export interface TerminalTaskState {
   taskId: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "cancelled";
   resultUrls?: string[];
   resultText?: string;
   error?: string;
@@ -84,7 +84,7 @@ export class TaskWatcher {
       const tasks = await prisma.generationTask.findMany({
         where: {
           id: { in: ids },
-          status: { in: ["completed", "failed"] },
+          status: { in: ["completed", "failed", "cancelled"] },
         },
         select: {
           id: true,
@@ -114,7 +114,7 @@ export class TaskWatcher {
 
         const state: TerminalTaskState = {
           taskId: task.id,
-          status: task.status as "completed" | "failed",
+          status: task.status as "completed" | "failed" | "cancelled",
           resultUrls,
           resultText: task.resultText ?? undefined,
           error: task.error ?? undefined,

@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { getTask } from "@server/crud/task";
-import { bus } from "@server/core/events/bus";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { fail } from "@server/core/response";
@@ -25,7 +24,7 @@ export async function GET(
   if (task.userId !== auth.user.id) return fail(403, "Access denied");
 
   // 如果已经是终态，直接返回
-  if (task.status === "completed" || task.status === "failed") {
+  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
     let resultUrls: string[] | undefined;
     try {
       resultUrls = task.resultUrls ? JSON.parse(task.resultUrls) : undefined;
@@ -58,7 +57,6 @@ export async function GET(
 
       request.signal.addEventListener("abort", () => {
         aborted = true;
-        bus.unsubscribe(taskId);
       });
 
       // 心跳定时器
@@ -70,20 +68,14 @@ export async function GET(
       }, 15_000);
 
       try {
-        // Promise.race: EventBus（进程内，0 延迟） vs TaskWatcher（跨进程兜底）
+        // 双进程架构：Worker 与 Next 进程分离，状态通过 SQLite 同步，
+        // 由 TaskWatcher 轮询兜底（EventBus 仅单进程内有效，跨进程无效）。
         while (!aborted) {
-          const result = await Promise.race([
-            bus.waitEvent(taskId, 1000).then((evt) => {
-              if (evt) return { source: "bus", data: evt };
-              return null;
-            }),
-            taskWatcher.watch(taskId, request.signal).then((state) => {
-              if (state) return { source: "watcher", data: state };
-              return null;
-            }),
-          ]);
-
+          const state = await taskWatcher.watch(taskId, request.signal);
           if (aborted) break;
+          if (!state) continue;
+
+          const result = { data: state };
 
           if (result) {
             const rawUrls: string[] | undefined = result.data.resultUrls as string[] | undefined;
@@ -105,7 +97,8 @@ export async function GET(
             // 终态 → 关闭
             if (
               payload.status === "completed" ||
-              payload.status === "failed"
+              payload.status === "failed" ||
+              payload.status === "cancelled"
             ) {
               break;
             }
@@ -115,7 +108,6 @@ export async function GET(
         logger.debug({ err, taskId }, "SSE stream error");
       } finally {
         clearInterval(heartbeat);
-        bus.unsubscribe(taskId);
         try {
           controller.close();
         } catch { /* already closed */ }

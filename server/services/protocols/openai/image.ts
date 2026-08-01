@@ -135,7 +135,10 @@ export class OpenAiImageProtocol implements ProtocolService {
 
     if (status === "failed") {
       const err = payload.error ?? payload.message ?? "Unknown error";
-      const errMsg = typeof err === "object" ? (err as Record<string, unknown>).message ?? "Unknown error" : String(err);
+      const errMsg =
+        typeof err === "object"
+          ? String((err as Record<string, unknown>).message ?? "Unknown error")
+          : String(err);
       return { status: "failed", urls: [], error: errMsg };
     }
 
