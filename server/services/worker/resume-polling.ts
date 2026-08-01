@@ -112,7 +112,7 @@ async function _doResumePoll(
       }
 
       const raw = await pollResp.json();
-      logEvent("resume_poll", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(raw).slice(0, 300) });
+      logEvent("resume_poll", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(raw) });
       const parsed: PollResult = protocol?.parsePollResponse
         ? protocol.parsePollResponse(raw)
         : { status: "pending", urls: [] };

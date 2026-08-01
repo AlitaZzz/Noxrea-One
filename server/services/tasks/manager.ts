@@ -288,11 +288,19 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       }
 
       const pollData = await pollResp.json();
-      logEvent("taskmgr", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(pollData).slice(0, 300) });
+      logEvent("taskmgr", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(pollData) });
       lastPollData = pollData;
 
       const parsed: PollResult = protocol.parsePollResponse?.(pollData)
         ?? { status: "pending", urls: [] };
+      logEvent("taskmgr", {
+        stage: "poll_parsed",
+        taskId,
+        attempt: attempt + 1,
+        status: parsed.status,
+        urls: parsed.urls.length,
+        error: parsed.error,
+      });
 
       if (parsed.status === "completed") {
         logEvent("taskmgr", {
