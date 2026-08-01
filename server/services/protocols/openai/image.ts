@@ -57,7 +57,8 @@ export class OpenAiImageProtocol implements ProtocolService {
         const b64 = item?.b64_json as string | undefined;
         const url = item?.url as string | undefined;
         if (b64) {
-          urls.push(`data:image/png;base64,${b64}`);
+          // 防止上游已自带 data: 前缀导致双重包装
+          urls.push(b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`);
         } else if (url) {
           urls.push(url);
         }
@@ -163,7 +164,11 @@ export class OpenAiImageProtocol implements ProtocolService {
       for (const item of items) {
         if (!item || typeof item !== "object") continue;
         const b64 = item.b64_json as string | undefined;
-        if (b64) { urls.push(`data:image/png;base64,${b64}`); continue; }
+        if (b64) {
+          // 防止上游已自带 data: 前缀导致双重包装
+          urls.push(b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`);
+          continue;
+        }
         const u = item.url as string | undefined;
         if (u) urls.push(u);
       }

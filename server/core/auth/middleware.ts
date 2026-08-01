@@ -92,14 +92,24 @@ export async function ensureAdminExists(
   const { hashPassword } = await import("@server/core/auth/password");
   const hashed = await hashPassword(adminPassword);
 
-  await prisma.user.create({
-    data: {
-      username: adminUsername,
-      hashedPassword: hashed,
-      isActive: true,
-      isSuperuser: true,
-    },
-  });
+  try {
+    await prisma.user.create({
+      data: {
+        username: adminUsername,
+        hashedPassword: hashed,
+        isActive: true,
+        isSuperuser: true,
+      },
+    });
+  } catch (err: unknown) {
+    // 唯一约束冲突 → 其他进程已创建，忽略
+    const code = (err as Record<string, unknown>)?.code;
+    if (code === "P2002" || code === "SQLITE_CONSTRAINT" || code === "SQLITE_CONSTRAINT_UNIQUE") {
+      // 竞态条件：另一个进程已抢先创建了管理员，忽略即可
+      return;
+    }
+    throw err;
+  }
 }
 
 // ── 统一导出 ──
