@@ -84,7 +84,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
           clearInterval(check);
           r(undefined);
         }
-      }, 200);
+      }, cfg.WORKER_POLL_CHECK_INTERVAL);
     });
   }
 
@@ -92,7 +92,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
   logEvent("worker.loop", { stage: "draining", inFlight: inFlight.size });
 
   if (inFlight.size > 0) {
-    const drainTimeout = 15_000;
+    const drainTimeout = cfg.WORKER_DRAIN_TIMEOUT * 1000;
     const drained = Promise.allSettled([...inFlight]);
     const timeout = new Promise<void>((r) => setTimeout(r, drainTimeout));
 

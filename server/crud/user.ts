@@ -23,12 +23,29 @@ export async function createUser(data: {
   });
 }
 
+/** 用户可更新字段白名单 */
+type UpdatableUserFields = {
+  avatarUrl?: string;
+  theme?: string;
+  language?: string;
+  isActive?: boolean;
+};
+
 export async function updateUser(
   id: number,
-  data: Record<string, unknown>
+  data: UpdatableUserFields
 ) {
+  // 白名单过滤：仅允许安全字段更新，防止直接设置 hashedPassword 等敏感字段
+  const allowed: Record<string, unknown> = {};
+  const allowedKeys = new Set(["avatarUrl", "theme", "language", "isActive"]);
+  for (const [key, val] of Object.entries(data)) {
+    if (allowedKeys.has(key) && val !== undefined) {
+      allowed[key] = val;
+    }
+  }
+
   return prisma.user.update({
     where: { id },
-    data,
+    data: allowed,
   });
 }

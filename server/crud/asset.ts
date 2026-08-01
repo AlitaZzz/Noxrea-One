@@ -1,5 +1,5 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson } from "./_json";
+import { stringifyJson, parseJsonObject } from "./_json";
 
 // ── Asset CRUD（对应 backend/app/crud/asset.py） ──
 
@@ -67,7 +67,12 @@ export async function getAssets(params: {
   const where: Record<string, unknown> = {};
 
   if (params.userId !== undefined) where.userId = params.userId;
-  if (params.folderId !== undefined) where.folderId = params.folderId;
+  // -1 表示「未分类」（folderId IS NULL），由前端 assets-store.ts 传入
+  if (params.folderId === -1) {
+    where.folderId = null;
+  } else if (params.folderId !== undefined) {
+    where.folderId = params.folderId;
+  }
   if (params.type) where.type = params.type;
   if (params.spaceKey) where.spaceKey = params.spaceKey;
   if (params.search) {
@@ -161,15 +166,7 @@ export async function updateAsset(
 ) {
   const data: Record<string, unknown> = { updatedAt: new Date() };
 
-  if (updates.tags !== undefined) {
-    data.tags = stringifyJson(updates.tags);
-    delete updates.tags;
-  }
-  if (updates.extra_data !== undefined) {
-    data.extraData = stringifyJson(updates.extra_data);
-    delete updates.extra_data;
-  }
-
+  // 统一的字段映射表：snake_case 请求参数 → camelCase DB 字段
   const fieldMap: Record<string, string> = {
     name: "name",
     type: "type",
@@ -178,11 +175,18 @@ export async function updateAsset(
     description: "description",
     folder_id: "folderId",
     space_key: "spaceKey",
+    tags: "tags",
+    extra_data: "extraData",
   };
 
   for (const [key, value] of Object.entries(updates)) {
     const mappedKey = fieldMap[key] ?? key;
-    data[mappedKey] = value;
+    // JSON 字段需要序列化
+    if (mappedKey === "tags" || mappedKey === "extraData") {
+      data[mappedKey] = stringifyJson(value);
+    } else {
+      data[mappedKey] = value;
+    }
   }
 
   return prisma.assetItem.update({ where: { id }, data });
@@ -225,15 +229,9 @@ export async function listSourceUrls(userId: number, spaceKey = "personal") {
 
   const urls = new Set<string>();
   for (const item of items) {
-    try {
-      const extra = item.extraData
-        ? JSON.parse(item.extraData)
-        : {};
-      if (extra.source_url && typeof extra.source_url === "string") {
-        urls.add(extra.source_url);
-      }
-    } catch {
-      // ignore
+    const extra = parseJsonObject(item.extraData);
+    if (extra.source_url && typeof extra.source_url === "string") {
+      urls.add(extra.source_url);
     }
   }
 

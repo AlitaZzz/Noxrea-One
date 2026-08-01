@@ -13,6 +13,13 @@ export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
+  // 请求体大小限制：防止恶意大 JSON 导致内存耗尽
+  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
+  const maxBodySize = 1024 * 1024; // 1MB
+  if (contentLength > maxBodySize) {
+    return fail(413, "Request body too large");
+  }
+
   let body: unknown;
   try {
     body = await request.json();

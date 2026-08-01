@@ -48,11 +48,6 @@ export async function POST(request: NextRequest) {
     const hash = computeBufferHash(buffer);
     const { mime, ext } = sniffMime(buffer.slice(0, 16));
 
-    const category = mime.startsWith("image/") ? "images"
-      : mime.startsWith("video/") ? "videos"
-      : mime.startsWith("audio/") ? "audio"
-      : "files";
-
     const finalExt = normalizeExt(ext);
     const storageKey = buildStorageKey(auth.user.id, hash, finalExt);
 
@@ -78,7 +73,7 @@ export async function POST(request: NextRequest) {
         hash,
       })
     );
-  } catch (err: any) {
-    return fail(500, err.message ?? "Upload failed");
+  } catch (err: unknown) {
+    return fail(500, (err as Error).message ?? "Upload failed");
   }
 }

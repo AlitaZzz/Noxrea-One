@@ -33,6 +33,8 @@ const configSchema = z.object({
   WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(5),
   WORKER_ZOMBIE_INTERVAL: z.coerce.number().int().positive().default(60),
   WORKER_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
+  WORKER_DRAIN_TIMEOUT: z.coerce.number().int().positive().default(15),
+  WORKER_POLL_CHECK_INTERVAL: z.coerce.number().int().positive().default(200),
 
   // Async polling
   WORKER_ASYNC_POLL_INTERVAL: z.coerce.number().positive().default(3.0),
