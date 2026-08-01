@@ -9,7 +9,7 @@ import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams } from "@server/services/model-config";
 import { buildContext } from "./context";
 import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
-import { parseJsonObject } from "@server/crud/_json";
+
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { prisma } from "@server/core/database/client";
@@ -35,8 +35,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
 
   try {
     // 1. 获取渠道配置
-    const channelId = ctx.config.channel_id as number | undefined;
-    if (!channelId) throw new Error("channel_id not found in task config");
+    const channelId = ctx.config.channelId as number | undefined;
+    if (!channelId) throw new Error("channelId not found in task config");
 
     const channel = await getChannel(channelId);
     if (!channel) throw new Error(`Channel ${channelId} not found`);
@@ -61,7 +61,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       ...modelDefaults,
       prompt: task.prompt,
       ...ctx.config,
-      ref_images: resolvedImages,
+      refImages: resolvedImages,
     };
 
     logEvent("executor", {
@@ -79,7 +79,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       const hostname = new URL(baseUrl).hostname;
       await resolveAndValidate(hostname);
     } catch (err: unknown) {
-      throw new Error(`SSRF validation failed for base_url: ${(err as Error).message}`);
+      throw new Error(`SSRF validation failed for baseUrl: ${(err as Error).message}`);
     }
 
     const routeCtx = {
@@ -91,7 +91,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       channelId,
       userId: task.userId,
       taskId: task.id,
-      config: channel.config ? parseJsonObject(channel.config) : undefined,
+      config: (channel.config as Record<string, unknown>) ?? undefined,
       params: rawParams,
     };
 
