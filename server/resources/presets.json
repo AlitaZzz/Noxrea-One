@@ -24,12 +24,16 @@
         "mapping": { "ref_images": "image_urls", "ratio": "size"},
         "body_patch": { "official_fallback": false }
       },
-      "protocol": {}
+      "protocol": {
+        "endpoints": {
+          "image.edits": "/images/generations"    
+        }
+      }
     }
   },
   {
     "name": "Agnes",
-    "baseUrl": "https://apihub.agnes-ai.com/v1",
+    "baseUrl": "https://api.agnes-ai.cn/v1",
     "protocol": "openai",
     "config": {
       "request": {
@@ -38,7 +42,8 @@
       },
       "protocol": {
         "endpoints": {
-          "image.edits": "/images/generations"
+          "image.edits": "/images/generations",
+          "poll": "/videos/{task_id}"          
         }
       }
     }
