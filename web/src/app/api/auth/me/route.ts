@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { updateMeSchema } from "@server/schemas/auth";
-import { toUserOut } from "@server/schemas/user";
 import { getUserById, updateUser } from "@server/crud/user";
 import { hashPassword, verifyPassword } from "@server/core/auth";
 import { ok, fail } from "@server/core/response";
@@ -13,7 +12,7 @@ export async function GET(request: NextRequest) {
   const user = await getUserById(auth.user.id);
   if (!user) return fail(404, "User not found");
 
-  return Response.json(ok(toUserOut(user)));
+  return Response.json(ok(user));
 }
 
 export async function PUT(request: NextRequest) {
@@ -37,8 +36,8 @@ export async function PUT(request: NextRequest) {
   if (parsed.data.username !== undefined) {
     updates.username = parsed.data.username;
   }
-  if (parsed.data.avatar_url !== undefined) {
-    updates.avatarUrl = parsed.data.avatar_url;
+  if (parsed.data.avatarUrl !== undefined) {
+    updates.avatarUrl = parsed.data.avatarUrl;
   }
   if (parsed.data.theme !== undefined) {
     updates.theme = parsed.data.theme;
@@ -50,15 +49,15 @@ export async function PUT(request: NextRequest) {
     const user = await getUserById(auth.user.id);
     if (!user) return fail(404, "User not found");
 
-    // old_password 用于验证当前密码，password 用于设置新密码
-    const oldPassword = parsed.data.old_password ?? parsed.data.password;
+    // oldPassword 用于验证当前密码，password 用于设置新密码
+    const oldPassword = parsed.data.oldPassword ?? parsed.data.password;
     const valid = await verifyPassword(oldPassword, user.hashedPassword);
     if (!valid) {
       return fail(400, "Current password is incorrect");
     }
-    // TODO: 完整改密逻辑：old_password 验证后设置 new_password
+    // TODO: 完整改密逻辑：oldPassword 验证后设置 new_password
   }
 
   const updated = await updateUser(auth.user.id, updates);
-  return Response.json(ok(toUserOut(updated)));
+  return Response.json(ok(updated));
 }

@@ -24,21 +24,19 @@ export async function GET(
   if (task.userId !== auth.user.id) return fail(403, "Access denied");
 
   // 如果已经是终态，直接返回
+  // CRUD 层已反序列化 JSON 字段，resultUrls/config 已是数组/对象，直接使用
   if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-    let resultUrls: string[] | undefined;
-    try {
-      resultUrls = task.resultUrls ? JSON.parse(task.resultUrls) : undefined;
-    } catch { /* ignore */ }
+    const resultUrls = (task.resultUrls as string[] | null) ?? undefined;
 
     const body = JSON.stringify({
       type: "status",
-      task_id: task.id,
+      taskId: task.id,
       status: task.status,
-      result_urls: resultUrls?.map(buildFileUrl),
-      result_text: task.resultText,
+      resultUrls: resultUrls?.map(buildFileUrl),
+      resultText: task.resultText,
       error: task.error,
       prompt: task.prompt,
-      config: task.config ? JSON.parse(task.config) : undefined,
+      config: task.config || undefined,
     });
     return new Response(`data: ${body}\n\n`, {
       headers: {
@@ -81,10 +79,10 @@ export async function GET(
             const rawUrls: string[] | undefined = result.data.resultUrls as string[] | undefined;
             const payload = {
               type: "status",
-              task_id: taskId,
+              taskId: taskId,
               status: result.data.status,
-              result_urls: rawUrls?.map(buildFileUrl),
-              result_text: result.data.resultText,
+              resultUrls: rawUrls?.map(buildFileUrl),
+              resultText: result.data.resultText,
               error: result.data.error,
               prompt: result.data.prompt,
               config: result.data.config,

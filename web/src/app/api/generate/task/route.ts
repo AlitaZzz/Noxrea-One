@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
-import { toTaskOut } from "@server/schemas/task";
 import { createTask } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
@@ -27,16 +26,7 @@ export async function POST(request: NextRequest) {
     return fail(400, "Invalid JSON body");
   }
 
-  // 前端传 camelCase（channelId/nodeId），映射到后端期望的 snake_case
-  const raw = body as Record<string, unknown>;
-  const mapped = {
-    ...raw,
-    channel_id: raw.channelId ?? raw.channel_id,
-    node_id: raw.nodeId ?? raw.node_id,
-    ref_images: raw.ref_images ?? raw.refImages,
-  };
-
-  const parsed = taskCreateSchema.safeParse(mapped);
+  const parsed = taskCreateSchema.safeParse(body);
   if (!parsed.success) {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
@@ -48,10 +38,10 @@ export async function POST(request: NextRequest) {
 
   // bg_removal 内部能力：不需要渠道
   if (capability !== "bg_removal") {
-    if (!data.channel_id) {
-      return fail(400, "channel_id is required");
+    if (!data.channelId) {
+      return fail(400, "channelId is required");
     }
-    const channel = await getChannel(data.channel_id);
+    const channel = await getChannel(data.channelId);
     if (!channel) {
       return fail(400, "Channel not found");
     }
@@ -63,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   // config 白名单构建（对齐 Python 精确字段控制）
   const config: Record<string, unknown> = {};
-  if (data.channel_id) config.channel_id = data.channel_id;
+  if (data.channelId) config.channelId = data.channelId;
   if (data.model) config.model = data.model;
   if (data.protocol) config.protocol = data.protocol;
 
@@ -76,7 +66,7 @@ export async function POST(request: NextRequest) {
     "mode", "input", "voice", "audio_file",
     "references",
   ]);
-  for (const [key, val] of Object.entries(raw)) {
+  for (const [key, val] of Object.entries(body as Record<string, unknown>)) {
     if (paramFields.has(key) && val !== undefined && val !== null) {
       config[key] = val;
     }
@@ -105,9 +95,9 @@ export async function POST(request: NextRequest) {
     model: data.model ?? undefined,
     prompt,
     config,
-    refImages: data.ref_images,
-    nodeId: data.node_id ?? "",
+    refImages: data.refImages,
+    nodeId: data.nodeId ?? "",
   });
 
-  return Response.json(ok(toTaskOut(task)));
+  return Response.json(ok(task));
 }

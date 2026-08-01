@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { folderUpdateSchema, toFolderOut } from "@server/schemas/asset";
+import { folderUpdateSchema } from "@server/schemas/asset";
 import { getFolder, updateFolder, deleteFolder } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
 
@@ -18,7 +18,7 @@ export async function GET(
   const folder = await getFolder(id);
   if (!folder) return fail(404, "Folder not found");
 
-  return Response.json(ok(toFolderOut(folder)));
+  return Response.json(ok(folder));
 }
 
 export async function PUT(
@@ -45,7 +45,7 @@ export async function PUT(
   }
 
   const folder = await updateFolder(id, parsed.data.name);
-  return Response.json(ok(toFolderOut(folder)));
+  return Response.json(ok(folder));
 }
 
 export async function DELETE(

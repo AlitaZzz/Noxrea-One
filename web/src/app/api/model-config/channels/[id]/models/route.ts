@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { modelInfoCreateSchema, toModelInfoOut } from "@server/schemas/channel-config";
+import { modelInfoCreateSchema } from "@server/schemas/channel-config";
 import { addModel } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
 
@@ -30,8 +30,8 @@ export async function POST(
   const model = await addModel(channelId, {
     name: parsed.data.name,
     capabilities: parsed.data.capabilities,
-    inferredCapabilities: parsed.data.inferred_capabilities,
+    inferredCapabilities: parsed.data.inferredCapabilities,
   });
 
-  return Response.json(ok(toModelInfoOut(model)));
+  return Response.json(ok(model));
 }

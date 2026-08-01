@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { toAssetOut } from "@server/schemas/asset";
 import { getAsset, updateAsset, deleteAsset } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
 
@@ -18,7 +17,7 @@ export async function GET(
   const item = await getAsset(id);
   if (!item) return fail(404, "Asset not found");
 
-  return Response.json(ok(toAssetOut(item)));
+  return Response.json(ok(item));
 }
 
 export async function PUT(
@@ -40,7 +39,7 @@ export async function PUT(
   }
 
   const item = await updateAsset(id, body as Record<string, unknown>);
-  return Response.json(ok(toAssetOut(item)));
+  return Response.json(ok(item));
 }
 
 export async function DELETE(

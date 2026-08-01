@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { loginRequestSchema } from "@server/schemas/auth";
-import { toUserOut } from "@server/schemas/user";
 import { getUserByUsername } from "@server/crud/user";
 import { createAccessToken, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter } from "@server/core/ratelimit";
@@ -30,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   // 查用户
   const user = await getUserByUsername(username);
-  if (!user || !user.is_active) {
+  if (!user || !user.isActive) {
     return fail(401, "用户名或密码错误");
   }
 
@@ -44,6 +43,6 @@ export async function POST(request: NextRequest) {
   const token = await createAccessToken(user.id, user.username);
 
   return Response.json(
-    ok({ access_token: token, token_type: "bearer", user: toUserOut(user) }, "Login successful")
+    ok({ access_token: token, token_type: "bearer", user }, "Login successful")
   );
 }

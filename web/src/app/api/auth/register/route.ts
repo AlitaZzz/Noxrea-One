@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { registerRequestSchema } from "@server/schemas/auth";
-import { toUserOut } from "@server/schemas/user";
 import { getUserByUsername, createUser } from "@server/crud/user";
 import { hashPassword, createAccessToken } from "@server/core/auth";
 import { getRegisterRateLimiter } from "@server/core/ratelimit";
@@ -55,6 +54,6 @@ export async function POST(request: NextRequest) {
   const token = await createAccessToken(user.id, user.username);
 
   return Response.json(
-    ok({ access_token: token, token_type: "bearer", user: toUserOut(user) }, "Registration successful")
+    ok({ access_token: token, token_type: "bearer", user }, "Registration successful")
   );
 }

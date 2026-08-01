@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { toTaskOut } from "@server/schemas/task";
 import { getTask } from "@server/crud/task";
 import { ok, fail } from "@server/core/response";
 
@@ -18,5 +17,5 @@ export async function GET(
   // 归属校验
   if (task.userId !== auth.user.id) return fail(403, "Access denied");
 
-  return Response.json(ok(toTaskOut(task)));
+  return Response.json(ok(task));
 }

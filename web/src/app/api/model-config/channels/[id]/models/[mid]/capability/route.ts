@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { updateCapabilitySchema } from "@server/schemas/channel-config";
-import { toModelInfoOut } from "@server/schemas/channel-config";
 import { updateModelCapability } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
 
@@ -29,5 +28,5 @@ export async function PUT(
   }
 
   const model = await updateModelCapability(modelId, parsed.data.capabilities);
-  return Response.json(ok(toModelInfoOut(model)));
+  return Response.json(ok(model));
 }
