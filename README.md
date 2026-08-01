@@ -88,7 +88,7 @@ Noxrea-AI-Canvas/
 │
 ├── prisma/                      # 数据建模
 │   ├── schema.prisma            # Prisma schema
-│   └── seed.ts                  # 管理员账号初始化
+│   └── migrations/              # 数据库迁移历史（已纳入版本控制）
 │
 ├── inference_service/           # 独立推理服务（背景移除）
 ├── docs/                        # 项目文档
@@ -157,15 +157,17 @@ npm install
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env，设置 JWT_SECRET_KEY 和 ADMIN_PASSWORD
+# 编辑 .env，设置 JWT_SECRET_KEY（必填）
 
-# 初始化数据库
-npx prisma migrate dev --name init
-npm run prisma:seed
+# 初始化数据库（应用迁移、创建表结构）
+npx prisma migrate deploy
+# 开发期如需重新生成迁移可用：npx prisma migrate dev
 
 # 启动（Next.js + Worker 同时启动）
 npm run dev
 # 前端 http://localhost:3000，API 同源
+#
+# 首次使用：通过页面注册账号（需 .env 中 ALLOW_REGISTRATION=true）
 ```
 
 ### 关键配置
@@ -174,7 +176,7 @@ npm run dev
 |--------|------|
 | `DATABASE_URL` | SQLite `file:./prisma/dev.db` 或 PG 连接串 |
 | `JWT_SECRET_KEY` | JWT 签名密钥（必填） |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 初始管理员账号（必填） |
+| `ALLOW_REGISTRATION` | 是否开放页面注册，默认 `true` |
 | `FFMPEG_PATH` | ffmpeg 路径，默认 `bin/ffmpeg`（视频截帧） |
 | `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
 
