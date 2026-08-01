@@ -33,7 +33,7 @@ function getModelPaths(protocol: string, baseUrl: string): { baseUrl: string; pa
 /**
  * 拉取上游模型列表（SSRF 校验 + DNS pinning）
  * 对应 backend/app/routers/models.py
- * 前端传 channelId，后端查库获取 base_url + api_key
+ * 前端传 channelId，后端查库获取 baseUrl + apiKey
  */
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
     return fail(400, "Invalid JSON body");
   }
 
-  const { channelId, base_url: rawBaseUrl, api_key: rawApiKey } = body as {
+  const { channelId, baseUrl: rawBaseUrl, apiKey: rawApiKey } = body as {
     channelId?: number | string;
-    base_url?: string;
-    api_key?: string;
+    baseUrl?: string;
+    apiKey?: string;
   };
 
   let baseUrl: string;
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     baseUrl = rawBaseUrl;
     apiKey = rawApiKey;
   } else {
-    return fail(400, "channelId or base_url is required");
+    return fail(400, "channelId or baseUrl is required");
   }
 
   // 根据协议确定 baseUrl 和请求路径

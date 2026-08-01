@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { assetCreateSchema, toAssetOut } from "@server/schemas/asset";
+import { assetCreateSchema } from "@server/schemas/asset";
 import { getAssets, createAsset } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   const result = await getAssets(params);
   return Response.json(
-    ok({ items: result.items.map(toAssetOut), total: result.total })
+    ok({ items: result.items, total: result.total })
   );
 }
 
@@ -49,10 +49,10 @@ export async function POST(request: NextRequest) {
     height: parsed.data.height,
     description: parsed.data.description,
     tags: parsed.data.tags,
-    extraData: parsed.data.extra_data,
-    folderId: parsed.data.folder_id,
-    spaceKey: parsed.data.space_key,
+    extraData: parsed.data.extraData,
+    folderId: parsed.data.folderId,
+    spaceKey: parsed.data.spaceKey,
   });
 
-  return Response.json(ok(toAssetOut(item)));
+  return Response.json(ok(item));
 }

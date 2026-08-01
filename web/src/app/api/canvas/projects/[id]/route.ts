@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { canvasUpdateSchema } from "@server/schemas/canvas";
-import { toCanvasOut } from "@server/schemas/canvas";
 import { getProject, updateProject, deleteProject, recalcFileReferences } from "@server/crud/canvas";
 import { ok, fail } from "@server/core/response";
 
@@ -20,7 +19,7 @@ export async function GET(
   if (!project) return fail(404, "Project not found");
   if (project.userId !== auth.user.id) return fail(403, "Access denied");
 
-  return Response.json(ok(toCanvasOut(project)));
+  return Response.json(ok(project));
 }
 
 export async function PUT(
@@ -52,16 +51,16 @@ export async function PUT(
 
   const project = await updateProject(id, {
     name: parsed.data.name,
-    canvasData: parsed.data.canvas_data,
+    canvasData: parsed.data.canvasData,
   });
 
-  // 文件引用重算（如果有 canvas_data 则提取文件引用）
-  if (parsed.data.canvas_data) {
-    // 从 canvas_data 提取文件 hash 引用（由前端在 canvas_data 中标记）
+  // 文件引用重算（如果有 canvasData 则提取文件引用）
+  if (parsed.data.canvasData) {
+    // 从 canvasData 提取文件 hash 引用（由前端在 canvasData 中标记）
     // 当前简化实现：不做自动提取，后续可根据需要接入
   }
 
-  return Response.json(ok(toCanvasOut(project)));
+  return Response.json(ok(project));
 }
 
 export async function DELETE(

@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { assetBatchCreateSchema, assetBatchUpdateSchema } from "@server/schemas/asset";
-import { toAssetOut } from "@server/schemas/asset";
 import { createAssetsBatch, updateAssetsBatch } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
 
@@ -29,13 +28,13 @@ export async function POST(request: NextRequest) {
     height: item.height,
     description: item.description,
     tags: item.tags,
-    extraData: item.extra_data,
-    folderId: item.folder_id,
-    spaceKey: item.space_key,
+    extraData: item.extraData,
+    folderId: item.folderId,
+    spaceKey: item.spaceKey,
   }));
 
   const created = await createAssetsBatch(items);
-  return Response.json(ok(created.map(toAssetOut)));
+  return Response.json(ok(created));
 }
 
 export async function PUT(request: NextRequest) {

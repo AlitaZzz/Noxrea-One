@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { folderCreateSchema, toFolderOut } from "@server/schemas/asset";
+import { folderCreateSchema } from "@server/schemas/asset";
 import { getFolders, createFolder } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
 
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const spaceKey = searchParams.get("space_key") ?? "personal";
 
   const folders = await getFolders(auth.user.id, spaceKey);
-  return Response.json(ok(folders.map(toFolderOut)));
+  return Response.json(ok(folders));
 }
 
 export async function POST(request: NextRequest) {
@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
 
   const folder = await createFolder(auth.user.id, {
     name: parsed.data.name,
-    spaceKey: parsed.data.space_key,
-    parentId: parsed.data.parent_id,
+    spaceKey: parsed.data.spaceKey,
+    parentId: parsed.data.parentId,
   });
 
-  return Response.json(ok(toFolderOut(folder)));
+  return Response.json(ok(folder));
 }
