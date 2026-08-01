@@ -1,6 +1,5 @@
-import { prisma } from "@server/core/database/client";
 import { logger } from "@server/core/logger";
-import { parseJsonArray } from "@server/crud/_json";
+import { getTasksByIds } from "@server/crud/task";
 
 // ── TaskWatcher：跨进程任务状态同步 ──
 
@@ -82,38 +81,22 @@ export class TaskWatcher {
     try {
       const ids = [...this.pending.keys()];
 
-      const tasks = await prisma.generationTask.findMany({
-        where: {
-          id: { in: ids },
-          status: { in: ["completed", "failed", "cancelled"] },
-        },
-        select: {
-          id: true,
-          status: true,
-          resultUrls: true,
-          resultText: true,
-          error: true,
-          prompt: true,
-        },
-      });
+      const tasks = await getTasksByIds(ids);
+      const terminalTasks = tasks.filter(
+        (t) => t.status === "completed" || t.status === "failed" || t.status === "cancelled"
+      );
 
-      for (const task of tasks) {
+      for (const task of terminalTasks) {
         const subs = this.pending.get(task.id);
         if (!subs) continue;
-
-        const prompt: string | undefined = task.prompt || undefined;
-
-        const resultUrls: string[] | undefined = task.resultUrls
-          ? parseJsonArray(task.resultUrls)
-          : undefined;
 
         const state: TerminalTaskState = {
           taskId: task.id,
           status: task.status as "completed" | "failed" | "cancelled",
-          resultUrls,
+          resultUrls: task.resultUrls ?? undefined,
           resultText: task.resultText ?? undefined,
           error: task.error ?? undefined,
-          prompt,
+          prompt: task.prompt || undefined,
         };
 
         for (const sub of subs) {
