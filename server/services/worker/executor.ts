@@ -9,6 +9,7 @@ import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams } from "@server/services/model-config";
 import { buildContext } from "./context";
 import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
+import { parseJsonObject } from "@server/crud/_json";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { prisma } from "@server/core/database/client";
@@ -77,8 +78,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     try {
       const hostname = new URL(baseUrl).hostname;
       await resolveAndValidate(hostname);
-    } catch (err: any) {
-      throw new Error(`SSRF validation failed for base_url: ${err.message}`);
+    } catch (err: unknown) {
+      throw new Error(`SSRF validation failed for base_url: ${(err as Error).message}`);
     }
 
     const routeCtx = {
@@ -90,7 +91,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       channelId,
       userId: task.userId,
       taskId: task.id,
-      config: channel.config ? JSON.parse(channel.config) : undefined,
+      config: channel.config ? parseJsonObject(channel.config) : undefined,
       params: rawParams,
     };
 
@@ -143,21 +144,21 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       taskId: task.id,
       urls: resultUrls.length,
     });
-  } catch (err: any) {
-    const errorMsg = err?.message ?? "Unknown error";
-    const [errorClass] = classifyError(errorMsg);
-
-    await updateTaskStatus(task.id, {
-      status: "failed",
-      error: errorMsg,
-      completedAt: new Date(),
-    });
+  } catch (err: unknown) {
+    const errorMsg = (err as Error)?.message ?? "Unknown error";
+    const [errorClass, retryable] = classifyError(errorMsg);
 
     logEvent("executor", {
-      stage: "failed",
+      stage: retryable ? "failed_retryable" : "failed",
       taskId: task.id,
       errorClass,
       error: summarizeText(errorMsg),
+    });
+
+    await updateTaskStatus(task.id, {
+      status: "failed",
+      error: errorMsg + (retryable ? " [retryable]" : ""),
+      completedAt: new Date(),
     });
   }
 }

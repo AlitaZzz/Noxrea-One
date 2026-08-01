@@ -12,6 +12,7 @@ export class RateLimiter {
   private windows = new Map<string, WindowEntry>();
   private maxRequests: number;
   private windowSeconds: number;
+  private lastCleanup = Date.now();
 
   constructor(maxRequests: number, windowSeconds: number) {
     this.maxRequests = maxRequests;
@@ -25,6 +26,17 @@ export class RateLimiter {
   check(key: string): boolean {
     const now = Date.now();
     const cutoff = now - this.windowSeconds * 1000;
+
+    // 定期清理空条目，防止内存泄漏
+    if (now - this.lastCleanup > this.windowSeconds * 1000 * 2) {
+      for (const [k, entry] of this.windows) {
+        entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
+        if (entry.timestamps.length === 0) {
+          this.windows.delete(k);
+        }
+      }
+      this.lastCleanup = now;
+    }
 
     let entry = this.windows.get(key);
     if (!entry) {

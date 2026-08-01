@@ -15,8 +15,10 @@ export function stringifyJson(value: unknown): string {
   if (isSqlite()) {
     return JSON.stringify(value);
   }
-  // PG 下 Prisma Json 类型直接返回对象
-  return value as string;
+  // PG 下 Prisma Json 类型直接返回对象 — 需要确保 value 已经是 string 或可序列化
+  if (typeof value === "string") return value;
+  // 如果 value 是对象但当前不是 SQLite，则仍然序列化（兼容 PG 过渡期）
+  return JSON.stringify(value);
 }
 
 /** 从存储字符串解析 JSON，失败返回 fallback */

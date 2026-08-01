@@ -9,6 +9,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http";
+import { parseJsonObject } from "@server/crud/_json";
 import type { GenerationTask } from "@prisma/client";
 import type { StopSignal } from "./loop";
 
@@ -47,7 +48,7 @@ async function _doResumePoll(
   let protocol: ReturnType<typeof getProtocol>;
 
   try {
-    const config = JSON.parse(task.config || "{}");
+    const config = parseJsonObject(task.config);
     const channelId = config.channel_id as number;
     const channel = await getChannel(channelId);
     if (!channel) throw new Error(`Channel ${channelId} not found`);
@@ -59,8 +60,8 @@ async function _doResumePoll(
 
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
     pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId);
-  } catch (err: any) {
-    await _failTask(taskId, `Failed to resume polling: ${err.message}`);
+  } catch (err: unknown) {
+    await _failTask(taskId, `Failed to resume polling: ${(err as Error).message}`);
     return;
   }
 
@@ -132,7 +133,12 @@ async function _doResumePoll(
 
         await prisma.generationTask.update({
           where: { id: taskId },
-          data: { status: "completed", resultUrls: JSON.stringify(resultUrls), completedAt: new Date(), updatedAt: new Date() },
+          data: {
+            status: "completed",
+            resultUrls: JSON.stringify(resultUrls),
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          },
         });
         return;
       }
@@ -143,11 +149,12 @@ async function _doResumePoll(
       }
 
       // pending: continue
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as Error & { code?: string; name?: string };
       logger.warn({
         taskId,
         attempt: attempt + 1,
-        err: err.message?.slice(0, 120) || err.code || err.name || String(err).slice(0, 120),
+        err: e.message?.slice(0, 120) || e.code || e.name || String(err).slice(0, 120),
       }, "resume poll error");
     }
   }

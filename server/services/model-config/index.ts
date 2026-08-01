@@ -23,6 +23,7 @@ function getProjectRoot(): string {
 
 let _presets: Record<string, unknown> | null = null;
 
+/** 加载预设配置（供前端 API 使用） */
 export function loadPresets(): Record<string, unknown> {
   if (_presets) return _presets;
   const presetPath = path.resolve(getProjectRoot(), "server/resources/presets.json");
@@ -32,8 +33,6 @@ export function loadPresets(): Record<string, unknown> {
 }
 
 // ── 模型参数 ──
-
-/** model_params.json 中每个 capability 的配置 */
 export interface ModelParamConfig {
   params: string[];
   defaults: Record<string, unknown>;

@@ -3,6 +3,35 @@ import { logger } from "./index";
 // ── 结构化日志工具（对应 logging_config.py） ──
 
 /**
+ * base64 data URL 匹配模式：data:...;base64,...
+ */
+const DATA_URL_RE = /^data:[^;]*;base64,[A-Za-z0-9+/=]+$/;
+
+/**
+ * 脱敏字符串中的 base64 内容。
+ * 检测 data:...;base64,... 模式并替换为占位符。
+ */
+function sanitizeString(v: string, maxLen = 200): string {
+  // 如果整串是 data URL → 占位
+  if (DATA_URL_RE.test(v)) {
+    return `[base64 data, ${v.length} chars]`;
+  }
+  // 如果包含 data: 子串 → 尝试脱敏（如 JSON 中包含 base64）
+  if (v.includes("data:") && v.includes(";base64,")) {
+    // 用正则替换所有 data URL 为占位符
+    return v.replace(
+      /data:[^;]*;base64,[A-Za-z0-9+/=]+/g,
+      (match) => `[base64 data, ${match.length} chars]`
+    );
+  }
+  // 长文本截断
+  if (v.length > maxLen) {
+    return v.slice(0, maxLen) + "...";
+  }
+  return v;
+}
+
+/**
  * 结构化日志事件。
  * 格式：[module] stage=xxx task=xxx | key=val | ...
  */
@@ -25,9 +54,11 @@ export function logEvent(
     if (typeof v === "boolean") {
       parts.push(`${k}=${v ? "true" : "false"}`);
     } else if (typeof v === "string") {
-      parts.push(`${k}=${v}`);
+      parts.push(`${k}=${sanitizeString(v)}`);
     } else {
-      parts.push(`${k}=${JSON.stringify(v)}`);
+      // 对象/数组 → JSON.stringify 后再脱敏 base64
+      const raw = JSON.stringify(v);
+      parts.push(`${k}=${sanitizeString(raw, 300)}`);
     }
   }
 
