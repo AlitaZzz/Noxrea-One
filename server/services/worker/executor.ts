@@ -142,7 +142,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     logEvent("executor", {
       stage: "completed",
       taskId: task.id,
-      urls: resultUrls.length,
+      urls: resultUrls,
+      text: result?.text,
     });
   } catch (err: unknown) {
     const errorMsg = (err as Error)?.message ?? "Unknown error";
@@ -152,7 +153,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       stage: retryable ? "failed_retryable" : "failed",
       taskId: task.id,
       errorClass,
-      error: summarizeText(errorMsg),
+      error: errorMsg,
     });
 
     await updateTaskStatus(task.id, {

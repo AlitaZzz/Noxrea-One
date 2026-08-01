@@ -307,7 +307,8 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
           stage: "poll_completed",
           taskId,
           attempt: attempt + 1,
-          urls: parsed.urls.length,
+          urls: parsed.urls,
+          text: parsed.text,
         });
         return { status: "completed", urls: parsed.urls, text: parsed.text };
       }
@@ -334,7 +335,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   }
 
   // 超时
-  const lastInfo = lastPollData ? ` - 上游最后返回: ${JSON.stringify(lastPollData).slice(0, 500)}` : "";
+  const lastInfo = lastPollData ? ` - 上游最后返回: ${JSON.stringify(lastPollData)}` : "";
   return {
     status: "failed",
     urls: [],
