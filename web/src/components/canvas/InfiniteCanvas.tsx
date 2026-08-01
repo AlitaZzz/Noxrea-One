@@ -470,8 +470,8 @@ export default function InfiniteCanvas() {
                     <div className="flex items-center gap-2 px-1 py-1.5">
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
                         style={{ background: "#1677ff", color: "#fff" }}>
-                        {authUser?.avatar_url ? (
-                          <img src={authUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                        {authUser?.avatarUrl ? (
+                          <img src={authUser.avatarUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
                           (authUser?.username || "G")[0].toUpperCase()
                         )}

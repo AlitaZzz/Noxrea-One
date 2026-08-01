@@ -17,12 +17,12 @@ function dtoToAsset(dto: AssetItemDto): AssetItem {
     width: dto.width || 0,
     height: dto.height || 0,
     description: dto.description,
-    createdAt: toTimestamp(dto.created_at),
-    updatedAt: toTimestamp(dto.updated_at),
+    createdAt: toTimestamp(dto.createdAt),
+    updatedAt: toTimestamp(dto.updatedAt),
     tags: dto.tags || [],
-    metadata: dto.extra_data || {},
-    folderId: dto.folder_id != null ? String(dto.folder_id) : undefined,
-    spaceKey: dto.space_key || "personal",
+    metadata: dto.extraData || {},
+    folderId: dto.folderId != null ? String(dto.folderId) : undefined,
+    spaceKey: dto.spaceKey || "personal",
   };
 }
 
@@ -30,9 +30,9 @@ function dtoToFolder(dto: AssetFolderDto): AssetFolder {
   return {
     id: String(dto.id),
     name: dto.name,
-    spaceKey: dto.space_key,
-    parentId: dto.parent_id != null ? String(dto.parent_id) : undefined,
-    createdAt: toTimestamp(dto.created_at),
+    spaceKey: dto.spaceKey,
+    parentId: dto.parentId != null ? String(dto.parentId) : undefined,
+    createdAt: toTimestamp(dto.createdAt),
     count: dto.count || 0,
   };
 }
@@ -64,10 +64,10 @@ export async function fetchAssetPage(
       : filters.category;
   }
   const res = await assetApi.listAssets({
-    folder_id: filters.folderId ? parseInt(filters.folderId, 10) : (filters.folderId === null ? -1 : undefined),
+    folderId: filters.folderId ? parseInt(filters.folderId, 10) : (filters.folderId === null ? -1 : undefined),
     type: typeParam,
     search: filters.search || undefined,
-    space_key: filters.spaceKey,
+    spaceKey: filters.spaceKey,
     skip,
     limit,
   });
@@ -147,7 +147,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       name: input.name, type: input.type,
       width: input.width, height: input.height,
       description: input.description, tags: input.tags,
-      extra_data: input.metadata, folder_id: toIntId(input.folderId || ""), space_key: input.spaceKey || "personal",
+      extraData: input.metadata, folderId: toIntId(input.folderId || ""), spaceKey: input.spaceKey || "personal",
     }).then((res) => {
       if (res.code === 200 && res.data) {
         const url = input.metadata?.sourceUrl;
@@ -164,7 +164,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         name: input.name, type: input.type,
         width: input.width, height: input.height,
         description: input.description, tags: input.tags,
-        extra_data: input.metadata, folder_id: toIntId(input.folderId || ""), space_key: input.spaceKey || "personal",
+        extraData: input.metadata, folderId: toIntId(input.folderId || ""), spaceKey: input.spaceKey || "personal",
       })),
     );
     if (res.code === 200 && res.data) {
@@ -189,7 +189,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.type !== undefined) body.type = patch.type;
-    if (patch.folderId !== undefined) body.folder_id = toIntId(patch.folderId);
+    if (patch.folderId !== undefined) body.folderId = toIntId(patch.folderId);
     if (Object.keys(body).length > 0) {
       await assetApi.updateAsset(intId, body).catch(() => {});
     }
@@ -204,7 +204,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length > 0) {
       const body: Record<string, unknown> = {};
-      if ("folderId" in updates) body.folder_id = toIntId(String(updates.folderId || "")) ?? null;
+      if ("folderId" in updates) body.folderId = toIntId(String(updates.folderId || "")) ?? null;
       if ("type" in updates) body.type = updates.type;
       if (Object.keys(body).length > 0) {
         await assetApi.updateAssetsBatch(intIds, body).catch(() => {});

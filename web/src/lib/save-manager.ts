@@ -243,7 +243,7 @@ class SaveManager {
     const needRefRecalc = currentFp !== prevFp;
 
     const payload: Record<string, unknown> = {
-      canvas_data: {
+      canvasData: {
         nodes: clean.nodes,
         edges: clean.edges,
         viewport: snapshot.viewport,

@@ -83,8 +83,8 @@ export default function ProjectPage() {
             <div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 180 }}>
               <style>{`.avatar-menu-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
               <div className="flex items-center gap-2 px-1 py-1.5">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden" style={{ background: user?.avatar_url ? "transparent" : "#1677ff", color: "#fff" }}>
-                  {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" /> : (user?.username || "U")[0].toUpperCase()}
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "#1677ff", color: "#fff" }}>
+                  {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.username || "U")[0].toUpperCase()}
                 </div>
                 <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username}</span>
               </div>
@@ -123,9 +123,9 @@ export default function ProjectPage() {
           onOpenChange={setAvatarOpen}
         >
           <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--canvas-bg-elevated)" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatar_url ? "transparent" : "#1677ff", color: "#fff" }}>
-              {user?.avatar_url ? (
-                <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "#1677ff", color: "#fff" }}>
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 (user?.username || "U")[0].toUpperCase()
               )}

@@ -56,15 +56,15 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                   if (!line.startsWith("data: ")) continue;
                   try {
                     const evt = JSON.parse(line.slice(6));
-                    const completedUrls: string[] = evt.result_urls || [];
+                    const completedUrls: string[] = evt.resultUrls || [];
 
-                    // LLM 文本结果：从 result_text 更新 content
-                    if (evt.status === "completed" && evt.result_text) {
+                    // LLM 文本结果：从 resultText 更新 content
+                    if (evt.status === "completed" && evt.resultText) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
                       if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       useCanvasStore.getState().updateNodeData(nodeId, {
-                        content: evt.result_text,
+                        content: evt.resultText,
                         taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();

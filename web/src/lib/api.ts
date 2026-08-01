@@ -139,28 +139,28 @@ export function apiUploadWithProgress<T = unknown>(
 
 export interface AssetFolderDto {
   id: number;
-  user_id: number;
+  userId: number;
   name: string;
-  space_key: string;
-  parent_id: number | null;
-  created_at: string;
+  spaceKey: string;
+  parentId: number | null;
+  createdAt: string;
   count: number;
 }
 
 export interface AssetItemDto {
   id: number;
-  user_id: number;
-  folder_id: number | null;
-  space_key: string;
+  userId: number;
+  folderId: number | null;
+  spaceKey: string;
   name: string;
   type: string;
   width: number;
   height: number;
   description: string;
   tags: string[];
-  extra_data: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
+  extraData: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Folders
@@ -171,7 +171,7 @@ export const assetApi = {
   createFolder: (name: string, spaceKey = "personal", parentId?: number) =>
     api<AssetFolderDto>("/api/assets/folders", {
       method: "POST",
-      body: JSON.stringify({ name, space_key: spaceKey, parent_id: parentId ?? null }),
+      body: JSON.stringify({ name, spaceKey, parentId: parentId ?? null }),
     }),
 
   updateFolder: (id: number, name: string) =>
@@ -184,12 +184,12 @@ export const assetApi = {
     api(`/api/assets/folders/${id}`, { method: "DELETE" }),
 
   // Assets
-  listAssets: (params?: { folder_id?: number; type?: string; search?: string; space_key?: string; skip?: number; limit?: number }) => {
+  listAssets: (params?: { folderId?: number; type?: string; search?: string; spaceKey?: string; skip?: number; limit?: number }) => {
     const sp = new URLSearchParams();
-    if (params?.folder_id !== undefined) sp.set("folder_id", String(params.folder_id));
+    if (params?.folderId !== undefined) sp.set("folder_id", String(params.folderId));
     if (params?.type) sp.set("type", params.type);
     if (params?.search) sp.set("search", params.search);
-    if (params?.space_key) sp.set("space_key", params.space_key);
+    if (params?.spaceKey) sp.set("space_key", params.spaceKey);
     if (params?.skip !== undefined) sp.set("skip", String(params.skip));
     if (params?.limit !== undefined) sp.set("limit", String(params.limit));
     const qs = sp.toString();
@@ -199,7 +199,7 @@ export const assetApi = {
   createAsset: (data: {
     name: string; type: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extra_data?: Record<string, unknown>; folder_id?: number; space_key?: string;
+    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
   }) =>
     api<AssetItemDto>("/api/assets/items", {
       method: "POST",
@@ -209,7 +209,7 @@ export const assetApi = {
   createAssetsBatch: (items: Array<{
     name: string; type: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extra_data?: Record<string, unknown>; folder_id?: number; space_key?: string;
+    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
   }>) =>
     api<AssetItemDto[]>("/api/assets/items/batch", {
       method: "POST",
