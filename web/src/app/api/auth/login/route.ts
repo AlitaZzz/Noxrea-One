@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   // 限流
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   if (!getLoginRateLimiter().check(`login:${ip}`)) {
-    return fail(429, "Too many login attempts. Please try again later.");
+    return fail(429, "登录尝试过于频繁，请稍后再试。");
   }
 
   // 解析
@@ -31,13 +31,13 @@ export async function POST(request: NextRequest) {
   // 查用户
   const user = await getUserByUsername(username);
   if (!user || !user.is_active) {
-    return fail(401, "Invalid username or password");
+    return fail(401, "用户名或密码错误");
   }
 
   // 验密码
   const valid = await verifyPassword(password, user.hashedPassword);
   if (!valid) {
-    return fail(401, "Invalid username or password");
+    return fail(401, "用户名或密码错误");
   }
 
   // 签发 JWT

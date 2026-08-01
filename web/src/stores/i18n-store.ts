@@ -426,7 +426,7 @@ const en: Record<string, string> = {
 };
 
 export const useI18nStore = create<I18nState>((set, get) => ({
-  lang: (typeof window !== "undefined" && navigator.language.startsWith("zh")) ? "zh" : "en",
+  lang: "zh",
   toggle: () => {
     const next = get().lang === "zh" ? "en" : "zh";
     set({ lang: next });

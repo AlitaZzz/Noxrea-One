@@ -84,8 +84,9 @@ export async function ensureAdminExists(
   adminUsername: string,
   adminPassword: string
 ): Promise<void> {
+  const normalized = adminUsername.toLowerCase();
   const existing = await prisma.user.findUnique({
-    where: { username: adminUsername },
+    where: { username: normalized },
   });
   if (existing) return;
 
@@ -95,7 +96,7 @@ export async function ensureAdminExists(
   try {
     await prisma.user.create({
       data: {
-        username: adminUsername,
+        username: normalized,
         hashedPassword: hashed,
         isActive: true,
         isSuperuser: true,

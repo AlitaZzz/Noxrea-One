@@ -7,7 +7,8 @@ export async function getUserById(id: number) {
 }
 
 export async function getUserByUsername(username: string) {
-  return prisma.user.findUnique({ where: { username } });
+  // 用户名大小写不敏感：统一按小写匹配
+  return prisma.user.findUnique({ where: { username: username.toLowerCase() } });
 }
 
 export async function createUser(data: {
@@ -17,7 +18,8 @@ export async function createUser(data: {
 }) {
   return prisma.user.create({
     data: {
-      username: data.username,
+      // 用户名统一小写存储，保证大小写不敏感且符合唯一约束
+      username: data.username.toLowerCase(),
       hashedPassword: data.hashedPassword,
     },
   });

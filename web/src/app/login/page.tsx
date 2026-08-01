@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
+import { showGlobalMessage } from "@/lib/global-message";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
 
@@ -322,34 +324,17 @@ function RightPanel({
   );
 }
 
-// ── Toast ──
-
-function Toast({ msg }: { msg: string }) {
-  return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-[slideDown_0.3s_ease-out]">
-      <div className="px-6 py-3 bg-emerald-600 text-white text-sm font-medium rounded-xl shadow-lg shadow-emerald-500/25">
-        {msg}
-      </div>
-    </div>
-  );
-}
-
 // ── Main ──
 
 export default function LoginPage() {
   const router = useRouter();
+  const authStore = useAuthStore();
 
   const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [toastMsg, setToastMsg] = useState("");
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
-
-  const showToast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 2500);
-  }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -369,39 +354,21 @@ export default function LoginPage() {
 
       try {
         if (mode === "signin") {
-          const res = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || data.message || "登录失败");
-
-          showToast("欢迎回来！");
+          await authStore.login(username, password);
+          showGlobalMessage().success("欢迎回来！");
           setTimeout(() => router.push("/"), 600);
         } else {
-          const res = await fetch("/api/auth/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || data.message || "注册失败");
-
-          showToast("账号创建成功！");
-          setTimeout(() => {
-            setMode("signin");
-            setPassword("");
-            setToastMsg("");
-          }, 1500);
+          await authStore.register(username, password);
+          showGlobalMessage().success("账号创建成功！");
+          setTimeout(() => router.push("/"), 600);
         }
       } catch (err: unknown) {
-        showToast((err as Error).message || "操作失败");
+        showGlobalMessage().error((err as Error).message || "操作失败");
       } finally {
         setLoading(false);
       }
     },
-    [mode, username, password, router, showToast]
+    [mode, username, password, router, authStore]
   );
 
   const toggleMode = useCallback(() => {
@@ -423,7 +390,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex h-screen w-screen bg-zinc-950 overflow-hidden">
-      {toastMsg && <Toast msg={toastMsg} />}
       <LeftPanel />
       <RightPanel
         mode={mode}

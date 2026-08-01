@@ -7,6 +7,7 @@ import { ReactNode, useEffect } from "react";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { getLayerPopupContainer } from "@/lib/layer";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { useI18nStore } from "@/stores/i18n-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,10 +101,22 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** 同步当前语言到 <html lang>，随语言切换实时更新 */
+function HtmlLangSync() {
+  const lang = useI18nStore((s) => s.lang);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+  return null;
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <AntConfigProvider>{children}</AntConfigProvider>
+      <AntConfigProvider>
+        <HtmlLangSync />
+        {children}
+      </AntConfigProvider>
     </QueryClientProvider>
   );
 }
