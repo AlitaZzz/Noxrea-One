@@ -41,6 +41,8 @@ const configSchema = z.object({
 
   // Upload
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(30),
+  // 上传文件根目录（相对项目根，或绝对路径）
+  UPLOAD_DIR: z.string().default("uploads"),
 
   // HTTP timeouts — scene-based
   HTTP_DL_CONNECT: z.coerce.number().positive().default(15),

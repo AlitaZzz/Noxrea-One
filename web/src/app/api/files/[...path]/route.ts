@@ -5,22 +5,7 @@ import { getResizedWebP, validateUserFile } from "@server/services/storage/media
 import { localStorage } from "@server/services/storage/backends/local";
 import { fail } from "@server/core/response";
 import path from "path";
-import fs from "fs/promises";
-import { createReadStream, existsSync } from "fs";
-
-/** 项目根目录的 uploads（兼容 Next.js cwd=web/） */
-function getUploadDir(): string {
-  let dir = path.resolve(process.cwd(), "uploads");
-  const parentDir = path.resolve(process.cwd(), "..");
-  const parentUploads = path.resolve(parentDir, "uploads");
-  // 如果父目录有 uploads 且包含用户子目录（如 "3/"），说明当前在 web/ 下
-  if (existsSync(parentUploads) && existsSync(path.resolve(parentUploads, "3"))) {
-    dir = parentUploads;
-  }
-  return dir;
-}
-
-const UPLOAD_DIR = getUploadDir();
+import { createReadStream } from "fs";
 
 export async function GET(
   request: NextRequest,
@@ -48,10 +33,10 @@ export async function GET(
     }
   }
 
-  const fullPath = path.resolve(UPLOAD_DIR, filePath);
+  const fullPath = path.resolve(localStorage.baseDir, filePath);
 
   // 路径穿越校验
-  if (!validateUserFile(fullPath, UPLOAD_DIR)) {
+  if (!validateUserFile(fullPath, localStorage.baseDir)) {
     return fail(403, "Access denied");
   }
 
