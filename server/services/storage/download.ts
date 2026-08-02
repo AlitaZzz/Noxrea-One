@@ -1,10 +1,11 @@
 // ── 远端结果下载（对应 backend/app/services/storage/download.py） ──
 
 import { resolveAndValidate } from "@server/core/ssrf";
-import { getTimeoutPreset, fetchWithTimeout } from "@server/core/http";
+import { fetchWithTimeout } from "@server/core/http";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
+import { resolveFromRoot } from "@server/core/paths";
 import { buildStorageKey } from "./service";
 import { computeBufferHash, sniffMime, normalizeExt } from "./hash";
 import { persistFileObject } from "./persist";
@@ -55,9 +56,6 @@ export async function downloadAndSave(
     }
     // ── 远端下载 ──
     else {
-      const timeout = getTimeoutPreset("dl");
-      const totalTimeout = (timeout.connect + timeout.read) * 1000;
-
       // SSRF 校验
       try {
         const hostname = new URL(cdnUrl).hostname;
@@ -68,7 +66,7 @@ export async function downloadAndSave(
       }
 
       const response = await fetchWithTimeout(cdnUrl, {
-        timeoutMs: totalTimeout,
+        scene: "dl",
       });
 
       if (!response.ok) {
@@ -119,9 +117,10 @@ export async function downloadAndSave(
 
     // ── 构建存储路径：{userId}/{hash[:2]}/{hash}{ext} ──
     const storageKey = buildStorageKey(userId, fileHash, fileExt);
-    const uploadsDir = path.resolve("uploads", path.dirname(storageKey));
+    const uploadsRoot = resolveFromRoot(cfg.UPLOAD_DIR);
+    const uploadsDir = path.resolve(uploadsRoot, path.dirname(storageKey));
     await fs.mkdir(uploadsDir, { recursive: true });
-    const targetPath = path.resolve("uploads", storageKey);
+    const targetPath = path.resolve(uploadsRoot, storageKey);
 
     // 同内容同路径覆盖无影响
     try {

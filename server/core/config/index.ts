@@ -48,26 +48,11 @@ const configSchema = z.object({
   // 上传文件根目录（相对项目根，或绝对路径）
   UPLOAD_DIR: z.string().default("uploads"),
 
-  // HTTP timeouts — scene-based
-  HTTP_DL_CONNECT: z.coerce.number().positive().default(15),
-  HTTP_DL_READ: z.coerce.number().positive().default(30),
-  HTTP_DL_WRITE: z.coerce.number().positive().default(10),
-  HTTP_DL_POOL: z.coerce.number().positive().default(10),
-
-  HTTP_POLL_CONNECT: z.coerce.number().positive().default(10),
-  HTTP_POLL_READ: z.coerce.number().positive().default(15),
-  HTTP_POLL_WRITE: z.coerce.number().positive().default(10),
-  HTTP_POLL_POOL: z.coerce.number().positive().default(5),
-
-  HTTP_API_CONNECT: z.coerce.number().positive().default(10),
-  HTTP_API_READ: z.coerce.number().positive().default(120),
-  HTTP_API_WRITE: z.coerce.number().positive().default(30),
-  HTTP_API_POOL: z.coerce.number().positive().default(10),
-
-  HTTP_ASYNC_CONNECT: z.coerce.number().positive().default(10),
-  HTTP_ASYNC_READ: z.coerce.number().positive().default(30),
-  HTTP_ASYNC_WRITE: z.coerce.number().positive().default(30),
-  HTTP_ASYNC_POOL: z.coerce.number().positive().default(10),
+  // HTTP timeouts - scene-based（单位：秒）
+  HTTP_TIMEOUT_DL: z.coerce.number().positive().default(45),
+  HTTP_TIMEOUT_POLL: z.coerce.number().positive().default(15),
+  HTTP_TIMEOUT_API: z.coerce.number().positive().default(120),
+  HTTP_TIMEOUT_ASYNC: z.coerce.number().positive().default(30),
 
   HTTP_TIMEOUT_INFERENCE: z.coerce.number().positive().default(300),
 
@@ -87,8 +72,8 @@ const configSchema = z.object({
     .transform((v) => v === "true" || v === "1")
     .default("true"),
 
-  // FFmpeg (video frame capture)
-  FFMPEG_PATH: z.string().default("bin/ffmpeg"),
+  // FFmpeg (video frame capture) - 目录路径，代码自动拼接 ffmpeg / ffmpeg.exe
+  FFMPEG_PATH: z.string().default("bin"),
 
   // Proxy (for accessing upstream APIs behind firewall)
   USE_SYSTEM_PROXY: z

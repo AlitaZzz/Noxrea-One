@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http";
-import { getConfig } from "@server/core/config";
 import { getChannel } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
 
@@ -39,7 +38,7 @@ router.post("/api/models/list", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -73,7 +72,6 @@ router.post("/api/models/list", async (c) => {
     const hostname = new URL(normalizedBase).hostname;
     await resolveAndValidate(hostname);
 
-    const cfg = getConfig();
     const headers: Record<string, string> = {};
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
@@ -89,7 +87,7 @@ router.post("/api/models/list", async (c) => {
         const response = await fetchWithTimeout(fullUrl, {
           method: "GET",
           headers,
-          timeoutMs: cfg.HTTP_API_READ * 1000,
+          scene: "api",
         });
         if (response.ok) {
           const raw = await response.json();
