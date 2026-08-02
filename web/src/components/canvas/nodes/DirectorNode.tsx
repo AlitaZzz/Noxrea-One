@@ -69,7 +69,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#ff8a3d", top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#722ed1", top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
     </div>
   );
 }
