@@ -28,6 +28,10 @@ export const GROUP_NODE_PADDING = 40;
 export const GROUP_NODE_MIN_WIDTH = 200;
 export const GROUP_NODE_MIN_HEIGHT = 120;
 
+// Audio node (fixed size, ~0.7x of image default, no resize)
+export const AUDIO_NODE_WIDTH = 420;
+export const AUDIO_NODE_HEIGHT = 237;
+
 // Image/video thumbnail display (short side max pixels)
 /** 节点显示尺寸上限（长边约束，px） */
 export const NODE_DISPLAY_MAX = 600;

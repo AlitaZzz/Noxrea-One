@@ -1,6 +1,8 @@
 import { MarkerType } from "@xyflow/react";
 
 import {
+  AUDIO_NODE_HEIGHT,
+  AUDIO_NODE_WIDTH,
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
   DIRECTOR_NODE_DEFAULT_WIDTH,
@@ -12,6 +14,8 @@ import {
 } from "@/lib/constants";
 import {
   type AnyNode,
+  type AudioNode,
+  type AudioNodeData,
   type DirectorNode,
   type GroupNode,
   type GroupNodeData,
@@ -84,6 +88,23 @@ export function createVideoNode(
   };
 }
 
+export function createAudioNode(
+  position: { x: number; y: number },
+  src?: string
+): AudioNode {
+  return {
+    id: uid("aud"),
+    type: NODE_TYPE.AUDIO,
+    position,
+    data: {
+      label: "",
+      src: src || "",
+      alt: "",
+    } as AudioNodeData,
+    style: { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT },
+  };
+}
+
 export function directorNode(position: { x: number; y: number }): DirectorNode {
   return {
     id: uid("dir"),
@@ -113,6 +134,7 @@ export function createGroupNode(
 const NODE_ID_PREFIX: Record<string, string> = {
   [NODE_TYPE.IMAGE]: "img",
   [NODE_TYPE.VIDEO]: "vid",
+  [NODE_TYPE.AUDIO]: "aud",
   [NODE_TYPE.TEXT]: "text",
   [NODE_TYPE.GROUP]: "group",
   [NODE_TYPE.DIRECTOR]: "dir",

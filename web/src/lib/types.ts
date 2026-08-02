@@ -23,6 +23,7 @@ export const NODE_TYPE = {
   TEXT: "text-node",
   IMAGE: "image-node",
   VIDEO: "video-node",
+  AUDIO: "audio-node",
   DIRECTOR: "director-node",
   GROUP: "group-node",
 } as const;
@@ -134,6 +135,19 @@ export type VideoNodeData = {
   genSettings?: VideoGenSettings;
 };
 
+export type AudioNodeData = {
+  /** 展示标题（双写 alt，见 ImageNode 约定） */
+  label: string;
+  /** 音频资源地址（复用 src 字段名以继承 save-manager 哈希收集） */
+  src: string;
+  /** 回退标题 */
+  alt: string;
+  /** 音频时长（秒），加载元数据后回填 */
+  duration?: number;
+  taskBinding?: TaskBinding;
+  upload?: UploadState;
+};
+
 // ============================================================
 // Model configuration
 // ============================================================
@@ -233,10 +247,11 @@ export type DirectorNodeData = {
 export type TextNode = Node<TextNodeData, typeof NODE_TYPE.TEXT>;
 export type ImageNode = Node<ImageNodeData, typeof NODE_TYPE.IMAGE>;
 export type VideoNode = Node<VideoNodeData, typeof NODE_TYPE.VIDEO>;
+export type AudioNode = Node<AudioNodeData, typeof NODE_TYPE.AUDIO>;
 export type DirectorNode = Node<DirectorNodeData, typeof NODE_TYPE.DIRECTOR>;
 export type GroupNode = Node<GroupNodeData, typeof NODE_TYPE.GROUP>;
 
-export type AnyNode = TextNode | ImageNode | VideoNode | DirectorNode | GroupNode;
+export type AnyNode = TextNode | ImageNode | VideoNode | AudioNode | DirectorNode | GroupNode;
 
 // ============================================================
 // My Assets
