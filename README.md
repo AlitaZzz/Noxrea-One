@@ -137,12 +137,17 @@ Noxrea-AI-Canvas/
 | 画布引擎 | @xyflow/react (React Flow) | ^12 |
 | 状态管理 | Zustand | ^5 |
 | UI 组件库 | Ant Design | ^6 |
+| 请求/缓存 | @tanstack/react-query | ^5 |
+| 3D 引擎 | three.js | ^0.185 |
+| 图标 | lucide-react | ^1 |
 | 后端框架 | Hono + @hono/node-server | ^4 |
 | 后端运行时 | Node.js 18+ / TypeScript 5+ | - |
 | ORM | Prisma | ^6 |
 | 数据库 | SQLite（开发）/ PostgreSQL（生产） | - |
 | 鉴权 | JWT (jose) + bcryptjs | ^5 / ^2 |
 | 校验 | Zod | ^3 |
+| HTTP 客户端 | Node 内置 fetch + undici | ^7 |
+| 并发控制 | p-limit | ^6 |
 | 日志 | pino + pino-pretty | ^9 |
 | 图像处理 | sharp | ^0.33 |
 | 进程管理 | tsx（server）/ concurrently（dev） | - |
@@ -184,8 +189,17 @@ npm run dev
 | `SERVER_PORT` | 后端 HTTP 端口，默认 `4000` |
 | `SERVER_HOST` | 后端监听地址，默认 `0.0.0.0` |
 | `UPLOAD_DIR` | 上传文件根目录，默认 `uploads`（相对项目根或绝对路径） |
-| `FFMPEG_PATH` | ffmpeg 路径，默认 `bin/ffmpeg`（视频截帧） |
-| `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
+| `MAX_UPLOAD_SIZE_MB` | 上传文件大小上限（MB），默认 `30`；Next.js proxy body 限制自动跟随此值 +5mb |
+| `FFMPEG_PATH` | ffmpeg 所在目录，默认 `bin`（代码自动拼接 `ffmpeg`/`ffmpeg.exe`） |
+| `HTTP_TIMEOUT_DL` | 下载/CDN 超时（秒），默认 `45` |
+| `HTTP_TIMEOUT_POLL` | 异步轮询超时（秒），默认 `15` |
+| `HTTP_TIMEOUT_API` | 同步普通接口超时（秒），默认 `120` |
+| `HTTP_TIMEOUT_ASYNC` | 异步任务创建超时（秒），默认 `30` |
+| `WORKER_MAX_CONCURRENCY` | Worker 并发数，默认 `10` |
+| `INFERENCE_SERVICE_URL` | 推理服务地址（背景移除等），默认 `http://localhost:8100` |
+| `USE_SYSTEM_PROXY` | 是否使用代理访问上游 API，默认 `false` |
+| `PROXY_URL` | 代理地址，如 `http://127.0.0.1:7890` |
+| `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验），默认 `false` |
 
 ## 文档
 
