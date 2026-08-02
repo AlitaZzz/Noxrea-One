@@ -166,6 +166,10 @@
 body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease; }
 .react-flow__node { font-size: 14px; }
 .react-flow__node-image-node { overflow: visible !important; }
+.react-flow__node-audio-node { overflow: visible !important; }
+.react-flow__node-director-node { overflow: visible !important; }
+.react-flow__node-video-node { overflow: visible !important; }
+.react-flow__node-text-node { overflow: visible !important; }
 .ant-btn-sm { font-size: 13px; }
 
 /* Button sizing (global) */
