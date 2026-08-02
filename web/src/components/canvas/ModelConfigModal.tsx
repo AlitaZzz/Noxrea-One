@@ -17,6 +17,8 @@ import { memo, useEffect, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { TextIcon } from "@/components/common/TextIcon";
+import { EyeIcon } from "@/components/common/icons/EyeIcon";
+import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
 import type { ModelCapability, ModelInfo } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
@@ -425,22 +427,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
               placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
               onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
               style={{ width: "100%" }}
-              iconRender={(v) => (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
-                  {v ? (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </>
-                  ) : (
-                    <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </>
-                  )}
-                </svg>
-              )}
+              iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
             />
           </div>
           </div>

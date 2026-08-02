@@ -46,6 +46,7 @@ import AudioNode from "@/components/canvas/nodes/AudioNode";
 import TextGenerationPanel from "@/components/canvas/TextGenerationPanel";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
+import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
 import { useAddNode } from "@/hooks/use-add-node";
 import { useCanvasEvents } from "@/hooks/use-canvas-events";
 import { useFileDrop } from "@/hooks/use-file-drop";
@@ -461,10 +462,10 @@ export default function InfiniteCanvas() {
                 trigger={
                   <div className="flex shrink-0 cursor-pointer items-center gap-1 hover:bg-white/10 rounded px-0.5 py-0.5 transition-colors">
                     <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
-                    <svg width="10" height="10" viewBox="0 0 16 16" className="shrink-0 transition-transform duration-200"
-                      style={{ color: "var(--canvas-text-dim)", transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}>
-                      <g transform="translate(4.7 5.8)"><path d="M6.2 0.1C6.36 -0.06 6.61 -0.06 6.77 0.1L7.19 0.52C7.35 0.68 7.35 0.93 7.19 1.09L4.15 4.13C3.87 4.4 3.43 4.4 3.16 4.13L0.12 1.09C-0.04 0.93 -0.04 0.68 0.12 0.52L0.54 0.1C0.7 -0.07 0.95 -0.07 1.11 0.1L3.65 2.64L6.2 0.1Z" fill="currentColor"/></g>
-                    </svg>
+                    <ChevronDownIcon
+                      className="shrink-0 transition-transform duration-200"
+                      style={{ color: "var(--canvas-text-dim)", width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
+                    />
                   </div>
                 }
                 placement="bottomLeft"

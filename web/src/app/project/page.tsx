@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 import SettingsModal from "@/components/auth/SettingsModal";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/common/MenuPopover";
+import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
+import { ThemeDarkIcon } from "@/components/common/icons/ThemeDarkIcon";
+import { ThemeLightIcon } from "@/components/common/icons/ThemeLightIcon";
 import type { CanvasProject } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";
@@ -104,9 +107,9 @@ export default function ProjectPage() {
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
                 onClick={() => { const next = theme === "dark" ? "light" : "dark"; toggleTheme(); useAuthStore.getState().savePreference("theme", next); setAvatarOpen(false); }}>
 {theme === "dark" ? (
-                  <><span>{t("theme.dark")}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: "auto" }}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></>
+                  <><span>{t("theme.dark")}</span><ThemeDarkIcon style={{ flexShrink: 0, marginLeft: "auto" }} /></>
                 ) : (
-                  <><span>{t("theme.light")}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: "auto" }}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></>
+                  <><span>{t("theme.light")}</span><ThemeLightIcon style={{ flexShrink: 0, marginLeft: "auto" }} /></>
                 )}
               </button>
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
@@ -131,9 +134,7 @@ export default function ProjectPage() {
               )}
             </div>
             <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || "User"}</span>
-            <svg width="10" height="10" viewBox="0 0 16 16" style={{ color: "var(--canvas-text-dim)" }}>
-              <g transform="translate(4.7 5.8)"><path d="M6.2 0.1C6.36-0.06 6.61-0.06 6.77 0.1L7.19 0.52C7.35 0.68 7.35 0.93 7.19 1.09L4.15 4.13C3.87 4.4 3.43 4.4 3.16 4.13L0.12 1.09C-0.04 0.93-0.04 0.68 0.12 0.52L0.54 0.1C0.7-0.07 0.95-0.07 1.11 0.1L3.65 2.64L6.2 0.1Z" fill="currentColor"/></g>
-            </svg>
+            <ChevronDownIcon style={{ color: "var(--canvas-text-dim)", width: 10, height: 10 }} />
           </div>
         </Popover>
       </div>

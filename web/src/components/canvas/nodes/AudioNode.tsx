@@ -1,7 +1,7 @@
 "use client";
 
 import { DeleteOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
-import { WaveIcon } from "@/components/canvas/nodes/WaveIcon";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
