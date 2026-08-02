@@ -2,6 +2,17 @@
 
 无限画布 AI 创作工具，支持节点式画布编辑、图片/文字/视频生成，以及 3D 导演模式。
 
+## 项目结构说明（npm Workspaces）
+
+本项目是一个 **npm workspaces monorepo**，根 `package.json` 通过 `workspaces: ["web"]` 将 `web` 声明为工作区子包。
+
+- 依赖只在**根目录**安装一次（依赖提升 / hoisting），安装后根 `node_modules` 中会通过软链 `node_modules/web -> ../web` 指向子包。
+- 全仓库只有**一个** `package-lock.json`（位于根目录），子包 `web` 不应存在独立 lock 文件，也不要在 `web/` 内单独执行 `npm install`。
+- `web/` 与 `server/`（含 `prisma/`）共享同一套 TypeScript 基类配置 `tsconfig.base.json`。
+- 所有跨包脚本统一在根 `package.json` 的 `scripts` 中编排（如 `npm run dev` 通过 `concurrently` 同时拉起 web 与 server）。
+
+> ⚠️ 不要删除 `web/node_modules`（若历史残留存在）后单独在 web 里 install；统一用根 `npm install` 管理。
+
 ## 系统架构
 
 ```
@@ -48,7 +59,7 @@
 
 ```
 Noxrea-AI-Canvas/
-├── web/                         # Next.js 纯前端
+├── web/                         # Next.js 纯前端（workspaces 子包）
 │   └── src/
 │       ├── app/                 # App Router 页面（API 已迁移至 server）
 │       │   ├── canvas/          # 画布主页
@@ -93,9 +104,12 @@ Noxrea-AI-Canvas/
 │   ├── schema.prisma            # Prisma schema
 │   └── migrations/              # 数据库迁移历史（已纳入版本控制）
 │
-├── inference_service/           # 独立推理服务（背景移除）
+├── inference_service/           # 独立推理服务（背景移除等，默认 http://localhost:8100）
 ├── docs/                        # 项目文档
-├── start.bat / start.ps1        # 一键启动脚本
+├── package.json                 # 根配置（含 workspaces: ["web"] 与统一脚本）
+├── package-lock.json            # 全仓库唯一锁文件
+├── tsconfig.base.json           # TS 公共基类配置（根与 web 共享）
+├── tsconfig.json                # 根 TS 配置（管 server/ + prisma/）
 └── CLAUDE.md                    # AI 协作指南
 ```
 
@@ -158,12 +172,17 @@ Noxrea-AI-Canvas/
 
 - Node.js >= 18
 
+### 安装依赖
+
+> 本仓库为 npm workspaces，**只需在根目录执行一次安装**，即可同时覆盖根（server）与 `web` 子包；请勿在 `web/` 内单独 `npm install`。
+
+```bash
+npm install        # 根目录执行，自动安装 workspaces 全部依赖
+```
+
 ### 快速启动
 
 ```bash
-# 安装依赖
-npm install
-
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env，设置 JWT_SECRET_KEY（必填）
@@ -172,12 +191,26 @@ cp .env.example .env
 npx prisma migrate deploy
 # 开发期如需重新生成迁移可用：npx prisma migrate dev
 
-# 启动（Web + Server 同时启动）
+# 启动（Web + Server 同时启动，通过 concurrently 编排）
 npm run dev
 # 前端 http://localhost:3000，API 通过 rewrites 代理到 localhost:4000
 #
+# 生产/后台启动（web 构建后常驻）：
+# npm start
+#
 # 首次使用：通过页面注册账号（需 .env 中 ALLOW_REGISTRATION=true）
 ```
+
+如需单独启动某一端：
+
+```bash
+npm run dev:web       # 仅前端
+npm run dev:server    # 仅后端（tsx watch）
+```
+
+### 独立推理服务（可选）
+
+`inference_service/` 为独立的背景移除等推理服务，默认监听 `http://localhost:8100`，由 `INFERENCE_SERVICE_URL` 配置。开发时如用到相关能力需单独启动该服务（详见其目录下的说明）。
 
 ### 关键配置
 
