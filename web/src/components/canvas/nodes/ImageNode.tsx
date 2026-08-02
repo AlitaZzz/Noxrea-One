@@ -388,7 +388,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: t("image.node"), alt: "", naturalWidth: 0, naturalHeight: 0,
+      src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
       rotation: undefined, flipH: undefined, flipV: undefined,
       upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
