@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MentionDropdown, { type ReferenceItem } from "./MentionDropdown";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 
 interface Props {
   references: ReferenceItem[];
@@ -12,7 +13,12 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-/** Extract plain text from contentEditable: chips → "图N", <br> → \n */
+/** chip 显示的标签：图片为 图N，音频为 音N */
+function chipLabel(r: ReferenceItem): string {
+  return `${r.kind === "audio" ? "音" : "图"}${r.index + 1}`;
+}
+
+/** Extract plain text from contentEditable: chips → "图N"/"音N", <br> → \n */
 function extractPlainText(root: HTMLElement): string {
   const parts: string[] = [];
   function walk(node: Node) {
@@ -22,7 +28,8 @@ function extractPlainText(root: HTMLElement): string {
       const el = node as HTMLElement;
       if (el.classList.contains("mention-chip")) {
         const idx = parseInt(el.getAttribute("data-ref-index") || "0", 10);
-        parts.push(`图${idx + 1}`);
+        const kind = el.getAttribute("data-ref-kind") === "audio" ? "audio" : "image";
+        parts.push(`${kind === "audio" ? "音" : "图"}${idx + 1}`);
       } else if (el.tagName === "BR") {
         parts.push("\n");
       } else {
@@ -37,7 +44,7 @@ function extractPlainText(root: HTMLElement): string {
 /** Render plain text → contentEditable HTML with chip spans */
 function renderHtml(text: string, references: ReferenceItem[]): string {
   const lookup = new Map<string, ReferenceItem>();
-  references.forEach((r) => lookup.set(`图${r.index + 1}`, r));
+  references.forEach((r) => lookup.set(chipLabel(r), r));
 
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -46,10 +53,14 @@ function renderHtml(text: string, references: ReferenceItem[]): string {
 
   let html = escaped.replace(/\n/g, "<br>");
 
-  html = html.replace(/图(\d+)/g, (match, num) => {
+  html = html.replace(/[图音](\d+)/g, (match) => {
     const ref = lookup.get(match);
     if (!ref) return match;
-    return `<span class="mention-chip" contenteditable="false" data-ref-src="${escapeAttr(ref.src)}" data-ref-index="${ref.index}" style="${escapeAttr(CHIP_STYLE)}"><img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${match}</span>`;
+    const inner =
+      ref.kind === "audio"
+        ? `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;"><svg viewBox="0 0 16 16" fill="none" style="display:inline-block;vertical-align:-0.125em;width:14px;height:14px;"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.333 6.667v2M4 4v7.333M6.667 2v12M9.333 5.333V10M12 3.333V12M14.667 6.667v2"/></svg></span>${match}`
+        : `<img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${match}`;
+    return `<span class="mention-chip" contenteditable="false" data-ref-src="${escapeAttr(ref.src)}" data-ref-index="${ref.index}" data-ref-kind="${ref.kind}" style="${escapeAttr(CHIP_STYLE)}">${inner}</span>`;
   });
 
   return html;
@@ -135,20 +146,18 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     let changed = false;
     chips.forEach((chip) => {
       const src = chip.getAttribute("data-ref-src");
-      const newIdx = references.findIndex((r) => r.src === src);
-      if (newIdx >= 0) {
+      const kind = chip.getAttribute("data-ref-kind") === "audio" ? "audio" : "image";
+      const ref = references.find((r) => r.src === src && r.kind === kind);
+      if (ref) {
         const oldIdx = chip.getAttribute("data-ref-index");
-        if (oldIdx !== String(newIdx)) {
-          chip.setAttribute("data-ref-index", String(newIdx));
-          const textNode = chip.lastChild;
-          if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-            textNode.textContent = `图${newIdx + 1}`;
-          }
-          const img = chip.querySelector("img");
-          if (img) {
-            const ref = references[newIdx];
-            if (ref) img.src = ref.thumbnail;
-          }
+        if (oldIdx !== String(ref.index)) {
+          chip.setAttribute("data-ref-index", String(ref.index));
+          const labelText = chipLabel(ref);
+          const textNode = Array.from(chip.childNodes).find(
+            (n) => n.nodeType === Node.TEXT_NODE,
+          );
+          if (textNode) textNode.textContent = labelText;
+          else chip.appendChild(document.createTextNode(labelText));
           changed = true;
         }
       } else {
@@ -210,13 +219,23 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
       chip.contentEditable = "false";
       chip.setAttribute("data-ref-src", item.src);
       chip.setAttribute("data-ref-index", String(item.index));
+      chip.setAttribute("data-ref-kind", item.kind);
       chip.setAttribute("style", CHIP_STYLE);
 
-      const img = document.createElement("img");
-      img.src = item.thumbnail;
-      img.style.cssText = "width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;";
-      chip.appendChild(img);
-      chip.appendChild(document.createTextNode(`图${item.index + 1}`));
+      if (item.kind === "audio") {
+        const wave = document.createElement("span");
+        wave.style.cssText =
+          "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;";
+        wave.innerHTML =
+          '<svg viewBox="0 0 16 16" fill="none" style="display:inline-block;vertical-align:-0.125em;width:14px;height:14px;"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.333 6.667v2M4 4v7.333M6.667 2v12M9.333 5.333V10M12 3.333V12M14.667 6.667v2"/></svg>';
+        chip.appendChild(wave);
+      } else {
+        const img = document.createElement("img");
+        img.src = item.thumbnail;
+        img.style.cssText = "width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;";
+        chip.appendChild(img);
+      }
+      chip.appendChild(document.createTextNode(chipLabel(item)));
 
       range.insertNode(chip);
 
@@ -291,7 +310,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
   );
 
   const filteredRefs = mentionQuery
-    ? references.filter((r) => `图${r.index + 1}`.includes(mentionQuery))
+    ? references.filter((r) => chipLabel(r).includes(mentionQuery))
     : references;
   const showDropdown = mentionActive && filteredRefs.length > 0;
 
