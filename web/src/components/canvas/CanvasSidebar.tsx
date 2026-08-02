@@ -19,6 +19,7 @@ import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "a
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TextIcon } from "@/components/common/TextIcon";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { MenuDivider } from "@/components/common/MenuPopover";
@@ -37,6 +38,7 @@ const NODE_TYPE_I18N: Record<string, string> = {
   [NODE_TYPE.VIDEO]: "video.node",
   [NODE_TYPE.TEXT]: "text.node",
   [NODE_TYPE.GROUP]: "group.node",
+  [NODE_TYPE.AUDIO]: "audio.node",
 };
 
 const NODE_TYPE_ORDER = [
@@ -44,6 +46,7 @@ const NODE_TYPE_ORDER = [
   NODE_TYPE.IMAGE,
   NODE_TYPE.VIDEO,
   NODE_TYPE.TEXT,
+  NODE_TYPE.AUDIO,
   NODE_TYPE.GROUP,
 ];
 
@@ -63,6 +66,7 @@ const TYPE_COLORS: Record<string, string> = {
   [NODE_TYPE.VIDEO]: "#13c2c2",
   [NODE_TYPE.TEXT]: "#1677ff",
   [NODE_TYPE.GROUP]: "#722ed1",
+  [NODE_TYPE.AUDIO]: "#fa8c16",
 };
 
 function getNodeTypeIcon(type: string) {
@@ -74,6 +78,7 @@ function getNodeTypeIcon(type: string) {
     case NODE_TYPE.VIDEO:    return <VideoCameraOutlined style={s} />;
     case NODE_TYPE.DIRECTOR: return <PartitionOutlined style={s} />;
     case NODE_TYPE.GROUP:    return <GroupOutlined style={s} />;
+    case NODE_TYPE.AUDIO:    return <WaveIcon style={s} />;
     default:                 return <PictureOutlined style={s} />;
   }
 }
