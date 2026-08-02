@@ -2,7 +2,7 @@
 
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
-import { createImageNode, createVideoNode } from "@/lib/node-defaults";
+import { createAudioNode, createImageNode, createVideoNode } from "@/lib/node-defaults";
 import type { AssetItem } from "@/lib/types";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
@@ -19,8 +19,9 @@ export function addAssetToCanvas(asset: AssetItem) {
 
   const pos = findFreePosition({ width: dw, height: dh });
 
-  // 检查资产是否带源 URL（视频 → VideoNode，图片 → ImageNode）
+  // 检查资产是否带源 URL（视频 → VideoNode，图片 → ImageNode，音频 → AudioNode）
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
+  const isAudio = asset.type === "audio";
   const isVideo =
     sourceUrl &&
     (sourceUrl.endsWith(".mp4") ||
@@ -28,6 +29,12 @@ export function addAssetToCanvas(asset: AssetItem) {
       sourceUrl.endsWith(".mov"));
 
   const addNodes = s.addNodes;
+  if (isAudio) {
+    const node = createAudioNode(pos, sourceUrl);
+    node.data.label = asset.name;
+    node.data.alt = asset.name;
+    addNodes([node]);
+  }
   if (isVideo) {
     const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
