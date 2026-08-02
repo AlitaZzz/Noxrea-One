@@ -3,7 +3,7 @@ import { loadConfig } from "@server/core/config";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
 
-// ── 幂等初始化（Next 与 Worker 两进程共用） ──
+// ── 幂等初始化（HTTP + Worker 同进程） ──
 
 let initialized = false;
 
