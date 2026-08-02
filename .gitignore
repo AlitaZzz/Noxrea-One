@@ -44,9 +44,11 @@ web/next-env.d.ts
 # Prisma
 # =====================================================
 
-prisma/dev.db
-prisma/dev.db-shm
-prisma/dev.db-wal
+# 本地开发数据库（实际位于 prisma/prisma/ 下）
+prisma/prisma/dev.db
+prisma/prisma/dev.db-shm
+prisma/prisma/dev.db-wal
+# 全局 *.db / *.db-shm / *.db-wal 规则同样覆盖上述文件；此处明确路径避免歧义
 # prisma/migrations/ 已纳入版本控制（共享迁移历史，不在此忽略）
 
 
