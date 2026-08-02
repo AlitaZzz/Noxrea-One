@@ -10,6 +10,7 @@ export const taskCreateSchema = z.object({
   prompt: z.string().optional(),
   config: z.record(z.unknown()).optional(),
   refImages: z.array(z.string()).optional(),
+  refAudio: z.array(z.string()).optional(),
   nodeId: z.string().optional(),
 });
 
@@ -24,6 +25,7 @@ export const taskOutSchema = z.object({
   prompt: z.string(),
   config: z.record(z.unknown()),
   refImages: z.array(z.string()).nullable(),
+  refAudio: z.array(z.string()).nullable(),
   resultUrls: z.array(z.string()).nullable(),
   resultText: z.string().nullable(),
   error: z.string().nullable(),

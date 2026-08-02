@@ -6,6 +6,7 @@ export interface WorkerContext {
   task: GenerationTask;
   config: Record<string, unknown>;
   refImages: string[];
+  refAudio: string[];
 }
 
 /** 从 Prisma GenerationTask 构建 WorkerContext
@@ -16,5 +17,6 @@ export function buildContext(task: GenerationTask): WorkerContext {
     task,
     config: (task.config as Record<string, unknown>) ?? {},
     refImages: (task.refImages as string[]) ?? [],
+    refAudio: (task.refAudio as string[]) ?? [],
   };
 }

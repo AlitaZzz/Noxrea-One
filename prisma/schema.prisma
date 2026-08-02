@@ -54,6 +54,7 @@ model GenerationTask {
   prompt         String   @default("") @map("prompt")
   config         String   @default("{}") @map("config") // JSON TEXT
   refImages      String?  @map("ref_images") // JSON TEXT
+  refAudio       String?  @map("ref_audio") // JSON TEXT
   resultUrls     String?  @map("result_urls") // JSON TEXT
   resultText     String?  @map("result_text")
   error          String?  @map("error")

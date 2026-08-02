@@ -96,6 +96,7 @@ router.post("/api/generate/task", async (c) => {
     prompt,
     config,
     refImages: data.refImages,
+    refAudio: data.refAudio,
     nodeId: data.nodeId ?? "",
   });
 

@@ -4,7 +4,7 @@ import { routeGenerate } from "@server/services/gateway/router";
 import { updateTaskStatus } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
-import { resolveRefImages } from "@server/services/resolvers/reference";
+import { resolveRefImages, resolveRefAudio } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams } from "@server/services/model-config";
 import { buildContext } from "./context";
@@ -44,6 +44,9 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     // 2. 解析参考图
     const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
 
+    // 2.5 解析参考音频
+    const resolvedAudio = await resolveRefAudio(ctx.refAudio, task.userId);
+
     // 3. 基础参数
     const capability = task.type ?? "image";
     const protocol = task.protocol ?? channel.protocol ?? "openai";
@@ -62,6 +65,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       prompt: task.prompt,
       ...ctx.config,
       refImages: resolvedImages,
+      ...(resolvedAudio.length > 0 ? { refAudio: resolvedAudio } : {}),
     };
 
     logEvent("executor", {

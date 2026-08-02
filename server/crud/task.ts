@@ -13,6 +13,7 @@ export async function createTask(data: {
   prompt?: string;
   config?: Record<string, unknown>;
   refImages?: string[];
+  refAudio?: string[];
   nodeId?: string;
 }) {
   const id = crypto.randomUUID();
@@ -27,6 +28,7 @@ export async function createTask(data: {
       prompt: data.prompt ?? "",
       config: stringifyJson(data.config ?? {}),
       refImages: data.refImages ? stringifyJson(data.refImages) : null,
+      refAudio: data.refAudio ? stringifyJson(data.refAudio) : null,
       nodeId: data.nodeId ?? "",
     },
   });
@@ -245,6 +247,7 @@ function deserializeTask(task: GenerationTask) {
     ...task,
     config: parseJsonObject(task.config),
     refImages: parseJsonArray(task.refImages),
+    refAudio: parseJsonArray(task.refAudio),
     resultUrls: parseJsonArray(task.resultUrls),
   };
 }
