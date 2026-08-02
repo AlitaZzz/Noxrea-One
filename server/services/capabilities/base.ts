@@ -42,7 +42,3 @@ export function registerCapability(
 export function getCapability(name: string): CapabilityService | undefined {
   return capabilityRegistry.get(name);
 }
-
-export function listCapabilities(): string[] {
-  return [...capabilityRegistry.keys()];
-}
