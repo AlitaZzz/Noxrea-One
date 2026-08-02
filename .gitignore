@@ -52,10 +52,8 @@ prisma/dev.db-wal
 
 
 # =====================================================
-# Backend - Python FastAPI (kept locally as reference, not committed to Git)
+# Python (inference_service 等)
 # =====================================================
-
-backend/
 
 # Python cache
 __pycache__/
@@ -97,17 +95,17 @@ inference_service/.env
 # User Generated Files
 # =====================================================
 
-# Upload files
-uploads/
+# Upload files（本地文件存储）
+/uploads/
 
-# Generated assets
-storage/
-output/
-outputs/
+# Generated assets（锚定根目录，避免误伤 server/services/storage 等同名源码目录）
+/storage/
+/output/
+/outputs/
 
 # Temporary files
-tmp/
-temp/
+/tmp/
+/temp/
 
 
 
@@ -116,8 +114,8 @@ temp/
 # =====================================================
 
 *.log
-logs/
-log/
+/logs/
+/log/
 
 
 
@@ -149,9 +147,6 @@ huggingface/
 
 # Claude cache
 .claude/cache/
-
-# 模型能力推断用的本地参考库（手动刷新，见 backend/scripts/fetch_model_db.py）
-backend/app/data/openrouter_models.json
 
 
 
@@ -190,5 +185,5 @@ Thumbs.db
 # FFmpeg
 # =====================================================
 
-# 项目根目录 bin/，存放 ffmpeg 等平台相关二进制依赖（体积大，不提交到 Git）
-bin/
+# bin/，存放 ffmpeg 等平台相关二进制依赖（体积大，不提交到 Git）
+/bin/

@@ -13,6 +13,7 @@ import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/util
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
+import { localStorage } from "@server/services/storage/backends/local";
 import type { GenerationResult } from "@server/schemas/result";
 import path from "path";
 import fs from "fs/promises";
@@ -80,7 +81,7 @@ class AudioCapabilityService implements CapabilityService {
       const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
       const fileExt = normalizeExt(sniffedExt) || ".mp3";
       const storageKey = buildStorageKey(ctx.userId, hash, fileExt);
-      const targetPath = path.resolve("uploads", storageKey);
+      const targetPath = path.resolve(localStorage.baseDir, storageKey);
 
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.writeFile(targetPath, buffer);

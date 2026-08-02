@@ -177,6 +177,7 @@ npm run dev
 | `DATABASE_URL` | SQLite `file:./prisma/dev.db` 或 PG 连接串 |
 | `JWT_SECRET_KEY` | JWT 签名密钥（必填） |
 | `ALLOW_REGISTRATION` | 是否开放页面注册，默认 `true` |
+| `UPLOAD_DIR` | 上传文件根目录，默认 `uploads`（相对项目根或绝对路径） |
 | `FFMPEG_PATH` | ffmpeg 路径，默认 `bin/ffmpeg`（视频截帧） |
 | `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
 

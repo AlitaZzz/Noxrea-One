@@ -6,26 +6,18 @@ import { existsSync } from "fs";
 import { spawn } from "child_process";
 import { localStorage } from "./backends/local";
 import { getConfig } from "@server/core/config";
+import { resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
 
-/** 解析 ffmpeg 路径：相对路径 → 项目根目录下的绝对路径 */
+/** 解析 ffmpeg 路径：相对路径按项目根解析；Windows 上自动补 .exe 扩展名 */
 function resolveFfmpegPath(configPath: string): string {
   if (path.isAbsolute(configPath)) return configPath;
-  // Windows 上 spawn 需要 .exe 扩展名
-  const candidates = process.platform === "win32"
-    ? [configPath, `${configPath}.exe`]
-    : [configPath];
-  // 向上查找项目根目录（包含 package.json 和 server/）
-  let dir = process.cwd();
-  for (let i = 0; i < 3; i++) {
-    for (const c of candidates) {
-      const candidate = path.resolve(dir, c);
-      if (existsSync(candidate)) return candidate;
-    }
-    dir = path.resolve(dir, "..");
+  const resolved = resolveFromRoot(configPath);
+  if (process.platform === "win32" && !existsSync(resolved)) {
+    const withExt = `${resolved}.exe`;
+    if (existsSync(withExt)) return withExt;
   }
-  // fallback：当前 cwd 下的相对路径
-  return path.resolve(process.cwd(), candidates[candidates.length - 1]);
+  return resolved;
 }
 
 /**

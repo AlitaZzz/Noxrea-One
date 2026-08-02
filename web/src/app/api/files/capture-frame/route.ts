@@ -5,20 +5,6 @@ import { localStorage } from "@server/services/storage/backends/local";
 import { ok, fail } from "@server/core/response";
 import path from "path";
 import fs from "fs/promises";
-import { existsSync } from "fs";
-
-/** 项目根目录的 uploads（兼容 Next.js cwd=web/） */
-function getUploadDir(): string {
-  let dir = path.resolve(process.cwd(), "uploads");
-  const parentDir = path.resolve(process.cwd(), "..");
-  const parentUploads = path.resolve(parentDir, "uploads");
-  if (existsSync(parentUploads) && existsSync(path.resolve(parentUploads, "3"))) {
-    dir = parentUploads;
-  }
-  return dir;
-}
-
-const UPLOAD_DIR = getUploadDir();
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -38,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   if (!video_key) return fail(400, "video_key is required");
 
-  const videoPath = path.resolve(UPLOAD_DIR, video_key);
+  const videoPath = path.resolve(localStorage.baseDir, video_key);
 
   try {
     await fs.access(videoPath);
@@ -48,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const ext = path.extname(video_key);
   const frameKey = video_key.replace(ext, `_frame_${time ?? 1}.jpg`);
-  const framePath = path.resolve(UPLOAD_DIR, frameKey);
+  const framePath = path.resolve(localStorage.baseDir, frameKey);
 
   try {
     await captureVideoFrame(videoPath, framePath, time ?? 1);
