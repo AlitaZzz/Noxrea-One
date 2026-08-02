@@ -1,12 +1,17 @@
 import { Hono } from "hono";
 import { ok } from "@server/core/response";
+import { router as authRouter } from "./routes/auth";
+import { router as modelConfigRouter } from "./routes/model-config";
 
 // ── Hono 应用实例 ──
-// 路由在后续批次中注册，此处仅创建骨架
 const app = new Hono();
 
 // 健康检查
 app.get("/api/health", (c) => c.json(ok({ status: "ok" })));
+
+// 路由注册
+app.route("/", authRouter);
+app.route("/", modelConfigRouter);
 
 // 404
 app.notFound((c) => c.json({ detail: "Not Found" }, 404));
