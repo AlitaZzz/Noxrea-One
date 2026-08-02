@@ -5,10 +5,7 @@ import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 
 // ── 反序列化工具 ──
 
-function deserializeChannel(ch: {
-  config: unknown;
-  models: Array<{ capabilities: unknown }>;
-}) {
+function deserializeChannel<T extends { config: unknown; models: Array<{ capabilities: unknown }> }>(ch: T) {
   return {
     ...ch,
     config: ch.config ? parseJsonObject(ch.config) : null,

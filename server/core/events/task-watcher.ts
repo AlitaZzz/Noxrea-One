@@ -10,6 +10,7 @@ export interface TerminalTaskState {
   resultText?: string;
   error?: string;
   prompt?: string;
+  config?: unknown;
 }
 
 interface PendingSubscription {
