@@ -67,35 +67,10 @@ export class OpenAiImageProtocol implements ProtocolService {
   }
 
   parseImageResponse(response: unknown): ProtocolResponse {
-    const data = response as Record<string, unknown>;
-    const resultData = data?.data as Array<Record<string, unknown>> | undefined;
-
-    const urls: string[] = [];
-    if (Array.isArray(resultData)) {
-      for (const item of resultData) {
-        // b64_json 优先（避免 URL 过期），回退 url
-        const b64 = item?.b64_json as string | undefined;
-        const url = item?.url as string | undefined;
-        if (b64) {
-          // 防止上游已自带 data: 前缀导致双重包装
-          urls.push(b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`);
-        } else if (url) {
-          urls.push(url);
-        }
-      }
-    }
-
-    // 兜底：部分代理返回 { images: [{ url: ... }] }
-    if (urls.length === 0) {
-      const images = data?.images as Array<Record<string, unknown>> | undefined;
-      if (Array.isArray(images)) {
-        for (const img of images) {
-          const url = img?.url as string | undefined;
-          if (url) urls.push(url);
-        }
-      }
-    }
-
+    const raw = JSON.stringify(response);
+    const urls = this._scanUrls(raw);
+    // 兜底：扫描整串无法识别裸 base64（不含 data: 锚点），需按字段名定位后补前缀
+    urls.push(...this._extractB64FromData(response, "data:image/png;base64,"));
     return { urls };
   }
 
@@ -163,26 +138,12 @@ export class OpenAiImageProtocol implements ProtocolService {
   }
 
   parsePollResponse(data: unknown): PollResult {
-    // 1. unwrap：{ code: 200, data: {...} } → 提取内层 data
-    let payload = data as Record<string, unknown>;
+    const payload = data as Record<string, unknown>;
     if (!payload || typeof payload !== "object") {
       return { status: "pending", urls: [] };
     }
-    // unwrap 包裹层（对齐 Python _unwrap）
-    if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
-      payload = payload.data as Record<string, unknown>;
-    }
 
     const status = normalizeStatus(String(payload.status ?? ""));
-
-    if (status === "completed") {
-      const extracted = this._extractImageUrls(payload);
-      if (extracted.length > 0) return { status: "completed", urls: extracted };
-
-      // 确认 status=completed 但无 data → 查看 output/result 兜底
-      const outputUrls = payload.output ?? payload.result;
-      if (typeof outputUrls === "string") return { status: "completed", urls: [outputUrls] };
-    }
 
     if (status === "failed") {
       const err = payload.error ?? payload.message ?? "Unknown error";
@@ -193,12 +154,10 @@ export class OpenAiImageProtocol implements ProtocolService {
       return { status: "failed", urls: [], error: errMsg };
     }
 
-    // status-agnostic 兜底：只要能提取到图片数据就视为完成
-    let extracted = this._extractImageUrls(payload);
-    if (extracted.length === 0 && payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
-      // 双重包裹
-      extracted = this._extractImageUrls(payload.data as Record<string, unknown>);
-    }
+    // 终极兜底：只要能扫描到图片 URL 就视为完成，URL 正则穿透任意层级
+    const extracted = this._extractImageUrls(payload);
+    // 合并裸 base64 兜底（OpenAI 标准 b64_json 不带 data: 前缀）
+    extracted.push(...this._extractB64FromData(payload, "data:image/png;base64,"));
     if (extracted.length > 0) return { status: "completed", urls: extracted };
 
     return { status: "pending", urls: [] };
@@ -219,5 +178,31 @@ export class OpenAiImageProtocol implements ProtocolService {
       if (!urls.includes(u)) urls.push(u);
     }
     return urls;
+  }
+
+  /**
+   * 裸 base64 兜底：正则无法识别不带 data: 前缀的裸 base64，
+   * 故按字段名（b64_json / b64）递归定位后补 MIME 前缀。
+   */
+  private _extractB64FromData(node: unknown, prefix: string): string[] {
+    const result: string[] = [];
+    const visit = (n: unknown) => {
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) {
+        for (const item of n) visit(item);
+        return;
+      }
+      const obj = n as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if ((key === "b64_json" || key === "b64") && typeof val === "string" && val.length > 0) {
+          result.push(val.startsWith("data:") ? val : `${prefix}${val}`);
+        } else if (val !== null && typeof val === "object") {
+          visit(val);
+        }
+      }
+    };
+    visit(node);
+    return result;
   }
 }

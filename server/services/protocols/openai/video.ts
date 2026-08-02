@@ -54,17 +54,10 @@ export class OpenAiVideoProtocol implements ProtocolService {
   }
 
   parseVideoResponse(response: unknown): ProtocolResponse {
-    const data = response as Record<string, unknown>;
-    const resultData = data?.data as Array<Record<string, unknown>> | undefined;
-    const urls: string[] = [];
-
-    if (Array.isArray(resultData)) {
-      for (const item of resultData) {
-        const url = item?.url as string | undefined;
-        if (url) urls.push(url);
-      }
-    }
-
+    const raw = JSON.stringify(response);
+    const urls = this._scanUrls(raw);
+    // 兜底：扫描整串无法识别裸 base64（不含 data: 锚点），需按字段名定位后补前缀
+    urls.push(...this._extractB64FromData(response));
     return { urls };
   }
 
@@ -132,26 +125,12 @@ export class OpenAiVideoProtocol implements ProtocolService {
   }
 
   parsePollResponse(data: unknown): PollResult {
-    let payload = data as Record<string, unknown>;
+    const payload = data as Record<string, unknown>;
     if (!payload || typeof payload !== "object") {
       return { status: "pending", urls: [] };
     }
 
-    // unwrap 包裹层
-    if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
-      payload = payload.data as Record<string, unknown>;
-    }
-
     const status = normalizeStatus(String(payload.status ?? ""));
-
-    if (status === "completed") {
-      const extracted = this._extractVideoUrls(payload);
-      if (extracted.length > 0) return { status: "completed", urls: extracted };
-
-      // 兜底：output/result 字段
-      const outputUrls = payload.output ?? payload.result;
-      if (typeof outputUrls === "string") return { status: "completed", urls: [outputUrls] };
-    }
 
     if (status === "failed") {
       const err = payload.error ?? payload.message ?? "Unknown error";
@@ -162,11 +141,10 @@ export class OpenAiVideoProtocol implements ProtocolService {
       return { status: "failed", urls: [], error: errMsg };
     }
 
-    // status-agnostic 兜底：只要能提取到视频数据就视为完成
-    let extracted = this._extractVideoUrls(payload);
-    if (extracted.length === 0 && payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
-      extracted = this._extractVideoUrls(payload.data as Record<string, unknown>);
-    }
+    // 终极兜底：只要能扫描到视频 URL 就视为完成，URL 正则穿透任意层级
+    const extracted = this._extractVideoUrls(payload);
+    // 合并裸 base64 兜底（部分渠道返回裸 b64_json）
+    extracted.push(...this._extractB64FromData(payload));
     if (extracted.length > 0) return { status: "completed", urls: extracted };
 
     return { status: "pending", urls: [] };
@@ -187,5 +165,31 @@ export class OpenAiVideoProtocol implements ProtocolService {
       if (!urls.includes(u)) urls.push(u);
     }
     return urls;
+  }
+
+  /**
+   * 裸 base64 兜底：正则无法识别不带 data: 前缀的裸 base64，
+   * 故按字段名（b64_json / b64）递归定位后补通用 data: 前缀（MIME 省略，由播放器按内容识别）。
+   */
+  private _extractB64FromData(node: unknown): string[] {
+    const result: string[] = [];
+    const visit = (n: unknown) => {
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) {
+        for (const item of n) visit(item);
+        return;
+      }
+      const obj = n as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if ((key === "b64_json" || key === "b64") && typeof val === "string" && val.length > 0) {
+          result.push(val.startsWith("data:") ? val : `data:;base64,${val}`);
+        } else if (val !== null && typeof val === "object") {
+          visit(val);
+        }
+      }
+    };
+    visit(node);
+    return result;
   }
 }
