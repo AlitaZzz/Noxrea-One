@@ -7,18 +7,29 @@ import { createPortal } from "react-dom";
 
 import type { Entity } from "@/director/entities/entity";
 import { useDirectorStore } from "@/stores/director-store";
+import { DirCameraIcon } from "@/components/common/icons/director/DirCameraIcon";
+import { DirCaretIcon } from "@/components/common/icons/director/DirCaretIcon";
+import { DirCubeIcon } from "@/components/common/icons/director/DirCubeIcon";
+import { DirEyeIcon } from "@/components/common/icons/director/DirEyeIcon";
+import { DirEyeOffIcon } from "@/components/common/icons/director/DirEyeOffIcon";
+import { DirGroupIcon } from "@/components/common/icons/director/DirGroupIcon";
+import { DirPersonIcon } from "@/components/common/icons/director/DirPersonIcon";
+import { DirTrashIcon } from "@/components/common/icons/director/DirTrashIcon";
 
-const ICON: Record<string, string> = {
-  camera: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 10l6-3v10l-6-3"/></svg>`,
-  person: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="6" r="2.5"/><path d="M12 8.5c-2.2 0-3.6 1.5-3.6 3.6V15M12 8.5c2.2 0 3.6 1.5 3.6 3.6V15M9.2 21v-5M14.8 21v-5"/></svg>`,
-  cube: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12v9M4 7.5l8 4.5 8-4.5"/></svg>`,
-  group: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="2.1"/><circle cx="17" cy="7" r="2.1"/><circle cx="7" cy="17" r="2.1"/><circle cx="17" cy="17" r="2.1"/></svg>`,
-  caret: `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>`,
-  eye: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`,
-  eyeOff: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.1 6.1C3.5 7.7 2 12 2 12s3.5 7 10 7a9.5 9.5 0 0 0 4-0.9M3 3l18 18"/></svg>`,
-  trash: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>`,
+const ICON_MAP = {
+  camera: DirCameraIcon,
+  person: DirPersonIcon,
+  cube: DirCubeIcon,
+  group: DirGroupIcon,
+  caret: DirCaretIcon,
+  eye: DirEyeIcon,
+  eyeOff: DirEyeOffIcon,
+  trash: DirTrashIcon,
 };
-const S = (name: string) => ICON[name] || "";
+const S = (name: string) => {
+  const C = ICON_MAP[name as keyof typeof ICON_MAP];
+  return C ? <C /> : null;
+};
 
 export default function Outliner() {
   const entities = useDirectorStore((s) => s.entities);
@@ -106,9 +117,11 @@ export default function Outliner() {
                   <span className={`w-[14px] flex items-center cursor-pointer mr-[-2px] transition-transform ${open ? "rotate-90" : ""}`}
                     style={{ color: "var(--dir-dim)" }}
                     onClick={(e) => { e.stopPropagation(); setCollapsed((c) => { const n = new Set(c); open ? n.add(ent.id) : n.delete(ent.id); return n; }); }}
-                    dangerouslySetInnerHTML={{ __html: S("caret") }} />
+                  >
+                    {S("caret")}
+                  </span>
                 )}
-                <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(ent.type)) }} />
+                <span className="w-[18px] flex items-center">{S(typeIcon(ent.type))}</span>
                 <span className="flex-1 truncate">{ent.name}</span>
                 {isCamera && shotCount > 0 && (
                   <span style={{
@@ -160,7 +173,7 @@ export default function Outliner() {
                     else { runtime?.setCameraView(false); runtime?.select(m.id); }
                   }}
                 >
-                  <span className="w-[18px] flex items-center" dangerouslySetInnerHTML={{ __html: S(typeIcon(m.type)) }} />
+                  <span className="w-[18px] flex items-center">{S(typeIcon(m.type))}</span>
                   <span className="flex-1 truncate">{m.name}</span>
                   {mIsCamera && mShotCount > 0 && (
                     <span style={{
@@ -189,7 +202,7 @@ export default function Outliner() {
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { runtime?.toggleVisibleMany(ctxMenu.ids); setCtxMenu(null); }}>
-            <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }} dangerouslySetInnerHTML={{ __html: S("eye") }} />
+            <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>{S("eye")}</span>
             <span className="flex-1">显示 / 隐藏</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
