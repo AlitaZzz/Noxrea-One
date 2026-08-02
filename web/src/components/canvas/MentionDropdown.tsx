@@ -1,11 +1,14 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 
 export interface ReferenceItem {
   src: string;
   thumbnail: string;
-  index: number; // 0-based index in refOrder
+  index: number; // 0-based index within its kind list
+  kind: "image" | "audio";
+  label?: string; // audio label (filename), unused for images
 }
 
 interface Props {
@@ -100,7 +103,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
     >
       {items.map((item, i) => (
         <div
-          key={item.src}
+          key={`${item.kind}-${item.src}`}
           className="flex items-center gap-3 px-3 py-2 cursor-pointer"
           style={{
             background: i === selectedIndex
@@ -113,17 +116,27 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
             onSelect(item);
           }}
         >
-          <img
-            src={item.thumbnail}
-            alt={`图${item.index + 1}`}
-            className="w-10 h-10 rounded object-cover flex-shrink-0"
-            style={{ border: "1px solid var(--canvas-border, #3a3a3a)" }}
-          />
+          {item.kind === "audio" ? (
+            <div
+              className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
+              style={{ background: "var(--canvas-bg-hover, #3c3c3c)", border: "1px solid var(--canvas-border, #3a3a3a)", color: "#1d9e75" }}
+            >
+              <WaveIcon style={{ width: 22, height: 22 }} />
+            </div>
+          ) : (
+            <img
+              src={item.thumbnail}
+              alt={`图${item.index + 1}`}
+              className="w-10 h-10 rounded object-cover flex-shrink-0"
+              style={{ border: "1px solid var(--canvas-border, #3a3a3a)" }}
+            />
+          )}
           <span
             className="text-sm font-medium"
             style={{ color: "var(--canvas-text)" }}
           >
-            图{item.index + 1}
+            {item.kind === "audio" ? `音${item.index + 1}` : `图${item.index + 1}`}
+            {item.kind === "audio" && item.label ? ` · ${item.label}` : ""}
           </span>
         </div>
       ))}

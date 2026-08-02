@@ -83,6 +83,7 @@ export interface VideoGenSettings {
   seconds: number;
   generateAudio: boolean;
   refOrder: string[];
+  refAudioOrder: string[];
   n: number;
 }
 

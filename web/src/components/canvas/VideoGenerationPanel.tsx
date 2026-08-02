@@ -2,12 +2,14 @@
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
 import { App, Button, Popover, Slider, Tooltip } from "antd";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
 import { TextIcon } from "@/components/common/TextIcon";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
+import { PlayIcon } from "@/components/common/icons/PlayIcon";
+import { StopIcon } from "@/components/common/icons/StopIcon";
 import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/node-defaults";
@@ -60,6 +62,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       seconds: s.seconds ?? (d.seconds as number) ?? 5,
       generateAudio: s.generateAudio ?? true,
       refOrder: s.refOrder || [],
+      refAudioOrder: s.refAudioOrder || [],
       n: s.n || (d.n as number) || 1,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,19 +135,31 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
 
-  // Upstream reference audio (AUDIO 节点, 按连接顺序, 去重)
+  // Upstream reference audio (AUDIO 节点, 按连接顺序, 按节点 id 与 src 双重去重)
   const upstreamAudio = useMemo(() => {
-    const seen = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenSrcs = new Set<string>();
     return canvasEdges
       .filter((e) => e.target === nodeId)
       .map((e) => canvasNodes.find((n) => n.id === e.source))
       .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.AUDIO)
-      .map((n) => ({ id: n.id, src: ((n.data as { src?: string }).src || "").trim() }))
-      .filter((a) => a.src !== "" && !seen.has(a.id) && seen.add(a.id));
+      .map((n) => ({
+        id: n.id,
+        src: ((n.data as { src?: string }).src || "").trim(),
+        label: ((n.data as { label?: string }).label || "").trim(),
+      }))
+      .filter(
+        (a) =>
+          a.src !== "" &&
+          !seenIds.has(a.id) &&
+          !seenSrcs.has(a.src) &&
+          (seenIds.add(a.id), seenSrcs.add(a.src), true),
+      );
   }, [nodeId, canvasNodes, canvasEdges]);
 
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
+  const [audioOrder, setAudioOrder] = useState<string[]>(saved.refAudioOrder || []);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [prevRefImages, setPrevRefImages] = useState(refImages);
   if (refImages !== prevRefImages) {
@@ -156,15 +171,43 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       return [...alive, ...added];
     });
   }
+  // 上游音频 src→label 映射，用于回填持久化顺序的 label
+  const audioSrcLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    upstreamAudio.forEach((a) => {
+      if (a.src) m.set(a.src, a.label);
+    });
+    return m;
+  }, [upstreamAudio]);
+  const audioSrcSet = useMemo(() => new Set(upstreamAudio.map((a) => a.src)), [upstreamAudio]);
+  const [prevAudioSrcs, setPrevAudioSrcs] = useState(audioSrcSet);
+  if (audioSrcSet !== prevAudioSrcs) {
+    setPrevAudioSrcs(audioSrcSet);
+    setAudioOrder((prev) => {
+      const alive = prev.filter((u) => audioSrcSet.has(u));
+      const added = [...audioSrcSet].filter((u) => !prev.includes(u));
+      if (added.length === 0 && alive.length === prev.length) return prev;
+      return [...alive, ...added];
+    });
+  }
 
-  // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）
+  // 构建 @ 提及的参考列表（图片基于 refOrder、音频基于 audioOrder，均保证编号稳定）
   const references = useMemo<ReferenceItem[]>(() => {
-    return refOrder.map((src, i) => ({
+    const images: ReferenceItem[] = refOrder.map((src, i) => ({
       src,
       thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
       index: i,
+      kind: "image",
     }));
-  }, [refOrder]);
+    const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
+      src,
+      thumbnail: src,
+      index: i,
+      kind: "audio",
+      label: audioSrcLabel.get(src) || "",
+    }));
+    return [...images, ...audios];
+  }, [refOrder, audioOrder, audioSrcLabel]);
 
   // Button disabled state derived from persistent node.data.task_status
   const isGenerating = useMemo(() => {
@@ -176,21 +219,21 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudio: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudio: [] as string[], n: 1, entry: null, channel: null });
-  const latestSettingsRef = useRef({ prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n });
+  const latestSettingsRef = useRef({ prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n };
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n]);
+    latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n };
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, n]);
   const { notification } = App.useApp();
 
   // Persist settings to node data on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n },
+        genSettings: { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n, nodeId]);
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, n, nodeId]);
 
   // Flush pending settings on component unmount (not on dep changes)
   useEffect(() => {
@@ -203,7 +246,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           saved.resolution === latest.resolution && saved.ratio === latest.ratio &&
           saved.seconds === latest.seconds && saved.generateAudio === latest.generateAudio &&
           saved.n === latest.n &&
-          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
+          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder) &&
+          JSON.stringify(saved.refAudioOrder) === JSON.stringify(latest.refAudioOrder)) return;
       useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
       markDirtyImmediate();
     };
@@ -314,7 +358,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudio: upstreamAudio.map((a) => a.src), n, entry, channel };
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudio: audioOrder, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -404,18 +448,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           ))}
           {/* 上游 Audio 节点 - 不可拖动，排在文本之后、图片之前 */}
           {upstreamAudio.map((aud) => (
-            <Tooltip key={`audio-${aud.id}`} title={aud.src.length > 50 ? aud.src.slice(0, 50) + "..." : aud.src}>
-              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
-                <WaveIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
-                <Button type="text" size="small"
-                  className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                  onClick={() => {
-                    const store = useCanvasStore.getState();
-                    const edge = store.edges.find((e) => e.target === nodeId && e.source === aud.id);
-                    if (edge) store.removeEdges([edge.id]);
-                  }}>✕</Button>
-              </div>
-            </Tooltip>
+            <AudioRefCard key={`audio-${aud.id}`} audio={aud} nodeId={nodeId} />
           ))}
           {refOrder.map((img, i) => (
             <div
@@ -628,3 +661,102 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 });
 
 export default VideoGenerationPanel;
+
+// 上游音频参考卡片：展示 label，悬停显示播放图标，点击播放/停止，移出停止，下次从头播放
+function AudioRefCard({
+  audio,
+  nodeId,
+}: {
+  audio: { id: string; src: string; label: string };
+  nodeId: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stop = useCallback(() => {
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0; // 下次从头播放
+    }
+    setPlaying(false);
+  }, []);
+
+  const toggle = useCallback(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      stop();
+    } else {
+      el.currentTime = 0;
+      void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
+  }, [playing, stop]);
+
+  return (
+    <Tooltip title={audio.label || audio.src}>
+      <div
+        className="relative group h-16 w-16 rounded flex items-center justify-center"
+        style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => {
+          setHovered(false);
+          if (playing) stop();
+        }}
+      >
+        <WaveIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
+        {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
+        {hovered && (
+          <Button
+            type="text"
+            size="small"
+            aria-label={playing ? "停止" : "播放"}
+            className="!absolute inset-0 !m-auto !w-8 !h-8 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggle();
+            }}
+          >
+            {playing ? (
+              <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
+            ) : (
+              <PlayIcon style={{ color: "#fff", width: 16, height: 16 }} />
+            )}
+          </Button>
+        )}
+        {/* 播放中不悬停时也显示停止图标，便于随时停止 */}
+        {playing && !hovered && (
+          <Button
+            type="text"
+            size="small"
+            aria-label="停止"
+            className="!absolute inset-0 !m-auto !w-8 !h-8 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              stop();
+            }}
+          >
+            <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
+          </Button>
+        )}
+        <Button type="text" size="small"
+          className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+          onClick={() => {
+            const store = useCanvasStore.getState();
+            const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
+            if (edge) store.removeEdges([edge.id]);
+          }}>✕</Button>
+        <audio
+          ref={audioRef}
+          src={audio.src}
+          preload="none"
+          onEnded={() => setPlaying(false)}
+          onPause={() => {
+            if (audioRef.current && audioRef.current.currentTime === 0) setPlaying(false);
+          }}
+        />
+      </div>
+    </Tooltip>
+  );
+}
