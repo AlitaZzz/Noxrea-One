@@ -63,8 +63,9 @@ router.get("/api/files/*", async (c) => {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".flac": "audio/flac",
   };
   const contentType = mimeMap[ext] ?? "application/octet-stream";
 
