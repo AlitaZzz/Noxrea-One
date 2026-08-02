@@ -22,8 +22,10 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@hono/node-server": "^2.0.12",
     "@prisma/client": "^6.0.0",
     "bcryptjs": "^2.4.3",
+    "hono": "^4.12.33",
     "jose": "^5.9.0",
     "p-limit": "^6.1.0",
     "pino": "^9.5.0",

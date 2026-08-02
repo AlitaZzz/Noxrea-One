@@ -21,6 +21,10 @@ const configSchema = z.object({
   APP_NAME: z.string().default("Noxrea AI Canvas"),
   LOG_LEVEL: z.string().default("INFO"),
 
+  // HTTP Server
+  SERVER_PORT: z.coerce.number().int().positive().default(4000),
+  SERVER_HOST: z.string().default("0.0.0.0"),
+
   // Worker
   WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(1),
   WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(10),
