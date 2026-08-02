@@ -702,7 +702,8 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
   const coverUrl = asset.metadata?.coverUrl as string | undefined;
   const isVideo = sourceUrl && /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(sourceUrl);
-  const imgSrc = isVideo ? coverUrl || sourceUrl : sourceUrl || "";
+  const isAudio = sourceUrl && /\.(mp3|wav|ogg|m4a|aac|flac|webm)(\?.*)?$/i.test(sourceUrl);
+  const imgSrc = isVideo || isAudio ? coverUrl || sourceUrl : sourceUrl || "";
   const [imgError, setImgError] = useState(false);
 
   const handleKeyDown = useCallback(
@@ -735,7 +736,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
           <img src={imgSrc + "?w=160"} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
         ) : (
           <div className="flex items-center justify-center h-full text-white/15 text-2xl font-bold">
-            {isVideo ? "VID" : "IMG"}
+            {isVideo ? "VID" : isAudio ? <WaveIcon style={{ fontSize: 28 }} /> : "IMG"}
           </div>
         )}
         {isVideo && !imgError && (

@@ -1,12 +1,13 @@
 "use client";
 
-import { AudioOutlined,CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
+import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import ModalButton from "@/components/common/ModalButton";
 import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
 import AppModal from "@/lib/app-modal";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 
@@ -37,9 +38,23 @@ function uid() {
   return `up_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function isImage(file: File) { return file.type.startsWith("image/"); }
-function isVideo(file: File) { return file.type.startsWith("video/"); }
-function isAudio(file: File) { return file.type.startsWith("audio/"); }
+function extOf(name: string) {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+}
+
+function isImage(file: File) {
+  if (file.type.startsWith("image/")) return true;
+  return ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(extOf(file.name));
+}
+function isVideo(file: File) {
+  if (file.type.startsWith("video/")) return true;
+  return ["mp4", "webm", "mov", "avi", "mkv", "m4v"].includes(extOf(file.name));
+}
+function isAudio(file: File) {
+  if (file.type.startsWith("audio/")) return true;
+  return ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"].includes(extOf(file.name));
+}
 
 interface UploadResult { url: string; key: string; }
 
@@ -380,7 +395,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <AudioOutlined style={{ fontSize: 36, color: "rgba(255,255,255,0.3)" }} />
+                    <WaveIcon style={{ fontSize: 36, color: "rgba(255,255,255,0.3)" }} />
                   </div>
                 )}
 

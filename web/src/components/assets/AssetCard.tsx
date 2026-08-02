@@ -1,12 +1,13 @@
 "use client";
 
-import { AudioOutlined,PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PlusOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import { useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { useLayerOverlay } from "@/lib/layer";
 import type { AssetItem } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -101,6 +102,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
           const sourceUrl = meta?.sourceUrl as string | undefined;
           const coverUrl = meta?.coverUrl as string | undefined;
           const isVideo = !!sourceUrl?.match(/\.(mp4|webm|mov)$/i);
+          const isAudio = !!sourceUrl?.match(/\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i);
 
           // Video: show coverUrl thumbnail with play icon on top-left
           if (isVideo) {
@@ -118,10 +120,10 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
               </div>
             );
           }
-          if (asset.type === "audio") {
+          if (asset.type === "audio" || isAudio) {
             return (
               <div className="w-full h-full flex items-center justify-center">
-                <AudioOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
+                <WaveIcon style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
               </div>
             );
           }
