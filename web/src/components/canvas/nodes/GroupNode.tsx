@@ -5,7 +5,7 @@ import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback,useState } from "react";
 
-import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import type { GroupNode as GroupNodeType } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -33,7 +33,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title — same as ImageNode */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         <span className="truncate">
           <GroupOutlined className="mr-1" />
           {editing ? (

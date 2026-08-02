@@ -15,7 +15,7 @@ import { memo, useCallback, useEffect,useRef, useState } from "react";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress, BASE } from "@/lib/api";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
@@ -274,7 +274,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   return (
     <div className="group relative w-full h-full flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: 28, flexShrink: 0 }}>
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <VideoCameraOutlined className="shrink-0" />
@@ -443,8 +443,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         )}
       </div>
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#13c2c2" }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#13c2c2" }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#13c2c2", top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#13c2c2", top: NODE_HANDLE_TOP }} />
     </div>
   );
 }

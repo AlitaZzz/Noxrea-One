@@ -6,6 +6,7 @@ import { Input } from "antd";
 import { memo } from "react";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
+import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
 import type { DirectorNode as DirectorNodeType,DirectorStateData } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/stores/director-store";
@@ -20,7 +21,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80">
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <PartitionOutlined className="shrink-0" />
@@ -68,7 +69,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#ff8a3d" }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#ff8a3d", top: NODE_HANDLE_TOP }} />
     </div>
   );
 }
