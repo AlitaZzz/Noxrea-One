@@ -52,25 +52,42 @@ export async function GET(
   const stream = new ReadableStream({
     async start(controller) {
       let aborted = false;
+      let closed = false; // 统一的已关闭标志，守护所有对 controller 的访问
+
+      const safeEnqueue = (chunk: Uint8Array) => {
+        if (closed) return; // 已关闭则跳过，杜绝向已关闭流写入
+        try {
+          controller.enqueue(chunk);
+        } catch {
+          closed = true; // enqueue 失败说明已关闭，标记并退出
+        }
+      };
+
+      const safeClose = () => {
+        if (closed) return; // 幂等关闭
+        closed = true;
+        try {
+          controller.close();
+        } catch { /* already closed */ }
+      };
 
       request.signal.addEventListener("abort", () => {
         aborted = true;
+        safeClose(); // 主动关闭，避免定时器后续再写死流
       });
 
       // 心跳定时器
       const heartbeat = setInterval(() => {
-        if (aborted) return;
-        try {
-          controller.enqueue(encoder.encode(": ping\n\n"));
-        } catch { /* closed */ }
+        if (aborted || closed) return;
+        safeEnqueue(encoder.encode(": ping\n\n"));
       }, 15_000);
 
       try {
         // 双进程架构：Worker 与 Next 进程分离，状态通过 SQLite 同步，
         // 由 TaskWatcher 轮询兜底（EventBus 仅单进程内有效，跨进程无效）。
-        while (!aborted) {
+        while (!aborted && !closed) {
           const state = await taskWatcher.watch(taskId, request.signal);
-          if (aborted) break;
+          if (aborted || closed) break;
           if (!state) continue;
 
           const result = { data: state };
@@ -88,7 +105,7 @@ export async function GET(
               config: result.data.config,
             };
 
-            controller.enqueue(
+            safeEnqueue(
               encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
             );
 
@@ -106,9 +123,7 @@ export async function GET(
         logger.debug({ err, taskId }, "SSE stream error");
       } finally {
         clearInterval(heartbeat);
-        try {
-          controller.close();
-        } catch { /* already closed */ }
+        safeClose();
       }
     },
   });
