@@ -30,7 +30,6 @@ export async function POST(
   const model = await addModel(channelId, {
     name: parsed.data.name,
     capabilities: parsed.data.capabilities,
-    inferredCapabilities: parsed.data.inferredCapabilities,
   });
 
   return Response.json(ok(model));

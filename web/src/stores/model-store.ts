@@ -6,7 +6,6 @@ import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } 
 interface RawModelEntry {
   id?: string;
   name?: string;
-  suggestedCapabilities?: string[];
 }
 
 interface ModelState {
@@ -23,7 +22,7 @@ interface ModelState {
 
   addModel: (channelId: string, name: string) => Promise<void>;
   toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
-  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[]; inferredCapabilities?: ModelCapability[] }[]) => Promise<void>;
+  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
   fetchModels: (channelId: string) => Promise<{ success: boolean; error?: string }>;
   fetchPresets: () => Promise<void>;
 }
@@ -189,30 +188,20 @@ export const useModelStore = create<ModelState>((set, get) => ({
         console.error("Fetch models failed:", msg);
         return { success: false, error: msg };
       }
-      const fetched: { name: string; suggested: ModelCapability[] }[] = (
-        json.data || []
-      ).map((m: RawModelEntry) => ({
-        name: (m.id || m.name) as string,
-        suggested: ((m.suggestedCapabilities || []) as string[]).filter((c) =>
-          ["text", "image", "video", "audio"].includes(c)
-        ) as ModelCapability[],
-      }));
+      const fetched: { name: string }[] = (json.data || []).map(
+        (m: RawModelEntry) => ({ name: (m.id || m.name) as string })
+      );
       const fetchedSet = new Set(fetched.map((m) => m.name));
       const existing = ch.models;
-      const merged: {
-        name: string;
-        capabilities: ModelCapability[];
-        inferredCapabilities: ModelCapability[];
-      }[] = [];
+      const merged: { name: string; capabilities: ModelCapability[] }[] = [];
       for (const ex of existing) {
         if (fetchedSet.has(ex.name)) {
-          const sug = fetched.find((f) => f.name === ex.name)?.suggested || [];
-          merged.push({ name: ex.name, capabilities: ex.capabilities || [], inferredCapabilities: sug });
+          merged.push({ name: ex.name, capabilities: ex.capabilities || [] });
         }
       }
       for (const f of fetched) {
         if (!existing.some((e) => e.name === f.name)) {
-          merged.push({ name: f.name, capabilities: [], inferredCapabilities: f.suggested });
+          merged.push({ name: f.name, capabilities: [] });
         }
       }
       await get().setChannelModels(channelId, merged);

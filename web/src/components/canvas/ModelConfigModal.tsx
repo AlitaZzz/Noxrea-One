@@ -40,20 +40,6 @@ const CAPABILITY_TABS: {
   { key: "audio", labelKey: "audio.cap", icon: <AudioOutlined />, color: "#fa8c16" },
 ];
 
-// 根据能力类型渲染图标徽章（不加 tooltip，纯图标）
-const renderCapIcon = (cap: ModelCapability, keyPrefix: string) => {
-  const tab = CAPABILITY_TABS.find((t) => t.key === cap);
-  if (!tab) return null;
-  return (
-    <span
-      key={`${keyPrefix}-${cap}`}
-      style={{ color: tab.color || "#888", display: "inline-flex", alignItems: "center" }}
-    >
-      {tab.icon}
-    </span>
-  );
-};
-
 // 单行（已 memo）：仅在 m / checked / activeCap / onToggle 变化时才重渲染
 const ModelRow = memo(function ModelRow({
   m,
@@ -79,12 +65,6 @@ const ModelRow = memo(function ModelRow({
       />
       <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
       <span className="flex-1 truncate">{m.name}</span>
-      {/* 推断类型徽章：勾选与否都显示；未探测到则无徽章 */}
-      {m.inferredCapabilities && m.inferredCapabilities.length > 0 && (
-        <span className="flex gap-1 flex-shrink-0 items-center">
-          {m.inferredCapabilities.map((c) => renderCapIcon(c, `inf-${m.id}`))}
-        </span>
-      )}
     </label>
   );
 });
