@@ -43,9 +43,8 @@ model User {
 model GenerationTask {
   id             String   @id @map("id") // UUID 字符串主键
   userId         Int      @map("user_id")
-  type           String   @map("type") // 旧字段，向后兼容
-  capability     String?  @map("capability")
-  protocol       String?  @map("protocol")
+  type           String   @map("type") // 权威模态字段：image | video | llm | bg_removal
+  protocol       String?  @map("protocol") // 落库值来自 channel.protocol，仅供记录可读；恢复轮询仍以 task.protocol ?? channel.protocol 链为准
   model          String?  @map("model")
   upstreamTaskId String?  @map("upstream_task_id")
   status         String   @default("pending") @map("status")
@@ -65,7 +64,7 @@ model GenerationTask {
   // 关系
   user User @relation(fields: [userId], references: [id])
 
-  @@index([userId])
+  @@index([userId, createdAt])
   @@index([status])
   @@map("generation_tasks")
 }
