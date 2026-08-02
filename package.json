@@ -6,12 +6,12 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -n next,worker -c cyan,magenta \"npm run dev:next\" \"npm run dev:worker\"",
-    "dev:next": "npm -w web run dev",
-    "dev:worker": "tsx watch --env-file=.env server/index.ts",
-    "worker": "tsx --env-file=.env server/index.ts",
+    "dev": "concurrently -n web,server -c cyan,magenta \"npm run dev:web\" \"npm run dev:server\"",
+    "dev:web": "npm -w web run dev",
+    "dev:server": "tsx watch --env-file=.env server/index.ts",
+    "server": "tsx --env-file=.env server/index.ts",
     "build": "npm -w web run build",
-    "start": "npm -w web run start",
+    "start": "concurrently -n web,server -c cyan,magenta \"npm -w web run start\" \"npm run server\"",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
