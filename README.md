@@ -14,32 +14,32 @@
 │  ┌────┴──────────────┴────────────┴───────────────┴───────┐  │
 │  │             Zustand Stores (状态管理)                    │  │
 │  └────────────────────────┬───────────────────────────────┘  │
-│                           │  HTTP / SSE                      │
+│                           │  /api/* (rewrites 透明代理)       │
 └───────────────────────────┼──────────────────────────────────┘
                             │
 ┌───────────────────────────┼──────────────────────────────────┐
-│                    Server (Node.js + Prisma)                  │
+│              Server (Hono + Node.js + Prisma)                 │
 │                           │                                   │
 │  ┌────────────────────────┴──────────────────────────────┐   │
-│  │              API Route Handlers (web/src/app/api/)     │   │
+│  │            Hono Route Handlers (server/http/)          │   │
 │  └──────────────┬──────────────────────┬─────────────────┘   │
 │                 │                      │                      │
 │  ┌──────────────┴──────┐  ┌───────────┴───────────────┐     │
-│  │   Worker Loop       │  │  TaskWatcher + SSE         │     │
-│  │   轮询领取任务        │  │  跨进程事件推送              │     │
+│  │   Worker Loop       │  │  SSE (TaskWatcher)         │     │
+│  │   (同进程异步循环)    │  │  (同进程事件推送)            │     │
 │  └──────────┬──────────┘  └───────────────────────────┘     │
 │             │                                                 │
 │  ┌──────────┴──────────────────────────────────────────┐     │
 │  │                  AI Gateway 管线                      │     │
-│  │  CapabilityRouter → CapabilityService                │     │
-│  │       → request-builder (transforms/mapping/patch)   │     │
-│  │       → Protocol (OpenAI/Gemini/Ark)                 │     │
-│  │       → TaskManager (同步/异步轮询)                  │     │
+│  │  CapabilityRouter -> CapabilityService                │     │
+│  │       -> request-builder (transforms/mapping/patch)   │     │
+│  │       -> Protocol (OpenAI/Gemini/Ark)                 │     │
+│  │       -> TaskManager (同步/异步轮询)                  │     │
 │  └──────────────────────────────────────────────────────┘     │
 │             │                                                 │
 │             ▼                                                 │
 │  ┌──────────────────────────────────────────────────────┐     │
-│  │            Storage (下载 → 本地落盘 / S3)              │     │
+│  │            Storage (下载 -> 本地落盘 / S3)              │     │
 │  └──────────────────────────────────────────────────────┘     │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -48,10 +48,9 @@
 
 ```
 Noxrea-AI-Canvas/
-├── web/                         # Next.js 前端
+├── web/                         # Next.js 纯前端
 │   └── src/
-│       ├── app/                 # App Router 页面 + API Route Handlers
-│       │   ├── api/             # 后端 API 端点（controller 层）
+│       ├── app/                 # App Router 页面（API 已迁移至 server）
 │       │   ├── canvas/          # 画布主页
 │       │   ├── login/           # 登录页
 │       │   └── project/         # 项目管理页
@@ -68,8 +67,12 @@ Noxrea-AI-Canvas/
 │       ├── director/            # 3D 引擎纯 TS 逻辑（core/entities/util）
 │       └── __tests__/           # 单元测试
 │
-├── server/                      # Node.js 后端业务层
-│   ├── index.ts                 # Worker 独立进程入口
+├── server/                      # Node.js 后端（HTTP + Worker 同进程）
+│   ├── index.ts                 # 服务入口（启动 Hono HTTP + Worker 循环）
+│   ├── http/                    # Hono 路由层
+│   │   ├── app.ts               # Hono 实例 + 路由注册
+│   │   ├── server.ts            # @hono/node-server 启停
+│   │   └── routes/              # 路由模块（auth/canvas/assets/generate/files 等）
 │   ├── core/                    # 基础设施（config/auth/database/logger/http/ssrf/events）
 │   ├── crud/                    # 数据访问层
 │   ├── schemas/                 # Zod schema + snake_case 映射
@@ -101,28 +104,28 @@ Noxrea-AI-Canvas/
 ### 链路一：AI 生成
 
 ```
-用户点生成 → 前端组装请求 → POST /api/generate/task → 创建任务(pending)
-  → Worker 轮询领取 → Executor 执行
-    → Gateway 管线 (transforms → mapping → patch → Protocol)
-    → 调用厂商 API → Storage 下载落盘
-  → TaskWatcher 跨进程推送 → SSE 通知前端
-  → 前端更新节点展示结果
+用户点生成 -> 前端组装请求 -> POST /api/generate/task -> 创建任务(pending)
+  -> Worker 同进程领取 -> Executor 执行
+    -> Gateway 管线 (transforms -> mapping -> patch -> Protocol)
+    -> 调用厂商 API -> Storage 下载落盘
+  -> TaskWatcher 同进程推送 -> SSE 通知前端
+  -> 前端更新节点展示结果
 ```
 
 ### 链路二：画布保存与还原
 
 ```
-前端 SaveManager: dirty 标记 → 2s trailing save → 指纹对比去重
-  → PUT /api/canvas/projects/{id} → 更新 canvas_data (JSON)
-  → 页面卸载时 keepalive 兜底保存
+前端 SaveManager: dirty 标记 -> 2s trailing save -> 指纹对比去重
+  -> PUT /api/canvas/projects/{id} -> 更新 canvas_data (JSON)
+  -> 页面卸载时 keepalive 兜底保存
 ```
 
 ### 链路三：SSE 实时推送
 
 ```
-Worker 进程: 任务完成 → 写 DB → TaskWatcher 轮询检测
-  → SSE 端点 GET /api/generate/task/{id}/stream
-  → 前端 EventSource 接收 → 更新节点 / 显示错误
+同进程 Worker: 任务完成 -> 写 DB -> TaskWatcher 轮询检测
+  -> SSE 端点 GET /api/generate/task/{id}/stream
+  -> 前端 EventSource 接收 -> 更新节点 / 显示错误
 ```
 
 ## 技术栈
@@ -134,14 +137,15 @@ Worker 进程: 任务完成 → 写 DB → TaskWatcher 轮询检测
 | 画布引擎 | @xyflow/react (React Flow) | ^12 |
 | 状态管理 | Zustand | ^5 |
 | UI 组件库 | Ant Design | ^6 |
-| 后端运行时 | Node.js 18+ / TypeScript 5+ | — |
+| 后端框架 | Hono + @hono/node-server | ^4 |
+| 后端运行时 | Node.js 18+ / TypeScript 5+ | - |
 | ORM | Prisma | ^6 |
-| 数据库 | SQLite（开发）/ PostgreSQL（生产） | — |
+| 数据库 | SQLite（开发）/ PostgreSQL（生产） | - |
 | 鉴权 | JWT (jose) + bcryptjs | ^5 / ^2 |
 | 校验 | Zod | ^3 |
 | 日志 | pino + pino-pretty | ^9 |
 | 图像处理 | sharp | ^0.33 |
-| 进程管理 | tsx（worker）/ concurrently（dev） | — |
+| 进程管理 | tsx（server）/ concurrently（dev） | - |
 
 ## 本地开发
 
@@ -163,9 +167,9 @@ cp .env.example .env
 npx prisma migrate deploy
 # 开发期如需重新生成迁移可用：npx prisma migrate dev
 
-# 启动（Next.js + Worker 同时启动）
+# 启动（Web + Server 同时启动）
 npm run dev
-# 前端 http://localhost:3000，API 同源
+# 前端 http://localhost:3000，API 通过 rewrites 代理到 localhost:4000
 #
 # 首次使用：通过页面注册账号（需 .env 中 ALLOW_REGISTRATION=true）
 ```
@@ -177,11 +181,13 @@ npm run dev
 | `DATABASE_URL` | SQLite `file:./prisma/dev.db` 或 PG 连接串 |
 | `JWT_SECRET_KEY` | JWT 签名密钥（必填） |
 | `ALLOW_REGISTRATION` | 是否开放页面注册，默认 `true` |
+| `SERVER_PORT` | 后端 HTTP 端口，默认 `4000` |
+| `SERVER_HOST` | 后端监听地址，默认 `0.0.0.0` |
 | `UPLOAD_DIR` | 上传文件根目录，默认 `uploads`（相对项目根或绝对路径） |
 | `FFMPEG_PATH` | ffmpeg 路径，默认 `bin/ffmpeg`（视频截帧） |
 | `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验） |
 
 ## 文档
 
-- [架构笔记](docs/architecture-notes.md) — 画布保存、SSRF 实现等
-- [CLAUDE.md](CLAUDE.md) — AI 协作快速参考
+- [架构笔记](docs/architecture-notes.md) - 画布保存、SSRF 实现等
+- [CLAUDE.md](CLAUDE.md) - AI 协作快速参考
