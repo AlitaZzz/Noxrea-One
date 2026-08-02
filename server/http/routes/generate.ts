@@ -37,10 +37,11 @@ router.post("/api/generate/task", async (c) => {
 
   const data = parsed.data;
 
-  // capability 回退：优先用 capability，其次 type
-  const capability = data.capability ?? data.type ?? "image";
+  // 模态：以 type 为准（image | video | llm | bg_removal）
+  const capability = data.type ?? "image";
 
   // bg_removal 内部能力：不需要渠道
+  let channelProtocol: string | undefined;
   if (capability !== "bg_removal") {
     if (!data.channelId) {
       return fail(400, "channelId is required");
@@ -52,6 +53,7 @@ router.post("/api/generate/task", async (c) => {
     if (!channel.protocol) {
       return fail(400, "Channel 未配置 protocol");
     }
+    channelProtocol = channel.protocol;
   }
 
   // config 白名单构建
@@ -89,8 +91,7 @@ router.post("/api/generate/task", async (c) => {
   const task = await createTask({
     userId: auth.user.id,
     type: data.type ?? capability,
-    capability,
-    protocol: data.protocol ?? undefined,
+    protocol: data.protocol ?? channelProtocol ?? undefined,
     model: data.model ?? undefined,
     prompt,
     config,

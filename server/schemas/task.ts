@@ -4,7 +4,6 @@ import { z } from "zod";
 
 export const taskCreateSchema = z.object({
   type: z.string().max(30).optional(),
-  capability: z.string().max(30).optional(),
   protocol: z.string().max(30).optional(),
   model: z.string().max(200).optional(),
   channelId: z.number().int().positive().optional(),
@@ -18,7 +17,6 @@ export const taskOutSchema = z.object({
   id: z.string(),
   userId: z.number(),
   type: z.string(),
-  capability: z.string().nullable(),
   protocol: z.string().nullable(),
   model: z.string().nullable(),
   upstreamTaskId: z.string().nullable(),
