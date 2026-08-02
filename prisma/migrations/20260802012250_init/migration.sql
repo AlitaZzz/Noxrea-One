@@ -69,7 +69,6 @@ CREATE TABLE "model_infos" (
     "channel_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "capabilities" TEXT NOT NULL DEFAULT '[]',
-    "inferred_capabilities" TEXT NOT NULL DEFAULT '[]',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "model_infos_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "model_channels" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );

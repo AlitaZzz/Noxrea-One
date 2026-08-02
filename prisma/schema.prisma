@@ -118,7 +118,6 @@ model ModelInfo {
   channelId            Int      @map("channel_id")
   name                 String   @map("name")
   capabilities         String   @default("[]") @map("capabilities") // JSON TEXT
-  inferredCapabilities String   @default("[]") @map("inferred_capabilities") // JSON TEXT
   createdAt            DateTime @default(now()) @map("created_at")
 
   // 关系
