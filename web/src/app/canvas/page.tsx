@@ -42,7 +42,7 @@ export default function HomePage() {
       // Sync theme & lang from user prefs
       const u = useAuthStore.getState().user!;
       useCanvasStore.getState().setTheme(u.theme === "light" ? "light" : "dark");
-      useI18nStore.getState().setLang((u.lang || "zh") as "zh" | "en");
+      useI18nStore.getState().setLang(((u.language || "zh") as "zh" | "en"));
       await initialize();
       const project = useProjectStore.getState().activeProject();
       if (!project) { window.location.href = "/project"; return; }
