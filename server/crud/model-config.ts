@@ -7,7 +7,7 @@ import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 
 function deserializeChannel(ch: {
   config: unknown;
-  models: Array<{ capabilities: unknown; inferredCapabilities: unknown }>;
+  models: Array<{ capabilities: unknown }>;
 }) {
   return {
     ...ch,
@@ -15,7 +15,6 @@ function deserializeChannel(ch: {
     models: ch.models.map((m) => ({
       ...m,
       capabilities: parseJsonArray(m.capabilities),
-      inferredCapabilities: parseJsonArray(m.inferredCapabilities),
     })),
   };
 }
@@ -97,20 +96,18 @@ export async function deleteChannel(id: number) {
 // Model
 export async function addModel(
   channelId: number,
-  data: { name: string; capabilities?: string[]; inferredCapabilities?: string[] }
+  data: { name: string; capabilities?: string[] }
 ) {
   const model = await prisma.modelInfo.create({
     data: {
       channelId,
       name: data.name,
       capabilities: stringifyJson(data.capabilities ?? []),
-      inferredCapabilities: stringifyJson(data.inferredCapabilities ?? []),
     },
   });
   return {
     ...model,
     capabilities: parseJsonArray(model.capabilities),
-    inferredCapabilities: parseJsonArray(model.inferredCapabilities),
   };
 }
 
@@ -123,7 +120,6 @@ export async function batchSetModels(
   models: Array<{
     name: string;
     capabilities?: string[];
-    inferredCapabilities?: string[];
   }>
 ) {
   return prisma.$transaction(async (tx) => {
@@ -133,7 +129,6 @@ export async function batchSetModels(
       channelId,
       name: m.name,
       capabilities: stringifyJson(m.capabilities ?? []),
-      inferredCapabilities: stringifyJson(m.inferredCapabilities ?? []),
     }));
 
     await tx.modelInfo.createMany({ data });
@@ -142,7 +137,6 @@ export async function batchSetModels(
     return result.map((m) => ({
       ...m,
       capabilities: parseJsonArray(m.capabilities),
-      inferredCapabilities: parseJsonArray(m.inferredCapabilities),
     }));
   });
 }
@@ -158,6 +152,5 @@ export async function updateModelCapability(
   return {
     ...model,
     capabilities: parseJsonArray(model.capabilities),
-    inferredCapabilities: parseJsonArray(model.inferredCapabilities),
   };
 }
