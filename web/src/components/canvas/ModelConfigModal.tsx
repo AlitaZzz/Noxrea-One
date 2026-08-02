@@ -512,9 +512,6 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '                   例：{"image.generations": "/v1/images/generations",\n' +
                     '                        "poll": "/v1/tasks"}\n' +
                     '\n' +
-                    '  unwrap           解包响应外层 data 包裹（true/false）\n' +
-                    '                   当 API 返回 {"data": {...}} 时设为 true\n' +
-                    '\n' +
                     '━━━ 数组映射语法 ━━━\n' +
                     '  {"images": "images[]"}            → images: ["u1","u2"]\n' +
                     '  {"images": "images[].image_url"}  → images: [{"image_url":"u1"},...]\n' +
@@ -541,9 +538,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
                     '      "image.generations": "/v1/images/generations",\n' +
                     '      "image.edits": "/v1/images/edits",\n' +
                     '      "poll": "/v1/tasks"\n' +
-                    '    },\n' +
-                    '    "unwrap": true\n' +
-                    '  }\n' +
+                    '    }\n' +
                     '}'
                   }
                   value={chForm.config}
