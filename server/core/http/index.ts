@@ -32,11 +32,18 @@ export async function fetchWithTimeout(
     timeoutMs?: number;
     scene?: HttpTimeoutScene;
     dispatcher?: unknown;
+    /** 仅影响 TCP 建连阶段的超时（毫秒），绕过 undici 默认的 10s 连接超时 */
+    connectTimeoutMs?: number;
   } = {}
 ): Promise<Response> {
-  const { timeoutMs, scene, dispatcher, ...fetchOptions } = options;
+  const { timeoutMs, scene, dispatcher, connectTimeoutMs, ...fetchOptions } = options;
 
   const effectiveTimeout = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
+
+  // 透传连接超时给 undici（仅作用于 TCP 握手阶段，与响应超时相互独立）
+  if (connectTimeoutMs && connectTimeoutMs > 0) {
+    (fetchOptions as Record<string, unknown>).connect = { timeout: connectTimeoutMs };
+  }
 
   // 代理：优先使用调用方传入的 dispatcher，其次使用系统代理
   const proxyDispatcher = dispatcher ?? getProxyDispatcher();
