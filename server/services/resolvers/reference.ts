@@ -41,6 +41,14 @@ async function readSelfFile(relPath: string, userId: number): Promise<string | n
       ".gif": "image/gif",
       ".mp4": "video/mp4",
       ".webm": "video/webm",
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".wave": "audio/wav",
+      ".ogg": "audio/ogg",
+      ".oga": "audio/ogg",
+      ".m4a": "audio/mp4",
+      ".aac": "audio/aac",
+      ".flac": "audio/flac",
     };
     const mime = mimeMap[ext] ?? "application/octet-stream";
     const b64 = data.toString("base64");
@@ -105,6 +113,66 @@ export async function resolveRefImages(
         error: (err as Error).message,
       });
       resolved.push(url); // 失败时透传原 URL
+    }
+  }
+
+  return resolved;
+}
+
+/**
+ * 解析参考音频列表（与 resolveRefImages 同策略：
+ * 1) 同源 URL → 读本机磁盘转 base64 data URL
+ * 2) 存储路径 → 同源处理，转 base64
+ * 3) 外链 URL → 透传原串
+ */
+export async function resolveRefAudio(
+  urls: string[],
+  userId: number
+): Promise<string[]> {
+  if (!urls || urls.length === 0) return [];
+
+  const resolved: string[] = [];
+
+  for (const url of urls) {
+    try {
+      // 已经是 data: URL → 直接透传
+      if (url.startsWith("data:")) {
+        resolved.push(url);
+        continue;
+      }
+
+      // /api/files/ 开头的同源 URL → 提取相对路径 → 转 base64
+      if (url.startsWith("/api/files/")) {
+        const relPath = url.replace(/^\/api\/files\//, "");
+        const dataUrl = await readSelfFile(relPath, userId);
+        if (dataUrl) {
+          resolved.push(dataUrl);
+          continue;
+        }
+        resolved.push(url);
+        continue;
+      }
+
+      // 纯存储路径（非 HTTP、非 /api/files/）→ 转 base64
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        const dataUrl = await readSelfFile(url, userId);
+        if (dataUrl) {
+          resolved.push(dataUrl);
+          continue;
+        }
+        resolved.push(url);
+        continue;
+      }
+
+      // 外链 → 透传
+      resolved.push(url);
+    } catch (err) {
+      logEvent("resolver.reference", {
+        stage: "resolve_audio_failed",
+        url: url.slice(0, 80),
+        error: (err as Error).message,
+      });
+      resolved.push(url);
     }
   }
 
