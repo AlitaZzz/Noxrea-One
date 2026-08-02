@@ -35,7 +35,7 @@ router.post("/api/model-config/channels", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -100,7 +100,7 @@ router.put("/api/model-config/channels/:id", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -158,7 +158,7 @@ router.post("/api/model-config/channels/:id/models", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -187,7 +187,7 @@ router.post("/api/model-config/channels/:id/models/set", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -225,7 +225,7 @@ router.put("/api/model-config/channels/:id/models/:mid/capability", async (c) =>
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }

@@ -25,7 +25,7 @@ router.post("/api/generate/task", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }

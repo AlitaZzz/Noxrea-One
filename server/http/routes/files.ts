@@ -4,6 +4,7 @@ import { localStorage } from "@server/services/storage/backends/local";
 import { fail } from "@server/core/response";
 import path from "path";
 import { createReadStream } from "fs";
+import { Readable } from "node:stream";
 
 const router = new Hono();
 
@@ -103,19 +104,19 @@ router.get("/api/files/*", async (c) => {
       const actualEnd = Math.min(end, stat.size - 1);
       const chunkSize = actualEnd - start + 1;
 
-      const stream = createReadStream(fullPath, { start, end: actualEnd });
+      const stream = Readable.toWeb(createReadStream(fullPath, { start, end: actualEnd }));
 
       headers.set("Content-Length", String(chunkSize));
       headers.set("Content-Range", `bytes ${start}-${actualEnd}/${stat.size}`);
 
-      return new Response(stream as unknown as ReadableStream, { status: 206, headers });
+      return new Response(stream, { status: 206, headers });
     }
   }
 
   // 流式返回（禁止整文件读入内存）
-  const stream = createReadStream(fullPath);
+  const stream = Readable.toWeb(createReadStream(fullPath));
 
-  return new Response(stream as unknown as ReadableStream, { headers });
+  return new Response(stream, { headers });
 });
 
 export { router };
