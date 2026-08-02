@@ -119,14 +119,15 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       .filter(Boolean) as string[];
   }, [nodeId, canvasNodes, canvasEdges]);
 
-  // 上游 Text 节点（按连接顺序），仅保留 content 非空的
+  // 上游 Text 节点（按连接顺序，去重），仅保留 content 非空的
   const upstreamTexts = useMemo(() => {
+    const seen = new Set<string>();
     return canvasEdges
       .filter((e) => e.target === nodeId)
       .map((e) => canvasNodes.find((n) => n.id === e.source))
       .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
       .map((n) => ({ id: n.id, content: ((n.data as { content?: string }).content || "").trim() }))
-      .filter((t) => t.content !== "");
+      .filter((t) => t.content !== "" && !seen.has(t.id) && seen.add(t.id));
   }, [nodeId, canvasNodes, canvasEdges]);
 
   // 最终 prompt = 上游文本内容 + 面板输入，按连接顺序拼接
