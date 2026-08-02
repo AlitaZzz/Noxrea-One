@@ -109,13 +109,23 @@ export function createGroupNode(
   };
 }
 
+// 复制节点时复用新建节点的 id 前缀约定，避免 image 节点复制后变成 "image-node_" 前缀
+const NODE_ID_PREFIX: Record<string, string> = {
+  [NODE_TYPE.IMAGE]: "img",
+  [NODE_TYPE.VIDEO]: "vid",
+  [NODE_TYPE.TEXT]: "text",
+  [NODE_TYPE.GROUP]: "group",
+  [NODE_TYPE.DIRECTOR]: "dir",
+};
+
 export function duplicateNode(
   node: AnyNode,
   offset: { x: number; y: number }
 ): AnyNode {
+  const prefix = NODE_ID_PREFIX[node.type] ?? node.type ?? "copy";
   return {
     ...JSON.parse(JSON.stringify(node)),
-    id: uid(node.type || "copy"),
+    id: uid(prefix),
     position: { x: node.position.x + offset.x, y: node.position.y + offset.y },
     selected: false,
   };
