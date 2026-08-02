@@ -37,7 +37,7 @@ router.post("/api/files/upload", async (c) => {
   const allowedTypes = [
     "image/jpeg", "image/png", "image/gif", "image/webp",
     "video/mp4", "video/webm",
-    "audio/mpeg", "audio/wav", "audio/ogg",
+    "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac",
   ];
   if (file.type && !allowedTypes.includes(file.type)) {
     return fail(415, `Unsupported file type: ${file.type}`);
