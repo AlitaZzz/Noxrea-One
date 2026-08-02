@@ -37,7 +37,6 @@ export type RequestConfig = z.infer<typeof requestConfigSchema>;
 export const modelInfoCreateSchema = z.object({
   name: z.string().min(1).max(200),
   capabilities: z.array(z.string()).optional(),
-  inferredCapabilities: z.array(z.string()).optional(),
 });
 
 export const modelInfoOutSchema = z.object({
@@ -45,7 +44,6 @@ export const modelInfoOutSchema = z.object({
   channelId: z.number(),
   name: z.string(),
   capabilities: z.array(z.string()),
-  inferredCapabilities: z.array(z.string()),
   createdAt: z.string(),
 });
 
@@ -59,7 +57,6 @@ export const batchSetModelsSchema = z.object({
     z.object({
       name: z.string().min(1).max(200),
       capabilities: z.array(z.string()).optional(),
-      inferredCapabilities: z.array(z.string()).optional(),
     })
   ),
 });
