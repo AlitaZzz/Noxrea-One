@@ -14,6 +14,11 @@ import { worldBox } from "@/director/util/measure";
 import { DirectorEntityMeta, DirectorRuntime, useDirectorStore } from "@/stores/director-store";
 
 import PoseSliders from "./PoseSliders";
+import { DirEyeIcon } from "@/components/common/icons/director/DirEyeIcon";
+import { DirEyeOffIcon } from "@/components/common/icons/director/DirEyeOffIcon";
+import { DirExpandIcon } from "@/components/common/icons/director/DirExpandIcon";
+import { DirTrashIcon } from "@/components/common/icons/director/DirTrashIcon";
+import { DirSendIcon } from "@/components/common/icons/director/DirSendIcon";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
@@ -185,13 +190,13 @@ function CameraShots({ cameraId }: { cameraId: string }) {
               {/* hover 操作按钮 */}
               <div className="dir-shot-actions">
                 <button title="发送到画布" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                  <DirSendIcon style={{ width: 14, height: 14 }} />
                 </button>
                 <button title="删除" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+                  <DirTrashIcon style={{ width: 14, height: 14 }} />
                 </button>
                 <button title="放大预览" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/></svg>
+                  <DirExpandIcon style={{ width: 14, height: 14 }} />
                 </button>
               </div>
             </div>
@@ -297,11 +302,9 @@ export default function Inspector() {
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>可见</span>
-            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}
-              dangerouslySetInnerHTML={{ __html: entity.visible
-                ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`
-                : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.1 6.1C3.5 7.7 2 12 2 12s3.5 7 10 7a9.5 9.5 0 0 0 4-0.9M3 3l18 18"/></svg>`
-              }} />
+            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
+              {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
+            </span>
           </div>
         </div>
       ) : (
@@ -332,10 +335,9 @@ export default function Inspector() {
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>可见</span>
-            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}
-              dangerouslySetInnerHTML={{ __html: entity.visible
-                ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`
-                : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.1 6.1C3.5 7.7 2 12 2 12s3.5 7 10 7a9.5 9.5 0 0 0 4-0.9M3 3l18 18"/></svg>` }} />
+            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
+              {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
+            </span>
           </div>
         </div>
       ))}
