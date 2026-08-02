@@ -3,10 +3,10 @@
 import { type DragEvent,useCallback } from "react";
 
 import { apiUploadWithProgress } from "@/lib/api";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
-import { createImageNode, createVideoNode } from "@/lib/node-defaults";
-import type { ImageNode, VideoNode } from "@/lib/types";
+import { createAudioNode, createImageNode, createVideoNode } from "@/lib/node-defaults";
+import type { AudioNode, ImageNode, VideoNode } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
@@ -48,7 +48,7 @@ export function useFileDrop(
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
       // 1) 立刻创建占位节点（默认尺寸），先给用户"有反应"的反馈
-      const placeholders: { node: ImageNode | VideoNode; file: File; idx: number }[] = [];
+      const placeholders: { node: AudioNode | ImageNode | VideoNode; file: File; idx: number }[] = [];
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
         const col = idx % GRID_COLS;
@@ -68,6 +68,12 @@ export function useFileDrop(
           node.data.alt = file.name;
           node.data.upload = { uploading: true, progress: 0, version: 0 };
           placeholders.push({ node, file, idx });
+        } else if (file.type.startsWith("audio/")) {
+          const node = createAudioNode({ x: px, y: py }, "");
+          node.data.label = file.name;
+          node.data.alt = file.name;
+          node.data.upload = { uploading: true, progress: 0, version: 0 };
+          placeholders.push({ node, file, idx });
         }
       }
 
@@ -81,13 +87,25 @@ export function useFileDrop(
         placeholders.map(async ({ node, file }) => {
           try {
             const isVideo = file.type.startsWith("video/");
-            const category = isVideo ? "videos" : "images";
+            const isAudio = file.type.startsWith("audio/");
+            const category = isVideo ? "videos" : isAudio ? "audios" : "images";
             const formData = new FormData();
             formData.append("file", file);
             const res = await apiUploadWithProgress<{ url: string }>(`/api/files/upload?category=${category}`, formData, (pct) => {
               updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0 } }, undefined, { skipHistory: true });
             });
             if (res.code !== 200 || !res.data?.url) { failedIds.push(node.id); return; }
+
+            if (isAudio) {
+              // 音频无固定宽高，使用固定节点尺寸；duration 由节点 onLoadedMetadata 回填
+              updateNodeData(node.id, {
+                src: res.data.url,
+                label: file.name,
+                alt: file.name,
+                upload: undefined,
+              }, { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }, { skipHistory: true });
+              return;
+            }
 
             const dims = await loadMediaDimensions(res.data.url, isVideo);
             const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
