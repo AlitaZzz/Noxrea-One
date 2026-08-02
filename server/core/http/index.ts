@@ -1,46 +1,17 @@
 import { getConfig } from "@server/core/config";
 
-// ── 场景化 HTTP 超时预设（对应 backend/app/config.py 的六组超时） ──
+// ── 场景化 HTTP 超时 ──
 
-export interface TimeoutPreset {
-  connect: number;
-  read: number;
-  write: number;
-  pool: number;
-}
+export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
 
-export function getTimeoutPreset(scene: "dl" | "poll" | "api" | "async"): TimeoutPreset {
+/** 按场景获取超时（毫秒） */
+export function getSceneTimeout(scene: HttpTimeoutScene): number {
   const cfg = getConfig();
-
   switch (scene) {
-    case "dl":
-      return {
-        connect: cfg.HTTP_DL_CONNECT,
-        read: cfg.HTTP_DL_READ,
-        write: cfg.HTTP_DL_WRITE,
-        pool: cfg.HTTP_DL_POOL,
-      };
-    case "poll":
-      return {
-        connect: cfg.HTTP_POLL_CONNECT,
-        read: cfg.HTTP_POLL_READ,
-        write: cfg.HTTP_POLL_WRITE,
-        pool: cfg.HTTP_POLL_POOL,
-      };
-    case "api":
-      return {
-        connect: cfg.HTTP_API_CONNECT,
-        read: cfg.HTTP_API_READ,
-        write: cfg.HTTP_API_WRITE,
-        pool: cfg.HTTP_API_POOL,
-      };
-    case "async":
-      return {
-        connect: cfg.HTTP_ASYNC_CONNECT,
-        read: cfg.HTTP_ASYNC_READ,
-        write: cfg.HTTP_ASYNC_WRITE,
-        pool: cfg.HTTP_ASYNC_POOL,
-      };
+    case "dl":    return cfg.HTTP_TIMEOUT_DL    * 1000;
+    case "poll":  return cfg.HTTP_TIMEOUT_POLL  * 1000;
+    case "api":   return cfg.HTTP_TIMEOUT_API   * 1000;
+    case "async": return cfg.HTTP_TIMEOUT_ASYNC * 1000;
   }
 }
 
@@ -59,10 +30,13 @@ export async function fetchWithTimeout(
   url: string,
   options: RequestInit & {
     timeoutMs?: number;
+    scene?: HttpTimeoutScene;
     dispatcher?: unknown;
   } = {}
 ): Promise<Response> {
-  const { timeoutMs, dispatcher, ...fetchOptions } = options;
+  const { timeoutMs, scene, dispatcher, ...fetchOptions } = options;
+
+  const effectiveTimeout = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
 
   // 代理：优先使用调用方传入的 dispatcher，其次使用系统代理
   const proxyDispatcher = dispatcher ?? getProxyDispatcher();
@@ -70,7 +44,7 @@ export async function fetchWithTimeout(
     (fetchOptions as Record<string, unknown>).dispatcher = proxyDispatcher;
   }
 
-  if (timeoutMs && timeoutMs > 0) {
+  if (effectiveTimeout > 0) {
     const controller = new AbortController();
     const signal = controller.signal;
 
@@ -86,7 +60,7 @@ export async function fetchWithTimeout(
       const originalTimer = setTimeout(() => {
         cleanup();
         controller.abort();
-      }, timeoutMs);
+      }, effectiveTimeout);
 
       fetchOptions.signal = signal;
 
@@ -104,7 +78,7 @@ export async function fetchWithTimeout(
 
     fetchOptions.signal = signal;
 
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), effectiveTimeout);
 
     try {
       const response = await fetch(url, fetchOptions);

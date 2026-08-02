@@ -102,7 +102,7 @@ async function _doResumePoll(
           "Content-Type": "application/json",
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         },
-        timeoutMs: 15_000,
+        scene: "poll",
       });
       logEvent("resume_poll", { stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
 

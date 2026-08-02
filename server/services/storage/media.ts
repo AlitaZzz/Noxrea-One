@@ -2,22 +2,19 @@
 
 import path from "path";
 import fs from "fs/promises";
-import { existsSync } from "fs";
 import { spawn } from "child_process";
 import { localStorage } from "./backends/local";
 import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
 
-/** 解析 ffmpeg 路径：相对路径按项目根解析；Windows 上自动补 .exe 扩展名 */
-function resolveFfmpegPath(configPath: string): string {
-  if (path.isAbsolute(configPath)) return configPath;
-  const resolved = resolveFromRoot(configPath);
-  if (process.platform === "win32" && !existsSync(resolved)) {
-    const withExt = `${resolved}.exe`;
-    if (existsSync(withExt)) return withExt;
-  }
-  return resolved;
+/** 解析 ffmpeg 可执行文件路径：FFMPEG_PATH 为目录，根据 OS 拼接 ffmpeg / ffmpeg.exe */
+function resolveFfmpegPath(configDir: string): string {
+  const dir = path.isAbsolute(configDir)
+    ? configDir
+    : resolveFromRoot(configDir);
+  const exe = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+  return path.join(dir, exe);
 }
 
 /**

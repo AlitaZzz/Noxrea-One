@@ -278,7 +278,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       logEvent("taskmgr", { stage: "poll_attempt", taskId, attempt: attempt + 1, pollUrl });
       const pollResp = await fetchWithTimeout(pollUrl, {
         headers,
-        timeoutMs: 15_000,
+        scene: "poll",
       });
       logEvent("taskmgr", { stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
 
