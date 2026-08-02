@@ -411,7 +411,6 @@ export default function DirectorViewport() {
           useDirectorStore.getState().setCameraView(true);
           // select 会触发 gizmo.attach/ring(由 _cameraView 检查屏蔽)
           selection.onSelect(activeCam.id);
-          // setCameraGizmoVisible(false)
           _forEachEntity((ent) => {
             if (ent.type === "camera") { (ent as CameraEntity).body.visible = false; (ent as CameraEntity).helper.visible = false; }
           });
