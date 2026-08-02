@@ -236,7 +236,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const handleClear = useCallback(() => {
     setSrc("");
     useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: t("video.node"), alt: "", naturalWidth: 0, naturalHeight: 0,
+      src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
       upload: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
     markDirtyImmediate();
