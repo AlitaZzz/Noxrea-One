@@ -1,11 +1,13 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
-import { App, Button, Popover, Slider } from "antd";
+import { App, Button, Popover, Slider, Tooltip } from "antd";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
+import { TextIcon } from "@/components/common/TextIcon";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/node-defaults";
@@ -114,6 +116,33 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       .filter(Boolean) as string[];
   }, [nodeId, canvasNodes, canvasEdges]);
 
+  // Upstream reference texts (TEXT 节点, 按连接顺序, 去重)
+  const upstreamTexts = useMemo(() => {
+    const seen = new Set<string>();
+    return canvasEdges
+      .filter((e) => e.target === nodeId)
+      .map((e) => canvasNodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
+      .map((n) => ({ id: n.id, content: ((n.data as { content?: string }).content || "").trim() }))
+      .filter((t) => t.content !== "" && !seen.has(t.id) && seen.add(t.id));
+  }, [nodeId, canvasNodes, canvasEdges]);
+
+  // 最终 prompt：上游文本 + 当前 prompt
+  const finalPrompt = useMemo(() => {
+    return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
+  }, [upstreamTexts, prompt]);
+
+  // Upstream reference audio (AUDIO 节点, 按连接顺序, 去重)
+  const upstreamAudio = useMemo(() => {
+    const seen = new Set<string>();
+    return canvasEdges
+      .filter((e) => e.target === nodeId)
+      .map((e) => canvasNodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.AUDIO)
+      .map((n) => ({ id: n.id, src: ((n.data as { src?: string }).src || "").trim() }))
+      .filter((a) => a.src !== "" && !seen.has(a.id) && seen.add(a.id));
+  }, [nodeId, canvasNodes, canvasEdges]);
+
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -146,7 +175,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [error, setError] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], n: 1, entry: null, channel: null });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudio: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudio: [] as string[], n: 1, entry: null, channel: null });
   const latestSettingsRef = useRef({ prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n });
   useEffect(() => {
     latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, n };
@@ -193,7 +222,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, n: num } = retryRef.current;
+    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudio: auds, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
       const res2 = await fetch(`${BASE}/api/generate/task`, {
@@ -210,6 +239,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           generateAudio: audio,
           n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
           refImages: refs.length > 0 ? refs : undefined,
+          refAudio: auds.length > 0 ? auds : undefined,
           nodeId,
         }),
       });
@@ -284,7 +314,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, n, entry, channel };
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudio: upstreamAudio.map((a) => a.src), n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -336,7 +366,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         onClick={handleRefUpload}>
         <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
       </Button>
-      {refOrder.length > 0 && (
+      {(refOrder.length > 0 || upstreamTexts.length > 0 || upstreamAudio.length > 0) && (
         <div
           className="flex gap-2 flex-wrap"
           onDragOver={(e) => {
@@ -357,6 +387,36 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             });
           }}
         >
+          {/* 上游 Text 节点 - 不可拖动，排在最前 */}
+          {upstreamTexts.map((txt) => (
+            <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
+              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+                <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
+                <Button type="text" size="small"
+                  className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+                  onClick={() => {
+                    const store = useCanvasStore.getState();
+                    const edge = store.edges.find((e) => e.target === nodeId && e.source === txt.id);
+                    if (edge) store.removeEdges([edge.id]);
+                  }}>✕</Button>
+              </div>
+            </Tooltip>
+          ))}
+          {/* 上游 Audio 节点 - 不可拖动，排在文本之后、图片之前 */}
+          {upstreamAudio.map((aud) => (
+            <Tooltip key={`audio-${aud.id}`} title={aud.src.length > 50 ? aud.src.slice(0, 50) + "..." : aud.src}>
+              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+                <WaveIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
+                <Button type="text" size="small"
+                  className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+                  onClick={() => {
+                    const store = useCanvasStore.getState();
+                    const edge = store.edges.find((e) => e.target === nodeId && e.source === aud.id);
+                    if (edge) store.removeEdges([edge.id]);
+                  }}>✕</Button>
+              </div>
+            </Tooltip>
+          ))}
           {refOrder.map((img, i) => (
             <div
               key={img}
