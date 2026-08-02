@@ -25,6 +25,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
   VIDEO: "video-node" as const,
+  AUDIO: "audio-node" as const,
   TEXT: "text-node" as const,
 };
 
@@ -221,6 +222,21 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
 
       {/* Video node actions */}
       {nodeType === NODE_ACTIONS.VIDEO && (
+        <>
+          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={t("download")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
+              onClick={() => dispatchNodeAction(nodeId, "download")} />
+          </Tooltip>
+          <Tooltip title={t("clear")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
+              onClick={() => dispatchNodeAction(nodeId, "clear")} />
+          </Tooltip>
+        </>
+      )}
+
+      {/* Audio node actions — 基础工具栏：下载 / 清除（上传在节点内） */}
+      {nodeType === NODE_ACTIONS.AUDIO && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("download")}>

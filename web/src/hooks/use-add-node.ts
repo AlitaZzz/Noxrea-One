@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 
 import {
+  createAudioNode,
   createGroupNode,
   createImageNode,
   createTextNode,
@@ -13,7 +14,7 @@ import type { AnyNode } from "@/lib/types";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 /** 支持的节点类型 */
-export type AddNodeType = "text" | "image" | "video" | "group" | "director";
+export type AddNodeType = "text" | "image" | "video" | "audio" | "group" | "director";
 
 /**
  * 在画布视口中心添加节点的 hook。
@@ -38,6 +39,9 @@ export function useAddNode() {
           break;
         case "video":
           node = createVideoNode({ x: 0, y: 0 });
+          break;
+        case "audio":
+          node = createAudioNode({ x: 0, y: 0 });
           break;
         case "group":
           node = createGroupNode(

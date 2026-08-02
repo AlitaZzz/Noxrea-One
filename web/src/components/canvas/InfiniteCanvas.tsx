@@ -42,6 +42,7 @@ import ImageNode from "@/components/canvas/nodes/ImageNode";
 import NodeToolbarUI from "@/components/canvas/nodes/NodeToolbar";
 import TextNode from "@/components/canvas/nodes/TextNode";
 import VideoNode from "@/components/canvas/nodes/VideoNode";
+import AudioNode from "@/components/canvas/nodes/AudioNode";
 import TextGenerationPanel from "@/components/canvas/TextGenerationPanel";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
@@ -336,6 +337,7 @@ export default function InfiniteCanvas() {
   const handleAddText = useCallback(() => addNodeAtCenter("text"), [addNodeAtCenter]);
   const handleAddImage = useCallback(() => addNodeAtCenter("image"), [addNodeAtCenter]);
   const handleAddVideo = useCallback(() => addNodeAtCenter("video"), [addNodeAtCenter]);
+  const handleAddAudio = useCallback(() => addNodeAtCenter("audio"), [addNodeAtCenter]);
   const handleAddDirector = useCallback(() => addNodeAtCenter("director"), [addNodeAtCenter]);
 
   const handleResetView = useCallback(() => {
@@ -377,6 +379,7 @@ export default function InfiniteCanvas() {
     [NODE_TYPE.TEXT]: TextNode,
     [NODE_TYPE.IMAGE]: ImageNode,
     [NODE_TYPE.VIDEO]: VideoNode,
+    [NODE_TYPE.AUDIO]: AudioNode,
     [NODE_TYPE.GROUP]: GroupNode,
     [NODE_TYPE.DIRECTOR]: DirectorNode,
   }), []);
@@ -556,6 +559,7 @@ export default function InfiniteCanvas() {
                   if (t === NODE_TYPE.TEXT) return "#1677ff";
                   if (t === NODE_TYPE.IMAGE) return "#52c41a";
                   if (t === NODE_TYPE.VIDEO) return "#13c2c2";
+                  if (t === NODE_TYPE.AUDIO) return "#eb2f96";
                   if (t === NODE_TYPE.GROUP) return "#722ed1";
                   if (t === NODE_TYPE.DIRECTOR) return "#ff8a3d";
                   return "#1677ff";
@@ -618,6 +622,7 @@ export default function InfiniteCanvas() {
         onAddText={handleAddText}
         onAddImage={handleAddImage}
         onAddVideo={handleAddVideo}
+        onAddAudio={handleAddAudio}
         onAddDirector={handleAddDirector}
         onResetView={handleResetView}
       />

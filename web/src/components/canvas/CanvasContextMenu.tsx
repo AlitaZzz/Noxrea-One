@@ -1,6 +1,7 @@
 "use client";
 
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { WaveIcon } from "@/components/canvas/nodes/WaveIcon";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
@@ -23,6 +24,7 @@ interface Props {
   onAddText: () => void;
   onAddImage: () => void;
   onAddVideo: () => void;
+  onAddAudio: () => void;
   onAddDirector: () => void;
   onResetView: () => void;
 }
@@ -51,6 +53,7 @@ export default function CanvasContextMenu(props: Props) {
         <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("text.node")}</MenuItem>
         <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("image.node")}</MenuItem>
         <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("audio.node")}</MenuItem>
         <MenuDivider />
         <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("director.node")}</MenuItem>
         <MenuDivider />
