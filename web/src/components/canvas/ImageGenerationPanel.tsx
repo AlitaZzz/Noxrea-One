@@ -16,6 +16,7 @@ import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
+import { TextIcon } from "@/components/common/TextIcon";
 
 function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
   const [w, h] = ratio.split(":").map(Number);
@@ -386,9 +387,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           {upstreamTexts.map((txt) => (
             <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
               <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="14" height="15" viewBox="0 0 16 16" className="pointer-events-none" style={{ color: "var(--canvas-text)" }}>
-                  <g transform="translate(1 0.5)"><path d="M9.33 14.62H0v-2.1h9.33zM14 10.44H0v-2.1h14zm0-4.17H0v-2.1h14zm0-4.17H0V0h14z" fill="currentColor"></path></g>
-                </svg>
+                <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
                 <Button type="text" size="small"
                   className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
                   onClick={() => {

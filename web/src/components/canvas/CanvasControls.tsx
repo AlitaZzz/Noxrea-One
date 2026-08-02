@@ -19,6 +19,7 @@ import { Button, InputNumber,Popover, Tooltip } from "antd";
 import { useCallback,useState } from "react";
 
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
+import { MagnetIcon } from "@/components/common/icons/MagnetIcon";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import type { BackgroundType } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";
@@ -161,19 +162,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
             size="small"
             type="text"
             className={`canvas-ctrl-btn ${snapToGrid ? "canvas-ctrl-active" : ""}`}
-            icon={
-              <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                {/* 马蹄磁铁 */}
-                <path d="M5 16V10a7 7 0 0 1 14 0v6" />
-                {/* 两极 */}
-                <rect x="3.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
-                <rect x="15.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
-                {/* 被吸附的节点 */}
-                <circle cx="12" cy="20" r="1.8" fill="currentColor" stroke="none" />
-                <circle cx="6.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
-                <circle cx="17.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
-              </svg>
-            }
+            icon={<MagnetIcon />}
             onClick={() => { toggleSnapToGrid(); }}
           />
       </Tooltip>

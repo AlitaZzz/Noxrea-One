@@ -5,6 +5,8 @@ import { App,Button, Input } from "antd";
 import { useEffect, useRef,useState } from "react";
 
 import { api } from "@/lib/api";
+import { EyeIcon } from "@/components/common/icons/EyeIcon";
+import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
 import AppModal from "@/lib/app-modal";
 import { useAuthStore, type UserInfo } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -112,22 +114,14 @@ export default function SettingsModal({ open, onClose }: Props) {
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{useI18nStore.getState().lang === "zh" ? "当前密码" : "Current Password"}</div>
           <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={useI18nStore.getState().lang === "zh" ? "修改密码需输入当前密码" : "Required to change password"} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
-            iconRender={(v) => (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
-                    {v ? (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>) : (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>)}
-                  </svg>
-                )} />
+            iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
         {/* New Password */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{useI18nStore.getState().lang === "zh" ? "新密码（留空保持不变）" : "New Password (leave blank to keep)"}</div>
           <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={useI18nStore.getState().lang === "zh" ? "留空保持不变" : "Leave blank"} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
-            iconRender={(v) => (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--canvas-text)" }}>
-                    {v ? (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>) : (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>)}
-                  </svg>
-                )} />
+            iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
         <Button type="primary" size="large" onClick={handleSave} loading={saving} block>

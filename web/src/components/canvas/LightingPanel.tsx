@@ -8,6 +8,7 @@ import WheelGuard from "@/components/common/WheelGuard";
 import AppModal from "@/lib/app-modal";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
+import { LightingIcon } from "@/components/common/icons/LightingIcon";
 
 interface LightingState {
   intensity: number;
@@ -147,10 +148,7 @@ export default function LightingPanel({ src, onClose }: Props) {
     <AppModal
       title={
         <span className="inline-flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-          </svg>
+          <LightingIcon className="h-4 w-4" />
           {t("lighting.title")}
         </span>
       }

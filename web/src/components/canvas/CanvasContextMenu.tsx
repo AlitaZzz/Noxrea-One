@@ -1,7 +1,7 @@
 "use client";
 
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { WaveIcon } from "@/components/canvas/nodes/WaveIcon";
+import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";

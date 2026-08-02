@@ -21,6 +21,8 @@ import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
 import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
 import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
+import { VolumeMuteIcon } from "@/components/common/icons/VolumeMuteIcon";
+import { VolumeUpIcon } from "@/components/common/icons/VolumeUpIcon";
 import { useI18nStore } from "@/stores/i18n-store";
 
 function formatTime(s: number): string {
@@ -382,17 +384,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               >
                 {muted ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <line x1="23" y1="9" x2="17" y2="15" />
-                    <line x1="17" y1="9" x2="23" y2="15" />
-                  </svg>
+                  <VolumeMuteIcon style={{ color: "#fff", width: 24, height: 24 }} />
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  </svg>
+                  <VolumeUpIcon style={{ color: "#fff", width: 24, height: 24 }} />
                 )}
               </button>
               <Popover trigger="hover" placement="top"
