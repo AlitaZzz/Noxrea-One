@@ -22,7 +22,7 @@ router.post("/api/auth/login", async (c) => {
   // 解析
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -71,7 +71,7 @@ router.post("/api/auth/register", async (c) => {
   // 解析
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }
@@ -121,7 +121,7 @@ router.put("/api/auth/me", async (c) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = await c.req.json();
   } catch {
     return fail(400, "Invalid JSON body");
   }

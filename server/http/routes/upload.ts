@@ -20,7 +20,7 @@ router.post("/api/files/upload", async (c) => {
 
   let formData: FormData;
   try {
-    formData = await request.formData();
+    formData = await c.req.formData();
   } catch {
     return fail(400, "Invalid form data");
   }
