@@ -61,8 +61,8 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   │   ├── storage/            # 存储后端抽象 + 本地/S3 + 下载/哈希/媒体处理
 │   │   ├── resolvers/          # 参考图解析
 │   │   ├── inference/          # 推理服务调用
-│   │   └── model-config/       # 预设/参数/白名单加载
-│   └── resources/              # JSON 数据文件（presets/model_params/whitelist）
+│   │   └── model-config/       # 预设/参数加载
+│   └── resources/              # JSON 数据文件（presets/model_params）
 │
 ├── web/
 │   ├── package.json            # 唯一的 workspace package，只含前端依赖
