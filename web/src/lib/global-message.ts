@@ -6,7 +6,10 @@
  * 2. 任意位置调 showGlobalMessage().error("...")
  */
 
-type MessageApi = { error: (msg: string) => void };
+type MessageApi = {
+  error: (msg: string) => void;
+  success: (msg: string) => void;
+};
 
 let _msgApi: MessageApi | null = null;
 

@@ -42,7 +42,7 @@ export default function ProjectPage() {
       if (!useAuthStore.getState().user) { window.location.href = "/login"; return; }
       const u = useAuthStore.getState().user!;
       useCanvasStore.getState().setTheme(u.theme === "light" ? "light" : "dark");
-      useI18nStore.getState().setLang((u.lang || "zh") as "zh" | "en");
+      useI18nStore.getState().setLang((u.language || "zh") as "zh" | "en");
       initialize().then(() => setReady(true));
     });
   }, [initialize]);

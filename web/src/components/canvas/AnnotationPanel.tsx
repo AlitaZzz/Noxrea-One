@@ -272,7 +272,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     lastPointRef.current = pt;
 
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     if (mode === "brush") {
@@ -289,7 +290,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!drawingRef.current || !imgLoaded) return;
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const pt = getCanvasPoint(e);
