@@ -13,8 +13,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@server/*": ["../server/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
@@ -23,8 +22,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "../server/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": ["node_modules"]
 }

@@ -30,6 +30,17 @@ const nextConfig: NextConfig = {
     root: path.join(__dirname, ".."),
   },
   serverExternalPackages: ["sharp", "pino"],
+  // 透明代理：所有 /api/* 请求转发到后端 Hono 服务
+  async rewrites() {
+    const backendPort = process.env.SERVER_PORT ?? "4000";
+    const backendUrl = `http://localhost:${backendPort}`;
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
