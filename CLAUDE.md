@@ -13,15 +13,16 @@
 | UI 组件库 | Ant Design | ^6.5.0 |
 | 请求/缓存 | @tanstack/react-query | ^5.101.2 |
 | 图标 | lucide-react | ^1.24.0 |
-| 后端运行时 | Node.js 18+ / TypeScript 5+ | — |
+| 后端框架 | Hono + @hono/node-server | ^4 |
+| 后端运行时 | Node.js 18+ / TypeScript 5+ | - |
 | ORM | Prisma | ^6.0.0 |
-| 数据库 | SQLite（开发）/ PostgreSQL（生产） | — |
+| 数据库 | SQLite（开发）/ PostgreSQL（生产） | - |
 | 鉴权 | JWT (jose) + bcryptjs | ^5.9.0 / ^2.4.3 |
 | 校验 | Zod | ^3.24.0 |
-| HTTP 客户端 | Node 内置 fetch + undici | — |
+| HTTP 客户端 | Node 内置 fetch + undici | - |
 | 日志 | pino + pino-pretty | ^9.5.0 |
 | 图像处理 | sharp | ^0.33.0 |
-| 进程管理 | tsx（worker）/ concurrently（dev） | — |
+| 进程管理 | tsx（server）/ concurrently（dev） | - |
 
 ## 目录结构
 
@@ -37,17 +38,21 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   ├── schema.prisma           # 数据建模（9张表，camelCase+@map）
 │   └── migrations/             # 迁移历史（已纳入版本控制）
 │
-├── server/                     # Node.js 后端业务层（纯 Node，无 Next/React 依赖）
-│   ├── index.ts                # Worker 独立进程入口
+├── server/                     # Node.js 后端（HTTP + Worker 同进程）
+│   ├── index.ts                # 服务入口（启动 Hono HTTP + Worker 循环）
+│   ├── http/                   # Hono 路由层
+│   │   ├── app.ts              # Hono 实例 + 路由注册
+│   │   ├── server.ts           # @hono/node-server 启停
+│   │   └── routes/             # 路由模块（auth/canvas/assets/generate/files 等）
 │   ├── core/                   # 基础设施
 │   │   ├── config/             # Zod 配置解析
 │   │   ├── database/           # PrismaClient 单例 + PRAGMA
-│   │   ├── auth/               # JWT / bcrypt / withAuth
+│   │   ├── auth/               # JWT / bcrypt / authenticateRequest
 │   │   ├── logger/             # pino 日志 + logEvent/summarizeBody
 │   │   ├── response/           # UnifiedResponse + ok/fail
 │   │   ├── http/               # 场景化超时预设
 │   │   ├── ssrf/               # SSRF 防护 + DNS pinning
-│   │   ├── events/             # EventBus（进程内）+ TaskWatcher（跨进程）
+│   │   ├── events/             # EventBus + TaskWatcher（同进程）
 │   │   └── ratelimit/          # 内存限流
 │   ├── crud/                   # 数据访问层（task/user/model-config/canvas/asset/file）
 │   ├── schemas/                # Zod schema + toXxxOut() mapper（唯一 snake_case 转换点）
@@ -67,24 +72,22 @@ Noxrea-AI-Canvas/               # Monorepo 根
 ├── web/
 │   ├── package.json            # 唯一的 workspace package，只含前端依赖
 │   ├── tsconfig.json           # extends ../tsconfig.base.json
-│   ├── next.config.ts          # monorepo 配置
-│   ├── eslint.config.mjs       # server/** no-restricted-imports 规则
+│   ├── next.config.ts          # monorepo 配置 + rewrites /api/* -> localhost:4000
+│   ├── eslint.config.mjs       # 前端 ESLint 规则
 │   └── src/
-│       ├── app/                # Next.js App Router 页面
-│       │   ├── api/            # Route Handlers（controller 层）
+│       ├── app/                # Next.js App Router 页面（纯前端，无 API 路由）
 │       │   ├── canvas/         # 画布主页面
 │       │   ├── login/          # 登录页
 │       │   └── project/        # 项目管理页
 │       ├── components/         # React 组件
 │       ├── hooks/              # 自定义 hooks
-│       ├── lib/                # 工具层（api.ts BASE 为空字符串，同源请求）
+│       ├── lib/                # 工具层（api.ts BASE 为空字符串，rewrites 同源代理）
 │       ├── providers/          # React context providers
 │       ├── stores/             # Zustand 状态管理
 │       ├── director/           # 3D 引擎逻辑（纯 TS，无 React）
 │       └── __tests__/          # 单元测试
 │
 ├── inference_service/          # 独立推理服务（背景移除等），保持不动
-├── backend/                    # [待删除] 原 Python FastAPI 后端（迁移参考源）
 ├── docs/                       # 项目文档
 ├── CLAUDE.md                   # 本文件
 ├── README.md                   # 项目说明
@@ -103,7 +106,7 @@ Noxrea-AI-Canvas/               # Monorepo 根
 | 测试 `*.test.ts`（集中 `src/__tests__/`） | kebab-case | `canvas-events.test.ts` |
 | 目录名 | 全小写 | `components/`、`director/` |
 
-- import 排序：`simple-import-sort` 分组为 external → `@/` / `@server/` 绝对路径 → 相对路径
+- import 排序：`simple-import-sort` 分组为 external -> `@/` 绝对路径 -> 相对路径
 - 测试集中放在 `src/__tests__/`
 
 ## 命名边界
@@ -119,10 +122,11 @@ Noxrea-AI-Canvas/               # Monorepo 根
 
 ## 关键架构约定
 
-- **调用链**：`API Route -> Service -> CRUD -> Prisma`；`Worker -> Executor -> Gateway -> Capability -> Protocol`
+- **调用链**：`Hono Route -> Service -> CRUD -> Prisma`；`Worker Loop -> Executor -> Gateway -> Capability -> Protocol`
 - **Service 禁止直接调用 Prisma**，必须经过 CRUD 层
-- **server/ 纯 Node.js 边界**：禁止导入 `next/*`、`react/*`、`@/*`（由 ESLint 规则强制）
-- **跨进程 SSE**：Worker 进程写 DB → TaskWatcher 读 DB → SSE 推送（非进程内 EventBus）
+- **server/ 纯 Node.js 边界**：不导入 `next/*`、`react/*`（web 已无 `@server` 引用）
+- **同进程 SSE**：Worker 同进程写 DB -> TaskWatcher 读 DB -> SSE 推送
+- **前端代理**：next.config.ts rewrites `/api/*` -> `localhost:4000`，无 CORS
 - 画布保存机制、SSRF 防护实现等详见 [docs/architecture-notes.md](docs/architecture-notes.md)
 
 ## 配置与运行
@@ -130,8 +134,9 @@ Noxrea-AI-Canvas/               # Monorepo 根
 - 复制 `.env.example` 为 `.env`，设置 `JWT_SECRET_KEY`（必填），`ALLOW_REGISTRATION` 控制是否开放注册
 - 安装依赖：`npm install`（根目录，自动处理 workspace + postinstall prisma generate）
 - 初始化数据库：`npx prisma migrate deploy`（应用迁移、创建表结构；开发期可用 `npx prisma migrate dev`）
-- 启动开发：`npm run dev`（同时启动 Next.js + Worker）
-- 单独启动 Worker：`npm run worker`
+- 启动开发：`npm run dev`（同时启动 Web + Server）
+- 单独启动 Server：`npm run dev:server`
+- 生产启动：`npm run start`（同时启动 Web + Server 生产进程）
 - 类型检查：`npm run typecheck`
 
 ## 协作规则
@@ -146,6 +151,6 @@ Noxrea-AI-Canvas/               # Monorepo 根
 ## Git 提交规则
 
 见 [docs/git-workflow.md](docs/git-workflow.md)。核心原则：
-- **不自动提交**，等用户确认后才 `git add + commit + push`
+- **不自动提交**，等用户确认后才 `git add + commit`
 - Commit message 用简洁中文，说明改了啥、为啥改
 - 不相关的改动拆成多个 commit
