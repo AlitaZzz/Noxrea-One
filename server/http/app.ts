@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { ok } from "@server/core/response";
 import { router as authRouter } from "./routes/auth";
 import { router as modelConfigRouter } from "./routes/model-config";
+import { router as canvasRouter } from "./routes/canvas";
+import { router as assetsRouter } from "./routes/assets";
 
 // ── Hono 应用实例 ──
 const app = new Hono();
@@ -12,6 +14,8 @@ app.get("/api/health", (c) => c.json(ok({ status: "ok" })));
 // 路由注册
 app.route("/", authRouter);
 app.route("/", modelConfigRouter);
+app.route("/", canvasRouter);
+app.route("/", assetsRouter);
 
 // 404
 app.notFound((c) => c.json({ detail: "Not Found" }, 404));
