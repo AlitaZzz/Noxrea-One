@@ -5,6 +5,7 @@ import { router as modelConfigRouter } from "./routes/model-config";
 import { router as canvasRouter } from "./routes/canvas";
 import { router as assetsRouter } from "./routes/assets";
 import { router as generateRouter } from "./routes/generate";
+import { router as modelsRouter } from "./routes/models";
 
 // ── Hono 应用实例 ──
 const app = new Hono();
@@ -18,6 +19,7 @@ app.route("/", modelConfigRouter);
 app.route("/", canvasRouter);
 app.route("/", assetsRouter);
 app.route("/", generateRouter);
+app.route("/", modelsRouter);
 
 // 404
 app.notFound((c) => c.json({ detail: "Not Found" }, 404));
