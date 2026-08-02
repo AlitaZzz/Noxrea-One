@@ -1,13 +1,14 @@
 "use client";
 
-import { DeleteOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { UploadOutlined } from "@ant-design/icons";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUploadWithProgress, BASE } from "@/lib/api";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH } from "@/lib/constants";
+import { apiUploadWithProgress } from "@/lib/api";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import AudioWaveform from "./AudioWaveform";
 import { EventNames } from "@/lib/event-names";
 import { isGenerating, type AudioNode as AudioNodeType, type AudioNodeData } from "@/lib/types";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
@@ -26,7 +27,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const [src, setSrc] = useState(data.src || "");
   const [isDragOver, setIsDragOver] = useState(false);
   const [duration, setDuration] = useState(data.duration || 0);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
 
   // Sync local src/duration when data changes externally (e.g. from undo/clear),
   // adjusted during render to avoid cascading renders.
@@ -37,14 +38,12 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     setDuration(data.duration || 0);
   }
 
-  const handleLoadedMetadata = useCallback(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    setDuration(a.duration || 0);
+  const handleAudioReady = useCallback((d: number) => {
+    setDuration(d || 0);
     // 回填 duration 到节点数据，供标题栏显示
     useCanvasStore.getState().updateNodeData(
       id,
-      { duration: a.duration || 0 } as Partial<AudioNodeData>,
+      { duration: d || 0 } as Partial<AudioNodeData>,
       undefined,
       { skipHistory: true }
     );
@@ -182,10 +181,10 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col" style={{ width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }}>
       {/* 拖入连接点 */}
-      <Handle id="in" type="target" position={Position.Left} style={{ opacity: 0 }} />
-      <Handle id="out" type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <Handle id="in" type="target" position={Position.Left} style={{ opacity: 0, top: NODE_HANDLE_TOP }} />
+      <Handle id="out" type="source" position={Position.Right} style={{ opacity: 0, top: NODE_HANDLE_TOP }} />
 
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: 28, flexShrink: 0 }}>
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <WaveIcon className="shrink-0" />
@@ -217,7 +216,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           ${selected ? "node-selected" : ""}
           ${isDragOver ? "node-drag-over" : ""}
         `}
-        style={{ background: hasAudio ? "transparent" : "var(--canvas-bg, #262626)" }}
+        style={{ background: "var(--canvas-bg, #262626)" }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
         onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }}
         onDrop={(e) => {
@@ -246,14 +245,12 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             <span className="text-sm text-white/70 font-medium">{t("generating")}</span>
           </div>
         ) : hasAudio ? (
-          <audio
-            ref={audioRef}
-            src={src}
-            controls
-            preload="metadata"
-            className="nodrag w-full"
-            onLoadedMetadata={handleLoadedMetadata}
-            onContextMenu={(e) => e.preventDefault()}
+          <AudioWaveform
+            url={src}
+            duration={duration}
+            playing={playing}
+            onToggle={setPlaying}
+            onReady={handleAudioReady}
           />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">

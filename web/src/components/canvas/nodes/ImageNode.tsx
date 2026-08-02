@@ -22,7 +22,7 @@ import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import {
 DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH, } from "@/lib/constants";
+  DEFAULT_NODE_WIDTH,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/image-utils";
 import {
@@ -441,7 +441,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     <>
     <div ref={nodeRef} className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: 28, flexShrink: 0 }}>
+      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
             <FileImageOutlined className="shrink-0" />
@@ -650,8 +650,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a" }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a" }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a", top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a", top: NODE_HANDLE_TOP }} />
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,

@@ -5,7 +5,7 @@ import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
-import { TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
 import type { TextNode as TextNodeType } from "@/lib/types";
 import { isGenerating } from "@/lib/types";
@@ -90,7 +90,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title tab */}
-      <div className="flex items-center px-3 py-1 text-[13px] font-medium text-white/80 z-10">
+      <div className="flex items-center px-3 py-1 text-[13px] font-medium text-white/80 z-10" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-1 flex-1 min-w-0">
             <TextIcon className="shrink-0" />
@@ -176,8 +176,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
       )}
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#1677ff" }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#1677ff" }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#1677ff", top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#1677ff", top: NODE_HANDLE_TOP }} />
     </div>
   );
 }
