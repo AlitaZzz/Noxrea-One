@@ -39,10 +39,10 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: `${maxUploadMB + 5}mb`,
   },
-  // 透明代理：所有 /api/* 请求转发到后端 Hono 服务
+  // 透明代理：所有 /api/* 请求转发到后端 Hono 服务（目标由 SERVER_URL 指定）
   async rewrites() {
-    const backendPort = rootEnv.SERVER_PORT ?? "4000";
-    const backendUrl = `http://localhost:${backendPort}`;
+    // SERVER_URL 默认 http://localhost:4000（同机）；分开部署时改为远程 Hono 地址
+    const backendUrl = (rootEnv.SERVER_URL || "http://localhost:4000").replace(/\/$/, "");
     return [
       {
         source: "/api/:path*",
