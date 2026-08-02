@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { channelCreateSchema, channelUpdateSchema, maskApiKey } from "@server/schemas/model-config";
-import { getChannels, createChannel, getChannel, updateChannel, deleteChannel } from "@server/crud/model-config";
+import { modelInfoCreateSchema, batchSetModelsSchema, updateCapabilitySchema } from "@server/schemas/channel-config";
+import {
+  getChannels, createChannel, getChannel, updateChannel, deleteChannel,
+  addModel, batchSetModels, deleteModel, updateModelCapability,
+} from "@server/crud/model-config";
 import { loadPresets } from "@server/services/model-config";
 import { ok, fail } from "@server/core/response";
 
@@ -141,6 +145,98 @@ router.delete("/api/model-config/channels/:id", async (c) => {
 router.get("/api/model-config/presets", (c) => {
   const presets = loadPresets();
   return c.json(ok(presets));
+});
+
+// ── POST /api/model-config/channels/:id/models ──
+router.post("/api/model-config/channels/:id/models", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const channelId = parseInt(c.req.param("id"), 10);
+  if (isNaN(channelId)) return fail(400, "Invalid channel ID");
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Invalid JSON body");
+  }
+
+  const parsed = modelInfoCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const model = await addModel(channelId, {
+    name: parsed.data.name,
+    capabilities: parsed.data.capabilities,
+  });
+
+  return c.json(ok(model));
+});
+
+// ── POST /api/model-config/channels/:id/models/set ──
+router.post("/api/model-config/channels/:id/models/set", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const channelId = parseInt(c.req.param("id"), 10);
+  if (isNaN(channelId)) return fail(400, "Invalid channel ID");
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Invalid JSON body");
+  }
+
+  const parsed = batchSetModelsSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(422, `Schema validation failed: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+  }
+
+  const models = await batchSetModels(channelId, parsed.data.models);
+  return c.json(ok(models));
+});
+
+// ── DELETE /api/model-config/channels/:id/models/:mid ──
+router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const modelId = parseInt(c.req.param("mid"), 10);
+  if (isNaN(modelId)) return fail(400, "Invalid model ID");
+
+  await deleteModel(modelId);
+  return c.json(ok(null, "Model deleted"));
+});
+
+// ── PUT /api/model-config/channels/:id/models/:mid/capability ──
+router.put("/api/model-config/channels/:id/models/:mid/capability", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const modelId = parseInt(c.req.param("mid"), 10);
+  if (isNaN(modelId)) return fail(400, "Invalid model ID");
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return fail(400, "Invalid JSON body");
+  }
+
+  const parsed = updateCapabilitySchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const model = await updateModelCapability(modelId, parsed.data.capabilities);
+  return c.json(ok(model));
 });
 
 export { router };

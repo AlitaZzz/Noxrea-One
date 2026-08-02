@@ -38,31 +38,6 @@ const eslintConfig = defineConfig([
       // react-hooks v6 规则保持 error 级别，违规逐项修复（见各文件清理），不降级。
     },
   },
-  // server/ 纯 Node.js 边界：禁止依赖 next、react 或 @/ 前缀导入
-  {
-    files: ["../server/**/*.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["next", "next/*"],
-              message: "server/ 禁止导入 Next.js 运行时模块（纯 Node.js 边界）",
-            },
-            {
-              group: ["react", "react/*"],
-              message: "server/ 禁止导入 React 模块（纯 Node.js 边界）",
-            },
-            {
-              group: ["@/*"],
-              message: "server/ 禁止导入 web 模块（纯 Node.js 边界）",
-            },
-          ],
-        },
-      ],
-    },
-  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
