@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 
   // 3. 启动 Worker 循环（异步，不阻塞事件循环）
   const stopSignal = { stopped: false };
-  workerLoop(stopSignal).catch((err) => {
+  const workerPromise = workerLoop(stopSignal).catch((err) => {
     logger.error({ err }, "Worker loop crashed");
   });
 
@@ -41,10 +41,12 @@ async function main(): Promise<void> {
     // 4b. 停止接受新 HTTP 连接
     await stopServer();
 
-    // 4c. 等待 Worker 排空在途任务
-    await new Promise((r) =>
-      setTimeout(r, getConfig().WORKER_DRAIN_TIMEOUT * 1000),
-    );
+    // 4c. 等待 Worker 排空在途任务（最多等 WORKER_DRAIN_TIMEOUT 秒）
+    const drainTimeout = getConfig().WORKER_DRAIN_TIMEOUT * 1000;
+    await Promise.race([
+      workerPromise,
+      new Promise<void>((r) => setTimeout(r, drainTimeout)),
+    ]);
 
     // 4d. 断开数据库
     await prisma.$disconnect();
