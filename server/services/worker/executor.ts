@@ -29,7 +29,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
   logEvent("executor", {
     stage: "start",
     taskId: task.id,
-    capability: task.capability,
+    capability: task.type,
     protocol: task.protocol,
   });
 
@@ -45,7 +45,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
 
     // 3. 基础参数
-    const capability = task.capability ?? ctx.config.capability as string ?? "image";
+    const capability = task.type ?? "image";
     const protocol = task.protocol ?? channel.protocol ?? "openai";
     const model = task.model ?? (ctx.config.model as string) ?? "";
 

@@ -8,7 +8,6 @@ import type { GenerationTask } from "@prisma/client";
 export async function createTask(data: {
   userId: number;
   type?: string;
-  capability?: string;
   protocol?: string;
   model?: string;
   prompt?: string;
@@ -23,7 +22,6 @@ export async function createTask(data: {
       id,
       userId: data.userId,
       type: data.type ?? "image",
-      capability: data.capability ?? null,
       protocol: data.protocol ?? null,
       model: data.model ?? null,
       prompt: data.prompt ?? "",

@@ -25,7 +25,7 @@ export function resumeAsyncPolling(task: GenerationTask, stopSignal: StopSignal)
     stage: "start",
     taskId,
     upstreamTaskId,
-    capability: task.capability,
+    capability: task.type,
   });
 
   // 异步执行，不阻塞主循环
@@ -124,7 +124,7 @@ async function _doResumePoll(
         const resultUrls: string[] = [];
         for (const url of parsed.urls) {
           try {
-            const key = await downloadAndSave(url, task.userId, task.capability ?? "image", taskId);
+            const key = await downloadAndSave(url, task.userId, task.type ?? "image", taskId);
             if (key) resultUrls.push(key);
           } catch (err) {
             logger.error({ err, taskId }, "Resume poll download failed");
