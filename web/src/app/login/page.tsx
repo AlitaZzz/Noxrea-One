@@ -26,47 +26,6 @@ function mulberry32(seed: number) {
   };
 }
 
-// ── 粒子预设 ──
-
-const PARTICLE_COUNT = 40;
-const PARTICLE_SEED = 42;
-
-const particlePresets = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
-  const rng = mulberry32(PARTICLE_SEED + i * 137);
-  return {
-    w: (2 + rng() * 3).toFixed(2),
-    h: (2 + rng() * 3).toFixed(2),
-    l: (rng() * 100).toFixed(2),
-    t: (rng() * 100).toFixed(2),
-    delay: (rng() * 4).toFixed(2),
-    dur: (2 + rng() * 3).toFixed(2),
-  };
-});
-
-// ── 粒子背景 ──
-
-function ParticleBg() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent" />
-      {particlePresets.map((p, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full bg-cyan-400/30 animate-pulse"
-          style={{
-            width: `${p.w}px`,
-            height: `${p.h}px`,
-            left: `${p.l}%`,
-            top: `${p.t}%`,
-            animationDelay: `${p.delay}s`,
-            animationDuration: `${p.dur}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 // ── 视频轮播 ──
 
 function VideoCarousel() {
@@ -101,20 +60,13 @@ function VideoCarousel() {
   const prevVideo = videos.length > 0 ? videos[(current - 1 + videos.length) % videos.length] : "";
   const currVideo = videos.length > 0 ? videos[current] : "";
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrent((c) => (c + 1) % videos.length);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, [videos.length]);
-
   if (videos.length === 0) {
     return <div className="absolute inset-0 bg-black" />;
   }
 
   return (
     <>
-      {/* 上一段视频（底层） */}
+      {/* 上一段视频（底层，循环常驻，做交叉过渡） */}
       <video
         key={prevVideo}
         className="absolute inset-0 w-full h-full object-cover"
@@ -124,22 +76,21 @@ function VideoCarousel() {
         playsInline
         disablePictureInPicture
         disableRemotePlayback
-        preload="none"
+        preload="auto"
         src={`/${prevVideo}.mp4`}
       />
-      {/* 当前视频（顶层，带淡入动画） */}
+      {/* 当前视频（顶层，播完即切下一段） */}
       <video
         key={currVideo}
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ animation: "fadeIn 1s ease-in-out" }}
         autoPlay
         muted
-        loop
         playsInline
         disablePictureInPicture
         disableRemotePlayback
-        preload="none"
+        preload="auto"
         src={`/${currVideo}.mp4`}
+        onEnded={() => setCurrent((c) => (c + 1) % videos.length)}
       />
     </>
   );
@@ -153,20 +104,9 @@ function LeftPanel() {
       {/* 视频背景 */}
       <VideoCarousel />
 
-      {/* 网格 + 光效叠加 */}
-      <div
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
       <div className="absolute w-[500px] h-[500px] rounded-full bg-cyan-500/10 blur-[120px]" />
 
-      <ParticleBg />
-
-      <div className="relative z-10 text-center px-12">
+      <div className="relative z-20 text-center px-12">
         <h1 className="text-4xl font-bold text-white mb-4 tracking-tight drop-shadow-[0_0_20px_rgba(34,211,238,0.35)]">
           {APP_NAME}
         </h1>
