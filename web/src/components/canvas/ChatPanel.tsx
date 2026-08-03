@@ -85,12 +85,14 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
     if ((!text.trim() && !activeSkill) || isStreaming) return;
-    const skills = activeSkill ? [activeSkill] : undefined;
+    const skills = activeSkill
+      ? [{ name: activeSkill, title: skillNames.find((s) => s.name === activeSkill)?.title }]
+      : undefined;
     void sendChat(text, skills);
     if (composerRef.current) composerRef.current.innerText = "";
     setActiveSkill(null);
     setDraft("");
-  }, [isStreaming, sendChat, activeSkill]);
+  }, [isStreaming, sendChat, activeSkill, skillNames]);
 
   const handleSkillSelect = useCallback((skillName: string) => {
     setActiveSkill(skillName);
