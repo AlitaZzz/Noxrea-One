@@ -1,7 +1,7 @@
 "use client";
 
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PauseCircleFilled, PlayCircleFilled, PlusOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import { useRef,useState } from "react";
 import { createPortal } from "react-dom";
@@ -26,8 +26,10 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
   const layerOverlay = useLayerOverlay();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [playing, setPlaying] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleMenuEnter = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -67,6 +69,37 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
     onDelete?.(asset);
   };
 
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setPlaying(false);
+  };
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = asset.metadata?.sourceUrl as string | undefined;
+    if (!url) return;
+    if (!audioRef.current) {
+      audioRef.current = new Audio(url);
+      audioRef.current.addEventListener("ended", () => setPlaying(false));
+    }
+    if (playing) {
+      stopAudio();
+    } else {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+      setPlaying(true);
+    }
+  };
+
+  const handleCardLeave = () => {
+    if (playing) {
+      stopAudio();
+    }
+  };
+
   const formatDate = (ts: number) => {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -81,6 +114,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
         borderColor: selected ? "var(--canvas-accent)" : undefined,
         borderWidth: selected ? 2 : 1,
       }}
+      onMouseLeave={handleCardLeave}
       onClick={(e) => {
         // Only trigger selection when clicking the card body, not menu buttons
         const target = e.target as HTMLElement;
@@ -101,8 +135,8 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
           const meta = asset.metadata as Record<string, unknown> | undefined;
           const sourceUrl = meta?.sourceUrl as string | undefined;
           const coverUrl = meta?.coverUrl as string | undefined;
-          const isVideo = !!sourceUrl?.match(/\.(mp4|webm|mov)$/i);
-          const isAudio = !!sourceUrl?.match(/\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i);
+          const isVideo = asset.mediaType === "video";
+          const isAudio = asset.mediaType === "audio";
 
           // Video: show coverUrl thumbnail with play icon on top-left
           if (isVideo) {
@@ -120,7 +154,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
               </div>
             );
           }
-          if (asset.type === "audio" || isAudio) {
+          if (isAudio) {
             return (
               <div className="w-full h-full flex items-center justify-center">
                 <WaveIcon style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
@@ -189,7 +223,17 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
 
       {/* Bottom info bar */}
       <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
-        <div className="text-white/90 text-xs truncate font-medium">{asset.name}</div>
+        <div className="flex items-center gap-1">
+          <div className="text-white/90 text-xs truncate font-medium flex-1 min-w-0">{asset.name}</div>
+          {asset.mediaType === "audio" && (
+            <button
+              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer"
+              onClick={togglePlay}
+            >
+              {playing ? <PauseCircleFilled style={{ fontSize: 14 }} /> : <PlayCircleFilled style={{ fontSize: 14 }} />}
+            </button>
+          )}
+        </div>
         <div className="text-white/40 text-[10px]">{formatDate(asset.createdAt)}</div>
       </div>
     </div>
