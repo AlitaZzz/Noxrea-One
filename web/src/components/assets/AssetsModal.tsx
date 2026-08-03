@@ -1,6 +1,6 @@
 "use client";
 
-import { DatabaseOutlined, FolderOpenOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Button, Input, Select, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -20,6 +20,7 @@ import AssetGrid from "./AssetGrid";
 import AssetSidebar from "./AssetSidebar";
 import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
+import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
 
 interface Props {
   open: boolean;
@@ -378,7 +379,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       <AppModal
         title={
           <div className="flex items-center gap-2">
-            <FolderOpenOutlined style={{ color: "var(--canvas-text-secondary)" }} />
+            <AssetsIcon style={{ color: "var(--canvas-text-secondary)", fontSize: 18 }} />
             <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.title")}</span>
           </div>
         }
