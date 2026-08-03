@@ -9,7 +9,9 @@ import {
   FolderOpenOutlined,
   FolderOutlined,
   LoadingOutlined,
+  PauseCircleFilled,
   PictureOutlined,
+  PlayCircleFilled,
   PlusOutlined,
   SearchOutlined,
   VideoCameraOutlined,
@@ -703,8 +705,50 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
   const coverUrl = asset.metadata?.coverUrl as string | undefined;
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
-  const imgSrc = isVideo || isAudio ? coverUrl || sourceUrl : sourceUrl || "";
   const [imgError, setImgError] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const imgSrc = (() => {
+    if (isVideo) {
+      const u = coverUrl || sourceUrl;
+      return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
+    }
+    if (isAudio) return coverUrl || sourceUrl || "";
+    return sourceUrl || "";
+  })();
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setPlaying(false);
+  }, []);
+
+  const togglePlay = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!sourceUrl) return;
+    if (!audioRef.current) {
+      audioRef.current = new Audio(sourceUrl);
+      audioRef.current.addEventListener("ended", () => setPlaying(false));
+    }
+    if (playing) {
+      stopAudio();
+    } else {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+      setPlaying(true);
+    }
+  }, [sourceUrl, playing, stopAudio]);
+
+  const handleCardLeave = useCallback(() => {
+    preview.onLeave();
+    if (playing) stopAudio();
+  }, [preview, playing, stopAudio]);
+
+  const formatDate = (ts: number) =>
+    `${new Date(ts).getFullYear()}-${String(new Date(ts).getMonth() + 1).padStart(2, "0")}-${String(new Date(ts).getDate()).padStart(2, "0")}`;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInsert(); } },
@@ -719,7 +763,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
         aria-label={t("asset.insert") + " " + asset.name}
         onKeyDown={handleKeyDown}
         onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
-        onMouseLeave={preview.onLeave}
+        onMouseLeave={handleCardLeave}
         className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all"
         style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
       >
@@ -733,7 +777,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
           </button>
         </div>
         {imgSrc && !imgError ? (
-          <img src={imgSrc + "?w=160"} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
+          <img src={imgSrc} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
         ) : (
           <div className="flex items-center justify-center h-full text-white/15 text-2xl font-bold">
             {isVideo ? "VID" : isAudio ? <WaveIcon style={{ fontSize: 28 }} /> : "IMG"}
@@ -744,8 +788,22 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
             <VideoCameraOutlined style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }} />
           </div>
         )}
+        {/* 底部信息栏：标题 + 日期（音频右侧含播放/停止按钮） */}
+        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg z-10">
+          <div className="flex items-center gap-1">
+            <span className="text-white/90 text-[10px] truncate font-medium flex-1 min-w-0">{asset.name}</span>
+            {isAudio && (
+              <button
+                className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer"
+                onClick={togglePlay}
+              >
+                {playing ? <PauseCircleFilled style={{ fontSize: 14 }} /> : <PlayCircleFilled style={{ fontSize: 14 }} />}
+              </button>
+            )}
+          </div>
+          <div className="text-white/40 text-[9px]">{formatDate(asset.createdAt)}</div>
+        </div>
       </div>
-      <span className="text-[10px] leading-tight text-white/50 truncate px-0.5">{asset.name}</span>
       <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
     </div>
   );
