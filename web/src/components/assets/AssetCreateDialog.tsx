@@ -293,12 +293,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     const inputs: CreateAssetInput[] = doneFiles.map((f) => ({
       name: f.file.name.replace(/\.[^.]+$/, ""),
       type: category,
+      mediaType: isVideo(f.file) ? "video" : isAudio(f.file) ? "audio" : "image",
       width: f.width,
       height: f.height,
       description: "",
       metadata: isVideo(f.file)
         ? { sourceUrl: f.url, coverUrl: f.coverUrl }
-        : isImage(f.file) ? { sourceUrl: f.url } : undefined,
+        : isAudio(f.file) ? { sourceUrl: f.url } : { sourceUrl: f.url },
       folderId: saveFolderId,
     }));
     await onCreate(inputs);
