@@ -78,9 +78,9 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     setDraft(composerRef.current?.innerText ?? "");
   }, []);
 
-  const canSend = !!draft.trim() || !!activeSkill;
-
   const [activeSkill, setActiveSkill] = useState<string | null>(null);
+
+  const canSend = !!draft.trim() || !!activeSkill;
 
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
