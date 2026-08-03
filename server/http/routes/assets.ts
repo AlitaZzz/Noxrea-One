@@ -145,6 +145,18 @@ router.get("/api/assets/items", async (c) => {
   return c.json(ok({ items: result.items, total: result.total }));
 });
 
+// ── GET /api/assets/items/source-urls ──
+// 注意：必须注册在 /api/assets/items/:id 之前，否则会被 :id 参数路由拦截
+router.get("/api/assets/items/source-urls", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const spaceKey = c.req.query("space_key") ?? "personal";
+  const urls = await listSourceUrls(auth.user.id, spaceKey);
+  return c.json(ok(urls));
+});
+
 // ── POST /api/assets/items ──
 router.post("/api/assets/items", async (c) => {
   const request = c.req.raw;
@@ -167,6 +179,7 @@ router.post("/api/assets/items", async (c) => {
     userId: auth.user.id,
     name: parsed.data.name,
     type: parsed.data.type,
+    mediaType: parsed.data.mediaType,
     width: parsed.data.width,
     height: parsed.data.height,
     description: parsed.data.description,
@@ -251,6 +264,7 @@ router.post("/api/assets/items/batch", async (c) => {
     userId: auth.user.id,
     name: item.name,
     type: item.type,
+    mediaType: item.mediaType,
     width: item.width,
     height: item.height,
     description: item.description,
@@ -284,19 +298,6 @@ router.put("/api/assets/items/batch", async (c) => {
 
   const result = await updateAssetsBatch(parsed.data.ids, parsed.data.updates);
   return c.json(ok(result));
-});
-
-// ════════ Source URLs ════════
-
-// ── GET /api/assets/items/source-urls ──
-router.get("/api/assets/items/source-urls", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
-
-  const spaceKey = c.req.query("space_key") ?? "personal";
-  const urls = await listSourceUrls(auth.user.id, spaceKey);
-  return c.json(ok(urls));
 });
 
 export { router };
