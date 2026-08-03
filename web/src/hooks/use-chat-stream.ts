@@ -250,7 +250,7 @@ export function useChatStream(modelId: string) {
       if ((!trimmed && (!skills || skills.length === 0)) || streamingRef.current) return;
 
       // 先让用户消息出现在界面（即使后续会话创建失败也不丢失）
-      const displayText = trimmed || (skills && skills.length ? `使用技能：${skills.join("、")}` : trimmed);
+      const displayText = trimmed || (skills && skills.length ? skills.join("、") : trimmed);
       appendMessage({ id: uid(), role: "user", content: displayText });
 
       const autoTitle = displayText.length > 24 ? `${displayText.slice(0, 24)}…` : displayText;
