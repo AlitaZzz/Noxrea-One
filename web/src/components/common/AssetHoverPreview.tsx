@@ -105,7 +105,7 @@ export function AssetHoverPreview({
       ? sourceUrl.includes("/api/files/") ? `${sourceUrl}?w=400` : sourceUrl
       : null;
 
-  if (!bigUrl) return null;
+  if (!isVideo && !bigUrl) return null;
 
   // 固定位置（不跟随鼠标）：水平已锚定在容器右边界外，仅做视口边界约束
   let left = x;
@@ -136,34 +136,66 @@ export function AssetHoverPreview({
         boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
       }}
     >
-      <img
-        src={bigUrl}
-        alt={asset.name}
-        onLoad={(e) => {
-          const img = e.currentTarget;
-          const nw = img.naturalWidth;
-          const nh = img.naturalHeight;
-          if (!nw || !nh) return;
-          // 横图以高度为基准，竖图以宽度为基准
-          let w: number, h: number;
-          if (nw >= nh) {
-            // Landscape / square: base on height
-            h = PREVIEW_MAX_H;
-            w = h * (nw / nh);
-          } else {
-            // Portrait: base on width
-            w = PREVIEW_W;
-            h = w * (nh / nw);
-          }
-          const maxH = window.innerHeight * 0.7;
-          if (h > maxH) {
-            h = maxH;
-            w = h * (nw / nh);
-          }
-          setBox({ w, h });
-        }}
-        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-      />
+      {isVideo ? (
+        <video
+          src={sourceUrl}
+          poster={bigUrl || undefined}
+          autoPlay
+          muted
+          loop
+          playsInline
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            const nw = v.videoWidth;
+            const nh = v.videoHeight;
+            if (!nw || !nh) return;
+            let w: number, h: number;
+            if (nw >= nh) {
+              h = PREVIEW_MAX_H;
+              w = h * (nw / nh);
+            } else {
+              w = PREVIEW_W;
+              h = w * (nh / nw);
+            }
+            const maxH = window.innerHeight * 0.7;
+            if (h > maxH) {
+              h = maxH;
+              w = h * (nw / nh);
+            }
+            setBox({ w, h });
+          }}
+          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", background: "#000" }}
+        />
+      ) : (
+        <img
+          src={bigUrl}
+          alt={asset.name}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            const nw = img.naturalWidth;
+            const nh = img.naturalHeight;
+            if (!nw || !nh) return;
+            // 横图以高度为基准，竖图以宽度为基准
+            let w: number, h: number;
+            if (nw >= nh) {
+              // Landscape / square: base on height
+              h = PREVIEW_MAX_H;
+              w = h * (nw / nh);
+            } else {
+              // Portrait: base on width
+              w = PREVIEW_W;
+              h = w * (nh / nw);
+            }
+            const maxH = window.innerHeight * 0.7;
+            if (h > maxH) {
+              h = maxH;
+              w = h * (nw / nh);
+            }
+            setBox({ w, h });
+          }}
+          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+        />
+      )}
     </div>,
     document.body
   );
