@@ -91,10 +91,9 @@ export function useChatStream(modelId: string) {
   /** 加载历史消息（切换会话时调用） */
   const loadHistory = useCallback(async (sessionId: string) => {
     try {
-      const [msgRes, sessionRes] = await Promise.all([
-        fetch(`/api/chat/sessions/${sessionId}/messages`, { headers: { ...getTokenHeader() } }),
-        fetch(`/api/chat/sessions/${sessionId}`, { headers: { ...getTokenHeader() } }),
-      ]);
+      const msgRes = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
+        headers: { ...getTokenHeader() },
+      });
       if (!msgRes.ok) throw new Error(`HTTP ${msgRes.status}`);
       const data = (await msgRes.json()) as Array<{ role: string; content: string }>;
       const loaded: ChatMessage[] = (data ?? []).map((m) => ({
@@ -104,14 +103,12 @@ export function useChatStream(modelId: string) {
       }));
       setMessages(loaded);
       setChatId(sessionId);
-      if (sessionRes.ok) {
-        const session = (await sessionRes.json()) as { title?: string };
-        setChatTitle(session.title ?? null);
-      }
+      const found = sessions.find((s) => String(s.id) === String(sessionId));
+      setChatTitle(found?.title ?? null);
     } catch {
       showGlobalMessage("加载历史失败");
     }
-  }, []);
+  }, [sessions]);
 
   /** 构建发给后端的 messages（过滤 UI 内部态，仅保留可序列化角色） */
   const buildPayload = useCallback(
