@@ -5,7 +5,7 @@ import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface CtxState {

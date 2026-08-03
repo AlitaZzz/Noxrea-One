@@ -2,6 +2,7 @@
 
 import {
   GroupOutlined,
+  MessageOutlined,
   PictureOutlined,
   PlusOutlined,
   VideoCameraOutlined,
@@ -10,12 +11,12 @@ import { Button,Popover, Tooltip } from "antd";
 import { useCallback, useEffect,useState } from "react";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 import { ShortcutIcon } from "@/components/common/icons/ShortcutIcon";
 import { useAddNode } from "@/hooks/use-add-node";
 import { useI18nStore } from "@/stores/i18n-store";
 
-export default function CenterToolbar() {
+export default function CenterToolbar({ onOpenChat }: { onOpenChat?: () => void }) {
   const t = useI18nStore((s) => s.t);
   const [open, setOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -84,6 +85,17 @@ export default function CenterToolbar() {
             <Button type="text" className="canvas-toolbar-btn" icon={<ShortcutIcon style={{ width: 18, height: 18 }} />} />
           </Tooltip>
         </Popover>
+        <span className="canvas-toolbar-sep" />
+        <Tooltip title="LLM 对话">
+          <Button
+            type="text"
+            className="canvas-toolbar-btn"
+            icon={<MessageOutlined style={{ fontSize: 18 }} />}
+            onClick={() => onOpenChat?.()}
+          >
+            对话
+          </Button>
+        </Tooltip>
       </div>
 
       {ctxMenu && (

@@ -15,7 +15,7 @@ import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 
 interface Props {
   nodeId: string;

@@ -6,7 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
 import { PlayIcon } from "@/components/common/icons/PlayIcon";
 import { StopIcon } from "@/components/common/icons/StopIcon";

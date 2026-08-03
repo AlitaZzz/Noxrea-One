@@ -28,10 +28,11 @@ import AssetsModal from "@/components/assets/AssetsModal";
 import CanvasContextMenu from "@/components/canvas/CanvasContextMenu";
 import CanvasControls from "@/components/canvas/CanvasControls";
 import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
+import ChatPanel from "@/components/canvas/ChatPanel";
 import CenterToolbar from "@/components/canvas/CenterToolbar";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
 import ImageGenerationPanel from "@/components/canvas/ImageGenerationPanel";
-import ModelConfigModal from "@/components/canvas/ModelConfigModal";
+import ApiSettingsDrawer from "@/components/canvas/ApiSettingsDrawer";
 import NodeInspector from "@/components/canvas/NodeInspector";
 import VideoGenerationPanel from "@/components/canvas/VideoGenerationPanel";
 import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
@@ -167,6 +168,7 @@ export default function InfiniteCanvas() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [canvasSidebarOpen, setCanvasSidebarOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
@@ -565,6 +567,7 @@ export default function InfiniteCanvas() {
               onOpenAssets={() => setAssetsOpen(true)}
               onOpenCanvasSidebar={() => setCanvasSidebarOpen((v) => !v)}
               canvasSidebarOpen={canvasSidebarOpen}
+              onOpenChat={() => setChatOpen(true)}
             />
           </div>
         </Panel>
@@ -591,7 +594,7 @@ export default function InfiniteCanvas() {
 
         {/* Bottom-center: add node toolbar */}
         <Panel position="bottom-center" style={{ margin: 0, padding: 0, paddingBottom: 30 }}>
-          <CenterToolbar />
+          <CenterToolbar onOpenChat={() => setChatOpen(true)} />
         </Panel>
 
         {/* Node toolbars */}
@@ -626,7 +629,7 @@ export default function InfiniteCanvas() {
         onClose={() => setInspectedNodeId(null)}
       />
 
-      <ModelConfigModal
+      <ApiSettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
@@ -669,6 +672,12 @@ export default function InfiniteCanvas() {
       <CanvasSidebar
         open={canvasSidebarOpen}
         onClose={() => setCanvasSidebarOpen(false)}
+      />
+
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        modelId="gpt-4o"
       />
     </div>
   );
