@@ -204,18 +204,19 @@ router.post("/api/chat/stream", async (c) => {
 
   const history = await listMessages(sessionId);
 
-  // 显式触发的技能：在历史之后、本轮用户输入之前注入一条 system 消息
+  // 显式触发的技能：注入一条 system 消息，必须位于整个消息序列最前
+  // （OpenAI 要求 system 消息在开头；history 已含 assistant 消息时不可插在中间）
   const skillContents = (payload.skills ?? [])
     .map((name) => getSkill(name))
     .filter((s): s is NonNullable<typeof s> => s !== null)
     .map((s) => s.content);
   const skillSystem = skillContents.length
-    ? [{ role: "system", content: skillContents.join("\n\n---\n\n") }]
+    ? [{ role: "system" as const, content: skillContents.join("\n\n---\n\n") }]
     : [];
 
   const messages: ChatMessage[] = [
-    ...history.map((m) => ({ role: m.role, content: m.content })),
     ...skillSystem,
+    ...history.map((m) => ({ role: m.role, content: m.content })),
     ...incoming.map((m) => ({
       role: m.role,
       content: m.content,

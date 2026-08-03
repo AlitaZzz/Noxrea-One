@@ -711,6 +711,11 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   border: 1px solid var(--canvas-border);
   border-bottom-left-radius: 4px;
 }
+.chat-bubble-error {
+  background: color-mix(in srgb, #e74c3c 14%, transparent);
+  border-color: color-mix(in srgb, #e74c3c 50%, transparent);
+  color: #ff9b93;
+}
 .chat-bubble-tool {
   background: transparent;
   border: 1px dashed var(--canvas-border-light);

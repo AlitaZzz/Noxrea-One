@@ -22,6 +22,8 @@ export interface ChatMessage {
   toolCalls?: ToolCallView[];
   /** role=tool 时对应的 tool_call_id */
   toolCallId?: string;
+  /** 标记该消息为错误（如上游返回错误），用于红色样式展示 */
+  error?: boolean;
 }
 
 /** 发给后端的消息形态 */
@@ -225,7 +227,9 @@ export function useChatStream(modelId: string) {
               }));
             }
           } else if (event === "error") {
-            throw new Error(parsed.error || "stream error");
+            const errMsg = parsed.error || "stream error";
+            patchAssistant({ content: `⚠ ${errMsg}`, error: true });
+            throw new Error(errMsg);
           }
         }
       }
