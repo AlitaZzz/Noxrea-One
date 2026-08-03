@@ -5,11 +5,11 @@ interface IconProps {
   style?: CSSProperties;
 }
 
-export function ChevronDownIcon({ className, style }: IconProps) {
+export function AttachIcon({ className, style }: IconProps) {
   return (
     <svg
-      width="14"
-      height="14"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -20,9 +20,11 @@ export function ChevronDownIcon({ className, style }: IconProps) {
       className={className}
       style={{ display: "inline-block", verticalAlign: "-0.125em", ...style }}
     >
-      <path d="m6 9 6 6 6-6" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 12h8" />
+      <path d="M12 8v8" />
     </svg>
   );
 }
 
-export default ChevronDownIcon;
+export default AttachIcon;

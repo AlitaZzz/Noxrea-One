@@ -26,3 +26,5 @@ export function TextIcon({ className, style }: TextIconProps) {
     </svg>
   );
 }
+
+export default TextIcon;

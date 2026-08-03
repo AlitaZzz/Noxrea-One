@@ -16,7 +16,7 @@ import type { CSSProperties,Key, ReactNode } from "react";
 import { memo, useEffect, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 import { EyeIcon } from "@/components/common/icons/EyeIcon";
 import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
 import type { ModelCapability, ModelInfo } from "@/lib/types";
@@ -136,7 +136,7 @@ function VirtualList<T>({
   );
 }
 
-export default function ModelConfigModal({ open, onClose }: Props) {
+export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const t = useI18nStore((s) => s.t);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
@@ -311,6 +311,7 @@ export default function ModelConfigModal({ open, onClose }: Props) {
       onClose={onClose}
       size={600}
       placement="right"
+      closable={{ placement: "end" }}
       destroyOnHidden
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" },

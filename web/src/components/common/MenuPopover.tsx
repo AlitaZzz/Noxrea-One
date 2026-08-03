@@ -25,17 +25,19 @@ export function MenuDivider() {
 }
 
 // Reusable popover menu
-export function MenuPopover({ open, onOpenChange, trigger, placement, content }: {
+export function MenuPopover({ open, onOpenChange, trigger, placement, content, overlayClassName }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   trigger: ReactNode;
   placement?: "bottomLeft" | "bottomRight" | "topLeft" | "topRight" | "top" | "bottom";
   content: ReactNode;
+  overlayClassName?: string;
 }) {
   return (
     <Popover
       content={<div className="menu-popover">{content}</div>}
       trigger="click" placement={placement || "bottomRight"} open={open} onOpenChange={onOpenChange}
+      overlayClassName={overlayClassName}
       styles={{ container: { padding: 0, background: "transparent" } }}>
       {trigger}
     </Popover>

@@ -5,24 +5,21 @@ interface IconProps {
   style?: CSSProperties;
 }
 
-export function ChevronDownIcon({ className, style }: IconProps) {
+export function PauseIcon({ className, style }: IconProps) {
   return (
     <svg
       width="14"
       height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 16 16"
+      fill="currentColor"
       aria-hidden="true"
       className={className}
       style={{ display: "inline-block", verticalAlign: "-0.125em", ...style }}
     >
-      <path d="m6 9 6 6 6-6" />
+      <rect x="3.5" y="2.5" width="3" height="11" rx="1" />
+      <rect x="9.5" y="2.5" width="3" height="11" rx="1" />
     </svg>
   );
 }
 
-export default ChevronDownIcon;
+export default PauseIcon;
