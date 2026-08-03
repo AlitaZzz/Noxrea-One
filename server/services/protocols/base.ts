@@ -7,10 +7,20 @@ export interface ProtocolRequestResult {
   body?: unknown;
 }
 
+/** LLM 工具调用（function calling） */
+export interface ProtocolToolCall {
+  id: string;
+  name: string;
+  /** 已解析的参数对象；解析失败时为空对象 */
+  args: Record<string, unknown>;
+}
+
 export interface ProtocolResponse {
   urls: string[];
   text?: string;
   raw?: unknown;
+  /** LLM 请求执行的工具调用 */
+  toolCalls?: ProtocolToolCall[];
 }
 
 /** 轮询结果 */
