@@ -141,7 +141,7 @@ export default function Outliner() {
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                         onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }} title="解组">⊟</button>}
                       <Button type="text" size="small"
-                        icon={<span className="w-[14px] flex items-center" dangerouslySetInnerHTML={{ __html: ent.visible ? S("eye") : S("eyeOff") }} />}
+                        icon={<span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span>}
                         className="!p-0.5"
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}

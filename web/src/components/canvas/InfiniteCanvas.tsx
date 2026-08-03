@@ -8,6 +8,7 @@ import {
   Background,
   BackgroundVariant,
   type Connection,
+  type Edge,
   type EdgeChange,
   MarkerType,
   MiniMap,
@@ -268,7 +269,7 @@ export default function InfiniteCanvas() {
 
   // IMAGE / TEXT 节点的上游仅接受 TEXT / IMAGE 类型
   const isValidConnection = useCallback(
-    (connection: Connection) => {
+    (connection: Connection | Edge) => {
       const srcId = connection.source;
       const tgtId = connection.target;
       if (!srcId || !tgtId) return true;
