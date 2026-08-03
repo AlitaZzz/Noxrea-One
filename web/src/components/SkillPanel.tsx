@@ -3,6 +3,7 @@
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { Popover, Spin, Empty, Tooltip } from "antd";
 import { useCallback, useEffect, useState } from "react";
+import { getTokenHeader } from "@/lib/api";
 
 interface SkillMeta {
   name: string;
@@ -26,7 +27,7 @@ export default function SkillPanel({ onSelect }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/chat/skills");
+      const res = await fetch("/api/chat/skills", { headers: { ...getTokenHeader() } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as SkillMeta[];
       setSkills(Array.isArray(data) ? data : []);
@@ -59,19 +60,49 @@ export default function SkillPanel({ onSelect }: Props) {
                 setOpen(false);
               }}
               style={{
-                padding: "6px 8px",
-                borderRadius: 6,
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start",
+                padding: "8px 10px",
+                borderRadius: 8,
                 cursor: "pointer",
                 transition: "background .15s",
               }}
               className="skill-item"
             >
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{s.title}</div>
-              {s.description && (
-                <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>
-                  {s.description}
+              <ThunderboltOutlined
+                style={{ fontSize: 16, marginTop: 2, color: "var(--canvas-accent)", flexShrink: 0 }}
+              />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: 13,
+                    color: "var(--canvas-text)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {s.title}
                 </div>
-              )}
+                {s.description && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      opacity: 0.65,
+                      marginTop: 2,
+                      color: "var(--canvas-text-dim)",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {s.description}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
