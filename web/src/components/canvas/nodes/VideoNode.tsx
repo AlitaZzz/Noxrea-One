@@ -12,6 +12,7 @@ import {
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
+import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/node-colors";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress, BASE } from "@/lib/api";
@@ -443,8 +444,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         )}
       </div>
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#13c2c2", top: NODE_HANDLE_TOP }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#13c2c2", top: NODE_HANDLE_TOP }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP }} />
     </div>
   );
 }

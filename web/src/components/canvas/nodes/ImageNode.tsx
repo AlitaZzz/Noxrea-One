@@ -30,6 +30,7 @@ import {
   type ImageNodeData,
   isGenerating,
 } from "@/lib/types";
+import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { useAssetsStore } from "@/stores/assets-store";
 import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -650,8 +651,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#52c41a", top: NODE_HANDLE_TOP }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#52c41a", top: NODE_HANDLE_TOP }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
