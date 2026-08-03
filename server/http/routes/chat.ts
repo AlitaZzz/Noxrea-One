@@ -203,6 +203,15 @@ router.post("/api/chat/stream", async (c) => {
   }
 
   const history = await listMessages(sessionId);
+  logEvent("chat.stream", {
+    stage: "received",
+    sessionId,
+    model: model ?? null,
+    agent,
+    incoming: incoming.length,
+    history: history.length,
+    skills: payload.skills?.length ?? 0,
+  });
 
   // 显式触发的技能：注入一条 system 消息，必须位于整个消息序列最前
   // （OpenAI 要求 system 消息在开头；history 已含 assistant 消息时不可插在中间）
@@ -260,6 +269,10 @@ router.post("/api/chat/stream", async (c) => {
 
   const encoder = new TextEncoder();
   let streamClosed = false;
+  // 中止上游 fetch：客户端断开后立即停止读取上游响应，释放连接
+  const upstreamAbort = new AbortController();
+  // 心跳定时器引用：cancel() 中需清除
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
@@ -273,14 +286,28 @@ router.post("/api/chat/stream", async (c) => {
         }
       };
 
+      // 心跳：每 15s 发送 SSE 注释行（: ping），对客户端透明，
+      // 但能保持 TCP 连接活跃，防止中间代理因空闲超时断开。
+      heartbeat = setInterval(() => {
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(": ping\n\n"));
+        } catch {
+          streamClosed = true;
+        }
+      }, 15_000);
+
       const result = await runCompletionStream({
         messages,
         channelId: channelId ? Number(channelId) : undefined,
         model: model ?? undefined,
         userId,
         agent,
+        signal: upstreamAbort.signal,
         onDelta: (delta: string) => send("delta", { delta }),
       });
+
+      if (heartbeat) clearInterval(heartbeat);
 
       if (!result.ok) {
         send("error", { error: result.error });
@@ -291,6 +318,7 @@ router.post("/api/chat/stream", async (c) => {
 
       const toolCalls = result.toolCalls ?? [];
       if (toolCalls.length > 0) {
+        logEvent("chat.stream", { stage: "tool_calls", sessionId, tools: toolCalls.map((t) => t.name).join(",") });
         // 有工具调用时不落库、不结束会话轮次，
         // 由前端执行工具后带 tool 结果再次请求续轮。
         // 给每个工具调用补上后台注册表里定义的中文展示名 label。
@@ -316,9 +344,14 @@ router.post("/api/chat/stream", async (c) => {
     },
     cancel() {
       // 客户端断开连接（reader 取消）时由运行时调用：
-      // 仅标记关闭，避免上游残留的 onDelta 继续写入已关闭的控制器。
+      // 1. 标记关闭，避免上游残留的 onDelta 继续写入已关闭的控制器
+      // 2. 中止上游 fetch，释放到火山引擎的连接
+      // 3. 清除心跳定时器
       // 注意：此处不可再调用 controller.close()，否则会再次抛错。
+      logEvent("chat.stream", { stage: "client_disconnect", sessionId });
       streamClosed = true;
+      upstreamAbort.abort();
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 
@@ -469,19 +502,59 @@ async function runCompletion(args: {
   }
 }
 
+/**
+ * 流式 body 空闲超时：fetchWithTimeout 的超时只覆盖「等响应头」阶段，
+ * 响应头返回后 body 读取无任何保护——上游 200 但长时间不推数据时
+ * reader.read() 会永久挂起，前端表现为一直「思考中」。
+ * 这里对每次 read 加空闲超时：完全无字节到达超过阈值即主动断开，
+ * 走 catch 给前端发 error 事件，把静默挂起变成可见报错。
+ */
+const STREAM_IDLE_TIMEOUT_MS = 120_000;
+
+function readWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<{ done: boolean; value?: Uint8Array }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reader.cancel().catch(() => {});
+      reject(new Error(`upstream stream idle: no data for ${STREAM_IDLE_TIMEOUT_MS / 1000}s`));
+    }, STREAM_IDLE_TIMEOUT_MS);
+    reader.read().then(
+      (r) => { clearTimeout(timer); resolve(r); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
 async function runCompletionStream(args: {
   messages: ChatMessage[];
   channelId?: number;
   model?: string;
   userId: number;
   agent?: boolean;
+  /** 外部中止信号（客户端断开时由调用方 abort） */
+  signal?: AbortSignal;
   onDelta: (delta: string) => void;
 }): Promise<RunResult> {
+  const startedAt = Date.now();
+  const elapsed = () => Date.now() - startedAt;
+
   const built = await buildUpstream(args);
-  if (!built.ok) return { ok: false, error: built.error };
+  if (!built.ok) {
+    logEvent("chat.stream", { stage: "build_failed", model: args.model ?? null, error: built.error });
+    return { ok: false, error: built.error };
+  }
 
   const channel = await resolveChannel(args.channelId, args.model);
   const protocolName = channel?.protocol;
+  logEvent("chat.stream", {
+    stage: "upstream_start",
+    channel: channel?.name ?? null,
+    protocol: protocolName ?? null,
+    model: args.model ?? null,
+    messages: args.messages.length,
+    agent: args.agent ?? false,
+  });
 
   try {
     const resp = await fetchWithTimeout(built.url, {
@@ -490,9 +563,12 @@ async function runCompletionStream(args: {
       body: JSON.stringify(built.body),
       scene: "async",
       timeoutMs: getWorkerApiTimeout(),
+      ...(args.signal ? { signal: args.signal } : {}),
     });
+    logEvent("chat.stream", { stage: "upstream_headers", status: resp.status, elapsedMs: elapsed() });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
+      logEvent("chat.stream", { stage: "upstream_error", status: resp.status, body: txt.slice(0, 200), elapsedMs: elapsed() });
       return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
     }
 
@@ -500,10 +576,11 @@ async function runCompletionStream(args: {
     const decoder = new TextDecoder();
     let buffer = "";
     let full = "";
+    let firstDeltaLogged = false;
     const toolAcc = new ToolCallAccumulator();
 
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await readWithIdleTimeout(reader);
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
@@ -517,6 +594,10 @@ async function runCompletionStream(args: {
 
         const delta = extractDelta(data, protocolName);
         if (delta) {
+          if (!firstDeltaLogged) {
+            firstDeltaLogged = true;
+            logEvent("chat.stream", { stage: "first_delta", elapsedMs: elapsed() });
+          }
           full += delta;
           args.onDelta(delta);
         }
@@ -526,9 +607,15 @@ async function runCompletionStream(args: {
     }
 
     const toolCalls = toolAcc.finish();
+    logEvent("chat.stream", {
+      stage: "upstream_done",
+      textLen: full.length,
+      toolCalls: toolCalls.length,
+      elapsedMs: elapsed(),
+    });
     return { ok: true, text: full, ...(toolCalls.length ? { toolCalls } : {}) };
   } catch (e) {
-    logEvent("chat.stream", { error: String(e) });
+    logEvent("chat.stream", { stage: "exception", error: String(e), elapsedMs: elapsed() });
     return { ok: false, error: String(e) };
   }
 }
