@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MentionDropdown, { type ReferenceItem } from "./MentionDropdown";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
+import { MentionIconSvg } from "@/components/common/icons/MentionIcon";
 
 interface Props {
   references: ReferenceItem[];
@@ -58,7 +59,7 @@ function renderHtml(text: string, references: ReferenceItem[]): string {
     if (!ref) return match;
     const inner =
       ref.kind === "audio"
-        ? `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;"><svg viewBox="0 0 16 16" fill="none" style="display:inline-block;vertical-align:-0.125em;width:14px;height:14px;"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.333 6.667v2M4 4v7.333M6.667 2v12M9.333 5.333V10M12 3.333V12M14.667 6.667v2"/></svg></span>${match}`
+        ? `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;">${MentionIconSvg}</span>${match}`
         : `<img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${match}`;
     return `<span class="mention-chip" contenteditable="false" data-ref-src="${escapeAttr(ref.src)}" data-ref-index="${ref.index}" data-ref-kind="${ref.kind}" style="${escapeAttr(CHIP_STYLE)}">${inner}</span>`;
   });
@@ -226,8 +227,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
         const wave = document.createElement("span");
         wave.style.cssText =
           "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;";
-        wave.innerHTML =
-          '<svg viewBox="0 0 16 16" fill="none" style="display:inline-block;vertical-align:-0.125em;width:14px;height:14px;"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.333 6.667v2M4 4v7.333M6.667 2v12M9.333 5.333V10M12 3.333V12M14.667 6.667v2"/></svg>';
+        wave.innerHTML = MentionIconSvg;
         chip.appendChild(wave);
       } else {
         const img = document.createElement("img");
