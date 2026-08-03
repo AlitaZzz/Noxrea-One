@@ -282,10 +282,13 @@ export interface AssetFolder {
 /** 虚拟「未分类」文件夹的 ID：代表 folder_id 为 NULL 的资产集合（不落库） */
 export const UNCATEGORIZED_FOLDER_ID = "__uncategorized__";
 
+export type MediaType = "image" | "video" | "audio" | "";
+
 export interface AssetItem {
   id: string;
   name: string;
   type: AssetType;
+  mediaType: MediaType;
   width: number;
   height: number;
   description: string;
@@ -300,6 +303,7 @@ export interface AssetItem {
 export interface CreateAssetInput {
   name: string;
   type: AssetType;
+  mediaType?: MediaType;
   width?: number;
   height?: number;
   description?: string;

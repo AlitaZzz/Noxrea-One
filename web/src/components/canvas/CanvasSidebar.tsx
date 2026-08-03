@@ -701,8 +701,8 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
   const coverUrl = asset.metadata?.coverUrl as string | undefined;
-  const isVideo = sourceUrl && /\.(mp4|webm|mov|avi|mkv)(\?.*)?$/i.test(sourceUrl);
-  const isAudio = sourceUrl && /\.(mp3|wav|ogg|m4a|aac|flac|webm)(\?.*)?$/i.test(sourceUrl);
+  const isVideo = asset.mediaType === "video";
+  const isAudio = asset.mediaType === "audio";
   const imgSrc = isVideo || isAudio ? coverUrl || sourceUrl : sourceUrl || "";
   const [imgError, setImgError] = useState(false);
 

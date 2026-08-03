@@ -154,6 +154,7 @@ export interface AssetItemDto {
   spaceKey: string;
   name: string;
   type: string;
+  mediaType: string;
   width: number;
   height: number;
   description: string;
@@ -197,7 +198,7 @@ export const assetApi = {
   },
 
   createAsset: (data: {
-    name: string; type: string;
+    name: string; type: string; mediaType?: string;
     width?: number; height?: number;
     description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
   }) =>
@@ -207,7 +208,7 @@ export const assetApi = {
     }),
 
   createAssetsBatch: (items: Array<{
-    name: string; type: string;
+    name: string; type: string; mediaType?: string;
     width?: number; height?: number;
     description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
   }>) =>

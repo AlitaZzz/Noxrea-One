@@ -43,6 +43,8 @@ export function useAssetHoverPreview(anchorX = 0) {
 
   const onEnter = useCallback(
     (asset: AssetItem, e: MouseEvent) => {
+      // 音频无可视缩略图，不触发预览
+      if (asset.mediaType === "audio") return;
       if (hideTimer.current) clearTimeout(hideTimer.current);
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       // 水平锚定在容器右边界之外，垂直对齐卡片顶部；只计算一次，不跟随鼠标
@@ -89,7 +91,11 @@ export function AssetHoverPreview({
 
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
   const coverUrl = asset.metadata?.coverUrl as string | undefined;
-  const isVideo = !!sourceUrl?.match(/\.(mp4|webm|mov)$/i);
+  const isVideo = asset.mediaType === "video";
+  const isAudio = asset.mediaType === "audio";
+
+  // 音频无可视缩略图，不展示大图预览
+  if (isAudio) return null;
 
   const bigUrl = isVideo
     ? coverUrl

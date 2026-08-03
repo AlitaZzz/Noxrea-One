@@ -31,6 +31,7 @@ export type FolderOut = z.infer<typeof folderOutSchema>;
 export const assetCreateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.string().max(20).optional(),
+  mediaType: z.string().max(10).optional(),
   width: z.number().int().min(0).optional(),
   height: z.number().int().min(0).optional(),
   description: z.string().optional(),
@@ -56,6 +57,7 @@ export const assetOutSchema = z.object({
   spaceKey: z.string(),
   name: z.string(),
   type: z.string(),
+  mediaType: z.string(),
   width: z.number(),
   height: z.number(),
   description: z.string(),

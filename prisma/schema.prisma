@@ -158,6 +158,7 @@ model AssetItem {
   spaceKey    String   @default("personal") @map("space_key")
   name        String   @default("Untitled") @map("name")
   type        String   @default("other") @map("type")
+  mediaType   String   @default("") @map("media_type") // 媒体类型：image/video/audio
   width       Int      @default(0) @map("width")
   height      Int      @default(0) @map("height")
   description String   @default("") @map("description")
@@ -172,6 +173,7 @@ model AssetItem {
 
   @@index([userId])
   @@index([folderId])
+  @@index([mediaType])
   @@map("asset_items")
 }
 

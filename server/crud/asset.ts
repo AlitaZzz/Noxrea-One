@@ -111,6 +111,7 @@ export async function createAsset(data: {
   userId: number;
   name?: string;
   type?: string;
+  mediaType?: string;
   width?: number;
   height?: number;
   description?: string;
@@ -124,6 +125,7 @@ export async function createAsset(data: {
       userId: data.userId,
       name: data.name ?? "Untitled",
       type: data.type ?? "other",
+      mediaType: data.mediaType ?? "",
       width: data.width ?? 0,
       height: data.height ?? 0,
       description: data.description ?? "",
@@ -141,6 +143,7 @@ export async function createAssetsBatch(
     userId: number;
     name?: string;
     type?: string;
+    mediaType?: string;
     width?: number;
     height?: number;
     description?: string;
@@ -154,6 +157,7 @@ export async function createAssetsBatch(
     userId: item.userId,
     name: item.name ?? "Untitled",
     type: item.type ?? "other",
+    mediaType: item.mediaType ?? "",
     width: item.width ?? 0,
     height: item.height ?? 0,
     description: item.description ?? "",
@@ -183,6 +187,7 @@ export async function updateAsset(
   const fieldMap: Record<string, string> = {
     name: "name",
     type: "type",
+    mediaType: "mediaType",
     width: "width",
     height: "height",
     description: "description",
