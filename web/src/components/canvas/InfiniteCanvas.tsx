@@ -55,6 +55,7 @@ import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { EdgeHighlightContext } from "@/lib/edge-highlight-context";
 import { createEdge } from "@/lib/node-defaults";
 import { type AnyNode,NODE_TYPE } from "@/lib/types";
+import { NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
@@ -555,16 +556,7 @@ export default function InfiniteCanvas() {
                   width: 180,
                   height: 120,
                 }}
-                nodeColor={(n) => {
-                  const t = n.type;
-                  if (t === NODE_TYPE.TEXT) return "#1677ff";
-                  if (t === NODE_TYPE.IMAGE) return "#52c41a";
-                  if (t === NODE_TYPE.VIDEO) return "#13c2c2";
-                  if (t === NODE_TYPE.AUDIO) return "#eb2f96";
-                  if (t === NODE_TYPE.GROUP) return "#722ed1";
-                  if (t === NODE_TYPE.DIRECTOR) return "#ff8a3d";
-                  return "#1677ff";
-                }}
+                nodeColor={(n) => NODE_TYPE_COLOR[n.type ?? ""] ?? "#1677ff"}
                 maskColor="rgba(255,255,255,0.08)"
               />
             )}
