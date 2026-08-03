@@ -5,6 +5,7 @@ interface IconProps {
   style?: CSSProperties;
 }
 
+/** 键盘快捷键图标：圆角键盘轮廓 + 键帽 */
 export function ShortcutIcon({ className, style }: IconProps) {
   return (
     <svg
@@ -18,10 +19,16 @@ export function ShortcutIcon({ className, style }: IconProps) {
       style={{ display: "inline-block", verticalAlign: "-0.125em", width: "1em", height: "1em", ...style }}
       aria-hidden="true"
     >
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-      <path d="M14 7h3a2 2 0 0 1 2 2v3" />
-      <path d="M10 14v3a2 2 0 0 1-2 2H7" />
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <line x1="6" y1="10" x2="6" y2="10" />
+      <line x1="9.5" y1="10" x2="9.5" y2="10" />
+      <line x1="13" y1="10" x2="13" y2="10" />
+      <line x1="16.5" y1="10" x2="16.5" y2="10" />
+      <line x1="6" y1="14" x2="6" y2="14" />
+      <line x1="9.5" y1="14" x2="9.5" y2="14" />
+      <line x1="13" y1="14" x2="13" y2="14" />
+      <line x1="18" y1="14" x2="18" y2="14" />
+      <line x1="7" y1="18" x2="17" y2="18" />
     </svg>
   );
 }
