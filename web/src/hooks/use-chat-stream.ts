@@ -156,7 +156,7 @@ export function useChatStream(modelId: string) {
       abortRef.current = ctrl;
 
       const body: Record<string, unknown> = { messages: history };
-      if (skills && skills.length > 0) body.skills = skills;
+      if (skills && skills.length > 0) body.skills = skills.map((s) => s.name);
 
       const res = await fetch(
         `/api/chat/stream?sessionId=${encodeURIComponent(sessionId)}&model=${encodeURIComponent(modelId)}&agent=1`,
@@ -245,12 +245,12 @@ export function useChatStream(modelId: string) {
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
   const sendChat = useCallback(
-    async (text: string, skills?: string[]) => {
+    async (text: string, skills?: { name: string; title?: string }[]) => {
       const trimmed = text.trim();
       if ((!trimmed && (!skills || skills.length === 0)) || streamingRef.current) return;
 
       // 先让用户消息出现在界面（即使后续会话创建失败也不丢失）
-      const displayText = trimmed || (skills && skills.length ? skills.join("、") : trimmed);
+      const displayText = trimmed || (skills && skills.length ? skills.map((s) => s.title || s.name).join("、") : trimmed);
       appendMessage({ id: uid(), role: "user", content: displayText });
 
       const autoTitle = displayText.length > 24 ? `${displayText.slice(0, 24)}…` : displayText;
