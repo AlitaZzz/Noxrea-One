@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react";
 
 import { EventNames } from "@/lib/event-names";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { ResizeCornerIcon } from "@/components/common/icons/ResizeCornerIcon";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -133,16 +134,7 @@ export default function ResizeHandle({
       }}
       onPointerDown={onPointerDown}
     >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        style={{ opacity: 0.4, pointerEvents: "none" }}
-      >
-        <line x1="11" y1="3" x2="3" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="11" y1="7" x2="7" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="11" y1="11" x2="11" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
+      <ResizeCornerIcon />
     </div>
   );
 }

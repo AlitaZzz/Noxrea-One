@@ -1,6 +1,6 @@
 "use client";
 
-import { TextIcon } from "@/components/common/TextIcon";
+import { TextIcon } from "@/components/common/icons/TextIcon";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
