@@ -247,12 +247,13 @@ export function useChatStream(modelId: string) {
   const sendChat = useCallback(
     async (text: string, skills?: string[]) => {
       const trimmed = text.trim();
-      if (!trimmed || streamingRef.current) return;
+      if ((!trimmed && (!skills || skills.length === 0)) || streamingRef.current) return;
 
       // 先让用户消息出现在界面（即使后续会话创建失败也不丢失）
-      appendMessage({ id: uid(), role: "user", content: trimmed });
+      const displayText = trimmed || (skills && skills.length ? `使用技能：${skills.join("、")}` : trimmed);
+      appendMessage({ id: uid(), role: "user", content: displayText });
 
-      const autoTitle = trimmed.length > 24 ? `${trimmed.slice(0, 24)}…` : trimmed;
+      const autoTitle = displayText.length > 24 ? `${displayText.slice(0, 24)}…` : displayText;
       const sessionId = await ensureSession(autoTitle);
       if (!sessionId) return;
       setChatTitle(autoTitle);

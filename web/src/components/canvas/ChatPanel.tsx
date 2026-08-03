@@ -15,7 +15,6 @@ import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { parseSlash } from "@/lib/slash-command";
 import { getTokenHeader } from "@/lib/api";
 
 interface Props {
@@ -79,25 +78,22 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     setDraft(composerRef.current?.innerText ?? "");
   }, []);
 
+  const [activeSkill, setActiveSkill] = useState<string | null>(null);
+
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
-    if (!text.trim() || isStreaming) return;
-    // 解析 "/skillName ..."：命中则把 skill 名传给后端注入 system，剩余文本作为真实指令
-    const parsed = parseSlash(text, skillNames);
-    const skills = parsed.skill ? [parsed.skill] : undefined;
-    const content = parsed.skill ? parsed.rest : text;
-    void sendChat(content, skills);
+    if ((!text.trim() && !activeSkill) || isStreaming) return;
+    const skills = activeSkill ? [activeSkill] : undefined;
+    void sendChat(text, skills);
     if (composerRef.current) composerRef.current.innerText = "";
+    setActiveSkill(null);
     setDraft("");
-  }, [isStreaming, sendChat, skillNames]);
+  }, [isStreaming, sendChat, activeSkill]);
 
   const handleSkillSelect = useCallback((skillName: string) => {
-    const el = composerRef.current;
-    if (!el) return;
-    el.innerText = el.innerText ? `${el.innerText} /${skillName}` : `/${skillName}`;
-    el.focus();
-    syncDraft();
-  }, [syncDraft]);
+    setActiveSkill(skillName);
+    if (composerRef.current) composerRef.current.focus();
+  }, []);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -307,12 +303,25 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
           }}
         />
         <div className="chat-composer">
+          {activeSkill ? (
+            <span className="chat-skill-chip">
+              {skills.find((s) => s.name === activeSkill)?.title ?? activeSkill}
+              <button
+                type="button"
+                className="chat-skill-chip-x"
+                aria-label="移除技能"
+                onClick={() => setActiveSkill(null)}
+              >
+                ×
+              </button>
+            </span>
+          ) : null}
           <div
             ref={composerRef}
             className="chat-composer-input"
             contentEditable
             suppressContentEditableWarning
-            data-placeholder='描述你的想法，输入"/" + skill 名称使用 Skill'
+            data-placeholder={activeSkill ? "补充指令（可留空）" : '描述你的想法，输入"/" + skill 名称使用 Skill'}
             onInput={(e) => {
               const el = e.currentTarget;
               // 删除到仅剩 <br>/空白时，真正清空以恢复占位符
