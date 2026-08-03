@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import { assetApi, type AssetFolderDto,type AssetItemDto } from "@/lib/api";
-import type { AssetFolder, AssetItem, AssetType,CreateAssetInput } from "@/lib/types";
+import type { AssetFolder, AssetItem, AssetType, CreateAssetInput, MediaType } from "@/lib/types";
 
 // --- Helpers ---
 
@@ -14,6 +14,7 @@ function dtoToAsset(dto: AssetItemDto): AssetItem {
     id: String(dto.id),
     name: dto.name,
     type: dto.type as AssetType,
+    mediaType: (dto.mediaType as MediaType) || "",
     width: dto.width || 0,
     height: dto.height || 0,
     description: dto.description,
@@ -161,7 +162,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   addAssetsBatch: async (inputs) => {
     const res = await assetApi.createAssetsBatch(
       inputs.map((input) => ({
-        name: input.name, type: input.type,
+        name: input.name, type: input.type, mediaType: input.mediaType,
         width: input.width, height: input.height,
         description: input.description, tags: input.tags,
         extraData: input.metadata, folderId: toIntId(input.folderId || ""), spaceKey: input.spaceKey || "personal",
