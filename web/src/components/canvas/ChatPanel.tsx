@@ -261,7 +261,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                 justifyContent: m.role === "user" ? "flex-end" : "flex-start",
               }}
             >
-              <div className={`chat-bubble chat-bubble-${m.role}`}>
+              <div className={`chat-bubble chat-bubble-${m.role}${m.error ? " chat-bubble-error" : ""}`}>
                 {m.role === "assistant" ? (
                   <>
                     {m.toolCalls?.length ? (
