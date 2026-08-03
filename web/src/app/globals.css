@@ -491,6 +491,27 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .canvas-toolbar-btn.ant-btn-text { width: 40px; height: 38px; border-radius: 9px; color: var(--canvas-text); padding: 0; display: flex; align-items: center; justify-content: center; }
 .canvas-toolbar-btn.ant-btn-text:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
 .canvas-toolbar-btn.ant-btn-text:active { background: var(--canvas-bg-active) !important; }
+
+.canvas-agent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--canvas-bg);
+  border: 1px solid var(--canvas-border);
+  color: var(--canvas-text);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.canvas-agent-btn:hover {
+  background: var(--canvas-bg-hover);
+}
+.canvas-agent-btn:active {
+  background: var(--canvas-bg-active);
+  transform: scale(0.97);
+}
 .canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
 /* 生成面板按钮（模型选择/参数面板 trigger）：hover 与工具栏同色 */
 .gen-panel-btn { height: 36px; border-radius: 8px; color: var(--canvas-text); display: flex; align-items: center; background: transparent; }
@@ -692,6 +713,27 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   scrollbar-width: thin;
   scrollbar-color: var(--canvas-border-light) transparent;
 }
+/* 聊天空态：居中显示品牌标题，无图标 */
+.chat-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.chat-empty-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+.chat-empty-subtitle {
+  font-size: 13px;
+  color: #ffffff;
+  opacity: 0.75;
+}
 .chat-msg { font-size: 13.5px; line-height: 1.55; }
 .chat-bubble {
   max-width: 88%;
@@ -708,7 +750,6 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .chat-bubble-assistant {
   background: var(--canvas-bg-elevated);
   color: var(--canvas-text);
-  border: 1px solid var(--canvas-border);
   border-bottom-left-radius: 4px;
 }
 .chat-bubble-error {
@@ -934,6 +975,13 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .chat-composer-model:hover {
   color: var(--canvas-text);
   background: var(--canvas-bg-hover);
+}
+/* 模型名带「渠道名/模型名」前缀，过长时截断省略 */
+.chat-composer-model-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* SkillPanel 技能按钮：与上传按钮一致，避免 antd Button 过渡闪烁 */
 .chat-composer .chat-skill-btn {

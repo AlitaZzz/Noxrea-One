@@ -5,7 +5,6 @@ import {
   BgColorsOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  MessageOutlined,
   ExpandOutlined,
   ApiOutlined,
   MedicineBoxOutlined, // unused — kept for other components
@@ -50,10 +49,9 @@ interface Props {
   onOpenAssets?: () => void;
   onOpenCanvasSidebar?: () => void;
   canvasSidebarOpen?: boolean;
-  onOpenChat?: () => void;
 }
 
-export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar, canvasSidebarOpen, onOpenChat }: Props) {
+export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar, canvasSidebarOpen }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const t = useI18nStore((s) => s.t);
 
@@ -205,11 +203,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AssetsIcon />} onClick={onOpenAssets} />
       </Tooltip>
 
-      {/* LLM Chat */}
-      <Tooltip title="LLM 对话">
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<MessageOutlined />} onClick={onOpenChat} />
-      </Tooltip>
-
+      {/* Agent 对话 */}
       {/* Zoom display + menu */}
       <Popover
         content={zoomMenu}

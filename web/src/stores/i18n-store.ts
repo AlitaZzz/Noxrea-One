@@ -67,6 +67,8 @@ const zh: Record<string, string> = {
   "current.password": "当前密码", "old.pw.required": "修改密码需输入当前密码",
   "save.changes": "保存修改", "saved": "已保存",
   "click.upload": "点击上传", "crop.avatar": "裁剪头像",
+  // Agent
+  "agent": "Agent", "agent.chat": "打开 Agent 对话",
   // Shortcuts
   "shortcuts": "快捷键", "shortcuts.zoom": "缩放", "shortcuts.pan": "平移",
   "shortcuts.edit": "编辑", "shortcuts.group": "编组", "shortcuts.other": "其他",
@@ -273,6 +275,7 @@ const en: Record<string, string> = {
   "account.settings": "Account Settings", "nickname": "Nickname", "new.password": "New Password (leave blank)",
   "current.password": "Current Password", "old.pw.required": "Required to change password",
   "save.changes": "Save Changes", "saved": "Saved",
+  "agent": "Agent", "agent.chat": "Open Agent Chat",
   "click.upload": "Click to upload", "crop.avatar": "Crop Avatar",
   "shortcuts": "Shortcuts", "shortcuts.zoom": "Zoom", "shortcuts.pan": "Pan",
   "shortcuts.edit": "Edit", "shortcuts.group": "Group", "shortcuts.other": "Other",
