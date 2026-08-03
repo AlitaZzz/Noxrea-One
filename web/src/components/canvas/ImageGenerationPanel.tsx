@@ -156,6 +156,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       src,
       thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
       index: i,
+      kind: "image" as const,
     }));
   }, [refOrder]);
 
@@ -190,7 +191,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return () => {
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings;
+      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<GenSettings> | undefined;
       // 没有已保存值 或 任一字段变化 -> flush（refOrder 用 JSON.stringify 比较）
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&

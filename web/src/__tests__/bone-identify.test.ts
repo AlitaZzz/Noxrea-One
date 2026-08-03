@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { Object3D } from "three";
 import { describe, expect,it } from "vitest";
 
 import { identifyBones } from "../director/util/bone-identify";

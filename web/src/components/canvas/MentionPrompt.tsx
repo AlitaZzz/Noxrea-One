@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MentionDropdown, { type ReferenceItem } from "./MentionDropdown";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
+
+export type { ReferenceItem } from "./MentionDropdown";
 import { MentionIconSvg } from "@/components/common/icons/MentionIcon";
 
 interface Props {

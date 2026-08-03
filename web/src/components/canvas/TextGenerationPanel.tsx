@@ -108,6 +108,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       src,
       thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
       index: i,
+      kind: "image" as const,
     }));
   }, [refOrder]);
 

@@ -168,7 +168,7 @@ export function AssetHoverPreview({
         />
       ) : (
         <img
-          src={bigUrl}
+          src={bigUrl || undefined}
           alt={asset.name}
           onLoad={(e) => {
             const img = e.currentTarget;

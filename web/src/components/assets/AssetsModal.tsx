@@ -173,7 +173,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], metadata: {}, spaceKey: "personal" } as AssetItem);
+    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", mediaType: "", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], metadata: {}, spaceKey: "personal" } as AssetItem);
   }, [selectedIds, t]);
 
   const handleBatchDeleteConfirm = useCallback(() => {

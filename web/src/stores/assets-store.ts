@@ -138,7 +138,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const tempId = `tmp_${Date.now()}`;
     const now = Date.now();
     const item: AssetItem = {
-      id: tempId, name: input.name, type: input.type,
+      id: tempId, name: input.name, type: input.type, mediaType: input.mediaType ?? "",
       width: input.width || 0, height: input.height || 0,
       description: input.description || "", createdAt: now, updatedAt: now,
       tags: input.tags || [], metadata: input.metadata || {}, folderId: input.folderId, spaceKey: input.spaceKey || "personal",
