@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { EventNames } from "@/lib/event-names";
+import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/node-colors";
 import type { TextNode as TextNodeType } from "@/lib/types";
 import { isGenerating } from "@/lib/types";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
@@ -176,8 +177,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
       )}
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#1677ff", top: NODE_HANDLE_TOP }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#1677ff", top: NODE_HANDLE_TOP }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
     </div>
   );
 }

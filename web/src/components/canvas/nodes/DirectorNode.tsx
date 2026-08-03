@@ -5,9 +5,10 @@ import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
 
+import { NODE_TYPE, type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/lib/types";
+import { NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
-import type { DirectorNode as DirectorNodeType,DirectorStateData } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/stores/director-store";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -69,7 +70,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#722ed1", top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.DIRECTOR], top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
     </div>
   );
 }
