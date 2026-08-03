@@ -21,12 +21,8 @@ export function addAssetToCanvas(asset: AssetItem) {
 
   // 检查资产是否带源 URL（视频 → VideoNode，图片 → ImageNode，音频 → AudioNode）
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
-  const isAudio = asset.type === "audio";
-  const isVideo =
-    sourceUrl &&
-    (sourceUrl.endsWith(".mp4") ||
-      sourceUrl.endsWith(".webm") ||
-      sourceUrl.endsWith(".mov"));
+  const isAudio = asset.mediaType === "audio";
+  const isVideo = asset.mediaType === "video";
 
   const addNodes = s.addNodes;
   if (isAudio) {
@@ -34,8 +30,7 @@ export function addAssetToCanvas(asset: AssetItem) {
     node.data.label = asset.name;
     node.data.alt = asset.name;
     addNodes([node]);
-  }
-  if (isVideo) {
+  } else if (isVideo) {
     const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
     node.data.alt = asset.name;
