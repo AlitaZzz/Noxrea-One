@@ -6,7 +6,6 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ExpandOutlined,
-  FolderOpenOutlined,
   ApiOutlined,
   MedicineBoxOutlined, // unused — kept for other components
   MoonOutlined,
@@ -19,6 +18,7 @@ import { Button, InputNumber,Popover, Tooltip } from "antd";
 import { useCallback,useState } from "react";
 
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
+import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
 import { MagnetIcon } from "@/components/common/icons/MagnetIcon";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import type { BackgroundType } from "@/lib/types";
@@ -200,7 +200,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
       {/* My Assets */}
       <Tooltip title={t("assets")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<FolderOpenOutlined />} onClick={onOpenAssets} />
+        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AssetsIcon />} onClick={onOpenAssets} />
       </Tooltip>
 
       {/* Zoom display + menu */}

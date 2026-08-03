@@ -21,6 +21,7 @@ import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "a
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TextIcon } from "@/components/common/TextIcon";
+import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
 import { WaveIcon } from "@/components/common/icons/WaveIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
@@ -232,7 +233,7 @@ export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
             }}
             onClick={() => setActiveTab("assets")}
           >
-            <FolderOpenOutlined />
+            <AssetsIcon />
             {t("canvas.tab.assets")}
           </button>
         </div>
