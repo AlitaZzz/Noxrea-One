@@ -43,7 +43,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
-  const [skillNames, setSkillNames] = useState<string[]>([]);
+  const [skillNames, setSkillNames] = useState<{ name: string; title?: string }[]>([]);
 
   // 初始化模型配置（幂等）；列表就绪后若当前选中项不在列表中则回退首项
   useEffect(() => {
@@ -54,8 +54,8 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     let alive = true;
     fetch("/api/chat/skills", { headers: { ...getTokenHeader() } })
       .then((r) => (r.ok ? r.json() : []))
-      .then((list: { name: string }[]) => {
-        if (alive && Array.isArray(list)) setSkillNames(list.map((s) => s.name));
+      .then((list: { name: string; title?: string }[]) => {
+        if (alive && Array.isArray(list)) setSkillNames(list);
       })
       .catch(() => {});
     return () => {
@@ -305,7 +305,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
         <div className="chat-composer">
           {activeSkill ? (
             <span className="chat-skill-chip">
-              {skills.find((s) => s.name === activeSkill)?.title ?? activeSkill}
+              {skillNames.find((s) => s.name === activeSkill)?.title ?? activeSkill}
               <button
                 type="button"
                 className="chat-skill-chip-x"
