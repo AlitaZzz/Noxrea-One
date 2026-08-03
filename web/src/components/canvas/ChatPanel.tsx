@@ -78,6 +78,8 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     setDraft(composerRef.current?.innerText ?? "");
   }, []);
 
+  const canSend = !!draft.trim() || !!activeSkill;
+
   const [activeSkill, setActiveSkill] = useState<string | null>(null);
 
   const handleSend = useCallback(() => {
@@ -349,6 +351,13 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
               sel.addRange(range);
               syncDraft();
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+              // Shift+Enter 保持默认换行行为
+            }}
           />
           <div className="chat-composer-actions">
             <div className="chat-composer-left">
@@ -395,13 +404,13 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                   width: 36,
                   height: 36,
                   borderRadius: 10,
-                  background: isStreaming ? "#e74c3c" : !draft.trim() ? "var(--canvas-border)" : "var(--canvas-text)",
-                  color: isStreaming ? "#fff" : !draft.trim() ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
+                  background: isStreaming ? "#e74c3c" : !canSend ? "var(--canvas-border)" : "var(--canvas-text)",
+                  color: isStreaming ? "#fff" : !canSend ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
                   border: "none",
                   cursor: "pointer",
-                  opacity: !draft.trim() && !isStreaming ? 0.5 : 1,
+                  opacity: !canSend && !isStreaming ? 0.5 : 1,
                 }}
-                disabled={!isStreaming && !draft.trim()}
+                disabled={!canSend && !isStreaming}
                 onClick={isStreaming ? stopStream : handleSend}
               >
                 {isStreaming ? (

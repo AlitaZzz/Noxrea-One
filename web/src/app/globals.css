@@ -796,43 +796,45 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   color: var(--canvas-text-muted);
   pointer-events: none;
 }
-/* 技能 chip：选中技能后以标签形式显示在输入框内 */
+/* 技能 chip：选中技能后以标签形式显示在输入框内，样式对齐生成面板 */
 .chat-skill-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   max-width: 100%;
-  padding: 3px 6px 3px 10px;
+  padding: 2px 4px 2px 8px;
   margin-bottom: 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--canvas-accent) 20%, transparent);
-  border: 1px solid color-mix(in srgb, var(--canvas-accent) 45%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid var(--canvas-border, #3a3a3a);
   color: var(--canvas-text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 13px;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: none;
+  vertical-align: middle;
 }
 .chat-skill-chip-x {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--canvas-accent) 30%, transparent);
-  color: inherit;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--canvas-text-dim);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background .2s;
+  transition: background .2s, color .2s;
 }
 .chat-skill-chip-x:hover {
-  background: color-mix(in srgb, var(--canvas-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--canvas-text) 16%, transparent);
+  color: var(--canvas-text);
 }
 .chat-composer-actions {
   display: flex;
