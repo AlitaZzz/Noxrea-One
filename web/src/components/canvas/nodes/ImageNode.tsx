@@ -3,7 +3,6 @@
 import {
   DownloadOutlined,
   FullscreenOutlined,
-  FileImageOutlined,
   PictureOutlined,
   ScissorOutlined,
   CrownOutlined,
@@ -445,7 +444,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-0.5 flex-1 min-w-0">
-            <FileImageOutlined className="shrink-0" />
+            <PictureOutlined className="shrink-0" />
             <Input
               size="small"
               variant="borderless"
@@ -460,7 +459,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           </span>
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-            <FileImageOutlined className="mr-1" />
+            <PictureOutlined className="mr-1" />
             {data.label || data.alt || t("image.node")}
           </span>
         )}
