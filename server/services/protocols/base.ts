@@ -13,6 +13,8 @@ export interface ProtocolToolCall {
   name: string;
   /** 已解析的参数对象；解析失败时为空对象 */
   args: Record<string, unknown>;
+  /** 对话气泡中展示的中文名（由后台工具注册表提供） */
+  label?: string;
 }
 
 export interface ProtocolResponse {

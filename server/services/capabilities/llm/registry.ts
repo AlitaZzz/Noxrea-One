@@ -14,6 +14,8 @@ export interface AgentToolDefinition {
   required: string[];
   /** 执行位置标记，见上 */
   execute: "client" | "server";
+  /** 对话气泡中展示的中文名（如 generate_image → 生成图片），由后台统一定义 */
+  label: string;
 }
 
 class ToolRegistry {
