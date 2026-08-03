@@ -38,7 +38,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
   ).filter(Boolean);
 
   const [activeModel, setActiveModel] = useState(modelId);
-  const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, deleteChat } = useChatStream(activeModel);
+  const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat } = useChatStream(activeModel);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
