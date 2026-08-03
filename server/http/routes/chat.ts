@@ -214,7 +214,25 @@ router.post("/api/chat/stream", async (c) => {
     ? [{ role: "system" as const, content: skillContents.join("\n\n---\n\n") }]
     : [];
 
+  // Agent 行为约束：置于所有 system 之前（最前），对所有 agent 会话生效。
+  // 要求模型对同一用户意图只发起一次同类工具调用，避免重复建节点。
+  // 注意：不依赖 skillSystem，纯聊天进入 agent 模式时同样需要该约束。
+  const agentConstraint = agent
+    ? [
+        {
+          role: "system" as const,
+          content:
+            "你是画布智能体。规则：\n" +
+            "1. 对于用户的每一条消息，你最多只能发起一次工具调用，绝对不要在同一轮里调用两次或以上同一工具。\n" +
+            "2. 不要为同一请求生成多个变体或多个选项，一次只创建一个节点。\n" +
+            "3. 每条新的用户消息都是独立的一轮，不受之前是否调用过工具的影响。" +
+            "即使用户上一轮已经生成过图片，本轮只要用户提出了生成意图，就应该正常调用对应工具。",
+        },
+      ]
+    : [];
+
   const messages: ChatMessage[] = [
+    ...agentConstraint,
     ...skillSystem,
     ...history.map((m) => ({ role: m.role, content: m.content })),
     ...incoming.map((m) => ({
@@ -241,10 +259,18 @@ router.post("/api/chat/stream", async (c) => {
   }
 
   const encoder = new TextEncoder();
+  let streamClosed = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        // 已关闭则跳过，避免 ERR_INVALID_STATE: Controller is already closed
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          // enqueue 失败（控制器已被关闭）时标记，后续不再写入
+          streamClosed = true;
+        }
       };
 
       const result = await runCompletionStream({
@@ -258,6 +284,7 @@ router.post("/api/chat/stream", async (c) => {
 
       if (!result.ok) {
         send("error", { error: result.error });
+        streamClosed = true;
         controller.close();
         return;
       }
@@ -266,10 +293,16 @@ router.post("/api/chat/stream", async (c) => {
       if (toolCalls.length > 0) {
         // 有工具调用时不落库、不结束会话轮次，
         // 由前端执行工具后带 tool 结果再次请求续轮。
-        for (const call of toolCalls) {
-          send("tool_call", { id: call.id, name: call.name, args: call.args });
+        // 给每个工具调用补上后台注册表里定义的中文展示名 label。
+        const enriched = toolCalls.map((call) => ({
+          ...call,
+          label: agentToolRegistry.get(call.name)?.label ?? call.name,
+        }));
+        for (const call of enriched) {
+          send("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
         }
-        send("done", { text: result.text, toolCalls });
+        send("done", { text: result.text, toolCalls: enriched });
+        streamClosed = true;
         controller.close();
         return;
       }
@@ -278,7 +311,14 @@ router.post("/api/chat/stream", async (c) => {
       await touchSession(sessionId);
 
       send("done", { text: result.text });
+      streamClosed = true;
       controller.close();
+    },
+    cancel() {
+      // 客户端断开连接（reader 取消）时由运行时调用：
+      // 仅标记关闭，避免上游残留的 onDelta 继续写入已关闭的控制器。
+      // 注意：此处不可再调用 controller.close()，否则会再次抛错。
+      streamClosed = true;
     },
   });
 
@@ -380,7 +420,14 @@ async function buildUpstream(args: {
 
   if (args.agent && channel.protocol === "openai") {
     body.tools = agentToolRegistry.getOpenAiTools();
+
+    // 收敛策略：始终允许模型按需调用工具（auto），以便用户在同会话中再次要求生成时
+    // 能真正再次建节点；仅靠 parallel_tool_calls:false 防止同一响应内并行/重复调用同类工具。
+    // 历史中是否存在 tool 结果不再一刀切禁止工具调用。
     body.tool_choice = "auto";
+    // 协议级约束：禁止在同一响应里并行发起多个工具调用（含重复调用同一工具），
+    // 从根本上避免「同一意图生成多个重复节点」。
+    body.parallel_tool_calls = false;
   }
 
   const req = protocol.buildLlmRequest(channel.baseUrl, channel.apiKey, body);
