@@ -33,6 +33,7 @@ model User {
   modelChannels   ModelChannel[]
   assetFolders    AssetFolder[]
   assetItems      AssetItem[]
+  chatSessions    ChatSession[]
 
   @@map("users")
 }
@@ -209,4 +210,41 @@ model FileReference {
   @@index([fileHash, userId], name: "idx_fr_hash_user")
   @@index([refType, refId], name: "idx_fr_type_id")
   @@map("file_references")
+}
+
+// ──────────────────────────────────────────
+// 10. ChatSession（按画布 project 独立的对话会话）
+// ──────────────────────────────────────────
+model ChatSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  projectId Int?     @map("project_id")
+  title     String   @default("New Chat") @map("title")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // 关系
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, projectId])
+  @@map("chat_sessions")
+}
+
+// ──────────────────────────────────────────
+// 11. ChatMessage（会话内的单条消息）
+// ──────────────────────────────────────────
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  sessionId Int      @map("session_id")
+  role      String   @map("role") // user | assistant
+  content   String   @default("") @map("content")
+  refImages String?  @map("ref_images") // JSON TEXT：参考图 URL 数组
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // 关系
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
 }
