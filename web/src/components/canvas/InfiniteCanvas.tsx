@@ -19,7 +19,7 @@ import {
   SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
-import { App,Popover } from "antd";
+import { App,Popover, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo,useState } from "react";
 
@@ -30,6 +30,7 @@ import CanvasControls from "@/components/canvas/CanvasControls";
 import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
 import ChatPanel from "@/components/canvas/ChatPanel";
 import CenterToolbar from "@/components/canvas/CenterToolbar";
+import { AgentIcon } from "@/components/common/icons/AgentIcon";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
 import ImageGenerationPanel from "@/components/canvas/ImageGenerationPanel";
 import ApiSettingsDrawer from "@/components/canvas/ApiSettingsDrawer";
@@ -567,9 +568,22 @@ export default function InfiniteCanvas() {
               onOpenAssets={() => setAssetsOpen(true)}
               onOpenCanvasSidebar={() => setCanvasSidebarOpen((v) => !v)}
               canvasSidebarOpen={canvasSidebarOpen}
-              onOpenChat={() => setChatOpen(true)}
             />
           </div>
+        </Panel>
+
+        {/* Top-right panel: agent entry */}
+        <Panel position="top-right" style={{ margin: 0, padding: 0, paddingRight: 30, paddingTop: 30 }}>
+          <Tooltip title={t("agent")}>
+            <button
+              type="button"
+              onClick={() => setChatOpen(true)}
+              className="canvas-agent-btn"
+            >
+              <AgentIcon style={{ width: 18, height: 18 }} />
+              <span className="text-sm font-medium">{t("agent")}</span>
+            </button>
+          </Tooltip>
         </Panel>
 
         {/* Generation panel — follows selected empty image node */}
@@ -594,7 +608,7 @@ export default function InfiniteCanvas() {
 
         {/* Bottom-center: add node toolbar */}
         <Panel position="bottom-center" style={{ margin: 0, padding: 0, paddingBottom: 30 }}>
-          <CenterToolbar onOpenChat={() => setChatOpen(true)} />
+          <CenterToolbar />
         </Panel>
 
         {/* Node toolbars */}

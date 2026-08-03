@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
-import { Drawer, Button, Empty, Tooltip } from "antd";
+import { Drawer, Button, Tooltip } from "antd";
 import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -26,18 +26,19 @@ interface Props {
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
 export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) {
   // 模型列表来自已配置的渠道（不写死），确保 store 已初始化
+  // 与生成面板一致：选项值为「渠道名/模型名」，显示带渠道前缀以便区分同名模型
   const channels = useModelStore((s) => s.channels);
   const initialize = useModelStore((s) => s.initialize);
-  const modelOptions = Array.from(
-    new Set(
-      channels.flatMap((c) =>
-        c.models.filter((m) => m.capabilities?.includes("text")).map((m) => m.name)
-      )
-    )
-  ).filter(Boolean);
+  const modelOptions = channels.flatMap((c) =>
+    c.models
+      .filter((m) => m.capabilities?.includes("text"))
+      .map((m) => ({ value: `${c.name}/${m.name}`, name: m.name }))
+  );
 
-  const [activeModel, setActiveModel] = useState(modelId);
-  const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat } = useChatStream(activeModel);
+  // activeModel 保存「渠道名/模型名」用于显示；传给后端时取纯模型名（与现有解析一致）
+  const [activeModel, setActiveModel] = useState(`${modelId}`);
+  const activeModelName = activeModel.includes("/") ? activeModel.split("/").pop()! : activeModel;
+  const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat } = useChatStream(activeModelName);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -63,8 +64,8 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     };
   }, []);
   useEffect(() => {
-    if (modelOptions.length && !modelOptions.includes(activeModel)) {
-      setActiveModel(modelOptions[0]);
+    if (modelOptions.length && !modelOptions.some((m) => m.value === activeModel)) {
+      setActiveModel(modelOptions[0].value);
     }
   }, [modelOptions, activeModel]);
 
@@ -245,11 +246,10 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
       {/* 消息列表 */}
       <div ref={listRef} className="chat-scroll" style={{ flex: 1, overflowY: "auto", padding: 12 }}>
         {messages.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="和 Agent 聊聊，或点「技能」插入 /skill"
-            style={{ marginTop: 48 }}
-          />
+          <div className="chat-empty">
+            <div className="chat-empty-title">Noxrea One</div>
+            <div className="chat-empty-subtitle">从灵感碎片，到完整世界</div>
+          </div>
         ) : (
           messages.map((m) => (
             <div
@@ -268,7 +268,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                       <div className="chat-tool-calls">
                         {m.toolCalls.map((t) => (
                           <div key={t.id} className="chat-tool-call">
-                            调用工具：<code>{t.name}</code>
+                            调用工具：<code>{t.label ?? t.name}</code>
                             {t.args && <div className="chat-tool-args">{t.args}</div>}
                           </div>
                         ))}
@@ -278,14 +278,16 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                       <div className="cortex-markdown">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                       </div>
-                    ) : (
+                    ) : !m.toolCalls?.length ? (
                       <span className="chat-thinking">思考中…</span>
-                    )}
+                    ) : null}
                   </>
                 ) : m.role === "tool" ? (
                   <span className="chat-tool-result">{m.content}</span>
                 ) : (
-                  <span>{m.content}</span>
+                  <div className="cortex-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  </div>
                 )}
               </div>
             </div>
@@ -363,15 +365,16 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
           />
           <div className="chat-composer-actions">
             <div className="chat-composer-left">
-              <button
-                type="button"
-                className="chat-composer-icon"
-                aria-label="添加附件或画布引用"
-                title="添加附件"
-                onClick={() => fileRef.current?.click()}
-              >
-                <AttachIcon />
-              </button>
+              <Tooltip title="添加附件" placement="top">
+                <button
+                  type="button"
+                  className="chat-composer-icon"
+                  aria-label="添加附件或画布引用"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <AttachIcon />
+                </button>
+              </Tooltip>
               <SkillPanel onSelect={handleSkillSelect} />
             </div>
             <div className="chat-composer-right">
@@ -380,21 +383,23 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                 onOpenChange={setModelOpen}
                 placement="topRight"
                 trigger={
-                  <button type="button" className="chat-composer-model" aria-label="选择模型">
-                    {activeModel}
-                    <ChevronDownIcon />
-                  </button>
+                  <Tooltip title={activeModel} placement="top">
+                    <button type="button" className="chat-composer-model" aria-label="选择模型">
+                      <span className="chat-composer-model-label">{activeModel}</span>
+                      <ChevronDownIcon />
+                    </button>
+                  </Tooltip>
                 }
                 content={modelOptions.map((m) => (
                   <MenuItem
-                    key={m}
-                    selected={activeModel === m}
+                    key={m.value}
+                    selected={activeModel === m.value}
                     onClick={() => {
-                      setActiveModel(m);
+                      setActiveModel(m.value);
                       setModelOpen(false);
                     }}
                   >
-                    {m}
+                    {m.value}
                   </MenuItem>
                 ))}
               />
