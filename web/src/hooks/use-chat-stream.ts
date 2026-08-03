@@ -62,6 +62,25 @@ function uid() {
   return `m_${Date.now()}_${_seq}`;
 }
 
+/** 前端 read 空闲超时：服务端有心跳保活，但极端情况（代理重置等）下
+ *  可能不触发任何事件就挂起。加 120s 超时把静默挂起变成可见报错。 */
+const FRONTEND_READ_TIMEOUT_MS = 120_000;
+
+function readWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<{ done: boolean; value?: Uint8Array }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reader.cancel().catch(() => {});
+      reject(new Error(`read timeout: no data for ${FRONTEND_READ_TIMEOUT_MS / 1000}s`));
+    }, FRONTEND_READ_TIMEOUT_MS);
+    reader.read().then(
+      (r) => { clearTimeout(timer); resolve(r); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
 interface RunStreamResult {
   /** done 事件是否携带 toolCalls（需要续轮） */
   hasTool: boolean;
@@ -191,7 +210,7 @@ export function useChatStream(modelId: string) {
     async (
       sessionId: string,
       history: StreamMessage[],
-      skills?: string[],
+      skills?: { name: string; title?: string }[],
       placeholderId?: string
     ): Promise<RunStreamResult> => {
       const ctrl = new AbortController();
@@ -235,7 +254,7 @@ export function useChatStream(modelId: string) {
       };
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readWithTimeout(reader);
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         const { blocks, rest } = parseBlocks(buf);
