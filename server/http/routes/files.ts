@@ -24,9 +24,10 @@ router.get("/api/files/*", async (c) => {
 
   let resolvedPath = filePath;
 
-  // w 缩放参数 -> WebP 缓存
+  // w 缩放参数 -> WebP 缓存（仅对图片生效，视频不应走 sharp 缩放）
   const w = c.req.query("w");
-  if (w) {
+  const isVideoExt = /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(filePath);
+  if (w && !isVideoExt) {
     const width = parseInt(w, 10);
     if (!isNaN(width) && width > 0) {
       const cached = await getResizedWebP(filePath, width);
