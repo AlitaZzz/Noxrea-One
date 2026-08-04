@@ -20,9 +20,9 @@ import { useReactFlow, type Node } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { TextIcon } from "@/components/common/icons/TextIcon";
-import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
-import { WaveIcon } from "@/components/common/icons/WaveIcon";
+import { TextIcon } from "@/components/common/icons/media/TextIcon";
+import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
+import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { MenuDivider } from "@/components/common/MenuPopover";

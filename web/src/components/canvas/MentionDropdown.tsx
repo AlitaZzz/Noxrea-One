@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { WaveIcon } from "@/components/common/icons/WaveIcon";
+import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 
 export interface ReferenceItem {
   src: string;

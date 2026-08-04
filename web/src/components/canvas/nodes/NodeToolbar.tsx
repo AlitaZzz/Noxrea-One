@@ -17,9 +17,9 @@ import { Eraser, FlipHorizontal, FlipVertical } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
-import { GridSplitIcon } from "@/components/common/icons/GridSplitIcon";
-import { LightingIcon } from "@/components/common/icons/LightingIcon";
-import { MultiAngleIcon } from "@/components/common/icons/MultiAngleIcon";
+import { GridSplitIcon } from "@/components/common/icons/canvas/GridSplitIcon";
+import { LightingIcon } from "@/components/common/icons/canvas/LightingIcon";
+import { MultiAngleIcon } from "@/components/common/icons/canvas/MultiAngleIcon";
 import { EventNames } from "@/lib/event-names";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";

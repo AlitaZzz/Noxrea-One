@@ -4,7 +4,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 
 import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
-import { AlignmentGuidesOverlay } from "@/components/common/icons/AlignmentGuidesOverlay";
+import { AlignmentGuidesOverlay } from "@/components/common/icons/canvas/AlignmentGuidesOverlay";
 
 interface Props {
   guides: AlignmentGuide[];

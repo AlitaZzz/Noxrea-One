@@ -11,7 +11,7 @@ import { Crowd } from "@/director/entities/crowd";
 import { POSE_PRESETS } from "@/director/entities/pose-presets";
 import { renderCameraThumbnail } from "@/director/util/camera-preview";
 import { worldBox } from "@/director/util/measure";
-import { DirectorEntityMeta, DirectorRuntime, useDirectorStore } from "@/stores/director-store";
+import { DirectorEntityMeta, DirectorRuntime, useDirectorStore } from "@/director/store";
 
 import PoseSliders from "./PoseSliders";
 import { DirEyeIcon } from "@/components/common/icons/director/DirEyeIcon";

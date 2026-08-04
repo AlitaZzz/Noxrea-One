@@ -6,7 +6,7 @@ import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Entity } from "@/director/entities/entity";
-import { useDirectorStore } from "@/stores/director-store";
+import { useDirectorStore } from "@/director/store";
 import { DirCameraIcon } from "@/components/common/icons/director/DirCameraIcon";
 import { DirCaretIcon } from "@/components/common/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/common/icons/director/DirCubeIcon";

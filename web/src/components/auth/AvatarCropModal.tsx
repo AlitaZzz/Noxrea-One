@@ -5,7 +5,7 @@ import { useCallback, useEffect,useRef, useState } from "react";
 
 import { apiUpload } from "@/lib/api";
 import { canvasToBlob } from "@/lib/image-utils";
-import { LayerModal } from "@/lib/layer";
+import { LayerModal } from "@/components/overlays/layer";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

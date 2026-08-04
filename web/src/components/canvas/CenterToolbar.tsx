@@ -10,8 +10,8 @@ import { Button,Popover, Tooltip } from "antd";
 import { useCallback, useEffect,useState } from "react";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { TextIcon } from "@/components/common/icons/TextIcon";
-import { ShortcutIcon } from "@/components/common/icons/ShortcutIcon";
+import { TextIcon } from "@/components/common/icons/media/TextIcon";
+import { ShortcutIcon } from "@/components/common/icons/canvas/ShortcutIcon";
 import { useAddNode } from "@/hooks/use-add-node";
 import { useI18nStore } from "@/stores/i18n-store";
 

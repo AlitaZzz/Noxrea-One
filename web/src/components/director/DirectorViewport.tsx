@@ -19,8 +19,8 @@ import { worldBox } from "@/director/util/measure";
 import { createNodeFromUrl,uploadBlob } from "@/lib/image-utils";
 import type { DirectorEntityState, DirectorStateData } from "@/lib/types";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { DirectorEntityMeta, DirectorRuntime, DirectorEntity, useDirectorStore } from "@/stores/director-store";
-import { NavSvg } from "@/components/common/icons/NavSvg";
+import { DirectorEntityMeta, DirectorRuntime, DirectorEntity, useDirectorStore } from "@/director/store";
+import { NavSvg } from "@/components/common/icons/director/NavSvg";
 
 type _SceneSnapshot = {
   scale?: number;
@@ -801,7 +801,7 @@ export default function DirectorViewport() {
             const layer = document.getElementById("dirLabelLayer");
             if (layer) layer.style.display = ss.labels ? "block" : "none";
           }
-          useDirectorStore.getState().setSceneState(ss as unknown as Partial<import("@/stores/director-store").SceneState>);
+          useDirectorStore.getState().setSceneState(ss as unknown as Partial<import("@/director/store").SceneState>);
         }
         if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
         if (data.shots) {

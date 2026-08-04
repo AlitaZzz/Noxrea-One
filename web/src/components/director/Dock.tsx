@@ -4,7 +4,7 @@ import { App,InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 
 import { groupedPresets } from "@/director/core/camera-presets";
-import { DirectorRuntime, useDirectorStore } from "@/stores/director-store";
+import { DirectorRuntime, useDirectorStore } from "@/director/store";
 import { DirCaretIcon } from "@/components/common/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/common/icons/director/DirCubeIcon";
 import { DirExpandIcon } from "@/components/common/icons/director/DirExpandIcon";

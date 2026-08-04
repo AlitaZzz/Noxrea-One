@@ -5,7 +5,7 @@ import { Button, Slider } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import WheelGuard from "@/components/common/WheelGuard";
-import { MultiAngleIcon } from "@/components/common/icons/MultiAngleIcon";
+import { MultiAngleIcon } from "@/components/common/icons/canvas/MultiAngleIcon";
 import AppModal from "@/lib/app-modal";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";

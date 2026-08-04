@@ -16,7 +16,7 @@ import type { CSSProperties,Key, ReactNode } from "react";
 import { memo, useEffect, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
-import { TextIcon } from "@/components/common/icons/TextIcon";
+import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { EyeIcon } from "@/components/common/icons/EyeIcon";
 import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
 import type { ModelCapability, ModelInfo } from "@/lib/types";

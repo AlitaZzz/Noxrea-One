@@ -1,11 +1,11 @@
 "use client";
 
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { WaveIcon } from "@/components/common/icons/WaveIcon";
+import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { TextIcon } from "@/components/common/icons/TextIcon";
+import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface CtxState {

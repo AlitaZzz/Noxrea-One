@@ -2,7 +2,7 @@
 
 import { ColorPicker, InputNumber,Slider, Switch } from "antd";
 
-import { useDirectorStore } from "@/stores/director-store";
+import { useDirectorStore } from "@/director/store";
 
 function SliderRow({ label, min, max, step = 1, value, disabled, format, onChange }: {
   label?: string; min: number; max: number; step?: number;
