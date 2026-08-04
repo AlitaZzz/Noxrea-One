@@ -44,7 +44,7 @@ model User {
 model GenerationTask {
   id             String   @id @map("id") // UUID 字符串主键
   userId         Int      @map("user_id")
-  type           String   @map("type") // 权威模态字段：image | video | llm | bg_removal
+  type           String   @map("type") // 权威模态字段：image | video | llm
   protocol       String?  @map("protocol") // 落库值来自 channel.protocol，仅供记录可读；恢复轮询仍以 task.protocol ?? channel.protocol 链为准
   model          String?  @map("model")
   upstreamTaskId String?  @map("upstream_task_id")

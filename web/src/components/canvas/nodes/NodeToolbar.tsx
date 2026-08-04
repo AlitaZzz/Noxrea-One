@@ -4,7 +4,6 @@ import {
   CameraOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  ExperimentOutlined,
   HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
@@ -190,10 +189,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }}
               icon={<LightingIcon />}
               onClick={() => dispatchNodeAction(nodeId, "lighting")} disabled={!assetSrc} />
-          </Tooltip>
-          <Tooltip title={t("bg_removal")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExperimentOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "bg-removal")} />
           </Tooltip>
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />

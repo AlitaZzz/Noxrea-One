@@ -83,38 +83,6 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       const prompt = evt.prompt || "";
 
-                      if (curBinding?.pendingAction === "bg_removal") {
-                        // 抠图 → 创建新节点，不覆盖原图
-                        const { createNodeFromUrl } = await import("@/lib/image-utils");
-                        const defW = 1024, defH = 1024;
-                        const url = completedUrls[0];
-                        const newNode = await createNodeFromUrl(nodeId, url, defW, defH, " (bg-removed)");
-                        // Clear source node state
-                        useCanvasStore.getState().updateNodeData(nodeId, {
-                          taskBinding: undefined,
-                        }, undefined, { skipHistory: true });
-                        markDirtyImmediate();
-                        // Load real dimensions for the new node
-                        if (newNode) {
-                          loadMediaDimensions(url, false).then((dims) => {
-                            if (dims.w > 0) {
-                              const { width, height } = computeNodeSize(dims.w, dims.h);
-                              useCanvasStore.getState().updateNodeData(newNode.id, {
-                                naturalWidth: dims.w, naturalHeight: dims.h,
-                              }, { width: width, height }, { skipHistory: true });
-                              markDirtyImmediate();
-                            }
-                          });
-                        }
-                        const t = useI18nStore.getState().t;
-                        if (!notifiedTasksRef.current.has(taskId)) {
-                          notifiedTasksRef.current.add(taskId);
-                          notifRef.current.success({ title: t("generation.image.success"), description: "Background removed", placement: "bottomRight", duration: 15 });
-                        }
-                        sseCtrlsRef.current.delete(taskId);
-                        return;
-                      }
-
                       const label = prompt.slice(0, 20);
                       const isVideoNode = cur.type === "video-node";
                       // Immediately show first result with default size
@@ -165,7 +133,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: curBinding?.pendingAction === "bg_removal" ? "Background removal failed" : t(isVideoNode ? "generation.video.failed" : isTextNode ? "generation.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
+                        notifRef.current.error({ title: t(isVideoNode ? "generation.video.failed" : isTextNode ? "generation.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

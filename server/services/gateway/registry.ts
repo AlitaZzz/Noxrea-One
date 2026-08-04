@@ -9,7 +9,6 @@ import "@server/services/capabilities/image/service";
 import "@server/services/capabilities/video/service";
 import "@server/services/capabilities/llm/service";
 import "@server/services/capabilities/audio/service";
-import "@server/services/capabilities/bg-removal/service";
 
 // ── 导入 Protocol 实现 ──
 import { OpenAiImageProtocol } from "@server/services/protocols/openai/image";
