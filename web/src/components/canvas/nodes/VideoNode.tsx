@@ -22,8 +22,8 @@ import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
 import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
 import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { VolumeMuteIcon } from "@/components/common/icons/VolumeMuteIcon";
-import { VolumeUpIcon } from "@/components/common/icons/VolumeUpIcon";
+import { VolumeMuteIcon } from "@/components/common/icons/media/VolumeMuteIcon";
+import { VolumeUpIcon } from "@/components/common/icons/media/VolumeUpIcon";
 import { useI18nStore } from "@/stores/i18n-store";
 
 function formatTime(s: number): string {

@@ -18,8 +18,8 @@ import { Button, InputNumber,Popover, Tooltip } from "antd";
 import { useCallback,useState } from "react";
 
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopover";
-import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
-import { MagnetIcon } from "@/components/common/icons/MagnetIcon";
+import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
+import { MagnetIcon } from "@/components/common/icons/canvas/MagnetIcon";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import type { BackgroundType } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";

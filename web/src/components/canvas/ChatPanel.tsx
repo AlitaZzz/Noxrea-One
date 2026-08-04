@@ -31,9 +31,9 @@ const sanitizeSchema = {
 };
 
 import SkillPanel from "@/components/SkillPanel";
-import { NewChatIcon } from "@/components/common/icons/NewChatIcon";
-import { HistoryIcon } from "@/components/common/icons/HistoryIcon";
-import { AttachIcon } from "@/components/common/icons/AttachIcon";
+import { NewChatIcon } from "@/components/common/icons/chat/NewChatIcon";
+import { HistoryIcon } from "@/components/common/icons/chat/HistoryIcon";
+import { AttachIcon } from "@/components/common/icons/chat/AttachIcon";
 import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useModelStore } from "@/stores/model-store";

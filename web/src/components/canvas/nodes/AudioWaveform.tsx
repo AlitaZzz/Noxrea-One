@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import WaveSurfer from "wavesurfer.js";
-import { PlayIcon } from "@/components/common/icons/PlayIcon";
-import { PauseIcon } from "@/components/common/icons/PauseIcon";
+import { PlayIcon } from "@/components/common/icons/media/PlayIcon";
+import { PauseIcon } from "@/components/common/icons/media/PauseIcon";
 
 export function formatTime(sec?: number): string {
   const s = Math.max(0, Math.floor(sec || 0));

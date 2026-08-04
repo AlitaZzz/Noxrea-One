@@ -8,7 +8,7 @@ import WheelGuard from "@/components/common/WheelGuard";
 import AppModal from "@/lib/app-modal";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-import { LightingIcon } from "@/components/common/icons/LightingIcon";
+import { LightingIcon } from "@/components/common/icons/canvas/LightingIcon";
 
 interface LightingState {
   intensity: number;

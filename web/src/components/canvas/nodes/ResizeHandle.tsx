@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react";
 
 import { EventNames } from "@/lib/event-names";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { ResizeCornerIcon } from "@/components/common/icons/ResizeCornerIcon";
+import { ResizeCornerIcon } from "@/components/common/icons/canvas/ResizeCornerIcon";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 

@@ -8,7 +8,7 @@ import Inspector from "@/components/director/Inspector";
 import Outliner from "@/components/director/Outliner";
 import ScenePanel from "@/components/director/ScenePanel";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { useDirectorStore } from "@/stores/director-store";
+import { useDirectorStore } from "@/director/store";
 
 const DirectorViewport = dynamic(() => import("@/components/director/DirectorViewport"), {
   ssr: false,

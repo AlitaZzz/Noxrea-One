@@ -31,7 +31,7 @@ import CanvasControls from "@/components/canvas/CanvasControls";
 import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/CanvasSidebar";
 import ChatPanel from "@/components/canvas/ChatPanel";
 import CenterToolbar from "@/components/canvas/CenterToolbar";
-import { AgentIcon } from "@/components/common/icons/AgentIcon";
+import { AgentIcon } from "@/components/common/icons/canvas/AgentIcon";
 import DeletableEdge from "@/components/canvas/EdgeDeleteButton";
 import ImageGenerationPanel from "@/components/canvas/ImageGenerationPanel";
 import ApiSettingsDrawer from "@/components/canvas/ApiSettingsDrawer";

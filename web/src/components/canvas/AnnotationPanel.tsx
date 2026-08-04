@@ -4,9 +4,9 @@ import { CheckOutlined, CloseOutlined, DeleteOutlined, HighlightOutlined, Border
 import { useViewport } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BrushSizeIcon } from "@/components/common/icons/BrushSizeIcon";
-import { RedoIcon } from "@/components/common/icons/RedoIcon";
-import { UndoIcon } from "@/components/common/icons/UndoIcon";
+import { BrushSizeIcon } from "@/components/common/icons/canvas/BrushSizeIcon";
+import { RedoIcon } from "@/components/common/icons/canvas/RedoIcon";
+import { UndoIcon } from "@/components/common/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/common/WheelGuard";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/image-utils";
 import { useCanvasStore } from "@/stores/canvas-store";

@@ -20,7 +20,7 @@ import AssetGrid from "./AssetGrid";
 import AssetSidebar from "./AssetSidebar";
 import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
-import { AssetsIcon } from "@/components/common/icons/AssetsIcon";
+import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
 
 interface Props {
   open: boolean;
