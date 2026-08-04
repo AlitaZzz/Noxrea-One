@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import SettingsModal from "@/components/auth/SettingsModal";
+import AppShell from "@/components/layout/AppShell";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
-import { ThemeDarkIcon } from "@/components/common/icons/ThemeDarkIcon";
-import { ThemeLightIcon } from "@/components/common/icons/ThemeLightIcon";
+import { ThemeDarkIcon } from "@/components/common/icons/theme/ThemeDarkIcon";
+import { ThemeLightIcon } from "@/components/common/icons/theme/ThemeLightIcon";
 import type { CanvasProject } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";
@@ -19,7 +20,6 @@ import { useProjectStore } from "@/stores/project-store";
 
 export default function ProjectPage() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CanvasProject | null>(null);
@@ -31,21 +31,12 @@ export default function ProjectPage() {
   const toggleTheme = useCanvasStore((s) => s.toggleTheme);
   const i18n = useI18nStore((s) => s);
   const t = useI18nStore((s) => s.t);
-  const initialize = useProjectStore((s) => s.initialize);
   const projects = useProjectStore((s) => s.projects);
   const createProject = useProjectStore((s) => s.createProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
-  useEffect(() => {
-    useAuthStore.getState().initialize().then(() => {
-      if (!useAuthStore.getState().user) { window.location.href = "/login"; return; }
-      const u = useAuthStore.getState().user!;
-      useCanvasStore.getState().setTheme(u.theme === "light" ? "light" : "dark");
-      useI18nStore.getState().setLang((u.language || "zh") as "zh" | "en");
-      initialize().then(() => setReady(true));
-    });
-  }, [initialize]);
+  // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成。
 
   const handleOpen = (p: CanvasProject) => {
     setActiveProject(p.id);
@@ -64,16 +55,9 @@ export default function ProjectPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center h-screen" style={{ background: "var(--canvas-app-bg)" }}>
-        <div className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>Loading...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen p-6 md:p-10" style={{ background: "var(--canvas-app-bg)", color: "var(--canvas-text)" }}>
+    <AppShell>
+      <div className="h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--canvas-text)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
@@ -233,6 +217,7 @@ export default function ProjectPage() {
         onOk={() => { if (deleteTarget) deleteProject(deleteTarget.id); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}
       />
-    </div>
+      </div>
+    </AppShell>
   );
 }

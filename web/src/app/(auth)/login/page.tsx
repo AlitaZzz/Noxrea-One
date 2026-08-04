@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
-import { showGlobalMessage } from "@/lib/global-message";
+import { showGlobalMessage } from "@/components/overlays/global-message";
 import { EyeIcon } from "@/components/common/icons/EyeIcon";
 import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
 import { SpinnerIcon } from "@/components/common/icons/SpinnerIcon";
