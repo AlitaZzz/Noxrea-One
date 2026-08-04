@@ -61,7 +61,7 @@ import { type AnyNode,NODE_TYPE } from "@/lib/types";
 import { NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
+import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
@@ -70,7 +70,7 @@ import { useSelectionStore } from "@/stores/selection-store";
 
 export default function InfiniteCanvas() {
   const router = useRouter();
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
   const { notification: notif } = App.useApp();
   useSseTaskMonitor(notif);
 
@@ -83,8 +83,6 @@ export default function InfiniteCanvas() {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
   const removeEdges = useCanvasStore((s) => s.removeEdges);
-  const viewport = useCanvasStore((s) => s.viewport);
-  const setViewport = useCanvasStore((s) => s.setViewport);
   const background = useCanvasStore((s) => s.background);
   const theme = useCanvasStore((s) => s.theme);
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
@@ -99,6 +97,11 @@ export default function InfiniteCanvas() {
     () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
     [nodes]
   );
+
+  // 冻结 defaultViewport 引用——React Flow 仅在首次挂载时读取此值，
+  // 后续 viewport 变更走 store + setRfViewport，绝不能让此 prop 随渲染更新，
+  // 否则会触发 onViewportChange -> setViewport -> 重渲染 -> defaultViewport 变 -> ∞
+  const defaultViewport = useMemo(() => useCanvasStore.getState().viewport, []);
 
   // Edges connected to any selected node → trigger multi-dot flow animation
   const highlightedEdgeIds = useMemo(
@@ -131,12 +134,15 @@ export default function InfiniteCanvas() {
     const project = useProjectStore.getState().activeProject();
     if (project) {
       useCanvasStore.getState().restoreFromProject(project);
+      // defaultViewport 仅首次挂载生效，切换项目需手动同步 React Flow 内部 viewport
+      const vp = useCanvasStore.getState().viewport;
+      setRfViewport(vp, { duration: 0 });
       // 切换/加载项目 = 历史归零。修复 undo 弹出即应用后不再需要基线快照
       // （旧基线是为了规避 undo 偏移下的 emptySnapshot 兜底），同时避免
       // 撤销穿透到上一个项目的画布内容。
       useHistoryStore.getState().clear();
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, setRfViewport]);
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -287,10 +293,9 @@ export default function InfiniteCanvas() {
 
   const handleViewportChange = useCallback(
     (vp: { x: number; y: number; zoom: number }) => {
-      setViewport({ x: vp.x, y: vp.y, zoom: vp.zoom });
-      markDirty();
+      syncLiveViewport({ x: vp.x, y: vp.y, zoom: vp.zoom });
     },
-    [setViewport]
+    []
   );
 
   const handleNodeDragStart = useCallback(() => {
@@ -362,18 +367,22 @@ export default function InfiniteCanvas() {
 
   // ---- Highlight selected node's connections ----
 
-  const highlightedEdges = edges.map((e) => ({
-    ...e,
-    style: {
-      ...e.style,
-      stroke:
-        selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)
-          ? "#1D9E75"
-          : (e.style?.stroke as string) || (theme === "dark" ? "#666" : "#999"),
-      strokeWidth:
-        selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target) ? 3 : 2,
-    },
-  }));
+  const highlightedEdges = useMemo(
+    () =>
+      edges.map((e) => ({
+        ...e,
+        style: {
+          ...e.style,
+          stroke:
+            selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)
+              ? "#1D9E75"
+              : (e.style?.stroke as string) || (theme === "dark" ? "#666" : "#999"),
+          strokeWidth:
+            selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target) ? 3 : 2,
+        },
+      })),
+    [edges, selectedNodeIds, theme]
+  );
 
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
@@ -416,7 +425,7 @@ export default function InfiniteCanvas() {
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
         onNodeClick={handleNodeClick}
-        defaultViewport={viewport}
+        defaultViewport={defaultViewport}
         selectionMode={SelectionMode.Partial}
         nodeDragThreshold={2}
         nodeClickDistance={3}
