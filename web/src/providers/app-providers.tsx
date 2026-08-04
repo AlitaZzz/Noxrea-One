@@ -4,8 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntApp,ConfigProvider, theme as antTheme } from "antd";
 import { ReactNode, useEffect } from "react";
 
-import { setGlobalMessageApi } from "@/lib/global-message";
-import { getLayerPopupContainer } from "@/lib/layer";
+import { setGlobalMessageApi } from "@/components/overlays/global-message";
+import { getLayerPopupContainer } from "@/components/overlays/layer";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

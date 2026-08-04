@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent-tools";
-import { showGlobalMessage } from "@/lib/global-message";
+import { showGlobalMessage } from "@/components/overlays/global-message";
 import { getTokenHeader } from "@/lib/api";
 
 export type ChatRole = "user" | "assistant" | "tool" | "system";

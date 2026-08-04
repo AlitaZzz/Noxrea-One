@@ -125,4 +125,3 @@ export function LayerModal({ children, ...props }: LayerModalProps) {
     </Modal>
   );
 }
-
