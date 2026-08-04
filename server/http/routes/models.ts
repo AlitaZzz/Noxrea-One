@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { resolveAndValidate } from "@server/core/ssrf";
-import { fetchWithTimeout } from "@server/core/http";
+import { fetchWithTimeout } from "@server/core/http-client";
 import { getChannel } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
 

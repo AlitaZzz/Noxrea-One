@@ -3,9 +3,8 @@
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
-import { prisma } from "@server/core/database/client";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
-import { updateTaskStatus } from "@server/crud/task";
+import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
+import { updateTaskStatus, isTaskCancelled, getTaskStatus } from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
 
 // ── 导出类型 ──────────────────────────────────────────────────
@@ -64,11 +63,8 @@ export async function pollUntilResult<T>(
   for (let i = 0; i < maxAttempts; i++) {
     if (taskId && i % 5 === 0) {
       try {
-        const t = await prisma.generationTask.findUnique({
-          where: { id: taskId },
-          select: { status: true },
-        });
-        if (t?.status === "cancelled") {
+        const status = await getTaskStatus(taskId);
+        if (status === "cancelled") {
           logEvent("poll", { stage: "cancelled", taskId });
           return null;
         }
@@ -346,13 +342,5 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
 // ── 取消检查 ──────────────────────────────────────────────────
 
 async function _checkCancelled(taskId: string): Promise<boolean> {
-  try {
-    const t = await prisma.generationTask.findUnique({
-      where: { id: taskId },
-      select: { status: true, error: true },
-    });
-    return t?.status === "cancelled" || (t?.status === "failed" && t?.error === "Cancelled");
-  } catch {
-    return false;
-  }
+  return isTaskCancelled(taskId);
 }

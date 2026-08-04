@@ -1,7 +1,7 @@
 // ── 远端结果下载（对应 backend/app/services/storage/download.py） ──
 
 import { resolveAndValidate } from "@server/core/ssrf";
-import { fetchWithTimeout } from "@server/core/http";
+import { fetchWithTimeout } from "@server/core/http-client";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";

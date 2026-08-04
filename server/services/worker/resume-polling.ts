@@ -1,6 +1,5 @@
 // ── 异步任务恢复轮询（Worker 重启后继续轮询已有 upstreamTaskId 的任务） ──
 
-import { prisma } from "@server/core/database/client";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
@@ -8,8 +7,8 @@ import { getChannel } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
 import { downloadAndSave } from "@server/services/storage/download";
-import { fetchWithTimeout } from "@server/core/http";
-import { updateTaskStatus } from "@server/crud/task";
+import { fetchWithTimeout } from "@server/core/http-client";
+import { updateTaskStatus, isTaskCancelled } from "@server/crud/task";
 import type { GenerationTask } from "@prisma/client";
 import type { StopSignal } from "./loop";
 
@@ -160,15 +159,7 @@ async function _doResumePoll(
 }
 
 async function _checkCancelled(taskId: string): Promise<boolean> {
-  try {
-    const t = await prisma.generationTask.findUnique({
-      where: { id: taskId },
-      select: { status: true },
-    });
-    return t?.status === "cancelled";
-  } catch {
-    return false;
-  }
+  return isTaskCancelled(taskId);
 }
 
 async function _failTask(taskId: string, error: string): Promise<void> {

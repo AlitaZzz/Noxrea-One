@@ -8,7 +8,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
+import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";

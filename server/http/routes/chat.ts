@@ -8,7 +8,7 @@ import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { agentToolRegistry } from "@server/services/capabilities/llm/registry";
 import "@server/services/capabilities/llm/tools"; // 触发工具注册（副作用）
 import { listSkills, getSkill } from "@server/services/capabilities/llm/skills/loader";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http";
+import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
 import { logEvent } from "@server/core/logger/utils";
 import {
