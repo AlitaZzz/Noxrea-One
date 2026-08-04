@@ -355,37 +355,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     }
   }, [id, src]);
 
-  const handleBgRemoval = useCallback(async () => {
-    if (!src) return;
-    try {
-      // Create task via existing generation task queue
-      const { BASE, getTokenHeader } = await import("@/lib/api");
-      const res = await fetch(`${BASE}/api/generate/task`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify({
-          type: "bg_removal",
-          prompt: "",
-          refImages: [src],
-          nodeId: id,
-        }),
-      });
-      if (!res.ok) throw new Error(`Task creation failed: HTTP ${res.status}`);
-      const json = await res.json();
-      const taskId = json.data?.id;
-      if (!taskId) throw new Error("No task_id returned");
-
-      // Store task info in node data for InfiniteCanvas SSE monitor
-      useCanvasStore.getState().updateNodeData(id, {
-        taskBinding: { taskId, status: "pending", pendingAction: "bg_removal" },
-      }, undefined, { skipHistory: true });
-      // markDirtyImmediate handled by updateNodeData internally
-    } catch (e) {
-      useCanvasStore.getState().updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
-      console.error("bg-removal failed:", e);
-    }
-  }, [id, src]);
-
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
       src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
@@ -396,10 +365,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval };
-  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleBgRemoval]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit };
+  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -415,7 +384,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
-        case "bg-removal": a.handleBgRemoval(); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);

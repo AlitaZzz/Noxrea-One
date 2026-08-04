@@ -147,7 +147,7 @@ export async function uploadBlob(blob: Blob, filename?: string): Promise<string 
  *
 /**
  * 从已有 URL 创建 ImageNode → 写入 store → 连线到源节点。
- * 适合：抠图任务完成、宫格切分、截图发送到画布等。
+ * 适合：宫格切分、截图发送到画布等。
  */
 export async function createNodeFromUrl(
   sourceId: string,

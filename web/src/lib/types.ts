@@ -35,7 +35,7 @@ export interface TaskBinding {
   /** 后端任务 ID（本地处理如裁剪/变换时为空串） */
   taskId: string;
   status: TaskStatus;
-  /** 异步任务的语义动作，如 "bg_removal" */
+  /** 异步任务的语义动作 */
   pendingAction?: string;
 }
 

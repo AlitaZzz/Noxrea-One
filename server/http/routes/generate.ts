@@ -37,24 +37,20 @@ router.post("/api/generate/task", async (c) => {
 
   const data = parsed.data;
 
-  // 模态：以 type 为准（image | video | llm | bg_removal）
+  // 模态：以 type 为准（image | video | llm）
   const capability = data.type ?? "image";
 
-  // bg_removal 内部能力：不需要渠道
-  let channelProtocol: string | undefined;
-  if (capability !== "bg_removal") {
-    if (!data.channelId) {
-      return fail(400, "channelId is required");
-    }
-    const channel = await getChannel(data.channelId);
-    if (!channel) {
-      return fail(400, "Channel not found");
-    }
-    if (!channel.protocol) {
-      return fail(400, "Channel 未配置 protocol");
-    }
-    channelProtocol = channel.protocol;
+  if (!data.channelId) {
+    return fail(400, "channelId is required");
   }
+  const channel = await getChannel(data.channelId);
+  if (!channel) {
+    return fail(400, "Channel not found");
+  }
+  if (!channel.protocol) {
+    return fail(400, "Channel 未配置 protocol");
+  }
+  const channelProtocol = channel.protocol;
 
   // config 白名单构建
   const config: Record<string, unknown> = {};
