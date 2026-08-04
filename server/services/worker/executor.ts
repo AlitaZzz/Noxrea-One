@@ -1,7 +1,7 @@
 // ── 单任务执行器（对应 backend/app/services/worker/executor.py） ──
 
 import { routeGenerate } from "@server/services/gateway/router";
-import { updateTaskStatus } from "@server/crud/task";
+import { updateTaskStatus, getTaskStatus } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio } from "@server/services/resolvers/reference";
@@ -12,7 +12,6 @@ import { logEvent, classifyError, summarizeText } from "@server/core/logger/util
 
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
-import { prisma } from "@server/core/database/client";
 import type { GenerationTask } from "@prisma/client";
 
 /**
@@ -119,8 +118,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     }
 
     // 结果落盘（对齐 Python _finalize_result + download_and_save）
-    const currentTask = await prisma.generationTask.findUnique({ where: { id: task.id }, select: { status: true } });
-    if (currentTask?.status === "cancelled") {
+    const currentStatus = await getTaskStatus(task.id);
+    if (currentStatus === "cancelled") {
       logEvent("executor", { stage: "cancelled_before_download", taskId: task.id });
       return;
     }
