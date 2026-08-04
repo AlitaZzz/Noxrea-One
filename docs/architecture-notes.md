@@ -106,12 +106,11 @@ Zustand store 的 `getState()` 方法可以在组件外和异步回调中获取�
 
 `server/services/worker/executor.ts` 在生成任务中也会代发请求，目标分"用户可控 URL"与"管理员配置 URL"两类：
 
-- **用户可控 URL（`ref_images` / `bg_removal` 的 `source_url`）**：
+- **用户可控 URL（`ref_images` 等用户提供的图片地址）**：
   - 同源 URL（严格比对 `PUBLIC_URL`）→ 直接读本机磁盘（`isSelfUrl`），**不发任何网络请求**
   - 命中 `ALLOWED_INTERNAL_HOSTS` 白名单 → 安全 fetch
   - 其它外链 → `ref_images` 透传原串；`source_url` 直接拒绝
 - **管理员配置 URL（`channel.base_url`）**：必须经 `resolveAndValidate` 校验
-- **纯内部服务 URL（`INFERENCE_SERVICE_URL`）**：属可信内部配置，不在此 SSRF 校验之列
 
 ---
 

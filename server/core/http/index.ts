@@ -98,11 +98,6 @@ export async function fetchWithTimeout(
   return fetch(url, fetchOptions);
 }
 
-/** 推理服务总超时（对应 HTTP_TIMEOUT_INFERENCE） */
-export function getInferenceTimeout(): number {
-  return getConfig().HTTP_TIMEOUT_INFERENCE * 1000;
-}
-
 /** Worker API 超时（对应 WORKER_API_TIMEOUT） */
 export function getWorkerApiTimeout(): number {
   return getConfig().WORKER_API_TIMEOUT * 1000;
