@@ -19,7 +19,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && node -e \"const fs=require('fs'),p='node_modules/@xyflow/react/node_modules/zustand';fs.rmSync(p,{recursive:true,force:true})\""
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
