@@ -11,6 +11,14 @@ const HISTORY_THROTTLE = 300;
 let _lastHistoryTime = 0;
 
 /**
+ * 模块级 viewport 跟踪变量。
+ * onViewportChange 高频触发时只更新此变量（不触发 Zustand set），
+ * 避免 useSyncExternalStore 同步重渲染 -> React Flow 再次 emit onViewportChange 的无限循环。
+ * 保存/快照/undo 时从此变量读取最新值。
+ */
+let _liveViewport: ViewportState = DEFAULT_VIEWPORT;
+
+/**
  * Mark canvas as modified — SaveManager 负责 trailing save。
  * 内部自动先调用 syncCanvasState 同步项目列表内存状态。
  */
@@ -21,6 +29,20 @@ export function markDirty() {
 /** 立即保存（离散操作，100ms 合并） */
 export function markDirtyImmediate() {
   saveManager.markDirtyImmediate();
+}
+
+/**
+ * 高频 viewport 变更入口（onViewportChange 调用）。
+ * 只更新模块级变量 + markDirty，不触发 Zustand set()，避免渲染循环。
+ */
+export function syncLiveViewport(vp: ViewportState) {
+  _liveViewport = vp;
+  saveManager.markDirty();
+}
+
+/** 读取最新 viewport（供 save / snapshot / getViewportCenter 使用） */
+export function getLiveViewport(): ViewportState {
+  return _liveViewport;
 }
 
 /** 等待保存完成并确保最终状态已落盘（项目切换等场景） */
@@ -106,6 +128,7 @@ interface CanvasState {
 export const useCanvasStore = create<CanvasState>((set) => ({
   viewport: DEFAULT_VIEWPORT,
   setViewport: (viewport) => {
+    _liveViewport = viewport;
     set({ viewport });
     saveManager.markDirty();
   },
@@ -175,7 +198,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     saveManager.markDirtyImmediate();
   },
 
-  resetViewport: () => set({ viewport: DEFAULT_VIEWPORT }),
+  resetViewport: () => {
+    _liveViewport = DEFAULT_VIEWPORT;
+    set({ viewport: DEFAULT_VIEWPORT });
+  },
 
   shortcutsVisible: false,
   setShortcutsVisible: (v) => set({ shortcutsVisible: v }),
@@ -201,13 +227,15 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   /** 从项目恢复画布状态 */
   restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean }) => {
+    const vp = project.viewport || DEFAULT_VIEWPORT;
+    _liveViewport = vp;
     set({
       nodes: ((project.nodes || []) as AnyNode[]).map((n) => ({
         ...n,
         data: { ...n.data },
       })) as AnyNode[],
       edges: (project.edges || []) as Edge[],
-      viewport: project.viewport || DEFAULT_VIEWPORT,
+      viewport: vp,
       background: project.background || DEFAULT_BACKGROUND,
       theme: project.theme || DEFAULT_THEME,
       minimapVisible: project.minimapVisible !== false,
@@ -222,7 +250,7 @@ export function takeCanvasSnapshot(): HistorySnapshot {
   return {
     nodes: JSON.parse(JSON.stringify(s.nodes)),
     edges: JSON.parse(JSON.stringify(s.edges)),
-    viewport: { ...s.viewport },
+    viewport: { ..._liveViewport },
     background: s.background,
     theme: s.theme,
     minimapVisible: s.minimapVisible,
@@ -232,7 +260,7 @@ export function takeCanvasSnapshot(): HistorySnapshot {
 
 /** 获取视口中心的世界坐标 */
 export function getViewportCenter(): { x: number; y: number } {
-  const vp = useCanvasStore.getState().viewport;
+  const vp = _liveViewport;
   return {
     x: -vp.x / vp.zoom + (window.innerWidth / 2) / vp.zoom,
     y: -vp.y / vp.zoom + (window.innerHeight / 2) / vp.zoom,

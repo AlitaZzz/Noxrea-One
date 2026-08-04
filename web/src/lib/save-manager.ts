@@ -13,7 +13,7 @@
  */
 
 import { BASE, checkUnauthorized,getTokenHeader } from "@/lib/api";
-import { takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
+import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
 
 type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
@@ -106,15 +106,7 @@ class SaveManager {
   }
 
   private setDirty(delay: number): void {
-    // 确保项目列表内存状态已同步
-    const s = useCanvasStore.getState();
-    const pid = useProjectStore.getState().activeProjectId;
-    if (pid) {
-      useProjectStore.getState().syncCanvasState(
-        pid, s.nodes, s.edges, s.viewport,
-        s.background, s.theme, s.minimapVisible, s.snapToGrid,
-      );
-    }
+    // NOTE: syncCanvasState 已移至 save() 中执行，避免拖动时每帧重建 projects 数组
     if (!this.dirty) {
       this.dirty = true;
       this.registerFlushOnce();
@@ -210,6 +202,13 @@ class SaveManager {
         this.dirty = true;
         return;
       }
+
+      // 同步项目列表内存状态（从 setDirty 移至此处，避免拖动时每帧重建 projects 数组）
+      const s = useCanvasStore.getState();
+      useProjectStore.getState().syncCanvasState(
+        activeId, s.nodes, s.edges, getLiveViewport(),
+        s.background, s.theme, s.minimapVisible, s.snapToGrid,
+      );
 
       const snapshot = takeCanvasSnapshot();
       await this.saveToApi(activeId, snapshot, keepalive);
