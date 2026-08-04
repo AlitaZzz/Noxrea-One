@@ -13,7 +13,7 @@ import {
   ZoomInOutlined,
   ZoomOutOutlined,
 } from "@ant-design/icons";
-import { useReactFlow } from "@xyflow/react";
+import { useReactFlow, useViewport } from "@xyflow/react";
 import { Button, InputNumber,Popover, Tooltip } from "antd";
 import { useCallback,useState } from "react";
 
@@ -55,7 +55,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const t = useI18nStore((s) => s.t);
 
-  const viewport = useCanvasStore((s) => s.viewport);
+  const viewport = useViewport();
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const toggleMinimap = useCanvasStore((s) => s.toggleMinimap);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
@@ -96,9 +96,11 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           size="small" controls={false}
           min={Math.round(MIN_ZOOM * 100)} max={Math.round(MAX_ZOOM * 100)}
           value={inputZoom} placeholder="100" autoFocus
+          className="zoom-input"
           style={{ width: "100%" }}
           suffix={<span style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>%</span>}
-          onChange={(v) => { if (v != null) { setInputZoom(v); handleZoomInput(v); } }} />
+          onChange={(v) => { if (v != null) setInputZoom(v); }}
+          onPressEnter={() => handleZoomInput(inputZoom)} />
       </div>
       <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
       <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("zoom.in")}</MenuItem>
@@ -123,6 +125,11 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         .canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
           background: var(--canvas-bg-hover) !important;
           color: var(--canvas-text) !important;
+        }
+        .zoom-input.ant-input-number:hover,
+        .zoom-input.ant-input-number-focused {
+          border-color: var(--canvas-border, #3a3a3a) !important;
+          box-shadow: none !important;
         }
       `}</style>
       <div
@@ -211,10 +218,10 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         open={zoomOpen}
         onOpenChange={(v) => {
           setZoomOpen(v);
-          if (v) setInputZoom(Math.round(useCanvasStore.getState().viewport.zoom * 100));
+          if (v) setInputZoom(Math.round(viewport.zoom * 100));
         }}
         placement="top"
-        styles={{ container: { padding: 12, background: "var(--canvas-bg, #262626)" } }}
+        styles={{ container: { padding: 12, background: "var(--canvas-bg, #262626)", border: "1px solid var(--canvas-border, #3a3a3a)", borderRadius: 8 } }}
       >
         <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
           {zoomPercent}%
