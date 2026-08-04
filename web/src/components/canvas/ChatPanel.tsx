@@ -6,6 +6,29 @@ import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+
+/** 允许 AI 输出中嵌入的 HTML 标签与属性，在 defaultSchema 基础上放宽 */
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "style", "className", "class"],
+    div: ["style", "className", "class"],
+    span: ["style", "className", "class"],
+    table: ["style", "className", "class"],
+    td: ["colspan", "rowspan", "style", "class"],
+    th: ["colspan", "rowspan", "style", "class"],
+    img: ["src", "alt", "width", "height", "style", "class"],
+    a: ["href", "target", "rel", "style", "class"],
+  },
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "div", "span", "table", "thead", "tbody", "tr", "td", "th",
+    "details", "summary", "figure", "figcaption",
+  ],
+};
 
 import SkillPanel from "@/components/SkillPanel";
 import { NewChatIcon } from "@/components/common/icons/NewChatIcon";
@@ -276,7 +299,12 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                     ) : null}
                     {m.content ? (
                       <div className="cortex-markdown">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+                        >
+                          {m.content}
+                        </ReactMarkdown>
                       </div>
                     ) : !m.toolCalls?.length ? (
                       <span className="chat-thinking">思考中…</span>
@@ -286,7 +314,12 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                   <span className="chat-tool-result">{m.content}</span>
                 ) : (
                   <div className="cortex-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
                   </div>
                 )}
               </div>
