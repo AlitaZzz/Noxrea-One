@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import type { DirectorEntity } from "@/stores/director-store";
+import type { DirectorEntity } from "@/director/store";
 import { worldBox } from "../util/measure";
 
 // Raycaster 选择 + 地面蓝环高亮。

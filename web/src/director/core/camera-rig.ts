@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-import type { DirectorEntity } from "@/stores/director-store";
+import type { DirectorEntity } from "@/director/store";
 import { worldBox } from "../util/measure";
 
 // OrbitControls + 聚焦选中 + 取景比例 overlay + 重置视角
