@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{SCENE_TITLE}} - Seedance 武打场景设计</title>
+<style>
+:root {
+  --bg: #0a0a0c;
+  --surface: #16161a;
+  --surface2: #1e1e24;
+  --border: #2a2a32;
+  --text: #e4e4e8;
+  --text2: #9a9aa6;
+  --text3: #5c5c68;
+  --accent: {{SCENE_COLOR}};
+  --accent-light: {{SCENE_COLOR_LIGHT}};
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.7; font-size: 15px;
+}
+.container { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.hero { text-align: center; padding: 60px 20px 48px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+.hero h1 {
+  font-size: 32px; font-weight: 600; letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 12px;
+}
+.hero .subtitle { font-size: 15px; color: var(--text2); }
+.hero .tags { margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.hero .tag {
+  font-size: 12px; padding: 4px 14px; border-radius: 20px;
+  border: 1px solid var(--border); color: var(--text2); background: var(--surface);
+}
+.scene-header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+}
+.scene-num {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 600; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); color: var(--accent-light);
+}
+.scene-title { font-size: 22px; font-weight: 600; }
+.scene-en { font-size: 13px; color: var(--text3); margin-top: 2px; }
+.info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+.info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.info-card .label { font-size: 12px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.info-card .value { font-size: 14px; color: var(--text); }
+.section { margin-bottom: 28px; }
+.section-title {
+  font-size: 14px; font-weight: 600; color: var(--accent);
+  margin-bottom: 14px; padding-left: 12px; border-left: 3px solid var(--accent);
+}
+.choreo { width: 100%; border-collapse: collapse; font-size: 13px; }
+.choreo th { text-align: left; padding: 10px 14px; color: var(--text3); font-weight: 500; font-size: 12px; border-bottom: 1px solid var(--border); }
+.choreo td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: top; }
+.choreo td:first-child { color: var(--accent); font-weight: 500; white-space: nowrap; }
+.choreo tr:hover td { background: var(--surface); }
+.prompt-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+.prompt-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.prompt-header .lang { font-size: 12px; font-weight: 600; color: #1D9E75; }
+.prompt-header .type { font-size: 11px; color: var(--text3); }
+.prompt-body { padding: 14px 16px; font-size: 13px; color: var(--text2); line-height: 1.8; font-family: "SF Mono", "Cascadia Code", monospace; }
+.prompt-body .kw { color: #EF9F27; }
+.prompt-body .cam { color: #378ADD; }
+.prompt-body .act { color: #D85A30; }
+.prompt-body .env { color: #1D9E75; }
+.shot-list { display: flex; flex-direction: column; gap: 10px; }
+.shot-item { display: flex; gap: 14px; align-items: flex-start; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.shot-time { font-size: 12px; font-weight: 600; color: #378ADD; white-space: nowrap; padding-top: 1px; }
+.shot-desc { font-size: 13px; color: var(--text2); }
+.shot-cam { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.tips { display: flex; flex-direction: column; gap: 8px; }
+.tip { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text2); }
+.tip .dot { color: #E24B4A; flex-shrink: 0; }
+.params { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.param { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+.param .pname { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.param .pval { font-size: 15px; font-weight: 600; }
+@media (max-width: 640px) {
+  .info-grid { grid-template-columns: 1fr; }
+  .params { grid-template-columns: repeat(2, 1fr); }
+  .hero h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="hero">
+    <h1>{{SCENE_TITLE}}</h1>
+    <p class="subtitle">{{SCENE_SUBTITLE}}</p>
+    <div class="tags">
+      <span class="tag">{{SCENE_STYLE}}</span>
+      <span class="tag">{{SCENE_DURATION}}</span>
+      <span class="tag">{{SCENE_MOOD}}</span>
+      <span class="tag">Seedance Prompt</span>
+    </div>
+  </div>
+
+  <div class="scene-header">
+    <div class="scene-num">{{SCENE_NUM}}</div>
+    <div>
+      <div class="scene-title">{{SCENE_TITLE}}</div>
+      <div class="scene-en">{{SCENE_TITLE_EN}}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card"><div class="label">风格</div><div class="value">{{SCENE_STYLE}}</div></div>
+    <div class="info-card"><div class="label">时长</div><div class="value">{{SCENE_DURATION}}</div></div>
+    <div class="info-card"><div class="label">情绪</div><div class="value">{{SCENE_MOOD}}</div></div>
+    <div class="info-card"><div class="label">参考</div><div class="value">{{SCENE_REFERENCE}}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">场景设定</div>
+    <div class="info-card">
+      <div class="value" style="font-size:14px;line-height:1.8;">{{SCENE_SETTING}}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">动作编排</div>
+    <table class="choreo">
+      <thead><tr><th>时间</th><th>动作</th><th>镜头</th></tr></thead>
+      <tbody>
+        {{CHOREOGRAPHY_ROWS}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Seedance 提示词</div>
+    <div class="prompt-box">
+      <div class="prompt-header"><span class="lang">中文提示词</span><span class="type">Text-to-Video</span></div>
+      <div class="prompt-body">{{PROMPT_CN}}</div>
+    </div>
+    <div class="prompt-box">
+      <div class="prompt-header"><span class="lang">English Prompt</span><span class="type">Text-to-Video</span></div>
+      <div class="prompt-body">{{PROMPT_EN}}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">镜头设计</div>
+    <div class="shot-list">
+      {{SHOT_LIST_ITEMS}}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">生成参数推荐</div>
+    <div class="params">
+      <div class="param"><div class="pname">分辨率</div><div class="pval">{{PARAM_RESOLUTION}}</div></div>
+      <div class="param"><div class="pname">帧率</div><div class="pval">{{PARAM_FPS}}</div></div>
+      <div class="param"><div class="pname">时长</div><div class="pval">{{PARAM_DURATION}}</div></div>
+      <div class="param"><div class="pname">宽高比</div><div class="pval">{{PARAM_RATIO}}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">生成技巧</div>
+    <div class="tips">
+      {{TIPS_ITEMS}}
+    </div>
+  </div>
+</div>
+</body>
+</html>
