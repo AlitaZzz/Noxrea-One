@@ -88,7 +88,7 @@ Noxrea-AI-Canvas/
 │   ├── crud/                    # 数据访问层
 │   ├── schemas/                 # Zod schema + snake_case 映射
 │   ├── services/                # 业务逻辑
-│   │   ├── capabilities/        # 能力服务（image/video/llm/audio/bg-removal）
+│   │   ├── capabilities/        # 能力服务（image/video/llm/audio）
 │   │   ├── protocols/           # 协议适配（openai/gemini/ark）
 │   │   ├── request-builder/     # 请求构建管线
 │   │   ├── gateway/             # Gateway 注册中心 + 路由
@@ -96,7 +96,6 @@ Noxrea-AI-Canvas/
 │   │   ├── worker/              # Worker 循环 + 任务执行器
 │   │   ├── storage/             # 存储后端抽象 + 本地/S3 + 媒体处理
 │   │   ├── resolvers/           # 参考图解析
-│   │   ├── inference/           # 推理服务调用
 │   │   └── model-config/        # 预设/参数加载
 │   └── resources/               # JSON 数据文件（presets/model_params）
 │
@@ -104,7 +103,6 @@ Noxrea-AI-Canvas/
 │   ├── schema.prisma            # Prisma schema
 │   └── migrations/              # 数据库迁移历史（已纳入版本控制）
 │
-├── inference_service/           # 独立推理服务（背景移除等，默认 http://localhost:8100）
 ├── docs/                        # 项目文档
 ├── package.json                 # 根配置（含 workspaces: ["web"] 与统一脚本）
 ├── package-lock.json            # 全仓库唯一锁文件
@@ -208,10 +206,6 @@ npm run dev:web       # 仅前端
 npm run dev:server    # 仅后端（tsx watch）
 ```
 
-### 独立推理服务（可选）
-
-`inference_service/` 为独立的背景移除等推理服务，默认监听 `http://localhost:8100`，由 `INFERENCE_SERVICE_URL` 配置。开发时如用到相关能力需单独启动该服务（详见其目录下的说明）。
-
 ### 关键配置
 
 | 配置项 | 说明 |
@@ -229,7 +223,6 @@ npm run dev:server    # 仅后端（tsx watch）
 | `HTTP_TIMEOUT_API` | 同步普通接口超时（秒），默认 `120` |
 | `HTTP_TIMEOUT_ASYNC` | 异步任务创建超时（秒），默认 `30` |
 | `WORKER_MAX_CONCURRENCY` | Worker 并发数，默认 `10` |
-| `INFERENCE_SERVICE_URL` | 推理服务地址（背景移除等），默认 `http://localhost:8100` |
 | `USE_SYSTEM_PROXY` | 是否使用代理访问上游 API，默认 `false` |
 | `PROXY_URL` | 代理地址，如 `http://127.0.0.1:7890` |
 | `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验），默认 `false` |

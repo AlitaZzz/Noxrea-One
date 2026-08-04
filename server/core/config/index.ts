@@ -54,12 +54,6 @@ const configSchema = z.object({
   HTTP_TIMEOUT_API: z.coerce.number().positive().default(120),
   HTTP_TIMEOUT_ASYNC: z.coerce.number().positive().default(30),
 
-  HTTP_TIMEOUT_INFERENCE: z.coerce.number().positive().default(300),
-
-  // Inference service
-  INFERENCE_SERVICE_URL: z.string().default("http://localhost:8100"),
-  INFERENCE_SERVICE_API_KEY: z.string().default(""),
-
   // Dev escape
   ALLOW_INSECURE_SECRETS: z
     .enum(["true", "false", "1", "0"])

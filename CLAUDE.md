@@ -57,7 +57,7 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   ├── crud/                   # 数据访问层（task/user/model-config/canvas/asset/file）
 │   ├── schemas/                # Zod schema + toXxxOut() mapper（唯一 snake_case 转换点）
 │   ├── services/               # 业务逻辑
-│   │   ├── capabilities/       # 能力服务（image/video/llm/audio/bg-removal）
+│   │   ├── capabilities/       # 能力服务（image/video/llm/audio）
 │   │   ├── protocols/          # 协议适配（openai/gemini/ark）
 │   │   ├── request-builder/    # 请求构建管线（transforms/mapping/patch）
 │   │   ├── gateway/            # Gateway 注册中心 + 路由
@@ -65,7 +65,6 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   │   ├── worker/             # Worker 循环 + 任务执行器
 │   │   ├── storage/            # 存储后端抽象 + 本地/S3 + 下载/哈希/媒体处理
 │   │   ├── resolvers/          # 参考图解析
-│   │   ├── inference/          # 推理服务调用
 │   │   └── model-config/       # 预设/参数加载
 │   └── resources/              # JSON 数据文件（presets/model_params）
 │
@@ -87,7 +86,6 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │       ├── director/           # 3D 引擎逻辑（纯 TS，无 React）
 │       └── __tests__/          # 单元测试
 │
-├── inference_service/          # 独立推理服务（背景移除等），保持不动
 ├── docs/                       # 项目文档
 ├── CLAUDE.md                   # 本文件
 ├── README.md                   # 项目说明
