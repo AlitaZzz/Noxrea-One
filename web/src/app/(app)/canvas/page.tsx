@@ -7,8 +7,7 @@ import { useEffect, useState } from "react";
 import InfiniteCanvas from "@/components/canvas/InfiniteCanvas";
 import AppShell from "@/components/layout/AppShell";
 import { useCanvasKeyboard } from "@/hooks/use-canvas-keyboard";
-import { LayerModal } from "@/lib/layer";
-import { useAuthStore } from "@/stores/auth-store";
+import { LayerModal } from "@/components/overlays/layer";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useProjectStore } from "@/stores/project-store";
@@ -25,7 +24,6 @@ function CanvasWithKeyboard() {
 
 export default function HomePage() {
   const t = useI18nStore((s) => s.t);
-  const initialize = useProjectStore((s) => s.initialize);
   const activeProject = useProjectStore((s) => s.activeProject);
   const shortcutsVisible = useCanvasStore((s) => s.shortcutsVisible);
   const setShortcutsVisible = useCanvasStore((s) => s.setShortcutsVisible);
@@ -34,23 +32,18 @@ export default function HomePage() {
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const [initialized, setInitialized] = useState(false);
 
-  // Initialize auth first, then projects
+  // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成，
+  // 此处仅负责把当前激活项目恢复到画布状态。
   useEffect(() => {
-    const init = async () => {
-      await useAuthStore.getState().initialize();
-      if (!useAuthStore.getState().user) { window.location.href = "/login"; return; }
-      // Sync theme & lang from user prefs
-      const u = useAuthStore.getState().user!;
-      useCanvasStore.getState().setTheme(u.theme === "light" ? "light" : "dark");
-      useI18nStore.getState().setLang(((u.language || "zh") as "zh" | "en"));
-      await initialize();
-      const project = useProjectStore.getState().activeProject();
-      if (!project) { window.location.href = "/project"; return; }
-      if (project) { useCanvasStore.getState().restoreFromProject(project); }
-      setInitialized(true);
-    };
-    init();
-  }, [initialize]);
+    const project = useProjectStore.getState().activeProject();
+    if (!project) {
+      // 没有激活项目则回落到项目列表页
+      window.location.href = "/project";
+      return;
+    }
+    useCanvasStore.getState().restoreFromProject(project);
+    setInitialized(true);
+  }, []);
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
   useEffect(() => {
