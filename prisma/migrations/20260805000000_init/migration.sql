@@ -1,4 +1,7 @@
--- CreateTable
+-- 合并后的完整结构（等价于原 5 个 migration 的最终净状态）
+-- 仅用于迁移历史合并，不执行数据变更。
+
+-- 1. users
 CREATE TABLE "users" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "username" TEXT NOT NULL,
@@ -12,13 +15,13 @@ CREATE TABLE "users" (
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
 
--- CreateTable
+-- 2. generation_tasks
 CREATE TABLE "generation_tasks" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" INTEGER NOT NULL,
     "type" TEXT NOT NULL,
-    "capability" TEXT,
     "protocol" TEXT,
     "model" TEXT,
     "upstream_task_id" TEXT,
@@ -29,27 +32,29 @@ CREATE TABLE "generation_tasks" (
     "prompt" TEXT NOT NULL DEFAULT '',
     "config" TEXT NOT NULL DEFAULT '{}',
     "ref_images" TEXT,
+    "ref_audio" TEXT,
     "result_urls" TEXT,
     "result_text" TEXT,
     "error" TEXT,
     "node_id" TEXT NOT NULL,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "generation_tasks_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX "generation_tasks_user_id_created_at_idx" ON "generation_tasks"("user_id","created_at");
+CREATE INDEX "generation_tasks_status_idx" ON "generation_tasks"("status");
 
--- CreateTable
+-- 3. canvas_projects
 CREATE TABLE "canvas_projects" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "canvas_data" TEXT NOT NULL DEFAULT '{}',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "canvas_projects_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX "canvas_projects_user_id_idx" ON "canvas_projects"("user_id");
 
--- CreateTable
+-- 4. model_channels
 CREATE TABLE "model_channels" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER,
@@ -59,33 +64,32 @@ CREATE TABLE "model_channels" (
     "protocol" TEXT NOT NULL DEFAULT 'openai',
     "config" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "model_channels_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX "model_channels_user_id_idx" ON "model_channels"("user_id");
 
--- CreateTable
+-- 5. model_infos
 CREATE TABLE "model_infos" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "channel_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "capabilities" TEXT NOT NULL DEFAULT '[]',
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "model_infos_channel_id_fkey" FOREIGN KEY ("channel_id") REFERENCES "model_channels" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- CreateTable
+-- 6. asset_folders
 CREATE TABLE "asset_folders" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "space_key" TEXT NOT NULL DEFAULT 'personal',
     "parent_id" INTEGER,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "asset_folders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "asset_folders_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "asset_folders" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX "asset_folders_user_id_idx" ON "asset_folders"("user_id");
+CREATE INDEX "asset_folders_parent_id_idx" ON "asset_folders"("parent_id");
 
--- CreateTable
+-- 7. asset_items
 CREATE TABLE "asset_items" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
@@ -93,18 +97,20 @@ CREATE TABLE "asset_items" (
     "space_key" TEXT NOT NULL DEFAULT 'personal',
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "type" TEXT NOT NULL DEFAULT 'other',
+    "media_type" TEXT NOT NULL DEFAULT '',
     "width" INTEGER NOT NULL DEFAULT 0,
     "height" INTEGER NOT NULL DEFAULT 0,
     "description" TEXT NOT NULL DEFAULT '',
     "tags" TEXT NOT NULL DEFAULT '[]',
     "extra_data" TEXT NOT NULL DEFAULT '{}',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "asset_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "asset_items_folder_id_fkey" FOREIGN KEY ("folder_id") REFERENCES "asset_folders" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX "asset_items_user_id_idx" ON "asset_items"("user_id");
+CREATE INDEX "asset_items_folder_id_idx" ON "asset_items"("folder_id");
+CREATE INDEX "asset_items_media_type_idx" ON "asset_items"("media_type");
 
--- CreateTable
+-- 8. file_objects
 CREATE TABLE "file_objects" (
     "user_id" INTEGER NOT NULL,
     "hash" TEXT NOT NULL,
@@ -115,10 +121,10 @@ CREATE TABLE "file_objects" (
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    PRIMARY KEY ("user_id", "hash")
+    PRIMARY KEY ("user_id","hash")
 );
 
--- CreateTable
+-- 9. file_references
 CREATE TABLE "file_references" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "file_hash" TEXT NOT NULL,
@@ -127,39 +133,28 @@ CREATE TABLE "file_references" (
     "ref_id" INTEGER NOT NULL,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX "uq_file_ref" ON "file_references"("file_hash","user_id","ref_type","ref_id");
+CREATE INDEX "idx_fr_hash_user" ON "file_references"("file_hash","user_id");
+CREATE INDEX "idx_fr_type_id" ON "file_references"("ref_type","ref_id");
 
--- CreateIndex
-CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
+-- 10. chat_sessions
+CREATE TABLE "chat_sessions" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "user_id" INTEGER NOT NULL,
+    "project_id" INTEGER,
+    "title" TEXT NOT NULL DEFAULT 'New Chat',
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX "chat_sessions_user_id_project_id_idx" ON "chat_sessions"("user_id","project_id");
 
--- CreateIndex
-CREATE INDEX "generation_tasks_user_id_idx" ON "generation_tasks"("user_id");
-
--- CreateIndex
-CREATE INDEX "generation_tasks_status_idx" ON "generation_tasks"("status");
-
--- CreateIndex
-CREATE INDEX "canvas_projects_user_id_idx" ON "canvas_projects"("user_id");
-
--- CreateIndex
-CREATE INDEX "model_channels_user_id_idx" ON "model_channels"("user_id");
-
--- CreateIndex
-CREATE INDEX "asset_folders_user_id_idx" ON "asset_folders"("user_id");
-
--- CreateIndex
-CREATE INDEX "asset_folders_parent_id_idx" ON "asset_folders"("parent_id");
-
--- CreateIndex
-CREATE INDEX "asset_items_user_id_idx" ON "asset_items"("user_id");
-
--- CreateIndex
-CREATE INDEX "asset_items_folder_id_idx" ON "asset_items"("folder_id");
-
--- CreateIndex
-CREATE INDEX "idx_fr_hash_user" ON "file_references"("file_hash", "user_id");
-
--- CreateIndex
-CREATE INDEX "idx_fr_type_id" ON "file_references"("ref_type", "ref_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "file_references_file_hash_user_id_ref_type_ref_id_key" ON "file_references"("file_hash", "user_id", "ref_type", "ref_id");
+-- 11. chat_messages
+CREATE TABLE "chat_messages" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "session_id" INTEGER NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL DEFAULT '',
+    "ref_images" TEXT,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX "chat_messages_session_id_created_at_idx" ON "chat_messages"("session_id","created_at");
