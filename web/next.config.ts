@@ -30,7 +30,7 @@ const maxUploadMB = Number(rootEnv.MAX_UPLOAD_SIZE_MB) || 30;
 
 const nextConfig: NextConfig = {
   env: publicEnv,
-  transpilePackages: ["antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm"],
+  transpilePackages: ["antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
   outputFileTracingRoot: path.join(__dirname, ".."),
   turbopack: {
     root: path.join(__dirname, ".."),
