@@ -40,6 +40,25 @@ export async function getTask(id: string) {
   return task ? deserializeTask(task) : null;
 }
 
+/** 读取任务状态（供 service 层判断取消/状态机，避免直调 Prisma） */
+export async function getTaskStatus(id: string): Promise<string | null> {
+  const task = await prisma.generationTask.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+  return task?.status ?? null;
+}
+
+/** 判断任务是否已取消（cancelled 终态，或 failed 且 error 标记为 Cancelled） */
+export async function isTaskCancelled(id: string): Promise<boolean> {
+  const task = await prisma.generationTask.findUnique({
+    where: { id },
+    select: { status: true, error: true },
+  });
+  if (!task) return false;
+  return task.status === "cancelled" || (task.status === "failed" && task.error === "Cancelled");
+}
+
 export async function getTasksByIds(ids: string[]) {
   const tasks = await prisma.generationTask.findMany({
     where: { id: { in: ids } },
