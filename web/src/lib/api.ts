@@ -1,4 +1,4 @@
-import { showGlobalMessage } from "@/components/overlays/global-message";
+import { showGlobalMessage } from "@/lib/global-message";
 
 // 同源请求（Next.js 全栈架构，API Routes 与前端在同一端口）
 export const BASE = "";

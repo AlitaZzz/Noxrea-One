@@ -3,9 +3,10 @@
 import { useCallback, useRef, useState } from "react";
 
 import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent-tools";
-import { showGlobalMessage } from "@/components/overlays/global-message";
+import { showGlobalMessage } from "@/lib/global-message";
 import { getTokenHeader } from "@/lib/api";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";
+import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 export type ChatRole = "user" | "assistant" | "tool" | "system";
 
@@ -322,7 +323,11 @@ export function useChatStream(modelId: string) {
             type: "function",
             function: { name: c.name, arguments: c.args },
           }));
-          const results: AgentToolResult[] = executeAgentTools(calls);
+          const results: AgentToolResult[] = executeAgentTools(
+            calls,
+            useCanvasStore.getState().addNodes,
+            findFreePosition,
+          );
 
           // 续轮前必须先把本轮 assistant 的 tool_calls 回填进 history，
           // 否则下一轮模型看不到「自己已经调用过工具」，会把同一意图重复调用一遍。

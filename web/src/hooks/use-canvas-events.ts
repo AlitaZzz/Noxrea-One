@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { useCtxMenu } from "@/components/canvas/CanvasContextMenu";
+import { useCtxMenu } from "@/stores/context-menu-store";
 import { EventNames } from "@/lib/constants";
 import { markDirty, markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";

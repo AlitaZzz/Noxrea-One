@@ -132,7 +132,7 @@ export default function ImageCropModal({ src, sourceId, onClose }: Props) {
         );
       });
 
-      await uploadAndAddNode(sourceId, blob, " (cropped)", {
+      await uploadAndAddNode(sourceId, blob, " (cropped)", useCanvasStore.getState(), {
         naturalWidth: cw,
         naturalHeight: ch,
       });

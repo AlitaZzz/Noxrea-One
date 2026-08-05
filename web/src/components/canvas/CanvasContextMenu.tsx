@@ -2,23 +2,11 @@
 
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
-import { create } from "zustand";
 
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { useI18nStore } from "@/stores/i18n-store";
-
-interface CtxState {
-  x: number; y: number; visible: boolean;
-  show: (x: number, y: number) => void;
-  hide: () => void;
-}
-
-export const useCtxMenu = create<CtxState>((set) => ({
-  x: 0, y: 0, visible: false,
-  show: (x, y) => set({ x, y, visible: true }),
-  hide: () => set({ visible: false }),
-}));
+import { useCtxMenu } from "@/stores/context-menu-store";
 
 interface Props {
   onAddText: () => void;

@@ -344,7 +344,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           if (!url) continue;
 
           const pos = { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) };
-          await createNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, undefined, pos);
+          await createNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, useCanvasStore.getState(), undefined, pos);
         }
       }
     } catch (e) {
