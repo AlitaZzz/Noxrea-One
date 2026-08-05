@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 
 import { EventNames, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
-import { createGroupNode } from "@/lib/node-defaults";
+import { createGroupNode } from "@/lib/nodes/node-defaults";
 import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 

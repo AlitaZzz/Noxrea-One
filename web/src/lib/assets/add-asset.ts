@@ -7,7 +7,7 @@
 
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
-import { createAudioNode, createImageNode, createVideoNode } from "@/lib/node-defaults";
+import { createAudioNode, createImageNode, createVideoNode } from "@/lib/nodes/node-defaults";
 import type { AnyNode } from "@/lib/types/nodes";
 import type { AssetItem } from "@/lib/types/assets";
 

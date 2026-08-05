@@ -12,7 +12,7 @@ import {
   createTextNode,
   createVideoNode,
   directorNode,
-} from "@/lib/node-defaults";
+} from "@/lib/nodes/node-defaults";
 import type { AnyNode } from "@/lib/types/nodes";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 

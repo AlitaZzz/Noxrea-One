@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { createImageNode, createVideoNode } from "@/lib/node-defaults";
+import { createImageNode, createVideoNode } from "@/lib/nodes/node-defaults";
 import type { AnyNode, GenSettings, VideoGenSettings } from "@/lib/types/nodes";
 
 /** 后端 tool_call 结构（与 /api/chat SSE 的 tool_call 事件一致） */

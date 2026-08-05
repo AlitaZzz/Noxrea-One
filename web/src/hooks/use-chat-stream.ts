@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent-tools";
+import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent/agent-tools";
 import { showGlobalMessage } from "@/lib/global-message";
 import { apiStream } from "@/lib/api";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";

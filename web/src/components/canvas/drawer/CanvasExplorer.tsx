@@ -28,7 +28,7 @@ import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { MenuDivider } from "@/components/common/MenuPopover";
-import { createAssetNode } from "@/lib/add-asset";
+import { createAssetNode } from "@/lib/assets/add-asset";
 import { assetApi } from "@/lib/api";
 import type { AnyNode } from "@/lib/types/nodes";
 import type { AssetFolder, AssetItem, AssetType } from "@/lib/types/assets";

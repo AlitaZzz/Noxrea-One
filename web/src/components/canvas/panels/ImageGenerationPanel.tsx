@@ -14,7 +14,7 @@ import WheelGuard from "@/components/common/WheelGuard";
 import { apiUpload, apiRaw } from "@/lib/api";
 import { EventNames, isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/image-utils";
-import { createEdge,createImageNode } from "@/lib/node-defaults";
+import { createEdge,createImageNode } from "@/lib/nodes/node-defaults";
 import type { GenSettings, MediaGenFields } from "@/lib/types/nodes";
 import type { ModelChannel } from "@/lib/types/models";
 import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";

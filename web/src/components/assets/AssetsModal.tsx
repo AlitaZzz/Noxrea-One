@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
 import ModalButton from "@/components/common/ModalButton";
-import { createAssetNode } from "@/lib/add-asset";
+import { createAssetNode } from "@/lib/assets/add-asset";
 import AppModal from "@/components/common/AppModal";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types/assets";
 import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
