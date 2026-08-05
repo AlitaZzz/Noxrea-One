@@ -13,10 +13,10 @@ import { Input,Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import MultiAngleEditor from "@/components/canvas/MultiAngleEditor";
-import LightingPanel from "@/components/canvas/LightingPanel";
-import AnnotationPanel from "@/components/canvas/AnnotationPanel";
-import CropPanel from "@/components/canvas/CropPanel";
+import MultiAngleEditor from "@/components/canvas/editing/MultiAngleEditor";
+import LightingPanel from "@/components/canvas/editing/LightingPanel";
+import AnnotationPanel from "@/components/canvas/editing/AnnotationPanel";
+import CropPanel from "@/components/canvas/editing/CropPanel";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import {

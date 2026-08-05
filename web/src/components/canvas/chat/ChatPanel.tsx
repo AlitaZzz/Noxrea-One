@@ -30,7 +30,7 @@ const sanitizeSchema = {
   ],
 };
 
-import SkillPanel from "@/components/canvas/SkillPanel";
+import SkillPanel from "./SkillPanel";
 import { NewChatIcon } from "@/components/common/icons/chat/NewChatIcon";
 import { HistoryIcon } from "@/components/common/icons/chat/HistoryIcon";
 import { AttachIcon } from "@/components/common/icons/chat/AttachIcon";

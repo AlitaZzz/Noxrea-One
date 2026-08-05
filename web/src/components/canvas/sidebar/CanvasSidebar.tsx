@@ -30,7 +30,7 @@ import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAsset
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useVideoThumbnail } from "@/hooks/use-video-thumbnail";
-import { getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER, TYPE_COLORS } from "./sidebar/node-type-constants";
+import { getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER, TYPE_COLORS } from "./node-type-constants";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
