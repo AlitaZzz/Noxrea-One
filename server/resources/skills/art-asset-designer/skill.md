@@ -1,6 +1,6 @@
 ---
 name: art-asset-designer
-title: 美术资产设计
+display_title: 美术资产设计
 description: 将分镜画面转化为可用于生图的美术设定与精准提示词，统一风格与色调。
 category: 美术资产设计
 appliesTo:

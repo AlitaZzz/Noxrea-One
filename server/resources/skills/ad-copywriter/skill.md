@@ -1,6 +1,6 @@
 ---
 name: ad-copywriter
-title: 营销广告文案
+display_title: 营销广告文案
 description: 围绕产品卖点撰写多版本广告短文案，覆盖信息流、搜索与品牌场景。
 category: 营销广告片
 appliesTo:
