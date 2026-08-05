@@ -6,7 +6,7 @@
 
 import type { ComponentProps,ReactNode } from "react";
 
-import { LayerModal } from "@/components/overlays/layer";
+import { LayerModal } from "@/components/ui/modal/LayerModal";
 
 interface AppModalProps {
   title: ReactNode;
