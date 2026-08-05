@@ -35,3 +35,10 @@ export interface ModelChannel {
   config?: Record<string, unknown>;
   models: ModelInfo[];
 }
+
+/** 生成面板中的模型选项 */
+export interface ModelOption {
+  value: string;
+  channelId: string;
+  modelName: string;
+}

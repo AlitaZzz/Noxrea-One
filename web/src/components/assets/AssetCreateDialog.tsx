@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 资产上传弹窗。
  * 支持多文件选择与拖入，限并发上传并展示单文件进度，
  * 自动提取图片 / 视频尺寸与视频封面，最后按所选分类与文件夹批量创建资产。
@@ -7,12 +7,12 @@
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode,useCallback, useEffect, useRef, useState } from "react";
 
-import ModalButton from "@/components/common/ModalButton";
+import AppModal from "@/components/ui/AppModal";
+import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import ModalButton from "@/components/ui/ModalButton";
 import { apiUpload, apiUploadWithProgress, captureFrame } from "@/lib/api";
-import AppModal from "@/components/common/AppModal";
-import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 

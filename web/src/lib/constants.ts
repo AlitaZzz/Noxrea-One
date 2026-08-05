@@ -5,6 +5,7 @@
  *
  * 注意：本文件承载所有「运行时常量 / 函数」，类型定义请放在 lib/types/*。
  */
+import type { AssetType } from "./types/assets";
 import type {
   BackgroundType,
   ThemeMode,
@@ -14,7 +15,6 @@ import type {
   TaskBinding,
   UploadState,
 } from "./types/nodes";
-import type { AssetType } from "./types/assets";
 
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 单个资产卡片。
  * 按资产类型渲染图片 / 视频 / 音频缩略预览（视频悬停自动播放、音频内联试听），
  * 提供选中态与右上角更多菜单（插入画布、重命名、下载、删除）。
@@ -11,9 +11,9 @@ import { Tooltip } from "antd";
 import { useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
-import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
-import { useLayerOverlay } from "@/components/overlays/layer";
+import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
+import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetItem } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 

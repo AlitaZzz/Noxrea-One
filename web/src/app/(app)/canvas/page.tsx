@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 画布页面（/canvas）。
  * 拉取并恢复当前激活项目到画布状态，装配 ReactFlowProvider、AppShell 与画布主体，
  * 并挂载两个页面级浮层：快捷键说明弹窗、Director 全屏编辑器。
@@ -10,16 +10,16 @@ import { ReactFlowProvider } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-import InfiniteCanvas from "@/components/canvas/InfiniteCanvas";
 import AppShell from "@/components/layout/AppShell";
+import { LayerModal } from "@/components/ui/modal/LayerModal";
+import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { useCanvasKeyboard } from "@/hooks/use-canvas-keyboard";
-import { LayerModal } from "@/components/overlays/layer";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useProjectStore } from "@/stores/project-store";
 
 const DirectorOverlay = dynamic(
-  () => import("@/components/director/DirectorOverlay"),
+  () => import("@/features/director/components/DirectorOverlay"),
   { ssr: false }
 );
 

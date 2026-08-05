@@ -6,9 +6,9 @@
 
 import { useCallback, useState } from "react";
 
-import { showGlobalMessage } from "@/lib/global-message";
-import { chatApi } from "@/lib/api";
 import type { ChatMessage, ChatRole } from "@/hooks/use-chat-stream";
+import { chatApi } from "@/lib/api";
+import { showGlobalMessage } from "@/lib/global-message";
 
 export interface SessionListItem {
   id: string;

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 登录 / 注册页面。
  * 左侧为品牌展示区（自动扫描 public/login-bg 下的视频做轮播背景），
  * 右侧为登录/注册表单：自定义字段校验、密码可见切换，提交后调用 auth store
@@ -6,13 +6,14 @@
  */
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
+import { useCallback, useEffect,useState } from "react";
+
+import { EyeIcon } from "@/components/ui/icons/EyeIcon";
+import { EyeOffIcon } from "@/components/ui/icons/EyeOffIcon";
+import { SpinnerIcon } from "@/components/ui/icons/SpinnerIcon";
 import { showGlobalMessage } from "@/lib/global-message";
-import { EyeIcon } from "@/components/common/icons/EyeIcon";
-import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
-import { SpinnerIcon } from "@/components/common/icons/SpinnerIcon";
+import { useAuthStore } from "@/stores/auth-store";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
 

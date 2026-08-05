@@ -3,8 +3,8 @@
  * 包含画布项目结构 CanvasProject、历史快照与剪贴板数据类型。
  */
 import type { AnyEdge } from "./canvas";
-import type { AnyNode } from "./nodes";
 import type { BackgroundType, ThemeMode, ViewportState } from "./canvas";
+import type { AnyNode } from "./nodes";
 
 // ============================================================
 // 项目

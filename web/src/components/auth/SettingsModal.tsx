@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 账户设置弹窗。
  * 修改当前登录用户的头像（经裁剪弹窗上传）、昵称与登录密码，
  * 保存后同步更新 auth store 中的用户信息。与模型 / 渠道配置无关。
@@ -9,10 +9,10 @@ import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
 import { App,Button, Input } from "antd";
 import { useEffect, useRef,useState } from "react";
 
+import AppModal from "@/components/ui/AppModal";
+import { EyeIcon } from "@/components/ui/icons/EyeIcon";
+import { EyeOffIcon } from "@/components/ui/icons/EyeOffIcon";
 import { api } from "@/lib/api";
-import { EyeIcon } from "@/components/common/icons/EyeIcon";
-import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
-import AppModal from "@/components/common/AppModal";
 import { useAuthStore, type UserInfo } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

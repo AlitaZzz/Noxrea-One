@@ -5,11 +5,11 @@
  */
 "use client";
 
+import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
-import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
-import type { AnyNode } from "@/lib/types/nodes";
 import type { AssetItem } from "@/lib/types/assets";
+import type { AnyNode } from "@/lib/types/nodes";
 
 /** 位置计算函数签名（由调用方从 store 注入） */
 export type FindFreePosition = (size: { width: number; height: number }) => { x: number; y: number };
