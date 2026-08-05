@@ -62,6 +62,8 @@ export async function createMessage(data: {
   role: ChatRole;
   content: string;
   refImages?: string[];
+  /** 本条 user 消息触发的技能名列表 */
+  skills?: string[] | null;
 }) {
   const msg = await prisma.chatMessage.create({
     data: {
@@ -69,6 +71,7 @@ export async function createMessage(data: {
       role: data.role,
       content: data.content,
       refImages: data.refImages ? stringifyJson(data.refImages) : null,
+      skills: data.skills && data.skills.length ? stringifyJson(data.skills) : null,
     },
   });
   return deserializeMessage(msg);
@@ -92,5 +95,6 @@ function deserializeMessage(message: ChatMessage) {
   return {
     ...message,
     refImages: parseJsonArray(message.refImages),
+    skills: parseJsonArray(message.skills),
   };
 }
