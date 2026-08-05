@@ -10,7 +10,7 @@ import { App, Button,Progress, Select } from "antd";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import ModalButton from "@/components/common/ModalButton";
-import { apiRaw, apiUpload, apiUploadWithProgress } from "@/lib/api";
+import { apiUpload, apiUploadWithProgress, captureFrame } from "@/lib/api";
 import AppModal from "@/components/common/AppModal";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types/assets";
@@ -162,10 +162,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       if (isVideo(file) && uploadResult.key) {
         (async () => {
           try {
-            const res = await apiRaw(`/api/files/capture-frame`, {
-              method: "POST",
-              body: JSON.stringify({ video_key: uploadResult.key, time: 0.1 }),
-            });
+            const res = await captureFrame(uploadResult.key, 0.1);
             if (res.ok) {
               const json = await res.json();
               if (json.data?.url) onUpdate(id, { coverUrl: json.data.url });

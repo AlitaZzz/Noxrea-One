@@ -5,7 +5,7 @@
  */
 import { create } from "zustand";
 
-import { api, setToken } from "@/lib/api";
+import { authApi, setToken } from "@/lib/api";
 
 export interface UserInfo {
   id: number;
@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().initialized) return;
     set({ loading: true });
     try {
-      const res = await api<UserInfo>("/api/auth/me");
+      const res = await authApi.me<UserInfo>();
       if (res.code === 200 && res.data) {
         set({ user: res.data });
       }
@@ -52,10 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
     const password = rawPassword.trim();
-    const res = await api<{ access_token: string; token_type: string; user: UserInfo }>(
-      "/api/auth/login",
-      { method: "POST", body: JSON.stringify({ username, password }), skipUnauthorized: true }
-    );
+    const res = await authApi.login<{ access_token: string; token_type: string; user: UserInfo }>(username, password);
     if (res.code === 200) {
       setToken(res.data.access_token);
       set({ user: res.data.user });
@@ -68,10 +65,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
     const password = rawPassword.trim();
-    const res = await api<{ access_token: string; token_type: string; user: UserInfo }>(
-      "/api/auth/register",
-      { method: "POST", body: JSON.stringify({ username, password }), skipUnauthorized: true }
-    );
+    const res = await authApi.register<{ access_token: string; token_type: string; user: UserInfo }>(username, password);
     if (res.code === 200 && res.data.access_token && res.data.user) {
       setToken(res.data.access_token);
       set({ user: res.data.user });
@@ -101,6 +95,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!user) return;
     set({ user: { ...user, [key]: value } });
     // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
-    api("/api/auth/me", { method: "PUT", body: JSON.stringify({ [key]: value }) }).catch(() => {});
+    authApi.updateMe({ [key]: value }).catch(() => {});
   },
 }));

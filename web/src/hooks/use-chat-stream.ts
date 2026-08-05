@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent/agent-tools";
 import { showGlobalMessage } from "@/lib/global-message";
-import { apiStream } from "@/lib/api";
+import { chatApi } from "@/lib/api";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
@@ -170,17 +170,14 @@ export function useChatStream(modelId: string) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
 
-      const body: Record<string, unknown> = { messages: history };
-      if (skills && skills.length > 0) body.skills = skills.map((s) => s.name);
-
-      const res = await apiStream(
-        `/api/chat/stream?sessionId=${encodeURIComponent(sessionId)}&model=${encodeURIComponent(modelId)}&agent=1`,
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-          signal: ctrl.signal,
-        }
-      );
+      const res = await chatApi.streamChat({
+        sessionId,
+        modelId,
+        agent: true,
+        messages: history,
+        skills: skills && skills.length > 0 ? skills : undefined,
+        signal: ctrl.signal,
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.body) throw new Error("no stream body");
 

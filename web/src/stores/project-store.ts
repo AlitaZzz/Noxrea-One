@@ -5,7 +5,7 @@
  */
 import { create } from "zustand";
 
-import { api } from "@/lib/api";
+import { projectApi } from "@/lib/api";
 import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
 import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/lib/types/canvas";
 import type { AnyNode } from "@/lib/types/nodes";
@@ -63,7 +63,7 @@ function mapServerProject(p: ServerProject): CanvasProject {
 
 async function fetchProjects(): Promise<CanvasProject[]> {
   try {
-    const res = await api<ServerProject[]>("/api/canvas/projects");
+    const res = await projectApi.listProjects<ServerProject[]>();
     if (res.code === 200 && res.data) {
       return res.data.map(mapServerProject);
     }
@@ -75,7 +75,7 @@ async function fetchProjectById(id: string): Promise<CanvasProject | null> {
   try {
     const numericId = parseInt(id, 10);
     if (isNaN(numericId)) return null;
-    const res = await api<ServerProject>(`/api/canvas/projects/${numericId}`);
+    const res = await projectApi.getProject<ServerProject>(numericId);
     if (res.code === 200 && res.data) {
       return mapServerProject(res.data);
     }
@@ -85,10 +85,7 @@ async function fetchProjectById(id: string): Promise<CanvasProject | null> {
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
-    const res = await api<ServerProject>("/api/canvas/projects", {
-      method: "POST",
-      body: JSON.stringify({ name, canvasData: { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] } }),
-    });
+    const res = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] });
     if (res.code === 200 && res.data) {
       return {
         id: String(res.data.id),
@@ -110,7 +107,7 @@ async function apiDeleteProject(projectId: string) {
   try {
     const id = parseInt(projectId, 10);
     if (isNaN(id)) return;
-    await api(`/api/canvas/projects/${id}`, { method: "DELETE" });
+    await projectApi.deleteProject(id);
   } catch { /* */ }
 }
 
@@ -166,9 +163,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     const nid = parseInt(id, 10);
     if (!isNaN(nid)) {
-      api(`/api/canvas/projects/${nid}`, {
-        method: "PUT", body: JSON.stringify({ name }),
-      }).catch(() => {});
+      projectApi.updateProject(nid, { name }).catch(() => {});
     }
   },
 

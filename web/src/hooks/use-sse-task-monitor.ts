@@ -27,7 +27,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-      import("@/lib/api").then(({ apiStream }) => {
+      import("@/lib/api").then(({ generationApi }) => {
       const scanAndConnect = () => {
         const allNodes = useCanvasStore.getState().nodes;
         for (const node of allNodes) {
@@ -43,9 +43,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
           (async () => {
             try {
-              const res = await apiStream(`/api/generate/task/${taskId}/stream`, {
-                signal: ctrl.signal,
-              });
+              const res = await generationApi.streamGenerationTask(taskId, ctrl.signal);
               if (!res.ok || !res.body) { sseCtrlsRef.current.delete(taskId); return; }
               const reader = res.body.getReader();
               const decoder = new TextDecoder();

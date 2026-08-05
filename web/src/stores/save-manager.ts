@@ -12,7 +12,7 @@
  * 仅支持登录用户，画布不允许游客访问。
  */
 
-import { apiRaw } from "@/lib/api";
+import { projectApi } from "@/lib/api";
 import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
 
@@ -259,13 +259,7 @@ class SaveManager {
 
     const body = JSON.stringify(payload);
 
-    const res = await apiRaw(`/api/canvas/projects/${id}`, {
-      method: "PUT",
-      body,
-      keepalive,
-      // keepalive 请求无法读取响应体，且页面即将卸载时无需处理 401
-      skipUnauthorized: keepalive,
-    });
+    const res = await projectApi.saveProjectRaw(id, body, keepalive);
 
     if (!keepalive && res.status === 401) return;
 

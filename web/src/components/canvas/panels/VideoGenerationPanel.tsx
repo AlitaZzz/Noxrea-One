@@ -27,6 +27,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
 import { RatioIcon, type ModelOption } from "../gen/shared";
+import { generationApi } from "@/lib/api";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -148,22 +149,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudio: auds, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
-      const res2 = await apiRaw(`/api/generate/task`, {
-        method: "POST",
-        body: JSON.stringify({
-          type: "video",
-          prompt: p.trim(),
-          model: entry.modelName,
-          channelId: entry.channelId,
-          resolution: (!modelParams || modelParams.params.includes("resolution")) ? res : undefined,
-          ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
-          seconds: (!modelParams || modelParams.params.includes("seconds")) ? sec : undefined,
-          generateAudio: audio,
-          n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
-          refImages: refs.length > 0 ? refs : undefined,
-          refAudio: auds.length > 0 ? auds : undefined,
-          nodeId,
-        }),
+      const res2 = await generationApi.submitGenerationTask({
+        type: "video",
+        prompt: p.trim(),
+        model: entry.modelName,
+        channelId: entry.channelId,
+        resolution: (!modelParams || modelParams.params.includes("resolution")) ? res : undefined,
+        ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
+        seconds: (!modelParams || modelParams.params.includes("seconds")) ? sec : undefined,
+        generateAudio: audio,
+        n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
+        refImages: refs.length > 0 ? refs : undefined,
+        refAudio: auds.length > 0 ? auds : undefined,
+        nodeId,
       });
       if (!res2.ok) {
         const err = await res2.json().catch(() => ({}));
@@ -257,9 +255,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
     if (tid) {
-      apiRaw(`/api/generate/task/${tid}/cancel`, {
-        method: "POST",
-      }).catch(() => {});
+      generationApi.cancelGenerationTask(tid).catch(() => {});
     }
     useCanvasStore.getState().updateNodeData(nodeId, {
       taskBinding: undefined,
