@@ -203,7 +203,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       });
 
-      await uploadAndAddNode(sourceId, blob, " (cropped)", { naturalWidth: sw, naturalHeight: sh });
+      await uploadAndAddNode(sourceId, blob, " (cropped)", useCanvasStore.getState(), { naturalWidth: sw, naturalHeight: sh });
       onClose();
     } catch (e) {
       console.error("Crop failed:", e);

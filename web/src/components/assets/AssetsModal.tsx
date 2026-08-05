@@ -6,12 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ConfirmModal from "@/components/common/ConfirmModal";
 import ModalButton from "@/components/common/ModalButton";
-import { addAssetToCanvas } from "@/lib/add-asset";
+import { createAssetNode } from "@/lib/add-asset";
 import AppModal from "@/components/common/AppModal";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { assetApi } from "@/lib/api";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
+import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
@@ -275,7 +276,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   // --- Handlers ---
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    addAssetToCanvas(asset);
+    const node = createAssetNode(asset, findFreePosition);
+    if (node) useCanvasStore.getState().addNodes([node]);
     notif.success({
       title: t("asset.added"),
       description: asset.name,

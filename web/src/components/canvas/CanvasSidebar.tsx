@@ -26,12 +26,12 @@ import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 
 import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/AssetHoverPreview";
 import { MenuDivider } from "@/components/common/MenuPopover";
-import { addAssetToCanvas } from "@/lib/add-asset";
+import { createAssetNode } from "@/lib/add-asset";
 import { assetApi } from "@/lib/api";
 import type { AnyNode, AssetFolder, AssetItem, AssetType } from "@/lib/types";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 
 // ── 节点类型顺序和标签映射 ──
@@ -494,7 +494,8 @@ function AssetsView() {
   }, [hasMore, loadingMore]);
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    addAssetToCanvas(asset);
+    const node = createAssetNode(asset, findFreePosition);
+    if (node) useCanvasStore.getState().addNodes([node]);
     notif.success({
       title: t("asset.added"),
       description: asset.name,

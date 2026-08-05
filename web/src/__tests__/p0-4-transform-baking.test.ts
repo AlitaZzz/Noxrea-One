@@ -54,6 +54,14 @@ vi.mock("@/stores/canvas-store", () => ({
 
 import { useCanvasStore } from "@/stores/canvas-store";
 
+/** 模拟 CanvasStoreApi（符合 image-utils 中定义的接口） */
+const mockStoreApi = {
+  nodes: mockNodes,
+  edges: [] as Array<Record<string, unknown>>,
+  addNodes: vi.fn(),
+  setEdges: vi.fn(),
+};
+
 // ── Import pure functions from save-manager ─────────────────────
 // These aren't exported; we re-implement or extract. Extract them:
 
@@ -98,7 +106,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
   describe("createNodeFromUrl", () => {
     it("should place derivative node to the right of source", async () => {
-      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)");
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
       expect(node).not.toBeNull();
       // x = source.x(100) + source width(600) + 60 = 760
       expect(node!.position.x).toBe(760);
@@ -106,13 +114,13 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should accept position override", async () => {
-      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", undefined, { x: 999, y: 888 });
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi, undefined, { x: 999, y: 888 });
       expect(node!.position.x).toBe(999);
       expect(node!.position.y).toBe(888);
     });
 
     it("should scale display dimensions by NODE_DISPLAY_MAX", async () => {
-      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)");
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)", mockStoreApi);
       const w = node!.style?.width as number;
       const h = node!.style?.height as number;
       expect(w).toBe(600);
@@ -120,7 +128,7 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should append label suffix before extension", async () => {
-      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)");
+      const node = await createNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)", mockStoreApi);
       const label = node!.data.label as string;
       expect(label).toContain(" (baked)");
       expect(label.endsWith(".jpg")).toBe(true);
@@ -128,14 +136,14 @@ describe("P0-4: CSS transform baking flow", () => {
 
     it("should merge extraNodeData", async () => {
       const node = await createNodeFromUrl("n1", "http://img.url/result.png", 100, 100, "",
-        { customField: "hello", naturalWidth: 999 }
+        mockStoreApi, { customField: "hello", naturalWidth: 999 }
       );
       expect((node!.data as Record<string, unknown>).customField).toBe("hello");
     });
 
     it("should accept position override explicitly", async () => {
       const pos = { x: 50, y: 60 };
-      const node = await createNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", undefined, pos);
+      const node = await createNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", mockStoreApi, undefined, pos);
       expect(node!.position.x).toBe(50);
       expect(node!.position.y).toBe(60);
     });
@@ -238,7 +246,7 @@ describe("P0-4: CSS transform baking flow", () => {
       });
 
       const blob = new Blob(["transformed-data"], { type: "image/png" });
-      const node = await uploadAndAddNode("n1", blob, " (baked)");
+      const node = await uploadAndAddNode("n1", blob, " (baked)", mockStoreApi);
 
       expect(node).not.toBeNull();
       expect((node!.data as { src?: string }).src).toBe("http://test/api/files/1/aa/aaaa...png");
@@ -249,7 +257,7 @@ describe("P0-4: CSS transform baking flow", () => {
       vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null, msg: "" });
 
       const blob = new Blob(["fail-data"]);
-      const node = await uploadAndAddNode("n1", blob, " (baked)");
+      const node = await uploadAndAddNode("n1", blob, " (baked)", mockStoreApi);
 
       expect(node).toBeNull();
     });

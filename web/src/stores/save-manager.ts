@@ -1,5 +1,5 @@
 /**
- * SaveManager — 画布保存的唯一入口。
+ * SaveManager - 画布保存的唯一入口。
  *
  * 职责：
  *  - dirty 状态管理
@@ -95,12 +95,12 @@ class SaveManager {
 
   // ==================== 公开接口 ====================
 
-  /** 标记改脏 — 2s trailing save（连续操作：拖拽/打字/缩放） */
+  /** 标记改脏 - 2s trailing save（连续操作：拖拽/打字/缩放） */
   markDirty(): void {
     this.setDirty(SAVE_DELAY);
   }
 
-  /** 标记改脏 — 100ms trailing save（离散操作：增删节点/编组/粘贴/连接） */
+  /** 标记改脏 - 100ms trailing save（离散操作：增删节点/编组/粘贴/连接） */
   markDirtyImmediate(): void {
     this.setDirty(SAVE_DELAY_IMMEDIATE);
   }

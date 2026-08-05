@@ -2,7 +2,7 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
-import { saveManager } from "@/lib/save-manager";
+import { saveManager } from "@/stores/save-manager";
 import type { AnyNode,BackgroundType, HistorySnapshot, ThemeMode, ViewportState } from "@/lib/types";
 import { useHistoryStore } from "@/stores/history-store";
 

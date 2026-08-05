@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { showGlobalMessage } from "@/components/overlays/global-message";
+import { showGlobalMessage } from "@/lib/global-message";
 import { getTokenHeader } from "@/lib/api";
 import type { ChatMessage, ChatRole } from "@/hooks/use-chat-stream";
 

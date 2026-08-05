@@ -3,8 +3,7 @@
 import { apiUpload } from "@/lib/api";
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
 import { createEdge,createImageNode } from "@/lib/node-defaults";
-import type { AnyNode, ImageNode } from "@/lib/types";
-import { useCanvasStore } from "@/stores/canvas-store";
+import type { AnyEdge, AnyNode, ImageNode } from "@/lib/types";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -78,7 +77,7 @@ export function applyThumbnailSettings(
 }
 
 /**
- * 创建 Canvas → 执行绘制 → 导出 Blob。
+ * 创建 Canvas -> 执行绘制 -> 导出 Blob。
  *
  * 提取的是 createElement("canvas") + getContext("2d") + toBlob 的公共管线，
  * 具体的绘制逻辑由 draw 回调处理，不强求统一。
@@ -131,7 +130,7 @@ export function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w:
 }
 
 /**
- * 上传图片 Blob → 返回 URL。
+ * 上传图片 Blob -> 返回 URL。
  * 纯上传，无节点操作，可安全地在循环中调用。
  */
 export async function uploadBlob(blob: Blob, filename?: string): Promise<string | null> {
@@ -142,12 +141,20 @@ export async function uploadBlob(blob: Blob, filename?: string): Promise<string 
   return res.data.url;
 }
 
+// ── Store 依赖注入接口 ──
+// lib/ 层不应直接引用 stores，通过此接口由调用方注入所需操作。
+export interface CanvasStoreApi {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+  addNodes: (nodes: AnyNode[]) => void;
+  setEdges: (edges: AnyEdge[]) => void;
+}
+
 /**
- * 纯函数：计算衍生节点的位置、尺寸、data，返回节点对象。
- *
-/**
- * 从已有 URL 创建 ImageNode → 写入 store → 连线到源节点。
+ * 从已有 URL 创建 ImageNode -> 写入 store -> 连线到源节点。
  * 适合：宫格切分、截图发送到画布等。
+ *
+ * @param storeApi  由调用方注入的 store 操作接口
  */
 export async function createNodeFromUrl(
   sourceId: string,
@@ -155,11 +162,11 @@ export async function createNodeFromUrl(
   naturalW: number,
   naturalH: number,
   labelSuffix: string,
+  storeApi: CanvasStoreApi,
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
 ): Promise<AnyNode | null> {
-  const store = useCanvasStore.getState();
-  const origNode = store.nodes.find((n) => n.id === sourceId);
+  const origNode = storeApi.nodes.find((n) => n.id === sourceId);
 
   // Position
   let x: number;
@@ -184,21 +191,22 @@ export async function createNodeFromUrl(
   applyThumbnailSettings(newNode, naturalW, naturalH, label);
   if (extraNodeData) Object.assign(newNode.data, extraNodeData);
 
-  store.addNodes([newNode]);
+  storeApi.addNodes([newNode]);
   const newEdge = createEdge(sourceId, newNode.id);
-  store.setEdges([...store.edges, newEdge]);
+  storeApi.setEdges([...storeApi.edges, newEdge]);
 
   return newNode;
 }
 
 /**
- * 上传裁切/变换后的图片 Blob → 创建新节点 → 建连线 → 批量添加。
+ * 上传裁切/变换后的图片 Blob -> 创建新节点 -> 建连线 -> 批量添加。
  *
  * uploadBlob + createNodeFromUrl 的便捷包装。
  *
  * @param sourceId        原图节点 ID
  * @param blob            处理后的图片 Blob
  * @param labelSuffix     节点 label 后缀，如 " (cropped)" / "(2-1)"
+ * @param storeApi        由调用方注入的 store 操作接口
  * @param extraNodeData   可选，额外写入 node.data 的字段
  * @param positionOverride  节点位置（不传则默认放在原图节点右侧）
  * @returns 新创建的节点，或 null（失败时）
@@ -207,6 +215,7 @@ export async function uploadAndAddNode(
   sourceId: string,
   blob: Blob,
   labelSuffix: string,
+  storeApi: CanvasStoreApi,
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
 ): Promise<AnyNode | null> {
@@ -216,5 +225,5 @@ export async function uploadAndAddNode(
   const nw = (extraNodeData?.naturalWidth as number) || 0;
   const nh = (extraNodeData?.naturalHeight as number) || 0;
 
-  return createNodeFromUrl(sourceId, url, nw, nh, labelSuffix, extraNodeData, positionOverride);
+  return createNodeFromUrl(sourceId, url, nw, nh, labelSuffix, storeApi, extraNodeData, positionOverride);
 }
