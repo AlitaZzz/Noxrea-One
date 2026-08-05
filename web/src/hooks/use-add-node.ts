@@ -1,3 +1,6 @@
+/**
+ * 在画布视口中心新增各类节点的 hook。
+ */
 "use client";
 
 import { useCallback } from "react";

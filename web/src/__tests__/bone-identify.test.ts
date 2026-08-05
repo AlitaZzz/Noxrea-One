@@ -1,3 +1,7 @@
+/**
+ * 骨骼识别单元测试。
+ * 覆盖 identifyBones 对不同命名规范骨架的匹配与左右区分能力。
+ */
 import * as THREE from "three";
 import type { Object3D } from "three";
 import { describe, expect,it } from "vitest";

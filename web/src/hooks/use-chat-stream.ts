@@ -1,3 +1,8 @@
+/**
+ * AI 对话消息流 hook。
+ * 负责发起流式请求、增量拼接回复、解析并执行工具调用、中断与错误处理，
+ * 对外导出消息与工具调用的视图类型。
+ */
 "use client";
 
 import { useCallback, useRef, useState } from "react";

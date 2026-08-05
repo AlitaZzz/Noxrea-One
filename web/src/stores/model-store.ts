@@ -1,3 +1,8 @@
+/**
+ * 模型与渠道状态仓库。
+ * 管理服务商渠道及其模型清单的增删改、能力标记，
+ * 支持从渠道远端拉取模型列表、读取服务商预设与模型参数配置缓存。
+ */
 import { create } from "zustand";
 
 import { api, BASE,getTokenHeader } from "@/lib/api";

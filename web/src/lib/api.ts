@@ -1,3 +1,8 @@
+/**
+ * 前端 HTTP 请求统一入口。
+ * 封装 token 读写与请求头注入、全局 401 处理、错误提示，
+ * 并提供通用 api、文件上传（含进度）及资产等业务接口封装。
+ */
 import { showGlobalMessage } from "@/lib/global-message";
 
 // 同源请求（Next.js 全栈架构，API Routes 与前端在同一端口）

@@ -1,3 +1,8 @@
+/**
+ * 文件拖入画布 hook。
+ * 拖放时先创建占位节点再异步上传，成功后原地替换内容、失败则移除占位；
+ * 多文件按网格排布。
+ */
 "use client";
 
 import { type DragEvent,useCallback } from "react";

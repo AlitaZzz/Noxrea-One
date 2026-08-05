@@ -1,3 +1,9 @@
+/**
+ * 画布核心状态仓库。
+ * 持有节点 / 连线 / 视口 / 背景 / 主题等画布状态与各类浮层开关，
+ * 提供节点增删改与快照能力，并通过 SaveManager 做脏标记与延迟保存。
+ * 视口高频变更走模块级变量以避免重渲染循环。
+ */
 import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 

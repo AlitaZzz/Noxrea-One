@@ -1,3 +1,7 @@
+/**
+ * 节点编组 / 取消编组 hook。
+ * 监听编组事件，计算包围盒、转换子节点相对坐标并维护父子关系与历史快照。
+ */
 "use client";
 
 import { useEffect } from "react";

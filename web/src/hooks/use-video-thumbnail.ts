@@ -1,3 +1,6 @@
+/**
+ * 视频首帧缩略图提取 hook，带模块级缓存避免重复解码。
+ */
 "use client";
 
 import { useEffect, useState } from "react";

@@ -1,3 +1,8 @@
+/**
+ * 资产库状态仓库。
+ * 管理空间 / 文件夹树与资产分页列表的加载与缓存，
+ * 提供资产的增删改、移动、改分类及文件夹的增删，并负责 DTO 到领域模型的转换。
+ */
 import { create } from "zustand";
 
 import { assetApi, type AssetFolderDto,type AssetItemDto } from "@/lib/api";

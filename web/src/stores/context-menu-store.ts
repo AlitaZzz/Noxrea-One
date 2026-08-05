@@ -1,3 +1,6 @@
+/**
+ * 画布右键菜单状态仓库：仅记录弹出坐标与显隐。
+ */
 import { create } from "zustand";
 
 interface CtxState {

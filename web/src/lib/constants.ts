@@ -1,3 +1,8 @@
+/**
+ * 全局常量集中定义。
+ * 包含视口与缩放默认值、历史栈上限、各类节点默认 / 最小尺寸、
+ * 布局间距以及自定义事件名 EventNames。
+ */
 import type { BackgroundType, ThemeMode,ViewportState } from "./types";
 import { NODE_TYPE } from "./types";
 

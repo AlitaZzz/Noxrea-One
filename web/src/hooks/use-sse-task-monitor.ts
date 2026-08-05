@@ -1,3 +1,8 @@
+/**
+ * 生成任务 SSE 监控 hook。
+ * 扫描画布中处于生成中的节点并建立 SSE 连接，任务完成 / 失败时回填节点数据、
+ * 调整节点尺寸并弹出通知。
+ */
 "use client";
 
 import { useEffect, useRef } from "react";

@@ -1,3 +1,8 @@
+/**
+ * 画布快捷键 hook。
+ * 处理复制 / 粘贴 / 再制、删除、全选、撤销重做与编组等键盘操作，
+ * 并在存在生成中节点时禁用撤销重做。
+ */
 "use client";
 
 import { useReactFlow } from "@xyflow/react";

@@ -1,3 +1,8 @@
+/**
+ * 画布项目状态仓库。
+ * 管理项目列表与当前激活项目（本地记忆 activeId），
+ * 负责项目的增删改查以及画布数据的序列化保存与加载。
+ */
 import { create } from "zustand";
 
 import { api } from "@/lib/api";

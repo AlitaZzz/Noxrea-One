@@ -1,3 +1,8 @@
+/**
+ * AI 对话工具调用的前端执行层。
+ * 解析后端下发的 tool_call，在画布上执行对应动作（如创建图片 / 视频节点），
+ * 并把执行结果整理成回填给模型的 tool 消息。
+ */
 "use client";
 
 import { createImageNode, createVideoNode } from "@/lib/node-defaults";
