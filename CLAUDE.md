@@ -190,7 +190,6 @@ Noxrea-AI-Canvas/               # Monorepo 根
 
 ## Git 提交规则
 
-见 [docs/git-workflow.md](docs/git-workflow.md)。核心原则：
 - **不自动提交**，等用户确认后才 `git add + commit`
 - Commit message 用简洁中文，说明改了啥、为啥改
 - 不相关的改动拆成多个 commit

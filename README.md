@@ -1,273 +1,152 @@
 # Noxrea AI Canvas
 
-无限画布 AI 创作工具，支持节点式画布编辑、图片/文字/视频生成，以及 3D 导演模式。
+无限画布 AI 创作工具。基于节点式画布编辑，集成图片、文字、视频生成与 3D 导演模式，提供从创意到成品的完整工作流。
 
-## 项目结构说明（npm Workspaces）
+## 功能特性
 
-本项目是一个 **npm workspaces monorepo**，根 `package.json` 通过 `workspaces: ["web"]` 将 `web` 声明为工作区子包。
-
-- 依赖只在**根目录**安装一次（依赖提升 / hoisting），安装后根 `node_modules` 中会通过软链 `node_modules/web -> ../web` 指向子包。
-- 全仓库只有**一个** `package-lock.json`（位于根目录），子包 `web` 不应存在独立 lock 文件，也不要在 `web/` 内单独执行 `npm install`。
-- `web/` 与 `server/`（含 `prisma/`）共享同一套 TypeScript 基类配置 `tsconfig.base.json`。
-- 所有跨包脚本统一在根 `package.json` 的 `scripts` 中编排（如 `npm run dev` 通过 `concurrently` 同时拉起 web 与 server）。
-
-> ⚠️ 不要删除 `web/node_modules`（若历史残留存在）后单独在 web 里 install；统一用根 `npm install` 管理。
-
-## 系统架构
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Web (Next.js App Router)                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐  │
-│  │ 画布组件  │ │ 生成面板  │ │ 资源管理  │ │ Director(3D)  │  │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────┬───────┘  │
-│       │              │            │               │          │
-│  ┌────┴──────────────┴────────────┴───────────────┴───────┐  │
-│  │             Zustand Stores (状态管理)                    │  │
-│  └────────────────────────┬───────────────────────────────┘  │
-│                           │  /api/* (rewrites 透明代理)       │
-└───────────────────────────┼──────────────────────────────────┘
-                            │
-┌───────────────────────────┼──────────────────────────────────┐
-│              Server (Hono + Node.js + Prisma)                 │
-│                           │                                   │
-│  ┌────────────────────────┴──────────────────────────────┐   │
-│  │            Hono Route Handlers (server/http/)          │   │
-│  └──────────────┬──────────────────────┬─────────────────┘   │
-│                 │                      │                      │
-│  ┌──────────────┴──────┐  ┌───────────┴───────────────┐     │
-│  │   Worker Loop       │  │  SSE (TaskWatcher)         │     │
-│  │   (同进程异步循环)    │  │  (同进程事件推送)            │     │
-│  └──────────┬──────────┘  └───────────────────────────┘     │
-│             │                                                 │
-│  ┌──────────┴──────────────────────────────────────────┐     │
-│  │                  AI Gateway 管线                      │     │
-│  │  CapabilityRouter -> CapabilityService                │     │
-│  │       -> request-builder (transforms/mapping/patch)   │     │
-│  │       -> Protocol (OpenAI/Gemini/Ark)                 │     │
-│  │       -> TaskManager (同步/异步轮询)                  │     │
-│  └──────────────────────────────────────────────────────┘     │
-│             │                                                 │
-│             ▼                                                 │
-│  ┌──────────────────────────────────────────────────────┐     │
-│  │            Storage (下载 -> 本地落盘 / S3)              │     │
-│  └──────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## 目录结构
-
-```
-Noxrea-AI-Canvas/
-├── web/                         # Next.js 纯前端（workspaces 子包）
-│   └── src/
-│       ├── app/                 # App Router 页面（API 已迁移至 server）
-│       │   ├── (app)/          # 已认证路由组（layout.tsx 做鉴权守卫）
-│       │   │   ├── canvas/      # 画布主页
-│       │   │   ├── project/     # 项目管理页
-│       │   │   └── layout.tsx
-│       │   ├── login/           # 登录页（无需鉴权）
-│       │   ├── layout.tsx       # 根布局
-│       │   └── page.tsx         # 首页（重定向）
-│       ├── components/          # React 组件
-│       │   ├── canvas/          # 画布核心（按功能子目录组织）
-│       │   │   ├── controls/    # 画布控制（对齐/右键/缩放/工具栏/边删除）
-│       │   │   ├── panels/      # 生成面板（图片/视频/文本/API设置）
-│       │   │   ├── chat/        # 聊天交互（ChatPanel/Mention/SkillPanel）
-│       │   │   ├── editing/     # 编辑工具（裁剪/标注/光照/多角度）
-│       │   │   ├── sidebar/     # 侧边栏（CanvasSidebar/NodeInspector）
-│       │   │   ├── gen/         # 生成面板共享（RatioIcon/ModelOption）
-│       │   │   ├── nodes/       # 节点组件（Text/Image/Video/Audio/Group/Director）
-│       │   │   └── InfiniteCanvas.tsx
-│       │   ├── common/          # 通用 UI（AppModal/ConfirmModal/VirtualList 等）
-│       │   ├── assets/          # 资源管理（侧栏/网格/卡片/文件夹）
-│       │   ├── director/        # 3D 引擎 React UI 容器
-│       │   ├── auth/            # 认证组件
-│       │   ├── layout/          # 布局组件
-│       │   └── overlays/        # 覆盖层（LayerModal 等）
-│       ├── contexts/            # React Context（edge-highlight-context）
-│       ├── hooks/               # 自定义 hooks（含 index.ts barrel export）
-│       ├── i18n/                # 国际化资源（zh-CN.json / en-US.json）
-│       ├── lib/                 # 纯工具层（零 stores/components 依赖）
-│       │   ├── types/           # 领域类型（canvas/nodes/models/assets/project）
-│       │   ├── types.ts         # Barrel re-export
-│       │   ├── api.ts           # API 调用
-│       │   ├── global-message.ts  # 全局消息 API
-│       │   ├── constants.ts     # 全局常量 + EventNames + NODE_TYPE_COLOR
-│       │   ├── image-utils.ts   # 图片工具（依赖注入 CanvasStoreApi）
-│       │   ├── add-asset.ts     # 资产->节点（纯函数）
-│       │   ├── agent-tools.ts   # Agent 工具（依赖注入）
-│       │   └── ...
-│       ├── providers/           # React context providers
-│       ├── stores/              # Zustand 状态管理
-│       │   ├── canvas-store.ts
-│       │   ├── save-manager.ts  # 画布保存管理器
-│       │   ├── context-menu-store.ts  # 右键菜单状态
-│       │   ├── i18n-store.ts   # i18n 状态（翻译文本在 i18n/ 目录）
-│       │   └── ...
-│       ├── director/            # 3D 引擎纯 TS 逻辑（core/entities/util）
-│       └── __tests__/           # 单元测试
-│
-├── server/                      # Node.js 后端（HTTP + Worker 同进程）
-│   ├── index.ts                 # 服务入口（启动 Hono HTTP + Worker 循环）
-│   ├── http/                    # Hono 路由层
-│   │   ├── app.ts               # Hono 实例 + 路由注册
-│   │   ├── server.ts            # @hono/node-server 启停
-│   │   └── routes/              # 路由模块（auth/canvas/assets/generate/files 等）
-│   ├── core/                    # 基础设施（config/auth/database/logger/http/ssrf/events）
-│   ├── crud/                    # 数据访问层
-│   ├── schemas/                 # Zod schema + snake_case 映射
-│   ├── services/                # 业务逻辑
-│   │   ├── capabilities/        # 能力服务（image/video/llm/audio）
-│   │   ├── protocols/           # 协议适配（openai/gemini/ark）
-│   │   ├── request-builder/     # 请求构建管线
-│   │   ├── gateway/             # Gateway 注册中心 + 路由
-│   │   ├── tasks/               # 异步轮询管理器
-│   │   ├── worker/              # Worker 循环 + 任务执行器
-│   │   ├── storage/             # 存储后端抽象 + 本地/S3 + 媒体处理
-│   │   ├── resolvers/           # 参考图解析
-│   │   └── model-config/        # 预设/参数加载
-│   └── resources/               # JSON 数据文件（presets/model_params）
-│
-├── prisma/                      # 数据建模
-│   ├── schema.prisma            # Prisma schema
-│   └── migrations/              # 数据库迁移历史（已纳入版本控制）
-│
-├── docs/                        # 项目文档
-├── package.json                 # 根配置（含 workspaces: ["web"] 与统一脚本）
-├── package-lock.json            # 全仓库唯一锁文件
-├── tsconfig.base.json           # TS 公共基类配置（根与 web 共享）
-├── tsconfig.json                # 根 TS 配置（管 server/ + prisma/）
-└── CLAUDE.md                    # AI 协作指南
-```
-
-## 核心链路
-
-### 链路一：AI 生成
-
-```
-用户点生成 -> 前端组装请求 -> POST /api/generate/task -> 创建任务(pending)
-  -> Worker 同进程领取 -> Executor 执行
-    -> Gateway 管线 (transforms -> mapping -> patch -> Protocol)
-    -> 调用厂商 API -> Storage 下载落盘
-  -> TaskWatcher 同进程推送 -> SSE 通知前端
-  -> 前端更新节点展示结果
-```
-
-### 链路二：画布保存与还原
-
-```
-前端 SaveManager: dirty 标记 -> 2s trailing save -> 指纹对比去重
-  -> PUT /api/canvas/projects/{id} -> 更新 canvas_data (JSON)
-  -> 页面卸载时 keepalive 兜底保存
-```
-
-### 链路三：SSE 实时推送
-
-```
-同进程 Worker: 任务完成 -> 写 DB -> TaskWatcher 轮询检测
-  -> SSE 端点 GET /api/generate/task/{id}/stream
-  -> 前端 EventSource 接收 -> 更新节点 / 显示错误
-```
-
-## 前端架构约定
-
-- **分层单向依赖**：`app -> components -> hooks/stores -> lib`，禁止反向依赖
-  - `lib/` 层零 `@/stores/` 和 `@/components/` 引用（纯工具 + 依赖注入）
-  - `hooks/` 层零 `@/components/` 引用（纯逻辑）
-  - 需要操作 store 的函数通过参数注入 `CanvasStoreApi` 接口（见 `image-utils.ts`、`agent-tools.ts`、`add-asset.ts`）
-- **类型就近定义**：领域类型在 `lib/types/` 下按领域拆分（canvas/nodes/models/assets/project），`lib/types.ts` 为 barrel re-export
-- **i18n 资源外置**：翻译文本在 `i18n/zh-CN.json` 和 `i18n/en-US.json`，store 仅管理状态
-- **Barrel Exports**：各主要目录提供 `index.ts` 统一导出公共 API
+- **无限画布** - 基于 React Flow 的节点式编辑，支持拖拽、缩放、分组、对齐
+- **多模态生成** - 图片、视频、文本、音频一键生成，结果直接落回画布
+- **3D 导演模式** - Three.js 驱动的 3D 场景编辑，支持模型导入与多视角预览
+- **AI 对话** - 画布内聊天面板，支持 Mention 引用节点、技能调用
+- **资源管理** - 内置素材库，支持文件夹组织与网格浏览
+- **实时推送** - SSE 长连接，任务进度即时反馈
+- **多协议适配** - OpenAI / Gemini / Ark 等主流 AI 厂商协议统一接入
+- **国际化** - 中 / 英双语，运行时切换
 
 ## 技术栈
 
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| 前端框架 | Next.js (App Router) | ^16 |
-| 前端 UI | React + Tailwind CSS | ^19 / ^4 |
-| 画布引擎 | @xyflow/react (React Flow) | ^12 |
-| 状态管理 | Zustand | ^5 |
-| UI 组件库 | Ant Design | ^6 |
-| 请求/缓存 | @tanstack/react-query | ^5 |
-| 3D 引擎 | three.js | ^0.185 |
-| 图标 | lucide-react | ^1 |
-| 后端框架 | Hono + @hono/node-server | ^4 |
-| 后端运行时 | Node.js 18+ / TypeScript 5+ | - |
-| ORM | Prisma | ^6 |
-| 数据库 | SQLite（开发）/ PostgreSQL（生产） | - |
-| 鉴权 | JWT (jose) + bcryptjs | ^5 / ^2 |
-| 校验 | Zod | ^3 |
-| HTTP 客户端 | Node 内置 fetch + undici | ^7 |
-| 并发控制 | p-limit | ^6 |
-| 日志 | pino + pino-pretty | ^9 |
-| 图像处理 | sharp | ^0.33 |
-| 进程管理 | tsx（server）/ concurrently（dev） | - |
+| 层级 | 技术 |
+|------|------|
+| 前端框架 | Next.js (App Router) + React 19 |
+| 画布引擎 | @xyflow/react (React Flow) 12 |
+| 状态管理 | Zustand 5 |
+| UI 组件 | Ant Design 6 + Tailwind CSS 4 |
+| 3D 引擎 | three.js |
+| 后端框架 | Hono 4 + @hono/node-server |
+| ORM | Prisma 6 |
+| 数据库 | SQLite（开发）/ PostgreSQL（生产） |
+| 鉴权 | JWT (jose) + bcryptjs |
+| 校验 | Zod |
+| 日志 | pino + pino-pretty |
+| 图像处理 | sharp |
 
-## 本地开发
+## 架构概览
+
+```
+Web (Next.js)                    Server (Hono + Node.js)
+┌────────────┐                  ┌─────────────────────────┐
+│  画布组件   │  /api/* rewrites │    Hono 路由层           │
+│  生成面板   │ ──────────────> │         │                 │
+│  资源管理   │  SSE (EventSource)│    Service -> CRUD -> Prisma│
+│  3D 导演   │ <────────────── │         │                 │
+│  Zustand   │                  │    Worker (同进程)        │
+└────────────┘                  │         │                 │
+                                │    AI Gateway 管线        │
+                                │    CapabilityRouter       │
+                                │      -> Protocol 适配       │
+                                │      -> Storage 落盘       │
+                                └─────────────────────────┘
+```
+
+前端通过 `next.config.ts` 的 rewrites 将 `/api/*` 透明代理到后端，无 CORS。Worker 与 HTTP 同进程运行，任务完成后经 SSE 实时推送。
+
+## 快速开始
 
 ### 前置条件
 
 - Node.js >= 18
 
-### 安装依赖
-
-> 本仓库为 npm workspaces，**只需在根目录执行一次安装**，即可同时覆盖根（server）与 `web` 子包；请勿在 `web/` 内单独 `npm install`。
+### 安装
 
 ```bash
-npm install        # 根目录执行，自动安装 workspaces 全部依赖
-```
+# 1. 克隆仓库
+git clone <repo-url>
+cd Noxrea-AI-Canvas
 
-### 快速启动
+# 2. 安装依赖（npm workspaces，根目录执行一次即可）
+npm install
 
-```bash
-# 配置环境变量
+# 3. 配置环境变量
 cp .env.example .env
-# 编辑 .env，设置 JWT_SECRET_KEY（必填）
+# 编辑 .env，至少设置 JWT_SECRET_KEY
 
-# 初始化数据库（应用迁移、创建表结构）
+# 4. 初始化数据库
 npx prisma migrate deploy
-# 开发期如需重新生成迁移可用：npx prisma migrate dev
 
-# 启动（Web + Server 同时启动，通过 concurrently 编排）
+# 5. 启动开发服务（Web + Server 同时启动）
 npm run dev
-# 前端 http://localhost:3000，API 通过 rewrites 代理到 localhost:4000
-#
-# 生产/后台启动（web 构建后常驻）：
-# npm start
-#
-# 首次使用：通过页面注册账号（需 .env 中 ALLOW_REGISTRATION=true）
 ```
 
-如需单独启动某一端：
+访问 http://localhost:3000 即可使用。首次需注册账号（`ALLOW_REGISTRATION=true` 时开放）。
+
+### 单独启动
 
 ```bash
-npm run dev:web       # 仅前端
-npm run dev:server    # 仅后端（tsx watch）
+npm run dev:web       # 仅前端 (localhost:3000)
+npm run dev:server    # 仅后端 (localhost:4000)
 ```
 
-### 关键配置
+### 生产部署
 
-| 配置项 | 说明 |
-|--------|------|
-| `DATABASE_URL` | SQLite `file:./prisma/dev.db` 或 PG 连接串 |
-| `JWT_SECRET_KEY` | JWT 签名密钥（必填） |
-| `ALLOW_REGISTRATION` | 是否开放页面注册，默认 `true` |
-| `SERVER_PORT` | 后端 HTTP 端口，默认 `4000` |
-| `SERVER_HOST` | 后端监听地址，默认 `0.0.0.0` |
-| `UPLOAD_DIR` | 上传文件根目录，默认 `uploads`（相对项目根或绝对路径） |
-| `MAX_UPLOAD_SIZE_MB` | 上传文件大小上限（MB），默认 `30`；Next.js proxy body 限制自动跟随此值 +5mb |
-| `FFMPEG_PATH` | ffmpeg 所在目录，默认 `bin`（代码自动拼接 `ffmpeg`/`ffmpeg.exe`） |
-| `HTTP_TIMEOUT_DL` | 下载/CDN 超时（秒），默认 `45` |
-| `HTTP_TIMEOUT_POLL` | 异步轮询超时（秒），默认 `15` |
-| `HTTP_TIMEOUT_API` | 同步普通接口超时（秒），默认 `120` |
-| `HTTP_TIMEOUT_ASYNC` | 异步任务创建超时（秒），默认 `30` |
-| `WORKER_MAX_CONCURRENCY` | Worker 并发数，默认 `10` |
-| `USE_SYSTEM_PROXY` | 是否使用代理访问上游 API，默认 `false` |
-| `PROXY_URL` | 代理地址，如 `http://127.0.0.1:7890` |
-| `ALLOW_INSECURE_SECRETS` | 开发逃生开关（跳过密钥占位符校验），默认 `false` |
+```bash
+npm run build    # 构建前端
+npm run start    # 启动 Web + Server 生产进程
+```
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `DATABASE_URL` | 数据库连接串 | `file:./prisma/dev.db` |
+| `JWT_SECRET_KEY` | JWT 签名密钥（**必填**） | - |
+| `ALLOW_REGISTRATION` | 是否开放注册 | `true` |
+| `SERVER_PORT` | 后端端口 | `4000` |
+| `SERVER_HOST` | 后端监听地址 | `0.0.0.0` |
+| `UPLOAD_DIR` | 上传文件根目录 | `uploads` |
+| `MAX_UPLOAD_SIZE_MB` | 上传大小上限 (MB) | `30` |
+| `WORKER_MAX_CONCURRENCY` | Worker 并发数 | `10` |
+| `USE_SYSTEM_PROXY` | 是否使用代理访问上游 API | `false` |
+| `PROXY_URL` | 代理地址 | - |
+| `FFMPEG_PATH` | ffmpeg 所在目录 | `bin` |
+
+完整配置见 `.env.example`。
+
+## 项目结构
+
+```
+Noxrea-AI-Canvas/
+├── web/                # Next.js 前端 (npm workspace 子包)
+│   └── src/
+│       ├── app/            # App Router 页面
+│       ├── components/     # React 组件（canvas/panels/chat/nodes 等）
+│       ├── stores/         # Zustand 状态管理
+│       ├── hooks/          # 自定义 hooks
+│       ├── lib/            # 纯工具层（零 store/component 依赖）
+│       ├── director/       # 3D 引擎逻辑 (纯 TS)
+│       └── i18n/           # 国际化资源
+├── server/            # Node.js 后端 (HTTP + Worker 同进程)
+│   ├── http/              # Hono 路由层
+│   ├── core/              # 基础设施 (config/auth/database/logger/ssrf)
+│   ├── crud/              # 数据访问层
+│   ├── schemas/           # Zod schema + snake_case 映射
+│   └── services/          # 业务逻辑
+│       ├── capabilities/     # 能力服务 (image/video/llm/audio)
+│       ├── protocols/        # 协议适配 (openai/gemini/ark)
+│       ├── gateway/          # Gateway 注册中心
+│       ├── worker/           # Worker 循环 + 任务执行
+│       ├── tasks/            # 异步轮询管理器
+│       └── storage/          # 存储后端 (本地/S3)
+├── prisma/            # Prisma schema + 迁移
+├── docs/              # 项目文档
+└── package.json       # 根配置 (workspaces + 统一脚本)
+```
 
 ## 文档
 
-- [架构笔记](docs/architecture-notes.md) - 画布保存、SSRF 实现等
+- [架构笔记](docs/architecture-notes.md) - 画布保存机制、SSRF 防护等
+- [协作规则](docs/collaboration-rules.md) - 团队协作约定
 - [CLAUDE.md](CLAUDE.md) - AI 协作快速参考
+
+## License
+
+Private
