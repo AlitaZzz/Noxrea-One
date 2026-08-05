@@ -1,7 +1,8 @@
 /**
- * 画布左侧抽屉侧边栏。
+ * 画布资源管理器（Explorer）。
  * 上半部为节点大纲：按类型分组列出画布节点，支持搜索、筛选与定位选中；
  * 下半部为资产快捷区：分页浏览资产文件夹与素材，支持悬浮预览并拖入画布成节点。
+ * 以 antd Drawer 实现，不绑定具体方位，可在主题层调整为左 / 右 / 上下布局。
  */
 "use client";
 
@@ -35,7 +36,7 @@ import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAsset
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useVideoThumbnail } from "@/hooks/use-video-thumbnail";
-import { getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER, TYPE_COLORS } from "./node-type-constants";
+import { getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER, TYPE_COLORS } from "./node-type-meta";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
@@ -49,12 +50,12 @@ const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
 
 export const DRAWER_WIDTH = 360;
 
-interface CanvasSidebarProps {
+interface CanvasExplorerProps {
   open: boolean;
   onClose: () => void;
 }
 
-export default function CanvasSidebar({ open, onClose }: CanvasSidebarProps) {
+export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
   const t = useI18nStore((s) => s.t);
   const lang = useI18nStore((s) => s.lang);
   const [activeTab, setActiveTab] = useState<string>("elements");

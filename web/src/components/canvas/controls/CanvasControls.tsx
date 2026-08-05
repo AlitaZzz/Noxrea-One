@@ -52,11 +52,11 @@ function LanguageToggle() {
 interface Props {
   onOpenSettings?: () => void;
   onOpenAssets?: () => void;
-  onOpenCanvasSidebar?: () => void;
-  canvasSidebarOpen?: boolean;
+  onOpenCanvasExplorer?: () => void;
+  canvasExplorerOpen?: boolean;
 }
 
-export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasSidebar, canvasSidebarOpen }: Props) {
+export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, canvasExplorerOpen }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const t = useI18nStore((s) => s.t);
 
@@ -144,14 +144,14 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           border: "1px solid var(--canvas-border, #3a3a3a)",
         }}
       >
-        {/* Canvas Sidebar — 最左侧主面板开关（图标+文字） */}
-        <Tooltip title={canvasSidebarOpen ? t("canvas.closeSidebar") : t("canvas.openSidebar")}>
+        {/* Canvas Explorer — 最左侧主面板开关（图标+文字） */}
+        <Tooltip title={canvasExplorerOpen ? t("canvas.closeSidebar") : t("canvas.openSidebar")}>
           <Button
             size="small"
             type="text"
-            className={`canvas-ctrl-btn${canvasSidebarOpen ? " canvas-ctrl-active" : ""}`}
-            icon={canvasSidebarOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
-            onClick={onOpenCanvasSidebar}
+            className={`canvas-ctrl-btn${canvasExplorerOpen ? " canvas-ctrl-active" : ""}`}
+            icon={canvasExplorerOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+            onClick={onOpenCanvasExplorer}
           >
             {t("canvas.panel")}
           </Button>
