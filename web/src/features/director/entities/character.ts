@@ -4,14 +4,14 @@
  * 支持全身 FK 关节摆姿与姿态预设应用。
  */
 import * as THREE from "three";
-import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { type GLTF,GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 import { identifyBones } from "../util/bone-identify";
 import { buildBoneMap } from "../util/bone-util";
 import { worldBox } from "../util/measure";
 import type { AxisOverride,RigType } from "../util/rig-axis-table";
 import { Entity } from "./entity";
-import { JOINTS, type Joint } from "./joint-config";
+import { type Joint,JOINTS } from "./joint-config";
 import { POSE_PRESET_MAP } from "./pose-presets";
 
 // 统一目标身高（单位），多角色视觉一致（§5.2）

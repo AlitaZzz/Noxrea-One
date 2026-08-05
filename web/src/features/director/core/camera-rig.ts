@@ -1,11 +1,11 @@
-/**
+﻿/**
  * 导演相机装置。
  * 封装 OrbitControls 轨道操作、聚焦选中实体、取景比例遮罩与视角复位。
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-import type { DirectorEntity } from "@/director/store";
+import type { DirectorEntity } from "../types";
 import { worldBox } from "../util/measure";
 
 // OrbitControls + 聚焦选中 + 取景比例 overlay + 重置视角

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 3D 导演台底部工具坞。
  * 提供变换模式切换（选择 / 移动 / 旋转 / 缩放）、添加角色 / 道具 / 相机、
  * 镜头预设选择与出图渲染等操作入口。
@@ -8,22 +8,22 @@
 import { App,InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 
-import { groupedPresets } from "@/director/core/camera-presets";
-import { DirectorRuntime, useDirectorStore } from "@/director/store";
-import { DirCaretIcon } from "@/components/common/icons/director/DirCaretIcon";
-import { DirCubeIcon } from "@/components/common/icons/director/DirCubeIcon";
-import { DirExpandIcon } from "@/components/common/icons/director/DirExpandIcon";
-import { DirFrameIcon } from "@/components/common/icons/director/DirFrameIcon";
-import { DirGroupIcon } from "@/components/common/icons/director/DirGroupIcon";
-import { DirImageIcon } from "@/components/common/icons/director/DirImageIcon";
-import { DirMoveIcon } from "@/components/common/icons/director/DirMoveIcon";
-import { DirPersonIcon } from "@/components/common/icons/director/DirPersonIcon";
-import { DirPointerIcon } from "@/components/common/icons/director/DirPointerIcon";
-import { DirRotateIcon } from "@/components/common/icons/director/DirRotateIcon";
-import { DirScaleIcon } from "@/components/common/icons/director/DirScaleIcon";
-import { DirShotIcon } from "@/components/common/icons/director/DirShotIcon";
-import { DirUploadIcon } from "@/components/common/icons/director/DirUploadIcon";
-import { DirVideoIcon } from "@/components/common/icons/director/DirVideoIcon";
+import { groupedPresets } from "@/features/director/core/camera-presets";
+import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
+import { DirCaretIcon } from "@/features/director/icons/DirCaretIcon";
+import { DirCubeIcon } from "@/features/director/icons/DirCubeIcon";
+import { DirExpandIcon } from "@/features/director/icons/DirExpandIcon";
+import { DirFrameIcon } from "@/features/director/icons/DirFrameIcon";
+import { DirGroupIcon } from "@/features/director/icons/DirGroupIcon";
+import { DirImageIcon } from "@/features/director/icons/DirImageIcon";
+import { DirMoveIcon } from "@/features/director/icons/DirMoveIcon";
+import { DirPersonIcon } from "@/features/director/icons/DirPersonIcon";
+import { DirPointerIcon } from "@/features/director/icons/DirPointerIcon";
+import { DirRotateIcon } from "@/features/director/icons/DirRotateIcon";
+import { DirScaleIcon } from "@/features/director/icons/DirScaleIcon";
+import { DirShotIcon } from "@/features/director/icons/DirShotIcon";
+import { DirUploadIcon } from "@/features/director/icons/DirUploadIcon";
+import { DirVideoIcon } from "@/features/director/icons/DirVideoIcon";
 
 const IC_MAP = {
   pointer: DirPointerIcon,

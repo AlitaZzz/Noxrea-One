@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 3D 导演台全屏浮层的布局外壳。
  * 组合顶部信息栏、左侧大纲、中部三维视口（动态导入禁用 SSR）、
  * 右侧检视器 / 场景面板与底部工具坞，自身不含三维逻辑。
@@ -8,14 +8,14 @@
 import { CloseOutlined } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 
-import Dock from "@/components/director/Dock";
-import Inspector from "@/components/director/Inspector";
-import Outliner from "@/components/director/Outliner";
-import ScenePanel from "@/components/director/ScenePanel";
+import Dock from "@/features/director/components/Dock";
+import Inspector from "@/features/director/components/Inspector";
+import Outliner from "@/features/director/components/Outliner";
+import ScenePanel from "@/features/director/components/ScenePanel";
+import { useDirectorStore } from "@/features/director/director-store";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { useDirectorStore } from "@/director/store";
 
-const DirectorViewport = dynamic(() => import("@/components/director/DirectorViewport"), {
+const DirectorViewport = dynamic(() => import("@/features/director/components/DirectorViewport"), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full text-white/50 text-sm">加载 3D 视口...</div>,
 });
