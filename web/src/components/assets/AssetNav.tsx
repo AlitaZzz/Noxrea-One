@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 资产库导航栏（Navigation）。
  * 上部为空间切换（个人 / 公共等），下部以递归树形展示文件夹层级与资产计数，
  * 支持选中定位与删除文件夹。
@@ -8,7 +8,7 @@
 import { FolderOutlined } from "@ant-design/icons";
 import type { ReactNode } from "react";
 
-import NavButton from "@/components/common/NavButton";
+import NavButton from "@/components/ui/NavButton";
 import type { AssetFolder } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 

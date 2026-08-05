@@ -8,8 +8,8 @@
 import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
-import { EventNames, PASTE_OFFSET, isGenerating } from "@/lib/constants";
 import { duplicateNode } from "@/features/canvas/node-defaults";
+import { EventNames, isGenerating,PASTE_OFFSET } from "@/lib/constants";
 import type { MediaGenFields } from "@/lib/types/nodes";
 import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";

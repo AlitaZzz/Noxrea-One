@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 资产库主弹窗，资产模块的容器与编排层。
  * 组合左侧空间 / 文件夹树、顶部分类页签与工具条、主体资产网格，
  * 统一处理分页加载、搜索筛选、批量选择与批量删除 / 移动 / 改类型、
@@ -10,13 +10,14 @@ import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icon
 import { App, Button, Input, Select, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import ConfirmModal from "@/components/common/ConfirmModal";
-import ModalButton from "@/components/common/ModalButton";
+import AppModal from "@/components/ui/AppModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import ModalButton from "@/components/ui/ModalButton";
 import { createAssetNode } from "@/features/assets/add-asset";
-import AppModal from "@/components/common/AppModal";
-import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types/assets";
-import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import { assetApi } from "@/lib/api";
+import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
+import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types/assets";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
@@ -27,7 +28,6 @@ import AssetGrid from "./AssetGrid";
 import AssetNav from "./AssetNav";
 import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
-import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
 
 interface Props {
   open: boolean;

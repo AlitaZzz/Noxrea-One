@@ -7,10 +7,10 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/features/agent/agent-tools";
-import { showGlobalMessage } from "@/lib/global-message";
-import { chatApi } from "@/lib/api";
+import { type AgentToolCall, type AgentToolResult,executeAgentTools } from "@/features/agent/agent-tools";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";
+import { chatApi } from "@/lib/api";
+import { showGlobalMessage } from "@/lib/global-message";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 export type ChatRole = "user" | "assistant" | "tool" | "system";

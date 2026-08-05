@@ -7,9 +7,9 @@
 
 import { useEffect } from "react";
 
-import { useContextMenuStore } from "@/stores/context-menu-store";
 import { EventNames } from "@/lib/constants";
 import { markDirty, markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
+import { useContextMenuStore } from "@/stores/context-menu-store";
 import { useSelectionStore } from "@/stores/selection-store";
 
 /**

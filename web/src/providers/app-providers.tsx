@@ -9,11 +9,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntApp, ConfigProvider } from "antd";
 import { ReactNode, useEffect } from "react";
 
+import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { setGlobalMessageApi } from "@/lib/global-message";
-import { getLayerPopupContainer } from "@/components/overlays/layer";
-import { directorTheme } from "@/styles/theme";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
+import { directorTheme } from "@/styles/theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {

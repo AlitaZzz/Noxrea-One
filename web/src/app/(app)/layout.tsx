@@ -4,8 +4,8 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";

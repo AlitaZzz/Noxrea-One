@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 新建文件夹弹窗。
  * 仅收集文件夹名称并回调创建，重名等失败情况由父级返回布尔值后在此提示。
  */
@@ -7,8 +7,8 @@
 import { Input } from "antd";
 import { useState } from "react";
 
-import ModalButton from "@/components/common/ModalButton";
-import AppModal from "@/components/common/AppModal";
+import AppModal from "@/components/ui/AppModal";
+import ModalButton from "@/components/ui/ModalButton";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

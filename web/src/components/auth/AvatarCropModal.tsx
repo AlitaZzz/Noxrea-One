@@ -8,9 +8,9 @@
 import { App,Button } from "antd";
 import { useCallback, useEffect,useRef, useState } from "react";
 
+import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { apiUpload } from "@/lib/api";
 import { canvasToBlob } from "@/lib/image-utils";
-import { LayerModal } from "@/components/overlays/layer";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

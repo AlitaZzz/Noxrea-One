@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { modelApi } from "@/lib/api";
-import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types/models";
+import type { ModelCapability, ModelChannel, ModelParamConfig,ProviderPreset } from "@/lib/types/models";
 
 interface RawModelEntry {
   id?: string;

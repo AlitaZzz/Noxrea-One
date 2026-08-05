@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 项目列表页（/project）。
  * 展示当前用户的全部画布项目（新建卡片 + 项目网格），支持新建、打开、重命名、删除；
  * 顶部头像菜单提供账户设置入口与语言 / 主题偏好切换、退出登录。
@@ -12,11 +12,11 @@ import { useEffect, useState } from "react";
 
 import SettingsModal from "@/components/auth/SettingsModal";
 import AppShell from "@/components/layout/AppShell";
-import ConfirmModal from "@/components/common/ConfirmModal";
-import { MenuDivider,MenuItem, MenuPopover } from "@/components/common/MenuPopover";
-import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
-import { ThemeDarkIcon } from "@/components/common/icons/theme/ThemeDarkIcon";
-import { ThemeLightIcon } from "@/components/common/icons/theme/ThemeLightIcon";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import { ChevronDownIcon } from "@/components/ui/icons/ChevronDownIcon";
+import { ThemeDarkIcon } from "@/components/ui/icons/theme/ThemeDarkIcon";
+import { ThemeLightIcon } from "@/components/ui/icons/theme/ThemeLightIcon";
+import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import type { CanvasProject } from "@/lib/types/project";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";

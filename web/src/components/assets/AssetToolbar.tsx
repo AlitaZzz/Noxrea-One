@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 资产库顶部工具条。
  * 提供搜索框、新建下拉（上传资产 / 新建文件夹），
  * 以及有选中项时出现的批量操作区（全选、改分类、移动、删除）。
@@ -10,8 +10,8 @@ import { Input } from "antd";
 import { useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
-import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
-import { useLayerOverlay } from "@/components/overlays/layer";
+import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
+import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {
