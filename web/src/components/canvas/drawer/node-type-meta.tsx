@@ -1,7 +1,6 @@
 /**
- * 节点类型的展示元数据。
- * 集中定义各节点类型的 i18n 文案 key、侧边栏排序、语义色与图标工厂函数。
- * 注意：文件名叫 constants，但同时导出返回 JSX 的图标工厂，命名偏窄。
+ * 节点类型的展示元数据（display meta）。
+ * 集中定义各节点类型的 i18n 文案 key、面板排序、语义色与图标工厂函数。
  */
 import { GroupOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 

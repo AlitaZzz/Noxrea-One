@@ -35,14 +35,14 @@ import AlignmentGuides from "@/components/canvas/controls/AlignmentGuides";
 import AssetsModal from "@/components/assets/AssetsModal";
 import CanvasContextMenu from "@/components/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/components/canvas/controls/CanvasControls";
-import CanvasSidebar, { DRAWER_WIDTH } from "@/components/canvas/sidebar/CanvasSidebar";
+import CanvasExplorer, { DRAWER_WIDTH } from "@/components/canvas/drawer/CanvasExplorer";
 import ChatPanel from "@/components/canvas/chat/ChatPanel";
 import CenterToolbar from "@/components/canvas/controls/CenterToolbar";
 import { AgentIcon } from "@/components/common/icons/canvas/AgentIcon";
 import DeletableEdge from "@/components/canvas/controls/EdgeDeleteButton";
 import ImageGenerationPanel from "@/components/canvas/panels/ImageGenerationPanel";
 import ApiSettingsDrawer from "@/components/canvas/panels/ApiSettingsDrawer";
-import NodeInspector from "@/components/canvas/sidebar/NodeInspector";
+import NodeInspector from "@/components/canvas/inspector/NodeInspector";
 import VideoGenerationPanel from "@/components/canvas/panels/VideoGenerationPanel";
 import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
 import { computeAlignment } from "@/hooks/use-alignment-guides";
@@ -182,7 +182,7 @@ export default function InfiniteCanvas() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
-  const [canvasSidebarOpen, setCanvasSidebarOpen] = useState(false);
+  const [canvasExplorerOpen, setCanvasExplorerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
@@ -471,7 +471,7 @@ export default function InfiniteCanvas() {
         />
 
         {/* Top-left panel: quick toolbar */}
-        <Panel position="top-left" style={{ margin: 0, padding: 0, marginLeft: canvasSidebarOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
+        <Panel position="top-left" style={{ margin: 0, padding: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
             <div
               className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px]"
@@ -559,7 +559,7 @@ export default function InfiniteCanvas() {
         </Panel>
 
         {/* Bottom-left panel: minimap + controls */}
-        <Panel position="bottom-left" style={{ margin: 0, padding: 0, marginLeft: canvasSidebarOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
+        <Panel position="bottom-left" style={{ margin: 0, padding: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
           <div className="flex flex-col gap-2" style={{ paddingLeft: 30, paddingBottom: 30 }}>
             {minimapVisible && (
               <MiniMap
@@ -583,8 +583,8 @@ export default function InfiniteCanvas() {
             <CanvasControls
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenAssets={() => setAssetsOpen(true)}
-              onOpenCanvasSidebar={() => setCanvasSidebarOpen((v) => !v)}
-              canvasSidebarOpen={canvasSidebarOpen}
+              onOpenCanvasExplorer={() => setCanvasExplorerOpen((v) => !v)}
+              canvasExplorerOpen={canvasExplorerOpen}
             />
           </div>
         </Panel>
@@ -700,9 +700,9 @@ export default function InfiniteCanvas() {
         onClose={() => setAssetsOpen(false)}
       />
 
-      <CanvasSidebar
-        open={canvasSidebarOpen}
-        onClose={() => setCanvasSidebarOpen(false)}
+      <CanvasExplorer
+        open={canvasExplorerOpen}
+        onClose={() => setCanvasExplorerOpen(false)}
       />
 
       <ChatPanel
