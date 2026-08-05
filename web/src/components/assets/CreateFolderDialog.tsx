@@ -4,7 +4,7 @@ import { Input } from "antd";
 import { useState } from "react";
 
 import ModalButton from "@/components/common/ModalButton";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

@@ -6,9 +6,8 @@ import { Input } from "antd";
 import { memo } from "react";
 
 import { NODE_TYPE, type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/lib/types";
-import { NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE_COLOR } from "@/lib/constants";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useDirectorStore } from "@/director/store";
 import { useI18nStore } from "@/stores/i18n-store";

@@ -5,8 +5,7 @@ import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback,useState } from "react";
 
-import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { EventNames } from "@/lib/event-names";
+import { EventNames, GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import type { GroupNode as GroupNodeType } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";
 

@@ -2,7 +2,7 @@
 
 import { useCallback,useState } from "react";
 
-import { EventNames } from "@/lib/event-names";
+import { EventNames } from "@/lib/constants";
 
 /**
  * 节点标题编辑 hook。

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import ModalButton from "@/components/common/ModalButton";
 import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types";
 import { useI18nStore } from "@/stores/i18n-store";

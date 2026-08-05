@@ -12,15 +12,12 @@ import {
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
-import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/node-colors";
-
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress, BASE } from "@/lib/api";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { EventNames } from "@/lib/event-names";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
-import { isGenerating, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
+import { isGenerating, NODE_TYPE, type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types";
 import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { VolumeMuteIcon } from "@/components/common/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/common/icons/media/VolumeUpIcon";

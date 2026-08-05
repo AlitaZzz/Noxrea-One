@@ -3,7 +3,7 @@
 import type { Node } from "@xyflow/react";
 import { Descriptions, Typography } from "antd";
 
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 
 const { Paragraph } = Typography;
 

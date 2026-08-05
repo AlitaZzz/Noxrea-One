@@ -7,11 +7,9 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE_COLOR } from "@/lib/constants";
 import AudioWaveform from "./AudioWaveform";
-import { EventNames } from "@/lib/event-names";
 import { isGenerating, NODE_TYPE, type AudioNode as AudioNodeType, type AudioNodeData } from "@/lib/types";
-import { NODE_TYPE_COLOR } from "@/lib/node-colors";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

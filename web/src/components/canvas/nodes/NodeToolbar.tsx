@@ -19,7 +19,7 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopo
 import { GridSplitIcon } from "@/components/common/icons/canvas/GridSplitIcon";
 import { LightingIcon } from "@/components/common/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/common/icons/canvas/MultiAngleIcon";
-import { EventNames } from "@/lib/event-names";
+import { EventNames } from "@/lib/constants";
 import { useAssetsStore } from "@/stores/assets-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
