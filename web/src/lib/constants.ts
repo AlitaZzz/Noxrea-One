@@ -9,6 +9,8 @@ import type {
   BackgroundType,
   ThemeMode,
   ViewportState,
+} from "./types/canvas";
+import type {
   TaskBinding,
   UploadState,
 } from "./types/nodes";

@@ -63,7 +63,7 @@ import { useFileDrop } from "@/hooks/use-file-drop";
 import { useGroupOperations } from "@/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { EdgeHighlightContext } from "@/contexts/edge-highlight-context";
-import { createEdge } from "@/lib/node-defaults";
+import { createEdge } from "@/lib/nodes/node-defaults";
 import type { AnyNode } from "@/lib/types/nodes";
 import { NODE_TYPE_COLOR, NODE_TYPE } from "@/lib/constants";
 import { useAssetsStore } from "@/stores/assets-store";
