@@ -1,7 +1,7 @@
 /**
  * 导演台导航小地图的 SVG 容器，承载动态绘制的方位指示，供运行时按 id 查询。
  */
-import type { ReactNode, CSSProperties } from "react";
+import type { CSSProperties,ReactNode } from "react";
 
 interface NavSvgProps {
   children: ReactNode;

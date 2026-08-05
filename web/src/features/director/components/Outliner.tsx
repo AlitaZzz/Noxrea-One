@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 3D 导演台左侧场景大纲。
  * 树形列出场景中的实体与镜头，支持搜索、重命名、显隐切换、多选与删除。
  */
@@ -9,16 +9,16 @@ import { Button,Input } from "antd";
 import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { Entity } from "@/director/entities/entity";
-import { useDirectorStore } from "@/director/store";
-import { DirCameraIcon } from "@/components/common/icons/director/DirCameraIcon";
-import { DirCaretIcon } from "@/components/common/icons/director/DirCaretIcon";
-import { DirCubeIcon } from "@/components/common/icons/director/DirCubeIcon";
-import { DirEyeIcon } from "@/components/common/icons/director/DirEyeIcon";
-import { DirEyeOffIcon } from "@/components/common/icons/director/DirEyeOffIcon";
-import { DirGroupIcon } from "@/components/common/icons/director/DirGroupIcon";
-import { DirPersonIcon } from "@/components/common/icons/director/DirPersonIcon";
-import { DirTrashIcon } from "@/components/common/icons/director/DirTrashIcon";
+import { useDirectorStore } from "@/features/director/director-store";
+import type { Entity } from "@/features/director/entities/entity";
+import { DirCameraIcon } from "@/features/director/icons/DirCameraIcon";
+import { DirCaretIcon } from "@/features/director/icons/DirCaretIcon";
+import { DirCubeIcon } from "@/features/director/icons/DirCubeIcon";
+import { DirEyeIcon } from "@/features/director/icons/DirEyeIcon";
+import { DirEyeOffIcon } from "@/features/director/icons/DirEyeOffIcon";
+import { DirGroupIcon } from "@/features/director/icons/DirGroupIcon";
+import { DirPersonIcon } from "@/features/director/icons/DirPersonIcon";
+import { DirTrashIcon } from "@/features/director/icons/DirTrashIcon";
 
 const ICON_MAP = {
   camera: DirCameraIcon,

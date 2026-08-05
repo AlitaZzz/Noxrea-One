@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 3D 导演台右侧属性检视器。
  * 按选中实体类型渲染对应属性：通用变换（位移 / 旋转 / 缩放）、
  * 角色体型与姿态（内嵌 PoseSliders）、群组参数、相机焦距与预览出图等。
@@ -10,20 +10,21 @@ import { Button, ColorPicker, Input, InputNumber,Select, Slider, Tooltip } from 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-import { CameraEntity } from "@/director/entities/camera";
-import { Character } from "@/director/entities/character";
-import { Crowd } from "@/director/entities/crowd";
-import { POSE_PRESETS } from "@/director/entities/pose-presets";
-import { renderCameraThumbnail } from "@/director/util/camera-preview";
-import { worldBox } from "@/director/util/measure";
-import { DirectorEntityMeta, DirectorRuntime, useDirectorStore } from "@/director/store";
+import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
+import { CameraEntity } from "@/features/director/entities/camera";
+import { Character } from "@/features/director/entities/character";
+import { Crowd } from "@/features/director/entities/crowd";
+import { POSE_PRESETS } from "@/features/director/entities/pose-presets";
+import { DirExpandIcon } from "@/features/director/icons/DirExpandIcon";
+import { DirEyeIcon } from "@/features/director/icons/DirEyeIcon";
+import { DirEyeOffIcon } from "@/features/director/icons/DirEyeOffIcon";
+import { DirSendIcon } from "@/features/director/icons/DirSendIcon";
+import { DirTrashIcon } from "@/features/director/icons/DirTrashIcon";
+import type { DirectorEntityMeta } from "@/features/director/types";
+import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
+import { worldBox } from "@/features/director/util/measure";
 
 import PoseSliders from "./PoseSliders";
-import { DirEyeIcon } from "@/components/common/icons/director/DirEyeIcon";
-import { DirEyeOffIcon } from "@/components/common/icons/director/DirEyeOffIcon";
-import { DirExpandIcon } from "@/components/common/icons/director/DirExpandIcon";
-import { DirTrashIcon } from "@/components/common/icons/director/DirTrashIcon";
-import { DirSendIcon } from "@/components/common/icons/director/DirSendIcon";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;

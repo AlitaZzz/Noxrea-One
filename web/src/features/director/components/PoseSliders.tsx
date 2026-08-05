@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 角色骨骼姿态调节滑杆组。
  * 依据关节配置按部位 / 左右分组渲染滑杆，内部维持本地值以保证拖拽流畅，
  * 并通过 syncRef 支持外部（如姿态预设应用后）强制回填。
@@ -8,7 +8,7 @@
 import { Slider } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { groupJoints, type Joint } from "@/director/entities/joint-config";
+import { groupJoints, type Joint } from "@/features/director/entities/joint-config";
 
 interface Props {
   characterId: string;

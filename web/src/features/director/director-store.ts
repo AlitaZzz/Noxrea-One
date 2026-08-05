@@ -1,55 +1,24 @@
-/**
+﻿/**
  * 3D 导演台状态仓库。
  * 保存实体元数据列表、选中项、变换模式、场景设置与出图记录，
  * 并提供场景状态的序列化 / 反序列化（与 Director 节点数据互通）。
  * 真正的 Three.js 对象保存在运行时 ref 中，不进入本 store。
  */
 import { create } from "zustand";
-import type { CameraEntity } from "@/director/entities/camera";
-import type { Character } from "@/director/entities/character";
-import type { Crowd } from "@/director/entities/crowd";
-import type { Prop } from "@/director/entities/prop";
-import type { Stage } from "@/director/core/stage";
 
-/** 导演场景中所有实体类型的联合（角色/道具/相机/群众）。 */
-export type DirectorEntity = Character | Prop | CameraEntity | Crowd;
-
+import type { Stage } from "@/features/director/core/stage";
 import type { DirectorStateData } from "@/lib/types/nodes";
 
-// --- Entity metadata (Three.js objects live in ref, not here) ---
-
-export interface DirectorEntityMeta {
-  id: string;
-  type: "character" | "prop" | "camera" | "crowd";
-  name: string;
-  visible: boolean;
-  _members?: DirectorEntityMeta[];
-}
-
-export interface Shot {
-  id: string;
-  url: string;
-  name: string;
-  cameraId: string;
-  createdAt: number;
-  selected?: boolean;
-}
-
-export interface SceneState {
-  scale: number;
-  pos: { x: number; y: number; z: number };
-  rot: { x: number; y: number; z: number };
-  sky: string;
-  labels: boolean;
-  ground: {
-    visible: boolean;
-    opacity: number;
-    height: number;
-  };
-  panoActive: boolean;
-  panoRot: number;
-  panoRadius: number;
-}
+import type {
+  CameraEntity,
+  Character,
+  Crowd,
+  DirectorEntity,
+  DirectorEntityMeta,
+  Prop,
+  SceneState,
+  Shot,
+} from "./types";
 
 // --- Runtime ref interface (exposed by DirectorViewport via useImperativeHandle) ---
 // UI calls these, DirectorViewport executes Three.js logic.

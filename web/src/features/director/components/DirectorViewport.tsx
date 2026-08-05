@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 3D 导演台的三维视口与运行时宿主。
  * 负责初始化 Three.js 舞台、相机装置、选择与变换控件、导航小方块，
  * 管理角色 / 群组 / 道具 / 相机等实体的增删与场景状态的存取，
@@ -10,23 +10,24 @@ import { App } from "antd";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-import type { CameraPresetCtx } from "@/director/core/camera-presets";
-import { CAMERA_PRESETS } from "@/director/core/camera-presets";
-import { CameraRig } from "@/director/core/camera-rig";
-import { NavGizmo } from "@/director/core/nav-gizmo";
-import { Selection } from "@/director/core/selection";
-import { Stage } from "@/director/core/stage";
-import { TransformGizmo } from "@/director/core/transform-gizmo";
-import { CameraEntity } from "@/director/entities/camera";
-import { Character } from "@/director/entities/character";
-import { Crowd } from "@/director/entities/crowd";
-import { Prop } from "@/director/entities/prop";
-import { worldBox } from "@/director/util/measure";
+import type { CameraPresetCtx } from "@/features/director/core/camera-presets";
+import { CAMERA_PRESETS } from "@/features/director/core/camera-presets";
+import { CameraRig } from "@/features/director/core/camera-rig";
+import { NavGizmo } from "@/features/director/core/nav-gizmo";
+import { Selection } from "@/features/director/core/selection";
+import { Stage } from "@/features/director/core/stage";
+import { TransformGizmo } from "@/features/director/core/transform-gizmo";
+import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
+import { CameraEntity } from "@/features/director/entities/camera";
+import { Character } from "@/features/director/entities/character";
+import { Crowd } from "@/features/director/entities/crowd";
+import { Prop } from "@/features/director/entities/prop";
+import { NavSvg } from "@/features/director/icons/NavSvg";
+import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
+import { worldBox } from "@/features/director/util/measure";
 import { createNodeFromUrl,uploadBlob } from "@/lib/image-utils";
 import type { DirectorEntityState, DirectorStateData } from "@/lib/types/nodes";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { DirectorEntityMeta, DirectorRuntime, DirectorEntity, useDirectorStore } from "@/director/store";
-import { NavSvg } from "@/components/common/icons/director/NavSvg";
 
 type _SceneSnapshot = {
   scale?: number;
@@ -807,7 +808,7 @@ export default function DirectorViewport() {
             const layer = document.getElementById("dirLabelLayer");
             if (layer) layer.style.display = ss.labels ? "block" : "none";
           }
-          useDirectorStore.getState().setSceneState(ss as unknown as Partial<import("@/director/store").SceneState>);
+          useDirectorStore.getState().setSceneState(ss as unknown as Partial<import("@/features/director/types").SceneState>);
         }
         if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
         if (data.shots) {
