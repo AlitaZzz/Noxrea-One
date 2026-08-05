@@ -1,3 +1,9 @@
+/**
+ * 画布页面（/canvas）。
+ * 拉取并恢复当前激活项目到画布状态，装配 ReactFlowProvider、AppShell 与画布主体，
+ * 并挂载两个页面级浮层：快捷键说明弹窗、Director 全屏编辑器。
+ * 无激活项目时回退到 /project。
+ */
 "use client";
 
 import { ReactFlowProvider } from "@xyflow/react";

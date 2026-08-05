@@ -1,3 +1,8 @@
+/**
+ * 项目列表页（/project）。
+ * 展示当前用户的全部画布项目（新建卡片 + 项目网格），支持新建、打开、重命名、删除；
+ * 顶部头像菜单提供账户设置入口与语言 / 主题偏好切换、退出登录。
+ */
 "use client";
 
 import { ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";

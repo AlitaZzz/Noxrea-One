@@ -1,3 +1,7 @@
+/**
+ * (app) 路由组布局：统一鉴权守卫与全局初始化。
+ * 未登录重定向到 /login，登录后预加载语言、主题与项目列表，就绪前不渲染子页面。
+ */
 "use client";
 
 import { useEffect, useState } from "react";

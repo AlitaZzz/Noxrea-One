@@ -1,3 +1,8 @@
+/**
+ * Next.js 应用根布局（Root Layout）。
+ * 定义 <html>/<body> 骨架、站点 metadata，并挂载全局 Provider 树。
+ * 不含任何业务逻辑，仅做最外层装配。
+ */
 import "./globals.css";
 
 import type { Metadata } from "next";

@@ -1,3 +1,8 @@
+/**
+ * 全局 Provider 聚合层。
+ * 统一装配 React Query 客户端、Ant Design 主题（明暗双套 token 与组件级覆写）、
+ * 全局 message API 注册（供 React 树外代码调用）以及 <html lang> 语言同步。
+ */
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
