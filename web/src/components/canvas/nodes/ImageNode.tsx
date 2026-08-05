@@ -28,11 +28,10 @@ import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
 import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/image-utils";
+import { isGenerating, NODE_TYPE } from "@/lib/constants";
 import {
   type ImageNode as ImageNodeType,
   type ImageNodeData,
-  isGenerating,
-  NODE_TYPE,
 } from "@/lib/types";
 import { useAssetsStore } from "@/stores/assets-store";
 import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";

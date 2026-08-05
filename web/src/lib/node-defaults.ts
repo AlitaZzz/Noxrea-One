@@ -17,6 +17,7 @@ import {
   TEXT_NODE_MIN_WIDTH,
   TEXT_NODE_MIN_HEIGHT,
 } from "@/lib/constants";
+import { NODE_TYPE } from "@/lib/constants";
 import {
   type AnyNode,
   type AudioNode,
@@ -26,7 +27,6 @@ import {
   type GroupNodeData,
   type ImageNode,
   type ImageNodeData,
-  NODE_TYPE,
   type TextNode,
   type TextNodeData,
   type VideoNode,

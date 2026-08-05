@@ -6,7 +6,7 @@ import { GroupOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined 
 
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
-import { NODE_TYPE } from "@/lib/types";
+import { NODE_TYPE } from "@/lib/constants";
 
 /** 节点类型 -> i18n key 映射 */
 export const NODE_TYPE_I18N: Record<string, string> = {

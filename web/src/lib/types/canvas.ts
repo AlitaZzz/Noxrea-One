@@ -1,6 +1,7 @@
 /**
- * 画布基础类型定义。
- * 包含连线别名、背景与主题枚举、视口结构，以及节点类型常量 NODE_TYPE。
+ * 画布基础类型定义（纯类型）。
+ * 包含连线别名、背景与主题枚举、视口结构。
+ * 节点类型常量 NODE_TYPE 已迁移至 lib/constants.ts。
  */
 import type { Edge } from "@xyflow/react";
 
@@ -18,16 +19,3 @@ export interface ViewportState {
   y: number;
   zoom: number;
 }
-
-// ============================================================
-// 节点类型枚举
-// ============================================================
-
-export const NODE_TYPE = {
-  TEXT: "text-node",
-  IMAGE: "image-node",
-  VIDEO: "video-node",
-  AUDIO: "audio-node",
-  DIRECTOR: "director-node",
-  GROUP: "group-node",
-} as const;
