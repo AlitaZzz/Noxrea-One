@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent-tools";
 import { showGlobalMessage } from "@/lib/global-message";
-import { getTokenHeader } from "@/lib/api";
+import { apiStream } from "@/lib/api";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
@@ -173,11 +173,10 @@ export function useChatStream(modelId: string) {
       const body: Record<string, unknown> = { messages: history };
       if (skills && skills.length > 0) body.skills = skills.map((s) => s.name);
 
-      const res = await fetch(
+      const res = await apiStream(
         `/api/chat/stream?sessionId=${encodeURIComponent(sessionId)}&model=${encodeURIComponent(modelId)}&agent=1`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...getTokenHeader() },
           body: JSON.stringify(body),
           signal: ctrl.signal,
         }

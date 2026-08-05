@@ -5,7 +5,7 @@
  */
 import { create } from "zustand";
 
-import { api, BASE,getTokenHeader } from "@/lib/api";
+import { api, apiRaw } from "@/lib/api";
 import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types/models";
 
 interface RawModelEntry {
@@ -182,9 +182,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
       return { success: false, error: "Channel has no baseUrl configured. Please update the channel URL." };
     }
     try {
-      const res = await fetch(`${BASE}/api/models/list`, {
+      const res = await apiRaw(`/api/models/list`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({ channelId: channelId }),
       });
       const json = await res.json();

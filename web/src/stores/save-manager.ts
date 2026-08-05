@@ -12,7 +12,7 @@
  * 仅支持登录用户，画布不允许游客访问。
  */
 
-import { BASE, checkUnauthorized,getTokenHeader } from "@/lib/api";
+import { apiRaw } from "@/lib/api";
 import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
 import { useProjectStore } from "@/stores/project-store";
 
@@ -258,19 +258,16 @@ class SaveManager {
     }
 
     const body = JSON.stringify(payload);
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const auth = getTokenHeader().Authorization;
-    if (auth) headers["Authorization"] = auth;
 
-    const res = await fetch(`${BASE}/api/canvas/projects/${id}`, {
+    const res = await apiRaw(`/api/canvas/projects/${id}`, {
       method: "PUT",
-      headers,
       body,
       keepalive,
+      // keepalive 请求无法读取响应体，且页面即将卸载时无需处理 401
+      skipUnauthorized: keepalive,
     });
 
-    // keepalive 请求无法读取响应体，且页面即将卸载时无需处理 401
-    if (!keepalive && checkUnauthorized(res.status)) return;
+    if (!keepalive && res.status === 401) return;
 
     fingerprintMap.set(projectId, currentFp);
   }

@@ -10,7 +10,7 @@ import { App, Button,Progress, Select } from "antd";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import ModalButton from "@/components/common/ModalButton";
-import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
+import { apiRaw, apiUpload, apiUploadWithProgress } from "@/lib/api";
 import AppModal from "@/components/common/AppModal";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types/assets";
@@ -162,10 +162,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       if (isVideo(file) && uploadResult.key) {
         (async () => {
           try {
-            const token = localStorage.getItem("noxrea-auth-token") || "";
-            const res = await fetch(`${BASE}/api/files/capture-frame`, {
+            const res = await apiRaw(`/api/files/capture-frame`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
               body: JSON.stringify({ video_key: uploadResult.key, time: 0.1 }),
             });
             if (res.ok) {

@@ -140,6 +140,41 @@ export function apiUploadWithProgress<T = unknown>(
   });
 }
 
+// --- 原始请求底座（供 keepalive / 流式 / 自定义解析使用） ---
+/**
+ * 低层 fetch 封装：自动注入同源 BASE、token 头与 401 拦截，
+ * 返回原始 Response，行为与 fetch 一致（不解析 JSON、不包裹返回值）。
+ * 适用于需要 keepalive、流式读取或自定义响应解析的请求。
+ * 普通 JSON 请求请直接使用 api() / apiUpload()。
+ */
+export async function apiRaw(
+  path: string,
+  options: RequestInit & { skipUnauthorized?: boolean } = {}
+): Promise<Response> {
+  const { skipUnauthorized, ...fetchOptions } = options;
+  const res = await fetch(`${BASE}${path}`, {
+    ...fetchOptions,
+    headers: {
+      "Content-Type": "application/json",
+      ...getTokenHeader(),
+      ...(fetchOptions.headers || {}),
+    },
+  });
+  if (!skipUnauthorized) checkUnauthorized(res.status);
+  return res;
+}
+
+/**
+ * 流式请求封装：基于 apiRaw 返回原始 Response，
+ * 调用方通过 res.body.getReader() 读取 SSE / 分块流。
+ */
+export async function apiStream(
+  path: string,
+  options: RequestInit & { skipUnauthorized?: boolean } = {}
+): Promise<Response> {
+  return apiRaw(path, options);
+}
+
 // --- Asset API ---
 
 export interface AssetFolderDto {

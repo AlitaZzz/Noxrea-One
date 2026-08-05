@@ -43,7 +43,7 @@ import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore } from "@/stores/canvas-store";
-import { getTokenHeader } from "@/lib/api";
+import { apiRaw } from "@/lib/api";
 
 interface Props {
   open: boolean;
@@ -83,7 +83,7 @@ export default function ChatPanel({ open, onClose }: Props) {
   // 拉取技能名列表，供斜杠命令解析时使用
   useEffect(() => {
     let alive = true;
-    fetch("/api/chat/skills", { headers: { ...getTokenHeader() } })
+    apiRaw("/api/chat/skills")
       .then((r) => (r.ok ? r.json() : []))
       .then((list: { name: string; displayTitle?: string }[]) => {
         if (alive && Array.isArray(list)) setSkillNames(list);
