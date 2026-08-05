@@ -30,7 +30,8 @@ import { AssetHoverPreview,useAssetHoverPreview } from "@/components/common/Asse
 import { MenuDivider } from "@/components/common/MenuPopover";
 import { createAssetNode } from "@/lib/add-asset";
 import { assetApi } from "@/lib/api";
-import type { AnyNode, AssetFolder, AssetItem, AssetType } from "@/lib/types";
+import type { AnyNode } from "@/lib/types/nodes";
+import type { AssetFolder, AssetItem, AssetType } from "@/lib/types/assets";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";

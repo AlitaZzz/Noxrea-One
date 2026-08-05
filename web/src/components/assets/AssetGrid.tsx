@@ -8,7 +8,7 @@
 import { Empty, Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 
-import type { AssetFolder,AssetItem } from "@/lib/types";
+import type { AssetFolder,AssetItem } from "@/lib/types/assets";
 import { UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import { useI18nStore } from "@/stores/i18n-store";
 

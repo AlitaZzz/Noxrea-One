@@ -7,7 +7,9 @@ import { create } from "zustand";
 
 import { api } from "@/lib/api";
 import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
-import type { AnyEdge, AnyNode, BackgroundType, CanvasProject, ThemeMode,ViewportState } from "@/lib/types";
+import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/lib/types/canvas";
+import type { AnyNode } from "@/lib/types/nodes";
+import type { CanvasProject } from "@/lib/types/project";
 
 // ===== localStorage helpers (active project only) =====
 

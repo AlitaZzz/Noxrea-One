@@ -15,7 +15,7 @@ import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/node-defaults";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import type { GenSettings, TextNodeData } from "@/lib/types";
+import type { GenSettings, TextNodeData } from "@/lib/types/nodes";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";

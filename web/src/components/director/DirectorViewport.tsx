@@ -23,7 +23,7 @@ import { Crowd } from "@/director/entities/crowd";
 import { Prop } from "@/director/entities/prop";
 import { worldBox } from "@/director/util/measure";
 import { createNodeFromUrl,uploadBlob } from "@/lib/image-utils";
-import type { DirectorEntityState, DirectorStateData } from "@/lib/types";
+import type { DirectorEntityState, DirectorStateData } from "@/lib/types/nodes";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { DirectorEntityMeta, DirectorRuntime, DirectorEntity, useDirectorStore } from "@/director/store";
 import { NavSvg } from "@/components/common/icons/director/NavSvg";

@@ -26,7 +26,7 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/common/MenuPopo
 import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
 import { MagnetIcon } from "@/components/common/icons/canvas/MagnetIcon";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
-import type { BackgroundType } from "@/lib/types";
+import type { BackgroundType } from "@/lib/types/canvas";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";

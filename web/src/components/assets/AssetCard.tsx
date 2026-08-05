@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import { useLayerOverlay } from "@/components/overlays/layer";
-import type { AssetItem } from "@/lib/types";
+import type { AssetItem } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

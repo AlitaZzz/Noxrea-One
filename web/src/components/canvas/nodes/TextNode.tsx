@@ -11,7 +11,7 @@ import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { EventNames, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH, isGenerating, NODE_TYPE } from "@/lib/constants";
-import type { TextNode as TextNodeType } from "@/lib/types";
+import type { TextNode as TextNodeType } from "@/lib/types/nodes";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useEditableTitle } from "@/hooks/use-editable-title";

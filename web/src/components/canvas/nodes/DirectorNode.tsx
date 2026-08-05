@@ -10,7 +10,7 @@ import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
 
-import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/lib/types";
+import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/lib/types/nodes";
 import { useEditableTitle } from "@/hooks/use-editable-title";
 import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE_COLOR, NODE_TYPE } from "@/lib/constants";
 import { useCanvasStore } from "@/stores/canvas-store";

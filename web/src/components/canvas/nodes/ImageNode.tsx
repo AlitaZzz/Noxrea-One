@@ -32,7 +32,7 @@ import { isGenerating, NODE_TYPE } from "@/lib/constants";
 import {
   type ImageNode as ImageNodeType,
   type ImageNodeData,
-} from "@/lib/types";
+} from "@/lib/types/nodes";
 import { useAssetsStore } from "@/stores/assets-store";
 import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";

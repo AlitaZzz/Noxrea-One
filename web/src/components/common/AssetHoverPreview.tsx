@@ -8,7 +8,7 @@
 import { type MouseEvent,useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { AssetItem } from "@/lib/types";
+import type { AssetItem } from "@/lib/types/assets";
 
 const PREVIEW_W = 400;
 const PREVIEW_MAX_H = 340;

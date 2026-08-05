@@ -26,7 +26,7 @@ import { VirtualList } from "@/components/common/VirtualList";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { EyeIcon } from "@/components/common/icons/EyeIcon";
 import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
-import type { ModelCapability, ModelInfo } from "@/lib/types";
+import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import { useCanvasStore } from "@/stores/canvas-store";

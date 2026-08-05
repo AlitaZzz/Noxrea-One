@@ -9,7 +9,9 @@ import { create } from "zustand";
 
 import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
 import { saveManager } from "@/stores/save-manager";
-import type { AnyNode,BackgroundType, HistorySnapshot, ThemeMode, ViewportState } from "@/lib/types";
+import type { BackgroundType, ThemeMode, ViewportState } from "@/lib/types/canvas";
+import type { AnyNode } from "@/lib/types/nodes";
+import type { HistorySnapshot } from "@/lib/types/project";
 import { useHistoryStore } from "@/stores/history-store";
 
 /** updateNodeData 自动压栈防抖时间（ms） */

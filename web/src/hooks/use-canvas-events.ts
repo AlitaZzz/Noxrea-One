@@ -7,7 +7,7 @@
 
 import { useEffect } from "react";
 
-import { useCtxMenu } from "@/stores/context-menu-store";
+import { useContextMenuStore } from "@/stores/context-menu-store";
 import { EventNames } from "@/lib/constants";
 import { markDirty, markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useSelectionStore } from "@/stores/selection-store";
@@ -23,7 +23,7 @@ export function useCanvasEvents() {
   const copySelected = useSelectionStore((s) => s.copySelected);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
   const removeEdges = useCanvasStore((s) => s.removeEdges);
-  const showCtx = useCtxMenu((s) => s.show);
+  const showCtx = useContextMenuStore((s) => s.show);
 
   // 1) node:update-data
   useEffect(() => {

@@ -14,7 +14,7 @@ import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE_COLOR, isGenerating, NODE_TYPE } from "@/lib/constants";
 import AudioWaveform from "./AudioWaveform";
-import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/lib/types";
+import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/lib/types/nodes";
 import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

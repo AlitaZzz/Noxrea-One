@@ -11,7 +11,7 @@ import { apiUploadWithProgress } from "@/lib/api";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/image-utils";
 import { createAudioNode, createImageNode, createVideoNode } from "@/lib/node-defaults";
-import type { AudioNode, ImageNode, VideoNode } from "@/lib/types";
+import type { AudioNode, ImageNode, VideoNode } from "@/lib/types/nodes";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

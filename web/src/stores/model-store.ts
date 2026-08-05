@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { api, BASE,getTokenHeader } from "@/lib/api";
-import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types";
+import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types/models";
 
 interface RawModelEntry {
   id?: string;

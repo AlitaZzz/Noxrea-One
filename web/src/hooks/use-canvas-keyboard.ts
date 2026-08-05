@@ -10,7 +10,7 @@ import { useEffect } from "react";
 
 import { EventNames, PASTE_OFFSET, isGenerating } from "@/lib/constants";
 import { duplicateNode } from "@/lib/node-defaults";
-import type { MediaGenFields } from "@/lib/types";
+import type { MediaGenFields } from "@/lib/types/nodes";
 import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useSelectionStore } from "@/stores/selection-store";
