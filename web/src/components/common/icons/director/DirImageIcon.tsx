@@ -1,3 +1,6 @@
+/**
+ * 导演台图片图标，用于出图结果相关操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

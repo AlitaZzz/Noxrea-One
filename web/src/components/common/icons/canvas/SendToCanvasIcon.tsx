@@ -1,3 +1,6 @@
+/**
+ * 插入画布图标，用于把资产送入画布的操作入口。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

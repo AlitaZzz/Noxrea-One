@@ -1,3 +1,6 @@
+/**
+ * 导演台折叠箭头图标，用于大纲树的展开收起。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

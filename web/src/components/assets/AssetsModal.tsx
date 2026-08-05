@@ -1,3 +1,9 @@
+/**
+ * 资产库主弹窗，资产模块的容器与编排层。
+ * 组合左侧空间 / 文件夹树、顶部分类页签与工具条、主体资产网格，
+ * 统一处理分页加载、搜索筛选、批量选择与批量删除 / 移动 / 改类型、
+ * 文件夹增删，以及「插入画布」（经 createAssetNode 转成画布节点）。
+ */
 "use client";
 
 import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";

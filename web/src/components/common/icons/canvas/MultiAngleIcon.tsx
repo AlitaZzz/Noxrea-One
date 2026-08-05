@@ -1,3 +1,6 @@
+/**
+ * 多视角图标，用于节点工具条的换机位操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

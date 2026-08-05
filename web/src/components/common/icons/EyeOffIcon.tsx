@@ -1,3 +1,6 @@
+/**
+ * 闭眼图标，用于密码输入框的密文隐藏态。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

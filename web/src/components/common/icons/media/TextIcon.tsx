@@ -1,3 +1,6 @@
+/**
+ * 文本图标，代表文本类型节点。
+ */
 "use client";
 
 import type { CSSProperties } from "react";

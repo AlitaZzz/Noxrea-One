@@ -1,3 +1,6 @@
+/**
+ * 导演台发送图标，用于把渲染结果送回画布。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

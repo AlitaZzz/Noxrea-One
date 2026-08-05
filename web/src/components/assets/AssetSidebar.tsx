@@ -1,3 +1,8 @@
+/**
+ * 资产库左侧导航栏。
+ * 上部为空间切换（个人 / 公共等），下部以递归树形展示文件夹层级与资产计数，
+ * 支持选中定位与删除文件夹。
+ */
 "use client";
 
 import { FolderOutlined } from "@ant-design/icons";

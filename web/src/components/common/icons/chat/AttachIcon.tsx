@@ -1,3 +1,6 @@
+/**
+ * 附件图标，用于对话面板的文件上传入口。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

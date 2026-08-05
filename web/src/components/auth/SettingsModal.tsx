@@ -1,3 +1,8 @@
+/**
+ * 账户设置弹窗。
+ * 修改当前登录用户的头像（经裁剪弹窗上传）、昵称与登录密码，
+ * 保存后同步更新 auth store 中的用户信息。与模型 / 渠道配置无关。
+ */
 "use client";
 
 import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";

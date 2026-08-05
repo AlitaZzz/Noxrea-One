@@ -1,3 +1,6 @@
+/**
+ * 导演台立方体图标，代表道具实体。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

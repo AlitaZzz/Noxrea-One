@@ -1,3 +1,6 @@
+/**
+ * 导演台人物图标，代表角色实体。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,8 @@
+/**
+ * 通用下拉菜单组件族。
+ * 导出菜单容器 MenuPopover 及其内部条目 MenuItem、分割线 MenuDivider，
+ * 统一菜单的样式与交互，纯展示无业务逻辑。
+ */
 "use client";
 
 import { Popover } from "antd";

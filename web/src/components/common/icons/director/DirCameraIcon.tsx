@@ -1,3 +1,6 @@
+/**
+ * 导演台相机图标，用于添加相机实体。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 导演台群组图标，代表群众实体。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 导演台可见图标，用于实体显隐切换的显示态。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 浅色主题图标，用于主题切换按钮。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

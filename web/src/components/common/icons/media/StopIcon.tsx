@@ -1,3 +1,6 @@
+/**
+ * 停止图标，用于中断播放或生成任务。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

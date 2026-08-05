@@ -1,3 +1,6 @@
+/**
+ * 对齐参考线的 SVG 覆盖层容器，承载动态生成的参考线，自身不做计算。
+ */
 import type { ReactNode, CSSProperties } from "react";
 
 interface OverlayProps {

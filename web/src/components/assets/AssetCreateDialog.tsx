@@ -1,3 +1,8 @@
+/**
+ * 资产上传弹窗。
+ * 支持多文件选择与拖入，限并发上传并展示单文件进度，
+ * 自动提取图片 / 视频尺寸与视频封面，最后按所选分类与文件夹批量创建资产。
+ */
 "use client";
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";

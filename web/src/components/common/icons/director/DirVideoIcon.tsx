@@ -1,3 +1,6 @@
+/**
+ * 导演台视频图标，用于视频相关操作入口。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 有声图标，用于视频播放器的音量状态。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

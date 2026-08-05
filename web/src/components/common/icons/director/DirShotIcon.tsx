@@ -1,3 +1,6 @@
+/**
+ * 导演台镜头图标，用于机位预设选择。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

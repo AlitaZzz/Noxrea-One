@@ -1,3 +1,6 @@
+/**
+ * 打光图标，用于节点工具条的图片打光操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

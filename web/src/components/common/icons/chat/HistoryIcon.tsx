@@ -1,3 +1,6 @@
+/**
+ * 历史会话图标，用于对话面板的会话列表入口。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

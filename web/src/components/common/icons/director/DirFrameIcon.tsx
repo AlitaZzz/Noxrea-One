@@ -1,3 +1,6 @@
+/**
+ * 导演台取景框图标，用于画幅比例设置。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 导演台展开图标，用于面板放大或全屏预览。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

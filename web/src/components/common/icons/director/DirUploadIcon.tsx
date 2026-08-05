@@ -1,3 +1,6 @@
+/**
+ * 导演台上传图标，用于导入模型或贴图。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

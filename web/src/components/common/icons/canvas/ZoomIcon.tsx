@@ -1,3 +1,6 @@
+/**
+ * 缩放图标，用于画布控制条的视图缩放。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

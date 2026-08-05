@@ -1,3 +1,6 @@
+/**
+ * AI 助手图标，用于对话面板入口。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

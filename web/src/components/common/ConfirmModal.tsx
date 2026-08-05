@@ -1,3 +1,7 @@
+/**
+ * 通用二次确认弹窗。
+ * 接收标题与正文文案，渲染取消 / 确定两个按钮，按钮文案缺省时按当前语言取默认值。
+ */
 "use client";
 
 import ModalButton from "@/components/common/ModalButton";

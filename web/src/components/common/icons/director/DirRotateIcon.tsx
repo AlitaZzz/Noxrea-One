@@ -1,3 +1,6 @@
+/**
+ * 导演台旋转图标，用于旋转变换模式。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {
