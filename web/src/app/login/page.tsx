@@ -1,3 +1,9 @@
+/**
+ * 登录 / 注册页面。
+ * 左侧为品牌展示区（自动扫描 public/login-bg 下的视频做轮播背景），
+ * 右侧为登录/注册表单：自定义字段校验、密码可见切换，提交后调用 auth store
+ * 完成登录或注册并跳转回根路由分流。
+ */
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
