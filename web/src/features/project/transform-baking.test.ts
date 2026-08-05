@@ -18,8 +18,8 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/image-utils";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/image-utils";
 
 // ── Mock Zustand stores ────────────────────────────────────────
 const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
