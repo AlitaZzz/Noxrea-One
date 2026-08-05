@@ -50,6 +50,20 @@ Web (Next.js)                    Server (Hono + Node.js)
 
 前端通过 `next.config.ts` 的 rewrites 将 `/api/*` 透明代理到后端，无 CORS。Worker 与 HTTP 同进程运行，任务完成后经 SSE 实时推送。
 
+## 前端架构分层
+
+前端通过 `eslint-plugin-boundaries` 强制分层依赖约束（`web/eslint.config.mjs`），各层只能向下依赖，禁止反向/跨层调用。分层定义：
+
+| 层 (type) | 路径 | 允许依赖 |
+|-----------|------|----------|
+| `app` | `src/app` | app, feature, ui, lib, store |
+| `feature` | `src/features/*` | feature, ui, lib, store |
+| `ui` | `src/components/ui` | ui, lib |
+| `store` | `src/**/stores/*` | store, lib |
+| `lib` | `src/lib` | lib |
+
+> `src/components` 下仅保留 `ui`（通用组件）、`layout`、`auth`、`assets` 等展示型目录；业务编排统一收敛到 `src/features`（canvas / director / agent / assets / project）。
+
 ## 快速开始
 
 ### 前置条件
@@ -115,30 +129,50 @@ npm run start    # 启动 Web + Server 生产进程
 
 ```
 Noxrea-AI-Canvas/
-├── web/                # Next.js 前端 (npm workspace 子包)
+├── web/                     # Next.js 前端 (npm workspace 子包)
 │   └── src/
-│       ├── app/            # App Router 页面
-│       ├── components/     # React 组件（canvas/panels/chat/nodes 等）
-│       ├── stores/         # Zustand 状态管理
-│       ├── hooks/          # 自定义 hooks
-│       ├── lib/            # 纯工具层（零 store/component 依赖）
-│       ├── director/       # 3D 引擎逻辑 (纯 TS)
-│       └── i18n/           # 国际化资源
-├── server/            # Node.js 后端 (HTTP + Worker 同进程)
-│   ├── http/              # Hono 路由层
-│   ├── core/              # 基础设施 (config/auth/database/logger/ssrf)
-│   ├── crud/              # 数据访问层
-│   ├── schemas/           # Zod schema + snake_case 映射
-│   └── services/          # 业务逻辑
-│       ├── capabilities/     # 能力服务 (image/video/llm/audio)
-│       ├── protocols/        # 协议适配 (openai/gemini/ark)
-│       ├── gateway/          # Gateway 注册中心
-│       ├── worker/           # Worker 循环 + 任务执行
-│       ├── tasks/            # 异步轮询管理器
-│       └── storage/          # 存储后端 (本地/S3)
-├── prisma/            # Prisma schema + 迁移
-├── docs/              # 项目文档
-└── package.json       # 根配置 (workspaces + 统一脚本)
+│       ├── app/             # App Router 页面与路由布局
+│       ├── components/      # 展示型组件
+│       │   ├── ui/          # 通用基础组件（受 boundaries 约束）
+│       │   ├── layout/      # 布局组件
+│       │   ├── auth/        # 鉴权相关组件
+│       │   └── assets/      # 素材展示组件
+│       ├── features/        # 业务编排（按领域拆分）
+│       │   ├── canvas/      # 画布节点 / 面板 / 检视器
+│       │   ├── director/    # 3D 导演模式
+│       │   ├── agent/       # AI 智能体
+│       │   ├── assets/      # 资源管理
+│       │   └── project/     # 项目管理
+│       ├── stores/          # Zustand 状态管理（按领域拆分）
+│       ├── hooks/           # 自定义 hooks
+│       ├── providers/       # 全局 Provider
+│       ├── lib/             # 纯工具层（零 store/component 依赖）
+│       │   ├── api/         # 后端 API 客户端
+│       │   ├── canvas/      # 画布计算工具
+│       │   ├── types/       # 共享类型
+│       │   └── utils/       # 通用工具函数
+│       ├── director/        # 3D 引擎逻辑 (纯 TS)
+│       ├── i18n/            # 国际化资源
+│       └── styles/          # 全局样式
+├── server/                  # Node.js 后端 (HTTP + Worker 同进程)
+│   ├── http/               # Hono 路由层
+│   ├── core/               # 基础设施 (config/auth/database/logger/ssrf)
+│   ├── crud/               # 数据访问层
+│   ├── schemas/            # Zod schema + snake_case 映射
+│   ├── resources/          # 资源与配置模板
+│   └── services/           # 业务逻辑
+│       ├── capabilities/   # 能力服务 (image/video/llm/audio)
+│       ├── protocols/      # 协议适配 (openai/gemini/ark)
+│       ├── gateway/        # Gateway 注册中心
+│       ├── agent/          # 智能体服务
+│       ├── model-config/   # 模型配置
+│       ├── request-builder/ # 请求构造
+│       ├── resolvers/      # 解析器
+│       ├── storage/        # 存储后端 (本地/S3)
+│       ├── tasks/          # 异步轮询管理器
+│       └── worker/         # Worker 循环 + 任务执行
+├── prisma/                 # Prisma schema + 迁移
+└── package.json            # 根配置 (workspaces + 统一脚本)
 ```
 
 ## License
