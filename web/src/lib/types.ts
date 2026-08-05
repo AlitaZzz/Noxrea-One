@@ -327,6 +327,7 @@ export interface CanvasProject {
   theme: ThemeMode;
   minimapVisible?: boolean;
   snapToGrid?: boolean;
+  agentModel?: string;
   nodes: AnyNode[];
   edges: AnyEdge[];
 }

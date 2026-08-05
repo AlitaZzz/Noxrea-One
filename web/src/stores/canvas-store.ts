@@ -114,6 +114,10 @@ interface CanvasState {
   directorOverlayOpen: boolean;
   setDirectorOverlayOpen: (v: boolean) => void;
 
+  // Agent model (persisted to canvasData, project-level)
+  agentModel: string | null;
+  setAgentModel: (model: string) => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -122,7 +126,7 @@ interface CanvasState {
   snapThreshold: number;
 
   // Persistence
-  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode }) => void;
+  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -217,6 +221,12 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
 
+  agentModel: null,
+  setAgentModel: (model) => {
+    set({ agentModel: model });
+    saveManager.markDirtyImmediate();
+  },
+
   snapToGrid: false,
   toggleSnapToGrid: () => {
     set((s) => ({ snapToGrid: !s.snapToGrid }));
@@ -226,7 +236,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   snapThreshold: 5,
 
   /** 从项目恢复画布状态 */
-  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean }) => {
+  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
     const vp = project.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
     set({
@@ -240,6 +250,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       theme: project.theme || DEFAULT_THEME,
       minimapVisible: project.minimapVisible !== false,
       snapToGrid: project.snapToGrid || false,
+      agentModel: project.agentModel ?? null,
     });
   },
 }));
