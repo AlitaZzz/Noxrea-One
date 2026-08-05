@@ -1,3 +1,6 @@
+/**
+ * 重做图标，用于画布历史操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

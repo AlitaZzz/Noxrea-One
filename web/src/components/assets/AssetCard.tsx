@@ -1,3 +1,8 @@
+/**
+ * 单个资产卡片。
+ * 按资产类型渲染图片 / 视频 / 音频缩略预览（视频悬停自动播放、音频内联试听），
+ * 提供选中态与右上角更多菜单（插入画布、重命名、下载、删除）。
+ */
 "use client";
 
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";

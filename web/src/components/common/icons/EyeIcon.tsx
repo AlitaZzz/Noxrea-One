@@ -1,3 +1,6 @@
+/**
+ * 眼睛图标，用于密码输入框的明文显示态。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

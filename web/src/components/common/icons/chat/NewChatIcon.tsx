@@ -1,3 +1,6 @@
+/**
+ * 新建会话图标，用于对话面板新开一轮对话。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,7 @@
+/**
+ * 资产网格中的文件夹卡片。
+ * 展示文件夹名与资产数量，点击进入、悬停显示删除按钮，纯展示组件。
+ */
 "use client";
 
 import { DeleteOutlined, FolderOutlined } from "@ant-design/icons";

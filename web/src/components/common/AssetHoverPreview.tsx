@@ -1,3 +1,8 @@
+/**
+ * 资产悬浮大图预览。
+ * 导出状态 hook（含进入 / 离开延迟与定位计算）与配套的 Portal 展示组件，
+ * 供侧边栏、资产库等缩略图列表复用。
+ */
 "use client";
 
 import { type MouseEvent,useCallback, useEffect, useRef, useState } from "react";

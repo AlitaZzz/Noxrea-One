@@ -1,3 +1,6 @@
+/**
+ * 快捷键图标，用于打开快捷键说明弹窗。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

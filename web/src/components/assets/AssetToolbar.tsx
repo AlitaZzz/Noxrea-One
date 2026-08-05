@@ -1,3 +1,8 @@
+/**
+ * 资产库顶部工具条。
+ * 提供搜索框、新建下拉（上传资产 / 新建文件夹），
+ * 以及有选中项时出现的批量操作区（全选、改分类、移动、删除）。
+ */
 "use client";
 
 import { CheckSquareOutlined,DeleteOutlined, FolderAddOutlined, FolderOutlined, PlusOutlined, SearchOutlined, TagsOutlined, UploadOutlined } from "@ant-design/icons";

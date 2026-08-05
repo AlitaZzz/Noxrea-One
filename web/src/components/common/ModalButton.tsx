@@ -1,3 +1,7 @@
+/**
+ * 弹窗底部通用按钮。
+ * 提供 default / primary / danger 三种视觉变体与加载、禁用态，样式随主题变量自适应。
+ */
 "use client";
 
 import { type ReactNode,useState } from "react";

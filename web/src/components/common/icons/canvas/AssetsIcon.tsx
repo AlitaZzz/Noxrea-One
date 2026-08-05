@@ -1,3 +1,6 @@
+/**
+ * 资产库图标，用于打开资产管理弹窗的入口按钮。
+ */
 import type { CSSProperties } from "react";
 
 interface AssetsIconProps {

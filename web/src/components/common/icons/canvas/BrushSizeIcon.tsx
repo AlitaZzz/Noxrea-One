@@ -1,3 +1,6 @@
+/**
+ * 画笔粗细图标，用于标注面板的笔触大小选择。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

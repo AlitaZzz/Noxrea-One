@@ -1,3 +1,7 @@
+/**
+ * 滚轮事件隔离容器。
+ * 用原生监听拦截 wheel 事件，避免画布内浮层滚动时误触 React Flow 缩放。
+ */
 "use client";
 
 import { type ReactNode,useEffect, useRef } from "react";

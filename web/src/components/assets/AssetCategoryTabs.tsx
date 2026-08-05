@@ -1,3 +1,7 @@
+/**
+ * 资产分类切换页签。
+ * 基于 ASSET_CATEGORIES 渲染受控的 Segmented 分段控件，纯展示无业务逻辑。
+ */
 "use client";
 
 import { Segmented } from "antd";

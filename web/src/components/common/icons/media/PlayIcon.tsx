@@ -1,3 +1,6 @@
+/**
+ * 播放图标，用于音视频播放控制。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 声波图标，代表音频类型节点或资产。
+ */
 import type { CSSProperties } from "react";
 
 interface WaveIconProps {

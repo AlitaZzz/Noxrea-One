@@ -1,3 +1,6 @@
+/**
+ * 导演台删除图标，用于移除场景实体。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

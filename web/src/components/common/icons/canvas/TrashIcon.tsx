@@ -1,3 +1,6 @@
+/**
+ * 删除图标，用于节点与资产的删除操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

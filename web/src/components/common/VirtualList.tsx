@@ -1,3 +1,7 @@
+/**
+ * 轻量虚拟滚动列表。
+ * 固定行高、无第三方依赖，按可视区计算渲染范围并预留 overscan 缓冲行。
+ */
 "use client";
 
 import type { CSSProperties, Key, ReactNode } from "react";

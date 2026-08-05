@@ -1,3 +1,6 @@
+/**
+ * 节点右下角缩放手柄的视觉图标。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

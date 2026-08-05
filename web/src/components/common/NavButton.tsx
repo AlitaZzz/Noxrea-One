@@ -1,3 +1,7 @@
+/**
+ * 导航 / 选择类列表按钮。
+ * 满宽左对齐，具备 hover 与 active 两种背景态，用于侧边栏、文件夹树等列表项。
+ */
 "use client";
 
 import { type ReactNode,useState } from "react";

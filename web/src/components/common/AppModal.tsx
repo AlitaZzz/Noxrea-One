@@ -1,3 +1,7 @@
+/**
+ * 通用弹窗基座。
+ * 在 LayerModal 之上统一居中、宽度默认值与标题下边距，全站功能弹窗均基于它构建。
+ */
 "use client";
 
 import type { ComponentProps,ReactNode } from "react";

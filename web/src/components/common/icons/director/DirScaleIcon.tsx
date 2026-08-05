@@ -1,3 +1,6 @@
+/**
+ * 导演台缩放图标，用于缩放变换模式。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

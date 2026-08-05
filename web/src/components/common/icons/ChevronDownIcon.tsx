@@ -1,3 +1,6 @@
+/**
+ * 向下箭头图标，用于下拉选择器的展开指示。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

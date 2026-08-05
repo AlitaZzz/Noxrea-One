@@ -1,3 +1,6 @@
+/**
+ * 导演台指针图标，用于选择模式。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

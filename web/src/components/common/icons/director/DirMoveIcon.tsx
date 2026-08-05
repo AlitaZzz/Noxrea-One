@@ -1,3 +1,6 @@
+/**
+ * 导演台移动图标，用于位移变换模式。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

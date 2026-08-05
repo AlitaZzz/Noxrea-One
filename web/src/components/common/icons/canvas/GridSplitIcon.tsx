@@ -1,3 +1,6 @@
+/**
+ * 宫格切分图标，用于节点工具条的图片切分操作。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {

@@ -1,3 +1,6 @@
+/**
+ * 旋转加载图标，用于按钮与面板的加载中状态。
+ */
 import type { CSSProperties } from "react";
 
 interface IconProps {
