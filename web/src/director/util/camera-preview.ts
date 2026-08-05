@@ -1,3 +1,7 @@
+/**
+ * 相机视角离屏出图工具。
+ * 用共享的离屏渲染器把指定相机的画面渲成 dataURL，供检视器缩略图与全屏预览使用。
+ */
 import * as THREE from "three";
 
 import type { Stage } from "../core/stage";

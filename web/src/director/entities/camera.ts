@@ -1,3 +1,8 @@
+/**
+ * 相机实体。
+ * 在场景中以可视化机身与视锥呈现一台可摆放的拍摄相机，
+ * 内含真实透视相机供 POV 出图使用。
+ */
 import * as THREE from "three";
 
 import { Entity } from "./entity";

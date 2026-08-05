@@ -1,3 +1,8 @@
+/**
+ * 变换操作手柄封装。
+ * 包装 TransformControls，处理平移 / 旋转 / 缩放模式切换、
+ * 与轨道控制的互斥以及变更回调。
+ */
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";

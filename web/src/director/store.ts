@@ -1,3 +1,9 @@
+/**
+ * 3D 导演台状态仓库。
+ * 保存实体元数据列表、选中项、变换模式、场景设置与出图记录，
+ * 并提供场景状态的序列化 / 反序列化（与 Director 节点数据互通）。
+ * 真正的 Three.js 对象保存在运行时 ref 中，不进入本 store。
+ */
 import { create } from "zustand";
 import type { CameraEntity } from "@/director/entities/camera";
 import type { Character } from "@/director/entities/character";
