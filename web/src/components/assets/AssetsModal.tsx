@@ -15,7 +15,7 @@ import ModalButton from "@/components/common/ModalButton";
 import { createAssetNode } from "@/lib/add-asset";
 import AppModal from "@/components/common/AppModal";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types";
-import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
+import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import { assetApi } from "@/lib/api";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";

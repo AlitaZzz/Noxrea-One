@@ -8,9 +8,9 @@
 import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
-import { EventNames, PASTE_OFFSET } from "@/lib/constants";
+import { EventNames, PASTE_OFFSET, isGenerating } from "@/lib/constants";
 import { duplicateNode } from "@/lib/node-defaults";
-import { isGenerating, type MediaGenFields } from "@/lib/types";
+import type { MediaGenFields } from "@/lib/types";
 import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { useSelectionStore } from "@/stores/selection-store";

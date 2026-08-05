@@ -1,10 +1,18 @@
 /**
  * 全局常量集中定义。
- * 包含视口与缩放默认值、历史栈上限、各类节点默认 / 最小尺寸、
- * 布局间距以及自定义事件名 EventNames。
+ * 包含节点类型枚举、资产分类等运行时常量，视口与缩放默认值、
+ * 历史栈上限、各类节点默认 / 最小尺寸、布局间距以及自定义事件名 EventNames。
+ *
+ * 注意：本文件承载所有「运行时常量 / 函数」，类型定义请放在 lib/types/*。
  */
-import type { BackgroundType, ThemeMode,ViewportState } from "./types";
-import { NODE_TYPE } from "./types";
+import type {
+  BackgroundType,
+  ThemeMode,
+  ViewportState,
+  TaskBinding,
+  UploadState,
+} from "./types/nodes";
+import type { AssetType } from "./types/assets";
 
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };
@@ -47,6 +55,46 @@ export const AUDIO_NODE_HEIGHT = 237;
 // Image/video thumbnail display (short side max pixels)
 /** 节点显示尺寸上限（长边约束，px） */
 export const NODE_DISPLAY_MAX = 600;
+
+// ── 节点类型枚举（自 lib/types/canvas.ts 迁移，types 目录应保持纯类型） ──
+export const NODE_TYPE = {
+  TEXT: "text-node",
+  IMAGE: "image-node",
+  VIDEO: "video-node",
+  AUDIO: "audio-node",
+  DIRECTOR: "director-node",
+  GROUP: "group-node",
+} as const;
+
+// ── 资产分类（自 lib/types/assets.ts 迁移） ──
+export const ASSET_CATEGORIES: { key: AssetType | "all"; labelKey: string }[] = [
+  { key: "all", labelKey: "asset.cat.all" },
+  { key: "character", labelKey: "asset.cat.character" },
+  { key: "scene", labelKey: "asset.cat.scene" },
+  { key: "object", labelKey: "asset.cat.object" },
+  { key: "style", labelKey: "asset.cat.style" },
+  { key: "audio", labelKey: "asset.cat.audio" },
+  { key: "other", labelKey: "asset.cat.other" },
+];
+
+/** 虚拟「未分类」文件夹的 ID：代表 folder_id 为 NULL 的资产集合（不落库） */
+export const UNCATEGORIZED_FOLDER_ID = "__uncategorized__";
+
+// ── 任务绑定 / 上传状态常量（自 lib/types/nodes.ts 迁移） ──
+export const TASK_BINDING_KEY = "taskBinding" as const;
+
+/** 已完成/无任务的空绑定 */
+export const EMPTY_TASK_BINDING: TaskBinding = { taskId: "", status: "completed" };
+
+/** 是否处于生成/处理中——由 taskBinding.status 推导，不再有独立 generating 字段 */
+export function isGenerating(binding: TaskBinding | undefined): boolean {
+  return binding?.status === "pending" || binding?.status === "processing";
+}
+
+export const UPLOAD_KEY = "upload" as const;
+
+/** 初始上传状态 */
+export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
 
 // ── Node colors（原 node-colors.ts，合并至此） ──
 // 节点类型对应的语义色，用于小地图 minimap 节点着色。

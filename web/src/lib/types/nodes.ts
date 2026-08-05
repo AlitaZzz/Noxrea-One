@@ -1,11 +1,13 @@
 /**
- * 画布节点的数据类型定义。
+ * 画布节点的数据类型定义（纯类型）。
  * 定义任务绑定与生成参数等公共字段，以及文本 / 图片 / 视频 / 音频 /
  * Director / 编组各节点的数据结构，并汇总为联合类型 AnyNode。
+ *
+ * 运行时常量（TASK_BINDING_KEY、UPLOAD_KEY、isGenerating 等）已迁移至 lib/constants.ts。
  */
 import type { Node } from "@xyflow/react";
 
-import { NODE_TYPE } from "./canvas";
+import type { NODE_TYPE } from "@/lib/constants";
 
 // ============================================================
 // 任务绑定（生成 / 异步任务状态）
@@ -21,16 +23,6 @@ export interface TaskBinding {
   pendingAction?: string;
 }
 
-export const TASK_BINDING_KEY = "taskBinding" as const;
-
-/** 已完成/无任务的空绑定 */
-export const EMPTY_TASK_BINDING: TaskBinding = { taskId: "", status: "completed" };
-
-/** 是否处于生成/处理中——由 taskBinding.status 推导，不再有独立 generating 字段 */
-export function isGenerating(binding: TaskBinding | undefined): boolean {
-  return binding?.status === "pending" || binding?.status === "processing";
-}
-
 // ============================================================
 // 上传状态
 // ============================================================
@@ -42,11 +34,6 @@ export interface UploadState {
   /** 防竞态版本号：每次重新上传自增，回调按版本号丢弃过期结果 */
   version: number;
 }
-
-export const UPLOAD_KEY = "upload" as const;
-
-/** 初始上传状态 */
-export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
 
 // ============================================================
 // 生成面板设置（持久化到节点）

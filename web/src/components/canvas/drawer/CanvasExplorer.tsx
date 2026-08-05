@@ -31,7 +31,7 @@ import { MenuDivider } from "@/components/common/MenuPopover";
 import { createAssetNode } from "@/lib/add-asset";
 import { assetApi } from "@/lib/api";
 import type { AnyNode, AssetFolder, AssetItem, AssetType } from "@/lib/types";
-import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
+import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
