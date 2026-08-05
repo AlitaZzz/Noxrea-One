@@ -18,7 +18,7 @@ import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUploadWithProgress, BASE } from "@/lib/api";
+import { apiRaw, apiUploadWithProgress } from "@/lib/api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR, NODE_TYPE, isGenerating } from "@/lib/constants";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
 import { createImageNode } from "@/lib/node-defaults";
@@ -118,10 +118,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     try {
       const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
       const videoKey = src.replace(/^\/api\/files\//, "").split("?")[0];
-      const token = localStorage.getItem("noxrea-auth-token") || "";
-      const res = await fetch(`${BASE}/api/files/capture-frame`, {
+      const res = await apiRaw(`/api/files/capture-frame`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ video_key: videoKey, time: seekTime }),
       });
       if (!res.ok) return;

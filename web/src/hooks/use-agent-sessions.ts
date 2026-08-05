@@ -7,7 +7,7 @@
 import { useCallback, useState } from "react";
 
 import { showGlobalMessage } from "@/lib/global-message";
-import { getTokenHeader } from "@/lib/api";
+import { apiRaw } from "@/lib/api";
 import type { ChatMessage, ChatRole } from "@/hooks/use-chat-stream";
 
 export interface SessionListItem {
@@ -45,9 +45,8 @@ export function useAgentSessions(opts: {
     async (initialTitle?: string): Promise<string | null> => {
       if (chatId) return chatId;
       try {
-        const res = await fetch("/api/chat/sessions", {
+        const res = await apiRaw("/api/chat/sessions", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...getTokenHeader() },
           body: JSON.stringify(initialTitle ? { title: initialTitle } : {}),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -67,9 +66,7 @@ export function useAgentSessions(opts: {
   const loadHistory = useCallback(
     async (sessionId: string, skillNames?: Array<{ name: string; displayTitle?: string }>) => {
       try {
-        const msgRes = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
-          headers: { ...getTokenHeader() },
-        });
+        const msgRes = await apiRaw(`/api/chat/sessions/${sessionId}/messages`);
         if (!msgRes.ok) throw new Error(`HTTP ${msgRes.status}`);
         const data = (await msgRes.json()) as Array<{
           role: string;
@@ -112,7 +109,7 @@ export function useAgentSessions(opts: {
   /** 拉取历史会话列表（按 updatedAt 倒序） */
   const loadSessions = useCallback(async () => {
     try {
-      const res = await fetch("/api/chat/sessions", { headers: { ...getTokenHeader() } });
+      const res = await apiRaw("/api/chat/sessions");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as SessionListItem[];
       setSessions(data ?? []);
@@ -125,9 +122,8 @@ export function useAgentSessions(opts: {
   const deleteChat = useCallback(
     async (sessionId: string) => {
       try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}`, {
+        const res = await apiRaw(`/api/chat/sessions/${sessionId}`, {
           method: "DELETE",
-          headers: { ...getTokenHeader() },
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
@@ -145,9 +141,8 @@ export function useAgentSessions(opts: {
     async (title: string) => {
       if (!chatId) return;
       try {
-        const res = await fetch(`/api/chat/sessions/${chatId}`, {
+        const res = await apiRaw(`/api/chat/sessions/${chatId}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", ...getTokenHeader() },
           body: JSON.stringify({ title }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

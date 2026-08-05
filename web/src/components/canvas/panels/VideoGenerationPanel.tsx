@@ -15,7 +15,7 @@ import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import { PlayIcon } from "@/components/common/icons/media/PlayIcon";
 import { StopIcon } from "@/components/common/icons/media/StopIcon";
-import { apiUpload, BASE, getTokenHeader } from "@/lib/api";
+import { apiUpload, apiRaw } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/node-defaults";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
@@ -261,9 +261,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudio: auds, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
-      const res2 = await fetch(`${BASE}/api/generate/task`, {
+      const res2 = await apiRaw(`/api/generate/task`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({
           type: "video",
           prompt: p.trim(),
@@ -371,8 +370,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
     if (tid) {
-      fetch(`${BASE}/api/generate/task/${tid}/cancel`, {
-        method: "POST", headers: { ...getTokenHeader() },
+      apiRaw(`/api/generate/task/${tid}/cancel`, {
+        method: "POST",
       }).catch(() => {});
     }
     useCanvasStore.getState().updateNodeData(nodeId, {

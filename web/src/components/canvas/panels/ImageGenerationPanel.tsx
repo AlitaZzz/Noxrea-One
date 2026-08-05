@@ -11,7 +11,7 @@ import { memo, useEffect, useMemo,useRef, useState } from "react";
 
 import { MenuItem,MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
-import { apiUpload, BASE,getTokenHeader } from "@/lib/api";
+import { apiUpload, apiRaw } from "@/lib/api";
 import { EventNames, isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge,createImageNode } from "@/lib/node-defaults";
@@ -210,9 +210,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const { entry, channel, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
-      const res = await fetch(`${BASE}/api/generate/task`, {
+      const res = await apiRaw(`/api/generate/task`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
         body: JSON.stringify({
           type: "image",
           prompt: p.trim(),
@@ -323,8 +322,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
     if (tid) {
-      fetch(`${BASE}/api/generate/task/${tid}/cancel`, {
-        method: "POST", headers: { ...getTokenHeader() },
+      apiRaw(`/api/generate/task/${tid}/cancel`, {
+        method: "POST",
       }).catch(() => {});
     }
     useCanvasStore.getState().updateNodeData(nodeId, {
