@@ -14,7 +14,7 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canva
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
-import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
+import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
 
 interface Props {

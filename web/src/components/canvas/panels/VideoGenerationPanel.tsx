@@ -18,8 +18,8 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canva
 import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
-import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
-import { RatioIcon, type ModelOption } from "./gen/shared";
+import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
+import { RatioIcon, type ModelOption } from "../gen/shared";
 
 interface Props { nodeId: string; }
 
