@@ -33,16 +33,22 @@ export default function HomePage() {
   const [initialized, setInitialized] = useState(false);
 
   // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成，
-  // 此处仅负责把当前激活项目恢复到画布状态。
+  // 此处从服务器拉取最新项目数据后再恢复到画布状态，
+  // 避免多浏览器/多 Tab 场景下本地缓存过期导致数据不一致。
   useEffect(() => {
-    const project = useProjectStore.getState().activeProject();
-    if (!project) {
-      // 没有激活项目则回落到项目列表页
+    const activeId = useProjectStore.getState().activeProjectId;
+    if (!activeId) {
       window.location.href = "/project";
       return;
     }
-    useCanvasStore.getState().restoreFromProject(project);
-    setInitialized(true);
+    useProjectStore.getState().refreshProject(activeId).then((project) => {
+      if (!project) {
+        window.location.href = "/project";
+        return;
+      }
+      useCanvasStore.getState().restoreFromProject(project);
+      setInitialized(true);
+    });
   }, []);
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)

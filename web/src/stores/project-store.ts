@@ -25,6 +25,7 @@ interface CanvasData {
   theme?: ThemeMode;
   minimapVisible?: boolean;
   snapToGrid?: boolean;
+  agentModel?: string;
   nodes?: unknown[];
   edges?: unknown[];
 }
@@ -36,26 +37,43 @@ interface ServerProject {
   updatedAt: string;
 }
 
+function mapServerProject(p: ServerProject): CanvasProject {
+  return {
+    id: String(p.id),
+    name: p.name,
+    createdAt: Date.now(),
+    updatedAt: new Date(p.updatedAt).getTime(),
+    viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
+    background: p.canvasData?.background || DEFAULT_BACKGROUND,
+    theme: p.canvasData?.theme || DEFAULT_THEME,
+    minimapVisible: p.canvasData?.minimapVisible ?? true,
+    snapToGrid: p.canvasData?.snapToGrid || false,
+    agentModel: p.canvasData?.agentModel,
+    nodes: (p.canvasData?.nodes || []) as AnyNode[],
+    edges: (p.canvasData?.edges || []) as AnyEdge[],
+  };
+}
+
 async function fetchProjects(): Promise<CanvasProject[]> {
   try {
     const res = await api<ServerProject[]>("/api/canvas/projects");
     if (res.code === 200 && res.data) {
-      return res.data.map((p) => ({
-        id: String(p.id),
-        name: p.name,
-        createdAt: Date.now(),
-        updatedAt: new Date(p.updatedAt).getTime(),
-        viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
-        background: p.canvasData?.background || DEFAULT_BACKGROUND,
-        theme: p.canvasData?.theme || DEFAULT_THEME,
-        minimapVisible: p.canvasData?.minimapVisible ?? true,
-        snapToGrid: p.canvasData?.snapToGrid || false,
-        nodes: (p.canvasData?.nodes || []) as AnyNode[],
-        edges: (p.canvasData?.edges || []) as AnyEdge[],
-      }));
+      return res.data.map(mapServerProject);
     }
   } catch { /* offline or error */ }
   return [];
+}
+
+async function fetchProjectById(id: string): Promise<CanvasProject | null> {
+  try {
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) return null;
+    const res = await api<ServerProject>(`/api/canvas/projects/${numericId}`);
+    if (res.code === 200 && res.data) {
+      return mapServerProject(res.data);
+    }
+  } catch { /* offline or error */ }
+  return null;
 }
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
@@ -96,12 +114,13 @@ interface ProjectState {
   activeProjectId: string | null;
 
   activeProject: () => CanvasProject | undefined;
+  refreshProject: (id: string) => Promise<CanvasProject | null>;
   createProject: (name?: string) => Promise<CanvasProject>;
   renameProject: (id: string, name: string) => void;
   deleteProject: (id: string) => void;
   deleteProjects: (ids: string[]) => void;
   setActiveProject: (id: string) => void;
-  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean) => void;
+  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
   initialize: () => Promise<void>;
 }
 
@@ -112,6 +131,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   activeProject: () => {
     const { projects, activeProjectId } = get();
     return projects.find((p) => p.id === activeProjectId);
+  },
+
+  refreshProject: async (id) => {
+    const fresh = await fetchProjectById(id);
+    if (!fresh) return null;
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? fresh : p)),
+    }));
+    return fresh;
   },
 
   createProject: async (name) => {
@@ -169,10 +197,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     saveLocalActiveId(id);
   },
 
-  syncCanvasState: (id, nodes, edges, viewport, background, theme, minimapVisible, snapToGrid) => {
+  syncCanvasState: (id, nodes, edges, viewport, background, theme, minimapVisible, snapToGrid, agentModel) => {
     set((s) => ({
       projects: s.projects.map((p) =>
-        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, theme, minimapVisible, snapToGrid, updatedAt: Date.now() } : p
+        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, theme, minimapVisible, snapToGrid, agentModel: agentModel ?? undefined, updatedAt: Date.now() } : p
       ),
     }));
   },
