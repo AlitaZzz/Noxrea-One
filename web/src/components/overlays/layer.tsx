@@ -1,3 +1,9 @@
+/**
+ * 弹窗层级（Layer）基础设施。
+ * 通过 Context 记录当前所处的浮层深度与 overlay 根节点，
+ * 使嵌套弹窗、下拉菜单能挂载到正确的层级容器，避免 z-index 与滚动穿透问题。
+ * 导出 LayerModal 与 useLayerOverlay 供上层组件使用。
+ */
 "use client";
 
 import { Modal } from "antd";

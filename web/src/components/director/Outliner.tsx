@@ -1,3 +1,7 @@
+/**
+ * 3D 导演台左侧场景大纲。
+ * 树形列出场景中的实体与镜头，支持搜索、重命名、显隐切换、多选与删除。
+ */
 "use client";
 
 import { DeleteOutlined } from "@ant-design/icons";

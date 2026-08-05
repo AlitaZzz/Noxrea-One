@@ -1,3 +1,7 @@
+/**
+ * 应用页面外壳容器。
+ * 提供满屏 flex 布局骨架，并把当前主题写入 <html data-theme>，驱动 CSS 变量换肤。
+ */
 "use client";
 
 import { ReactNode, useEffect } from "react";
