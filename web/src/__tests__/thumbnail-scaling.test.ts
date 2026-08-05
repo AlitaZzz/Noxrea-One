@@ -44,10 +44,10 @@ const D = NODE_DISPLAY_MAX; // 600
 /** 模拟 CanvasStoreApi（符合 image-utils 中定义的接口） */
 const mockStoreApi = {
   nodes: mockNodes,
-  edges: [] as Array<Record<string, unknown>>,
+  edges: [],
   addNodes: vi.fn(),
   setEdges: vi.fn(),
-};
+} as any;
 
 interface TestCase {
   name: string;
