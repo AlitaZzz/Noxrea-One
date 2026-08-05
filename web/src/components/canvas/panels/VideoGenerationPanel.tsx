@@ -17,7 +17,7 @@ import { PlayIcon } from "@/components/common/icons/media/PlayIcon";
 import { StopIcon } from "@/components/common/icons/media/StopIcon";
 import { apiUpload, apiRaw } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
-import { createEdge, createImageNode } from "@/lib/nodes/node-defaults";
+import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import type { MediaGenFields, VideoGenSettings } from "@/lib/types/nodes";
 import type { ModelChannel } from "@/lib/types/models";

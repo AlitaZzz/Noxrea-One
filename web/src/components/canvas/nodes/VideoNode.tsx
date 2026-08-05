@@ -21,7 +21,7 @@ import { useEditableTitle } from "@/hooks/use-editable-title";
 import { apiUploadWithProgress, captureFrame as captureFrameApi } from "@/lib/api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR, NODE_TYPE, isGenerating } from "@/lib/constants";
 import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
-import { createImageNode } from "@/lib/nodes/node-defaults";
+import { createImageNode } from "@/features/canvas/node-defaults";
 import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types/nodes";
 import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
 import { VolumeMuteIcon } from "@/components/common/icons/media/VolumeMuteIcon";
