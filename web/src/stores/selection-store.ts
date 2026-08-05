@@ -1,3 +1,6 @@
+/**
+ * 画布剪贴板状态仓库：暂存复制的节点供粘贴使用。
+ */
 import { create } from "zustand";
 
 import type { AnyNode,ClipboardData } from "@/lib/types";

@@ -1,3 +1,6 @@
+/**
+ * 多语言状态仓库：保存当前语言并提供文案翻译函数 t。
+ */
 import { create } from "zustand";
 
 import type { Lang } from "@/i18n";

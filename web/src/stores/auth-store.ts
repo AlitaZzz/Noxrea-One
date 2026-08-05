@@ -1,3 +1,8 @@
+/**
+ * 登录鉴权状态仓库。
+ * 保存当前用户信息与登录态，提供初始化（恢复会话）、登录、注册、登出、
+ * 角色判定与主题 / 语言偏好持久化。
+ */
 import { create } from "zustand";
 
 import { api, setToken } from "@/lib/api";

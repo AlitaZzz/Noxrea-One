@@ -1,3 +1,8 @@
+/**
+ * 画布节点的数据类型定义。
+ * 定义任务绑定与生成参数等公共字段，以及文本 / 图片 / 视频 / 音频 /
+ * Director / 编组各节点的数据结构，并汇总为联合类型 AnyNode。
+ */
 import type { Node } from "@xyflow/react";
 
 import { NODE_TYPE } from "./canvas";

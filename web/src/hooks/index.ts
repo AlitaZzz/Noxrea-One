@@ -1,3 +1,7 @@
+/**
+ * 自定义 hooks 桶文件（barrel）。
+ * 统一导出画布交互、对话流、文件拖放、任务监控等复用逻辑。
+ */
 export { useAddNode } from "./use-add-node";
 export type { AddNodeType } from "./use-add-node";
 export { useAgentSessions } from "./use-agent-sessions";

@@ -1,3 +1,8 @@
+/**
+ * 资产到画布节点的转换层（防腐层）。
+ * 以纯函数把 AssetItem 转成对应类型的画布节点并计算尺寸与落位，
+ * 不直接操作任何 store，由调用方负责入库。
+ */
 "use client";
 
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";

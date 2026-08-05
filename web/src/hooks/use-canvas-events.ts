@@ -1,3 +1,8 @@
+/**
+ * 画布自定义事件总线监听 hook。
+ * 把节点组件派发的 window 级事件（更新数据、复制、删除节点 / 连线、右键菜单）
+ * 统一转成对画布 store 的操作。
+ */
 "use client";
 
 import { useEffect } from "react";

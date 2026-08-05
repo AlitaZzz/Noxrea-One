@@ -1,3 +1,6 @@
+/**
+ * 节点标题就地编辑 hook：封装双击进入编辑、回车 / 失焦保存的通用逻辑。
+ */
 "use client";
 
 import { useCallback,useState } from "react";

@@ -1,3 +1,7 @@
+/**
+ * 撤销 / 重做历史仓库。
+ * 以双栈保存画布快照，限制最大深度，只负责栈的进出，不感知画布内部结构。
+ */
 import { create } from "zustand";
 
 import { HISTORY_MAX_SIZE } from "@/lib/constants";

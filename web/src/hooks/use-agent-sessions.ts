@@ -1,3 +1,7 @@
+/**
+ * AI 对话会话管理 hook：会话列表加载与新建 / 切换 / 重命名 / 删除。
+ * 与消息流 use-chat-stream 分离，消息状态通过回调注入以避免双向耦合。
+ */
 "use client";
 
 import { useCallback, useState } from "react";

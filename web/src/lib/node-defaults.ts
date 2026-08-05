@@ -1,3 +1,8 @@
+/**
+ * 节点与连线的工厂方法。
+ * 集中定义各类节点的默认数据、默认尺寸与 ID 生成规则，
+ * 并提供节点再制（duplicate）与连线创建函数。
+ */
 import { MarkerType } from "@xyflow/react";
 
 import {
