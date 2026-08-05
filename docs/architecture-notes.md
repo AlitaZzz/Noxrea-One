@@ -119,7 +119,7 @@ Zustand store 的 `getState()` 方法可以在组件外和异步回调中获取�
 ### 编辑与阅读习惯
 
 - **优先编辑现有文件，而非重写整个文件**：用 Edit/str_replace 做精确改动，不要用 Write 整体覆盖
-- **除非文件被修改过，否则不要重复完整读取已经读过的文件**：与 [docs/claude-code-workflow.md](claude-code-workflow.md) 的省 token 规则呼应，避免重复消耗上下文
+- **除非文件被修改过，否则不要重复完整读取已经读过的文件**：避免重复消耗上下文
 
 ### 代码结构
 
