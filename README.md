@@ -62,19 +62,49 @@ Noxrea-AI-Canvas/
 ├── web/                         # Next.js 纯前端（workspaces 子包）
 │   └── src/
 │       ├── app/                 # App Router 页面（API 已迁移至 server）
-│       │   ├── canvas/          # 画布主页
-│       │   ├── login/           # 登录页
-│       │   └── project/         # 项目管理页
+│       │   ├── (app)/          # 已认证路由组（layout.tsx 做鉴权守卫）
+│       │   │   ├── canvas/      # 画布主页
+│       │   │   ├── project/     # 项目管理页
+│       │   │   └── layout.tsx
+│       │   ├── login/           # 登录页（无需鉴权）
+│       │   ├── layout.tsx       # 根布局
+│       │   └── page.tsx         # 首页（重定向）
 │       ├── components/          # React 组件
-│       │   ├── canvas/          # 画布核心（InfiniteCanvas, 生成面板等）
-│       │   │   └── nodes/       # 节点组件（Text/Image/Video/Group/Director）
+│       │   ├── canvas/          # 画布核心（按功能子目录组织）
+│       │   │   ├── controls/    # 画布控制（对齐/右键/缩放/工具栏/边删除）
+│       │   │   ├── panels/      # 生成面板（图片/视频/文本/API设置）
+│       │   │   ├── chat/        # 聊天交互（ChatPanel/Mention/SkillPanel）
+│       │   │   ├── editing/     # 编辑工具（裁剪/标注/光照/多角度）
+│       │   │   ├── sidebar/     # 侧边栏（CanvasSidebar/NodeInspector）
+│       │   │   ├── gen/         # 生成面板共享（RatioIcon/ModelOption）
+│       │   │   ├── nodes/       # 节点组件（Text/Image/Video/Audio/Group/Director）
+│       │   │   └── InfiniteCanvas.tsx
+│       │   ├── common/          # 通用 UI（AppModal/ConfirmModal/VirtualList 等）
 │       │   ├── assets/          # 资源管理（侧栏/网格/卡片/文件夹）
 │       │   ├── director/        # 3D 引擎 React UI 容器
-│       │   ├── common/          # 通用 UI
-│       │   └── auth/            # 认证组件
+│       │   ├── auth/            # 认证组件
+│       │   ├── layout/          # 布局组件
+│       │   └── overlays/        # 覆盖层（LayerModal 等）
+│       ├── contexts/            # React Context（edge-highlight-context）
+│       ├── hooks/               # 自定义 hooks（含 index.ts barrel export）
+│       ├── i18n/                # 国际化资源（zh-CN.json / en-US.json）
+│       ├── lib/                 # 纯工具层（零 stores/components 依赖）
+│       │   ├── types/           # 领域类型（canvas/nodes/models/assets/project）
+│       │   ├── types.ts         # Barrel re-export
+│       │   ├── api.ts           # API 调用
+│       │   ├── global-message.ts  # 全局消息 API
+│       │   ├── constants.ts     # 全局常量 + EventNames + NODE_TYPE_COLOR
+│       │   ├── image-utils.ts   # 图片工具（依赖注入 CanvasStoreApi）
+│       │   ├── add-asset.ts     # 资产->节点（纯函数）
+│       │   ├── agent-tools.ts   # Agent 工具（依赖注入）
+│       │   └── ...
+│       ├── providers/           # React context providers
 │       ├── stores/              # Zustand 状态管理
-│       ├── lib/                 # 工具层（api, types, save-manager 等）
-│       ├── hooks/               # 自定义 hooks
+│       │   ├── canvas-store.ts
+│       │   ├── save-manager.ts  # 画布保存管理器
+│       │   ├── context-menu-store.ts  # 右键菜单状态
+│       │   ├── i18n-store.ts   # i18n 状态（翻译文本在 i18n/ 目录）
+│       │   └── ...
 │       ├── director/            # 3D 引擎纯 TS 逻辑（core/entities/util）
 │       └── __tests__/           # 单元测试
 │
@@ -139,6 +169,16 @@ Noxrea-AI-Canvas/
   -> SSE 端点 GET /api/generate/task/{id}/stream
   -> 前端 EventSource 接收 -> 更新节点 / 显示错误
 ```
+
+## 前端架构约定
+
+- **分层单向依赖**：`app -> components -> hooks/stores -> lib`，禁止反向依赖
+  - `lib/` 层零 `@/stores/` 和 `@/components/` 引用（纯工具 + 依赖注入）
+  - `hooks/` 层零 `@/components/` 引用（纯逻辑）
+  - 需要操作 store 的函数通过参数注入 `CanvasStoreApi` 接口（见 `image-utils.ts`、`agent-tools.ts`、`add-asset.ts`）
+- **类型就近定义**：领域类型在 `lib/types/` 下按领域拆分（canvas/nodes/models/assets/project），`lib/types.ts` 为 barrel re-export
+- **i18n 资源外置**：翻译文本在 `i18n/zh-CN.json` 和 `i18n/en-US.json`，store 仅管理状态
+- **Barrel Exports**：各主要目录提供 `index.ts` 统一导出公共 API
 
 ## 技术栈
 
