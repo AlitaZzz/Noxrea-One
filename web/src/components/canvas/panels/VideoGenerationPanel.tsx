@@ -27,6 +27,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
 import { RatioIcon, type ModelOption } from "../gen/shared";
+import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
 
@@ -100,58 +101,18 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelParams]);
 
-  // Upstream reference images - derived live from current edges.
-  const canvasNodes = useCanvasStore((s) => s.nodes);
-  const canvasEdges = useCanvasStore((s) => s.edges);
-  const refImages = useMemo(() => {
-    const upstreamIds = new Set(canvasEdges.filter((e) => e.target === nodeId).map((e) => e.source));
-    return canvasNodes
-      .filter((n) => upstreamIds.has(n.id) && n.type === NODE_TYPE.IMAGE)
-      .map((n) => (n.data as { src?: string }).src)
-      .filter(Boolean) as string[];
-  }, [nodeId, canvasNodes, canvasEdges]);
-
-  // Upstream reference texts (TEXT 节点, 按连接顺序, 去重)
-  const upstreamTexts = useMemo(() => {
-    const seen = new Set<string>();
-    return canvasEdges
-      .filter((e) => e.target === nodeId)
-      .map((e) => canvasNodes.find((n) => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
-      .map((n) => ({ id: n.id, content: ((n.data as { content?: string }).content || "").trim() }))
-      .filter((t) => t.content !== "" && !seen.has(t.id) && seen.add(t.id));
-  }, [nodeId, canvasNodes, canvasEdges]);
-
-  // 最终 prompt：上游文本 + 当前 prompt
-  const finalPrompt = useMemo(() => {
-    return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
-  }, [upstreamTexts, prompt]);
-
-  // Upstream reference audio (AUDIO 节点, 按连接顺序, 按节点 id 与 src 双重去重)
-  const upstreamAudio = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenSrcs = new Set<string>();
-    return canvasEdges
-      .filter((e) => e.target === nodeId)
-      .map((e) => canvasNodes.find((n) => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.AUDIO)
-      .map((n) => ({
-        id: n.id,
-        src: ((n.data as { src?: string }).src || "").trim(),
-        label: ((n.data as { label?: string }).label || "").trim(),
-      }))
-      .filter(
-        (a) =>
-          a.src !== "" &&
-          !seenIds.has(a.id) &&
-          !seenSrcs.has(a.src) &&
-          (seenIds.add(a.id), seenSrcs.add(a.src), true),
-      );
-  }, [nodeId, canvasNodes, canvasEdges]);
-
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [audioOrder, setAudioOrder] = useState<string[]>(saved.refAudioOrder || []);
+
+  // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
+  const {
+    refImages, upstreamTexts, upstreamAudio, audioSrcLabel, references, finalPrompt, isGenerating,
+    elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
+  } = useVideoGenPanel({
+    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refOrder, audioOrder,
+  });
+
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [prevRefImages, setPrevRefImages] = useState(refImages);
   if (refImages !== prevRefImages) {
@@ -163,14 +124,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       return [...alive, ...added];
     });
   }
-  // 上游音频 src→label 映射，用于回填持久化顺序的 label
-  const audioSrcLabel = useMemo(() => {
-    const m = new Map<string, string>();
-    upstreamAudio.forEach((a) => {
-      if (a.src) m.set(a.src, a.label);
-    });
-    return m;
-  }, [upstreamAudio]);
   const audioSrcSet = useMemo(() => new Set(upstreamAudio.map((a) => a.src)), [upstreamAudio]);
   const [prevAudioSrcs, setPrevAudioSrcs] = useState(audioSrcSet);
   if (audioSrcSet !== prevAudioSrcs) {
@@ -183,74 +136,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     });
   }
 
-  // 构建 @ 提及的参考列表（图片基于 refOrder、音频基于 audioOrder，均保证编号稳定）
-  const references = useMemo<ReferenceItem[]>(() => {
-    const images: ReferenceItem[] = refOrder.map((src, i) => ({
-      src,
-      thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
-      index: i,
-      kind: "image",
-    }));
-    const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
-      src,
-      thumbnail: src,
-      index: i,
-      kind: "audio",
-      label: audioSrcLabel.get(src) || "",
-    }));
-    return [...images, ...audios];
-  }, [refOrder, audioOrder, audioSrcLabel]);
-
-  // Button disabled state derived from persistent node.data.task_status
-  const isGenerating = useMemo(() => {
-    const node = canvasNodes.find((n) => n.id === nodeId);
-    return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
-  }, [canvasNodes, nodeId]);
-  const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState("");
-
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudio: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudio: [] as string[], n: 1, entry: null, channel: null });
-  const latestSettingsRef = useRef({ prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n });
-  useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n };
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, n]);
   const { notification } = App.useApp();
-
-  // Persist settings to node data on change (debounced)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n },
-      }, undefined, { skipHistory: true });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, n, nodeId]);
-
-  // Flush pending settings on component unmount (not on dep changes)
-  useEffect(() => {
-    return () => {
-      const latest = latestSettingsRef.current;
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<VideoGenSettings> | undefined;
-      if (saved &&
-          saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
-          saved.resolution === latest.resolution && saved.ratio === latest.ratio &&
-          saved.seconds === latest.seconds && saved.generateAudio === latest.generateAudio &&
-          saved.n === latest.n &&
-          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder) &&
-          JSON.stringify(saved.refAudioOrder) === JSON.stringify(latest.refAudioOrder)) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
-      markDirtyImmediate();
-    };
-  }, []);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
 
   const is: React.CSSProperties = {
     background: "transparent", border: "none", color: "var(--canvas-text)", borderRadius: 4, fontSize: 13,
