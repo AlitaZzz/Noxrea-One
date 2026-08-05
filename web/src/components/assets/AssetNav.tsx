@@ -1,5 +1,5 @@
 /**
- * 资产库左侧导航栏。
+ * 资产库导航栏（Navigation）。
  * 上部为空间切换（个人 / 公共等），下部以递归树形展示文件夹层级与资产计数，
  * 支持选中定位与删除文件夹。
  */
@@ -77,7 +77,7 @@ function FolderTree({
   );
 }
 
-export default function AssetSidebar({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
+export default function AssetNav({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
   const t = useI18nStore((s) => s.t);
   const spaceFolders = folders.filter((f) => f.spaceKey === activeSpace && !f.parentId);
 
