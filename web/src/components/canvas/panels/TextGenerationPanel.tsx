@@ -11,7 +11,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
-import { apiUpload, apiRaw } from "@/lib/api";
+import { apiUpload, generationApi } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge, createImageNode } from "@/lib/nodes/node-defaults";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
@@ -227,16 +227,13 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
 
       const messages = [{ role: "user", content }];
 
-      const res = await apiRaw(`/api/generate/task`, {
-        method: "POST",
-        body: JSON.stringify({
-          type: "llm",
-          prompt: finalPrompt,
-          model: entry.modelName,
-          channelId: entry.channelId,
-          nodeId,
-          messages,
-        }),
+      const res = await generationApi.submitGenerationTask({
+        type: "llm",
+        prompt: finalPrompt,
+        model: entry.modelName,
+        channelId: entry.channelId,
+        nodeId,
+        messages,
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
@@ -270,9 +267,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const tid = (node?.data as TextNodeData)?.taskBinding?.taskId;
     if (tid) {
-      apiRaw(`/api/generate/task/${tid}/cancel`, {
-        method: "POST",
-      }).catch(() => {});
+      generationApi.cancelGenerationTask(tid).catch(() => {});
     }
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
     markDirtyImmediate();

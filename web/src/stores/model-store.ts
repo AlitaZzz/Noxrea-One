@@ -5,7 +5,7 @@
  */
 import { create } from "zustand";
 
-import { api, apiRaw } from "@/lib/api";
+import { modelApi } from "@/lib/api";
 import type { ModelCapability, ModelChannel, ProviderPreset, ModelParamConfig } from "@/lib/types/models";
 
 interface RawModelEntry {
@@ -41,14 +41,14 @@ export const useModelStore = create<ModelState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const res = await api<ModelChannel[]>("/api/model-config/channels");
+      const res = await modelApi.fetchChannels<ModelChannel[]>();
       if (res.code === 200 && res.data) {
         // API 返回 camelCase，与前端 ModelChannel 类型一致，直接使用
         set({ channels: res.data, initialized: true });
         await get().fetchPresets();
         // 拉取模型参数配置（params + defaults + constraints）
         try {
-          const mpRes = await api<Record<string, Record<string, ModelParamConfig>>>("/api/model-params");
+          const mpRes = await modelApi.fetchModelParams<Record<string, Record<string, ModelParamConfig>>>();
           if (mpRes.code === 200 && mpRes.data) {
             set({ modelParamsCache: mpRes.data });
           }
@@ -84,7 +84,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
   fetchPresets: async () => {
     try {
-      const res = await api<ProviderPreset[]>("/api/model-config/presets");
+      const res = await modelApi.fetchPresets<ProviderPreset[]>();
       if (res.code === 200 && res.data) {
         set({ presets: res.data });
       }
@@ -94,13 +94,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   addChannel: async (name, baseUrl, apiKey, protocol, config) => {
-    const body: Record<string, unknown> = { name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey };
-    if (protocol) body.protocol = protocol;
-    if (config) body.config = config;
-    const res = await api<{ id: string }>("/api/model-config/channels", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
+    const res = await modelApi.createChannel(name, baseUrl, apiKey, protocol, config);
     if (res.code === 200 && res.data) {
       const channel: ModelChannel = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
       if (protocol) channel.protocol = protocol;
@@ -116,20 +110,17 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
     if (patch.config !== undefined) body.config = patch.config;
-    await api(`/api/model-config/channels/${id}`, { method: "PUT", body: JSON.stringify(body) });
+    await modelApi.updateChannel(id, body);
     set((s) => ({ channels: s.channels.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
   },
 
   deleteChannel: async (id) => {
-    await api(`/api/model-config/channels/${id}`, { method: "DELETE" });
+    await modelApi.deleteChannel(id);
     set((s) => ({ channels: s.channels.filter((c) => c.id !== id) }));
   },
 
   addModel: async (channelId, name) => {
-    const res = await api<{ id: string }>(`/api/model-config/channels/${channelId}/models`, {
-      method: "POST",
-      body: JSON.stringify({ name, capabilities: [] }),
-    });
+    const res = await modelApi.addModel(channelId, name);
     if (res.code === 200 && res.data) {
       set((s) => ({
         channels: s.channels.map((c) =>
@@ -148,9 +139,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const has = model.capabilities?.includes(cap);
     const caps = has ? (model.capabilities || []).filter((x) => x !== cap) : [...(model.capabilities || []), cap];
 
-    await api(`/api/model-config/channels/${channelId}/models/${modelId}/capability`, {
-      method: "PUT", body: JSON.stringify({ capabilities: caps }),
-    });
+    await modelApi.setModelCapability(channelId, modelId, caps);
     set((s) => ({
       channels: s.channels.map((c) =>
         c.id === channelId ? {
@@ -162,10 +151,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   setChannelModels: async (channelId, models) => {
-    await api(`/api/model-config/channels/${channelId}/models/set`, {
-      method: "POST", body: JSON.stringify({ models }),
-    });
-    const reload = await api<ModelChannel[]>("/api/model-config/channels");
+    await modelApi.setChannelModels(channelId, models);
+    const reload = await modelApi.fetchChannels<ModelChannel[]>();
     if (reload.code === 200 && reload.data) {
       set({ channels: reload.data });
     }
@@ -182,10 +169,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       return { success: false, error: "Channel has no baseUrl configured. Please update the channel URL." };
     }
     try {
-      const res = await apiRaw(`/api/models/list`, {
-        method: "POST",
-        body: JSON.stringify({ channelId: channelId }),
-      });
+      const res = await modelApi.fetchModelsList(channelId);
       const json = await res.json();
       if (json.code !== 200) {
         const msg = json.msg || `HTTP ${res.status}`;

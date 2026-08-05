@@ -1,7 +1,9 @@
 /**
- * 前端 HTTP 请求统一入口。
+ * 前端 HTTP 请求统一底座。
  * 封装 token 读写与请求头注入、全局 401 处理、错误提示，
- * 并提供通用 api、文件上传（含进度）及资产等业务接口封装。
+ * 提供通用 api（JSON 包裹）、apiUpload（表单）、apiUploadWithProgress（带进度）、
+ * apiRaw（原始 Response）与 apiStream（流式）等底层能力。
+ * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
 import { showGlobalMessage } from "@/lib/global-message";
 
@@ -27,7 +29,7 @@ export function getTokenHeader(): Record<string, string> {
 }
 
 // ── 全局 401 处理 ──
-// 循环依赖: auth-store → api.ts，所以 useAuthStore 必须动态 import
+// 循环依赖: auth-store → api/client，所以 useAuthStore 必须动态 import
 export class UnauthorizedError extends Error {
   constructor() {
     super("Unauthorized");
@@ -100,7 +102,11 @@ export async function api<T = unknown>(
   }
 }
 
-export async function apiUpload<T = unknown>(path: string, formData: FormData, skipUnauthorized = false): Promise<{ code: number; data: T; msg: string }> {
+export async function apiUpload<T = unknown>(
+  path: string,
+  formData: FormData,
+  skipUnauthorized = false
+): Promise<{ code: number; data: T; msg: string }> {
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
@@ -118,7 +124,7 @@ export async function apiUpload<T = unknown>(path: string, formData: FormData, s
 export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
-  onProgress?: (pct: number) => void,
+  onProgress?: (pct: number) => void
 ): Promise<{ code: number; data: T; msg: string }> {
   const token = getToken();
   return new Promise((resolve, reject) => {
@@ -140,13 +146,6 @@ export function apiUploadWithProgress<T = unknown>(
   });
 }
 
-// --- 原始请求底座（供 keepalive / 流式 / 自定义解析使用） ---
-/**
- * 低层 fetch 封装：自动注入同源 BASE、token 头与 401 拦截，
- * 返回原始 Response，行为与 fetch 一致（不解析 JSON、不包裹返回值）。
- * 适用于需要 keepalive、流式读取或自定义响应解析的请求。
- * 普通 JSON 请求请直接使用 api() / apiUpload()。
- */
 export async function apiRaw(
   path: string,
   options: RequestInit & { skipUnauthorized?: boolean } = {}
@@ -174,104 +173,3 @@ export async function apiStream(
 ): Promise<Response> {
   return apiRaw(path, options);
 }
-
-// --- Asset API ---
-
-export interface AssetFolderDto {
-  id: number;
-  userId: number;
-  name: string;
-  spaceKey: string;
-  parentId: number | null;
-  createdAt: string;
-  count: number;
-}
-
-export interface AssetItemDto {
-  id: number;
-  userId: number;
-  folderId: number | null;
-  spaceKey: string;
-  name: string;
-  type: string;
-  mediaType: string;
-  width: number;
-  height: number;
-  description: string;
-  tags: string[];
-  extraData: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Folders
-export const assetApi = {
-  listFolders: (spaceKey = "personal") =>
-    api<AssetFolderDto[]>(`/api/assets/folders?space_key=${spaceKey}`),
-
-  createFolder: (name: string, spaceKey = "personal", parentId?: number) =>
-    api<AssetFolderDto>("/api/assets/folders", {
-      method: "POST",
-      body: JSON.stringify({ name, spaceKey, parentId: parentId ?? null }),
-    }),
-
-  updateFolder: (id: number, name: string) =>
-    api<AssetFolderDto>(`/api/assets/folders/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({ name }),
-    }),
-
-  deleteFolder: (id: number) =>
-    api(`/api/assets/folders/${id}`, { method: "DELETE" }),
-
-  // Assets
-  listAssets: (params?: { folderId?: number; type?: string; search?: string; spaceKey?: string; skip?: number; limit?: number }) => {
-    const sp = new URLSearchParams();
-    if (params?.folderId !== undefined) sp.set("folder_id", String(params.folderId));
-    if (params?.type) sp.set("type", params.type);
-    if (params?.search) sp.set("search", params.search);
-    if (params?.spaceKey) sp.set("space_key", params.spaceKey);
-    if (params?.skip !== undefined) sp.set("skip", String(params.skip));
-    if (params?.limit !== undefined) sp.set("limit", String(params.limit));
-    const qs = sp.toString();
-    return api<{ items: AssetItemDto[]; total: number }>(`/api/assets/items${qs ? `?${qs}` : ""}`);
-  },
-
-  createAsset: (data: {
-    name: string; type: string; mediaType?: string;
-    width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
-  }) =>
-    api<AssetItemDto>("/api/assets/items", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  createAssetsBatch: (items: Array<{
-    name: string; type: string; mediaType?: string;
-    width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
-  }>) =>
-    api<AssetItemDto[]>("/api/assets/items/batch", {
-      method: "POST",
-      body: JSON.stringify(items),
-    }),
-
-  updateAsset: (id: number, data: Record<string, unknown>) =>
-    api<AssetItemDto>(`/api/assets/items/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  deleteAsset: (id: number) =>
-    api(`/api/assets/items/${id}`, { method: "DELETE" }),
-
-  updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
-    api<{ count: number }>("/api/assets/items/batch", {
-      method: "PUT",
-      body: JSON.stringify({ ids, updates }),
-    }),
-
-  listSourceUrls: (spaceKey = "personal") =>
-    api<string[]>(`/api/assets/items/source-urls?space_key=${spaceKey}`),
-};
