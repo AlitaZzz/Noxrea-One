@@ -1,3 +1,8 @@
+/**
+ * 3D 导演台全屏浮层的布局外壳。
+ * 组合顶部信息栏、左侧大纲、中部三维视口（动态导入禁用 SSR）、
+ * 右侧检视器 / 场景面板与底部工具坞，自身不含三维逻辑。
+ */
 "use client";
 
 import { CloseOutlined } from "@ant-design/icons";

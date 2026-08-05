@@ -1,3 +1,8 @@
+/**
+ * 3D 导演台右侧属性检视器。
+ * 按选中实体类型渲染对应属性：通用变换（位移 / 旋转 / 缩放）、
+ * 角色体型与姿态（内嵌 PoseSliders）、群组参数、相机焦距与预览出图等。
+ */
 "use client";
 
 import { DeleteOutlined } from "@ant-design/icons";

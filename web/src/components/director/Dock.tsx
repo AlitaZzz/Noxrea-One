@@ -1,3 +1,8 @@
+/**
+ * 3D 导演台底部工具坞。
+ * 提供变换模式切换（选择 / 移动 / 旋转 / 缩放）、添加角色 / 道具 / 相机、
+ * 镜头预设选择与出图渲染等操作入口。
+ */
 "use client";
 
 import { App,InputNumber, Popover, Tooltip } from "antd";

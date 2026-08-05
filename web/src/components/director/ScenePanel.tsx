@@ -1,3 +1,8 @@
+/**
+ * 3D 导演台场景全局设置面板。
+ * 调节环境天空色、地面显隐与透明度、网格与标签显示等场景级参数，
+ * 变更直接作用于 director 运行时。
+ */
 "use client";
 
 import { ColorPicker, InputNumber,Slider, Switch } from "antd";
