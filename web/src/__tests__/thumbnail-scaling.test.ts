@@ -7,7 +7,7 @@
 
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
-import { NODE_DISPLAY_MAX } from "@/lib/constants";
+import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
   {
@@ -57,31 +57,30 @@ interface TestCase {
   expectedScale: number;
   expectedDisplayW: number;
   expectedDisplayH: number;
-  expectedWithTitle: number;
 }
 
 const testCases: TestCase[] = [
   // 4000×3000: longSide=4000>600, scale=600/4000=0.15, W=600, H=450
-  { name: "超大横图 4000×3000", naturalW: 4000, naturalH: 3000, longSide: 4000, expectedScale: 600/4000, expectedDisplayW: 600, expectedDisplayH: 450, expectedWithTitle: 474 },
+  { name: "超大横图 4000×3000", naturalW: 4000, naturalH: 3000, longSide: 4000, expectedScale: 600/4000, expectedDisplayW: 600, expectedDisplayH: 450 },
   // 2000×4000: longSide=4000>600, scale=0.15, W=300, H=600
-  { name: "超大竖图 2000×4000", naturalW: 2000, naturalH: 4000, longSide: 4000, expectedScale: 600/4000, expectedDisplayW: 300, expectedDisplayH: 600, expectedWithTitle: 624 },
+  { name: "超大竖图 2000×4000", naturalW: 2000, naturalH: 4000, longSide: 4000, expectedScale: 600/4000, expectedDisplayW: 300, expectedDisplayH: 600 },
   // 1024×1024: longSide=1024>600, scale=600/1024≈0.5859375, W=600, H=600
-  { name: "方形 1024×1024", naturalW: 1024, naturalH: 1024, longSide: 1024, expectedScale: 600/1024, expectedDisplayW: 600, expectedDisplayH: 600, expectedWithTitle: 624 },
+  { name: "方形 1024×1024", naturalW: 1024, naturalH: 1024, longSide: 1024, expectedScale: 600/1024, expectedDisplayW: 600, expectedDisplayH: 600 },
   // 刚好 NODE_DISPLAY_MAX(600)×600: longSide=600 NOT > 600, scale=1
-  { name: "刚好 NODE_DISPLAY_MAX 600×600", naturalW: D, naturalH: D, longSide: D, expectedScale: 1, expectedDisplayW: D, expectedDisplayH: D, expectedWithTitle: D + 24 },
+  { name: "刚好 NODE_DISPLAY_MAX 600×600", naturalW: D, naturalH: D, longSide: D, expectedScale: 1, expectedDisplayW: D, expectedDisplayH: D },
   // 200×100: longSide=200 ≤ 600, scale=1
-  { name: "小图 200×100", naturalW: 200, naturalH: 100, longSide: 200, expectedScale: 1, expectedDisplayW: 200, expectedDisplayH: 100, expectedWithTitle: 124 },
+  { name: "小图 200×100", naturalW: 200, naturalH: 100, longSide: 200, expectedScale: 1, expectedDisplayW: 200, expectedDisplayH: 100 },
   // 1×1
-  { name: "极小 1×1", naturalW: 1, naturalH: 1, longSide: 1, expectedScale: 1, expectedDisplayW: 1, expectedDisplayH: 1, expectedWithTitle: 25 },
+  { name: "极小 1×1", naturalW: 1, naturalH: 1, longSide: 1, expectedScale: 1, expectedDisplayW: 1, expectedDisplayH: 1 },
   // 1920×1080: longSide=1920>600, scale=600/1920=0.3125, W=600, H=338 (Math.round(1080*0.3125)=338)
-  { name: "超宽 16:9 1920×1080", naturalW: 1920, naturalH: 1080, longSide: 1920, expectedScale: 600/1920, expectedDisplayW: 600, expectedDisplayH: 338, expectedWithTitle: 362 },
+  { name: "超宽 16:9 1920×1080", naturalW: 1920, naturalH: 1080, longSide: 1920, expectedScale: 600/1920, expectedDisplayW: 600, expectedDisplayH: 338 },
   // 100×2000: longSide=2000>600, scale=600/2000=0.3, W=30, H=600
   // 以前短边约束 scale=1 → 100×2000 拉穿画布，长边约束修复了
-  { name: "超窄 100×2000", naturalW: 100, naturalH: 2000, longSide: 2000, expectedScale: 600/2000, expectedDisplayW: 30, expectedDisplayH: 600, expectedWithTitle: 624 },
+  { name: "超窄 100×2000", naturalW: 100, naturalH: 2000, longSide: 2000, expectedScale: 600/2000, expectedDisplayW: 30, expectedDisplayH: 600 },
   // 0×100: degenerate
-  { name: "零宽 0×100", naturalW: 0, naturalH: 100, longSide: 100, expectedScale: 1, expectedDisplayW: 300, expectedDisplayH: 100, expectedWithTitle: 124 },
+  { name: "零宽 0×100", naturalW: 0, naturalH: 100, longSide: 100, expectedScale: 1, expectedDisplayW: 300, expectedDisplayH: 100 },
   // 0×0
-  { name: "全零 0×0", naturalW: 0, naturalH: 0, longSide: 0, expectedScale: 1, expectedDisplayW: 300, expectedDisplayH: 300, expectedWithTitle: 324 },
+  { name: "全零 0×0", naturalW: 0, naturalH: 0, longSide: 0, expectedScale: 1, expectedDisplayW: 300, expectedDisplayH: 300 },
 ];
 
 describe("核心缩放公式（computeThumbScale）— 长边约束 NODE_DISPLAY_MAX=600", () => {
@@ -104,7 +103,7 @@ describe("createNodeFromUrl — 统一使用 computeThumbScale", () => {
       const expectedW = tc.naturalW > 0 ? tc.expectedDisplayW : 300;
       const expectedH = tc.naturalH > 0 ? tc.expectedDisplayH : 300;
       expect(node?.style?.width).toBe(expectedW);
-      expect(node?.style?.height).toBe(expectedH + 24);
+      expect(node?.style?.height).toBe(expectedH + NODE_TITLE_HEIGHT);
     });
   }
 });

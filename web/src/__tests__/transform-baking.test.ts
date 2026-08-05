@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/image-utils";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 // ── Mock Zustand stores ────────────────────────────────────────
 const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
@@ -124,7 +125,7 @@ describe("P0-4: CSS transform baking flow", () => {
       const w = node!.style?.width as number;
       const h = node!.style?.height as number;
       expect(w).toBe(600);
-      expect(h).toBe(474);
+      expect(h).toBe(450 + NODE_TITLE_HEIGHT);
     });
 
     it("should append label suffix before extension", async () => {
