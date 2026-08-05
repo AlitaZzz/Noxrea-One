@@ -11,7 +11,7 @@ import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 import { MenuDivider,MenuItem } from "@/components/common/MenuPopover";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { useI18nStore } from "@/stores/i18n-store";
-import { useCtxMenu } from "@/stores/context-menu-store";
+import { useContextMenuStore } from "@/stores/context-menu-store";
 
 interface Props {
   onAddText: () => void;
@@ -24,7 +24,7 @@ interface Props {
 
 export default function CanvasContextMenu(props: Props) {
   const t = useI18nStore((s) => s.t);
-  const { x, y, visible, hide } = useCtxMenu();
+  const { x, y, visible, hide } = useContextMenuStore();
 
   if (!visible) return null;
 

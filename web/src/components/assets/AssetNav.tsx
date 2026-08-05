@@ -9,7 +9,7 @@ import { FolderOutlined } from "@ant-design/icons";
 import type { ReactNode } from "react";
 
 import NavButton from "@/components/common/NavButton";
-import type { AssetFolder } from "@/lib/types";
+import type { AssetFolder } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface SpaceItem {

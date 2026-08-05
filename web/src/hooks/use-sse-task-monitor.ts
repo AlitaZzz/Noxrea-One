@@ -8,7 +8,7 @@
 import { useEffect, useRef } from "react";
 
 import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
-import type { MediaGenFields } from "@/lib/types";
+import type { MediaGenFields } from "@/lib/types/nodes";
 import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

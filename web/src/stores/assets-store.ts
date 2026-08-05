@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { assetApi, type AssetFolderDto,type AssetItemDto } from "@/lib/api";
-import type { AssetFolder, AssetItem, AssetType, CreateAssetInput, MediaType } from "@/lib/types";
+import type { AssetFolder, AssetItem, AssetType, CreateAssetInput, MediaType } from "@/lib/types/assets";
 
 // --- Helpers ---
 

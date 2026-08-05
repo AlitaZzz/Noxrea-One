@@ -8,7 +8,8 @@
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/image-utils";
 import { createAudioNode, createImageNode, createVideoNode } from "@/lib/node-defaults";
-import type { AnyNode, AssetItem } from "@/lib/types";
+import type { AnyNode } from "@/lib/types/nodes";
+import type { AssetItem } from "@/lib/types/assets";
 
 /** 位置计算函数签名（由调用方从 store 注入） */
 export type FindFreePosition = (size: { width: number; height: number }) => { x: number; y: number };

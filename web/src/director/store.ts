@@ -14,7 +14,7 @@ import type { Stage } from "@/director/core/stage";
 /** 导演场景中所有实体类型的联合（角色/道具/相机/群众）。 */
 export type DirectorEntity = Character | Prop | CameraEntity | Crowd;
 
-import type { DirectorStateData } from "@/lib/types";
+import type { DirectorStateData } from "@/lib/types/nodes";
 
 // --- Entity metadata (Three.js objects live in ref, not here) ---
 

@@ -18,7 +18,8 @@
 
 import { beforeEach,describe, expect, it } from "vitest";
 
-import type { AnyNode, HistorySnapshot, ImageNodeData } from "@/lib/types";
+import type { AnyNode, ImageNodeData } from "@/lib/types/nodes";
+import type { HistorySnapshot } from "@/lib/types/project";
 import { takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";
 import { useHistoryStore } from "@/stores/history-store";
 

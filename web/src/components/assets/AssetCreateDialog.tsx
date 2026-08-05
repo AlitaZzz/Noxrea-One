@@ -13,7 +13,7 @@ import ModalButton from "@/components/common/ModalButton";
 import { apiUpload, apiUploadWithProgress, BASE } from "@/lib/api";
 import AppModal from "@/components/common/AppModal";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
-import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types";
+import type { AssetFolder, AssetType, CreateAssetInput } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [

@@ -7,7 +7,7 @@
 import { Segmented } from "antd";
 
 import { ASSET_CATEGORIES } from "@/lib/constants";
-import type { AssetType } from "@/lib/types";
+import type { AssetType } from "@/lib/types/assets";
 import { useI18nStore } from "@/stores/i18n-store";
 
 interface Props {

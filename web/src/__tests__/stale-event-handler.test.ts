@@ -14,7 +14,7 @@
 import { applyEdgeChanges,applyNodeChanges } from "@xyflow/react";
 import { beforeEach,describe, expect, it } from "vitest";
 
-import type { AnyNode } from "@/lib/types";
+import type { AnyNode } from "@/lib/types/nodes";
 import { useCanvasStore } from "@/stores/canvas-store";
 
 /** 快速构造一个节点 */

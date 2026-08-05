@@ -13,5 +13,5 @@ export { useModelStore } from "./model-store";
 export { useAssetsStore, ASSET_PAGE_SIZE, computeRecursiveFolderCounts } from "./assets-store";
 export type { AssetListState } from "./assets-store";
 export { useI18nStore } from "./i18n-store";
-export { useCtxMenu } from "./context-menu-store";
+export { useContextMenuStore } from "./context-menu-store";
 export { saveManager } from "./save-manager";

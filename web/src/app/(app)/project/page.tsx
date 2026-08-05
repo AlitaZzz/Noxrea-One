@@ -17,7 +17,7 @@ import { MenuDivider,MenuItem, MenuPopover } from "@/components/common/MenuPopov
 import { ChevronDownIcon } from "@/components/common/icons/ChevronDownIcon";
 import { ThemeDarkIcon } from "@/components/common/icons/theme/ThemeDarkIcon";
 import { ThemeLightIcon } from "@/components/common/icons/theme/ThemeLightIcon";
-import type { CanvasProject } from "@/lib/types";
+import type { CanvasProject } from "@/lib/types/project";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";

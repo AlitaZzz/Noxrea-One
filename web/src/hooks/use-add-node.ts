@@ -13,7 +13,7 @@ import {
   createVideoNode,
   directorNode,
 } from "@/lib/node-defaults";
-import type { AnyNode } from "@/lib/types";
+import type { AnyNode } from "@/lib/types/nodes";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
 /** 支持的节点类型 */

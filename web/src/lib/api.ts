@@ -5,7 +5,7 @@
  */
 import { showGlobalMessage } from "@/lib/global-message";
 
-// 同源请求（Next.js 全栈架构，API Routes 与前端在同一端口）
+// 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
 export const BASE = "";
 
 function getToken(): string | null {

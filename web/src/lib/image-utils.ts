@@ -8,7 +8,8 @@
 import { apiUpload } from "@/lib/api";
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
 import { createEdge,createImageNode } from "@/lib/node-defaults";
-import type { AnyEdge, AnyNode, ImageNode } from "@/lib/types";
+import type { AnyEdge } from "@/lib/types/canvas";
+import type { AnyNode, ImageNode } from "@/lib/types/nodes";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。

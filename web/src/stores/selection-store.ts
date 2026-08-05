@@ -3,7 +3,8 @@
  */
 import { create } from "zustand";
 
-import type { AnyNode,ClipboardData } from "@/lib/types";
+import type { AnyNode } from "@/lib/types/nodes";
+import type { ClipboardData } from "@/lib/types/project";
 
 interface SelectionState {
   clipboard: ClipboardData | null;
