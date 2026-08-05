@@ -1,3 +1,8 @@
+/**
+ * @ 引用候选下拉列表。
+ * 展示可引用的图片 / 音频素材缩略项，支持键盘上下选择与外部点击关闭，
+ * 并对外导出引用项类型 ReferenceItem。
+ */
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";

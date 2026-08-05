@@ -1,3 +1,8 @@
+/**
+ * 节点四角缩放手柄。
+ * 处理指针拖拽过程中的尺寸计算（含最小尺寸约束与可选宽高比锁定），
+ * 实时写回画布 store，被各类节点组件复用。
+ */
 "use client";
 
 import { useCallback, useRef } from "react";

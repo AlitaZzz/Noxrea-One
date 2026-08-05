@@ -1,3 +1,7 @@
+/**
+ * 节点拖拽对齐辅助线。
+ * 把 use-alignment-guides 计算出的画布坐标辅助线换算为屏幕坐标并叠加渲染。
+ */
 "use client";
 
 import { useReactFlow } from "@xyflow/react";

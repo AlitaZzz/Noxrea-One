@@ -1,3 +1,8 @@
+/**
+ * 画布 AI 对话抽屉。
+ * 提供多轮会话（新建 / 历史切换）、附件上传、技能调用与模型选择，
+ * 流式接收回复并以 Markdown 渲染（经 sanitize 白名单放宽后允许有限 HTML）。
+ */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, ThunderboltOutlined } from "@ant-design/icons";

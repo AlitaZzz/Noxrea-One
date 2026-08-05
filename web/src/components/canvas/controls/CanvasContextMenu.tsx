@@ -1,3 +1,8 @@
+/**
+ * 画布空白处右键菜单。
+ * 从 context-menu store 读取弹出位置与显隐，渲染「新增各类节点 / 重置视图」菜单项，
+ * 具体动作由父级通过 props 注入，自身不含业务逻辑。
+ */
 "use client";
 
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";

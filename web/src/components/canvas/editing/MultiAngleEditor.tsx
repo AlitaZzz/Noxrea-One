@@ -1,3 +1,8 @@
+/**
+ * 多视角（相机机位）编辑器。
+ * 以三维轨道球控件设定观察方位角、仰角与远近，并提供俯拍 / 仰拍 / 鱼眼等预设机位，
+ * 生成对应视角的图片节点。
+ */
 "use client";
 
 import { ArrowUpOutlined } from "@ant-design/icons";

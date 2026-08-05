@@ -1,3 +1,8 @@
+/**
+ * 图片生成面板，挂在图片节点下方。
+ * 负责提示词输入（支持 @ 引用其他节点）、模型与画质 / 分辨率 / 比例 / 张数等参数配置，
+ * 提交生成任务并把参数持久化到节点数据，生成结果回填当前节点或派生新节点。
+ */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined,RobotOutlined } from "@ant-design/icons";

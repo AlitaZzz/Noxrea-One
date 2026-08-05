@@ -1,3 +1,8 @@
+/**
+ * 文本节点（text-node）渲染组件。
+ * 展示 / 就地编辑文本内容与节点标题，支持清空、生成中状态展示、
+ * 四角缩放与上下连接桩；内容变更通过自定义事件回传画布层统一落库。
+ */
 "use client";
 
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
