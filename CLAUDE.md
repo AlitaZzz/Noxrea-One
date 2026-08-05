@@ -75,14 +75,50 @@ Noxrea-AI-Canvas/               # Monorepo 根
 │   ├── eslint.config.mjs       # 前端 ESLint 规则
 │   └── src/
 │       ├── app/                # Next.js App Router 页面（纯前端，无 API 路由）
-│       │   ├── canvas/         # 画布主页面
-│       │   ├── login/          # 登录页
-│       │   └── project/        # 项目管理页
+│       │   ├── (app)/          # 已认证路由组（layout.tsx 做鉴权守卫）
+│       │   │   ├── canvas/     # 画布主页面
+│       │   │   ├── project/    # 项目管理页
+│       │   │   └── layout.tsx
+│       │   ├── login/          # 登录页（无需鉴权，直接根下）
+│       │   ├── layout.tsx      # 根布局
+│       │   └── page.tsx        # 首页（重定向）
 │       ├── components/         # React 组件
-│       ├── hooks/              # 自定义 hooks
-│       ├── lib/                # 工具层（api.ts BASE 为空字符串，rewrites 同源代理）
+│       │   ├── canvas/         # 画布核心（按功能子目录组织）
+│       │   │   ├── controls/   # 画布控制（对齐/右键/缩放/工具栏/边删除）
+│       │   │   ├── panels/     # 生成面板（图片/视频/文本/API设置）
+│       │   │   ├── chat/       # 聊天交互（ChatPanel/Mention/SkillPanel）
+│       │   │   ├── editing/    # 编辑工具（裁剪/标注/光照/多角度）
+│       │   │   ├── sidebar/    # 侧边栏（CanvasSidebar/NodeInspector）
+│       │   │   ├── gen/        # 生成面板共享（RatioIcon/ModelOption）
+│       │   │   ├── nodes/      # 节点组件（Text/Image/Video/Audio/Group/Director）
+│       │   │   └── InfiniteCanvas.tsx  # 主画布入口
+│       │   ├── common/         # 通用 UI（AppModal/ConfirmModal/VirtualList 等）
+│       │   ├── assets/         # 资源管理（侧栏/网格/卡片/文件夹）
+│       │   ├── director/       # 3D 引擎 React UI 容器
+│       │   ├── auth/           # 认证组件
+│       │   ├── layout/         # 布局组件
+│       │   └── overlays/       # 覆盖层（LayerModal 等）
+│       ├── contexts/           # React Context（edge-highlight-context）
+│       ├── hooks/              # 自定义 hooks（含 index.ts barrel export）
+│       ├── i18n/               # 国际化资源（zh-CN.json / en-US.json + 加载器）
+│       ├── lib/                # 纯工具层（零 stores/components 依赖）
+│       │   ├── types/          # 领域类型（canvas/nodes/models/assets/project）
+│       │   ├── types.ts        # Barrel re-export（向后兼容）
+│       │   ├── api.ts          # API 调用（引用 lib/global-message）
+│       │   ├── global-message.ts  # 全局消息 API（antd message 代理）
+│       │   ├── constants.ts    # 全局常量 + EventNames + NODE_TYPE_COLOR
+│       │   ├── image-utils.ts  # 图片工具（依赖注入 CanvasStoreApi）
+│       │   ├── add-asset.ts    # 资产->节点（纯函数，依赖注入）
+│       │   ├── agent-tools.ts  # Agent 工具（依赖注入 addNodes/findFreePosition）
+│       │   ├── node-defaults.ts
+│       │   └── slash-command.ts
 │       ├── providers/          # React context providers
-│       ├── stores/             # Zustand 状态管理
+│       ├── stores/             # Zustand 状态管理（含 index.ts barrel export）
+│       │   ├── canvas-store.ts
+│       │   ├── save-manager.ts # 画布保存管理器（从 lib/ 迁入）
+│       │   ├── context-menu-store.ts  # 右键菜单状态（从组件提取）
+│       │   ├── i18n-store.ts   # i18n 状态（翻译文本在 i18n/ 目录）
+│       │   └── ...
 │       ├── director/           # 3D 引擎逻辑（纯 TS，无 React）
 │       └── __tests__/          # 单元测试
 │
@@ -99,10 +135,10 @@ Noxrea-AI-Canvas/               # Monorepo 根
 
 | 类型 | 规则 | 示例 |
 |---|---|---|
-| React 组件 `*.tsx`（`components/**`） | PascalCase | `CanvasContextMenu.tsx` |
-| 其余 `*.ts` / 非组件 `*.tsx` | kebab-case | `use-canvas-events.ts`、`app-modal.tsx` |
+| React 组件 `*.tsx`（`components/**`） | PascalCase | `CanvasContextMenu.tsx`、`AppModal.tsx` |
+| 其余 `*.ts` / 非组件 `*.tsx` | kebab-case | `use-canvas-events.ts`、`global-message.ts` |
 | 测试 `*.test.ts`（集中 `src/__tests__/`） | kebab-case | `canvas-events.test.ts` |
-| 目录名 | 全小写 | `components/`、`director/` |
+| 目录名 | 全小写 | `components/`、`director/`、`controls/` |
 
 - import 排序：`simple-import-sort` 分组为 external -> `@/` 绝对路径 -> 相对路径
 - 测试集中放在 `src/__tests__/`
@@ -125,6 +161,12 @@ Noxrea-AI-Canvas/               # Monorepo 根
 - **server/ 纯 Node.js 边界**：不导入 `next/*`、`react/*`（web 已无 `@server` 引用）
 - **同进程 SSE**：Worker 同进程写 DB -> TaskWatcher 读 DB -> SSE 推送
 - **前端代理**：next.config.ts rewrites `/api/*` -> `localhost:4000`，无 CORS
+- **前端分层单向依赖**：`app -> components -> hooks/stores -> lib`，禁止反向依赖
+  - `lib/` 层零 `@/stores/` 和 `@/components/` 引用（纯工具 + 依赖注入）
+  - `hooks/` 层零 `@/components/` 引用（纯逻辑）
+  - `lib/` 中需要操作 store 的函数，通过参数注入 `CanvasStoreApi` 接口（见 `image-utils.ts`、`agent-tools.ts`、`add-asset.ts`）
+- **类型就近定义**：领域类型在 `lib/types/` 下按领域拆分，`lib/types.ts` 为 barrel re-export
+- **i18n 资源外置**：翻译文本在 `i18n/zh-CN.json` 和 `i18n/en-US.json`，`stores/i18n-store.ts` 仅管理状态
 - 画布保存机制、SSRF 防护实现等详见 [docs/architecture-notes.md](docs/architecture-notes.md)
 
 ## 配置与运行
