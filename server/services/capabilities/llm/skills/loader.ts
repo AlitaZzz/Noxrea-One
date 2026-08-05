@@ -7,8 +7,10 @@ import matter from "gray-matter";
 import { resolveFromRoot } from "../../../../core/paths";
 
 export interface SkillMeta {
+  /** 技能标识符：英文小写 + 连字符，用于调用与持久化 */
   name: string;
-  title: string;
+  /** 展示名：面向用户的中文名称 */
+  displayTitle: string;
   description: string;
   category: string;
   appliesTo?: string[];
@@ -43,7 +45,7 @@ function scanSkills(): Skill[] {
       const name = (data.name as string) || entry.name;
       const meta: SkillMeta = {
         name,
-        title: (data.title as string) || name,
+        displayTitle: (data.display_title as string) || name,
         description: (data.description as string) || "",
         category: (data.category as string) || "未分类",
         appliesTo: Array.isArray(data.appliesTo) ? data.appliesTo : undefined,

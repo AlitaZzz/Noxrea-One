@@ -1,6 +1,6 @@
 ---
 name: script-writer
-title: 短视频脚本创作
+display_title: 短视频脚本创作
 description: 根据主题快速生成结构清晰、节奏紧凑的短视频口播脚本，含钩子、铺垫与行动号召。
 category: 剧本策划
 appliesTo:

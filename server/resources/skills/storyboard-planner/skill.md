@@ -1,6 +1,6 @@
 ---
 name: storyboard-planner
-title: 分镜策划
+display_title: 分镜策划
 description: 将脚本拆解为可执行的分镜表，标注景别、运镜、画面与台词，便于后续美术与拍摄。
 category: 分镜策划
 appliesTo:
