@@ -141,12 +141,6 @@ Noxrea-AI-Canvas/
 └── package.json       # 根配置 (workspaces + 统一脚本)
 ```
 
-## 文档
-
-- [架构笔记](docs/architecture-notes.md) - 画布保存机制、SSRF 防护等
-- [协作规则](docs/collaboration-rules.md) - 团队协作约定
-- [CLAUDE.md](CLAUDE.md) - AI 协作快速参考
-
 ## License
 
 Private
