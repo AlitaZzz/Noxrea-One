@@ -1002,7 +1002,9 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .cortex-markdown h1 { font-size: 18px; }
 .cortex-markdown h2 { font-size: 16px; }
 .cortex-markdown h3 { font-size: 14.5px; }
-.cortex-markdown ul, .cortex-markdown ol { margin: 0 0 8px; padding-left: 20px; }
+.cortex-markdown ul, .cortex-markdown ol { margin: 0 0 8px; padding-left: 20px; list-style-position: outside; }
+.cortex-markdown ul { list-style-type: disc; }
+.cortex-markdown ol { list-style-type: decimal; }
 .cortex-markdown li { margin-bottom: 3px; }
 .cortex-markdown code {
   background: var(--canvas-bg-hover);
