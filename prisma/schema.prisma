@@ -239,6 +239,7 @@ model ChatMessage {
   sessionId Int      @map("session_id")
   role      String   @map("role") // user | assistant
   content   String   @default("") @map("content")
+  skills    String?  @map("skills") // JSON TEXT：本条 user 消息触发的技能名数组
   refImages String?  @map("ref_images") // JSON TEXT：参考图 URL 数组
   createdAt DateTime @default(now()) @map("created_at")
 
