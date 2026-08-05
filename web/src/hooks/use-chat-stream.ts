@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import { executeAgentTools, type AgentToolCall, type AgentToolResult } from "@/lib/agent-tools";
 import { showGlobalMessage } from "@/components/overlays/global-message";
 import { getTokenHeader } from "@/lib/api";
+import { useAgentSessions } from "@/hooks/use-agent-sessions";
 
 export type ChatRole = "user" | "assistant" | "tool" | "system";
 
@@ -26,6 +27,8 @@ export interface ChatMessage {
   toolCallId?: string;
   /** 标记该消息为错误（如上游返回错误），用于红色样式展示 */
   error?: boolean;
+  /** 触发式 skill：在用户气泡顶部以「图标 + name」呈现 */
+  skills?: { name: string; displayTitle?: string }[];
 }
 
 /** 发给后端的工具调用形态（args 必须为对象，后端会 JSON.stringify 后透传上游） */
@@ -93,7 +96,10 @@ interface RunStreamResult {
 }
 
 /**
- * 高层对话封装：管理会话 + SSE 解析 + tool_call 续轮状态机。
+ * 高层对话封装：管理消息 + SSE 解析 + tool_call 续轮状态机。
+ *
+ * 会话管理（chatId / sessions / CRUD）委托给 useAgentSessions，
+ * 本 hook 只关注消息流和工具续轮。
  *
  * 续轮状态机：收到 done 且携带 toolCalls 时，调用 executeAgentTools 执行
  * （在画布建节点），把 tool 结果再次投递给 /api/chat/stream 续轮，
@@ -104,9 +110,6 @@ export function useChatStream(modelId: string) {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [chatId, setChatId] = useState<string | null>(null);
-  const [chatTitle, setChatTitle] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const streamingRef = useRef(false);
@@ -120,72 +123,17 @@ export function useChatStream(modelId: string) {
     setMessages((prev) => prev.filter((m) => !(m.role === "assistant" && !m.content && !m.toolCalls)));
   }, []);
 
-  /** 创建新会话（首条消息前调用），可选传入初始标题 */
-  const ensureSession = useCallback(async (initialTitle?: string): Promise<string | null> => {
-    if (chatId) return chatId;
-    try {
-      const res = await fetch("/api/chat/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify(initialTitle ? { title: initialTitle } : {}),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { id: string; title?: string };
-      setChatId(data.id);
-      if (data.title) setChatTitle(data.title);
-      return data.id;
-    } catch {
-      showGlobalMessage().error("创建会话失败");
-      return null;
-    }
-  }, [chatId]);
-
-  /** 加载历史消息（切换会话时调用） */
-  const loadHistory = useCallback(async (sessionId: string) => {
-    try {
-      const msgRes = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
-        headers: { ...getTokenHeader() },
-      });
-      if (!msgRes.ok) throw new Error(`HTTP ${msgRes.status}`);
-      const data = (await msgRes.json()) as Array<{ role: string; content: string }>;
-      const loaded: ChatMessage[] = (data ?? []).map((m) => ({
-        id: uid(),
-        role: m.role as ChatRole,
-        content: m.content,
-      }));
-      setMessages(loaded);
-      setChatId(sessionId);
-      const found = sessions.find((s) => String(s.id) === String(sessionId));
-      setChatTitle(found?.title ?? null);
-    } catch {
-      showGlobalMessage().error("加载历史失败");
-    }
-  }, [sessions]);
-
-  /** 构建发给后端的 messages（过滤 UI 内部态，仅保留可序列化角色） */
-  const buildPayload = useCallback(
-    (extra: StreamMessage[]): StreamMessage[] => {
-      const base: StreamMessage[] = messages
-        .filter((m) => m.role !== "tool" || m.toolCallId)
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.toolCalls?.length
-            ? {
-                toolCalls: m.toolCalls.map((t) => ({
-                  id: t.id,
-                  name: t.name,
-                  args: parseToolArgs(t.args),
-                  ...(t.label ? { label: t.label } : {}),
-                })),
-              }
-            : {}),
-          ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
-        }));
-      return [...base, ...extra];
+  // ── 会话管理委托给 useAgentSessions ──
+  const sessions = useAgentSessions({
+    onClearMessages: () => setMessages([]),
+    onStopStream: () => {
+      abortRef.current?.abort();
+      streamingRef.current = false;
+      setIsStreaming(false);
+      clearPendingPlaceholders();
     },
-    [messages]
-  );
+    onLoadMessages: (loaded: ChatMessage[]) => setMessages(loaded),
+  });
 
   /** 解析一段 SSE buffer 中的事件块 */
   function parseBlocks(buf: string): { blocks: Array<{ event: string; data: string }>; rest: string } {
@@ -210,7 +158,7 @@ export function useChatStream(modelId: string) {
     async (
       sessionId: string,
       history: StreamMessage[],
-      skills?: { name: string; title?: string }[],
+      skills?: { name: string; displayTitle?: string }[],
       placeholderId?: string
     ): Promise<RunStreamResult> => {
       const ctrl = new AbortController();
@@ -312,25 +260,28 @@ export function useChatStream(modelId: string) {
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
   const sendChat = useCallback(
-    async (text: string, skills?: { name: string; title?: string }[]) => {
+    async (text: string, skills?: { name: string; displayTitle?: string }[]) => {
       const trimmed = text.trim();
       if ((!trimmed && (!skills || skills.length === 0)) || streamingRef.current) return;
 
       // 先让用户消息出现在界面（即使后续会话创建失败也不丢失）
-      const displayText = trimmed || (skills && skills.length ? skills.map((s) => s.title || s.name).join("、") : trimmed);
-      appendMessage({ id: uid(), role: "user", content: displayText });
+      // 有 skill 时正文只放用户指令；skill 名称由气泡顶部的图标+name 行展示，避免重复
+      const displayText = trimmed;
+      appendMessage({
+        id: uid(),
+        role: "user",
+        content: displayText,
+        ...(skills && skills.length ? { skills } : {}),
+      });
 
       const autoTitle = displayText.length > 24 ? `${displayText.slice(0, 24)}…` : displayText;
-      const sessionId = await ensureSession(autoTitle);
+      const sessionId = await sessions.ensureSession(autoTitle);
       if (!sessionId) return;
-      setChatTitle(autoTitle);
+      sessions.setChatTitle(autoTitle);
 
       streamingRef.current = true;
       setIsStreaming(true);
       setError(null);
-
-      // 记录最近一次插入的占位气泡 id，供异常/兜底清理使用
-      let lastPlaceholderId: string | null = null;
 
       try {
         // 用局部 history 累积所有轮次消息，避免依赖 messages state（setMessages 异步更新，
@@ -343,7 +294,6 @@ export function useChatStream(modelId: string) {
 
           // 先插入一条「思考中」占位气泡，保证发送后立即可见反馈
           const placeholderId = uid();
-          lastPlaceholderId = placeholderId;
           appendMessage({ id: placeholderId, role: "assistant", content: "" });
 
           const { hasTool, toolCalls, assistantId, text } = await runStream(
@@ -410,61 +360,8 @@ export function useChatStream(modelId: string) {
         );
       }
     },
-    [appendMessage, buildPayload, ensureSession, runStream]
+    [appendMessage, sessions, runStream]
   );
-
-  /** 开新对话 */
-  const newChat = useCallback(() => {
-    stopStream();
-    setMessages([]);
-    setChatId(null);
-    setChatTitle(null);
-    setError(null);
-  }, [stopStream]);
-
-  /** 拉取历史会话列表（按 updatedAt 倒序） */
-  const loadSessions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/chat/sessions", { headers: { ...getTokenHeader() } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as Array<{ id: string; title: string; updatedAt: string }>;
-      setSessions(data ?? []);
-    } catch {
-      showGlobalMessage().error("加载历史列表失败");
-    }
-  }, []);
-
-  /** 删除会话；若删的是当前会话则顺带开新对话 */
-  const deleteChat = useCallback(
-    async (sessionId: string) => {
-      try {
-        const res = await fetch(`/api/chat/sessions/${sessionId}`, { method: "DELETE", headers: { ...getTokenHeader() } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        if (sessionId === chatId) newChat();
-        showGlobalMessage().success("已删除会话");
-      } catch {
-        showGlobalMessage().error("删除失败");
-      }
-    },
-    [chatId, newChat]
-  );
-
-  /** 重命名当前会话 */
-  const renameChat = useCallback(async (title: string) => {
-    if (!chatId) return;
-    try {
-      const res = await fetch(`/api/chat/sessions/${chatId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...getTokenHeader() },
-        body: JSON.stringify({ title }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setChatTitle(title);
-    } catch {
-      showGlobalMessage().error("重命名失败");
-    }
-  }, [chatId]);
 
   return {
     messages,
@@ -472,15 +369,15 @@ export function useChatStream(modelId: string) {
     setInput,
     isStreaming,
     error,
-    chatId,
-    chatTitle,
+    chatId: sessions.chatId,
+    chatTitle: sessions.chatTitle,
     sendChat,
     stopStream,
-    newChat,
-    loadHistory,
-    renameChat,
-    sessions,
-    loadSessions,
-    deleteChat,
+    newChat: sessions.newChat,
+    loadHistory: sessions.loadHistory,
+    renameChat: sessions.renameChat,
+    sessions: sessions.sessions,
+    loadSessions: sessions.loadSessions,
+    deleteChat: sessions.deleteChat,
   };
 }

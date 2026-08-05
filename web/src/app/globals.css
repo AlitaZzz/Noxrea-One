@@ -882,6 +882,28 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: color-mix(in srgb, var(--canvas-text) 16%, transparent);
   color: var(--canvas-text);
 }
+/* 对话流中用户消息携带的 skill：图标 + name，呈现为浅色胶囊标签 */
+.chat-msg-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.chat-msg-skill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  line-height: normal;
+  color: var(--canvas-accent, #7c5cff);
+  background: color-mix(in srgb, var(--canvas-accent, #7c5cff) 16%, transparent);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.chat-msg-skill .anticon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
 .chat-composer-actions {
   display: flex;
   align-items: center;
@@ -992,7 +1014,14 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* markdown 渲染容器 */
-.cortex-markdown { font-size: 13.5px; line-height: 1.6; color: var(--canvas-text); white-space: normal; }
+.cortex-markdown {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--canvas-text);
+  white-space: normal;
+}
 .cortex-markdown p { margin: 0 0 8px; }
 .cortex-markdown p:last-child { margin-bottom: 0; }
 .cortex-markdown h1, .cortex-markdown h2, .cortex-markdown h3,
