@@ -24,7 +24,7 @@ import { useI18nStore } from "@/stores/i18n-store";
 import AssetCategoryTabs from "./AssetCategoryTabs";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
-import AssetSidebar from "./AssetSidebar";
+import AssetNav from "./AssetNav";
 import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
 import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
@@ -437,7 +437,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             className="flex flex-col py-4 border-r shrink-0"
             style={{ borderColor: "var(--canvas-border)", paddingLeft: 0, paddingRight: 16 }}
           >
-            <AssetSidebar
+            <AssetNav
               spaces={spaceLabels}
               activeSpace={activeSpace}
               activeFolderId={activeFolderId}
