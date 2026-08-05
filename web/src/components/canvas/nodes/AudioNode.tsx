@@ -1,3 +1,8 @@
+/**
+ * 音频节点（audio-node）渲染组件。
+ * 承载音频上传与拖入、生成中状态展示，内嵌 AudioWaveform 波形播放器，
+ * 并把解析出的时长回填到节点数据供标题栏显示。
+ */
 "use client";
 
 import { UploadOutlined } from "@ant-design/icons";

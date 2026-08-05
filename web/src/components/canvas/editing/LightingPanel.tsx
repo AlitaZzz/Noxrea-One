@@ -1,3 +1,8 @@
+/**
+ * 图片打光参数面板。
+ * 通过三维球体控件设定光源方位角 / 仰角，并调节强度与色温色值（含六向快捷预设），
+ * 输出的是打光描述参数而非像素结果，交由生成链路使用。
+ */
 "use client";
 
 import { ArrowUpOutlined } from "@ant-design/icons";

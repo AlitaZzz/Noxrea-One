@@ -1,3 +1,8 @@
+/**
+ * 音频波形播放器展示组件（基于 wavesurfer.js）。
+ * 纯受控 UI：负责波形绘制、进度光标与播放按钮，播放态由父组件传入，
+ * 通过回调向上抛出进度与就绪时长；另导出通用的时间格式化函数。
+ */
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";

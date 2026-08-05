@@ -1,3 +1,8 @@
+/**
+ * 支持 @ 引用的提示词输入框。
+ * 基于 contentEditable 实现：输入 @ 唤起候选下拉，选中后插入不可拆分的 chip，
+ * 对外始终以「图N / 音N」形式输出纯文本，被各生成面板与对话面板复用。
+ */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";

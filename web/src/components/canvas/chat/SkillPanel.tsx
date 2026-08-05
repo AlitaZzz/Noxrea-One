@@ -1,3 +1,7 @@
+/**
+ * 对话技能选择面板。
+ * 从后端拉取可用技能列表并以气泡形式分类展示，选中后把 /技能名 追加到输入框。
+ */
 "use client";
 
 import { ThunderboltOutlined } from "@ant-design/icons";

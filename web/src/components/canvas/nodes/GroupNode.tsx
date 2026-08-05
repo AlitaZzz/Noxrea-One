@@ -1,3 +1,8 @@
+/**
+ * 编组节点（group-node）渲染组件。
+ * 作为其他节点的父容器提供可视边框与可编辑组名，支持四角缩放，
+ * 不承载媒体内容，成员管理由画布层的编组逻辑负责。
+ */
 "use client";
 
 import { GroupOutlined } from "@ant-design/icons";

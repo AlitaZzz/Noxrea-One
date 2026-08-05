@@ -1,3 +1,8 @@
+/**
+ * 文本生成面板，挂在文本节点下方。
+ * 负责提示词输入（支持 @ 引用其他节点）与文本模型选择，
+ * 以流式方式接收生成结果并写回节点内容。
+ */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";

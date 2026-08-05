@@ -1,3 +1,8 @@
+/**
+ * 自定义连线组件（贝塞尔曲线）。
+ * 悬停 / 选中时在中点显示剪断按钮以删除连线，参与生成的连线会渲染流动光点动画。
+ * 注意：文件名只体现了删除按钮，实际导出的是完整的边渲染组件 DeletableEdge。
+ */
 "use client";
 
 import { ScissorOutlined } from "@ant-design/icons";

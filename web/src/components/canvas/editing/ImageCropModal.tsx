@@ -1,3 +1,7 @@
+/**
+ * 图片裁剪弹窗（基于 react-image-crop 的早期实现）。
+ * 与 CropPanel 功能重叠，当前项目内已无任何引用，属待清理的历史代码。
+ */
 "use client";
 
 import "react-image-crop/dist/ReactCrop.css";

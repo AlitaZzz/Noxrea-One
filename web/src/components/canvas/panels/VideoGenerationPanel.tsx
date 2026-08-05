@@ -1,3 +1,8 @@
+/**
+ * 视频生成面板，挂在视频节点下方。
+ * 负责提示词输入（支持 @ 引用与首尾帧图片）、模型与分辨率 / 比例 / 时长 / 音频等参数配置，
+ * 提交异步生成任务并把参数持久化到节点数据。
+ */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";

@@ -1,3 +1,7 @@
+/**
+ * 节点详情查看弹窗（调试用）。
+ * 以只读方式展示选中节点的 ID、类型、坐标、尺寸及原始 JSON 数据。
+ */
 "use client";
 
 import type { Node } from "@xyflow/react";

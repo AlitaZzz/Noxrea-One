@@ -1,3 +1,8 @@
+/**
+ * 图片标注编辑面板。
+ * 在原图之上提供画笔、矩形框、文字三种标注工具（含颜色 / 粗细调节与撤销重做），
+ * 确认后把合成结果上传并作为新的图片节点加入画布。
+ */
 "use client";
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, HighlightOutlined, BorderOutlined, FontSizeOutlined } from "@ant-design/icons";

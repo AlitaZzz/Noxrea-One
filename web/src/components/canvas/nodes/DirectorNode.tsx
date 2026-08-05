@@ -1,3 +1,8 @@
+/**
+ * Director 节点（director-node）在画布上的入口卡片。
+ * 仅做占位展示与标题编辑，点击后把节点内保存的三维场景状态载入 director store
+ * 并打开全屏 Director 编辑器，本身不含三维逻辑。
+ */
 "use client";
 
 import { PartitionOutlined } from "@ant-design/icons";

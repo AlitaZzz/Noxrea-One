@@ -1,3 +1,8 @@
+/**
+ * 图片裁剪面板（自实现拖拽手柄版本）。
+ * 支持自由与预设比例裁剪、八向手柄调整与整体移动，
+ * 确认后裁切图片并上传为新的图片节点。
+ */
 "use client";
 
 import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";

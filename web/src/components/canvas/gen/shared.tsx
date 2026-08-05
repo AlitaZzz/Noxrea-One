@@ -1,3 +1,8 @@
+/**
+ * 图片 / 视频生成面板之间的共享代码。
+ * 当前仅包含宽高比可视化图标与模型选项类型定义。
+ */
+
 /** 比例选择器的可视化图标（宽高比小方框） */
 export function RatioIcon({ ratio }: { ratio: string; active?: boolean }) {
   const [w, h] = ratio.split(":").map(Number);
