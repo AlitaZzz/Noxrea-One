@@ -1,3 +1,7 @@
+/**
+ * 群众实体（角色阵列）。
+ * 以行列排布批量管理多个角色成员，整体作为单个实体参与选择与变换。
+ */
 import * as THREE from "three";
 
 import type { Character } from "./character";

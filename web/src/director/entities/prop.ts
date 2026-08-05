@@ -1,3 +1,7 @@
+/**
+ * 道具实体。
+ * 构建立方体、球体、人台等基础几何道具并循环分配配色。
+ */
 import * as THREE from "three";
 
 import { Entity } from "./entity";

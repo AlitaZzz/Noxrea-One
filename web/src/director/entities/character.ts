@@ -1,3 +1,8 @@
+/**
+ * 角色实体。
+ * 加载带骨骼的 GLB 素体并归一化身高体型，构建骨骼映射，
+ * 支持全身 FK 关节摆姿与姿态预设应用。
+ */
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 

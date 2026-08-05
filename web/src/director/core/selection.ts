@@ -1,3 +1,7 @@
+/**
+ * 三维实体拾取与高亮。
+ * 基于 Raycaster 完成点击选择，并在地面绘制选中蓝环指示。
+ */
 import * as THREE from "three";
 
 import type { DirectorEntity } from "@/director/store";
