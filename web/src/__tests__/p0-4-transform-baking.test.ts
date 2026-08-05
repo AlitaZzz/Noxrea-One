@@ -57,10 +57,10 @@ import { useCanvasStore } from "@/stores/canvas-store";
 /** 模拟 CanvasStoreApi（符合 image-utils 中定义的接口） */
 const mockStoreApi = {
   nodes: mockNodes,
-  edges: [] as Array<Record<string, unknown>>,
+  edges: [],
   addNodes: vi.fn(),
   setEdges: vi.fn(),
-};
+} as any;
 
 // ── Import pure functions from save-manager ─────────────────────
 // These aren't exported; we re-implement or extract. Extract them:

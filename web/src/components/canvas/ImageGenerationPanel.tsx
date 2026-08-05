@@ -16,25 +16,10 @@ import { useHistoryStore } from "@/stores/history-store";
 import { useI18nStore } from "@/stores/i18n-store";
 import { useModelStore } from "@/stores/model-store";
 import MentionPrompt, { type ReferenceItem } from "./MentionPrompt";
+import { RatioIcon, type ModelOption } from "./gen/shared";
 import { TextIcon } from "@/components/common/icons/media/TextIcon";
 
-function RatioIcon({ ratio, active }: { ratio: string; active?: boolean }) {
-  const [w, h] = ratio.split(":").map(Number);
-  const maxDim = 14;
-  const boxW = Math.max(3, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
-  const boxH = Math.max(3, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
-  return <span className="inline-flex items-center justify-center" style={{ width: 17, height: 17, marginRight: 3, flexShrink: 0 }}>
-    <span className="rounded-[2px]" style={{ width: boxW, height: boxH, border: `1.5px solid currentColor` }} />
-  </span>;
-}
-
 interface Props { nodeId: string; }
-
-interface ModelOption {
-  value: string;
-  channelId: string;
-  modelName: string;
-}
 
 const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Props) {
   const t = useI18nStore((s) => s.t);

@@ -4,13 +4,10 @@ import {
   AppstoreOutlined,
   CloseOutlined,
   FilterOutlined,
-  PartitionOutlined,
-  GroupOutlined,
   FolderOpenOutlined,
   FolderOutlined,
   LoadingOutlined,
   PauseCircleFilled,
-  PictureOutlined,
   PlayCircleFilled,
   PlusOutlined,
   SearchOutlined,
@@ -20,7 +17,6 @@ import { useReactFlow, type Node } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { TextIcon } from "@/components/common/icons/media/TextIcon";
 import { AssetsIcon } from "@/components/common/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/common/icons/media/WaveIcon";
 
@@ -33,25 +29,8 @@ import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/stores/assets-store";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
-
-// ── 节点类型顺序和标签映射 ──
-const NODE_TYPE_I18N: Record<string, string> = {
-  [NODE_TYPE.DIRECTOR]: "director.node",
-  [NODE_TYPE.IMAGE]: "image.node",
-  [NODE_TYPE.VIDEO]: "video.node",
-  [NODE_TYPE.TEXT]: "text.node",
-  [NODE_TYPE.GROUP]: "group.node",
-  [NODE_TYPE.AUDIO]: "audio.node",
-};
-
-const NODE_TYPE_ORDER = [
-  NODE_TYPE.DIRECTOR,
-  NODE_TYPE.IMAGE,
-  NODE_TYPE.VIDEO,
-  NODE_TYPE.TEXT,
-  NODE_TYPE.AUDIO,
-  NODE_TYPE.GROUP,
-];
+import { useVideoThumbnail } from "@/hooks/use-video-thumbnail";
+import { getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER, TYPE_COLORS } from "./sidebar/node-type-constants";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
@@ -62,78 +41,6 @@ const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
   { key: "audio", labelKey: "asset.cat.audio" },
   { key: "other", labelKey: "asset.cat.other" },
 ];
-
-const TYPE_COLORS: Record<string, string> = {
-  [NODE_TYPE.DIRECTOR]: "#ff8a3d",
-  [NODE_TYPE.IMAGE]: "#52c41a",
-  [NODE_TYPE.VIDEO]: "#13c2c2",
-  [NODE_TYPE.TEXT]: "#1677ff",
-  [NODE_TYPE.GROUP]: "#722ed1",
-  [NODE_TYPE.AUDIO]: "#fa8c16",
-};
-
-function getNodeTypeIcon(type: string) {
-  const color = TYPE_COLORS[type] || "var(--canvas-text-dim)";
-  const s = { fontSize: 18, color };
-  switch (type) {
-    case NODE_TYPE.TEXT:     return <TextIcon style={s} />;
-    case NODE_TYPE.IMAGE:    return <PictureOutlined style={s} />;
-    case NODE_TYPE.VIDEO:    return <VideoCameraOutlined style={s} />;
-    case NODE_TYPE.DIRECTOR: return <PartitionOutlined style={s} />;
-    case NODE_TYPE.GROUP:    return <GroupOutlined style={s} />;
-    case NODE_TYPE.AUDIO:    return <WaveIcon style={s} />;
-    default:                 return <PictureOutlined style={s} />;
-  }
-}
-
-// ── 视频缩略图提取 hook ──
-// 模块级全局缓存：跨组件实例与 tab 切换复用，避免重复解码视频
-const videoThumbCache = new Map<string, string>();
-
-function useVideoThumbnail(src: string | undefined) {
-  const [thumb, setThumb] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!src) return;
-    const cached = videoThumbCache.get(src);
-    if (cached) { setThumb(cached); return; }
-    let cancelled = false;
-    setLoading(true);
-    setThumb(null);
-
-    const video = document.createElement("video");
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
-    video.src = src;
-
-    const onSeek = () => {
-      if (cancelled) return;
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext("2d")!.drawImage(video, 0, 0);
-        const url = canvas.toDataURL("image/jpeg", 0.6);
-        videoThumbCache.set(src, url);
-        setThumb(url);
-      } catch { /* noop */ }
-      setLoading(false);
-      video.remove();
-    };
-    const onMeta = () => { video.currentTime = 1; };
-    const onErr = () => { if (!cancelled) { setLoading(false); video.remove(); } };
-
-    video.addEventListener("loadedmetadata", onMeta);
-    video.addEventListener("seeked", onSeek);
-    video.addEventListener("error", onErr);
-
-    return () => { cancelled = true; video.remove(); };
-  }, [src]);
-  return { thumb, loading };
-}
 
 export const DRAWER_WIDTH = 360;
 
