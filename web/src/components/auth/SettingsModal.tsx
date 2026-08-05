@@ -7,7 +7,7 @@ import { useEffect, useRef,useState } from "react";
 import { api } from "@/lib/api";
 import { EyeIcon } from "@/components/common/icons/EyeIcon";
 import { EyeOffIcon } from "@/components/common/icons/EyeOffIcon";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import { useAuthStore, type UserInfo } from "@/stores/auth-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

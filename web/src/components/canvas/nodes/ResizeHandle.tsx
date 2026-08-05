@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 
-import { EventNames } from "@/lib/event-names";
+import { EventNames } from "@/lib/constants";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { ResizeCornerIcon } from "@/components/common/icons/canvas/ResizeCornerIcon";
 

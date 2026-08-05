@@ -14,7 +14,7 @@ import ReactCrop, {
 
 import ModalButton from "@/components/common/ModalButton";
 import NavButton from "@/components/common/NavButton";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import { canvasToBlob,uploadAndAddNode } from "@/lib/image-utils";
 import { useCanvasStore } from "@/stores/canvas-store";
 

@@ -20,7 +20,7 @@ interface AppModalProps {
   style?: React.CSSProperties;
 }
 
-/** 通用弹窗 — 统一标题下边距 + 居中，所有功能弹窗都用这个。 */
+/** 通用弹窗 - 统一标题下边距 + 居中，所有功能弹窗都用这个。 */
 export default function AppModal({
   title, open, onCancel, width = 520, footer, children, styles,
   className, destroyOnHidden, closeIcon, centered, style,

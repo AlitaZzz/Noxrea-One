@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import WheelGuard from "@/components/common/WheelGuard";
 import { MultiAngleIcon } from "@/components/common/icons/canvas/MultiAngleIcon";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useI18nStore } from "@/stores/i18n-store";
 

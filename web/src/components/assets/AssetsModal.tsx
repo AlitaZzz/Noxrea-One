@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ConfirmModal from "@/components/common/ConfirmModal";
 import ModalButton from "@/components/common/ModalButton";
 import { addAssetToCanvas } from "@/lib/add-asset";
-import AppModal from "@/lib/app-modal";
+import AppModal from "@/components/common/AppModal";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/lib/types";
 import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
 import { assetApi } from "@/lib/api";

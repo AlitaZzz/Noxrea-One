@@ -7,7 +7,7 @@ import { memo, useEffect, useMemo,useRef, useState } from "react";
 import { MenuItem,MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
 import { apiUpload, BASE,getTokenHeader } from "@/lib/api";
-import { EventNames } from "@/lib/event-names";
+import { EventNames } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/image-utils";
 import { createEdge,createImageNode } from "@/lib/node-defaults";
 import { type GenSettings, isGenerating as isGeneratingBinding, type MediaGenFields,ModelChannel, NODE_TYPE } from "@/lib/types";

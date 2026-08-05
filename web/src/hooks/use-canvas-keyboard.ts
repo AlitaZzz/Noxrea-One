@@ -3,8 +3,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
-import { PASTE_OFFSET } from "@/lib/constants";
-import { EventNames } from "@/lib/event-names";
+import { EventNames, PASTE_OFFSET } from "@/lib/constants";
 import { duplicateNode } from "@/lib/node-defaults";
 import { isGenerating, type MediaGenFields } from "@/lib/types";
 import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/stores/canvas-store";

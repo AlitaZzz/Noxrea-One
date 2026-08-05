@@ -3,8 +3,8 @@
 import { ScissorOutlined } from "@ant-design/icons";
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps,getBezierPath } from "@xyflow/react";
 
-import { useHighlightedEdges } from "@/lib/edge-highlight-context";
-import { EventNames } from "@/lib/event-names";
+import { useHighlightedEdges } from "@/contexts/edge-highlight-context";
+import { EventNames } from "@/lib/constants";
 
 const DOT_COLOR = "#1D9E75";
 const DURATION = 1.6;
