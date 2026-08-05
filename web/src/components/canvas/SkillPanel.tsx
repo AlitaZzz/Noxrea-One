@@ -7,7 +7,7 @@ import { getTokenHeader } from "@/lib/api";
 
 interface SkillMeta {
   name: string;
-  title: string;
+  displayTitle: string;
   description: string;
   category: string;
   appliesTo?: string[];
@@ -84,7 +84,7 @@ export default function SkillPanel({ onSelect }: Props) {
                     textOverflow: "ellipsis",
                   }}
                 >
-                  {s.title}
+                  {s.displayTitle}
                 </div>
                 {s.description && (
                   <div

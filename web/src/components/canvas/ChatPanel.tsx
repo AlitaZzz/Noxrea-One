@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { Drawer, Button, Tooltip } from "antd";
 import { MenuPopover, MenuItem } from "@/components/common/MenuPopover";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -30,7 +30,7 @@ const sanitizeSchema = {
   ],
 };
 
-import SkillPanel from "@/components/SkillPanel";
+import SkillPanel from "@/components/canvas/SkillPanel";
 import { NewChatIcon } from "@/components/common/icons/chat/NewChatIcon";
 import { HistoryIcon } from "@/components/common/icons/chat/HistoryIcon";
 import { AttachIcon } from "@/components/common/icons/chat/AttachIcon";
@@ -43,11 +43,10 @@ import { getTokenHeader } from "@/lib/api";
 interface Props {
   open: boolean;
   onClose: () => void;
-  modelId?: string;
 }
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
-export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) {
+export default function ChatPanel({ open, onClose }: Props) {
   // 模型列表来自已配置的渠道（不写死），确保 store 已初始化
   // 与生成面板一致：选项值为「渠道名/模型名」，显示带渠道前缀以便区分同名模型
   const channels = useModelStore((s) => s.channels);
@@ -58,8 +57,11 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
       .map((m) => ({ value: `${c.name}/${m.name}`, name: m.name }))
   );
 
-  // activeModel 保存「渠道名/模型名」用于显示；传给后端时取纯模型名（与现有解析一致）
-  const [activeModel, setActiveModel] = useState(`${modelId}`);
+  // activeModel 来自 canvasStore.agentModel（project 级持久化，落盘到 canvasData）
+  const agentModel = useCanvasStore((s) => s.agentModel);
+  const setAgentModel = useCanvasStore((s) => s.setAgentModel);
+  // 若 store 尚无值（旧项目 / 未加载），回退到首个可用模型
+  const activeModel = agentModel ?? modelOptions[0]?.value ?? "gpt-4o";
   const activeModelName = activeModel.includes("/") ? activeModel.split("/").pop()! : activeModel;
   const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat } = useChatStream(activeModelName);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
@@ -67,7 +69,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
-  const [skillNames, setSkillNames] = useState<{ name: string; title?: string }[]>([]);
+  const [skillNames, setSkillNames] = useState<{ name: string; displayTitle?: string }[]>([]);
 
   // 初始化模型配置（幂等）；列表就绪后若当前选中项不在列表中则回退首项
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     let alive = true;
     fetch("/api/chat/skills", { headers: { ...getTokenHeader() } })
       .then((r) => (r.ok ? r.json() : []))
-      .then((list: { name: string; title?: string }[]) => {
+      .then((list: { name: string; displayTitle?: string }[]) => {
         if (alive && Array.isArray(list)) setSkillNames(list);
       })
       .catch(() => {});
@@ -87,10 +89,10 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     };
   }, []);
   useEffect(() => {
-    if (modelOptions.length && !modelOptions.some((m) => m.value === activeModel)) {
-      setActiveModel(modelOptions[0].value);
+    if (modelOptions.length && !modelOptions.some((m) => m.value === agentModel)) {
+      setAgentModel(modelOptions[0].value);
     }
-  }, [modelOptions, activeModel]);
+  }, [modelOptions, agentModel, setAgentModel]);
 
   // 新消息到达时滚到底部
   useEffect(() => {
@@ -110,11 +112,12 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
     const text = composerRef.current?.innerText ?? "";
     if ((!text.trim() && !activeSkill) || isStreaming) return;
     const skills = activeSkill
-      ? [{ name: activeSkill, title: skillNames.find((s) => s.name === activeSkill)?.title }]
+      ? [{ name: activeSkill, displayTitle: skillNames.find((s) => s.name === activeSkill)?.displayTitle }]
       : undefined;
     void sendChat(text, skills);
     if (composerRef.current) composerRef.current.innerText = "";
-    setActiveSkill(null);
+    // 不清除 activeSkill —— skill 保持激活直到用户显式点击 × 移除，
+    // 这样同一对话内后续消息会继续带上 skill 标签
     setDraft("");
   }, [isStreaming, sendChat, activeSkill, skillNames]);
 
@@ -217,7 +220,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                           type="button"
                           className="chat-history-main"
                           onClick={() => {
-                            void loadHistory(s.id);
+                            void loadHistory(s.id, skillNames);
                             setHistoryOpen(false);
                           }}
                         >
@@ -314,12 +317,24 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                   <span className="chat-tool-result">{m.content}</span>
                 ) : (
                   <div className="cortex-markdown">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
+                    {m.skills?.length ? (
+                      <div className="chat-msg-skills">
+                        {m.skills.map((s) => (
+                          <span key={s.name} className="chat-msg-skill">
+                            <ThunderboltOutlined style={{ fontSize: 12, marginRight: 4 }} />
+                            {s.displayTitle ?? s.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {m.content ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+                      >
+                        {m.content}
+                      </ReactMarkdown>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -344,7 +359,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
         <div className="chat-composer">
           {activeSkill ? (
             <span className="chat-skill-chip">
-              {skillNames.find((s) => s.name === activeSkill)?.title ?? activeSkill}
+              {skillNames.find((s) => s.name === activeSkill)?.displayTitle ?? activeSkill}
               <button
                 type="button"
                 className="chat-skill-chip-x"
@@ -428,7 +443,7 @@ export default function ChatPanel({ open, onClose, modelId = "gpt-4o" }: Props) 
                     key={m.value}
                     selected={activeModel === m.value}
                     onClick={() => {
-                      setActiveModel(m.value);
+                      setAgentModel(m.value);
                       setModelOpen(false);
                     }}
                   >

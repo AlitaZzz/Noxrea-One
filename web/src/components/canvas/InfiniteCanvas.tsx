@@ -701,7 +701,6 @@ export default function InfiniteCanvas() {
       <ChatPanel
         open={chatOpen}
         onClose={() => setChatOpen(false)}
-        modelId="gpt-4o"
       />
     </div>
   );
