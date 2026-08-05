@@ -13,7 +13,7 @@ import { MenuItem, MenuPopover } from "@/components/common/MenuPopover";
 import WheelGuard from "@/components/common/WheelGuard";
 import { apiUpload, generationApi } from "@/lib/api";
 import { applyThumbnailSettings } from "@/lib/image-utils";
-import { createEdge, createImageNode } from "@/lib/nodes/node-defaults";
+import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import type { GenSettings, TextNodeData } from "@/lib/types/nodes";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";

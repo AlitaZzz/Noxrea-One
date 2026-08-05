@@ -7,7 +7,7 @@
 
 import { apiUpload } from "@/lib/api";
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
-import { createEdge,createImageNode } from "@/lib/nodes/node-defaults";
+import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
 import type { AnyEdge } from "@/lib/types/canvas";
 import type { AnyNode, ImageNode } from "@/lib/types/nodes";
 

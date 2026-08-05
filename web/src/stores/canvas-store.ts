@@ -8,7 +8,7 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
-import { saveManager } from "@/stores/save-manager";
+import { saveManager } from "@/features/project/save-manager";
 import type { BackgroundType, ThemeMode, ViewportState } from "@/lib/types/canvas";
 import type { AnyNode } from "@/lib/types/nodes";
 import type { HistorySnapshot } from "@/lib/types/project";
