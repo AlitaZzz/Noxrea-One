@@ -75,7 +75,7 @@ function parseBlocks(buf: string): { blocks: Array<{ event: string; data: string
  * （在画布建节点），把 tool 结果通过 /tool-result 端点回传后端，
  * 后端自动续轮调 LLM，直到无 toolCalls 或 skill_completed 才停止。
  */
-export function useAgentStream(modelId: string) {
+export function useAgentStream(modelId: string, projectId?: number) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -101,6 +101,7 @@ export function useAgentStream(modelId: string) {
       clearPendingPlaceholders();
     },
     onLoadMessages: (loaded: ChatMessage[]) => setMessages(loaded),
+    projectId,
   });
 
   /** 发起单次流式请求（初始消息或工具结果续轮），解析 SSE 事件 */

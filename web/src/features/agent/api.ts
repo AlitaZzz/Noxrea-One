@@ -7,17 +7,23 @@ import type { StreamAgentOptions, ToolResultOptions } from "@/features/agent/typ
 
 // ── 会话 CRUD ──
 
-/** 创建会话，可选初始标题。 */
-export async function createSession(initialTitle?: string): Promise<Response> {
+/** 创建会话，可选初始标题和项目 ID。 */
+export async function createSession(initialTitle?: string, projectId?: number): Promise<Response> {
+  const body: Record<string, unknown> = {};
+  if (initialTitle) body.title = initialTitle;
+  if (projectId != null) body.projectId = projectId;
   return apiRaw("/api/agent/sessions", {
     method: "POST",
-    body: JSON.stringify(initialTitle ? { title: initialTitle } : {}),
+    body: JSON.stringify(body),
   });
 }
 
-/** 拉取会话列表（按 updatedAt 倒序）。 */
-export async function listSessions(): Promise<Response> {
-  return apiRaw("/api/agent/sessions");
+/** 拉取会话列表（按 updatedAt 倒序），可选按项目过滤。 */
+export async function listSessions(projectId?: number): Promise<Response> {
+  const url = projectId != null
+    ? `/api/agent/sessions?projectId=${encodeURIComponent(projectId)}`
+    : "/api/agent/sessions";
+  return apiRaw(url);
 }
 
 /** 获取会话详情（含 activeSkill / skillStatus）。 */

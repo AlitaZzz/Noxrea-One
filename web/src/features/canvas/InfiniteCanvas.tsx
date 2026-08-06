@@ -708,6 +708,7 @@ export default function InfiniteCanvas() {
       <AgentDrawer
         open={chatOpen}
         onClose={() => setChatOpen(false)}
+        projectId={activeProjectId ? Number(activeProjectId) : undefined}
       />
     </div>
   );
