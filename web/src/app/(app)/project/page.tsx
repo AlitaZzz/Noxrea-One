@@ -40,6 +40,12 @@ export default function ProjectPage() {
   const createProject = useProjectStore((s) => s.createProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const refreshProjects = useProjectStore((s) => s.refreshProjects);
+
+  // 每次进入项目列表页时重新拉取，确保列表按 updatedAt 最新排序
+  useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
 
   // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成。
 
