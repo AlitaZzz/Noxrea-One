@@ -218,6 +218,10 @@ export function useAgentStream(modelId: string) {
       setIsStreaming(true);
       setError(null);
 
+      // ★ 提前创建 assistant 占位，"思考中…" 立即出现
+      const placeholderId = uid();
+      appendMessage({ id: placeholderId, role: "assistant", content: "" });
+
       try {
         // 初始流式请求
         const ctrl = new AbortController();
@@ -230,7 +234,7 @@ export function useAgentStream(modelId: string) {
           signal: ctrl.signal,
         });
 
-        let result = await runStream(res);
+        let result = await runStream(res, placeholderId);
 
         // 初始流也可能直接 skill_completed（无工具调用）
         if (result.skillCompleted) {
@@ -304,8 +308,18 @@ export function useAgentStream(modelId: string) {
       } catch (err: any) {
         if (err?.name !== "AbortError") {
           const msg = err?.message || "对话失败";
-          setError(msg);
-          showGlobalMessage().error(msg);
+          // 错误只渲染到气泡内：patch 最后一个空的 assistant 占位
+          // SSE error 事件已由 runStream 内部 patchAssistant 处理，此处兜底非 SSE 错误（HTTP 429、超时等）
+          setMessages((prev) => {
+            const next = [...prev];
+            for (let i = next.length - 1; i >= 0; i--) {
+              if (next[i].role === "assistant" && !next[i].content && !next[i].toolCalls) {
+                next[i] = { ...next[i], content: `⚠ ${msg}`, error: true };
+                break;
+              }
+            }
+            return next;
+          });
         }
       } finally {
         streamingRef.current = false;
