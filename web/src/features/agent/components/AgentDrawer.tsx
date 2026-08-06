@@ -118,11 +118,14 @@ export default function AgentDrawer({ open, onClose }: Props) {
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
     if ((!text.trim() && !chipSkill) || isStreaming) return;
-    void sendChat(text, chipSkill ?? undefined);
+    const displayTitle = chipSkill
+      ? skillNames.find((s) => s.name === chipSkill)?.displayTitle
+      : undefined;
+    void sendChat(text, chipSkill ?? undefined, displayTitle);
     if (composerRef.current) composerRef.current.innerText = "";
     setDraft("");
     setChipSkill(null);
-  }, [isStreaming, sendChat, chipSkill]);
+  }, [isStreaming, sendChat, chipSkill, skillNames]);
 
   const handleSkillSelect = useCallback((skillName: string) => {
     void bindSkill(skillName);

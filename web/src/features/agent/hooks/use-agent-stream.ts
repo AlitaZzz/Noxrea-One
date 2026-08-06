@@ -191,8 +191,8 @@ export function useAgentStream(modelId: string) {
   }, [clearPendingPlaceholders]);
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
-  const sendChat = useCallback(
-    async (text: string, skillOverride?: string) => {
+    const sendChat = useCallback(
+      async (text: string, skillOverride?: string, skillDisplayTitle?: string) => {
       const trimmed = text.trim();
       if (streamingRef.current) return;
       const effectiveSkill = skillOverride ?? sessions.activeSkill;
@@ -207,9 +207,9 @@ export function useAgentStream(modelId: string) {
         ...(skillOverride ? { skill: skillOverride } : {}),
       });
 
-      const autoTitle = trimmed
-        ? trimmed.length > 24 ? `${trimmed.slice(0, 24)}…` : trimmed
-        : (effectiveSkill ?? "新对话");
+        const autoTitle = trimmed
+          ? trimmed
+          : (skillDisplayTitle ?? effectiveSkill ?? "新对话");
       const sessionId = await sessions.ensureSession(autoTitle);
       if (!sessionId) return;
       sessions.setChatTitle(autoTitle);

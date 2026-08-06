@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { fail } from "@server/core/response";
-import { listSkills } from "@server/services/agent/skills/loader";
+import { listSkills, getSkill } from "@server/services/agent/skills/loader";
 import { agentToolRegistry } from "@server/services/agent/tools/registry";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
 import { COMPLETE_SKILL } from "@server/services/agent/tools/definitions";
@@ -309,8 +309,18 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         content: userContent,
         refImages: parsed.refImages,
       });
-      if (history.length === 0 && userContent) {
-        await renameSession(sessionId, userId, userContent.slice(0, 30));
+      if (history.length === 0) {
+        // 首条消息：按内容设置标题，落库完整内容不截断
+        if (userContent) {
+          await renameSession(sessionId, userId, userContent);
+        } else if (activeSkill) {
+          // 纯技能对话：用 displayTitle 落库
+          const skillMeta = getSkill(activeSkill);
+          const displayTitle = skillMeta?.meta.displayTitle;
+          if (displayTitle) {
+            await renameSession(sessionId, userId, displayTitle);
+          }
+        }
       }
 
       // 空内容 + 有技能时，注入引导消息让 LLM 启动技能流程
