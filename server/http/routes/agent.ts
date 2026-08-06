@@ -251,57 +251,8 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   }
   const parsed = streamSchema.parse(payload);
 
-  // 如果前端传了 skillName，绑定到 session（覆盖旧技能）
-  let activeSkill = session.activeSkill;
-  if (parsed.skillName && parsed.skillName !== activeSkill) {
-    await setSkill(sessionId, userId, parsed.skillName);
-    activeSkill = parsed.skillName;
-  }
   // 有技能激活时自动注入工具
   const agent = true;
-
-  const history: HistoryMessage[] = await listMessages(sessionId);
-  logEvent("agent.stream", {
-    stage: "received",
-    sessionId,
-    model: model ?? null,
-    activeSkill: activeSkill ?? null,
-    history: history.length,
-  });
-
-  // 用户消息先落库
-  const userContent = parsed.content || "";
-  await createMessage({
-    sessionId,
-    role: "user",
-    content: userContent,
-    refImages: parsed.refImages,
-  });
-  if (history.length === 0 && userContent) {
-    await renameSession(sessionId, userId, userContent.slice(0, 30));
-  }
-
-  // 空内容 + 有技能时，注入引导消息让 LLM 启动技能流程
-  let effectiveContent = userContent;
-  if (!userContent && activeSkill) {
-    effectiveContent = `（用户已选择技能「${activeSkill}」，请按该技能的流程开始工作。如有需要请主动询问用户补充信息，或直接调用工具执行任务。）`;
-  }
-
-  const incoming: IncomingMessage[] = [
-    {
-      role: "user",
-      content: effectiveContent,
-      ...(parsed.refImages?.length ? { images: parsed.refImages } : {}),
-    },
-  ];
-
-  // 组装消息
-  const messages = buildAgentMessages({
-    history,
-    incoming,
-    activeSkill,
-    agent,
-  });
 
   const encoder = new TextEncoder();
   let streamClosed = false;
@@ -319,6 +270,9 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         }
       };
 
+      // ★ 立即 flush thinking，前端马上显示"思考中…"
+      send("thinking", {});
+
       heartbeat = setInterval(() => {
         if (streamClosed) return;
         try {
@@ -327,6 +281,59 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
           streamClosed = true;
         }
       }, 15_000);
+
+      // ── DB 操作移入 stream 内部，避免阻塞首个事件 ──
+
+      // 技能绑定
+      let activeSkill = session.activeSkill;
+      if (parsed.skillName && parsed.skillName !== activeSkill) {
+        await setSkill(sessionId, userId, parsed.skillName);
+        activeSkill = parsed.skillName;
+      }
+
+      const history: HistoryMessage[] = await listMessages(sessionId);
+      logEvent("agent.stream", {
+        stage: "received",
+        sessionId,
+        model: model ?? null,
+        activeSkill: activeSkill ?? null,
+        skillStatus: session.skillStatus,
+        history: history.length,
+      });
+
+      // 用户消息先落库
+      const userContent = parsed.content || "";
+      await createMessage({
+        sessionId,
+        role: "user",
+        content: userContent,
+        refImages: parsed.refImages,
+      });
+      if (history.length === 0 && userContent) {
+        await renameSession(sessionId, userId, userContent.slice(0, 30));
+      }
+
+      // 空内容 + 有技能时，注入引导消息让 LLM 启动技能流程
+      let effectiveContent = userContent;
+      if (!userContent && activeSkill) {
+        effectiveContent = `（用户已选择技能「${activeSkill}」，请按该技能的流程开始工作。如有需要请主动询问用户补充信息，或直接调用工具执行任务。）`;
+      }
+
+      const incoming: IncomingMessage[] = [
+        {
+          role: "user",
+          content: effectiveContent,
+          ...(parsed.refImages?.length ? { images: parsed.refImages } : {}),
+        },
+      ];
+
+      // 组装消息
+      const messages = buildAgentMessages({
+        history,
+        incoming,
+        activeSkill,
+        agent,
+      });
 
       const result = await runCompletionStream({
         messages,
@@ -442,26 +449,6 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   const activeSkill = session.activeSkill;
   const agent = true;
 
-  // 落库 tool 消息
-  await createMessage({
-    sessionId,
-    role: "tool",
-    content: parsed.result,
-    toolCallId: parsed.toolCallId,
-  });
-
-  const history: HistoryMessage[] = await listMessages(sessionId);
-  const incoming: IncomingMessage[] = [
-    { role: "tool", content: parsed.result, toolCallId: parsed.toolCallId },
-  ];
-
-  const messages = buildAgentMessages({
-    history: history.slice(0, -1), // 排除刚落库的 tool 消息（已在 incoming 中）
-    incoming,
-    activeSkill,
-    agent,
-  });
-
   const encoder = new TextEncoder();
   let streamClosed = false;
   const upstreamAbort = new AbortController();
@@ -478,6 +465,9 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
         }
       };
 
+      // ★ 立即 flush thinking，前端马上显示"思考中…"
+      send("thinking", {});
+
       heartbeat = setInterval(() => {
         if (streamClosed) return;
         try {
@@ -486,6 +476,28 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
           streamClosed = true;
         }
       }, 15_000);
+
+      // ── DB 操作移入 stream 内部 ──
+
+      // 落库 tool 消息
+      await createMessage({
+        sessionId,
+        role: "tool",
+        content: parsed.result,
+        toolCallId: parsed.toolCallId,
+      });
+
+      const history: HistoryMessage[] = await listMessages(sessionId);
+      const incoming: IncomingMessage[] = [
+        { role: "tool", content: parsed.result, toolCallId: parsed.toolCallId },
+      ];
+
+      const messages = buildAgentMessages({
+        history: history.slice(0, -1), // 排除刚落库的 tool 消息（已在 incoming 中）
+        incoming,
+        activeSkill,
+        agent,
+      });
 
       const result = await runCompletionStream({
         messages,
