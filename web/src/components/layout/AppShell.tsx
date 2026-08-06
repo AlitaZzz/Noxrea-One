@@ -6,7 +6,7 @@
 
 import { ReactNode, useEffect } from "react";
 
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const theme = useCanvasStore((s) => s.theme);

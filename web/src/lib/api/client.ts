@@ -53,7 +53,7 @@ function handleUnauthorized() {
   // 同步清除 localStorage token，不依赖异步 import，防止页面跳转后 token 未清除导致循环
   setToken(null);
 
-  import("@/stores/auth-store").then(({ useAuthStore }) => {
+  import("@/features/auth/store").then(({ useAuthStore }) => {
     useAuthStore.getState().logout();
   });
 

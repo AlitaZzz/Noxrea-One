@@ -8,7 +8,7 @@
 import { describe, expect,it } from "vitest";
 
 import { GROUP_NODE_PADDING } from "@/lib/constants";
-import type { AnyNode } from "@/lib/types/nodes";
+import type { AnyNode } from "@/features/canvas/types";
 
 // ── 纯函数：计算选中节点的 bounding box ──────────────────────────
 

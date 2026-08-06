@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 图片节点（image-node）渲染组件，功能最重的节点类型。
  * 负责图片展示与上传（含拖拽、进度）、多结果图扇形网格展开、生成中占位，
  * 并按需挂载裁剪 / 打光 / 标注 / 多视角等图像编辑浮层。
@@ -22,20 +22,20 @@ import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
-import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUploadWithProgress } from "@/lib/api";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { apiUploadWithProgress } from "@/lib/api/client";
 import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
 import { isGenerating, NODE_TYPE } from "@/lib/constants";
-import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/image-utils";
+import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
 import {
   type ImageNode as ImageNodeType,
   type ImageNodeData,
-} from "@/lib/types/nodes";
-import { useAssetsStore } from "@/stores/assets-store";
-import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+} from "@/features/canvas/types";
+import { useAssetsStore } from "@/features/assets/store";
+import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 /**
  * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的

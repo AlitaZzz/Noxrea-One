@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 多视角（相机机位）编辑器。
  * 以三维轨道球控件设定观察方位角、仰角与远近，并提供俯拍 / 仰拍 / 鱼眼等预设机位，
  * 生成对应视角的图片节点。
@@ -12,8 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppModal from "@/components/ui/AppModal";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 interface Props {
   src: string;

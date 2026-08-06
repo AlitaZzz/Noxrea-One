@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 音频节点（audio-node）渲染组件。
  * 承载音频上传与拖入、生成中状态展示，内嵌 AudioWaveform 波形播放器，
  * 并把解析出的时长回填到节点数据供标题栏显示。
@@ -10,13 +10,13 @@ import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUploadWithProgress } from "@/lib/api";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { apiUploadWithProgress } from "@/lib/api/client";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/lib/types/nodes";
+import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
-import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 import AudioWaveform from "./AudioWaveform";
 

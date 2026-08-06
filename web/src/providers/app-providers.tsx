@@ -11,8 +11,8 @@ import { ReactNode, useEffect } from "react";
 
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { setGlobalMessageApi } from "@/lib/global-message";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 import { directorTheme } from "@/styles/theme";
 
 const queryClient = new QueryClient({

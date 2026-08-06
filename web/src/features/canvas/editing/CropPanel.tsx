@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 图片裁剪面板（自实现拖拽手柄版本）。
  * 支持自由与预设比例裁剪、八向手柄调整与整体移动，
  * 确认后裁切图片并上传为新的图片节点。
@@ -11,9 +11,9 @@ import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import WheelGuard from "@/components/ui/WheelGuard";
-import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/image-utils";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 interface Props {
   src: string;

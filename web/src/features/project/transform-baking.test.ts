@@ -12,14 +12,14 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 // ── Mock @/lib/api ─────────────────────────────────────────────
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api/client", () => ({
   apiUpload: vi.fn(),
   BASE: "http://test",
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/image-utils";
+import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/utils/image-utils";
 
 // ── Mock Zustand stores ────────────────────────────────────────
 const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
@@ -32,7 +32,7 @@ const mockNodes: Array<{ id: string; type: string; position: { x: number; y: num
   },
 ];
 
-vi.mock("@/stores/canvas-store", () => ({
+vi.mock("@/features/canvas/stores/canvas-store", () => ({
   useCanvasStore: Object.assign(
     (selector?: (s: Record<string, unknown>) => unknown) => {
       const state = {
@@ -53,7 +53,7 @@ vi.mock("@/stores/canvas-store", () => ({
   ),
 }));
 
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /** 模拟 CanvasStoreApi（符合 image-utils 中定义的接口） */
 const mockStoreApi = {
@@ -209,7 +209,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
   describe("uploadBlob", () => {
     it("should call apiUpload with file and category", async () => {
-      const { apiUpload } = await import("@/lib/api");
+      const { apiUpload } = await import("@/lib/api/client");
       vi.mocked(apiUpload).mockResolvedValueOnce({
         code: 200,
         data: { url: "http://test/api/files/1/aa/aaaa...png" },
@@ -226,7 +226,7 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should return null on upload failure", async () => {
-      const { apiUpload } = await import("@/lib/api");
+      const { apiUpload } = await import("@/lib/api/client");
       vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null, msg: "" });
 
       const blob = new Blob(["fake"]);
@@ -239,7 +239,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
   describe("uploadAndAddNode", () => {
     it("should return node when upload succeeds", async () => {
-      const { apiUpload } = await import("@/lib/api");
+      const { apiUpload } = await import("@/lib/api/client");
       vi.mocked(apiUpload).mockResolvedValueOnce({
         code: 200,
         data: { url: "http://test/api/files/1/aa/aaaa...png" },
@@ -254,7 +254,7 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should return null when upload fails", async () => {
-      const { apiUpload } = await import("@/lib/api");
+      const { apiUpload } = await import("@/lib/api/client");
       vi.mocked(apiUpload).mockResolvedValueOnce({ code: 500, data: null, msg: "" });
 
       const blob = new Blob(["fail-data"]);

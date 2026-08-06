@@ -31,7 +31,7 @@ import {
   type TextNodeData,
   type VideoNode,
   type VideoNodeData,
-} from "@/lib/types/nodes";
+} from "@/features/canvas/types";
 
 let _idCounter = 0;
 function uid(prefix: string) {

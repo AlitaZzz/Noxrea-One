@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 画布底部中央工具条。
  * 提供「新增节点」下拉入口与快捷键说明弹窗，并监听画布右键事件在指针处
  * 复用同一套新增菜单。
@@ -17,8 +17,8 @@ import { useCallback, useEffect,useState } from "react";
 import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
-import { useAddNode } from "@/hooks/use-add-node";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useAddNode } from "@/features/canvas/hooks/use-add-node";
+import { useI18nStore } from "@/lib/i18n/store";
 
 export default function CenterToolbar() {
   const t = useI18nStore((s) => s.t);

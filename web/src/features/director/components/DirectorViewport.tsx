@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 3D 导演台的三维视口与运行时宿主。
  * 负责初始化 Three.js 舞台、相机装置、选择与变换控件、导航小方块，
  * 管理角色 / 群组 / 道具 / 相机等实体的增删与场景状态的存取，
@@ -22,12 +22,12 @@ import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
-import { NavSvg } from "@/features/director/icons/NavSvg";
+import { NavSvg } from "@/components/ui/icons/director/NavSvg";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
-import { createNodeFromUrl,uploadBlob } from "@/lib/image-utils";
-import type { DirectorEntityState, DirectorStateData } from "@/lib/types/nodes";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { createNodeFromUrl,uploadBlob } from "@/lib/utils/image-utils";
+import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 type _SceneSnapshot = {
   scale?: number;

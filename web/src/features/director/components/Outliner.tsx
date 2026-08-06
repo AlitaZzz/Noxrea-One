@@ -11,14 +11,14 @@ import { createPortal } from "react-dom";
 
 import { useDirectorStore } from "@/features/director/director-store";
 import type { Entity } from "@/features/director/entities/entity";
-import { DirCameraIcon } from "@/features/director/icons/DirCameraIcon";
-import { DirCaretIcon } from "@/features/director/icons/DirCaretIcon";
-import { DirCubeIcon } from "@/features/director/icons/DirCubeIcon";
-import { DirEyeIcon } from "@/features/director/icons/DirEyeIcon";
-import { DirEyeOffIcon } from "@/features/director/icons/DirEyeOffIcon";
-import { DirGroupIcon } from "@/features/director/icons/DirGroupIcon";
-import { DirPersonIcon } from "@/features/director/icons/DirPersonIcon";
-import { DirTrashIcon } from "@/features/director/icons/DirTrashIcon";
+import { DirCameraIcon } from "@/components/ui/icons/director/DirCameraIcon";
+import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
+import { DirCubeIcon } from "@/components/ui/icons/director/DirCubeIcon";
+import { DirEyeIcon } from "@/components/ui/icons/director/DirEyeIcon";
+import { DirEyeOffIcon } from "@/components/ui/icons/director/DirEyeOffIcon";
+import { DirGroupIcon } from "@/components/ui/icons/director/DirGroupIcon";
+import { DirPersonIcon } from "@/components/ui/icons/director/DirPersonIcon";
+import { DirTrashIcon } from "@/components/ui/icons/director/DirTrashIcon";
 
 const ICON_MAP = {
   camera: DirCameraIcon,

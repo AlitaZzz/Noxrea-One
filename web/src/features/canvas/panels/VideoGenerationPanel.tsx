@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 视频生成面板，挂在视频节点下方。
  * 负责提示词输入（支持 @ 引用与首尾帧图片）、模型与分辨率 / 比例 / 时长 / 音频等参数配置，
  * 提交异步生成任务并把参数持久化到节点数据。
@@ -17,19 +17,21 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
-import { apiRaw,apiUpload } from "@/lib/api";
-import { generationApi } from "@/lib/api";
+
+
+import { apiRaw, apiUpload } from "@/lib/api/client";
+import { generationApi } from "@/features/canvas/api/generation-api";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { applyThumbnailSettings } from "@/lib/image-utils";
+import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import type { ModelChannel } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
-import type { MediaGenFields, VideoGenSettings } from "@/lib/types/nodes";
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useModelStore } from "@/stores/model-store";
+import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
+import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { useI18nStore } from "@/lib/i18n/store";
+import { useModelStore } from "@/lib/model-store";
 
-import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
+import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }

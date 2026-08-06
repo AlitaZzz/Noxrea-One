@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 节点悬浮工具条。
  * 按节点类型渲染对应操作（下载、裁剪、宫格切分、打光、多视角、翻转旋转、
  * 收藏到资产、删除等），操作本身不落地，统一通过自定义事件派发给节点组件执行。
@@ -25,9 +25,9 @@ import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { EventNames } from "@/lib/constants";
-import { useAssetsStore } from "@/stores/assets-store";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useAssetsStore } from "@/features/assets/store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,

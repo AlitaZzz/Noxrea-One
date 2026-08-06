@@ -7,10 +7,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { useAuthStore } from "@/stores/auth-store";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useProjectStore } from "@/stores/project-store";
+import { useAuthStore } from "@/features/auth/store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
+import { useProjectStore } from "@/features/project/store";
 
 /**
  * (app) 路由组统一鉴权 + 全局初始化守卫。

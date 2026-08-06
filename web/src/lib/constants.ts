@@ -5,16 +5,16 @@
  *
  * 注意：本文件承载所有「运行时常量 / 函数」，类型定义请放在 lib/types/*。
  */
-import type { AssetType } from "./types/assets";
+import type { AssetType } from "@/features/assets/types";
 import type {
   BackgroundType,
   ThemeMode,
   ViewportState,
-} from "./types/canvas";
+} from "@/features/canvas/types";
 import type {
   TaskBinding,
   UploadState,
-} from "./types/nodes";
+} from "@/features/canvas/types";
 
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };

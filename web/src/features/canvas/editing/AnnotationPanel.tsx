@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 图片标注编辑面板。
  * 在原图之上提供画笔、矩形框、文字三种标注工具（含颜色 / 粗细调节与撤销重做），
  * 确认后把合成结果上传并作为新的图片节点加入画布。
@@ -14,9 +14,9 @@ import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
-import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/image-utils";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 interface Props {
   src: string;

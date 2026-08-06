@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 画布右下角控制条。
  * 提供缩放调节、适应视图、网格背景切换、吸附开关、主题与语言切换，
  * 以及资产库 / 渠道配置 / 侧边栏的打开入口；偏好项变更会同步保存到用户配置。
@@ -26,10 +26,10 @@ import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
-import type { BackgroundType } from "@/lib/types/canvas";
-import { useAuthStore } from "@/stores/auth-store";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import type { BackgroundType } from "@/features/canvas/types";
+import { useAuthStore } from "@/features/auth/store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 function LanguageToggle() {
   const lang = useI18nStore((s) => s.lang);
