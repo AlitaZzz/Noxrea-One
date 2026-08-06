@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { ChatMessage, ChatRole, SessionListItem } from "@/features/agent/types";
 import { agentApi } from "@/features/agent/api";
@@ -28,6 +28,8 @@ export function useAgentSessions(opts: {
   onStopStream: () => void;
   /** 加载历史消息到 UI（切换会话时调用） */
   onLoadMessages: (messages: ChatMessage[]) => void;
+  /** 当前项目 ID，切换项目时自动重置对话 */
+  projectId?: number;
 }) {
   const [chatId, setChatId] = useState<string | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
@@ -35,12 +37,22 @@ export function useAgentSessions(opts: {
   const [skillStatus, setSkillStatus] = useState<string>("idle");
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
 
+  // 切换项目时自动重置对话，避免旧项目的会话串到新项目
+  useEffect(() => {
+    opts.onStopStream();
+    opts.onClearMessages();
+    setChatId(null);
+    setChatTitle(null);
+    setActiveSkill(null);
+    setSkillStatus("idle");
+  }, [opts.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** 创建新会话（首条消息前调用），可选传入初始标题 */
   const ensureSession = useCallback(
     async (initialTitle?: string): Promise<string | null> => {
       if (chatId) return chatId;
       try {
-        const res = await agentApi.createSession(initialTitle);
+        const res = await agentApi.createSession(initialTitle, opts.projectId);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { id: string; title?: string };
         setChatId(data.id);
@@ -104,14 +116,14 @@ export function useAgentSessions(opts: {
   /** 拉取历史会话列表（按 updatedAt 倒序） */
   const loadSessions = useCallback(async () => {
     try {
-      const res = await agentApi.listSessions();
+      const res = await agentApi.listSessions(opts.projectId);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as SessionListItem[];
       setSessions(data ?? []);
     } catch {
       showGlobalMessage().error("加载历史列表失败");
     }
-  }, []);
+  }, [opts.projectId]);
 
   /** 删除会话；若删的是当前会话则顺带开新对话 */
   const deleteChat = useCallback(

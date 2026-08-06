@@ -51,10 +51,11 @@ import SkillPanel from "@/features/agent/components/SkillPanel";
 interface Props {
   open: boolean;
   onClose: () => void;
+  projectId?: number;
 }
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
-export default function AgentDrawer({ open, onClose }: Props) {
+export default function AgentDrawer({ open, onClose, projectId }: Props) {
   const channels = useModelStore((s) => s.channels);
   const initialize = useModelStore((s) => s.initialize);
   const modelOptions = channels.flatMap((c) =>
@@ -71,7 +72,7 @@ export default function AgentDrawer({ open, onClose }: Props) {
     messages, isStreaming, error, sendChat, stopStream, newChat,
     chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat,
     activeSkill, skillStatus, bindSkill, removeSkill,
-  } = useAgentStream(activeModelName);
+  } = useAgentStream(activeModelName, projectId);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
