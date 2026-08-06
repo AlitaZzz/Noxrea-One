@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Director 节点（director-node）在画布上的入口卡片。
  * 仅做占位展示与标题编辑，点击后把节点内保存的三维场景状态载入 director store
  * 并打开全屏 Director 编辑器，本身不含三维逻辑。
@@ -11,11 +11,11 @@ import { Input } from "antd";
 import { memo } from "react";
 
 import { useDirectorStore } from "@/features/director/director-store";
-import { useEditableTitle } from "@/hooks/use-editable-title";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/lib/types/nodes";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   useI18nStore((s) => s.lang);

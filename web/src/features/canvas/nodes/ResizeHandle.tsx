@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 节点四角缩放手柄。
  * 处理指针拖拽过程中的尺寸计算（含最小尺寸约束与可选宽高比锁定），
  * 实时写回画布 store，被各类节点组件复用。
@@ -9,7 +9,7 @@ import { useCallback, useRef } from "react";
 
 import { ResizeCornerIcon } from "@/components/ui/icons/canvas/ResizeCornerIcon";
 import { EventNames } from "@/lib/constants";
-import { useCanvasStore } from "@/stores/canvas-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 

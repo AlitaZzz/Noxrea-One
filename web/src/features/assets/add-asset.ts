@@ -7,9 +7,9 @@
 
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
-import { computeNodeSize } from "@/lib/image-utils";
-import type { AssetItem } from "@/lib/types/assets";
-import type { AnyNode } from "@/lib/types/nodes";
+import { computeNodeSize } from "@/lib/utils/image-utils";
+import type { AssetItem } from "@/features/assets/types";
+import type { AnyNode } from "@/features/canvas/types";
 
 /** 位置计算函数签名（由调用方从 store 注入） */
 export type FindFreePosition = (size: { width: number; height: number }) => { x: number; y: number };

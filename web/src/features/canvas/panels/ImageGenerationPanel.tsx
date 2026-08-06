@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 图片生成面板，挂在图片节点下方。
  * 负责提示词输入（支持 @ 引用其他节点）、模型与画质 / 分辨率 / 比例 / 张数等参数配置，
  * 提交生成任务并把参数持久化到节点数据，生成结果回填当前节点或派生新节点。
@@ -14,18 +14,19 @@ import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem,MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
-import { apiUpload, generationApi } from "@/lib/api";
+import { apiUpload } from "@/lib/api/client";
+import { generationApi } from "@/features/canvas/api/generation-api";
 import { EventNames, isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { applyThumbnailSettings } from "@/lib/image-utils";
+import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import type { ModelChannel } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
-import type { GenSettings, MediaGenFields } from "@/lib/types/nodes";
-import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useModelStore } from "@/stores/model-store";
+import type { GenSettings, MediaGenFields } from "@/features/canvas/types";
+import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { useI18nStore } from "@/lib/i18n/store";
+import { useModelStore } from "@/lib/model-store";
 
-import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
+import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 
 interface Props { nodeId: string; }
 

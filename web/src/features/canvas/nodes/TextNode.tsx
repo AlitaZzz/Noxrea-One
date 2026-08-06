@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 文本节点（text-node）渲染组件。
  * 展示 / 就地编辑文本内容与节点标题，支持清空、生成中状态展示、
  * 四角缩放与上下连接桩；内容变更通过自定义事件回传画布层统一落库。
@@ -10,11 +10,11 @@ import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { useEditableTitle } from "@/hooks/use-editable-title";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
-import type { TextNode as TextNodeType } from "@/lib/types/nodes";
-import { markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import type { TextNode as TextNodeType } from "@/features/canvas/types";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 import ResizeHandle from "./ResizeHandle";
 

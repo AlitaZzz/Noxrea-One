@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 画布根容器组件。
  * 装配 React Flow 实例（节点/边类型注册、视口与选区行为），编排节点增删改、
  * 连线、编组、对齐吸附、文件拖入与快捷键等交互 hook，并挂载画布内各类浮层
@@ -31,19 +31,19 @@ import { App,Popover, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo,useState } from "react";
 
-import AssetsModal from "@/components/assets/AssetsModal";
+import AssetsModal from "@/features/assets/components/AssetsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
-import { ChevronDownIcon } from "@/components/ui/icons/ChevronDownIcon";
+import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import ChatPanel from "@/features/canvas/chat/ChatPanel";
+import AgentDrawer from "@/features/agent/components/AgentDrawer";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
 import CenterToolbar from "@/features/canvas/controls/CenterToolbar";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
-import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/drawer/CanvasExplorer";
-import NodeInspector from "@/features/canvas/inspector/NodeInspector";
+import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
+import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import { createEdge } from "@/features/canvas/node-defaults";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
 import DirectorNode from "@/features/canvas/nodes/DirectorNode";
@@ -52,28 +52,28 @@ import ImageNode from "@/features/canvas/nodes/ImageNode";
 import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
 import TextNode from "@/features/canvas/nodes/TextNode";
 import VideoNode from "@/features/canvas/nodes/VideoNode";
-import ApiSettingsDrawer from "@/features/canvas/panels/ApiSettingsDrawer";
+import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
-import { useAddNode } from "@/hooks/use-add-node";
-import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
-import { computeAlignment } from "@/hooks/use-alignment-guides";
-import { useCanvasEvents } from "@/hooks/use-canvas-events";
-import { useFileDrop } from "@/hooks/use-file-drop";
-import { useGroupOperations } from "@/hooks/use-group-operations";
+import { useAddNode } from "@/features/canvas/hooks/use-add-node";
+import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
+import { computeAlignment } from "@/features/canvas/hooks/use-alignment-guides";
+import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
+import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
+import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import type { AnyNode } from "@/lib/types/nodes";
+import type { AnyNode } from "@/features/canvas/types";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
-import { useAssetsStore } from "@/stores/assets-store";
-import { useAuthStore } from "@/stores/auth-store";
-import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useModelStore } from "@/stores/model-store";
-import { useProjectStore } from "@/stores/project-store";
-import { useSelectionStore } from "@/stores/selection-store";
+import { useAssetsStore } from "@/features/assets/store";
+import { useAuthStore } from "@/features/auth/store";
+import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { useI18nStore } from "@/lib/i18n/store";
+import { useModelStore } from "@/lib/model-store";
+import { useProjectStore } from "@/features/project/store";
+import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 
 export default function InfiniteCanvas() {
   const router = useRouter();
@@ -705,7 +705,7 @@ export default function InfiniteCanvas() {
         onClose={() => setCanvasExplorerOpen(false)}
       />
 
-      <ChatPanel
+      <AgentDrawer
         open={chatOpen}
         onClose={() => setChatOpen(false)}
       />

@@ -7,10 +7,10 @@
 
 import { useEffect, useRef } from "react";
 
-import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/image-utils";
-import type { MediaGenFields } from "@/lib/types/nodes";
-import { markDirtyImmediate,useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/utils/image-utils";
+import type { MediaGenFields } from "@/features/canvas/types";
+import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 /**
  * SSE 任务监控 hook。
@@ -27,7 +27,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-      import("@/lib/api").then(({ generationApi }) => {
+      import("@/features/canvas/api/generation-api").then(({ generationApi }) => {
       const scanAndConnect = () => {
         const allNodes = useCanvasStore.getState().nodes;
         for (const node of allNodes) {

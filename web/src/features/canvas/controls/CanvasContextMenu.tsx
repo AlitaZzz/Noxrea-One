@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 画布空白处右键菜单。
  * 从 context-menu store 读取弹出位置与显隐，渲染「新增各类节点 / 重置视图」菜单项，
  * 具体动作由父级通过 props 注入，自身不含业务逻辑。
@@ -10,8 +10,8 @@ import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
-import { useContextMenuStore } from "@/stores/context-menu-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 interface Props {
   onAddText: () => void;

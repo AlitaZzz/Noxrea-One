@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 视频节点（video-node）渲染组件。
  * 内置轻量播放器（播放/暂停、静音、进度条拖拽），支持视频上传与拖入、
  * 生成中状态展示，以及「截取当前帧生成图片节点」操作。
@@ -21,14 +21,15 @@ import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
 import { createImageNode } from "@/features/canvas/node-defaults";
-import { useEditableTitle } from "@/hooks/use-editable-title";
-import { apiUploadWithProgress, captureFrame as captureFrameApi } from "@/lib/api";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { apiUploadWithProgress } from "@/lib/api/client";
+import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
-import { applyThumbnailSettings, computeNodeSize } from "@/lib/image-utils";
-import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/lib/types/nodes";
+import { applyThumbnailSettings, computeNodeSize } from "@/lib/utils/image-utils";
+import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
-import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   useI18nStore((s) => s.lang);

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 图片打光参数面板。
  * 通过三维球体控件设定光源方位角 / 仰角，并调节强度与色温色值（含六向快捷预设），
  * 输出的是打光描述参数而非像素结果，交由生成链路使用。
@@ -12,8 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppModal from "@/components/ui/AppModal";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
-import { useCanvasStore } from "@/stores/canvas-store";
-import { useI18nStore } from "@/stores/i18n-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useI18nStore } from "@/lib/i18n/store";
 
 interface LightingState {
   intensity: number;

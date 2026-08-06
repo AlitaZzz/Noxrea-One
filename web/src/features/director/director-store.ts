@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 3D 导演台状态仓库。
  * 保存实体元数据列表、选中项、变换模式、场景设置与出图记录，
  * 并提供场景状态的序列化 / 反序列化（与 Director 节点数据互通）。
@@ -7,7 +7,7 @@
 import { create } from "zustand";
 
 import type { Stage } from "@/features/director/core/stage";
-import type { DirectorStateData } from "@/lib/types/nodes";
+import type { DirectorStateData } from "@/features/canvas/types";
 
 import type {
   CameraEntity,

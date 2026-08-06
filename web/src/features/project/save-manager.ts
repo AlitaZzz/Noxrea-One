@@ -12,9 +12,9 @@
  * 仅支持登录用户，画布不允许游客访问。
  */
 
-import { projectApi } from "@/lib/api";
-import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/stores/canvas-store";
-import { useProjectStore } from "@/stores/project-store";
+import { projectApi } from "@/features/project/api";
+import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useProjectStore } from "@/features/project/store";
 
 type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
 

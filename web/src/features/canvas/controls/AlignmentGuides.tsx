@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 节点拖拽对齐辅助线。
  * 把 use-alignment-guides 计算出的画布坐标辅助线换算为屏幕坐标并叠加渲染。
  */
@@ -8,7 +8,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 
 import { AlignmentGuidesOverlay } from "@/components/ui/icons/canvas/AlignmentGuidesOverlay";
-import type { AlignmentGuide } from "@/hooks/use-alignment-guides";
+import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 
 interface Props {
   guides: AlignmentGuide[];

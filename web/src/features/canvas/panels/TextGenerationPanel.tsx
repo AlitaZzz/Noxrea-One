@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 文本生成面板，挂在文本节点下方。
  * 负责提示词输入（支持 @ 引用其他节点）与文本模型选择，
  * 以流式方式接收生成结果并写回节点内容。
@@ -13,16 +13,17 @@ import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
-import { apiUpload, generationApi } from "@/lib/api";
+import { apiUpload } from "@/lib/api/client";
+import { generationApi } from "@/features/canvas/api/generation-api";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { applyThumbnailSettings } from "@/lib/image-utils";
-import type { GenSettings, TextNodeData } from "@/lib/types/nodes";
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/stores/canvas-store";
-import { useHistoryStore } from "@/stores/history-store";
-import { useI18nStore } from "@/stores/i18n-store";
-import { useModelStore } from "@/stores/model-store";
+import { applyThumbnailSettings } from "@/lib/utils/image-utils";
+import type { GenSettings, TextNodeData } from "@/features/canvas/types";
+import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { useI18nStore } from "@/lib/i18n/store";
+import { useModelStore } from "@/lib/model-store";
 
-import MentionPrompt, { type ReferenceItem } from "../chat/MentionPrompt";
+import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 
 interface Props {
   nodeId: string;

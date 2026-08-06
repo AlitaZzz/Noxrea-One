@@ -356,11 +356,9 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         await completeSkill(sessionId);
         send("skill_completed", { message: "技能已完成" });
 
-        // 如果 LLM 同时输出了文本，落库并推送
-        if (result.text) {
-          await createMessage({ sessionId, role: "assistant", content: result.text });
-          await touchSession(sessionId);
-        }
+        // 无论有无文本都落库 assistant 消息，让 LLM 记住自己已结束技能
+        await createMessage({ sessionId, role: "assistant", content: result.text || "" });
+        await touchSession(sessionId);
         send("done", { text: result.text, skillCompleted: true });
         streamClosed = true;
         controller.close();
@@ -517,10 +515,9 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
         await completeSkill(sessionId);
         send("skill_completed", { message: "技能已完成" });
 
-        if (result.text) {
-          await createMessage({ sessionId, role: "assistant", content: result.text });
-          await touchSession(sessionId);
-        }
+        // 无论有无文本都落库 assistant 消息
+        await createMessage({ sessionId, role: "assistant", content: result.text || "" });
+        await touchSession(sessionId);
         send("done", { text: result.text, skillCompleted: true });
         streamClosed = true;
         controller.close();

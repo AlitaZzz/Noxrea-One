@@ -11,8 +11,8 @@ import { Input } from "antd";
 import { memo, useCallback,useState } from "react";
 
 import { EventNames, GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
-import type { GroupNode as GroupNodeType } from "@/lib/types/nodes";
-import { useI18nStore } from "@/stores/i18n-store";
+import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
+import { useI18nStore } from "@/lib/i18n/store";
 
 import ResizeHandle from "./ResizeHandle";
 

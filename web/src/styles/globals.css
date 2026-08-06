@@ -708,7 +708,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: rgba(255,255,255,.3);
 }
 
-/* ===== ChatPanel (Agent 对话抽屉) ===== */
+/* ===== AgentDrawer (Agent 对话抽屉) ===== */
 .chat-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--canvas-border-light) transparent;
