@@ -6,7 +6,7 @@
  */
 
 import type { ProtocolToolCall } from "@server/services/protocols/base";
-import { getSkill } from "@server/services/capabilities/llm/skills/loader";
+import { getSkill } from "@server/services/agent/skills/loader";
 
 /** 组装后发给上游的消息条目 */
 export type AgentMessage = {
