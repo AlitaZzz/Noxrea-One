@@ -33,10 +33,10 @@ export interface HistoryMessage {
   skills?: string[] | null;
 }
 
-// Layer 1: 基础身份（developer 角色，最高优先级）
+// Layer 1: 基础身份（system 角色，所有 OpenAI 兼容网关均支持）
 
 const BASE_IDENTITY = {
-  role: "developer" as const,
+  role: "system" as const,
   content:
     "你是 **Noxrea One Agent**，一个专注于图片、音频、视频生成与创作的智能助手。\n\n" +
     "无论是想要一段视频、一张概念图，还是一段配乐，都可以直接告诉我你的想法。我能帮你完成：\n" +
@@ -46,10 +46,10 @@ const BASE_IDENTITY = {
     "当用户询问你的身份或能力时，用简洁的 markdown 介绍上述信息即可。",
 };
 
-// Layer 2: 工具使用规则（developer 角色）
+// Layer 2: 工具使用规则（system 角色）
 
 const TOOL_GUIDANCE = {
-  role: "developer" as const,
+  role: "system" as const,
   content:
     "## 工具使用规则\n" +
     "1. 对于用户的每一条消息，你最多只能发起一次工具调用，绝对不要在同一轮里调用两次或以上同一工具。\n" +
