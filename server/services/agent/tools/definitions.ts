@@ -2,6 +2,7 @@
  * Agent 工具定义。
  * 定义供 LLM function-calling 使用的工具 schema，统一向中央注册器注册。
  * 工具由前端执行：后端透传 tool_call，前端在画布创建对应节点。
+ * complete_skill 为 server 端元工具：后端拦截，不透传给前端。
  *
  * 本文件属于 agent 模块，与 capabilities/llm（前端 text 节点纯文本能力）完全解耦。
  */
@@ -42,6 +43,24 @@ const VIDEO_TOOL: AgentToolDefinition = {
 
 agentToolRegistry.register(IMAGE_TOOL);
 agentToolRegistry.register(VIDEO_TOOL);
+
+// ── Server 端元工具 ──
+
+const COMPLETE_SKILL_TOOL: AgentToolDefinition = {
+  name: "complete_skill",
+  description:
+    "当技能任务已全部完成时调用此工具。调用后会话回到普通对话模式。" +
+    "如果你认为当前技能的所有任务都已执行完毕，请调用此工具。",
+  parameters: {},
+  required: [],
+  execute: "server",
+  label: "完成技能",
+};
+
+agentToolRegistry.register(COMPLETE_SKILL_TOOL);
+
+/** complete_skill 的工具名，用于后端拦截 */
+export const COMPLETE_SKILL = "complete_skill";
 
 /** 传给上游 LLM 的 tools 字段（兼容导出，等价于 registry.getOpenAiTools()） */
 export const AGENT_TOOLS = agentToolRegistry.getOpenAiTools();

@@ -1,7 +1,7 @@
 /**
  * Agent 工具过滤。
- * 根据当前激活的技能白名单（skill.md 的 tools 字段）过滤注入给 LLM 的 tools。
- * skills 为空或为空数组时兜底注入全部已注册工具。
+ * 根据 session 级别的 activeSkill（skill.md 的 tools 字段）过滤注入给 LLM 的 tools。
+ * activeSkill 为 null 时注入全部已注册工具（普通对话模式）。
  */
 
 import { agentToolRegistry } from "./registry";
@@ -10,20 +10,17 @@ import { getSkill } from "../skills/loader";
 /**
  * 解析当前轮应注入给 LLM 的 tools（OpenAI function-calling 格式）。
  *
- * @param skills 前端显式触发的技能名列表；空或 undefined → 注入全部工具
+ * @param activeSkill session 当前激活的技能名；null/undefined -> 注入全部工具
  */
-export function resolveSkillTools(skills?: string[]): unknown[] {
-  if (!skills || skills.length === 0) {
+export function resolveSkillTools(activeSkill?: string | null): unknown[] {
+  if (!activeSkill) {
     return agentToolRegistry.getOpenAiTools();
   }
 
-  const allowed = new Set<string>();
-  for (const name of skills) {
-    const skill = getSkill(name);
-    skill?.meta.tools?.forEach((t: string) => allowed.add(t));
-  }
+  const skill = getSkill(activeSkill);
+  const allowed = new Set<string>(skill?.meta.tools ?? []);
 
-  // 没有任何白名单声明时，兜底注入全部工具（避免技能漏配导致无工具可用）
+  // 技能未声明 tools 白名单时，兜底注入全部工具
   if (allowed.size === 0) {
     return agentToolRegistry.getOpenAiTools();
   }
