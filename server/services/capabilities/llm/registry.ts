@@ -4,10 +4,24 @@
  * 工具执行位置分 client（后端透传、前端建节点）与 server（预留后端执行）两类。
  */
 
+/** JSON Schema 基础类型（受控字面量，避免手写拼错 type） */
+export type AgentToolParamType = "string" | "number" | "boolean" | "array" | "object";
+
+export interface AgentToolParam {
+  type: AgentToolParamType;
+  description: string;
+  /** 数组元素类型（type 为 "array" 时可选） */
+  items?: AgentToolParamType;
+  /** 数值下界（type 为 "number" 时可选） */
+  minimum?: number;
+  /** 数值上界（type 为 "number" 时可选） */
+  maximum?: number;
+}
+
 export interface AgentToolDefinition {
   name: string;
   description: string;
-  parameters: Record<string, { type: string; description: string }>;
+  parameters: Record<string, AgentToolParam>;
   required: string[];
   /** 执行位置标记，见上 */
   execute: "client" | "server";
