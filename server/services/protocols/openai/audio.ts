@@ -1,4 +1,7 @@
-// ── OpenAI 音频协议 ──
+/**
+ * OpenAI 音频协议。
+ * 实现 OpenAI 音频生成的上游请求构建与响应解析。
+ */
 
 import type { ProtocolRequestResult, ProtocolResponse, ProtocolService } from "@server/services/protocols/base";
 

@@ -1,5 +1,8 @@
-// 技能加载器：扫描 server/resources/skills/<name>/skill.md，解析 frontmatter。
-// 每个技能是一个目录，目录内含 skill.md。模块加载时扫描一次并缓存（进程级）。
+/**
+ * 技能加载器。
+ * 扫描 server/resources/skills/<name>/skill.md 并解析 frontmatter，
+ * 模块加载时扫描一次并缓存为进程级技能元数据。
+ */
 
 import fs from "fs";
 import path from "path";

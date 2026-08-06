@@ -1,4 +1,7 @@
-// ── Capability 抽象基类（对应 backend/app/services/capabilities/base.py） ──
+/**
+ * 能力抽象基类。
+ * 定义 Capability 的注册、上下文与统一调用接口，供各能力实现继承。
+ */
 
 import type { GenerationResult } from "@server/schemas/result";
 

@@ -1,3 +1,7 @@
+/**
+ * HTTP 应用装配。
+ * 聚合各业务路由、中间件与全局错误处理，构建 Hono 应用实例。
+ */
 import { Hono } from "hono";
 import { ok } from "@server/core/response";
 import { router as authRouter } from "./routes/auth";
@@ -12,7 +16,7 @@ import { router as captureFrameRouter } from "./routes/capture-frame";
 import { router as uploadRouter } from "./routes/upload";
 import { router as filesRouter } from "./routes/files";
 
-// ── Hono 应用实例 ──
+// Hono 应用实例
 const app = new Hono();
 
 // 健康检查

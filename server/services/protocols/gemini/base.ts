@@ -1,4 +1,7 @@
-// ── Gemini 协议基类（对应 backend/app/services/protocols/gemini/base.py） ──
+/**
+ * Gemini 协议基类。
+ * 实现 Gemini 上游协议的公共逻辑，提供认证头与请求结果封装。
+ */
 
 import type { ProtocolRequestResult, ProtocolService } from "@server/services/protocols/base";
 

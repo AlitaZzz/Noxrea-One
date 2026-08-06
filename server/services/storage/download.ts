@@ -1,4 +1,7 @@
-// ── 远端结果下载（对应 backend/app/services/storage/download.py） ──
+/**
+ * 远端结果下载。
+ * 在 SSRF 校验后下载远程生成结果，计算哈希并持久化为文件对象。
+ */
 
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
@@ -44,7 +47,7 @@ export async function downloadAndSave(
   try {
     let buffer: Buffer;
 
-    // ── data: URL ──
+    // data: URL
     if (cdnUrl.startsWith("data:")) {
       const match = cdnUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
@@ -54,7 +57,7 @@ export async function downloadAndSave(
       buffer = Buffer.from(match[2], "base64");
       logEvent("storage.download", { stage: "decoded_data_url", taskId, size: buffer.length });
     }
-    // ── 远端下载 ──
+    // 远端下载
     else {
       // SSRF 校验（确定性失败，不重试）
       try {
@@ -142,12 +145,12 @@ export async function downloadAndSave(
       buffer = downloadedBuffer;
     }
 
-    // ── SHA256 + magic bytes 校验 ──
+    // SHA256 + magic bytes 校验
     const fileHash = computeBufferHash(buffer);
     const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
     const fileExt = normalizeExt(sniffedExt);
 
-    // ── 构建存储路径：{userId}/{hash[:2]}/{hash}{ext} ──
+    // 构建存储路径：{userId}/{hash[:2]}/{hash}{ext}
     const storageKey = buildStorageKey(userId, fileHash, fileExt);
     const uploadsRoot = resolveFromRoot(cfg.UPLOAD_DIR);
     const uploadsDir = path.resolve(uploadsRoot, path.dirname(storageKey));
@@ -167,7 +170,7 @@ export async function downloadAndSave(
       }
     }
 
-    // ── 去重 + DB 记录 ──
+    // 去重 + DB 记录
     await persistFileObject({
       userId,
       hash: fileHash,

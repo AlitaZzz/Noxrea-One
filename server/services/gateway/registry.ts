@@ -1,16 +1,19 @@
-// ── Gateway 注册中心（对应 backend/app/services/gateway/registry.py） ──
+/**
+ * Gateway 注册中心。
+ * 维护能力（Capability）与协议（Protocol）的注册表，
+ * 并在导入副作用中触发各能力实现的注册。
+ */
 
 import { registerCapability } from "@server/services/capabilities/base";
 import { registerProtocol } from "@server/services/protocols/base";
 import { logEvent } from "@server/core/logger/utils";
 
-// ── 导入 Capability 实现（触发 registerCapability 调用） ──
 import "@server/services/capabilities/image/service";
 import "@server/services/capabilities/video/service";
 import "@server/services/capabilities/llm/service";
 import "@server/services/capabilities/audio/service";
 
-// ── 导入 Protocol 实现 ──
+// 导入 Protocol 实现
 import { OpenAiImageProtocol } from "@server/services/protocols/openai/image";
 import { OpenAiVideoProtocol } from "@server/services/protocols/openai/video";
 import { OpenAiLlmProtocol } from "@server/services/protocols/openai/llm";
@@ -29,7 +32,7 @@ export function initGateway(): void {
   if (initialized) return;
   initialized = true;
 
-  // ── 注册 Protocols ──
+  // 注册 Protocols
   // OpenAI
   const openaiImage = new OpenAiImageProtocol();
   const openaiVideo = new OpenAiVideoProtocol();

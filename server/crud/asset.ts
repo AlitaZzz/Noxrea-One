@@ -1,7 +1,9 @@
+/**
+ * 资产与文件夹 CRUD。
+ * 提供资产条目与文件夹的数据库读写，并处理 JSON 字段的反序列化。
+ */
 import { prisma } from "@server/core/database/client";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
-
-// ── 反序列化工具 ──
 
 function deserializeAsset(item: { tags: unknown; extraData: unknown }) {
   return {
@@ -11,9 +13,9 @@ function deserializeAsset(item: { tags: unknown; extraData: unknown }) {
   };
 }
 
-// ── Asset CRUD（对应 backend/app/crud/asset.py） ──
+// Asset CRUD
 
-// ── Folders ──
+// Folders
 
 export async function getFolders(userId: number, spaceKey = "personal") {
   return prisma.assetFolder.findMany({
@@ -63,7 +65,7 @@ export async function deleteFolder(id: number) {
   return prisma.assetFolder.delete({ where: { id } });
 }
 
-// ── Items ──
+// Items
 
 export async function getAssets(params: {
   userId?: number;

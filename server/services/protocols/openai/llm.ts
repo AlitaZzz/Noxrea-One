@@ -1,4 +1,7 @@
-// ── OpenAI LLM 协议 ──
+/**
+ * OpenAI LLM 协议。
+ * 实现 OpenAI LLM 文本补全的上游请求构建与响应解析。
+ */
 
 import type {
   ProtocolRequestResult,
@@ -30,7 +33,7 @@ export class OpenAiLlmProtocol implements ProtocolService {
     const data = response as Record<string, unknown>;
     const choices = data?.choices as Array<Record<string, unknown>> | undefined;
 
-    // 合并所有 choice 的 content（对应 Python merge_choices 逻辑）
+    // 合并所有 choice 的 content
     const parts: string[] = [];
     const toolCalls: ProtocolToolCall[] = [];
 

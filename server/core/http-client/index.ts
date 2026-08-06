@@ -1,6 +1,8 @@
+/**
+ * 场景化 HTTP 客户端。
+ * 按下载、轮询、接口、异步等场景提供差异化的超时与请求封装。
+ */
 import { getConfig } from "@server/core/config";
-
-// ── 场景化 HTTP 超时 ──
 
 export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
 

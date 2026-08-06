@@ -1,4 +1,7 @@
-// ── 异步任务恢复轮询（Worker 重启后继续轮询已有 upstreamTaskId 的任务） ──
+/**
+ * 异步任务恢复轮询。
+ * Worker 重启后继续轮询已有 upstreamTaskId 的任务，直至终态或超时。
+ */
 
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";

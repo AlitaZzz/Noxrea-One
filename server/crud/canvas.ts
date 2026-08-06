@@ -1,7 +1,9 @@
+/**
+ * 画布工程 CRUD。
+ * 按用户读写画布工程、节点数据与缩略图等持久化信息。
+ */
 import { prisma } from "@server/core/database/client";
 import { stringifyJson, parseJsonObject } from "./_json";
-
-// ── Canvas CRUD（对应 backend/app/crud/canvas.py） ──
 
 export async function getProjects(userId: number) {
   const projects = await prisma.canvasProject.findMany({
@@ -69,7 +71,7 @@ export async function deleteProject(id: number) {
   return prisma.canvasProject.delete({ where: { id } });
 }
 
-// ── 文件引用重算（对应 Python file_references 的 upsert + deleteMany） ──
+// 文件引用重算（upsert + deleteMany）
 
 export async function recalcFileReferences(
   projectId: number,

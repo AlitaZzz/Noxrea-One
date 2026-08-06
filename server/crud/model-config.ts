@@ -1,9 +1,9 @@
+/**
+ * 模型渠道配置 CRUD。
+ * 管理 API 渠道、模型能力与配置项的读写，并处理配置 JSON 字段的反序列化。
+ */
 import { prisma } from "@server/core/database/client";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
-
-// ── Model Config CRUD（对应 backend/app/crud/model_config.py） ──
-
-// ── 反序列化工具 ──
 
 function deserializeChannel<T extends { config: unknown; models: Array<{ capabilities: unknown }> }>(ch: T) {
   return {

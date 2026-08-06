@@ -1,4 +1,7 @@
-// ── LLM Capability Service（对应 backend/app/services/capabilities/llm/service.py） ──
+/**
+ * LLM 能力服务。
+ * 实现 LLM 文本生成能力，组装协议请求、解析参考图并调用上游补全。
+ */
 
 import {
   registerCapability,
@@ -15,7 +18,7 @@ import type { GenerationResult } from "@server/schemas/result";
 
 /**
  * 遍历 messages，将 image_url 中的本地 URL 转为 base64 data URI。
- * 对应 Python LLMService.execute() 中的 resolve_refs 逻辑。
+ * 解析参考图引用后组装消息上下文。
  */
 async function resolveMessageImages(
   messages: unknown,

@@ -1,6 +1,8 @@
+/**
+ * 资产相关请求校验模式。
+ * 定义文件夹与资产的创建、更新等入参的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Asset schemas（对应 backend/app/schemas/asset.py） ──
 
 // Folder
 export const folderCreateSchema = z.object({

@@ -1,9 +1,11 @@
 import { prisma } from "@server/core/database/client";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 import crypto from "crypto";
+/**
+ * 生成任务 CRUD。
+ * 提供异步生成任务的创建、状态更新与查询等数据库操作。
+ */
 import type { GenerationTask } from "@prisma/client";
-
-// ── Task CRUD（对应 backend/app/crud/task.py） ──
 
 export async function createTask(data: {
   userId: number;
@@ -128,7 +130,7 @@ export async function updateTaskStatus(
   return deserializeTask(task);
 }
 
-// ── 原子领取任务（对应 claim_pending_tasks） ──
+// 原子领取任务
 
 export async function claimPendingTasks(limit = 10) {
   const now = new Date();
@@ -166,7 +168,7 @@ export async function claimPendingTasks(limit = 10) {
   });
 }
 
-// ── 僵尸任务清理 ──
+// 僵尸任务清理
 // 超过最大重试次数的任务直接判死；未超限则重置为 pending 并递增 retryCount
 
 export async function cleanupZombieTasks(
@@ -207,7 +209,7 @@ export async function cleanupZombieTasks(
   return dead.count + retried.count;
 }
 
-// ── 启动时恢复未完成的任务 ──
+// 启动时恢复未完成的任务
 
 /**
  * 将 processing 状态的任务分类处理：
@@ -244,7 +246,7 @@ export async function recoverProcessingTasks(): Promise<{
   return { recovered: syncIds.length, asyncTasks: asyncTasks.map(deserializeTask) };
 }
 
-// ── 取消任务 ──
+// 取消任务
 // 取消使用独立的 cancelled 终态，不再复用 failed，便于前端区分
 
 export async function cancelTask(id: string) {
@@ -259,7 +261,7 @@ export async function cancelTask(id: string) {
   });
 }
 
-// ── 反序列化工具：将 SQLite JSON 字符串解析为对象 ──
+// 反序列化工具：将 SQLite JSON 字符串解析为对象
 
 function deserializeTask(task: GenerationTask) {
   return {

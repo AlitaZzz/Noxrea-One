@@ -1,10 +1,8 @@
-// ── Agent 上游调用层 ──
-//
-// 从 chat.ts 抽出的上游 LLM 调用逻辑：
-//   - resolveChannel:  查找可用的渠道
-//   - buildUpstream:   组装上游请求（参考图解析、协议适配、工具注入）
-//   - runCompletion:   非流式调用
-//   - runCompletionStream: 流式调用 + tool_call 累积
+/**
+ * Agent 上游调用层。
+ * 封装从 chat 抽离的上游 LLM 调用逻辑：解析可用渠道、组装上游请求、
+ * 执行非流式与流式补全，并累积 tool_call 结果。
+ */
 
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";

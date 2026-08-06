@@ -1,4 +1,8 @@
-// ── Gateway Router（对应 backend/app/services/gateway/router.py） ──
+/**
+ * Gateway 路由。
+ * 根据请求的能力、协议与渠道解析出对应的能力实现，
+ * 并构建调用上游所需的路由上下文。
+ */
 
 import { getCapability } from "@server/services/capabilities/base";
 import type { GenerationResult } from "@server/schemas/result";

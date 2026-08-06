@@ -1,4 +1,7 @@
-// ── 存储后端抽象（对应 backend/app/services/storage/service.py 的存储后端接口） ──
+/**
+ * 存储后端抽象。
+ * 定义文件保存、读取、状态查询、删除与公开访问 URL 的统一存储接口。
+ */
 
 export interface StorageBackend {
   /** 保存文件 */

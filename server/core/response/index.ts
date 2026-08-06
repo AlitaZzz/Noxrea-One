@@ -1,4 +1,7 @@
-// ── 统一响应格式（对应 schemas/common.py UnifiedResponse） ──
+/**
+ * 统一响应格式。
+ * 定义接口标准返回结构及成功、错误等构造辅助函数。
+ */
 
 export interface UnifiedResponse<T = unknown> {
   code: number;

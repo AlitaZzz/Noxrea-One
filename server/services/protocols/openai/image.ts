@@ -1,4 +1,7 @@
-// ── OpenAI 图片生成协议 ──
+/**
+ * OpenAI 图片生成协议。
+ * 继承 OpenAI 协议基类，构建图片生成的上游请求与异步轮询逻辑。
+ */
 
 import type {
   ProtocolRequestResult,
@@ -74,7 +77,7 @@ export class OpenAiImageProtocol implements ProtocolService {
     return { urls };
   }
 
-  // ── 异步任务支持（对齐 Python OpenAIBaseProtocol） ──
+  // 异步任务支持
 
   extractTaskId(data: unknown, channelConfig?: Record<string, unknown>): string | null {
     if (!data || typeof data !== "object") return null;

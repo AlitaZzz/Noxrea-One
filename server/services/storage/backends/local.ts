@@ -1,4 +1,7 @@
-// ── 本地磁盘存储后端（对应 Python 本地存储） ──
+/**
+ * 本地磁盘存储后端。
+ * 基于文件系统实现 StorageBackend，提供上传根目录下的保存与读取。
+ */
 
 import fs from "fs/promises";
 import path from "path";

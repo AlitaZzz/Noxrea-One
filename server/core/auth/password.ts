@@ -1,6 +1,8 @@
+/**
+ * 密码哈希与校验。
+ * 基于 bcrypt 提供密码的单向哈希与比对能力。
+ */
 import bcrypt from "bcryptjs";
-
-// ── 密码哈希与校验（对应 passlib[bcrypt]） ──
 
 const BCRYPT_ROUNDS = 12;
 

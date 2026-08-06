@@ -1,4 +1,7 @@
-// ── 内存限流器（对应 backend/app/services/ratelimit.py） ──
+/**
+ * 内存限流器。
+ * 基于滑动窗口实现按标识的速率限制，防止接口被过度调用。
+ */
 
 interface WindowEntry {
   timestamps: number[];
@@ -70,7 +73,7 @@ export class RateLimiter {
   }
 }
 
-// ── 预置限流器 ──
+// 预置限流器
 
 const globalLimiters =
   globalForRateLimit.__noxreaRateLimiters ?? new Map();

@@ -1,8 +1,10 @@
 import { prisma } from "@server/core/database/client";
 import { stringifyJson, parseJsonArray } from "./_json";
+/**
+ * 对话会话 CRUD。
+ * 管理按画布工程隔离的聊天会话与消息的创建与读取。
+ */
 import type { ChatSession, ChatMessage } from "@prisma/client";
-
-// ── Chat CRUD（按画布 project 独立的对话会话） ──
 
 export type ChatRole = "user" | "assistant";
 
@@ -85,7 +87,7 @@ export async function listMessages(sessionId: number) {
   return messages.map(deserializeMessage);
 }
 
-// ── 反序列化工具 ──
+// 反序列化工具
 
 function deserializeSession(session: ChatSession) {
   return { ...session };

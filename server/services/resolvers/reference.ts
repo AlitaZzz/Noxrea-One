@@ -1,4 +1,7 @@
-// ── 参考图解析（对应 backend/app/services/resolvers/reference.py） ──
+/**
+ * 参考图解析。
+ * 将用户传入的参考图路径或 URL 解析为可访问的资源，并做路径穿越防护。
+ */
 
 import { logEvent } from "@server/core/logger/utils";
 import fs from "fs/promises";
@@ -16,7 +19,7 @@ function isPathWithin(base: string, target: string): boolean {
 
 /**
  * 将存储路径转为完整的 data: URL（base64）。
- * 对应 Python read_self_file + base64 encode。
+ * 读取自身文件并 base64 编码。
  */
 async function readSelfFile(relPath: string, userId: number): Promise<string | null> {
   try {

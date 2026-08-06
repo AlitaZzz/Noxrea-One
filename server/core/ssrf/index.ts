@@ -1,9 +1,10 @@
+/**
+ * SSRF 防护。
+ * 解析并校验请求地址，拦截指向内网与保留地址的恶意访问。
+ */
 import dns from "dns/promises";
 import net from "net";
 import { getConfig } from "@server/core/config";
-
-// ── SSRF 防护（对应 backend/app/services/ssrf.py） ──
-// 全栈架构下仅需保留 resolveAndValidate，防止恶意 baseUrl 指向内网。
 
 const PRIVATE_IP_PREFIXES = [
   "0.", "10.", "100.", "127.", "169.254.",

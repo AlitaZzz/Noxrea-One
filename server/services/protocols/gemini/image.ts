@@ -1,4 +1,7 @@
-// ── Gemini 图片生成协议（对应 backend/app/services/protocols/gemini/image.py） ──
+/**
+ * Gemini 图片生成协议。
+ * 继承 Gemini 协议基类，构建图片生成的上游请求与响应解析。
+ */
 
 import { GeminiProtocol } from "./base";
 import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";

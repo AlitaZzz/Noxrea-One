@@ -1,6 +1,8 @@
+/**
+ * 通用响应与分页校验模式。
+ * 定义统一的接口响应结构及分页参数等共用 zod 规则。
+ */
 import { z } from "zod";
-
-// ── UnifiedResponse schema + 通用工具 ──
 
 export const unifiedResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
   z.object({

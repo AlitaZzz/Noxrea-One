@@ -1,3 +1,7 @@
+/**
+ * 认证路由。
+ * 处理登录、注册、个人信息更新与登出等鉴权接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
@@ -9,7 +13,6 @@ import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
 
-// ── POST /api/auth/login ──
 router.post("/api/auth/login", async (c) => {
   const request = c.req.raw;
 
@@ -52,7 +55,7 @@ router.post("/api/auth/login", async (c) => {
   return c.json(ok({ access_token: token, token_type: "bearer", user }, "Login successful"));
 });
 
-// ── POST /api/auth/register ──
+// POST /api/auth/register
 router.post("/api/auth/register", async (c) => {
   const request = c.req.raw;
 
@@ -101,7 +104,7 @@ router.post("/api/auth/register", async (c) => {
   return c.json(ok({ access_token: token, token_type: "bearer", user }, "Registration successful"));
 });
 
-// ── GET /api/auth/me ──
+// GET /api/auth/me
 router.get("/api/auth/me", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -113,7 +116,7 @@ router.get("/api/auth/me", async (c) => {
   return c.json(ok(user));
 });
 
-// ── PUT /api/auth/me ──
+// PUT /api/auth/me
 router.put("/api/auth/me", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

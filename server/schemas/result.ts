@@ -1,6 +1,8 @@
+/**
+ * 生成结果校验模式。
+ * 定义同步生成结果与异步提交结果的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Result schemas（对应 backend/app/schemas/result.py） ──
 
 // 同步生成结果
 export const generationResultSchema = z.object({

@@ -1,4 +1,7 @@
-// ── Ark 图片生成协议（对应 backend/app/services/protocols/ark/image.py） ──
+/**
+ * Ark 图片生成协议。
+ * 继承 Ark 协议基类，构建图片生成的上游请求与响应解析。
+ */
 
 import { ArkProtocol } from "./base";
 import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";
