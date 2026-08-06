@@ -125,6 +125,7 @@ interface ProjectState {
   deleteProjects: (ids: string[]) => void;
   setActiveProject: (id: string) => void;
   syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
+  refreshProjects: () => Promise<void>;
   initialize: () => Promise<void>;
 }
 
@@ -205,6 +206,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, theme, minimapVisible, snapToGrid, agentModel: agentModel ?? undefined, updatedAt: Date.now() } : p
       ),
     }));
+  },
+
+  refreshProjects: async () => {
+    const projects = await fetchProjects();
+    set((s) => {
+      let { activeProjectId } = s;
+      if (activeProjectId && !projects.find((p) => p.id === activeProjectId)) {
+        activeProjectId = projects.length > 0 ? projects[0].id : null;
+        saveLocalActiveId(activeProjectId);
+      }
+      return { projects, activeProjectId };
+    });
   },
 
   initialize: async () => {
