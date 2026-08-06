@@ -3,7 +3,7 @@
  * 组件 / hook / store 不应再直接调用底层 fetch。
  */
 export * from "./asset-api";
-export * from "./chat-api";
+export * from "./agent-api";
 export * from "./client";
 export * from "./file-api";
 export * from "./generation-api";

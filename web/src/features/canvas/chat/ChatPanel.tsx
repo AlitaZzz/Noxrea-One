@@ -2,6 +2,7 @@
  * 画布 AI 对话抽屉。
  * 提供多轮会话（新建 / 历史切换）、附件上传、技能调用与模型选择，
  * 流式接收回复并以 Markdown 渲染（经 sanitize 白名单放宽后允许有限 HTML）。
+ * 技能绑定在 session 级别，前端只需选择技能一次，后续消息自动沿用。
  */
 "use client";
 
@@ -13,7 +14,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-import { MenuItem,MenuPopover } from "@/components/ui/MenuPopover";
+import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 
 /** 允许 AI 输出中嵌入的 HTML 标签与属性，在 defaultSchema 基础上放宽 */
 const sanitizeSchema = {
@@ -41,7 +42,7 @@ import { HistoryIcon } from "@/components/ui/icons/chat/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/chat/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/ChevronDownIcon";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { chatApi } from "@/lib/api";
+import { agentApi } from "@/lib/api";
 import { useCanvasStore } from "@/stores/canvas-store";
 import { useModelStore } from "@/stores/model-store";
 
@@ -54,8 +55,6 @@ interface Props {
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
 export default function ChatPanel({ open, onClose }: Props) {
-  // 模型列表来自已配置的渠道（不写死），确保 store 已初始化
-  // 与生成面板一致：选项值为「渠道名/模型名」，显示带渠道前缀以便区分同名模型
   const channels = useModelStore((s) => s.channels);
   const initialize = useModelStore((s) => s.initialize);
   const modelOptions = channels.flatMap((c) =>
@@ -64,13 +63,15 @@ export default function ChatPanel({ open, onClose }: Props) {
       .map((m) => ({ value: `${c.name}/${m.name}`, name: m.name }))
   );
 
-  // activeModel 来自 canvasStore.agentModel（project 级持久化，落盘到 canvasData）
   const agentModel = useCanvasStore((s) => s.agentModel);
   const setAgentModel = useCanvasStore((s) => s.setAgentModel);
-  // 若 store 尚无值（旧项目 / 未加载），回退到首个可用模型
   const activeModel = agentModel ?? modelOptions[0]?.value ?? "gpt-4o";
   const activeModelName = activeModel.includes("/") ? activeModel.split("/").pop()! : activeModel;
-  const { messages, isStreaming, error, sendChat, stopStream, newChat, chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat } = useChatStream(activeModelName);
+  const {
+    messages, isStreaming, error, sendChat, stopStream, newChat,
+    chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat,
+    activeSkill, skillStatus, bindSkill, removeSkill,
+  } = useChatStream(activeModelName);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -78,30 +79,28 @@ export default function ChatPanel({ open, onClose }: Props) {
   const [draft, setDraft] = useState("");
   const [skillNames, setSkillNames] = useState<{ name: string; displayTitle?: string }[]>([]);
 
-  // 初始化模型配置（幂等）；列表就绪后若当前选中项不在列表中则回退首项
   useEffect(() => {
     void initialize();
   }, [initialize]);
-  // 拉取技能名列表，供斜杠命令解析时使用
+
+  // 拉取技能列表，供 chip 展示标题
   useEffect(() => {
     let alive = true;
-    chatApi.listSkills()
+    agentApi.listSkills()
       .then((r) => (r.ok ? r.json() : []))
       .then((list: { name: string; displayTitle?: string }[]) => {
         if (alive && Array.isArray(list)) setSkillNames(list);
       })
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
+
   useEffect(() => {
     if (modelOptions.length && !modelOptions.some((m) => m.value === agentModel)) {
       setAgentModel(modelOptions[0].value);
     }
   }, [modelOptions, agentModel, setAgentModel]);
 
-  // 新消息到达时滚到底部
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -111,32 +110,34 @@ export default function ChatPanel({ open, onClose }: Props) {
     setDraft(composerRef.current?.innerText ?? "");
   }, []);
 
-  const [activeSkill, setActiveSkill] = useState<string | null>(null);
+  // 输入框技能 chip：本地存技能名，不依赖异步的 activeSkill
+  const [chipSkill, setChipSkill] = useState<string | null>(null);
 
-  const canSend = !!draft.trim() || !!activeSkill;
+  const canSend = !!draft.trim() || !!chipSkill;
 
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
-    if ((!text.trim() && !activeSkill) || isStreaming) return;
-    const skills = activeSkill
-      ? [{ name: activeSkill, displayTitle: skillNames.find((s) => s.name === activeSkill)?.displayTitle }]
-      : undefined;
-    void sendChat(text, skills);
+    if ((!text.trim() && !chipSkill) || isStreaming) return;
+    void sendChat(text, chipSkill ?? undefined);
     if (composerRef.current) composerRef.current.innerText = "";
-    // 不清除 activeSkill —— skill 保持激活直到用户显式点击 × 移除，
-    // 这样同一对话内后续消息会继续带上 skill 标签
     setDraft("");
-  }, [isStreaming, sendChat, activeSkill, skillNames]);
+    setChipSkill(null);
+  }, [isStreaming, sendChat, chipSkill]);
 
   const handleSkillSelect = useCallback((skillName: string) => {
-    setActiveSkill(skillName);
+    void bindSkill(skillName);
+    setChipSkill(skillName);
     if (composerRef.current) composerRef.current.focus();
-  }, []);
+  }, [bindSkill]);
+
+  const handleRemoveSkill = useCallback(() => {
+    void removeSkill();
+    setChipSkill(null);
+  }, [removeSkill]);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // 标题就地重命名
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const startRename = useCallback(() => {
@@ -149,7 +150,6 @@ export default function ChatPanel({ open, onClose }: Props) {
     setEditing(false);
   }, [titleDraft, renameChat]);
 
-  // 相对时间：分钟→小时→天→日期
   const formatRelative = useCallback((iso: string) => {
     const diff = Date.now() - new Date(iso).getTime();
     const min = Math.floor(diff / 60000);
@@ -185,11 +185,7 @@ export default function ChatPanel({ open, onClose }: Props) {
             }}
           />
         ) : (
-          <span
-            className="chat-title"
-            title="点击重命名"
-            onClick={startRename}
-          >
+          <span className="chat-title" title="点击重命名" onClick={startRename}>
             {chatTitle ?? "新对话"}
           </span>
         )
@@ -197,12 +193,7 @@ export default function ChatPanel({ open, onClose }: Props) {
       extra={
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <Tooltip title="新对话" placement="bottom">
-            <button
-              type="button"
-              className="chat-header-btn"
-              aria-label="新对话"
-              onClick={() => newChat()}
-            >
+            <button type="button" className="chat-header-btn" aria-label="新对话" onClick={() => newChat()}>
               <NewChatIcon />
             </button>
           </Tooltip>
@@ -227,7 +218,7 @@ export default function ChatPanel({ open, onClose }: Props) {
                           type="button"
                           className="chat-history-main"
                           onClick={() => {
-                            void loadHistory(s.id, skillNames);
+                            void loadHistory(s.id);
                             setHistoryOpen(false);
                           }}
                         >
@@ -257,12 +248,7 @@ export default function ChatPanel({ open, onClose }: Props) {
             }
             trigger={
               <Tooltip title="历史对话" placement="bottom">
-                <button
-                  type="button"
-                  className="chat-header-btn"
-                  aria-label="历史对话"
-                  onClick={() => setHistoryOpen((v) => !v)}
-                >
+                <button type="button" className="chat-header-btn" aria-label="历史对话" onClick={() => setHistoryOpen((v) => !v)}>
                   <HistoryIcon />
                 </button>
               </Tooltip>
@@ -276,7 +262,6 @@ export default function ChatPanel({ open, onClose }: Props) {
         section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
       }}
     >
-      {/* 消息列表 */}
       <div ref={listRef} className="chat-scroll" style={{ flex: 1, overflowY: "auto", padding: 12 }}>
         {messages.length === 0 ? (
           <div className="chat-empty">
@@ -288,11 +273,7 @@ export default function ChatPanel({ open, onClose }: Props) {
             <div
               key={m.id}
               className={`chat-msg chat-msg-${m.role}`}
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-              }}
+              style={{ marginBottom: 12, display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}
             >
               <div className={`chat-bubble chat-bubble-${m.role}${m.error ? " chat-bubble-error" : ""}`}>
                 {m.role === "assistant" ? (
@@ -324,14 +305,11 @@ export default function ChatPanel({ open, onClose }: Props) {
                   <span className="chat-tool-result">{m.content}</span>
                 ) : (
                   <div className="cortex-markdown">
-                    {m.skills?.length ? (
+                    {m.skill ? (
                       <div className="chat-msg-skills">
-                        {m.skills.map((s) => (
-                          <span key={s.name} className="chat-msg-skill">
-                            <ThunderboltOutlined style={{ fontSize: 12, marginRight: 4 }} />
-                            {s.displayTitle ?? s.name}
-                          </span>
-                        ))}
+                        <span className="chat-msg-skill">
+                          <ThunderboltOutlined /> {skillNames.find((s) => s.name === m.skill)?.displayTitle ?? m.skill}
+                        </span>
                       </div>
                     ) : null}
                     {m.content ? (
@@ -351,7 +329,6 @@ export default function ChatPanel({ open, onClose }: Props) {
         {error ? <div className="chat-error">{error}</div> : null}
       </div>
 
-      {/* 输入区：参照精致输入框结构（附件 / Skill / 模型 / 发送） */}
       <div className="chat-input-bar">
         <input
           ref={fileRef}
@@ -359,19 +336,17 @@ export default function ChatPanel({ open, onClose }: Props) {
           accept=".docx,.txt,.pdf,.jpg,.jpeg,.png,.mp4,.mov,.wav,.mp3"
           multiple
           hidden
-          onChange={() => {
-            /* 附件上传：后端未提供接口，先占位 */
-          }}
+          onChange={() => { /* 附件上传：后端未提供接口，先占位 */ }}
         />
         <div className="chat-composer">
-          {activeSkill ? (
+          {chipSkill ? (
             <span className="chat-skill-chip">
-              {skillNames.find((s) => s.name === activeSkill)?.displayTitle ?? activeSkill}
+              {skillNames.find((s) => s.name === chipSkill)?.displayTitle ?? chipSkill}
               <button
                 type="button"
                 className="chat-skill-chip-x"
                 aria-label="移除技能"
-                onClick={() => setActiveSkill(null)}
+                onClick={handleRemoveSkill}
               >
                 ×
               </button>
@@ -382,17 +357,15 @@ export default function ChatPanel({ open, onClose }: Props) {
             className="chat-composer-input"
             contentEditable
             suppressContentEditableWarning
-            data-placeholder={activeSkill ? "补充指令（可留空）" : '描述你的想法，输入"/" + skill 名称使用 Skill'}
+            data-placeholder={chipSkill ? "补充指令，后端自动沿用当前技能" : '描述你的想法，点击闪电选择 Skill'}
             onInput={(e) => {
               const el = e.currentTarget;
-              // 删除到仅剩 <br>/空白时，真正清空以恢复占位符
               if (!el.textContent?.trim()) el.innerHTML = "";
               el.style.height = "auto";
               el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
               syncDraft();
             }}
             onPaste={(e) => {
-              // 粘贴纯文本，避免带入外部 HTML 样式
               e.preventDefault();
               const text = e.clipboardData.getData("text/plain");
               const sel = window.getSelection();
@@ -415,7 +388,6 @@ export default function ChatPanel({ open, onClose }: Props) {
                 e.preventDefault();
                 handleSend();
               }
-              // Shift+Enter 保持默认换行行为
             }}
           />
           <div className="chat-composer-actions">
