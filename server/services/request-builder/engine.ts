@@ -79,6 +79,12 @@ export function build(input: BuildInput): Record<string, unknown> {
     }
   }
 
+  // 3.6 注入模型名：LLM 请求必须带 model，否则上游报 MissingParameter。
+  // 该字段不在白名单内，需在过滤之后、mapping 之前显式写入，确保不会被清掉。
+  if (input.capability === "llm" && input.modelName) {
+    body.model = input.modelName;
+  }
+
   // 3. Mapping：字段映射/重命名（渠道级，从 request.mapping 读取）
   if (mappingConfig) {
     body = applyMapping(body, mappingConfig);
