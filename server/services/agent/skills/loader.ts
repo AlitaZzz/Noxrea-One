@@ -35,6 +35,51 @@ const SKILLS_DIR = resolveFromRoot("server/resources/skills");
 
 let cache: Skill[] | null = null;
 
+/**
+ * 扫描技能目录下的 references/ 子目录，将所有 .md 文件内容内联拼接到正文末尾。
+ *
+ * 这样 skill.md 可以通过 `references/xxx.md` 引用拆分文件，
+ * loader 会在加载时自动合并，LLM 收到的是完整的单段 system prompt。
+ *
+ * 支持嵌套子目录（如 references/camera/abc.md），按相对路径排序保证确定性。
+ */
+function loadReferences(skillDir: string): string {
+  const refDir = path.join(skillDir, "references");
+  if (!fs.existsSync(refDir)) return "";
+
+  const files = collectMarkdownFiles(refDir);
+  if (files.length === 0) return "";
+
+  const parts: string[] = [];
+  for (const absPath of files) {
+    const relPath = path.relative(skillDir, absPath).replace(/\\/g, "/");
+    try {
+      const body = fs.readFileSync(absPath, "utf-8").trim();
+      parts.push(`\n\n---\n<!-- references/${relPath} -->\n${body}`);
+    } catch {
+      // 单个文件读取失败不阻断其余文件
+    }
+  }
+  return parts.join("");
+}
+
+/** 递归收集目录下所有 .md 文件路径（排序保证确定性） */
+function collectMarkdownFiles(dir: string): string[] {
+  const results: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  // 先文件后目录，各自按名称排序
+  const files = entries.filter((e) => e.isFile() && e.name.endsWith(".md")).sort((a, b) => a.name.localeCompare(b.name));
+  const subdirs = entries.filter((e) => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const f of files) {
+    results.push(path.join(dir, f.name));
+  }
+  for (const d of subdirs) {
+    results.push(...collectMarkdownFiles(path.join(dir, d.name)));
+  }
+  return results;
+}
+
 function scanSkills(): Skill[] {
   if (!fs.existsSync(SKILLS_DIR)) {
     console.error(`[skills] 技能目录不存在: ${SKILLS_DIR}`);
@@ -46,7 +91,8 @@ function scanSkills(): Skill[] {
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const skillFile = path.join(SKILLS_DIR, entry.name, "skill.md");
+    const skillDir = path.join(SKILLS_DIR, entry.name);
+    const skillFile = path.join(skillDir, "skill.md");
     if (!fs.existsSync(skillFile)) continue;
 
     try {
@@ -61,7 +107,11 @@ function scanSkills(): Skill[] {
         appliesTo: Array.isArray(data.appliesTo) ? data.appliesTo : undefined,
         tools: Array.isArray(data.tools) ? data.tools : undefined,
       };
-      skills.push({ meta, content: content.trim() });
+
+      // 自动内联 references/ 子目录下的所有 .md 文件
+      const fullContent = content.trim() + loadReferences(skillDir);
+
+      skills.push({ meta, content: fullContent });
     } catch (err) {
       console.error(`[skills] 读取技能失败: ${skillFile}`, err);
     }
