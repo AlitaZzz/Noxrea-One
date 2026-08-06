@@ -30,7 +30,7 @@ import { createAssetNode } from "@/features/assets/add-asset";
 import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { useVideoThumbnail } from "@/hooks/use-video-thumbnail";
 import { assetApi } from "@/lib/api";
-import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/lib/canvas/node-type-meta";
+import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/node-type-meta";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import type { AssetFolder, AssetItem, AssetType } from "@/lib/types/assets";
 import type { AnyNode } from "@/lib/types/nodes";
