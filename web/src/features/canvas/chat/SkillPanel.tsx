@@ -8,7 +8,7 @@ import { ThunderboltOutlined } from "@ant-design/icons";
 import { Empty, Popover, Spin, Tooltip } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
-import { chatApi } from "@/lib/api";
+import { agentApi } from "@/lib/api";
 
 interface SkillMeta {
   name: string;
@@ -32,7 +32,7 @@ export default function SkillPanel({ onSelect }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await chatApi.listSkills();
+      const res = await agentApi.listSkills();
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as SkillMeta[];
       setSkills(Array.isArray(data) ? data : []);

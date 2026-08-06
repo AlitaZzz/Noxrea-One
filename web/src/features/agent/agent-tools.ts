@@ -8,7 +8,7 @@
 import { createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import type { AnyNode, GenSettings, VideoGenSettings } from "@/lib/types/nodes";
 
-/** 后端 tool_call 结构（与 /api/chat SSE 的 tool_call 事件一致） */
+/** 后端 tool_call 结构（与 /api/agent SSE 的 tool_call 事件一致） */
 export interface AgentToolCall {
   id: string;
   type: "function";

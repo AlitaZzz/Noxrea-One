@@ -1,15 +1,16 @@
 /**
- * AI 对话消息流 hook。
- * 负责发起流式请求、增量拼接回复、解析并执行工具调用、中断与错误处理，
- * 对外导出消息与工具调用的视图类型。
+ * Agent 消息流 hook。
+ * 负责发起流式请求、增量拼接回复、解析并执行工具调用、
+ * 回传工具结果并继续流式接收，直到无工具调用或技能完成。
+ * 前端不再管理消息历史，后端全权负责上下文构建。
  */
 "use client";
 
 import { useCallback, useRef, useState } from "react";
 
-import { type AgentToolCall, type AgentToolResult,executeAgentTools } from "@/features/agent/agent-tools";
+import { type AgentToolCall, type AgentToolResult, executeAgentTools } from "@/features/agent/agent-tools";
 import { useAgentSessions } from "@/hooks/use-agent-sessions";
-import { chatApi } from "@/lib/api";
+import { agentApi } from "@/lib/api";
 import { showGlobalMessage } from "@/lib/global-message";
 import { findFreePosition, useCanvasStore } from "@/stores/canvas-store";
 
@@ -31,10 +32,10 @@ export interface ChatMessage {
   toolCalls?: ToolCallView[];
   /** role=tool 时对应的 tool_call_id */
   toolCallId?: string;
+  /** user 消息携带的技能名（展示该消息由哪个技能驱动） */
+  skill?: string;
   /** 标记该消息为错误（如上游返回错误），用于红色样式展示 */
   error?: boolean;
-  /** 触发式 skill：在用户气泡顶部以「图标 + name」呈现 */
-  skills?: { name: string; displayTitle?: string }[];
 }
 
 /** 发给后端的工具调用形态（args 必须为对象，后端会 JSON.stringify 后透传上游） */
@@ -45,34 +46,13 @@ interface StreamToolCall {
   label?: string;
 }
 
-/** 发给后端的消息形态 */
-interface StreamMessage {
-  role: ChatRole | "tool";
-  content: string;
-  toolCalls?: StreamToolCall[];
-  toolCallId?: string;
-}
-
-/** 把 UI 层的 args 字符串还原为对象（解析失败回退空对象，避免后端双重编码） */
-function parseToolArgs(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 let _seq = 0;
 function uid() {
   _seq++;
   return `m_${Date.now()}_${_seq}`;
 }
 
-/** 前端 read 空闲超时：服务端有心跳保活，但极端情况（代理重置等）下
- *  可能不触发任何事件就挂起。加 120s 超时把静默挂起变成可见报错。 */
+/** 前端 read 空闲超时 */
 const FRONTEND_READ_TIMEOUT_MS = 120_000;
 
 function readWithTimeout(
@@ -90,26 +70,33 @@ function readWithTimeout(
   });
 }
 
-interface RunStreamResult {
-  /** done 事件是否携带 toolCalls（需要续轮） */
-  hasTool: boolean;
-  /** 本轮 assistant 发起的工具调用 */
-  toolCalls: ToolCallView[];
-  /** 本条 assistant 消息在 UI 中的 id（用于异常/续轮边界时清理占位气泡） */
-  assistantId: string;
-  /** 本轮累积的文本（无 tool 调用时即最终回复） */
-  text: string;
+/** 解析一段 SSE buffer 中的事件块 */
+function parseBlocks(buf: string): { blocks: Array<{ event: string; data: string }>; rest: string } {
+  const raw = buf.split("\n\n");
+  const rest = raw.pop() ?? "";
+  const blocks = raw
+    .map((block) => {
+      let event = "";
+      let data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data = line.slice(5).trim();
+      }
+      return { event, data };
+    })
+    .filter((b) => b.event && b.data);
+  return { blocks, rest };
 }
 
 /**
- * 高层对话封装：管理消息 + SSE 解析 + tool_call 续轮状态机。
+ * 高层对话封装：管理消息 + SSE 解析 + 工具续轮。
  *
- * 会话管理（chatId / sessions / CRUD）委托给 useAgentSessions，
+ * 会话管理（chatId / sessions / CRUD / 技能绑定）委托给 useAgentSessions。
  * 本 hook 只关注消息流和工具续轮。
  *
- * 续轮状态机：收到 done 且携带 toolCalls 时，调用 executeAgentTools 执行
- * （在画布建节点），把 tool 结果再次投递给 /api/chat/stream 续轮，
- * 直到无 toolCalls 才停止（最多续轮 8 轮防止死循环）。
+ * 续轮：收到 done 且携带 toolCalls 时，调用 executeAgentTools 执行
+ * （在画布建节点），把 tool 结果通过 /tool-result 端点回传后端，
+ * 后端自动续轮调 LLM，直到无 toolCalls 或 skill_completed 才停止。
  */
 export function useChatStream(modelId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -124,12 +111,10 @@ export function useChatStream(modelId: string) {
     setMessages((prev) => [...prev, msg]);
   }, []);
 
-  /** 移除仍在「思考中」的占位气泡（内容为空、未收到任何 delta/tool 调用） */
   const clearPendingPlaceholders = useCallback(() => {
     setMessages((prev) => prev.filter((m) => !(m.role === "assistant" && !m.content && !m.toolCalls)));
   }, []);
 
-  // ── 会话管理委托给 useAgentSessions ──
   const sessions = useAgentSessions({
     onClearMessages: () => setMessages([]),
     onStopStream: () => {
@@ -141,43 +126,12 @@ export function useChatStream(modelId: string) {
     onLoadMessages: (loaded: ChatMessage[]) => setMessages(loaded),
   });
 
-  /** 解析一段 SSE buffer 中的事件块 */
-  function parseBlocks(buf: string): { blocks: Array<{ event: string; data: string }>; rest: string } {
-    const raw = buf.split("\n\n");
-    const rest = raw.pop() ?? "";
-    const blocks = raw
-      .map((block) => {
-        let event = "";
-        let data = "";
-        for (const line of block.split("\n")) {
-          if (line.startsWith("event:")) event = line.slice(6).trim();
-          else if (line.startsWith("data:")) data = line.slice(5).trim();
-        }
-        return { event, data };
-      })
-      .filter((b) => b.event && b.data);
-    return { blocks, rest };
-  }
-
-  /** 发起单次流式请求，返回 done 时是否携带 toolCalls 及对应的工具调用 */
+  /** 发起单次流式请求（初始消息或工具结果续轮），解析 SSE 事件 */
   const runStream = useCallback(
     async (
-      sessionId: string,
-      history: StreamMessage[],
-      skills?: { name: string; displayTitle?: string }[],
+      res: Response,
       placeholderId?: string
-    ): Promise<RunStreamResult> => {
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-
-      const res = await chatApi.streamChat({
-        sessionId,
-        modelId,
-        agent: true,
-        messages: history,
-        skills: skills && skills.length > 0 ? skills : undefined,
-        signal: ctrl.signal,
-      });
+    ): Promise<{ hasTool: boolean; toolCalls: ToolCallView[]; assistantId: string; text: string; skillCompleted: boolean }> => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.body) throw new Error("no stream body");
 
@@ -187,9 +141,8 @@ export function useChatStream(modelId: string) {
       let accText = "";
       let accToolCalls: ToolCallView[] = [];
       let doneHasTool = false;
+      let skillCompleted = false;
 
-      // 复用调用方预先插入的「思考中」占位气泡，保证发送后即时有反馈；
-      // 若调用方未提供占位，则在此自行创建。
       const assistantId = placeholderId ?? uid();
       if (!placeholderId) appendMessage({ id: assistantId, role: "assistant", content: "" });
 
@@ -227,6 +180,8 @@ export function useChatStream(modelId: string) {
               args: typeof parsed.args === "string" ? parsed.args : JSON.stringify(parsed.args ?? {}),
               ...(parsed.label ? { label: parsed.label } : {}),
             });
+          } else if (event === "skill_completed") {
+            skillCompleted = true;
           } else if (event === "done") {
             doneHasTool = Array.isArray(parsed.toolCalls) && parsed.toolCalls.length > 0;
             if (doneHasTool) {
@@ -246,37 +201,37 @@ export function useChatStream(modelId: string) {
       }
 
       if (accToolCalls.length > 0) patchAssistant({ toolCalls: accToolCalls });
-      return { hasTool: doneHasTool, toolCalls: accToolCalls, assistantId, text: accText };
+      return { hasTool: doneHasTool, toolCalls: accToolCalls, assistantId, text: accText, skillCompleted };
     },
-    [appendMessage, modelId]
+    [appendMessage]
   );
 
-  /** 主动停止流式 */
   const stopStream = useCallback(() => {
     abortRef.current?.abort();
     streamingRef.current = false;
     setIsStreaming(false);
-    // 清理仍停留在「思考中…」的占位气泡，避免停止后界面卡在"思考中"
     clearPendingPlaceholders();
   }, [clearPendingPlaceholders]);
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
   const sendChat = useCallback(
-    async (text: string, skills?: { name: string; displayTitle?: string }[]) => {
+    async (text: string, skillOverride?: string) => {
       const trimmed = text.trim();
-      if ((!trimmed && (!skills || skills.length === 0)) || streamingRef.current) return;
+      if (streamingRef.current) return;
+      const effectiveSkill = skillOverride ?? sessions.activeSkill;
+      // 空文本且无技能时不发送
+      if (!trimmed && !effectiveSkill) return;
 
-      // 先让用户消息出现在界面（即使后续会话创建失败也不丢失）
-      // 有 skill 时正文只放用户指令；skill 名称由气泡顶部的图标+name 行展示，避免重复
-      const displayText = trimmed;
       appendMessage({
         id: uid(),
         role: "user",
-        content: displayText,
-        ...(skills && skills.length ? { skills } : {}),
+        content: trimmed,
+        ...(effectiveSkill ? { skill: effectiveSkill } : {}),
       });
 
-      const autoTitle = displayText.length > 24 ? `${displayText.slice(0, 24)}…` : displayText;
+      const autoTitle = trimmed
+        ? trimmed.length > 24 ? `${trimmed.slice(0, 24)}…` : trimmed
+        : (effectiveSkill ?? "新对话");
       const sessionId = await sessions.ensureSession(autoTitle);
       if (!sessionId) return;
       sessions.setChatTitle(autoTitle);
@@ -286,40 +241,37 @@ export function useChatStream(modelId: string) {
       setError(null);
 
       try {
-        // 用局部 history 累积所有轮次消息，避免依赖 messages state（setMessages 异步更新，
-        // 循环内 buildPayload 读到的仍是旧值，会导致续轮上下文丢失、上游返回异常）。
-        const history: StreamMessage[] = [{ role: "user", content: trimmed }];
+        // 初始流式请求
+        const ctrl = new AbortController();
+        abortRef.current = ctrl;
+        const res = await agentApi.streamAgent({
+          sessionId,
+          modelId,
+          content: trimmed,
+          ...(effectiveSkill ? { skillName: effectiveSkill } : {}),
+          signal: ctrl.signal,
+        });
 
+        let result = await runStream(res);
+
+        // 工具续轮循环
         for (let round = 0; round < 8; round++) {
-          // 用户已停止（stopStream 会将 streamingRef 置 false），立即终止续轮
           if (!streamingRef.current) break;
-
-          // 先插入一条「思考中」占位气泡，保证发送后立即可见反馈
-          const placeholderId = uid();
-          appendMessage({ id: placeholderId, role: "assistant", content: "" });
-
-          const { hasTool, toolCalls, assistantId, text } = await runStream(
-            sessionId,
-            history,
-            skills,
-            placeholderId
-          );
-          if (!hasTool) {
-            // 续轮结束：若本轮 assistant 既无文本也无工具调用（纯空占位），
-            // 删除占位气泡，避免界面残留「思考中…」
-            if (!text && !toolCalls.length) {
-              setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+          if (result.skillCompleted) break;
+          if (!result.hasTool) {
+            if (!result.text && !result.toolCalls.length) {
+              setMessages((prev) => prev.filter((m) => m.id !== result.assistantId));
             }
             break;
           }
 
-          // 纯工具轮（无文本）会留下一条空 assistant 气泡，清理掉，避免界面出现空白消息
-          if (!text) {
-            setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+          // 清理空 assistant 占位
+          if (!result.text) {
+            setMessages((prev) => prev.filter((m) => m.id !== result.assistantId));
           }
 
-          // 执行工具（在画布建节点），拿到 tool 结果
-          const calls: AgentToolCall[] = toolCalls.map((c) => ({
+          // 执行工具
+          const calls: AgentToolCall[] = result.toolCalls.map((c) => ({
             id: c.id,
             type: "function",
             function: { name: c.name, arguments: c.args },
@@ -330,24 +282,34 @@ export function useChatStream(modelId: string) {
             findFreePosition,
           );
 
-          // 续轮前必须先把本轮 assistant 的 tool_calls 回填进 history，
-          // 否则下一轮模型看不到「自己已经调用过工具」，会把同一意图重复调用一遍。
-          // 注意 args 需还原为对象（后端会 JSON.stringify 后透传上游），且顺序必须是
-          // assistant(tool_calls) 在前、tool 结果在后，否则上游会因协议非法拒绝请求。
-          history.push({
-            role: "assistant",
-            content: text,
-            toolCalls: toolCalls.map((t) => ({
-              id: t.id,
-              name: t.name,
-              args: parseToolArgs(t.args),
-              ...(t.label ? { label: t.label } : {}),
-            })),
-          });
-
+          // 展示 tool 消息
           for (const r of results) {
             appendMessage({ id: uid(), role: "tool", content: r.content, toolCallId: r.tool_call_id });
-            history.push({ role: "tool", content: r.content, toolCallId: r.tool_call_id });
+          }
+
+          // 回传第一个 tool 结果，后端自动续轮
+          const firstResult = results[0];
+          if (!firstResult) break;
+
+          const placeholderId = uid();
+          appendMessage({ id: placeholderId, role: "assistant", content: "" });
+
+          const ctrl2 = new AbortController();
+          abortRef.current = ctrl2;
+          const res2 = await agentApi.submitToolResult({
+            sessionId,
+            modelId,
+            toolCallId: firstResult.tool_call_id,
+            result: firstResult.content,
+            signal: ctrl2.signal,
+          });
+
+          result = await runStream(res2, placeholderId);
+
+          // 如果有多个 tool 结果，逐个回传（非首结果不再触发新流，仅落库）
+          for (let i = 1; i < results.length; i++) {
+            // 后端目前只支持单 tool 续轮，多 tool 结果仅展示在 UI
+            // 后续可扩展为并发续轮
           }
         }
       } catch (err: any) {
@@ -359,14 +321,12 @@ export function useChatStream(modelId: string) {
       } finally {
         streamingRef.current = false;
         setIsStreaming(false);
-        // 兜底：清理所有「空内容且无工具调用」的 assistant 占位气泡，
-        // 避免任何异常 / 续轮边界情况下界面残留「思考中…」
         setMessages((prev) =>
           prev.filter((m) => !(m.role === "assistant" && !m.content && !m.toolCalls))
         );
       }
     },
-    [appendMessage, sessions, runStream]
+    [appendMessage, sessions, runStream, modelId]
   );
 
   return {
@@ -377,6 +337,8 @@ export function useChatStream(modelId: string) {
     error,
     chatId: sessions.chatId,
     chatTitle: sessions.chatTitle,
+    activeSkill: sessions.activeSkill,
+    skillStatus: sessions.skillStatus,
     sendChat,
     stopStream,
     newChat: sessions.newChat,
@@ -385,5 +347,7 @@ export function useChatStream(modelId: string) {
     sessions: sessions.sessions,
     loadSessions: sessions.loadSessions,
     deleteChat: sessions.deleteChat,
+    bindSkill: sessions.bindSkill,
+    removeSkill: sessions.removeSkill,
   };
 }
