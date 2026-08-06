@@ -3,6 +3,9 @@
  * 将历史消息、当前轮消息与技能内容组装为发给上游 LLM 的 messages 数组。
  * 采用分层注入策略：developer 层定义基础身份与工具规则，
  * system 层在有技能时注入领域知识，确保领域指令不覆盖基础身份。
+ *
+ * 技能绑定在 session 级别（activeSkill），不再按消息过滤历史。
+ * 全量历史注入，LLM 需要完整上下文才能做出连贯决策。
  */
 
 import type { ProtocolToolCall } from "@server/services/protocols/base";
@@ -26,11 +29,12 @@ export interface IncomingMessage {
   toolCallId?: string;
 }
 
-/** 从 DB 读出的历史消息（含 skills 标签） */
+/** 从 DB 读出的历史消息 */
 export interface HistoryMessage {
   role: string;
   content: string;
-  skills?: string[] | null;
+  toolCallId?: string | null;
+  toolName?: string | null;
 }
 
 // Layer 1: 基础身份（system 角色，所有 OpenAI 兼容网关均支持）
@@ -57,43 +61,35 @@ const TOOL_GUIDANCE = {
     "3. 每条新的用户消息都是独立的一轮，不受之前是否调用过工具的影响。" +
     "即使用户上一轮已经生成过图片，本轮只要用户提出了生成意图，就应该正常调用对应工具。\n" +
     "4. 如果当前有技能（Skill）激活，优先遵循技能中的输出格式与流程要求。" +
-    "技能未明确要求调用工具时，以纯文本输出设计方案，不要主动调用工具。",
+    "技能声明了工具时，应在合适时机主动调用工具执行任务。\n" +
+    "5. 当技能任务已全部完成时，请调用 complete_skill 工具结束技能。",
 };
 
 /**
  * 组装最终发给上游 LLM 的 messages 数组。
  *
- * @param history    - 从 DB 读出的历史消息
- * @param incoming   - 前端发来的当前轮消息（含可能的 tool 续轮）
- * @param skills     - 显式触发的技能名列表
- * @param agent      - 是否为 agent 模式（注入 developer 层 + 工具）
+ * @param history     - 从 DB 读出的全量历史消息
+ * @param incoming    - 前端发来的当前轮消息（含可能的 tool 续轮）
+ * @param activeSkill - session 级激活的技能名（null=普通对话模式）
+ * @param agent       - 是否为 agent 模式（注入 developer 层 + 工具）
  */
 export function buildAgentMessages(opts: {
   history: HistoryMessage[];
   incoming: IncomingMessage[];
-  skills?: string[];
+  activeSkill?: string | null;
   agent: boolean;
 }): AgentMessage[] {
   const { history, incoming, agent } = opts;
-  const skills = opts.skills ?? [];
+  const activeSkill = opts.activeSkill ?? null;
 
   // Layer 3: Skill 领域知识（system 角色）
-  const skillContents = skills
-    .map((name) => getSkill(name))
-    .filter((s): s is NonNullable<typeof s> => s !== null)
-    .map((s) => s.content);
-  const skillSystem: AgentMessage[] = skillContents.length
-    ? [{ role: "system", content: skillContents.join("\n\n---\n\n") }]
-    : [];
-
-  // 历史过滤：按当前轮 skill 隔离上下文
-  const filteredHistory = history.filter((m) => {
-    const msgSkills = (m.skills as string[] | null) ?? [];
-    if (skills.length === 0) {
-      return msgSkills.length === 0;
+  const skillSystem: AgentMessage[] = [];
+  if (activeSkill) {
+    const skill = getSkill(activeSkill);
+    if (skill) {
+      skillSystem.push({ role: "system", content: skill.content });
     }
-    return msgSkills.some((s) => skills.includes(s));
-  });
+  }
 
   // 组装消息序列
   const messages: AgentMessage[] = [];
@@ -106,9 +102,13 @@ export function buildAgentMessages(opts: {
   // Layer 3: skill 领域知识
   messages.push(...skillSystem);
 
-  // 历史消息
+  // 历史消息（全量，不按 skill 过滤）
   messages.push(
-    ...filteredHistory.map((m) => ({ role: m.role, content: m.content })),
+    ...history.map((m) => {
+      const msg: AgentMessage = { role: m.role, content: m.content };
+      if (m.toolCallId) msg.toolCallId = m.toolCallId;
+      return msg;
+    }),
   );
 
   // 当前轮消息

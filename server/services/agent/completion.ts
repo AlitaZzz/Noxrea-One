@@ -42,8 +42,8 @@ export async function buildUpstream(args: {
   userId: number;
   /** 是否注入 Agent 工具（仅 openai 协议支持） */
   agent?: boolean;
-  /** 当前激活的技能名列表，用于过滤注入给 LLM 的 tools */
-  skills?: string[];
+  /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
+  activeSkill?: string | null;
 }): Promise<BuildResult> {
   const channel = await resolveChannel(args.channelId, args.model);
   if (!channel) return { ok: false, error: "no available channel" };
@@ -96,7 +96,7 @@ export async function buildUpstream(args: {
   };
 
   if (args.agent && channel.protocol === "openai") {
-    body.tools = resolveSkillTools(args.skills);
+    body.tools = resolveSkillTools(args.activeSkill ?? null);
     body.tool_choice = "auto";
     body.parallel_tool_calls = false;
   }
@@ -170,8 +170,8 @@ export async function runCompletionStream(args: {
   model?: string;
   userId: number;
   agent?: boolean;
-  /** 当前激活的技能名列表，用于过滤注入给 LLM 的 tools */
-  skills?: string[];
+  /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
+  activeSkill?: string | null;
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
 }): Promise<RunResult> {
