@@ -7,8 +7,9 @@
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { getChannel, getChannels } from "@server/crud/model-config";
-import { agentToolRegistry } from "@server/services/capabilities/llm/registry";
-import "@server/services/capabilities/llm/tools"; // 触发工具注册（副作用）
+import { agentToolRegistry } from "@server/services/agent/tools/registry";
+import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
+import { resolveSkillTools } from "@server/services/agent/tools/filter";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
 import { logEvent } from "@server/core/logger/utils";
@@ -41,6 +42,8 @@ export async function buildUpstream(args: {
   userId: number;
   /** 是否注入 Agent 工具（仅 openai 协议支持） */
   agent?: boolean;
+  /** 当前激活的技能名列表，用于过滤注入给 LLM 的 tools */
+  skills?: string[];
 }): Promise<BuildResult> {
   const channel = await resolveChannel(args.channelId, args.model);
   if (!channel) return { ok: false, error: "no available channel" };
@@ -93,7 +96,7 @@ export async function buildUpstream(args: {
   };
 
   if (args.agent && channel.protocol === "openai") {
-    body.tools = agentToolRegistry.getOpenAiTools();
+    body.tools = resolveSkillTools(args.skills);
     body.tool_choice = "auto";
     body.parallel_tool_calls = false;
   }
@@ -167,6 +170,8 @@ export async function runCompletionStream(args: {
   model?: string;
   userId: number;
   agent?: boolean;
+  /** 当前激活的技能名列表，用于过滤注入给 LLM 的 tools */
+  skills?: string[];
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
 }): Promise<RunResult> {

@@ -70,6 +70,15 @@ export function build(input: BuildInput): Record<string, unknown> {
     }
   }
 
+  // 3.5 能力级白名单：LLM 能力只需 prompt/messages，不应把 image/video 的内部字段
+  // （n、refImages、channelId、model 等）透传给语言模型上游，否则上游会报未知参数。
+  if (input.capability === "llm") {
+    const LLM_ALLOWED = new Set(["prompt", "messages", "temperature", "top_p", "max_tokens", "stop", "stream"]);
+    for (const key of Object.keys(body)) {
+      if (!LLM_ALLOWED.has(key)) delete body[key];
+    }
+  }
+
   // 3. Mapping：字段映射/重命名（渠道级，从 request.mapping 读取）
   if (mappingConfig) {
     body = applyMapping(body, mappingConfig);

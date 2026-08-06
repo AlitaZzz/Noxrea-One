@@ -6,9 +6,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { fail } from "@server/core/response";
-import { listSkills } from "@server/services/capabilities/llm/skills/loader";
-import { agentToolRegistry } from "@server/services/capabilities/llm/registry";
-import "@server/services/capabilities/llm/tools"; // 触发工具注册（副作用）
+import { listSkills } from "@server/services/agent/skills/loader";
+import { agentToolRegistry } from "@server/services/agent/tools/registry";
+import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
 import { logEvent } from "@server/core/logger/utils";
 import {
   createSession,
@@ -270,6 +270,7 @@ router.post("/api/chat/stream", async (c) => {
         model: model ?? undefined,
         userId,
         agent,
+        skills: payload.skills,
         signal: upstreamAbort.signal,
         onDelta: (delta: string) => send("delta", { delta }),
       });
