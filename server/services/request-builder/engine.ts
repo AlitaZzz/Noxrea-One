@@ -1,4 +1,7 @@
-// ── 请求构建管线引擎（对应 backend/app/services/request_builder/engine.py） ──
+/**
+ * 请求构建管线引擎。
+ * 串联变换、字段映射与固定参数注入，将业务参数构建为上游请求体。
+ */
 
 import { applyTransforms } from "./transforms";
 import { applyMapping } from "./mapping";
@@ -26,7 +29,7 @@ const INTERNAL_FIELDS = new Set(["capability"]);
 
 /**
  * 四步管线：transforms → auto-clean → mapping → patch
- * 对应 Python engine.py 的 build()
+ * 构建上游请求体
  *
  * channelConfig 结构（对齐 Python ChannelConfig）：
  * {

@@ -1,13 +1,9 @@
-// ── Agent 消息上下文构建器 ──
-//
-// 负责将历史消息、当前轮消息、技能内容组装为最终发给上游 LLM 的 messages 数组。
-// 采用分层注入策略：
-//   Layer 1 (developer): 基础身份 -- 永远在，定义"我是谁"
-//   Layer 2 (developer): 工具规则 -- 永远在，定义"有什么工具、怎么用"
-//   Layer 3 (system):    领域知识 -- 有 skill 时在，定义"怎么设计"
-//
-// developer 角色在 OpenAI API 中优先级高于 system，天然形成层级，
-// 确保 skill 的领域指令不会覆盖应用的基础身份与工具约束。
+/**
+ * Agent 消息上下文构建器。
+ * 将历史消息、当前轮消息与技能内容组装为发给上游 LLM 的 messages 数组。
+ * 采用分层注入策略：developer 层定义基础身份与工具规则，
+ * system 层在有技能时注入领域知识，确保领域指令不覆盖基础身份。
+ */
 
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getSkill } from "@server/services/capabilities/llm/skills/loader";
@@ -37,7 +33,7 @@ export interface HistoryMessage {
   skills?: string[] | null;
 }
 
-// ── Layer 1: 基础身份（developer 角色，最高优先级） ──
+// Layer 1: 基础身份（developer 角色，最高优先级）
 
 const BASE_IDENTITY = {
   role: "developer" as const,
@@ -50,7 +46,7 @@ const BASE_IDENTITY = {
     "当用户询问你的身份或能力时，用简洁的 markdown 介绍上述信息即可。",
 };
 
-// ── Layer 2: 工具使用规则（developer 角色） ──
+// Layer 2: 工具使用规则（developer 角色）
 
 const TOOL_GUIDANCE = {
   role: "developer" as const,
@@ -81,7 +77,7 @@ export function buildAgentMessages(opts: {
   const { history, incoming, agent } = opts;
   const skills = opts.skills ?? [];
 
-  // ── Layer 3: Skill 领域知识（system 角色） ──
+  // Layer 3: Skill 领域知识（system 角色）
   const skillContents = skills
     .map((name) => getSkill(name))
     .filter((s): s is NonNullable<typeof s> => s !== null)
@@ -90,7 +86,7 @@ export function buildAgentMessages(opts: {
     ? [{ role: "system", content: skillContents.join("\n\n---\n\n") }]
     : [];
 
-  // ── 历史过滤：按当前轮 skill 隔离上下文 ──
+  // 历史过滤：按当前轮 skill 隔离上下文
   const filteredHistory = history.filter((m) => {
     const msgSkills = (m.skills as string[] | null) ?? [];
     if (skills.length === 0) {
@@ -99,7 +95,7 @@ export function buildAgentMessages(opts: {
     return msgSkills.some((s) => skills.includes(s));
   });
 
-  // ── 组装消息序列 ──
+  // 组装消息序列
   const messages: AgentMessage[] = [];
 
   // Layer 1 + 2: agent 模式时始终注入（不因 skill 激活而跳过）

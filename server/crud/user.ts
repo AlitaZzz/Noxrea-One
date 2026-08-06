@@ -1,6 +1,8 @@
+/**
+ * 用户 CRUD。
+ * 按 ID 与用户名查询用户信息，用户名匹配大小写不敏感。
+ */
 import { prisma } from "@server/core/database/client";
-
-// ── User CRUD（对应 backend/app/crud/user.py） ──
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });

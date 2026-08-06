@@ -1,4 +1,7 @@
-// ── Protocol 抽象基类（对应 backend/app/services/protocols/base.py） ──
+/**
+ * 协议抽象基类。
+ * 定义协议请求构建与工具调用的统一接口，供各上游协议实现继承。
+ */
 
 export interface ProtocolRequestResult {
   url: string;
@@ -79,15 +82,15 @@ export interface ProtocolService {
   /** 解析音频响应 */
   parseAudioResponse?(response: unknown): ProtocolResponse;
 
-  // ── 异步任务支持 ──
+  // 异步任务支持
 
-  /** 从响应中提取上游异步 task_id（对应 Python extract_task_id） */
+  /** 从响应中提取上游异步 task_id */
   extractTaskId?(data: unknown, channelConfig?: Record<string, unknown>): string | null;
 
-  /** 构造轮询 URL（对应 Python build_poll_url） */
+  /** 构造轮询 URL */
   buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string;
 
-  /** 解析轮询响应（对应 Python parse_poll_response） */
+  /** 解析轮询响应 */
   parsePollResponse?(data: unknown): PollResult;
 }
 

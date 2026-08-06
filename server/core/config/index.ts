@@ -1,11 +1,13 @@
+/**
+ * 全局配置加载与校验。
+ * 从环境变量读取服务配置，经 zod 校验并提供带默认值的强类型访问。
+ */
 import { z } from "zod";
 
-// 占位符密钥（对应 Python _PLACEHOLDER_SECRETS）
+// 占位符密钥
 const PLACEHOLDER_SECRETS: Record<string, string> = {
   JWT_SECRET_KEY: "change-me-to-a-random-secret",
 };
-
-// ── Zod schema 定义 ──
 
 const configSchema = z.object({
   // Database
@@ -79,7 +81,7 @@ const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>;
 
-// ── 单例配置 ──
+// 单例配置
 
 let _config: Config | null = null;
 
@@ -108,7 +110,7 @@ export function loadConfig(): Config {
 
   const cfg = parsed.data;
 
-  // 占位符密钥校验（对应 Python _check_placeholder_secrets）
+  // 占位符密钥校验
   if (!cfg.ALLOW_INSECURE_SECRETS) {
     const offenders: string[] = [];
     for (const [k, ph] of Object.entries(PLACEHOLDER_SECRETS)) {

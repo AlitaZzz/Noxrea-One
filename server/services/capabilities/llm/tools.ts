@@ -1,11 +1,8 @@
-// ── Agent 工具定义（OpenAI function calling schema） ──
-//
-// 工具在「前端」执行：后端只负责把 tools 透传给上游 LLM，
-// 并把上游返回的 tool_calls 通过 SSE 转发给前端。
-// 前端收到后在画布上创建对应节点并预填提示词，不自动起生成任务。
-//
-// 本文件不再维护硬编码数组，所有工具统一向 agentToolRegistry 注册。
-// 新增节点类型（如音频/文本）只需在下方加一处 register(...)。
+/**
+ * Agent 工具定义。
+ * 定义供 LLM function-calling 使用的工具 schema，统一向中央注册器注册。
+ * 工具由前端执行：后端透传 tool_call，前端在画布创建对应节点。
+ */
 
 import { agentToolRegistry, type AgentToolDefinition } from "./registry";
 

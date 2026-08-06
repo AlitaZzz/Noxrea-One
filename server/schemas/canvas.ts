@@ -1,6 +1,8 @@
+/**
+ * 画布相关请求校验模式。
+ * 定义画布工程的创建与更新入参的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Canvas schemas（对应 backend/app/schemas/canvas.py） ──
 
 export const canvasCreateSchema = z.object({
   name: z.string().max(200).optional(),

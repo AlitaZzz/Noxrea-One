@@ -1,8 +1,11 @@
-// ── 固定参数注入（对应 backend/app/services/request_builder/patch.py） ──
+/**
+ * 固定参数注入。
+ * 将渠道配置的 extra_body 深度合并到请求参数，实现固定参数注入。
+ */
 
 /**
  * 将渠道配置的 extra_body 深度合并到请求参数中。
- * 对应 Python 的 deep_merge。
+ * 深度合并对象。
  */
 export function applyPatch(
   params: Record<string, unknown>,

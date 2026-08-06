@@ -1,4 +1,7 @@
-// ── Worker 主循环（对应 backend/app/services/worker/loop.py） ──
+/**
+ * Worker 主循环。
+ * 周期性认领待处理任务、清理僵尸任务并恢复处理中任务，受并发上限约束。
+ */
 
 import { claimPendingTasks, cleanupZombieTasks, recoverProcessingTasks } from "@server/crud/task";
 import { executeTask } from "./executor";
@@ -88,7 +91,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
     });
   }
 
-  // ── 优雅停机：排空在途任务 ──
+  // 优雅停机：排空在途任务
   logEvent("worker.loop", { stage: "draining", inFlight: inFlight.size });
 
   if (inFlight.size > 0) {

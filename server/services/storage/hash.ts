@@ -1,4 +1,7 @@
-// ── 增量 SHA256 + magic bytes 嗅探（对应 Python storage hash + media sniffMime） ──
+/**
+ * 哈希与媒体嗅探。
+ * 提供增量 SHA256 计算与基于 magic bytes 的 MIME / 扩展名嗅探。
+ */
 
 import crypto from "crypto";
 import fs from "fs/promises";

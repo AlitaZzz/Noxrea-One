@@ -1,4 +1,7 @@
-// ── Worker 上下文（对应 backend/app/services/worker/context.py） ──
+/**
+ * Worker 上下文。
+ * 从任务记录构建执行上下文，聚合任务配置与参考图、参考音频等资源。
+ */
 
 import type { GenerationTask } from "@prisma/client";
 

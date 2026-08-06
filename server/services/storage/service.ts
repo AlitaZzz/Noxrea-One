@@ -1,4 +1,7 @@
-// ── 存储服务统一入口（对应 backend/app/services/storage/service.py） ──
+/**
+ * 存储服务入口。
+ * 聚合存储后端，提供上传保存、下载 URL 与密钥构建等统一访问入口。
+ */
 
 import { localStorage } from "./backends/local";
 import type { StorageBackend } from "./backend";

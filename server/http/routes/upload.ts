@@ -1,3 +1,7 @@
+/**
+ * 文件上传路由。
+ * 处理 multipart 文件上传，完成哈希校验、落盘与文件对象持久化。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { getConfig } from "@server/core/config";
@@ -9,7 +13,6 @@ import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
 
-// ── POST /api/files/upload (multipart/formdata) ──
 router.post("/api/files/upload", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

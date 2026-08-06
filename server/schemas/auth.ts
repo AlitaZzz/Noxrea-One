@@ -1,6 +1,8 @@
+/**
+ * 认证相关请求校验模式。
+ * 定义登录、注册等认证入参的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Auth schemas（对应 backend/app/schemas/auth.py） ──
 
 export const loginRequestSchema = z.object({
   username: z.string().min(1),

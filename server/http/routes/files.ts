@@ -1,3 +1,7 @@
+/**
+ * 文件服务路由。
+ * 提供文件下载、Range 请求、WebP 缩放与流式响应等接口。
+ */
 import { Hono } from "hono";
 import { getResizedWebP, validateUserFile } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
@@ -8,7 +12,6 @@ import { Readable } from "node:stream";
 
 const router = new Hono();
 
-// ── GET /api/files/* (文件服务：Range/WebP缩放/流式) ──
 router.get("/api/files/*", async (c) => {
   const request = c.req.raw;
 

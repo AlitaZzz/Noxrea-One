@@ -1,6 +1,8 @@
+/**
+ * 任务相关请求校验模式。
+ * 定义生成任务创建入参的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Task schemas（对应 backend/app/schemas/task.py） ──
 
 export const taskCreateSchema = z.object({
   type: z.string().max(30).optional(),

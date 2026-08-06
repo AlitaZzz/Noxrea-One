@@ -1,6 +1,8 @@
+/**
+ * 数据库客户端。
+ * 以全局单例方式提供 Prisma 客户端，避免开发热重载产生多实例。
+ */
 import { PrismaClient } from "@prisma/client";
-
-// ── 全局单例（防 Next.js dev 热重载产生多实例） ──
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -24,7 +26,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-// ── SQLite PRAGMA（对应 Python lifespan 的 WAL 设置） ──
+// SQLite PRAGMA（WAL 等运行时参数设置）
 
 export async function applyPragmas(): Promise<void> {
   const dbUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";

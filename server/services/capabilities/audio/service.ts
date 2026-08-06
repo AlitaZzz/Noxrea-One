@@ -1,4 +1,7 @@
-// ── Audio Capability Service（对应 backend/app/services/capabilities/audio/service.py） ──
+/**
+ * 音频能力服务。
+ * 实现音频生成能力，组装协议请求并调用上游补全，支持结果回传与日志脱敏。
+ */
 
 import {
   registerCapability,

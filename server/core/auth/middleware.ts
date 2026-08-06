@@ -1,8 +1,10 @@
+/**
+ * 请求鉴权中间件。
+ * 解析访问令牌、构造鉴权用户对象，并提供管理员初始化与权限校验。
+ */
 import { prisma } from "@server/core/database/client";
 import { decodeAccessToken } from "@server/core/auth/jwt";
 import type { User } from "@prisma/client";
-
-// ── Auth 用户类型（纯 TS 对象，非 Prisma 对象） ──
 
 export interface AuthUser {
   id: number;
@@ -24,7 +26,7 @@ function toAuthUser(user: User): AuthUser {
   };
 }
 
-// ── withAuth 高阶函数（对应 Depends(get_current_user)） ──
+// withAuth 高阶函数（鉴权用户注入）
 
 /**
  * 从 Request 中解析 Bearer token 并注入当前用户。
@@ -78,7 +80,7 @@ export async function authenticateRequest(
   return { user: toAuthUser(dbUser) };
 }
 
-// ── 管理员自动创建（对应 ensure_admin_exists） ──
+// 管理员自动创建
 
 export async function ensureAdminExists(
   adminUsername: string,
@@ -113,6 +115,6 @@ export async function ensureAdminExists(
   }
 }
 
-// ── 统一导出 ──
+// 统一导出
 
 export { toAuthUser };

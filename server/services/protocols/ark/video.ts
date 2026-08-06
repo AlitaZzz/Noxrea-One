@@ -1,4 +1,7 @@
-// ── Ark 视频生成协议 ──
+/**
+ * Ark 视频生成协议。
+ * 继承 Ark 协议基类，构建视频生成的上游请求与轮询逻辑。
+ */
 
 import { ArkProtocol } from "./base";
 import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";

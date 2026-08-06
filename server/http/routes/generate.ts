@@ -1,3 +1,7 @@
+/**
+ * 生成任务路由。
+ * 处理生成任务的创建、查询、取消与结果回传等接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
@@ -10,7 +14,6 @@ import { buildFileUrl } from "@server/services/storage/service";
 
 const router = new Hono();
 
-// ── POST /api/generate/task ──
 router.post("/api/generate/task", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -99,7 +102,7 @@ router.post("/api/generate/task", async (c) => {
   return c.json(ok(task));
 });
 
-// ── GET /api/generate/task/:id ──
+// GET /api/generate/task/:id
 router.get("/api/generate/task/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -113,7 +116,7 @@ router.get("/api/generate/task/:id", async (c) => {
   return c.json(ok(task));
 });
 
-// ── POST /api/generate/task/:id/cancel ──
+// POST /api/generate/task/:id/cancel
 router.post("/api/generate/task/:id/cancel", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -133,7 +136,7 @@ router.post("/api/generate/task/:id/cancel", async (c) => {
   return c.json(ok(null, "cancelled"));
 });
 
-// ── GET /api/generate/task/:id/stream (SSE) ──
+// GET /api/generate/task/:id/stream (SSE)
 router.get("/api/generate/task/:id/stream", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

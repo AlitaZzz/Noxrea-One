@@ -1,6 +1,7 @@
-// ── JSON TEXT 列的序列化/反序列化 helper ──
-// 对应 SQLAlchemy SQLite JSON → TEXT 的抽象层
-// 切 PostgreSQL 后可在此处切换为 Prisma Json 类型
+/**
+ * JSON 文本列序列化辅助。
+ * 在 SQLite 以 TEXT 存储 JSON 的场景下，提供对象与 JSON 字符串的相互转换。
+ */
 
 import { getConfig } from "@server/core/config";
 

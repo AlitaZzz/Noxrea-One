@@ -1,4 +1,7 @@
-// ── 参数变换（对应 backend/app/services/request_builder/transforms.py） ──
+/**
+ * 参数变换。
+ * 根据 model_params.json 的 transforms 配置执行值变换，支持 base64 与查表。
+ */
 
 /**
  * 从 model_params.json 的 transforms 配置执行值变换。

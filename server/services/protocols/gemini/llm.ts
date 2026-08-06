@@ -1,4 +1,7 @@
-// ── Gemini LLM 协议 ──
+/**
+ * Gemini LLM 协议。
+ * 继承 Gemini 协议基类，构建 LLM 文本补全的上游请求。
+ */
 
 import { GeminiProtocol } from "./base";
 import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";

@@ -1,3 +1,7 @@
+/**
+ * 模型渠道配置路由。
+ * 处理渠道、模型与能力配置的查询、创建、更新与删除等接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { channelCreateSchema, channelUpdateSchema, maskApiKey } from "@server/schemas/model-config";
@@ -11,7 +15,7 @@ import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
 
-// ── GET /api/model-config/channels ──
+// GET /api/model-config/channels
 router.get("/api/model-config/channels", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -27,7 +31,7 @@ router.get("/api/model-config/channels", async (c) => {
   return c.json(ok(result));
 });
 
-// ── POST /api/model-config/channels ──
+// POST /api/model-config/channels
 router.post("/api/model-config/channels", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -63,7 +67,7 @@ router.post("/api/model-config/channels", async (c) => {
   );
 });
 
-// ── GET /api/model-config/channels/:id ──
+// GET /api/model-config/channels/:id
 router.get("/api/model-config/channels/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -85,7 +89,7 @@ router.get("/api/model-config/channels/:id", async (c) => {
   );
 });
 
-// ── PUT /api/model-config/channels/:id ──
+// PUT /api/model-config/channels/:id
 router.put("/api/model-config/channels/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -127,7 +131,7 @@ router.put("/api/model-config/channels/:id", async (c) => {
   );
 });
 
-// ── DELETE /api/model-config/channels/:id ──
+// DELETE /api/model-config/channels/:id
 router.delete("/api/model-config/channels/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -141,13 +145,13 @@ router.delete("/api/model-config/channels/:id", async (c) => {
   return c.json(ok(null, "Channel deleted"));
 });
 
-// ── GET /api/model-config/presets ──
+// GET /api/model-config/presets
 router.get("/api/model-config/presets", (c) => {
   const presets = loadPresets();
   return c.json(ok(presets));
 });
 
-// ── POST /api/model-config/channels/:id/models ──
+// POST /api/model-config/channels/:id/models
 router.post("/api/model-config/channels/:id/models", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -176,7 +180,7 @@ router.post("/api/model-config/channels/:id/models", async (c) => {
   return c.json(ok(model));
 });
 
-// ── POST /api/model-config/channels/:id/models/set ──
+// POST /api/model-config/channels/:id/models/set
 router.post("/api/model-config/channels/:id/models/set", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -201,7 +205,7 @@ router.post("/api/model-config/channels/:id/models/set", async (c) => {
   return c.json(ok(models));
 });
 
-// ── DELETE /api/model-config/channels/:id/models/:mid ──
+// DELETE /api/model-config/channels/:id/models/:mid
 router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -214,7 +218,7 @@ router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
   return c.json(ok(null, "Model deleted"));
 });
 
-// ── PUT /api/model-config/channels/:id/models/:mid/capability ──
+// PUT /api/model-config/channels/:id/models/:mid/capability
 router.put("/api/model-config/channels/:id/models/:mid/capability", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

@@ -1,3 +1,7 @@
+/**
+ * 对话路由。
+ * 处理聊天会话与消息的查询、创建及流式生成等接口。
+ */
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
@@ -22,7 +26,7 @@ import { runCompletion, runCompletionStream } from "@server/services/agent/compl
 
 const router = new Hono();
 
-// ── 会话 CRUD ──
+// 会话 CRUD
 
 const createChatSessionSchema = z.object({
   projectId: z.number().int().nullable().optional(),
@@ -101,7 +105,7 @@ router.get("/api/chat/sessions/:id/messages", async (c) => {
   return c.json(messages);
 });
 
-// ── 非流式兜底：发送并落库 ──
+// 非流式兜底：发送并落库
 
 const sendChatMessageSchema = z.object({
   content: z.string().min(1),
@@ -155,7 +159,7 @@ router.post("/api/chat/sessions/:id/messages", async (c) => {
   return c.json(assistant);
 });
 
-// ── 技能目录（供前端 / 面板使用） ──
+// 技能目录（供前端 / 面板使用）
 
 router.get("/api/chat/skills", async (c) => {
   const auth = await authenticateRequest(c.req.raw);
@@ -163,7 +167,7 @@ router.get("/api/chat/skills", async (c) => {
   return c.json(listSkills());
 });
 
-// ── 流式对话端点 ──
+// 流式对话端点
 
 router.post("/api/chat/stream", async (c) => {
   const auth = await authenticateRequest(c.req.raw);
@@ -207,7 +211,7 @@ router.post("/api/chat/stream", async (c) => {
     skills: payload.skills ?? [],
   });
 
-  // ── 组装消息（分层注入：developer 身份 + developer 工具规则 + system skill） ──
+  // 组装消息（分层注入：developer 身份 + developer 工具规则 + system skill）
   const messages = buildAgentMessages({
     history,
     incoming,

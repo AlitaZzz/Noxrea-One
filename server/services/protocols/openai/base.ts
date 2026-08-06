@@ -1,4 +1,7 @@
-// ── OpenAI 协议基类 ──
+/**
+ * OpenAI 协议基类。
+ * 实现 OpenAI 上游协议的公共逻辑，提供认证头与请求结果封装。
+ */
 
 import type { ProtocolRequestResult, ProtocolResponse, ProtocolService } from "@server/services/protocols/base";
 

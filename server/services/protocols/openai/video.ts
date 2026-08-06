@@ -1,4 +1,7 @@
-// ── OpenAI 视频生成协议 ──
+/**
+ * OpenAI 视频生成协议。
+ * 继承 OpenAI 协议基类，构建视频生成的上游请求与异步轮询逻辑。
+ */
 
 import type {
   ProtocolRequestResult,
@@ -61,7 +64,7 @@ export class OpenAiVideoProtocol implements ProtocolService {
     return { urls };
   }
 
-  // ── 异步任务支持（对齐 OpenAiImageProtocol） ──
+  // 异步任务支持
 
   extractTaskId(data: unknown, channelConfig?: Record<string, unknown>): string | null {
     if (!data || typeof data !== "object") return null;

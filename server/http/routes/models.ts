@@ -1,3 +1,7 @@
+/**
+ * 模型能力路由。
+ * 提供模型列表查询与按能力过滤等接口，含跨域模型代理转发。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { resolveAndValidate } from "@server/core/ssrf";
@@ -30,7 +34,7 @@ function getModelPaths(protocol: string, baseUrl: string): { baseUrl: string; pa
   }
 }
 
-// ── POST /api/models/list ──
+// POST /api/models/list
 router.post("/api/models/list", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

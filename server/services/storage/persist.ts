@@ -1,4 +1,7 @@
-// ── 文件持久化（对应 backend/app/services/storage/persist.py） ──
+/**
+ * 文件持久化。
+ * 将下载或上传的文件以哈希去重方式写入存储并登记文件对象元数据。
+ */
 
 import { upsertFileObject } from "@server/crud/file";
 import { logEvent } from "@server/core/logger/utils";

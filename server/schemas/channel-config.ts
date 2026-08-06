@@ -1,6 +1,8 @@
+/**
+ * 渠道配置校验模式。
+ * 定义协议配置段与渠道配置的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Channel Config schemas（对应 backend/app/schemas/channel_config.py） ──
 
 // 协议配置段
 export const protocolConfigSchema = z.object({
@@ -32,7 +34,7 @@ export type ChannelConfig = z.infer<typeof channelConfigSchema>;
 export type ProtocolConfig = z.infer<typeof protocolConfigSchema>;
 export type RequestConfig = z.infer<typeof requestConfigSchema>;
 
-// ── Model Info schemas ──
+// Model Info schemas
 
 export const modelInfoCreateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -50,7 +52,7 @@ export const modelInfoOutSchema = z.object({
 export type ModelInfoCreate = z.infer<typeof modelInfoCreateSchema>;
 export type ModelInfoOut = z.infer<typeof modelInfoOutSchema>;
 
-// ── 批量设置模型 ──
+// 批量设置模型
 
 export const batchSetModelsSchema = z.object({
   models: z.array(
@@ -63,7 +65,7 @@ export const batchSetModelsSchema = z.object({
 
 export type BatchSetModels = z.infer<typeof batchSetModelsSchema>;
 
-// ── 更新模型能力 ──
+// 更新模型能力
 
 export const updateCapabilitySchema = z.object({
   capabilities: z.array(z.string()),

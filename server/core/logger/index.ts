@@ -1,7 +1,9 @@
+/**
+ * 结构化日志器。
+ * 以全局单例方式提供 pino 日志实例，按配置级别输出日志。
+ */
 import pino from "pino";
 import { getConfig } from "@server/core/config";
-
-// ── 全局单例 ──
 
 const globalForPino = globalThis as unknown as {
   __noxreaLogger?: pino.Logger;

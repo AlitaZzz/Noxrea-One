@@ -1,3 +1,7 @@
+/**
+ * 视频抽帧路由。
+ * 提供从视频文件中抽取指定帧并返回图片的接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { captureVideoFrame } from "@server/services/storage/media";
@@ -8,7 +12,6 @@ import fs from "fs/promises";
 
 const router = new Hono();
 
-// ── POST /api/files/capture-frame ──
 router.post("/api/files/capture-frame", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

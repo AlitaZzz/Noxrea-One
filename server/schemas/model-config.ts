@@ -1,6 +1,8 @@
+/**
+ * 模型配置相关请求校验模式。
+ * 定义渠道与模型配置的创建、更新等入参的 zod 校验规则。
+ */
 import { z } from "zod";
-
-// ── Model Config schemas（对应 backend/app/schemas/model_config.py） ──
 
 export const channelCreateSchema = z.object({
   name: z.string().min(1).max(100),

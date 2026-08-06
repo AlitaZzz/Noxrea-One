@@ -1,3 +1,7 @@
+/**
+ * 资产与文件夹路由。
+ * 处理资产、文件夹的查询、创建、更新与批量操作等接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import {
@@ -28,7 +32,7 @@ const router = new Hono();
 
 // ════════ Folders ════════
 
-// ── GET /api/assets/folders ──
+// GET /api/assets/folders
 router.get("/api/assets/folders", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -39,7 +43,7 @@ router.get("/api/assets/folders", async (c) => {
   return c.json(ok(folders));
 });
 
-// ── POST /api/assets/folders ──
+// POST /api/assets/folders
 router.post("/api/assets/folders", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -66,7 +70,7 @@ router.post("/api/assets/folders", async (c) => {
   return c.json(ok(folder));
 });
 
-// ── GET /api/assets/folders/:id ──
+// GET /api/assets/folders/:id
 router.get("/api/assets/folders/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -81,7 +85,7 @@ router.get("/api/assets/folders/:id", async (c) => {
   return c.json(ok(folder));
 });
 
-// ── PUT /api/assets/folders/:id ──
+// PUT /api/assets/folders/:id
 router.put("/api/assets/folders/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -106,7 +110,7 @@ router.put("/api/assets/folders/:id", async (c) => {
   return c.json(ok(folder));
 });
 
-// ── DELETE /api/assets/folders/:id ──
+// DELETE /api/assets/folders/:id
 router.delete("/api/assets/folders/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -121,7 +125,7 @@ router.delete("/api/assets/folders/:id", async (c) => {
 
 // ════════ Items ════════
 
-// ── GET /api/assets/items ──
+// GET /api/assets/items
 router.get("/api/assets/items", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -145,7 +149,7 @@ router.get("/api/assets/items", async (c) => {
   return c.json(ok({ items: result.items, total: result.total }));
 });
 
-// ── GET /api/assets/items/source-urls ──
+// GET /api/assets/items/source-urls
 // 注意：必须注册在 /api/assets/items/:id 之前，否则会被 :id 参数路由拦截
 router.get("/api/assets/items/source-urls", async (c) => {
   const request = c.req.raw;
@@ -157,7 +161,7 @@ router.get("/api/assets/items/source-urls", async (c) => {
   return c.json(ok(urls));
 });
 
-// ── POST /api/assets/items ──
+// POST /api/assets/items
 router.post("/api/assets/items", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -192,7 +196,7 @@ router.post("/api/assets/items", async (c) => {
   return c.json(ok(item));
 });
 
-// ── GET /api/assets/items/:id ──
+// GET /api/assets/items/:id
 router.get("/api/assets/items/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -207,7 +211,7 @@ router.get("/api/assets/items/:id", async (c) => {
   return c.json(ok(item));
 });
 
-// ── PUT /api/assets/items/:id ──
+// PUT /api/assets/items/:id
 router.put("/api/assets/items/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -227,7 +231,7 @@ router.put("/api/assets/items/:id", async (c) => {
   return c.json(ok(item));
 });
 
-// ── DELETE /api/assets/items/:id ──
+// DELETE /api/assets/items/:id
 router.delete("/api/assets/items/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -242,7 +246,7 @@ router.delete("/api/assets/items/:id", async (c) => {
 
 // ════════ Batch ════════
 
-// ── POST /api/assets/items/batch ──
+// POST /api/assets/items/batch
 router.post("/api/assets/items/batch", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -278,7 +282,7 @@ router.post("/api/assets/items/batch", async (c) => {
   return c.json(ok(created));
 });
 
-// ── PUT /api/assets/items/batch ──
+// PUT /api/assets/items/batch
 router.put("/api/assets/items/batch", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

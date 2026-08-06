@@ -1,4 +1,8 @@
-// ── 项目根路径解析（兼容 cwd=项目根 与 cwd=web/） ──
+/**
+ * 项目根路径解析。
+ * 兼容 cwd 为项目根与 cwd 为 web/ 两种启动方式，
+ * 向上查找同时包含 server/ 与 package.json 的祖先目录作为根。
+ */
 
 import path from "path";
 import { existsSync } from "fs";

@@ -1,3 +1,7 @@
+/**
+ * 画布工程路由。
+ * 处理画布工程的查询、创建、更新与删除等接口。
+ */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
@@ -6,7 +10,6 @@ import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
 
-// ── GET /api/canvas/projects ──
 router.get("/api/canvas/projects", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -16,7 +19,7 @@ router.get("/api/canvas/projects", async (c) => {
   return c.json(ok(projects));
 });
 
-// ── POST /api/canvas/projects ──
+// POST /api/canvas/projects
 router.post("/api/canvas/projects", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -42,7 +45,7 @@ router.post("/api/canvas/projects", async (c) => {
   return c.json(ok(project));
 });
 
-// ── GET /api/canvas/projects/:id ──
+// GET /api/canvas/projects/:id
 router.get("/api/canvas/projects/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -58,7 +61,7 @@ router.get("/api/canvas/projects/:id", async (c) => {
   return c.json(ok(project));
 });
 
-// ── PUT /api/canvas/projects/:id ──
+// PUT /api/canvas/projects/:id
 router.put("/api/canvas/projects/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -91,7 +94,7 @@ router.put("/api/canvas/projects/:id", async (c) => {
   return c.json(ok(project));
 });
 
-// ── DELETE /api/canvas/projects/:id ──
+// DELETE /api/canvas/projects/:id
 router.delete("/api/canvas/projects/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

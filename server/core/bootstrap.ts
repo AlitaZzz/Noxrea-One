@@ -1,9 +1,12 @@
+/**
+ * 服务启动引导。
+ * 幂等初始化配置、数据库 PRAGMA、网关等全局依赖，
+ * 供 HTTP 服务与 Worker 循环在同进程中共用。
+ */
 import { applyPragmas } from "@server/core/database/client";
 import { loadConfig } from "@server/core/config";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
-
-// ── 幂等初始化（HTTP + Worker 同进程） ──
 
 let initialized = false;
 

@@ -1,7 +1,9 @@
+/**
+ * 任务状态监听器。
+ * 监听跨进程任务的状态变更，并同步终态结果至内存与下游。
+ */
 import { logger } from "@server/core/logger";
 import { getTasksByIds } from "@server/crud/task";
-
-// ── TaskWatcher：跨进程任务状态同步 ──
 
 export interface TerminalTaskState {
   taskId: string;

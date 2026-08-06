@@ -1,4 +1,7 @@
-// ── 单任务执行器（对应 backend/app/services/worker/executor.py） ──
+/**
+ * 单任务执行器。
+ * 解析任务上下文、路由到对应能力并驱动生成，更新任务状态与结果。
+ */
 
 import { routeGenerate } from "@server/services/gateway/router";
 import { updateTaskStatus, getTaskStatus } from "@server/crud/task";

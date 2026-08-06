@@ -1,6 +1,8 @@
+/**
+ * 结构化日志工具。
+ * 在统一日志之上提供事件记录与 base64 内容脱敏等辅助能力。
+ */
 import { logger } from "./index";
-
-// ── 结构化日志工具（对应 logging_config.py） ──
 
 /**
  * base64 data URL 匹配模式：data:...;base64,...
@@ -68,7 +70,7 @@ export function logEvent(
 
 /**
  * 分类错误：返回 [类别, 是否可重试]
- * 对应 Python classify_error
+ * 错误分类
  */
 export function classifyError(
   error: string | null | undefined,
@@ -97,7 +99,7 @@ export function classifyError(
 
 /**
  * 脱敏 body 日志输出（禁止泄漏 apiKey 和大 body）
- * 对应 Python summarizeBody
+ * 响应体摘要
  */
 export function summarizeBody(body: unknown, maxLen = 200): unknown {
   if (!body || typeof body !== "object") return body;
@@ -144,7 +146,7 @@ export function summarizeBody(body: unknown, maxLen = 200): unknown {
 
 /**
  * 截断长文本日志
- * 对应 Python summarizeText
+ * 文本摘要
  */
 export function summarizeText(text: string | null | undefined): string {
   if (!text) return "";

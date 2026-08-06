@@ -1,4 +1,7 @@
-// ── TaskManager：同步优先异步兜底（对齐 backend/app/services/tasks/manager.py） ──
+/**
+ * 任务管理器。
+ * 提交生成任务并优先同步等待，超时则转为异步轮询兜底。
+ */
 
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
@@ -6,8 +9,6 @@ import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { updateTaskStatus, isTaskCancelled, getTaskStatus } from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
-
-// ── 导出类型 ──────────────────────────────────────────────────
 
 export interface SubmitAndWaitResult {
   status: "completed" | "failed";
@@ -36,7 +37,7 @@ export interface SubmitAndWaitInput {
   initialDelay?: number;
 }
 
-// ── 导出（供 executor 使用） ──────────────────────────────────
+// 导出（供 executor 使用）
 
 export interface PollOptions {
   maxAttempts?: number;
@@ -81,7 +82,7 @@ export async function pollUntilResult<T>(
   return null;
 }
 
-// ── 核心：submit_and_wait ────────────────────────────────────
+// 核心：submit_and_wait
 
 /**
  * 同步优先异步兜底：提交上游请求，自动判断/轮询。
@@ -194,7 +195,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   };
 }
 
-// ── 内部轮询 ──────────────────────────────────────────────────
+// 内部轮询
 
 interface PollInput {
   taskId: string;
@@ -339,7 +340,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   };
 }
 
-// ── 取消检查 ──────────────────────────────────────────────────
+// 取消检查
 
 async function _checkCancelled(taskId: string): Promise<boolean> {
   return isTaskCancelled(taskId);

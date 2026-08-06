@@ -1,7 +1,9 @@
+/**
+ * JWT 签发与校验。
+ * 基于 jose 实现访问令牌的签发、解码与过期校验。
+ */
 import * as jose from "jose";
 import { getConfig } from "@server/core/config";
-
-// ── JWT 签发与校验（对应 backend/app/services/auth.py） ──
 
 export interface TokenPayload {
   sub: string; // user_id as string

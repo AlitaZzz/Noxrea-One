@@ -1,4 +1,7 @@
-// ── 模型配置服务（对应 backend/app/services/model_params.py + model_capabilities.py） ──
+/**
+ * 模型配置服务。
+ * 加载模型参数与能力预设，提供渠道、模型配置与预设的读取入口。
+ */
 
 import fs from "fs";
 import path from "path";
@@ -19,7 +22,7 @@ function getProjectRoot(): string {
   return process.cwd();
 }
 
-// ── 预设 ──
+// 预设
 
 let _presets: Record<string, unknown> | null = null;
 
@@ -32,7 +35,7 @@ export function loadPresets(): Record<string, unknown> {
   return _presets!;
 }
 
-// ── 模型参数 ──
+// 模型参数
 export interface ModelParamConfig {
   params: string[];
   defaults: Record<string, unknown>;
@@ -59,7 +62,7 @@ export function loadModelParams(): Record<string, Record<string, unknown>> {
  * 按模型名 + capability 查找参数配置。
  * 匹配优先级：精确名 > fnmatch 通配符 > _default
  * defaults/params/constraints 优先用模型级配置，transforms 从 _default 兜底。
- * 对应 Python ModelParamsRegistry.get()
+ * 读取模型参数预设
  */
 export function getModelParams(modelName: string, capability: string): ModelParamConfig | null {
   const data = loadRaw();

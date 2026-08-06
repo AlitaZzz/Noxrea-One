@@ -1,6 +1,8 @@
+/**
+ * 文件对象 CRUD。
+ * 基于内容哈希去重存储文件元数据，并提供文件对象的 upsert 与查询。
+ */
 import { prisma } from "@server/core/database/client";
-
-// ── File CRUD（对应 backend/app/models/file_object.py 相关操作） ──
 
 // FileObject upsert（去重：hash 碰撞时更新）
 export async function upsertFileObject(data: {

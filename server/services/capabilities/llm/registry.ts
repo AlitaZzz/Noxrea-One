@@ -1,11 +1,8 @@
-// ── Agent 工具中央注册器 ──
-//
-// 所有供 LLM function-calling 使用的工具都在此统一注册，避免散落在硬编码数组中。
-// 新增一个工具只需调用 register()，无需修改任何分发逻辑。
-//
-// 工具的「执行位置」分为两类：
-// - "client"：后端只透传 tool_call 给前端，由前端在画布上建节点（现有行为，默认）
-// - "server"：预留扩展位，未来可由后端直接执行
+/**
+ * Agent 工具中央注册器。
+ * 统一注册供 LLM function-calling 使用的工具，新增工具只需调用 register()。
+ * 工具执行位置分 client（后端透传、前端建节点）与 server（预留后端执行）两类。
+ */
 
 export interface AgentToolDefinition {
   name: string;

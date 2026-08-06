@@ -1,4 +1,7 @@
-// ── 媒体处理（对应 backend/app/services/media.py） ──
+/**
+ * 媒体处理。
+ * 基于 ffmpeg 提供视频抽帧、转码与缩略图等本地媒体处理能力。
+ */
 
 import path from "path";
 import fs from "fs/promises";
@@ -19,7 +22,7 @@ function resolveFfmpegPath(configDir: string): string {
 
 /**
  * 图片等比缩放 WebP 缓存
- * 对应 Python 的 sharp 缩放缓存
+ * sharp 缩放缓存
  */
 export async function getResizedWebP(
   storageKey: string,
@@ -60,7 +63,7 @@ export async function getResizedWebP(
 
 /**
  * 视频截帧（spawn ffmpeg）
- * 对应 Python 的 subprocess ffmpeg
+ * 基于 subprocess 调用 ffmpeg
  */
 export async function captureVideoFrame(
   videoPath: string,
@@ -118,7 +121,7 @@ export async function captureVideoFrame(
 
 /**
  * 路径穿越防护：校验用户文件访问
- * 对应 Python validateUserFile
+ * 校验用户文件合法性
  */
 export function validateUserFile(
   filePath: string,
