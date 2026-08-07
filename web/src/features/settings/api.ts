@@ -33,6 +33,10 @@ export const modelApi = {
       body: JSON.stringify({ models }),
     }),
 
+  /** 拉取通道明文 apiKey（按需揭示）。 */
+  fetchChannelApiKey: (id: string) =>
+    api<{ apiKey: string }>(`/api/model-config/channels/${id}/apikey`),
+
   /** 拉取全部通道配置（可指定返回类型）。 */
   fetchChannels: <T = unknown[]>() =>
     api<T>(`/api/model-config/channels`),

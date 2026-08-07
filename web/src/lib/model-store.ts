@@ -23,6 +23,7 @@ interface ModelState {
 
   addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
   updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol" | "config">>) => Promise<void>;
+  fetchChannelApiKey: (id: string) => Promise<string>;
   deleteChannel: (id: string) => Promise<void>;
 
   addModel: (channelId: string, name: string) => Promise<void>;
@@ -111,7 +112,25 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
     if (patch.config !== undefined) body.config = patch.config;
     await modelApi.updateChannel(id, body);
-    set((s) => ({ channels: s.channels.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+    // 只合并非 undefined 的字段，避免 undefined 覆盖原有值
+    set((s) => ({
+      channels: s.channels.map((c) => {
+        if (c.id !== id) return c;
+        const merged = { ...c };
+        for (const [k, v] of Object.entries(patch)) {
+          if (v !== undefined) (merged as Record<string, unknown>)[k] = v;
+        }
+        return merged;
+      }),
+    }));
+  },
+
+  fetchChannelApiKey: async (id) => {
+    const res = await modelApi.fetchChannelApiKey(id);
+    if (res.code === 200 && res.data) {
+      return res.data.apiKey;
+    }
+    throw new Error("Failed to fetch API key");
   },
 
   deleteChannel: async (id) => {

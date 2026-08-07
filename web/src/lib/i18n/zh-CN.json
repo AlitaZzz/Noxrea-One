@@ -37,7 +37,7 @@
   "fetch.models": "拉取模型", "no.channels": "暂无渠道", "no.models": "暂无模型",
   "no.channels.desc": "添加渠道以开始使用",
   "no.models.desc": "点击拉取模型，或手动添加",
-  "add.model": "添加模型", "name": "名称", "base.url": "基础 URL", "api.key": "API 密钥", "api.key.keepblank": "留空保持不变",
+  "add.model": "添加模型", "name": "名称", "base.url": "基础 URL", "api.key": "API 密钥", "api.key.keepblank": "留空保持不变", "api.key.fetchFailed": "获取密钥失败", "api.key.copied": "已复制到剪贴板", "api.key.copyFailed": "复制失败",
   "text.cap": "文本", "image.cap": "图片", "video.cap": "视频", "audio.cap": "音频",
   "enabled": "已启用", "available": "可用（点击启用）",
   "select.all": "全选", "invert": "反选", "clear.cap": "清空",

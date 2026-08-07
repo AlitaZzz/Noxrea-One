@@ -9,6 +9,7 @@
 import {
   ApiOutlined,
   AudioOutlined,
+  CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -87,6 +88,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const presets = useModelStore((s) => s.presets);
   const addChannel = useModelStore((s) => s.addChannel);
   const updateChannel = useModelStore((s) => s.updateChannel);
+  const fetchChannelApiKey = useModelStore((s) => s.fetchChannelApiKey);
   const deleteChannel = useModelStore((s) => s.deleteChannel);
   const addModel = useModelStore((s) => s.addModel);
   const toggleModelCapability = useModelStore((s) => s.toggleModelCapability);
@@ -105,6 +107,11 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const [editChannelId, setEditChannelId] = useState<string | null>(null);
   const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [apiKeyRevealed, setApiKeyRevealed] = useState(false);
+  const [apiKeyMasked, setApiKeyMasked] = useState("");
+  const [keyDirty, setKeyDirty] = useState(false);
+  const [fetchingKey, setFetchingKey] = useState(false);
   const [newModelName, setNewModelName] = useState("");
   const [fetching, setFetching] = useState(false);
   const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null);
@@ -128,6 +135,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     setShowAdvanced(false);
     setEditChannelId(null);
     setShowAddChannel(false);
+    setApiKeyVisible(false);
+    setApiKeyRevealed(false);
+    setApiKeyMasked("");
+    setKeyDirty(false);
   };
 
   const handleSaveChannel = () => {
@@ -150,7 +161,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     if (editChannelId) {
       updateChannel(editChannelId, {
         name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
-        apiKey: chForm.apiKey.trim() || undefined,
+        apiKey: keyDirty ? (chForm.apiKey.trim() || undefined) : undefined,
         config: configObj,
       });
       message.success(t("modelConfig.channelUpdated"));
@@ -164,15 +175,62 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const handleEditChannel = (id: string) => {
     const ch = channels.find((c) => c.id === id);
     if (!ch) return;
-    // apiKey 不预填（后端返回的是掩码）：留空表示保持原 key 不变，用户需改时重新输入完整值
     const fmt = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v, null, 2) : "");
-    setChForm({ 
-      name: ch.name, baseUrl: ch.baseUrl, apiKey: "",
+    // 预填掩码 apiKey：用户可见掩码值，点击小眼睛拉取明文
+    setApiKeyMasked(ch.apiKey);
+    setApiKeyRevealed(false);
+    setKeyDirty(false);
+    setApiKeyVisible(false);
+    setChForm({
+      name: ch.name, baseUrl: ch.baseUrl, apiKey: ch.apiKey,
       protocol: ch.protocol || "openai",
       config: fmt(ch.config),
     });
     setEditChannelId(id);
     setShowAddChannel(true);
+  };
+
+  // 点击小眼睛：首次揭示时从后端拉取明文密钥
+  const handleApiKeyVisibleChange = async (visible: boolean) => {
+    setApiKeyVisible(visible);
+    if (visible && editChannelId && !apiKeyRevealed && !keyDirty) {
+      setFetchingKey(true);
+      try {
+        const plain = await fetchChannelApiKey(editChannelId);
+        setChForm((f) => ({ ...f, apiKey: plain }));
+        setApiKeyRevealed(true);
+      } catch {
+        message.error(t("api.key.fetchFailed"));
+        setApiKeyVisible(false);
+      }
+      setFetchingKey(false);
+    }
+  };
+
+  // 复制按钮：按需拉取明文后复制到剪贴板
+  const handleCopyApiKey = async () => {
+    if (!editChannelId) return;
+    let textToCopy = chForm.apiKey;
+    if (!apiKeyRevealed && !keyDirty) {
+      setFetchingKey(true);
+      try {
+        textToCopy = await fetchChannelApiKey(editChannelId);
+        setChForm((f) => ({ ...f, apiKey: textToCopy }));
+        setApiKeyRevealed(true);
+        setApiKeyVisible(true);
+      } catch {
+        message.error(t("api.key.fetchFailed"));
+        setFetchingKey(false);
+        return;
+      }
+      setFetchingKey(false);
+    }
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      message.success(t("api.key.copied"));
+    } catch {
+      message.error(t("api.key.copyFailed"));
+    }
   };
 
   const handleFetch = async () => {
@@ -366,12 +424,29 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
-            <Input.Password
-              placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."} value={chForm.apiKey}
-              onChange={(e) => setChForm((f) => ({ ...f, apiKey: e.target.value }))}
-              style={{ width: "100%" }}
-              iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
-            />
+                <div className="flex gap-1">
+                  <Input.Password
+                    placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."}
+                    value={chForm.apiKey}
+                    onChange={(e) => {
+                      setChForm((f) => ({ ...f, apiKey: e.target.value }));
+                      setKeyDirty(true);
+                    }}
+                    style={{ flex: 1 }}
+                    visibilityToggle={{ visible: apiKeyVisible, onVisibleChange: handleApiKeyVisibleChange }}
+                    iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
+                  />
+                  {editChannelId && (
+                    <Button
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={handleCopyApiKey}
+                      loading={fetchingKey}
+                      className="model-btn"
+                      style={{ flexShrink: 0 }}
+                    />
+                  )}
+                </div>
           </div>
           </div>
           </div>
