@@ -467,6 +467,27 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             </Tooltip>
           </div>
         )}
+        {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
+          <div className="absolute top-2 right-2 z-20 nodrag">
+            <Tooltip title={t("replace")}>
+              <button
+                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+                onClick={() => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept = "image/*";
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file) handleFile(file);
+                  };
+                  input.click();
+                }}
+              >
+                <UploadOutlined style={{ fontSize: 12 }} />
+              </button>
+            </Tooltip>
+          </div>
+        )}
         {data.upload?.uploading ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 px-8" style={{ background: "var(--canvas-bg)" }}>
             {data.upload?.progress != null ? (
@@ -622,7 +643,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />
+      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />}
       <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />
     </div>
     {angleEditorOpen && src && createPortal(
