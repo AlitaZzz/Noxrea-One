@@ -41,6 +41,7 @@ export function createAssetNode(asset: AssetItem, findFreePosition: FindFreePosi
     node.data.alt = asset.name;
     node.data.naturalWidth = nw || 320;
     node.data.naturalHeight = nh || 180;
+    node.data.source = "upload";
     node.style = {
       width: dw || DEFAULT_NODE_WIDTH,
       height: dh || DEFAULT_NODE_HEIGHT,
@@ -53,6 +54,7 @@ export function createAssetNode(asset: AssetItem, findFreePosition: FindFreePosi
     node.data.alt = asset.name;
     node.data.naturalWidth = nw;
     node.data.naturalHeight = nh;
+    node.data.source = "upload";
     node.style = { width: dw, height: dh };
     return node;
   }

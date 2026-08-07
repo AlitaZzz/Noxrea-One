@@ -95,6 +95,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         src: firstUrl, label, alt: label,
                         naturalWidth: defW, naturalHeight: defH,
                         lockAspectRatio: true, taskBinding: undefined,
+                        source: "generate",
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();
                       // Async load real dimensions for the first result

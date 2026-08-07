@@ -122,6 +122,7 @@ export function useFileDrop(
               naturalWidth: nw,
               naturalHeight: nh,
               upload: undefined,
+              source: "upload",
             }, { width, height }, { skipHistory: true });
           } catch {
             failedIds.push(node.id);

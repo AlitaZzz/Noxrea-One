@@ -170,7 +170,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               new CustomEvent(EventNames.NODE_UPDATE_DATA, {
                 detail: {
                   nodeId: id,
-                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined },
+                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined, source: "upload" },
                   style: { width, height },
                   immediate: true,
                 },
@@ -363,6 +363,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
       rotation: undefined, flipH: undefined, flipV: undefined,
       upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined,
+      source: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
     markDirtyImmediate();
   }, [id]);

@@ -190,7 +190,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             new CustomEvent(EventNames.NODE_UPDATE_DATA, {
               detail: {
                 nodeId: id,
-                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh, upload: undefined },
+                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh, upload: undefined, source: "upload" },
                 style: { width, height },
                 immediate: true,
               },
@@ -233,7 +233,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     setSrc("");
     useCanvasStore.getState().updateNodeData(id, {
       src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
-      upload: undefined,
+      upload: undefined, source: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
     markDirtyImmediate();
   }, [id]);
