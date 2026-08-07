@@ -34,10 +34,10 @@ export const NODE_TITLE_HEIGHT = 28;
 // 输入/输出连接点垂直原点：去掉标题栏高度后内容区正中
 // 内容区中心相对节点顶部 = 总高/2 + 标题栏/2，故 top = 50% + NODE_TITLE_HEIGHT/2
 export const NODE_HANDLE_TOP = `calc(50% + ${NODE_TITLE_HEIGHT / 2}px)`;
-export const TEXT_NODE_DEFAULT_WIDTH = 350;
-export const TEXT_NODE_DEFAULT_HEIGHT = 400;
-export const TEXT_NODE_MIN_WIDTH = 350;
-export const TEXT_NODE_MIN_HEIGHT = 400;
+export const TEXT_NODE_DEFAULT_WIDTH = DEFAULT_NODE_WIDTH;
+export const TEXT_NODE_DEFAULT_HEIGHT = DEFAULT_NODE_HEIGHT;
+export const TEXT_NODE_MIN_WIDTH = DEFAULT_NODE_WIDTH;
+export const TEXT_NODE_MIN_HEIGHT = DEFAULT_NODE_HEIGHT;
 
 export const DIRECTOR_NODE_DEFAULT_WIDTH = 350;
 export const DIRECTOR_NODE_DEFAULT_HEIGHT = 400;
