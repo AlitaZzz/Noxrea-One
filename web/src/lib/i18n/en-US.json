@@ -37,7 +37,7 @@
   "fetch.models": "Fetch Models", "no.channels": "No channels", "no.models": "No models",
   "no.channels.desc": "Add a channel to get started",
   "no.models.desc": "Click Fetch to pull models, or add manually",
-  "add.model": "Add Model", "name": "Name", "base.url": "Base URL", "api.key": "API Key", "api.key.keepblank": "Leave blank to keep unchanged",
+  "add.model": "Add Model", "name": "Name", "base.url": "Base URL", "api.key": "API Key", "api.key.keepblank": "Leave blank to keep unchanged", "api.key.fetchFailed": "Failed to fetch API key", "api.key.copied": "Copied to clipboard", "api.key.copyFailed": "Copy failed",
   "text.cap": "Text", "image.cap": "Image", "video.cap": "Video", "audio.cap": "Audio",
   "enabled": "Enabled", "available": "Available (click to enable)",
   "select.all": "All", "invert": "Invert", "clear.cap": "Clear",

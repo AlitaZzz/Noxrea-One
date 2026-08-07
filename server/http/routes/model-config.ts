@@ -89,6 +89,22 @@ router.get("/api/model-config/channels/:id", async (c) => {
   );
 });
 
+// GET /api/model-config/channels/:id/apikey — 按需返回明文 apiKey（不掩码）
+router.get("/api/model-config/channels/:id/apikey", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const rawId = c.req.param("id");
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) return fail(400, "Invalid channel ID");
+
+  const channel = await getChannel(id);
+  if (!channel) return fail(404, "Channel not found");
+
+  return c.json(ok({ apiKey: channel.apiKey }));
+});
+
 // PUT /api/model-config/channels/:id
 router.put("/api/model-config/channels/:id", async (c) => {
   const request = c.req.raw;
