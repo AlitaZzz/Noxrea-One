@@ -251,8 +251,8 @@ export async function listSourceUrls(userId: number, spaceKey = "personal") {
   const urls = new Set<string>();
   for (const item of items) {
     const extra = parseJsonObject(item.extraData);
-    if (extra.source_url && typeof extra.source_url === "string") {
-      urls.add(extra.source_url);
+    if (extra.sourceUrl && typeof extra.sourceUrl === "string") {
+      urls.add(extra.sourceUrl);
     }
   }
 
