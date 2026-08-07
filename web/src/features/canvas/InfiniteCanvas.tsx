@@ -64,7 +64,7 @@ import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import type { AnyNode } from "@/features/canvas/types";
+import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 import { useAssetsStore } from "@/features/assets/store";
 import { useAuthStore } from "@/features/auth/store";
@@ -156,6 +156,7 @@ export default function InfiniteCanvas() {
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.IMAGE) return null;
+    if ((sel[0].data as ImageNodeData).source === "upload") return null;
     return sel[0].id;
   }, [nodes]);
 
@@ -164,6 +165,7 @@ export default function InfiniteCanvas() {
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.VIDEO) return null;
+    if ((sel[0].data as VideoNodeData).source === "upload") return null;
     return sel[0].id;
   }, [nodes]);
 
