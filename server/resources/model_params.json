@@ -2,7 +2,7 @@
   "_default": {
     "image": {
       "params": ["quality", "resolution", "ratio", "n"],
-      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "1:1", "n": 1 },
+      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "9:16", "n": 1 },
       "constraints": {
         "quality": ["auto", "high", "medium", "low"],
         "resolution": ["1K", "2K", "4K"],
@@ -21,7 +21,7 @@
   "*gpt-image*": {
     "image": {
       "params": ["quality", "resolution", "ratio", "n"],
-      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "1:1", "n": 1 },
+      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "9:16", "n": 1 },
       "constraints": {
         "quality": ["auto", "high", "medium", "low"],
         "resolution": ["1K", "2K", "4K"],
@@ -85,7 +85,7 @@
   "*nano-banana*": {
     "image": {
       "params": ["quality", "ratio", "n"],
-      "defaults": { "quality": "auto", "ratio": "1:1", "n": 1 },
+      "defaults": { "quality": "auto", "ratio": "9:16", "n": 1 },
       "constraints": {
         "quality": ["auto", "high", "medium", "low"],
         "ratio": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
