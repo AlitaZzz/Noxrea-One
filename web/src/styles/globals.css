@@ -609,8 +609,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* 通知退出动画期间禁用指针事件，避免透明通知拦截 Agent Drawer 底部按钮点击 */
-.ant-notification-fade-leave-active {
-  pointer-events: none;
+.ant-notification-fade-leave-active,
+.ant-notification-fade-leave-active .ant-notification-notice,
+.ant-notification-fade-leave-active .ant-notification-notice * {
+  pointer-events: none !important;
 }
 
 /* Outliner 列表：默认隐藏滚动条，hover 时显示 */
