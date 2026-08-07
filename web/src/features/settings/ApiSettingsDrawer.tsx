@@ -319,8 +319,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
       }}
     >
-    <div className="model-config-wrap flex flex-col h-full">
+    <div className="model-config-wrap flex flex-col h-full overflow-y-auto">
       <style>{`
+        .model-config-wrap { scrollbar-width: none; -ms-overflow-style: none; }
+        .model-config-wrap::-webkit-scrollbar { display: none; }
         .model-config-wrap input:not([type]), .model-config-wrap .ant-input, .model-config-wrap .ant-input-password { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; color: var(--canvas-text) !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
         .model-config-wrap textarea.ant-input { height: auto !important; padding: 8px 11px !important; }
         .model-config-wrap .ant-select.ant-select, .model-config-wrap .ant-select-selector.ant-select-selector { height: 36px !important; background: var(--canvas-bg) !important; color: var(--canvas-text) !important; }
@@ -567,7 +569,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       </div>
 
       {/* ===== Model list ===== */}
-      <div className="p-5 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ scrollbarGutter: "stable" }}>
+      <div className="p-5 flex-1 flex flex-col min-h-[300px] overflow-hidden" style={{ scrollbarGutter: "stable" }}>
         {!channel ? (
           <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
             <ApiOutlined className="text-3xl mb-2 block" />
