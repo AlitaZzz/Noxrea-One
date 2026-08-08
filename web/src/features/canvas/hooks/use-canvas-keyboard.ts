@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import { duplicateNode } from "@/features/canvas/node-defaults";
 import { EventNames, isGenerating,PASTE_OFFSET } from "@/lib/constants";
 import type { MediaGenFields } from "@/features/canvas/types";
-import { markDirtyImmediate, takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 
@@ -166,7 +166,7 @@ export function useCanvasKeyboard() {
           s.setTheme(prev.theme);
           if (prev.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: prev.minimapVisible });
           if (prev.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: prev.snapToGrid });
-          markDirtyImmediate();
+          markDirtyUndo();
         }
       }
 
@@ -185,7 +185,7 @@ export function useCanvasKeyboard() {
           s.setTheme(next.theme);
           if (next.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: next.minimapVisible });
           if (next.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: next.snapToGrid });
-          markDirtyImmediate();
+          markDirtyUndo();
         }
       }
 
