@@ -630,7 +630,8 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
       return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
     }
     if (isAudio) return coverUrl || sourceUrl || "";
-    return sourceUrl || "";
+    const u = sourceUrl;
+    return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
   })();
 
   const stopAudio = useCallback(() => {
