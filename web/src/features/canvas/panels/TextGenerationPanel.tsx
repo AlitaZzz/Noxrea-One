@@ -20,7 +20,7 @@ import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import type { GenSettings, TextNodeData } from "@/features/canvas/types";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
@@ -36,7 +36,7 @@ interface ModelOption {
 }
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const channels = useModelStore((s) => s.channels);
   const { notification } = App.useApp();
 
@@ -297,7 +297,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           }}
           onClick={handleRefUpload}
         >
-          <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
+          <PlusOutlined style={{ fontSize: 12 }} /> {t("common.reference")}
         </Button>
         {(refOrder.length > 0 || upstreamTexts.length > 0) && (
           <div
@@ -408,7 +408,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           references={references}
           value={prompt}
           onChange={setPrompt}
-          placeholder={t("prompt.placeholder.text")}
+          placeholder={t("generation.promptPlaceholderText")}
           style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">

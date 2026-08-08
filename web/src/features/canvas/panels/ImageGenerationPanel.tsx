@@ -23,7 +23,7 @@ import { type ModelOption } from "@/lib/types/models";
 import type { GenSettings, MediaGenFields } from "@/features/canvas/types";
 import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
@@ -31,7 +31,7 @@ import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 interface Props { nodeId: string; }
 
 const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const channels = useModelStore((s) => s.channels);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
@@ -350,7 +350,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
         onClick={handleRefUpload}>
-        <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
+        <PlusOutlined style={{ fontSize: 12 }} /> {t("common.reference")}
       </Button>
       {(refOrder.length > 0 || upstreamTexts.length > 0) && (
         <div
@@ -447,7 +447,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         references={references}
         value={prompt}
         onChange={setPrompt}
-        placeholder={t("prompt.placeholder")}
+        placeholder={t("generation.promptPlaceholder")}
         style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
@@ -473,7 +473,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               {/* ── ① 画质 ── */}
               {showQuality && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("quality")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.quality")}</div>
                 <div className="grid grid-cols-4 gap-1">
                   {qualityOptions.map((v) => {
                     const active = quality === v;
@@ -482,7 +482,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
                         style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setQuality(v)}>{t(`quality.${v}`)}</Button>
+                        onClick={() => setQuality(v)}>{t(`generation.quality.${v}`)}</Button>
                     );
                   })}
                 </div>
@@ -491,7 +491,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               {/* ── ② 清晰度 ── */}
               {showResolution && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.clarity")}</div>
                 <div className="grid grid-cols-3 gap-1">
                   {resolutionOptions.map((v) => {
                     const active = resolution === v;
@@ -509,7 +509,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               {/* ── ③ 比例 ── */}
               {showRatio && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("ratio")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.ratio")}</div>
                 <div className="grid grid-cols-5 gap-1">
                   {ratioOptions.map((v) => {
                     const [w, h] = v.split(":").map(Number);
@@ -537,7 +537,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               {/* ── ④ 生成数量 ── */}
               {showN && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.count")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.count")}</div>
                 <div className="grid grid-cols-3 gap-1">
                   {[1, 2, 4].map((v) => {
                     const active = n === v;
@@ -546,7 +546,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
                         style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setN(v)}>{v}{t("count.unit")}</Button>
+                        onClick={() => setN(v)}>{v}{t("generation.countUnit")}</Button>
                     );
                   })}
                 </div>
@@ -561,7 +561,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
             {showQuality && <> · {t(`quality.${quality}`)}</>}
             {showResolution && <> · {resolution}</>}
-            {showN && <> · {n}{t("count.unit")}</>}
+            {showN && <> · {n}{t("generation.countUnit")}</>}
           </button>
         </Popover>
         <div className="flex-1" />

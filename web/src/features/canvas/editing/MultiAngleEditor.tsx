@@ -13,7 +13,7 @@ import AppModal from "@/components/ui/AppModal";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;
@@ -39,7 +39,7 @@ const PRESETS: Preset[] = [
   { key: "back", labelKey: "angle.back", azimuth: 180, elevation: 0, zoom: 1 },
 ];
 
-const ZOOM_LABELS = ["angle.zoom.near", "angle.zoom.mid", "angle.zoom.far"];
+const ZOOM_LABELS = ["angle.zoomNear", "angle.zoomMid", "angle.zoomFar"];
 
 const DEFAULT_AZIMUTH = 0;
 const DEFAULT_ELEVATION = 0;
@@ -52,7 +52,7 @@ const ORBIT_RADIUS = 120;
 const LATITUDES = [-80, -60, -40, -20, 0, 20, 40, 60, 80];
 
 export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
   const [azimuth, setAzimuth] = useState(DEFAULT_AZIMUTH);
@@ -174,7 +174,7 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
       title={
         <span className="inline-flex items-center gap-2">
           <MultiAngleIcon className="h-4 w-4" />
-          {t("angle.editor.title")}
+          {t("angle.editorTitle")}
         </span>
       }
       open
@@ -395,7 +395,7 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
                   backdropFilter: "blur(4px)",
                 }}
               >
-                {t("angle.camera.pos")}: {azimuth}&#176; / {elevation}&#176;
+                {t("angle.cameraPos")}: {azimuth}&#176; / {elevation}&#176;
               </div>
             </div>
 
