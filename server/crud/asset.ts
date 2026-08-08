@@ -85,9 +85,20 @@ export async function getAssets(params: {
   } else if (params.folderId !== undefined) {
     where.folderId = params.folderId;
   }
-  if (params.type) where.type = params.type;
   if (params.spaceKey) where.spaceKey = params.spaceKey;
-  if (params.search) {
+
+  // type 与 search 之间使用 OR 关系：命中其一即可
+  const typeList = params.type ? params.type.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  const hasSearch = params.search && params.search.trim();
+
+  if (typeList.length > 0 && hasSearch) {
+    where.OR = [
+      { type: { in: typeList } },
+      { name: { contains: params.search } },
+    ];
+  } else if (typeList.length > 0) {
+    where.type = { in: typeList };
+  } else if (hasSearch) {
     where.name = { contains: params.search };
   }
 
