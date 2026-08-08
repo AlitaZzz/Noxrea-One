@@ -71,30 +71,3 @@ export async function deleteProject(id: number) {
   return prisma.canvasProject.delete({ where: { id } });
 }
 
-// 文件引用重算（upsert + deleteMany）
-
-export async function recalcFileReferences(
-  projectId: number,
-  fileHashes: { hash: string; userId: number; refType: string }[]
-) {
-  const refType = "canvas_project";
-
-  return prisma.$transaction(async (tx) => {
-    // 删除旧引用
-    await tx.fileReference.deleteMany({
-      where: { refType, refId: projectId },
-    });
-
-    // 插入新引用
-    if (fileHashes.length > 0) {
-      const data = fileHashes.map((f) => ({
-        fileHash: f.hash,
-        userId: f.userId,
-        refType,
-        refId: projectId,
-      }));
-
-      await tx.fileReference.createMany({ data });
-    }
-  });
-}

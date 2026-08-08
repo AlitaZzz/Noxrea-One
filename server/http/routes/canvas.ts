@@ -93,10 +93,11 @@ router.put("/api/canvas/projects/:id", async (c) => {
     canvasData: parsed.data.canvasData,
   });
 
-  // 文件引用重算
+  // 文件引用重算（diff 增减）
   if (parsed.data.needRefRecalc && parsed.data.canvasData) {
-    const hashes = extractHashesFromCanvas(parsed.data.canvasData);
-    void recalcCanvasRefs(id, auth.user.id, hashes);
+    const newHashes = extractHashesFromCanvas(parsed.data.canvasData);
+    const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
+    void recalcCanvasRefs(auth.user.id, oldHashes, newHashes);
   }
 
   return c.json(ok(project));
@@ -117,8 +118,9 @@ router.delete("/api/canvas/projects/:id", async (c) => {
 
   await deleteProject(id);
 
-  // 异步清理文件引用 + GC 孤儿文件
-  void cleanCanvasRefs(id, auth.user.id);
+  // 异步递减文件引用计数 + GC 孤儿文件
+  const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
+  void cleanCanvasRefs(auth.user.id, oldHashes);
 
   return c.json(ok(null, "Project deleted"));
 });
