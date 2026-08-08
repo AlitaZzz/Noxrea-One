@@ -24,6 +24,8 @@ interface ImageRef {
 
 const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
+/** undo/redo 专用延迟，比 immediate 稍长以合并连续撤销/重做 */
+const SAVE_DELAY_UNDO = 500;
 
 // ── fingerprint：追踪画布文件引用变化 ──
 // 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
@@ -103,6 +105,11 @@ class SaveManager {
   /** 标记改脏 - 100ms trailing save（离散操作：增删节点/编组/粘贴/连接） */
   markDirtyImmediate(): void {
     this.setDirty(SAVE_DELAY_IMMEDIATE);
+  }
+
+  /** 标记改脏 - 500ms trailing save（撤销/重做：合并连续 Ctrl+Z / Ctrl+Y） */
+  markDirtyUndo(): void {
+    this.setDirty(SAVE_DELAY_UNDO);
   }
 
   private setDirty(delay: number): void {

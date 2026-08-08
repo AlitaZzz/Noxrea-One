@@ -39,6 +39,10 @@ export function markDirtyImmediate() {
   saveManager.markDirtyImmediate();
 }
 
+export function markDirtyUndo() {
+  saveManager.markDirtyUndo();
+}
+
 /**
  * 高频 viewport 变更入口（onViewportChange 调用）。
  * 只更新模块级变量 + markDirty，不触发 Zustand set()，避免渲染循环。
