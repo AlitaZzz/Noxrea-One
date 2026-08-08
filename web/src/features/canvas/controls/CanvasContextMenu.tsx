@@ -40,6 +40,7 @@ export default function CanvasContextMenu(props: Props) {
           background: "var(--canvas-bg)",
           border: "1px solid var(--canvas-border)",
           minWidth: 175,
+          userSelect: "none",
         }}
       >
         <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.add")}</div>

@@ -132,6 +132,7 @@ export default function InfiniteCanvas() {
   const { t } = useTranslation();
 
   const [editName, setEditName] = useState(projectName);
+  const [isEditingName, setIsEditingName] = useState(false);
   const [prevProjectName, setPrevProjectName] = useState(projectName);
   if (projectName !== prevProjectName) {
     setPrevProjectName(projectName);
@@ -531,31 +532,35 @@ export default function InfiniteCanvas() {
                 }
               />
               <div className="w-px h-5 mx-0.5" style={{ background: "var(--canvas-border)" }} />
-              <input
-                className="bg-transparent text-sm outline-none border-none flex-1 min-w-0 cursor-default"
-                style={{ color: "var(--canvas-text)", height: 24 }}
-                placeholder="Untitled"
-                readOnly
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onDoubleClick={(e) => {
-                  const t = e.target as HTMLInputElement;
-                  t.removeAttribute("readOnly");
-                  t.focus();
-                  t.setSelectionRange(t.value.length, t.value.length);
-                }}
-                onBlur={(e) => {
-                  const t = e.target as HTMLInputElement;
-                  t.setAttribute("readOnly", "true");
-                  const activeId = useProjectStore.getState().activeProjectId;
-                  if (activeId && t.value.trim()) {
-                    useProjectStore.getState().renameProject(activeId, t.value.trim());
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-              />
+              {isEditingName ? (
+                <input
+                  className="bg-transparent text-sm outline-none border-none flex-1 min-w-0"
+                  style={{ color: "var(--canvas-text)", height: 24, cursor: "text" }}
+                  placeholder="Untitled"
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onFocus={(e) => e.target.setSelectionRange(0, e.target.value.length)}
+                  onBlur={() => {
+                    setIsEditingName(false);
+                    const activeId = useProjectStore.getState().activeProjectId;
+                    if (activeId && editName.trim()) {
+                      useProjectStore.getState().renameProject(activeId, editName.trim());
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                />
+              ) : (
+                <div
+                  className="text-sm flex-1 min-w-0 truncate"
+                  style={{ color: "var(--canvas-text)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
+                  onDoubleClick={() => setIsEditingName(true)}
+                >
+                  {editName || "Untitled"}
+                </div>
+              )}
             </div>
 
           </div>
