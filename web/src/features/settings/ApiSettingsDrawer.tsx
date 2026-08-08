@@ -29,7 +29,7 @@ import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
 
 interface Props {
@@ -80,7 +80,7 @@ const ModelRow = memo(function ModelRow({
 });
 
 export default function ApiSettingsDrawer({ open, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
@@ -200,7 +200,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         setChForm((f) => ({ ...f, apiKey: plain }));
         setApiKeyRevealed(true);
       } catch {
-        message.error(t("api.key.fetchFailed"));
+        message.error(t("modelConfig.apiKeyFetchFailed"));
         setApiKeyVisible(false);
       }
       setFetchingKey(false);
@@ -219,7 +219,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         setApiKeyRevealed(true);
         setApiKeyVisible(true);
       } catch {
-        message.error(t("api.key.fetchFailed"));
+        message.error(t("modelConfig.apiKeyFetchFailed"));
         setFetchingKey(false);
         return;
       }
@@ -227,9 +227,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     }
     try {
       await navigator.clipboard.writeText(textToCopy);
-      message.success(t("api.key.copied"));
+      message.success(t("modelConfig.apiKeyCopied"));
     } catch {
-      message.error(t("api.key.copyFailed"));
+      message.error(t("modelConfig.apiKeyCopyFailed"));
     }
   };
 
@@ -290,11 +290,11 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     | { kind: "model"; key: string; m: ModelInfo; checked: boolean };
   const rows: Row[] = [];
   if (filteredCap.length > 0) {
-    rows.push({ kind: "header", key: "h-cap", label: t("enabled"), tone: "cap" });
+    rows.push({ kind: "header", key: "h-cap", label: t("common.enabled"), tone: "cap" });
     for (const m of filteredCap) rows.push({ kind: "model", key: m.id, m, checked: true });
   }
   if (filteredOther.length > 0) {
-    rows.push({ kind: "header", key: "h-other", label: t("available"), tone: "other" });
+    rows.push({ kind: "header", key: "h-other", label: t("common.available"), tone: "other" });
     for (const m of filteredOther) rows.push({ kind: "model", key: m.id, m, checked: false });
   }
 
@@ -304,7 +304,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       title={
         <div className="flex items-center gap-2">
           <ApiOutlined />
-          <span style={{ color: "var(--canvas-text)" }}>{t("api.settings")}</span>
+          <span style={{ color: "var(--canvas-text)" }}>{t("modelConfig.apiSettings")}</span>
         </div>
       }
       open={open}
@@ -343,7 +343,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       `}</style>
       {/* ===== Channel selector ===== */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("channels")}:</span>
+        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.channels")}:</span>
         <Select
           size="small"
           value={channelId}
@@ -351,23 +351,23 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           disabled={showAddChannel}
           style={{ width: 150, height: 32 }}
           options={channels.map((c) => ({ label: c.name, value: c.id }))}
-          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("no.channels")}</span>}
+          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.noChannels")}</span>}
         />
         <div className="flex items-center gap-1 ml-auto">
           <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} className="model-btn">
-            {t("add.channel")}
+            {t("modelConfig.addChannel")}
           </Button>
           {channel && (
             <>
               <div className="w-px h-4 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
               <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
-                {channel.models.length > 0 ? `${t("fetch.models")} (${channel.models.length})` : t("fetch.models")}
+                {channel.models.length > 0 ? `${t("modelConfig.fetchModels")} (${channel.models.length})` : t("modelConfig.fetchModels")}
               </Button>
               <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} className="model-btn">
-                {t("edit")}
+                {t("common.edit")}
               </Button>
               <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteChannelId(channel.id)}>
-                {t("delete")}
+                {t("common.delete")}
               </Button>
             </>
           )}
@@ -380,35 +380,35 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           <div className="flex gap-1">
             <div className="flex flex-col gap-2" style={{ flex: 1 }}>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("name")}</span>
-                <Input size="small" placeholder={t("my.api")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("common.name")}</span>
+                <Input size="small" placeholder={t("modelConfig.myApi")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("base.url")}</span>
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.baseUrl")}</span>
                 <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ width: "100%" }} />
               </div>
             </div>
             <div className="flex flex-col gap-2" style={{ flex: 1 }}>
               <div className="flex gap-1">
                 <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
-                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("protocol")}</span>
+                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocol")}</span>
                   <Select
                     size="small"
                     value={chForm.protocol}
                     onChange={(v) => setChForm((f) => ({ ...f, protocol: v }))}
                     style={{ width: "100%" }}
                     options={[
-                      { label: t("protocol.openai"), value: "openai" },
-                      { label: t("protocol.gemini"), value: "gemini" },
-                      { label: t("protocol.ark"), value: "ark" },
+                      { label: t("modelConfig.protocol.openai"), value: "openai" },
+                      { label: t("modelConfig.protocol.gemini"), value: "gemini" },
+                      { label: t("modelConfig.protocol.ark"), value: "ark" },
                     ]}
                   />
                 </div>
                 <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
-                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("preset")}</span>
+                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.preset")}</span>
                   <Select
                     size="small" style={{ width: "100%" }}
-                    placeholder={t("preset")}
+                    placeholder={t("modelConfig.preset")}
                     options={presets.map((p) => ({ label: p.name, value: p.name }))}
                     onChange={(name) => {
                       const p = presets.find((pr) => pr.name === name);
@@ -425,10 +425,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 </div>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("api.key")}</span>
+                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.apiKey")}</span>
                 <div className="flex gap-1">
                   <Input.Password
-                    placeholder={editChannelId ? t("api.key.keepblank") : "sk-..."}
+                    placeholder={editChannelId ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
                     value={chForm.apiKey}
                     onChange={(e) => {
                       setChForm((f) => ({ ...f, apiKey: e.target.value }));
@@ -460,7 +460,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               onClick={() => setShowAdvanced((v) => !v)}
             >
               <span style={{ display: "inline-block", width: 0, height: 0, borderLeft: "5px solid var(--canvas-text)", borderTop: "4px solid transparent", borderBottom: "4px solid transparent", transition: "transform 0.2s", transform: showAdvanced ? "rotate(90deg)" : "rotate(0deg)" }} />
-              {t("advanced.settings")}
+              {t("modelConfig.advancedSettings")}
             </button>
             {showAdvanced && (
               <div className="flex flex-col gap-1.5 mt-0.5">
@@ -537,9 +537,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
             )}
           </div>
           <div className="flex gap-1 justify-end">
-            <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("cancel")}</Button>
+            <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("common.cancel")}</Button>
             <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
-              {editChannelId ? t("save.changes") : t("add.channel")}
+              {editChannelId ? t("auth.saveChanges") : t("modelConfig.addChannel")}
             </Button>
           </div>
         </div>
@@ -573,12 +573,12 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         {!channel ? (
           <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
             <ApiOutlined className="text-3xl mb-2 block" />
-            {t("no.channels.desc")}
+            {t("modelConfig.noChannelsDesc")}
           </div>
         ) : channel.models.length === 0 ? (
           <div className="text-center py-8" style={{ color: "var(--canvas-text-muted)" }}>
-            <div className="text-sm mb-1">{t("no.models")}</div>
-            <div className="text-xs mb-3">{t("no.models.desc")}</div>
+            <div className="text-sm mb-1">{t("modelConfig.noModels")}</div>
+            <div className="text-xs mb-3">{t("modelConfig.noModelsDesc")}</div>
           </div>
         ) : (
           <>
@@ -587,28 +587,28 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               <Input
                 size="small"
                 allowClear
-                placeholder={t("search.model")}
+                placeholder={t("modelConfig.searchModel")}
                 value={searchModel}
                 onChange={(e) => setSearchModel(e.target.value)}
                 style={{ flex: 1 }}
               />
-              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("select.all") || "全选"}</Button>
-              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("invert") || "反选"}</Button>
-              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("clear.cap") || "清空"}</Button>
+              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll") || "全选"}</Button>
+              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert") || "反选"}</Button>
+              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap") || "清空"}</Button>
             </div>
 
             {/* Add model manually */}
             <div className="flex gap-1.5 mb-3 flex-shrink-0">
               <Input
                 size="small"
-                placeholder={t("add.model.placeholder")}
+                placeholder={t("modelConfig.addModelPlaceholder")}
                 value={newModelName}
                 onChange={(e) => setNewModelName(e.target.value)}
                 onPressEnter={handleAddModel}
                 style={{ flex: 1 }}
               />
               <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
-                {t("add")}
+                {t("common.add")}
               </Button>
             </div>
 
@@ -647,7 +647,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     </Drawer>
       <ConfirmModal
         open={!!deleteChannelId}
-        title={t("delete.channel")}
+        title={t("modelConfig.deleteChannel")}
         content={channels.find(c => c.id === deleteChannelId)?.name || ""}
         onOk={() => { if (deleteChannelId) deleteChannel(deleteChannelId); setChannelId(null); setDeleteChannelId(null); }}
         onCancel={() => setDeleteChannelId(null)}
