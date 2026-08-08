@@ -14,7 +14,7 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import { captureFrame } from "@/features/canvas/api/file-api";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { type UploadResult, uploadWithRetry } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
@@ -72,7 +72,7 @@ interface Props {
 }
 
 export default function AssetCreateDialog({ open, onClose, onCreate, folders }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [category, setCategory] = useState<AssetType>("other");
@@ -455,7 +455,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               style={{ width: "100%" }}
               options={(() => {
                 const opts: { value: string; label: ReactNode }[] = [
-                  { value: "__root__", label: <span>{t("asset.space.personal")}</span> },
+                  { value: "__root__", label: <span>{t("asset.spacePersonal")}</span> },
                 ];
                 const build = (parentId: string | undefined, depth: number) => {
                   const children = (folders || []).filter(
@@ -506,7 +506,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                 opacity: saveDisabled ? 0.35 : 1,
               }}
             >
-              {t("save")}
+              {t("common.save")}
             </Button>
             <Button
               block
@@ -518,7 +518,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                 borderRadius: 8, height: 36,
               }}
             >
-              {t("cancel")}
+              {t("common.cancel")}
             </Button>
           </div>
         </div>

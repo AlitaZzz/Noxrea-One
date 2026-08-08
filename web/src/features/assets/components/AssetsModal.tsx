@@ -20,7 +20,7 @@ import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
 import AssetCreateDialog from "./AssetCreateDialog";
@@ -35,8 +35,8 @@ interface Props {
 }
 
 export default function AssetsModal({ open, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
-  const lang = useI18nStore((s) => s.lang);
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
@@ -352,8 +352,8 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const spaceLabels = useMemo(
     () => [
-      { key: "personal", label: t("asset.space.personal"), icon: <UserOutlined /> },
-      { key: "reusable", label: t("asset.space.reusable"), icon: <DatabaseOutlined /> },
+      { key: "personal", label: t("asset.spacePersonal"), icon: <UserOutlined /> },
+      { key: "reusable", label: t("asset.spaceReusable"), icon: <DatabaseOutlined /> },
     ],
     [t, lang],
   );
@@ -456,7 +456,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
               {activeFolderId === null ? (
                 <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
-                  {t("asset.space.personal")}
+                  {t("asset.spacePersonal")}
                 </span>
               ) : (
                 <button
@@ -464,7 +464,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                   className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                   style={{ color: "var(--canvas-text-dim)" }}
                 >
-                  {t("asset.space.personal")}
+                  {t("asset.spacePersonal")}
                 </button>
               )}
               {breadCrumb.map((f) => {
@@ -543,8 +543,8 @@ export default function AssetsModal({ open, onClose }: Props) {
           className="rename-modal"
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setRenamingId(null)}>{t("cancel")}</ModalButton>
-              <ModalButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("save")}</ModalButton>
+              <ModalButton onClick={() => setRenamingId(null)}>{t("common.cancel")}</ModalButton>
+              <ModalButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</ModalButton>
             </div>
           }
           styles={{
@@ -579,7 +579,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         {/* Delete confirm */}
         <ConfirmModal
           open={!!deleteAsset}
-          title={t("delete.asset")}
+          title={t("asset.delete")}
           content={deleteAsset?.name || ""}
           onOk={() => {
             if (!deleteAsset) return;
@@ -600,8 +600,8 @@ export default function AssetsModal({ open, onClose }: Props) {
         {/* Delete folder confirm */}
         <ConfirmModal
           open={!!deleteFolder}
-          title={t("delete.folder")}
-          content={`${deleteFolder?.name || ""} — ${t("delete.folder.warn")}`}
+          title={t("asset.folder.delete")}
+          content={`${deleteFolder?.name || ""} — ${t("asset.folder.deleteWarn")}`}
           onOk={handleDeleteFolderConfirm}
           onCancel={() => { setDeleteFolder(null); setSelectedIds(new Set()); }}
         />
@@ -616,7 +616,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setBatchMoveOpen(false)}>{t("cancel")}</ModalButton>
+              <ModalButton onClick={() => setBatchMoveOpen(false)}>{t("common.cancel")}</ModalButton>
             </div>
           }
           styles={{
@@ -632,7 +632,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               style={{ color: "var(--canvas-text)" }}
             >
               <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
-              {t("asset.space.personal")}
+              {t("asset.spacePersonal")}
             </button>
             <button
               onClick={() => handleBatchMove(UNCATEGORIZED_FOLDER_ID)}
@@ -674,10 +674,10 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setBatchTypeOpen(false)}>{t("cancel")}</ModalButton>
+              <ModalButton onClick={() => setBatchTypeOpen(false)}>{t("common.cancel")}</ModalButton>
               <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
-                  <ModalButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("save")}</ModalButton>
+                  <ModalButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</ModalButton>
                 </span>
               </Tooltip>
             </div>

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";
@@ -41,7 +41,7 @@ export default function AssetGrid({
   loading, hasMore, loadingMore, onLoadMore,
   loadError, onRetry,
 }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // IntersectionObserver for infinite scroll

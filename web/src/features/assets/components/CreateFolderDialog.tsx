@@ -9,7 +9,7 @@ import { useState } from "react";
 
 import AppModal from "@/components/ui/AppModal";
 import ModalButton from "@/components/ui/ModalButton";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,8 +50,8 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       }}
       footer={
         <div className="flex justify-end gap-2">
-          <ModalButton onClick={() => { setName(""); onClose(); }}>{t("cancel")}</ModalButton>
-          <ModalButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("save")}</ModalButton>
+          <ModalButton onClick={() => { setName(""); onClose(); }}>{t("common.cancel")}</ModalButton>
+          <ModalButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</ModalButton>
         </div>
       }
     >

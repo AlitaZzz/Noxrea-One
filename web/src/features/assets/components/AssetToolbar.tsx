@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   search: string;
@@ -29,7 +29,7 @@ interface Props {
 }
 
 export default function AssetToolbar({ search, onSearchChange, selectedCount, allSelected, onSelectAll, onBatchDelete, onBatchMove, onBatchType, onUpload, onCreateFolder, canCreateFolder = true }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -77,7 +77,7 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
             }}
           >
             <CheckSquareOutlined />
-            {allSelected ? t("deselectAll") : t("selectAll")}
+            {allSelected ? t("common.deselectAll") : t("common.selectAll")}
           </button>
           <button
             onClick={onBatchMove}
@@ -116,7 +116,7 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
             }}
           >
             <DeleteOutlined />
-            {t("delete")} ({selectedCount})
+            {t("common.delete")} ({selectedCount})
           </button>
         </>
       )}
