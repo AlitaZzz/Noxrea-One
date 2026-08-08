@@ -211,6 +211,29 @@ router.get("/api/assets/items/:id", async (c) => {
   return c.json(ok(item));
 });
 
+// PUT /api/assets/items/batch
+// 注意：必须注册在 /api/assets/items/:id 之前，否则会被 :id 参数路由拦截
+router.put("/api/assets/items/batch", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return fail(400, "Invalid JSON body");
+  }
+
+  const parsed = assetBatchUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+  }
+
+  const result = await updateAssetsBatch(parsed.data.ids, parsed.data.updates);
+  return c.json(ok(result));
+});
+
 // PUT /api/assets/items/:id
 router.put("/api/assets/items/:id", async (c) => {
   const request = c.req.raw;
@@ -280,28 +303,6 @@ router.post("/api/assets/items/batch", async (c) => {
 
   const created = await createAssetsBatch(items);
   return c.json(ok(created));
-});
-
-// PUT /api/assets/items/batch
-router.put("/api/assets/items/batch", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
-
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return fail(400, "Invalid JSON body");
-  }
-
-  const parsed = assetBatchUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
-  }
-
-  const result = await updateAssetsBatch(parsed.data.ids, parsed.data.updates);
-  return c.json(ok(result));
 });
 
 export { router };
