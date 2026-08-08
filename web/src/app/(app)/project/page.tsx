@@ -20,7 +20,7 @@ import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import type { CanvasProject } from "@/features/project/types";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/features/project/store";
 
 export default function ProjectPage() {
@@ -34,8 +34,7 @@ export default function ProjectPage() {
   const user = useAuthStore((s) => s.user);
   const theme = useCanvasStore((s) => s.theme);
   const toggleTheme = useCanvasStore((s) => s.toggleTheme);
-  const i18n = useI18nStore((s) => s);
-  const t = useI18nStore((s) => s.t);
+  const { t, i18n } = useTranslation();
   const projects = useProjectStore((s) => s.projects);
   const createProject = useProjectStore((s) => s.createProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
@@ -72,7 +71,7 @@ export default function ProjectPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold m-0">{t("all.projects")}</h1>
+          <h1 className="text-lg font-semibold m-0">{t("project.all")}</h1>
           <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{projects.length}</span>
         </div>
 
@@ -90,13 +89,13 @@ export default function ProjectPage() {
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
                 onClick={() => { setAvatarOpen(false); setSettingsOpen(true); }}>
-                {t("account.settings")}
+                {t("auth.accountSettings")}
               </button>
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
-                onClick={() => { i18n.toggle(); useAuthStore.getState().savePreference("language", i18n.lang === "zh" ? "en" : "zh"); setAvatarOpen(false); }}>
-<span>{i18n.lang === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, opacity: 0.6 }}>{i18n.lang === "zh" ? "中" : "EN"}</span>
+                onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; i18n.changeLanguage(newLang); useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
+<span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
               </button>
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
@@ -111,7 +110,7 @@ export default function ProjectPage() {
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
                 style={{ color: "var(--canvas-text-dim)", border: "none", cursor: "pointer", background: "transparent" }}
                 onClick={() => { useAuthStore.getState().logout(); router.push("/login"); }}>
-                {t("logout")}
+                {t("auth.logout")}
               </button>
             </div>
           }
@@ -147,7 +146,7 @@ export default function ProjectPage() {
             onClick={handleCreate}
           >
             <PlusOutlined className="text-3xl mb-2" style={{ color: "var(--canvas-text-dim)" }} />
-            <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("new.project")}</span>
+            <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("project.new")}</span>
           </div>
 
           {projects.map((p) => (
@@ -211,7 +210,7 @@ export default function ProjectPage() {
                   {formatDate(p.updatedAt)}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>
-                  {p.nodes?.length || 0}{t("nodes.count")}
+                  {p.nodes?.length || 0}{t("canvas.nodesCount")}
                 </div>
               </div>
             </div>
@@ -221,10 +220,10 @@ export default function ProjectPage() {
 
       <ConfirmModal
         open={!!deleteTarget}
-        title={t("delete.project")}
-        content={`${t("project.delete.confirm")} "${deleteTarget?.name}"?`}
-        okText={t("delete")}
-        cancelText={t("cancel")}
+        title={t("project.delete")}
+        content={`${t("project.deleteConfirm")} "${deleteTarget?.name}"?`}
+        okText={t("common.delete")}
+        cancelText={t("common.cancel")}
         onOk={() => { if (deleteTarget) deleteProject(deleteTarget.id); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}
       />

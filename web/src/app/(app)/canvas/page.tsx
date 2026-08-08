@@ -15,7 +15,7 @@ import { LayerModal } from "@/components/ui/modal/LayerModal";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/features/project/store";
 
 const DirectorOverlay = dynamic(
@@ -29,7 +29,7 @@ function CanvasWithKeyboard() {
 }
 
 export default function HomePage() {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const activeProject = useProjectStore((s) => s.activeProject);
   const shortcutsVisible = useCanvasStore((s) => s.shortcutsVisible);
   const setShortcutsVisible = useCanvasStore((s) => s.setShortcutsVisible);
@@ -81,7 +81,7 @@ export default function HomePage() {
 
       {/* Shortcuts help modal */}
       <LayerModal
-        title={<span style={{ color: "var(--canvas-text)" }}>{t("shortcuts")}</span>}
+        title={<span style={{ color: "var(--canvas-text)" }}>{t("shortcuts.title")}</span>}
         open={shortcutsVisible}
         onCancel={() => setShortcutsVisible(false)}
         footer={null}
