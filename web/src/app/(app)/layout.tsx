@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import i18n from "@/lib/i18n/config";
 import { useProjectStore } from "@/features/project/store";
 
 /**
@@ -41,7 +41,7 @@ export default function AppLayout({
 
       // 同步用户偏好（主题 / 语言）到全局 store
       useCanvasStore.getState().setTheme(user.theme === "light" ? "light" : "dark");
-      useI18nStore.getState().setLang((user.language || "zh") as "zh" | "en");
+      i18n.changeLanguage(user.language || "zh");
 
       await useProjectStore.getState().initialize();
       if (!cancelled) {
