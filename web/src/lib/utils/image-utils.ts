@@ -139,10 +139,11 @@ export function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w:
  * 上传图片 Blob -> 返回 URL。
  * 纯上传，无节点操作，可安全地在循环中调用。
  */
-export async function uploadBlob(blob: Blob, filename?: string): Promise<string | null> {
+export async function uploadBlob(blob: Blob, filename?: string, source?: "upload" | "derived"): Promise<string | null> {
   const fd = new FormData();
   fd.append("file", blob, filename || `region_${Date.now()}.png`);
-  const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", fd);
+  const qs = source ? `&source=${source}` : "";
+  const res = await apiUpload<{ url: string }>(`/api/files/upload?category=images${qs}`, fd);
   if (res.code !== 200 || !res.data?.url) return null;
   return res.data.url;
 }
@@ -224,8 +225,9 @@ export async function uploadAndAddNode(
   storeApi: CanvasStoreApi,
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
+  source?: "upload" | "derived",
 ): Promise<AnyNode | null> {
-  const url = await uploadBlob(blob);
+  const url = await uploadBlob(blob, undefined, source);
   if (!url) return null;
 
   const nw = (extraNodeData?.naturalWidth as number) || 0;

@@ -61,13 +61,14 @@ router.post("/api/files/upload", async (c) => {
     await localStorage.save(storageKey, buffer);
 
     // 持久化
+    const source = (c.req.query("source") as "upload" | "derived") || "upload";
     await persistFileObject({
       userId: auth.user.id,
       hash,
       size: buffer.length,
       mimeType: mime,
       ext: finalExt,
-      source: "upload",
+      source,
     });
 
     return c.json(
