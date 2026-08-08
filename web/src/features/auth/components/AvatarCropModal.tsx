@@ -11,7 +11,7 @@ import { useCallback, useEffect,useRef, useState } from "react";
 import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { apiUpload } from "@/lib/api/client";
 import { canvasToBlob } from "@/lib/utils/image-utils";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;
@@ -24,7 +24,7 @@ const SIZE = 220; // crop area display size
 const OUTPUT = 200; // output resolution
 
 export default function AvatarCropModal({ open, file, onDone, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -123,7 +123,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
 
   return (
     <LayerModal
-      title={<span style={{ color: "var(--canvas-text)" }}>{t("crop.avatar")}</span>}
+      title={<span style={{ color: "var(--canvas-text)" }}>{t("auth.cropAvatar")}</span>}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -145,13 +145,13 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
           <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ width: SIZE, height: SIZE }} />
         </div>
         <div className="flex items-center gap-2 w-full">
-          <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{useI18nStore.getState().lang === "zh" ? "缩放" : "Zoom"}</span>
+          <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("common.zoom")}</span>
           <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
             className="flex-1" style={{ accentColor: "#1677ff" }} />
         </div>
         <div className="flex gap-2 w-full">
-          <Button onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("cancel")}</Button>
-          <Button type="primary" onClick={handleSave} loading={saving} block>{t("save")}</Button>
+          <Button onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("common.cancel")}</Button>
+          <Button type="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</Button>
         </div>
       </div>
     </LayerModal>

@@ -6,7 +6,7 @@
 
 import AppModal from "@/components/ui/AppModal";
 import ModalButton from "@/components/ui/ModalButton";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;
@@ -19,7 +19,8 @@ interface Props {
 }
 
 export default function ConfirmModal({ open, title, content, okText, cancelText, onOk, onCancel }: Props) {
-  const lang = useI18nStore((s) => s.lang);
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
 
   return (
     <AppModal

@@ -14,7 +14,7 @@ import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { api } from "@/lib/api/client";
 import { useAuthStore, type UserInfo } from "@/features/auth/store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import AvatarCropModal from "./AvatarCropModal";
 
@@ -24,7 +24,7 @@ interface Props {
 }
 
 export default function SettingsModal({ open, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const user = useAuthStore((s) => s.user);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -61,16 +61,16 @@ export default function SettingsModal({ open, onClose }: Props) {
       if (nick.trim() && nick.trim() !== user?.username) body.username = nick.trim();
       if (avatarUrl.trim() && avatarUrl !== user?.avatarUrl) body.avatarUrl = avatarUrl.trim();
       if (newPw.trim()) {
-        if (!oldPw) { message.error(t("old.pw.required")); setSaving(false); return; }
+        if (!oldPw) { message.error(t("auth.oldPwRequired")); setSaving(false); return; }
         body.password = newPw;
         body.oldPassword = oldPw;
       }
-      if (Object.keys(body).length === 0) { message.info(t("nothing.to.save")); setSaving(false); return; }
+      if (Object.keys(body).length === 0) { message.info(t("save.nothingToSave")); setSaving(false); return; }
       const res = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
       if (res.code === 200 && res.data) {
         useAuthStore.setState({ user: res.data }); // immediate update, no refetch needed
       }
-      message.success(t("saved"));
+      message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("save.failed")); }
     setSaving(false);
@@ -78,7 +78,7 @@ export default function SettingsModal({ open, onClose }: Props) {
 
   return (
     <AppModal
-      title={t("account.settings")}
+      title={t("auth.accountSettings")}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -105,32 +105,32 @@ export default function SettingsModal({ open, onClose }: Props) {
               <CameraOutlined style={{ fontSize: 18 }} />
             </div>
           </div>
-          <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("click.upload")}</span>
+          <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("auth.clickUpload")}</span>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCropFile(f); setCropOpen(true); } }} />
         </div>
 
         {/* Nickname */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("nickname")}</div>
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.nickname")}</div>
           <Input prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={nick} onChange={(e) => setNick(e.target.value)} style={is} />
         </div>
 
         {/* Old Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{useI18nStore.getState().lang === "zh" ? "当前密码" : "Current Password"}</div>
-          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={useI18nStore.getState().lang === "zh" ? "修改密码需输入当前密码" : "Required to change password"} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.currentPassword")}</div>
+          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
             iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
         {/* New Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{useI18nStore.getState().lang === "zh" ? "新密码（留空保持不变）" : "New Password (leave blank to keep)"}</div>
-          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={useI18nStore.getState().lang === "zh" ? "留空保持不变" : "Leave blank"} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.newPassword")}</div>
+          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("modelConfig.apiKeyKeepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
             iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
         <Button type="primary" size="large" onClick={handleSave} loading={saving} block>
-          {t("save.changes")}
+          {t("auth.saveChanges")}
         </Button>
       </div>
       <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
