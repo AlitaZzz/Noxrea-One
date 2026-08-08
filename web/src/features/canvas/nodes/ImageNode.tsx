@@ -90,7 +90,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const [expanded, setExpanded] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
-  // 点击节点外部时收起展开视图（捕获阶段，绕过 ReactFlow 事件拦截）
+  // 点击节点外部时收起展开视图
   useEffect(() => {
     if (!expanded) return;
     const handler = (e: MouseEvent) => {
@@ -123,17 +123,26 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
       // 撤销时整个 node.data 被快照替换，版本号自动失效。
       const uploadVersion = Date.now();
+      const previewUrl = URL.createObjectURL(file);
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
         // 立即进入 uploading 状态，让节点进度条出现（与拖到画布路径一致）
         store.updateNodeData(
           id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion } },
+          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl } },
           undefined,
           { skipHistory: true }
         );
       }
+
+      // 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
+      loadMediaDimensions(previewUrl, false).then((dims) => {
+        const nw = dims.w || 600;
+        const nh = dims.h || 338;
+        const { width, height } = computeNodeSize(nw, nh);
+        useCanvasStore.getState().updateNodeData(id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
+      });
 
       try {
         const formData = new FormData();
@@ -142,10 +151,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           "/api/files/upload?category=images",
           formData,
           (pct) => {
-            // 上传进度回传，更新进度条
+            // 上传进度回传，更新进度条（保留 previewUrl）
             useCanvasStore.getState().updateNodeData(
               id,
-              { upload: { uploading: true, progress: pct, version: uploadVersion } },
+              { upload: { uploading: true, progress: pct, version: uploadVersion, previewUrl } },
               undefined,
               { skipHistory: true }
             );
@@ -163,6 +172,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
             const nw = img.naturalWidth, nh = img.naturalHeight;
             const { width, height } = computeNodeSize(nw, nh);
+            URL.revokeObjectURL(previewUrl);
             const latestData = currentNode.data as ImageNodeData;
             // 上传完成：清空 upload（进度条消失），写回图片主信息；
             // 同时清掉可能残留的 multiResultUrls，避免旧多图层叠在新主图后。
@@ -185,6 +195,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
             s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
           }
+          URL.revokeObjectURL(previewUrl);
         }
       } catch (e) {
         console.error("Image upload failed:", e);
@@ -194,6 +205,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
           s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
         }
+        URL.revokeObjectURL(previewUrl);
       }
     },
     [id]
@@ -451,17 +463,22 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           </div>
         )}
         {data.upload?.uploading ? (
-          <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3 px-8" style={{ background: "var(--canvas-bg)" }}>
-            {data.upload?.progress != null ? (
-              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
-              </div>
-            ) : (
-              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
-              </div>
+          <div className="absolute inset-0 rounded-lg overflow-hidden">
+            {data.upload?.previewUrl && (
+              <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
-            <span className="text-sm text-white/50">{t("common.uploading")}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
+              {data.upload?.progress != null ? (
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                </div>
+              ) : (
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+                </div>
+              )}
+              <span className="text-sm text-white/60">{t("common.uploading")}</span>
+            </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
