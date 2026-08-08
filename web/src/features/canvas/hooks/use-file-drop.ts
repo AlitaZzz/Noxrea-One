@@ -87,7 +87,7 @@ export function useFileDrop(
       addNodes(placeholderNodes);
 
       // 2) 异步上传，逐个替换占位节点
-      const failedIds: string[] = [];
+      const failed: { id: string; reason?: string }[] = [];
       await Promise.allSettled(
         placeholders.map(async ({ node, file }) => {
           try {
@@ -99,7 +99,11 @@ export function useFileDrop(
             const res = await apiUploadWithProgress<{ url: string }>(`/api/files/upload?category=${category}`, formData, (pct) => {
               updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0 } }, undefined, { skipHistory: true });
             });
-            if (res.code !== 200 || !res.data?.url) { failedIds.push(node.id); return; }
+            if (res.code !== 200 || !res.data?.url) {
+              // fail() 返回 { detail }, ok() 返回 { code, data, msg }
+              failed.push({ id: node.id, reason: (res as any).detail ?? (res as any).msg });
+              return;
+            }
 
             if (isAudio) {
               // 音频无固定宽高，使用固定节点尺寸；duration 由节点 onLoadedMetadata 回填
@@ -124,23 +128,36 @@ export function useFileDrop(
               upload: undefined,
               source: "upload",
             }, { width, height }, { skipHistory: true });
-          } catch {
-            failedIds.push(node.id);
+          } catch (err: any) {
+            failed.push({ id: node.id, reason: err?.message });
           }
         }),
       );
 
       // 3) 删除上传失败的占位节点
-      if (failedIds.length > 0) {
-        removeNodes(failedIds, { skipHistory: true });
+      if (failed.length > 0) {
+        removeNodes(failed.map((f) => f.id), { skipHistory: true });
       }
-      const successCount = placeholderNodes.length - failedIds.length;
+      const successCount = placeholderNodes.length - failed.length;
       if (successCount === 0 && notif) {
         const t = useI18nStore.getState().t;
-        notif.error({ title: t("file.upload.failed"), description: t("file.upload.failed.all"), placement: "bottomRight", duration: 4 });
-      } else if (failedIds.length > 0 && notif) {
+        // 全部失败时，优先显示服务端返回的具体原因
+        const reason = failed.find((f) => f.reason)?.reason;
+        notif.error({
+          title: t("file.upload.failed"),
+          description: reason ?? t("file.upload.failed.all"),
+          placement: "bottomRight",
+          duration: 4,
+        });
+      } else if (failed.length > 0 && notif) {
         const t = useI18nStore.getState().t;
-        notif.error({ title: t("file.upload.failed"), description: `${failedIds.length}/${files.length}`, placement: "bottomRight", duration: 4 });
+        const reason = failed.find((f) => f.reason)?.reason;
+        notif.error({
+          title: t("file.upload.failed"),
+          description: reason ? `${failed.length}/${files.length} - ${reason}` : `${failed.length}/${files.length}`,
+          placement: "bottomRight",
+          duration: 4,
+        });
       }
     },
     [addNodes, removeNodes, updateNodeData, screenToFlowPosition, shouldIgnore],
