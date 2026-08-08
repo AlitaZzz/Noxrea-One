@@ -49,9 +49,12 @@ router.post("/api/files/upload", async (c) => {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const hash = await computeBufferHash(buffer);
-    const { mime, ext } = sniffMime(buffer.slice(0, 16));
+    const sniffed = sniffMime(buffer.subarray(0, 16));
 
-    const finalExt = normalizeExt(ext);
+    // 优先使用浏览器提供的 MIME（已通过白名单校验），sniffMime 仅作为 fallback
+    // 避免 m4a 被嗅探为 video/mp4 等同签名格式的误判
+    const mime = file.type || sniffed.mime;
+    const finalExt = normalizeExt(file.type ? (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? sniffed.ext) : sniffed.ext);
     const storageKey = buildStorageKey(auth.user.id, hash, finalExt);
 
     // 写入本地

@@ -81,7 +81,7 @@ class AudioCapabilityService implements CapabilityService {
       const blob = await response.blob();
       const buffer = Buffer.from(await blob.arrayBuffer());
       const hash = await computeBufferHash(buffer);
-      const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
+      const { mime, ext: sniffedExt } = sniffMime(buffer.subarray(0, 16));
       const fileExt = normalizeExt(sniffedExt) || ".mp3";
       const storageKey = buildStorageKey(ctx.userId, hash, fileExt);
       const targetPath = path.resolve(localStorage.baseDir, storageKey);

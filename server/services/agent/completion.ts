@@ -225,8 +225,8 @@ export async function runCompletionStream(args: {
 
       let nl: number;
       while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
+        const line = buffer.subarray(0, nl).trim();
+        buffer = buffer.subarray(nl + 1);
         if (!line.startsWith("data:")) continue;
         const data = line.slice(5).trim();
         if (data === "[DONE]") continue;

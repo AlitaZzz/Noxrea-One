@@ -147,7 +147,7 @@ export async function downloadAndSave(
 
     // SHA256 + magic bytes 校验
     const fileHash = await computeBufferHash(buffer);
-    const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
+    const { mime, ext: sniffedExt } = sniffMime(buffer.subarray(0, 16));
     const fileExt = normalizeExt(sniffedExt);
 
     // 构建存储路径：{userId}/{hash[:2]}/{hash}{ext}
