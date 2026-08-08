@@ -7,7 +7,13 @@
  * 本文件属于 agent 模块，与 capabilities/llm（前端 text 节点纯文本能力）完全解耦。
  */
 
+import { z } from "zod";
 import { agentToolRegistry, type AgentToolDefinition } from "./registry";
+
+/** generate_image / generate_video 共用参数 schema */
+const promptToolSchema = z.object({
+  prompt: z.string().min(1),
+});
 
 const IMAGE_TOOL: AgentToolDefinition = {
   name: "generate_image",
@@ -23,6 +29,7 @@ const IMAGE_TOOL: AgentToolDefinition = {
   required: ["prompt"],
   execute: "client",
   label: "生成图片",
+  zodSchema: promptToolSchema,
 };
 
 const VIDEO_TOOL: AgentToolDefinition = {
@@ -39,6 +46,7 @@ const VIDEO_TOOL: AgentToolDefinition = {
   required: ["prompt"],
   execute: "client",
   label: "生成视频",
+  zodSchema: promptToolSchema,
 };
 
 agentToolRegistry.register(IMAGE_TOOL);
@@ -55,6 +63,7 @@ const COMPLETE_SKILL_TOOL: AgentToolDefinition = {
   required: [],
   execute: "server",
   label: "完成技能",
+  zodSchema: z.object({}).strict(),
 };
 
 agentToolRegistry.register(COMPLETE_SKILL_TOOL);

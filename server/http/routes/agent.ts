@@ -385,10 +385,18 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
       // 有工具调用：透传给前端执行
       if (toolCalls.length > 0) {
         logEvent("agent.stream", { stage: "tool_calls", sessionId, tools: toolCalls.map((t) => t.name).join(",") });
-        const enriched = toolCalls.map((call) => ({
-          ...call,
-          label: agentToolRegistry.get(call.name)?.label ?? call.name,
-        }));
+        const enriched = toolCalls.map((call) => {
+          const def = agentToolRegistry.get(call.name);
+          const validated = agentToolRegistry.validateArgs(call.name, call.args);
+          if (!validated.ok) {
+            logEvent("agent.tool_validation_failed", { tool: call.name, error: validated.error, args: call.args });
+          }
+          return {
+            ...call,
+            args: validated.ok ? validated.data : call.args,
+            label: def?.label ?? call.name,
+          };
+        });
         for (const call of enriched) {
           send("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
         }
@@ -549,10 +557,18 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       // 有工具调用：透传给前端
       if (toolCalls.length > 0) {
         logEvent("agent.stream", { stage: "tool_calls_continue", sessionId, tools: toolCalls.map((t) => t.name).join(",") });
-        const enriched = toolCalls.map((call) => ({
-          ...call,
-          label: agentToolRegistry.get(call.name)?.label ?? call.name,
-        }));
+        const enriched = toolCalls.map((call) => {
+          const def = agentToolRegistry.get(call.name);
+          const validated = agentToolRegistry.validateArgs(call.name, call.args);
+          if (!validated.ok) {
+            logEvent("agent.tool_validation_failed", { tool: call.name, error: validated.error, args: call.args });
+          }
+          return {
+            ...call,
+            args: validated.ok ? validated.data : call.args,
+            label: def?.label ?? call.name,
+          };
+        });
         for (const call of enriched) {
           send("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
         }
