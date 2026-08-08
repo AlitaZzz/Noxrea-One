@@ -15,7 +15,7 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetItem } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   asset: AssetItem;
@@ -27,7 +27,7 @@ interface Props {
 }
 
 export default function AssetCard({ asset, selected, onToggleSelect, onInsertCanvas, onRename, onDelete }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -217,10 +217,10 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
             }}
           >
             <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-            <MenuItem onClick={handleDownload}><DownloadOutlined /> {t("download")}</MenuItem>
+            <MenuItem onClick={handleDownload}><DownloadOutlined /> {t("common.download")}</MenuItem>
             <MenuItem onClick={handleRename}><EditOutlined /> {t("asset.rename")}</MenuItem>
             <MenuDivider />
-            <MenuItem dimmed onClick={handleDelete}><DeleteOutlined /> {t("delete")}</MenuItem>
+            <MenuItem dimmed onClick={handleDelete}><DeleteOutlined /> {t("common.delete")}</MenuItem>
           </div>,
           layerOverlay || document.body
         )}

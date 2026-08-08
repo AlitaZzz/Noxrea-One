@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 
 import NavButton from "@/components/ui/NavButton";
 import type { AssetFolder } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface SpaceItem {
   key: string;
@@ -78,7 +78,7 @@ function FolderTree({
 }
 
 export default function AssetNav({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const spaceFolders = folders.filter((f) => f.spaceKey === activeSpace && !f.parentId);
 
   return (

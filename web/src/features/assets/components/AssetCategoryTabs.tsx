@@ -8,7 +8,7 @@ import { Segmented } from "antd";
 
 import { ASSET_CATEGORIES } from "@/lib/constants";
 import type { AssetType } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   active: AssetType | "all";
@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default function AssetCategoryTabs({ active, onChange }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
 
   return (
     <div className="mb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>

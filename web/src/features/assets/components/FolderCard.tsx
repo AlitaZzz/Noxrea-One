@@ -7,7 +7,7 @@
 import { DeleteOutlined, FolderOutlined } from "@ant-design/icons";
 
 import type { AssetFolder } from "@/features/assets/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   folder: AssetFolder;
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function FolderCard({ folder, count, onClick, onDelete }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -33,7 +33,7 @@ export default function FolderCard({ folder, count, onClick, onDelete }: Props) 
       {onDelete && (
         <button
           onClick={handleDelete}
-          title={t("delete.folder")}
+          title={t("asset.folder.delete")}
           className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded text-white/40 hover:text-white hover:bg-white/10"
         >
           <DeleteOutlined />
