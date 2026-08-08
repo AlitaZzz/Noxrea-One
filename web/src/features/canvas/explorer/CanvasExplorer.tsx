@@ -36,7 +36,7 @@ import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types"
 import type { AnyNode } from "@/features/canvas/types";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
@@ -56,8 +56,7 @@ interface CanvasExplorerProps {
 }
 
 export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
-  const t = useI18nStore((s) => s.t);
-  const lang = useI18nStore((s) => s.lang);
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<string>("elements");
   const isDark = useCanvasStore((s) => s.theme) === "dark";
 
@@ -89,7 +88,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
           onClick={onClose}
           className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-white/10 cursor-pointer"
           style={{ color: "var(--canvas-text-dim)" }}
-          title={t("close")}
+          title={t("common.close")}
         >
           <CloseOutlined />
         </button>
@@ -167,7 +166,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
 
 // ── 元素视图 ──
 function CanvasElementsView() {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
 
   const selectedNodeIds = useMemo(
@@ -223,7 +222,7 @@ function CanvasElementsView() {
         style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
       >
         <AppstoreOutlined />
-        <span>{nodes.length} {t("nodes.count")}</span>
+        <span>{nodes.length} {t("canvas.nodesCount")}</span>
       </div>
     </div>
   );
@@ -233,7 +232,7 @@ type ElementItemProps = { node: Node; selected: boolean };
 
 function ElementItemImpl(props: ElementItemProps) {
   const { node, selected } = props;
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { setCenter } = useReactFlow();
   const nodeType = node.type || "";
   const typeLabel = nodeType && NODE_TYPE_I18N[nodeType] ? t(NODE_TYPE_I18N[nodeType]) : "";
@@ -297,8 +296,8 @@ const ElementItem = memo(ElementItemImpl);
 
 // ── 资产视图 ──
 function AssetsView() {
-  const t = useI18nStore((s) => s.t);
-  const lang = useI18nStore((s) => s.lang);
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
@@ -493,7 +492,7 @@ function AssetsView() {
               {typeFilter.length > 0 && <MenuDivider />}
               {typeFilter.length > 0 && (
                 <div className="filter-row" onClick={() => setTypeFilter([])} style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>
-                  {t("asset.filter.clear")}
+                  {t("asset.filterClear")}
                 </div>
               )}
             </div>
@@ -519,7 +518,7 @@ function AssetsView() {
         {/* 根：个人资产库（根视图为当前项，进入文件夹后可点击返回，位置保持一致不加箭头） */}
         {activeFolderId === null ? (
           <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
-            {t("asset.space.personal")}
+            {t("asset.spacePersonal")}
           </span>
         ) : (
           <button
@@ -527,7 +526,7 @@ function AssetsView() {
             className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
             style={{ color: "var(--canvas-text-dim)" }}
           >
-            {t("asset.space.personal")}
+            {t("asset.spacePersonal")}
           </button>
         )}
         {breadcrumb.map((crumb) => {
@@ -599,7 +598,7 @@ function AssetsView() {
         {activeFolderId === null && typeFilter.length === 0 ? (
           <>
             <FolderOpenOutlined />
-            <span>{gridFolders.length} {t("folders.label")}</span>
+            <span>{gridFolders.length} {t("asset.foldersLabel")}</span>
           </>
         ) : (
           <>
@@ -614,7 +613,7 @@ function AssetsView() {
 
 // ── 资产缩略图卡片 ──
 function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () => void }) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
   const coverUrl = asset.metadata?.coverUrl as string | undefined;
@@ -676,7 +675,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
       <div
         tabIndex={0}
         role="button"
-        aria-label={t("asset.insert") + " " + asset.name}
+        aria-label={t("asset.send") + " " + asset.name}
         onKeyDown={handleKeyDown}
         onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
         onMouseLeave={handleCardLeave}

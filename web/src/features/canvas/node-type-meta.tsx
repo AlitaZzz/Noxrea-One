@@ -13,12 +13,12 @@ import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
 
 /** 节点类型 -> i18n key 映射 */
 export const NODE_TYPE_I18N: Record<string, string> = {
-  [NODE_TYPE.DIRECTOR]: "director.node",
-  [NODE_TYPE.IMAGE]: "image.node",
-  [NODE_TYPE.VIDEO]: "video.node",
-  [NODE_TYPE.TEXT]: "text.node",
-  [NODE_TYPE.GROUP]: "group.node",
-  [NODE_TYPE.AUDIO]: "audio.node",
+  [NODE_TYPE.DIRECTOR]: "node.director",
+  [NODE_TYPE.IMAGE]: "node.image",
+  [NODE_TYPE.VIDEO]: "node.video",
+  [NODE_TYPE.TEXT]: "node.text",
+  [NODE_TYPE.GROUP]: "node.group",
+  [NODE_TYPE.AUDIO]: "node.audio",
 };
 
 /** 节点类型在侧边栏中的显示顺序 */

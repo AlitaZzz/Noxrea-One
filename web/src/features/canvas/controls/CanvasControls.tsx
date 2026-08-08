@@ -29,11 +29,12 @@ import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import type { BackgroundType } from "@/features/canvas/types";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 function LanguageToggle() {
-  const lang = useI18nStore((s) => s.lang);
-  const toggle = useI18nStore((s) => s.toggle);
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
+  const toggle = () => i18n.changeLanguage(lang === "zh" ? "en" : "zh");
   return (
     <Tooltip title={lang === "zh" ? "Switch to English" : "切换到中文"}>
       <Button
@@ -58,7 +59,7 @@ interface Props {
 
 export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, canvasExplorerOpen }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
 
   const viewport = useViewport();
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
@@ -108,12 +109,12 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           onPressEnter={() => handleZoomInput(inputZoom)} />
       </div>
       <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-      <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("zoom.in")}</MenuItem>
-      <MenuItem onClick={() => { zoomOut(); setZoomOpen(false); }}><ZoomOutOutlined /> {t("zoom.out")}</MenuItem>
-      <MenuItem onClick={() => { fitView({ duration: 300 }); setZoomOpen(false); }}><ExpandOutlined /> {t("fit")}</MenuItem>
+      <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("canvas.zoom.in")}</MenuItem>
+      <MenuItem onClick={() => { zoomOut(); setZoomOpen(false); }}><ZoomOutOutlined /> {t("canvas.zoom.out")}</MenuItem>
+      <MenuItem onClick={() => { fitView({ duration: 300 }); setZoomOpen(false); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
       <MenuDivider />
-      <MenuItem onClick={() => handleZoomTo(50)}>{t("zoom.to.50")}</MenuItem>
-      <MenuItem onClick={() => handleZoomTo(100)}>{t("zoom.to.100")}</MenuItem>
+      <MenuItem onClick={() => handleZoomTo(50)}>{t("canvas.zoom.to50")}</MenuItem>
+      <MenuItem onClick={() => handleZoomTo(100)}>{t("canvas.zoom.to100")}</MenuItem>
     </div>
   );
 
@@ -158,7 +159,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         </Tooltip>
 
         {/* Minimap toggle */}
-        <Tooltip title={minimapVisible ? t("minimap.hide") : t("minimap.show")}>
+        <Tooltip title={minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}>
           <Button
             size="small"
             type="text"
@@ -169,7 +170,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         </Tooltip>
 
         {/* Snap to grid toggle */}
-        <Tooltip title={snapToGrid ? t("snap.on") : t("snap.off")}>
+        <Tooltip title={snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}>
           <Button
             size="small"
             type="text"
@@ -182,13 +183,13 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       {/* Background picker */}
       <MenuPopover open={bgOpen} onOpenChange={setBgOpen}
         trigger={
-          <Tooltip title={t("background")}>
+          <Tooltip title={t("common.background")}>
             <Button size="small" type="text" className="canvas-ctrl-btn" icon={<BgColorsOutlined />} />
           </Tooltip>
         }
         placement="top"
         content={(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
-          <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(bg)}</MenuItem>
+          <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(`canvas.background.${bg}`)}</MenuItem>
         ))}
       />
       {/* Theme toggle */}
@@ -206,12 +207,12 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       <LanguageToggle />
 
       {/* API Settings */}
-      <Tooltip title={t("api.settings")}>
+      <Tooltip title={t("modelConfig.apiSettings")}>
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ApiOutlined />} onClick={onOpenSettings} />
       </Tooltip>
 
       {/* My Assets */}
-      <Tooltip title={t("assets")}>
+      <Tooltip title={t("common.assets")}>
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AssetsIcon />} onClick={onOpenAssets} />
       </Tooltip>
 

@@ -11,7 +11,7 @@ import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   onAddText: () => void;
@@ -23,7 +23,7 @@ interface Props {
 }
 
 export default function CanvasContextMenu(props: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { x, y, visible, hide } = useContextMenuStore();
 
   if (!visible) return null;
@@ -42,15 +42,15 @@ export default function CanvasContextMenu(props: Props) {
           minWidth: 175,
         }}
       >
-        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("add.node")}</div>
-        <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("text.node")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("image.node")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("audio.node")}</MenuItem>
+        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.add")}</div>
+        <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("node.text")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("node.image")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("node.audio")}</MenuItem>
         <MenuDivider />
-        <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("director.node")}</MenuItem>
+        <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("node.director")}</MenuItem>
         <MenuDivider />
-        <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("fit")}</MenuItem>
+        <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
       </div>
     </>
   );
