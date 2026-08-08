@@ -130,24 +130,23 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       // 撤销/清除时整个 node.data 被替换，版本号自动失效，从而丢弃过期回调。
       const uploadVersion = Date.now();
       const previewUrl = URL.createObjectURL(file);
+
+      // 先从本地 blob URL 获取尺寸，再进入 uploading 状态（一次性设置正确大小）
+      const dims = await loadMediaDimensions(previewUrl, true);
+      const nw = dims.w || 1280;
+      const nh = dims.h || 720;
+      const { width, height } = computeNodeSize(nw, nh);
+
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
         store.updateNodeData(
           id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl } },
-          undefined,
+          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl }, naturalWidth: nw, naturalHeight: nh, source: "upload" },
+          { width, height },
           { skipHistory: true }
         );
       }
-
-      // 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
-      loadMediaDimensions(previewUrl, true).then((dims) => {
-        const nw = dims.w || 1280;
-        const nh = dims.h || 720;
-        const { width, height } = computeNodeSize(nw, nh);
-        useCanvasStore.getState().updateNodeData(id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
-      });
 
       try {
         const formData = new FormData();

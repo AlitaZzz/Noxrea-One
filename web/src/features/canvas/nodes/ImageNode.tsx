@@ -124,25 +124,23 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 撤销时整个 node.data 被快照替换，版本号自动失效。
       const uploadVersion = Date.now();
       const previewUrl = URL.createObjectURL(file);
+
+      // 先从本地 blob URL 获取尺寸，再进入 uploading 状态（一次性设置正确大小）
+      const dims = await loadMediaDimensions(previewUrl, false);
+      const nw = dims.w || 600;
+      const nh = dims.h || 338;
+      const { width, height } = computeNodeSize(nw, nh);
+
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
-        // 立即进入 uploading 状态，让节点进度条出现（与拖到画布路径一致）
         store.updateNodeData(
           id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl } },
-          undefined,
+          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl }, naturalWidth: nw, naturalHeight: nh, source: "upload" },
+          { width, height },
           { skipHistory: true }
         );
       }
-
-      // 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
-      loadMediaDimensions(previewUrl, false).then((dims) => {
-        const nw = dims.w || 600;
-        const nh = dims.h || 338;
-        const { width, height } = computeNodeSize(nw, nh);
-        useCanvasStore.getState().updateNodeData(id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
-      });
 
       try {
         const formData = new FormData();

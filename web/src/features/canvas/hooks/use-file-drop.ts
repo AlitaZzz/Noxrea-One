@@ -52,31 +52,43 @@ export function useFileDrop(
 
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
-      // 1) 立刻创建占位节点（默认尺寸），先给用户"有反应"的反馈
+      // 1) 先从本地 blob URL 预加载图片/视频尺寸，再按正确尺寸创建节点
       const placeholders: { node: AudioNode | ImageNode | VideoNode; file: File; idx: number }[] = [];
+      let mediaIdx = 0;
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
-        const col = idx % GRID_COLS;
-        const row = Math.floor(idx / GRID_COLS);
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        const isAudio = file.type.startsWith("audio/");
+        if (!isImage && !isVideo && !isAudio) continue;
+
+        const col = mediaIdx % GRID_COLS;
+        const row = Math.floor(mediaIdx / GRID_COLS);
         const px = pos.x + col * (DEFAULT_NODE_WIDTH + GRID_GAP);
         const py = pos.y + row * (DEFAULT_NODE_HEIGHT + 24 + GRID_GAP);
+        mediaIdx++;
 
-        if (file.type.startsWith("image/")) {
-          const node = createImageNode({ x: px, y: py }, "");
+        if (isImage || isVideo) {
+          const previewUrl = URL.createObjectURL(file);
+          const dims = await loadMediaDimensions(previewUrl, isVideo);
+          const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
+          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
+          const { width, height } = computeNodeSize(nw, nh);
+
+          const node = isImage ? createImageNode({ x: px, y: py }, "") : createVideoNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: URL.createObjectURL(file) };
+          node.data.naturalWidth = nw;
+          node.data.naturalHeight = nh;
+          node.data.source = "upload";
+          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl };
+          node.style = { width, height };
           placeholders.push({ node, file, idx });
-        } else if (file.type.startsWith("video/")) {
-          const node = createVideoNode({ x: px, y: py }, "");
-          node.data.label = file.name;
-          node.data.alt = file.name;
-          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: URL.createObjectURL(file) };
-          placeholders.push({ node, file, idx });
-        } else if (file.type.startsWith("audio/")) {
+        } else {
           const node = createAudioNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
+          node.data.source = "upload";
           node.data.upload = { uploading: true, progress: 0, version: 0 };
           placeholders.push({ node, file, idx });
         }
@@ -85,21 +97,6 @@ export function useFileDrop(
       if (placeholders.length === 0) return;
       const placeholderNodes = placeholders.map((p) => p.node);
       addNodes(placeholderNodes);
-
-      // 1.5) 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
-      for (const { node, file } of placeholders) {
-        const isVideo = file.type.startsWith("video/");
-        const isAudio = file.type.startsWith("audio/");
-        if (isAudio) continue;
-        const previewUrl = (node.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
-        if (!previewUrl) continue;
-        loadMediaDimensions(previewUrl, isVideo).then((dims) => {
-          const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
-          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
-          const { width, height } = computeNodeSize(nw, nh);
-          updateNodeData(node.id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
-        });
-      }
 
       // 2) 异步上传，限制并发数避免 dev 代理层 ETIMEDOUT
       const failed: { id: string; reason?: string }[] = [];
