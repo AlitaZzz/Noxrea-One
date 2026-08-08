@@ -48,7 +48,7 @@ router.post("/api/files/upload", async (c) => {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const hash = computeBufferHash(buffer);
+    const hash = await computeBufferHash(buffer);
     const { mime, ext } = sniffMime(buffer.slice(0, 16));
 
     const finalExt = normalizeExt(ext);

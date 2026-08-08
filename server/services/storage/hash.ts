@@ -82,7 +82,8 @@ export async function computeFileHash(filePath: string): Promise<string> {
   return hash.digest("hex");
 }
 
-/** 增量计算 Buffer SHA256 */
-export function computeBufferHash(buffer: Buffer): string {
-  return crypto.createHash("sha256").update(buffer).digest("hex");
+/** 异步计算 Buffer SHA256（不阻塞事件循环） */
+export async function computeBufferHash(buffer: Buffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Buffer.from(hashBuffer).toString("hex");
 }

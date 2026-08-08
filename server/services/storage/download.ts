@@ -146,7 +146,7 @@ export async function downloadAndSave(
     }
 
     // SHA256 + magic bytes 校验
-    const fileHash = computeBufferHash(buffer);
+    const fileHash = await computeBufferHash(buffer);
     const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
     const fileExt = normalizeExt(sniffedExt);
 
