@@ -15,13 +15,12 @@ import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
 import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.label || t("director.node"), { syncAlt: false });
+    useEditableTitle(id, data.label || t("node.director"), { syncAlt: false });
 
   return (
     <div className="group relative w-full h-full flex flex-col">
@@ -45,7 +44,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
             <PartitionOutlined className="mr-1" />
-            {data.label || t("director.node")}
+            {data.label || t("node.director")}
           </span>
         )}
 
@@ -57,7 +56,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         style={{ background: "var(--canvas-bg)" }}>
         <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
           <PartitionOutlined className="text-5xl" />
-          <span className="text-base text-center">{t("director.desc")}</span>
+          <span className="text-base text-center">{t("node.directorDesc")}</span>
           <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
             onClick={() => {
               const cs = useCanvasStore.getState();
@@ -69,7 +68,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
               useDirectorStore.getState().setOpeningNodeId(id);
               cs.setDirectorOverlayOpen(true);
             }}>
-            {t("director.open")}
+            {t("node.directorOpen")}
           </button>
         </div>
       </div>

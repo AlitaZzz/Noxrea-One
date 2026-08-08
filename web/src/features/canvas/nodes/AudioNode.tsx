@@ -16,13 +16,12 @@ import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HAN
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import AudioWaveform from "./AudioWaveform";
 
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const [src, setSrc] = useState(data.src || "");
   const [isDragOver, setIsDragOver] = useState(false);
   const [duration, setDuration] = useState(data.duration || 0);
@@ -172,7 +171,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   }, [id, handleDownload, handleClear]);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("audio.node"), { syncAlt: true });
+    useEditableTitle(id, data.alt || data.label || t("node.audio"), { syncAlt: true });
 
   const hasAudio = src && src.length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -201,7 +200,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
             <WaveIcon className="mr-1" />
-            {data.label || data.alt || t("audio.node")}
+            {data.label || data.alt || t("node.audio")}
           </span>
         )}
         {hasAudio && duration > 0 && (
@@ -236,12 +235,12 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
                 <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
             )}
-            <span className="text-sm text-white/70 font-medium">{t("uploading")}</span>
+            <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
           </div>
         ) : isGenerating(data.taskBinding) ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{t("generating")}</span>
+            <span className="text-sm text-white/70 font-medium">{t("common.generating")}</span>
           </div>
         ) : hasAudio ? (
           <AudioWaveform
@@ -259,7 +258,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
               className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
               onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
             >
-              <UploadOutlined className="text-lg" /> {t("upload")}
+              <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>
         )}

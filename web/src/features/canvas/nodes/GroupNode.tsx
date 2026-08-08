@@ -12,22 +12,21 @@ import { memo, useCallback,useState } from "react";
 
 import { EventNames, GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(data.label || t("group.node"));
+  const [label, setLabel] = useState(data.label || t("node.group"));
 
   const handleLabelChange = useCallback(
     (value: string) => {
       setLabel(value);
       window.dispatchEvent(
         new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-          detail: { nodeId: id, data: { ...data, label: value || t("group.node") } },
+          detail: { nodeId: id, data: { ...data, label: value || t("node.group") } },
         })
       );
     },
