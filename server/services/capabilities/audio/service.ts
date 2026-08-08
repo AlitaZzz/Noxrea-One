@@ -80,7 +80,7 @@ class AudioCapabilityService implements CapabilityService {
     if (contentType.includes("audio") || contentType.includes("octet-stream")) {
       const blob = await response.blob();
       const buffer = Buffer.from(await blob.arrayBuffer());
-      const hash = computeBufferHash(buffer);
+      const hash = await computeBufferHash(buffer);
       const { mime, ext: sniffedExt } = sniffMime(buffer.slice(0, 16));
       const fileExt = normalizeExt(sniffedExt) || ".mp3";
       const storageKey = buildStorageKey(ctx.userId, hash, fileExt);
