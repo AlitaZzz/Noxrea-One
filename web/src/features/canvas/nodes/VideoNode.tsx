@@ -28,11 +28,10 @@ import { computeNodeSize, createNodeFromUrl } from "@/lib/utils/image-utils";
 import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const [src, setSrc] = useState(data.src || "");
   const [isDragOver, setIsDragOver] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -118,7 +117,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (!imgUrl) return;
 
       const nw = v.videoWidth, nh = v.videoHeight;
-      const label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
+      const label = `${data.alt || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
       await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" });
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, id]);
@@ -254,7 +253,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [id, handleDownload, handleClear, captureFrame]);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("video.node"), { syncAlt: true });
+    useEditableTitle(id, data.alt || data.label || t("node.video"), { syncAlt: true });
 
   const hasVideo = src && src.length > 0;
 
@@ -279,7 +278,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
             <VideoCameraOutlined className="mr-1" />
-            {data.label || data.alt || t("video.node")}
+            {data.label || data.alt || t("node.video")}
           </span>
         )}
         {hasVideo && data.naturalWidth > 0 && (
@@ -307,7 +306,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       >
         {data.source === "upload" && hasVideo && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("replace")}>
+            <Tooltip title={t("common.replace")}>
               <button
                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
                 onClick={() => {
@@ -337,12 +336,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
             )}
-            <span className="text-sm text-white/70 font-medium">{t("uploading")}</span>
+            <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
           </div>
         ) : isGenerating(data.taskBinding) ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{t("generating")}</span>
+            <span className="text-sm text-white/70 font-medium">{t("common.generating")}</span>
           </div>
         ) : hasVideo ? (
           <div className="w-full h-full relative">
@@ -444,7 +443,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 };
                 input.click();
               }}>
-              <UploadOutlined className="text-lg" /> {t("upload")}
+              <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>
         )}

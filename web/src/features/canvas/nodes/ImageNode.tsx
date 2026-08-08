@@ -36,7 +36,7 @@ import {
 } from "@/features/canvas/types";
 import { useAssetsStore } from "@/features/assets/store";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 /**
  * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
@@ -65,8 +65,7 @@ function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
 }
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
@@ -310,7 +309,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
     addAsset({
-      name: data.alt || data.label || t("image.node"),
+      name: data.alt || data.label || t("node.image"),
       type: "other",
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
@@ -366,7 +365,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   };
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("image.node"), { syncAlt: true });
+    useEditableTitle(id, data.alt || data.label || t("node.image"), { syncAlt: true });
 
   const hasImage = src && src.length > 0;
 
@@ -395,7 +394,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
             <PictureOutlined className="mr-1" />
-            {data.label || data.alt || t("image.node")}
+            {data.label || data.alt || t("node.image")}
           </span>
         )}
         {hasImage && data.naturalWidth > 0 && (
@@ -420,7 +419,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       >
         {isMulti && !expanded && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("expand")}>
+            <Tooltip title={t("common.expand")}>
               <button
                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
                 onClick={toggleExpand}
@@ -432,7 +431,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         )}
         {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("replace")}>
+            <Tooltip title={t("common.replace")}>
               <button
                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
                 onClick={() => {
@@ -462,12 +461,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
             )}
-            <span className="text-sm text-white/50">{t("uploading")}</span>
+            <span className="text-sm text-white/50">{t("common.uploading")}</span>
           </div>
         ) : isGenerating(data.taskBinding) ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/50">{t("generating")}</span>
+            <span className="text-sm text-white/50">{t("common.generating")}</span>
           </div>
         ) : isMulti && hasImage ? (
             expanded ? (
@@ -493,7 +492,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
                           {/* 操作按钮 */}
                           <div className="absolute top-1 right-1 flex gap-1 z-10 nodrag">
-                            <Tooltip title={t("download")}>
+                            <Tooltip title={t("common.download")}>
                               <button
                                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
                                 onClick={() => handleDownloadUrl(url)}
@@ -502,7 +501,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                               </button>
                             </Tooltip>
                             {!isMain && (
-                              <Tooltip title={t("set.as.main")}>
+                              <Tooltip title={t("node.setAsMain")}>
                                 <button
                                   className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
                                   onClick={() => handleSetMain(url)}
@@ -512,7 +511,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                               </Tooltip>
                             )}
                             {isMain && (
-                              <Tooltip title={t("collapse")}>
+                              <Tooltip title={t("common.collapse")}>
                                 <button
                                   className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
                                   onClick={toggleExpand}
@@ -589,7 +588,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 };
                 input.click();
               }}>
-              <UploadOutlined className="text-lg" /> {t("upload")}
+              <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>
         )}

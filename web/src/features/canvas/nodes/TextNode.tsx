@@ -14,19 +14,18 @@ import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 import ResizeHandle from "./ResizeHandle";
 
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
-  useI18nStore((s) => s.lang);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const content = data.content || "";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editingContent, setEditingContent] = useState(false);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.label || t("text.node"));
+    useEditableTitle(id, data.label || t("node.text"));
 
   const exitEditing = useCallback(() => {
     const el = textareaRef.current;
@@ -113,7 +112,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           <span className="flex items-center gap-1 flex-1 min-w-0">
             <TextIcon className="shrink-0 mr-1" />
             <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-              {data.label || t("text.node")}
+              {data.label || t("node.text")}
             </span>
           </span>
         )}
@@ -155,7 +154,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           data-text-node
           className={`flex-1 w-full resize-none border-none outline-none p-3 text-sm text-white/80 placeholder:text-white/20 ${editingContent ? "nodrag" : ""}`}
           style={{ background: "transparent", pointerEvents: editingContent ? "auto" : "none", cursor: "auto" }}
-          placeholder={t("text.placeholder")}
+          placeholder={t("node.textPlaceholder")}
           value={content}
           onChange={(e) => handleChange(e.target.value)}
           readOnly={!editingContent}
@@ -170,7 +169,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         {generating && (
           <div className="absolute inset-0 rounded-lg flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg, #262626)" }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/50">{t("generating")}</span>
+            <span className="text-sm text-white/50">{t("common.generating")}</span>
           </div>
         )}
       </div>
