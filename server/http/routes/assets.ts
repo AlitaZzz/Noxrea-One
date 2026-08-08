@@ -27,6 +27,12 @@ import {
   listSourceUrls,
 } from "@server/crud/asset";
 import { ok, fail } from "@server/core/response";
+import {
+  addAssetRef,
+  removeAssetRef,
+  gcFileIfOrphaned,
+  extractHashFromAsset,
+} from "@server/services/storage/ref-manager";
 
 const router = new Hono();
 
@@ -193,6 +199,10 @@ router.post("/api/assets/items", async (c) => {
     spaceKey: parsed.data.spaceKey,
   });
 
+  // 添加文件引用
+  const hash = extractHashFromAsset(parsed.data.extraData as Record<string, unknown>);
+  if (hash) void addAssetRef(item.id, hash, auth.user.id);
+
   return c.json(ok(item));
 });
 
@@ -263,7 +273,21 @@ router.delete("/api/assets/items/:id", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
   if (isNaN(id)) return fail(400, "Invalid asset ID");
 
+  // 查询资产，提取 hash
+  const item = await getAsset(id);
+  if (!item) return fail(404, "Asset not found");
+
+  const hash = item.extraData
+    ? extractHashFromAsset(item.extraData as Record<string, unknown>)
+    : null;
+
   await deleteAsset(id);
+
+  // 异步清理引用 + GC 孤儿文件（引用归零才删物理文件）
+  if (hash) {
+    void removeAssetRef(id).then(() => gcFileIfOrphaned(hash, auth.user.id));
+  }
+
   return c.json(ok(null, "Asset deleted"));
 });
 
@@ -302,6 +326,15 @@ router.post("/api/assets/items/batch", async (c) => {
   }));
 
   const created = await createAssetsBatch(items);
+
+  // 批量添加文件引用
+  for (const item of created) {
+    const hash = item.extraData
+      ? extractHashFromAsset(item.extraData as Record<string, unknown>)
+      : null;
+    if (hash) void addAssetRef(item.id, hash, auth.user.id);
+  }
+
   return c.json(ok(created));
 });
 

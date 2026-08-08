@@ -203,7 +203,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   removeAsset: async (id) => {
     const intId = toIntId(id);
-    if (intId) await assetApi.deleteAsset(intId).catch(() => {});
+    if (!intId) return;
+    await assetApi.deleteAsset(intId);
   },
 
   updateAssetsBatch: async (ids, updates) => {
