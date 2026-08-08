@@ -84,6 +84,22 @@ export class LocalStorageBackend implements StorageBackend {
     } catch {
       // ignore
     }
+    // 向上清理空目录（不删 baseDir 本身）
+    await this.cleanupEmptyDirs(path.dirname(filePath));
+  }
+
+  /** 从 dir 向上逐级删除空目录，直到 baseDir 为止 */
+  private async cleanupEmptyDirs(dir: string): Promise<void> {
+    if (dir === this.baseDir || dir === path.dirname(this.baseDir)) return;
+    try {
+      const entries = await fs.readdir(dir);
+      if (entries.length > 0) return;
+      await fs.rmdir(dir);
+      // 递归检查上一级
+      await this.cleanupEmptyDirs(path.dirname(dir));
+    } catch {
+      // 目录不存在或非空，忽略
+    }
   }
 
   /** 返回相对路径（不再使用 PUBLIC_URL 硬编码） */
