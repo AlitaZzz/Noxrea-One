@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
+import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
@@ -28,7 +29,7 @@ import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
 import { isGenerating, NODE_TYPE } from "@/lib/constants";
-import { canvasToBlob, computeNodeSize, computeThumbScale, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
+import { canvasToBlob, computeNodeSize, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
 import {
   type ImageNode as ImageNodeType,
   type ImageNodeData,
@@ -318,45 +319,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     });
   }, [src, data.alt, data.label, id, addAsset]);
 
-  const handleGridSplit = useCallback(async (rows: number, cols: number) => {
-    if (!src) return;
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new window.Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = src;
-      });
-
-      const pieceW = img.naturalWidth / cols;
-      const pieceH = img.naturalHeight / rows;
-      const { displayW, displayH } = computeThumbScale(pieceW, pieceH);
-
-      // Get original node position for grid layout
-      const origNode = useCanvasStore.getState().nodes.find((n) => n.id === id);
-      const baseX = (origNode?.position.x || 0) + (origNode?.style?.width as number || 600) + 60;
-      const baseY = origNode?.position.y || 0;
-      const gap = 12;
-
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const blob = await canvasToBlob(pieceW, pieceH, (ctx) => {
-            ctx.drawImage(img, c * pieceW, r * pieceH, pieceW, pieceH, 0, 0, pieceW, pieceH);
-          });
-          const url = await uploadBlob(blob, `grid_${r}_${c}.png`);
-          if (!url) continue;
-
-          const pos = { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) };
-          await createNodeFromUrl(id, url, pieceW, pieceH, ` (${r + 1}-${c + 1})`, useCanvasStore.getState(), { source: "derived" }, pos);
-        }
-      }
-    } catch (e) {
-      console.error("grid-split failed:", e);
-    } finally {
-      useCanvasStore.getState().updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
-    }
-  }, [id, src]);
+  const handleGridSplit = useGridSplit(id, src);
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
