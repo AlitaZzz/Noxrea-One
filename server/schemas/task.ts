@@ -14,6 +14,31 @@ export const taskCreateSchema = z.object({
   refImages: z.array(z.string()).optional(),
   refAudio: z.array(z.string()).optional(),
   nodeId: z.string().optional(),
+  // --- 白名单生成参数 ---
+  resolution: z.string().optional(),
+  ratio: z.string().optional(),
+  quality: z.string().optional(),
+  n: z.number().int().min(1).max(4).optional(),
+  strength: z.number().optional(),
+  seed: z.number().int().optional(),
+  background: z.string().optional(),
+  seconds: z.number().optional(),
+  frame_rate: z.number().optional(),
+  // --- LLM 参数 ---
+  messages: z.array(z.unknown()).optional(),
+  temperature: z.number().optional(),
+  max_tokens: z.number().int().positive().optional(),
+  top_p: z.number().min(0).max(1).optional(),
+  stream: z.boolean().optional(),
+  stop: z.union([z.string(), z.array(z.string())]).optional(),
+  frequency_penalty: z.number().optional(),
+  presence_penalty: z.number().optional(),
+  // --- 音频/视频参数 ---
+  mode: z.string().optional(),
+  input: z.string().optional(),
+  voice: z.string().optional(),
+  audio_file: z.string().optional(),
+  references: z.array(z.string()).optional(),
 });
 
 export const taskOutSchema = z.object({

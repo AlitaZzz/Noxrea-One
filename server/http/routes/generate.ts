@@ -69,8 +69,9 @@ router.post("/api/generate/task", async (c) => {
     "mode", "input", "voice", "audio_file",
     "references",
   ]);
-  for (const [key, val] of Object.entries(body as Record<string, unknown>)) {
-    if (paramFields.has(key) && val !== undefined && val !== null) {
+  for (const key of paramFields) {
+    const val = (data as Record<string, unknown>)[key];
+    if (val !== undefined && val !== null) {
       config[key] = val;
     }
   }
