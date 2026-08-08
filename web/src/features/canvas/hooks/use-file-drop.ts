@@ -8,9 +8,9 @@
 import { type DragEvent,useCallback } from "react";
 
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
-import { apiUploadWithProgress } from "@/lib/api/client";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
+import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
 import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useI18nStore } from "@/lib/i18n/store";
@@ -86,29 +86,23 @@ export function useFileDrop(
       const placeholderNodes = placeholders.map((p) => p.node);
       addNodes(placeholderNodes);
 
-      // 2) 异步上传，逐个替换占位节点
+      // 2) 异步上传，限制并发数避免 dev 代理层 ETIMEDOUT
       const failed: { id: string; reason?: string }[] = [];
-      await Promise.allSettled(
-        placeholders.map(async ({ node, file }) => {
+      await runWithConcurrency(
+        placeholders.map(({ node, file }) => async () => {
+          const isVideo = file.type.startsWith("video/");
+          const isAudio = file.type.startsWith("audio/");
+          const category = isVideo ? "videos" : isAudio ? "audios" : "images";
+
           try {
-            const isVideo = file.type.startsWith("video/");
-            const isAudio = file.type.startsWith("audio/");
-            const category = isVideo ? "videos" : isAudio ? "audios" : "images";
-            const formData = new FormData();
-            formData.append("file", file);
-            const res = await apiUploadWithProgress<{ url: string }>(`/api/files/upload?category=${category}`, formData, (pct) => {
+            const result = await uploadWithRetry(file, category, (pct) => {
               updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0 } }, undefined, { skipHistory: true });
             });
-            if (res.code !== 200 || !res.data?.url) {
-              // fail() 返回 { detail }, ok() 返回 { code, data, msg }
-              failed.push({ id: node.id, reason: (res as any).detail ?? (res as any).msg });
-              return;
-            }
 
             if (isAudio) {
               // 音频无固定宽高，使用固定节点尺寸；duration 由节点 onLoadedMetadata 回填
               updateNodeData(node.id, {
-                src: res.data.url,
+                src: result.url,
                 label: file.name,
                 alt: file.name,
                 upload: undefined,
@@ -116,20 +110,20 @@ export function useFileDrop(
               return;
             }
 
-            const dims = await loadMediaDimensions(res.data.url, isVideo);
+            const dims = await loadMediaDimensions(result.url, isVideo);
             const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
             const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
 
             const { width, height } = computeNodeSize(nw, nh);
             updateNodeData(node.id, {
-              src: res.data.url,
+              src: result.url,
               naturalWidth: nw,
               naturalHeight: nh,
               upload: undefined,
               source: "upload",
             }, { width, height }, { skipHistory: true });
-          } catch (err: any) {
-            failed.push({ id: node.id, reason: err?.message });
+          } catch (err) {
+            failed.push({ id: node.id, reason: getUploadErrorDetail(err) });
           }
         }),
       );

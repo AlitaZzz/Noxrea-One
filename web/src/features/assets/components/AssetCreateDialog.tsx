@@ -12,10 +12,10 @@ import { type ReactNode,useCallback, useEffect, useRef, useState } from "react";
 import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
-import { apiUpload, apiUploadWithProgress } from "@/lib/api/client";
 import { captureFrame } from "@/features/canvas/api/file-api";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { useI18nStore } from "@/lib/i18n/store";
+import { type UploadResult, uploadWithRetry } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
   { value: "character", labelKey: "asset.cat.character" },
@@ -62,16 +62,7 @@ function isAudio(file: File) {
   return ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"].includes(extOf(file.name));
 }
 
-interface UploadResult { url: string; key: string; }
 
-async function uploadFile(file: File, onProgress: (pct: number) => void): Promise<UploadResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  try {
-    const res = await apiUploadWithProgress<UploadResult>("/api/files/upload?category=assets", formData, onProgress);
-    return res.data ?? { url: "", key: "" };
-  } catch { return { url: "", key: "" }; }
-}
 
 interface Props {
   open: boolean;
@@ -146,7 +137,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       new Promise<UploadResult>(async (resolve) => {
         try {
           onUpdate(id, { status: "uploading" });
-          const result = await uploadFile(file, (pct: number) => {
+          const result = await uploadWithRetry(file, "assets", (pct: number) => {
             onUpdate(id, { uploadProgress: pct });
           });
           resolve(result);
