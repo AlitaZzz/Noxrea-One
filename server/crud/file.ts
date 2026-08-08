@@ -72,7 +72,7 @@ export async function incrementRefCount(hash: string, userId: number): Promise<v
   });
 }
 
-/** 原子递减文件引用计数，归零则条件删除行，返回是否需要 GC 物理文件 */
+/** 原子递减文件引用计数，归零时保留记录（不删除行、不删除物理文件），留待后续 GC 清理 */
 export async function decrementRefCount(
   hash: string,
   userId: number,
@@ -84,15 +84,7 @@ export async function decrementRefCount(
       select: { refCount: true, ext: true },
     });
 
-    if (updated.refCount <= 0) {
-      // 条件删除：只有 refCount 确实是 0 才删行
-      const deleted = await prisma.fileObject.deleteMany({
-        where: { userId, hash, refCount: 0 },
-      });
-      if (deleted.count > 0) {
-        return { needGc: true, ext: updated.ext };
-      }
-    }
+    // refCount 归零时保留记录，不做物理删除，留待后续 GC 清理
     return { needGc: false, ext: updated.ext };
   } catch (e: unknown) {
     // P2025: 记录不存在（已 GC 或从未创建），忽略
