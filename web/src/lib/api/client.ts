@@ -5,7 +5,7 @@
  * apiRaw（原始 Response）与 apiStream（流式）等底层能力。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
-import { showGlobalMessage } from "@/lib/global-message";
+import { showGlobalNotification } from "@/lib/global-notification";
 
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
 export const BASE = "";
@@ -59,7 +59,12 @@ function handleUnauthorized() {
 
   // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不弹提示，避免重复提示
   if (window.location.pathname !== "/login") {
-    showGlobalMessage().error("登录已过期，请重新登录");
+    showGlobalNotification().error({
+      title: "登录已过期",
+      description: "请重新登录",
+      placement: "bottomRight",
+      duration: 5,
+    });
   }
 
   // 延迟跳转，让 toast 可见
