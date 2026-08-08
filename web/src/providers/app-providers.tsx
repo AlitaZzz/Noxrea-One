@@ -13,8 +13,9 @@ import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import "@/lib/i18n/config";
 import { directorTheme } from "@/styles/theme";
+import { useTranslation } from "react-i18next";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,10 +53,10 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
 
 /** 同步当前语言到 <html lang>，随语言切换实时更新 */
 function HtmlLangSync() {
-  const lang = useI18nStore((s) => s.lang);
+  const { i18n } = useTranslation();
   useEffect(() => {
-    document.documentElement.lang = lang;
-  }, [lang]);
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
   return null;
 }
 
