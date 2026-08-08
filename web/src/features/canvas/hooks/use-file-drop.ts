@@ -65,13 +65,13 @@ export function useFileDrop(
           const node = createImageNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data.upload = { uploading: true, progress: 0, version: 0 };
+          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: URL.createObjectURL(file) };
           placeholders.push({ node, file, idx });
         } else if (file.type.startsWith("video/")) {
           const node = createVideoNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data.upload = { uploading: true, progress: 0, version: 0 };
+          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: URL.createObjectURL(file) };
           placeholders.push({ node, file, idx });
         } else if (file.type.startsWith("audio/")) {
           const node = createAudioNode({ x: px, y: py }, "");
@@ -86,6 +86,21 @@ export function useFileDrop(
       const placeholderNodes = placeholders.map((p) => p.node);
       addNodes(placeholderNodes);
 
+      // 1.5) 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
+      for (const { node, file } of placeholders) {
+        const isVideo = file.type.startsWith("video/");
+        const isAudio = file.type.startsWith("audio/");
+        if (isAudio) continue;
+        const previewUrl = (node.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
+        if (!previewUrl) continue;
+        loadMediaDimensions(previewUrl, isVideo).then((dims) => {
+          const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
+          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
+          const { width, height } = computeNodeSize(nw, nh);
+          updateNodeData(node.id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
+        });
+      }
+
       // 2) 异步上传，限制并发数避免 dev 代理层 ETIMEDOUT
       const failed: { id: string; reason?: string }[] = [];
       await runWithConcurrency(
@@ -96,8 +111,15 @@ export function useFileDrop(
 
           try {
             const result = await uploadWithRetry(file, category, (pct) => {
-              updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0 } }, undefined, { skipHistory: true });
+              const cur = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
+              const previewUrl = (cur?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
+              updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0, previewUrl } }, undefined, { skipHistory: true });
             });
+
+            // 释放预览 blob URL
+            const curNode = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
+            const oldPreview = (curNode?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
+            if (oldPreview?.startsWith("blob:")) URL.revokeObjectURL(oldPreview);
 
             if (isAudio) {
               // 音频无固定宽高，使用固定节点尺寸；duration 由节点 onLoadedMetadata 回填
@@ -123,6 +145,10 @@ export function useFileDrop(
               source: "upload",
             }, { width, height }, { skipHistory: true });
           } catch (err) {
+            // 释放预览 blob URL
+            const curNode = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
+            const oldPreview = (curNode?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
+            if (oldPreview?.startsWith("blob:")) URL.revokeObjectURL(oldPreview);
             failed.push({ id: node.id, reason: getUploadErrorDetail(err) });
           }
         }),

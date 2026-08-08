@@ -24,7 +24,7 @@ import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
-import { computeNodeSize, createNodeFromUrl } from "@/lib/utils/image-utils";
+import { computeNodeSize, createNodeFromUrl, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -129,17 +129,25 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
       // 撤销/清除时整个 node.data 被替换，版本号自动失效，从而丢弃过期回调。
       const uploadVersion = Date.now();
+      const previewUrl = URL.createObjectURL(file);
       const store = useCanvasStore.getState();
       const nodeBefore = store.nodes.find((n) => n.id === id);
       if (nodeBefore) {
-        // 立即进入 uploading 状态，让节点进度条出现（与拖到画布路径一致）
         store.updateNodeData(
           id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion } },
+          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl } },
           undefined,
           { skipHistory: true }
         );
       }
+
+      // 立即从本地 blob URL 获取尺寸，先调整节点大小（不阻塞上传）
+      loadMediaDimensions(previewUrl, true).then((dims) => {
+        const nw = dims.w || 1280;
+        const nh = dims.h || 720;
+        const { width, height } = computeNodeSize(nw, nh);
+        useCanvasStore.getState().updateNodeData(id, { naturalWidth: nw, naturalHeight: nh }, { width, height }, { skipHistory: true });
+      });
 
       try {
         const formData = new FormData();
@@ -148,10 +156,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           "/api/files/upload?category=videos",
           formData,
           (pct) => {
-            // 上传进度回传，更新进度条
             useCanvasStore.getState().updateNodeData(
               id,
-              { upload: { uploading: true, progress: pct, version: uploadVersion } },
+              { upload: { uploading: true, progress: pct, version: uploadVersion, previewUrl } },
               undefined,
               { skipHistory: true }
             );
@@ -162,7 +169,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           const s = useCanvasStore.getState();
           const currentNode = s.nodes.find((n) => n.id === id);
           if (!currentNode) return;
-          // 异步回调时校验：节点存在且版本号匹配（未被撤销/重置）
           if ((currentNode.data as VideoNodeData).upload?.version !== uploadVersion) return;
 
           const dims = await new Promise<{ w: number; h: number }>((resolve) => {
@@ -175,6 +181,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           const nw = dims.w || 1280;
           const nh = dims.h || 720;
           const { width, height } = computeNodeSize(nw, nh);
+          URL.revokeObjectURL(previewUrl);
           const latestData = currentNode.data as VideoNodeData;
           // 上传完成：清空 upload（进度条消失），写回视频主信息
           window.dispatchEvent(
@@ -194,15 +201,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
             s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
           }
+          URL.revokeObjectURL(previewUrl);
         }
       } catch (e) {
         console.error("Video upload failed:", e);
-        // 失败时清除 uploading 状态（进度条消失），避免卡在"上传中"
         const s = useCanvasStore.getState();
         const currentNode = s.nodes.find((n) => n.id === id);
         if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
           s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
         }
+        URL.revokeObjectURL(previewUrl);
       }
     },
     [id]
@@ -326,17 +334,22 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         )}
         {data.upload?.uploading ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
-            {data.upload?.progress != null ? (
-              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
-              </div>
-            ) : (
-              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
-              </div>
+          <div className="absolute inset-0 rounded-lg overflow-hidden">
+            {data.upload?.previewUrl && (
+              <video src={data.upload.previewUrl} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
-            <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
+              {data.upload?.progress != null ? (
+                <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                </div>
+              ) : (
+                <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: "60%" }} />
+                </div>
+              )}
+              <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
+            </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>

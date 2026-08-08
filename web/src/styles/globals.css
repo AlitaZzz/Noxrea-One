@@ -259,6 +259,12 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   100% { transform: rotate(405deg); }
 }
 
+/* 上传中模糊预览背景的呼吸动画 */
+@keyframes breathe {
+  0%, 100% { transform: scale(1.15); opacity: 0.45; }
+  50% { transform: scale(1.25); opacity: 0.65; }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--canvas-bg); }
