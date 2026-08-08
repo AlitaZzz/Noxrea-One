@@ -16,7 +16,7 @@ import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;
@@ -39,7 +39,7 @@ interface TextAnnotation {
 }
 
 export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const { zoom } = useViewport();
 
@@ -568,7 +568,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
             onKeyDown={handleTextKeyDown}
-            placeholder={t("annotation.text.placeholder")}
+            placeholder={t("annotation.textPlaceholder")}
             style={{
               position: "absolute",
               left: naturalToPercent(textInputPos.x, textInputPos.y).left,

@@ -13,7 +13,7 @@ import AppModal from "@/components/ui/AppModal";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface LightingState {
   intensity: number;
@@ -50,7 +50,7 @@ interface Props {
 }
 
 export default function LightingPanel({ src, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);

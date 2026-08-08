@@ -28,7 +28,7 @@ import { type ModelOption } from "@/lib/types/models";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
@@ -37,7 +37,7 @@ import { useVideoGenPanel } from "./use-video-gen-panel";
 interface Props { nodeId: string; }
 
 const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const channels = useModelStore((s) => s.channels);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = channels.flatMap((c) =>
@@ -286,7 +286,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
         onClick={handleRefUpload}>
-        <PlusOutlined style={{ fontSize: 12 }} /> {t("reference")}
+        <PlusOutlined style={{ fontSize: 12 }} /> {t("common.reference")}
       </Button>
       {(refOrder.length > 0 || upstreamTexts.length > 0 || upstreamAudio.length > 0) && (
         <div
@@ -387,7 +387,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         references={references}
         value={prompt}
         onChange={setPrompt}
-        placeholder={t("prompt.placeholder.video")}
+        placeholder={t("generation.promptPlaceholderVideo")}
         style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
@@ -413,7 +413,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               {/* ── ① 比例 ── */}
               {showRatio && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("ratio")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.ratio")}</div>
                 <div className="grid grid-cols-5 gap-1">
                   {ratioOptions.map((v) => {
                     const [w, h] = v.split(":").map(Number);
@@ -441,7 +441,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               {/* ── ② 清晰度 ── */}
               {showResolution && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("clarity")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.clarity")}</div>
                 <div className="grid grid-cols-4 gap-1">
                   {resolutionOptions.map((v) => {
                     const active = resolution === v;
@@ -459,7 +459,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               {/* ── ③ 时长 (Slider) ── */}
               {showSeconds && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.seconds")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.duration")}</div>
                 <Slider
                   min={1} max={15} step={1}
                   value={seconds}
@@ -472,11 +472,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               )}
               {/* ── ④ 生成音频 ── */}
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.audio")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.audio")}</div>
                 <div className="grid grid-cols-2 gap-1">
                   {[true, false].map((v) => {
                     const active = generateAudio === v;
-                    const label = v ? t("gen.audio.on") : t("gen.audio.off");
+                    const label = v ? t("generation.audioOn") : t("generation.audioOff");
                     return (
                       <Button size="small" type="text" key={String(v)} className="rounded-md text-[13px] transition-colors"
                         style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
@@ -490,7 +490,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               {/* ── ⑤ 生成数量 ── */}
               {showN && (
               <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("gen.count")}</div>
+                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.count")}</div>
                 <div className="grid grid-cols-3 gap-1">
                   {[1, 2, 4].map((v) => {
                     const active = n === v;
@@ -499,7 +499,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                         style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
                         onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
                         onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setN(v)}>{v}{t("count.unit.video")}</Button>
+                        onClick={() => setN(v)}>{v}{t("generation.countUnitVideo")}</Button>
                     );
                   })}
                 </div>
@@ -513,9 +513,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
             {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
             {showResolution && <> · {resolution}</>}
-            {showSeconds && <> · {seconds}{t("seconds.unit")}</>}
-            <> · {generateAudio ? t("gen.audio.on.short") : t("gen.audio.off.short")}</>
-            {showN && <> · {n}{t("count.unit.video")}</>}
+            {showSeconds && <> · {seconds}{t("generation.secondsUnit")}</>}
+            <> · {generateAudio ? t("generation.audioOnShort") : t("generation.audioOffShort")}</>
+            {showN && <> · {n}{t("generation.countUnitVideo")}</>}
           </button>
         </Popover>
         <div className="flex-1" />

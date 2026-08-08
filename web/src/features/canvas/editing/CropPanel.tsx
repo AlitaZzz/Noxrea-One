@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;
@@ -42,7 +42,7 @@ interface CropRect {
 const MIN_SIZE = 20;
 
 export default function CropPanel({ src, sourceId, onClose }: Props) {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const { zoom } = useViewport();
 
