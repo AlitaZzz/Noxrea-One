@@ -7,6 +7,8 @@ import { authenticateRequest } from "@server/core/auth/middleware";
 import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
 import { getProjects, createProject, getProject, updateProject, deleteProject } from "@server/crud/canvas";
 import { ok, fail } from "@server/core/response";
+import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
+import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
 
 const router = new Hono();
 
@@ -91,6 +93,12 @@ router.put("/api/canvas/projects/:id", async (c) => {
     canvasData: parsed.data.canvasData,
   });
 
+  // 文件引用重算
+  if (parsed.data.needRefRecalc && parsed.data.canvasData) {
+    const hashes = extractHashesFromCanvas(parsed.data.canvasData);
+    void recalcCanvasRefs(id, auth.user.id, hashes);
+  }
+
   return c.json(ok(project));
 });
 
@@ -108,6 +116,10 @@ router.delete("/api/canvas/projects/:id", async (c) => {
   if (existing.userId !== auth.user.id) return fail(403, "Access denied");
 
   await deleteProject(id);
+
+  // 异步清理文件引用 + GC 孤儿文件
+  void cleanCanvasRefs(id, auth.user.id);
+
   return c.json(ok(null, "Project deleted"));
 });
 
