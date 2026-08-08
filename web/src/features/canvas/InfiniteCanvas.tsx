@@ -70,7 +70,7 @@ import { useAssetsStore } from "@/features/assets/store";
 import { useAuthStore } from "@/features/auth/store";
 import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
 import { useProjectStore } from "@/features/project/store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
@@ -129,7 +129,7 @@ export default function InfiniteCanvas() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
   const authUser = useAuthStore((s) => s.user);
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
 
   const [editName, setEditName] = useState(projectName);
   const [prevProjectName, setPrevProjectName] = useState(projectName);
@@ -511,7 +511,7 @@ export default function InfiniteCanvas() {
                       </div>
                     </div>
                     <MenuDivider />
-                    <MenuItem onClick={async () => { setToolbarMenuOpen(false); await flushAndWait(); router.push("/project"); }}>{t("home")}</MenuItem>
+                    <MenuItem onClick={async () => { setToolbarMenuOpen(false); await flushAndWait(); router.push("/project"); }}>{t("project.home")}</MenuItem>
                     <MenuDivider />
                     <MenuItem onClick={async () => {
                         setToolbarMenuOpen(false);
@@ -520,13 +520,13 @@ export default function InfiniteCanvas() {
                         useProjectStore.getState().setActiveProject(proj.id);
                         useCanvasStore.getState().restoreFromProject(proj);
                         setTimeout(() => fitView({ duration: 300 }), 50);
-                      }}>{t("new.project")}</MenuItem>
-                    <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("delete.project")}</MenuItem>
+                      }}>{t("project.new")}</MenuItem>
+                    <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
                     <MenuDivider />
                     <MenuItem dimmed onClick={() => {
                         setToolbarMenuOpen(false);
                         setLogoutConfirmOpen(true);
-                      }}>{t("logout")}</MenuItem>
+                      }}>{t("auth.logout")}</MenuItem>
                   </>
                 }
               />
@@ -594,14 +594,14 @@ export default function InfiniteCanvas() {
 
         {/* Top-right panel: agent entry */}
         <Panel position="top-right" style={{ margin: 0, padding: 0, paddingRight: 30, paddingTop: 30 }}>
-          <Tooltip title={t("agent")}>
+          <Tooltip title={t("agent.title")}>
             <button
               type="button"
               onClick={() => setChatOpen(true)}
               className="canvas-agent-btn"
             >
               <AgentIcon style={{ width: 18, height: 18 }} />
-              <span className="text-sm font-medium">{t("agent")}</span>
+              <span className="text-sm font-medium">{t("agent.title")}</span>
             </button>
           </Tooltip>
         </Panel>
@@ -670,10 +670,10 @@ export default function InfiniteCanvas() {
 
       <ConfirmModal
         open={deleteConfirmOpen}
-        title={t("delete.project")}
-        content={projectName ? `${t("project.delete.confirm")} "${projectName}"?` : t("project.delete.confirm")}
-        okText={t("delete")}
-        cancelText={t("cancel")}
+        title={t("project.delete")}
+        content={projectName ? `${t("project.deleteConfirm")} "${projectName}"?` : t("project.deleteConfirm")}
+        okText={t("common.delete")}
+        cancelText={t("common.cancel")}
         onOk={async () => {
           await flushAndWait();
           const activeId = useProjectStore.getState().activeProjectId;
@@ -686,10 +686,10 @@ export default function InfiniteCanvas() {
 
       <ConfirmModal
         open={logoutConfirmOpen}
-        title={t("logout")}
-        content={t("logout.confirm")}
-        okText={t("logout")}
-        cancelText={t("cancel")}
+        title={t("auth.logout")}
+        content={t("auth.logoutConfirm")}
+        okText={t("auth.logout")}
+        cancelText={t("common.cancel")}
         onOk={() => {
           useAuthStore.getState().logout();
           setLogoutConfirmOpen(false);

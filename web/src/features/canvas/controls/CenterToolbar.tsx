@@ -18,10 +18,10 @@ import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useAddNode } from "@/features/canvas/hooks/use-add-node";
-import { useI18nStore } from "@/lib/i18n/store";
+import { useTranslation } from "react-i18next";
 
 export default function CenterToolbar() {
-  const t = useI18nStore((s) => s.t);
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
@@ -42,13 +42,13 @@ export default function CenterToolbar() {
 
   const menuContent = (
     <div className="menu-popover flex flex-col gap-0.5" style={{ minWidth: 160 }}>
-      <MenuItem onClick={() => addNode("text")}><TextIcon /> {t("text.node")}</MenuItem>
-      <MenuItem onClick={() => addNode("image")}><PictureOutlined /> {t("image.node")}</MenuItem>
-      <MenuItem onClick={() => addNode("video")}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
+      <MenuItem onClick={() => addNode("text")}><TextIcon /> {t("node.text")}</MenuItem>
+      <MenuItem onClick={() => addNode("image")}><PictureOutlined /> {t("node.image")}</MenuItem>
+      <MenuItem onClick={() => addNode("video")}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
       <MenuDivider />
-      <MenuItem onClick={() => addNode("group")}><GroupOutlined /> {t("group.node")}</MenuItem>
+      <MenuItem onClick={() => addNode("group")}><GroupOutlined /> {t("node.group")}</MenuItem>
       <MenuDivider />
-      <MenuItem onClick={() => addNode("director")}><VideoCameraOutlined /> {t("director.node")}</MenuItem>
+      <MenuItem onClick={() => addNode("director")}><VideoCameraOutlined /> {t("node.director")}</MenuItem>
     </div>
   );
 
@@ -58,7 +58,7 @@ export default function CenterToolbar() {
         style={{ bottom: 24, padding: "8px 12px" }}>
         <Popover content={menuContent} trigger="click" open={open} onOpenChange={setOpen} placement="top"
           styles={{ container: { padding: 0, background: "transparent" } }}>
-          <Tooltip title={t("add.node")} open={open ? false : undefined}>
+          <Tooltip title={t("node.add")} open={open ? false : undefined}>
             <Button type="text" className="canvas-toolbar-btn" icon={<PlusOutlined style={{ fontSize: 20 }} />} />
           </Tooltip>
         </Popover>
@@ -85,7 +85,7 @@ export default function CenterToolbar() {
             </div>
           } trigger="click" open={shortcutsOpen} onOpenChange={setShortcutsOpen} placement="top"
           styles={{ container: { padding: 0, background: "transparent" } }}>
-          <Tooltip title={t("shortcuts")} open={shortcutsOpen ? false : undefined}>
+          <Tooltip title={t("shortcuts.title")} open={shortcutsOpen ? false : undefined}>
             <Button type="text" className="canvas-toolbar-btn" icon={<ShortcutIcon style={{ width: 18, height: 18 }} />} />
           </Tooltip>
         </Popover>
@@ -94,13 +94,13 @@ export default function CenterToolbar() {
       {ctxMenu && (
         <div className="fixed z-50" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={() => setCtxMenu(null)}>
           <div className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg" style={{ background: "var(--menu-bg)", border: "1px solid var(--menu-border)" }}>
-            <MenuItem onClick={() => { addNode("text"); setCtxMenu(null); }}><TextIcon /> {t("text.node")}</MenuItem>
-            <MenuItem onClick={() => { addNode("image"); setCtxMenu(null); }}><PictureOutlined /> {t("image.node")}</MenuItem>
-            <MenuItem onClick={() => { addNode("video"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("video.node")}</MenuItem>
+            <MenuItem onClick={() => { addNode("text"); setCtxMenu(null); }}><TextIcon /> {t("node.text")}</MenuItem>
+            <MenuItem onClick={() => { addNode("image"); setCtxMenu(null); }}><PictureOutlined /> {t("node.image")}</MenuItem>
+            <MenuItem onClick={() => { addNode("video"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
             <MenuDivider />
-            <MenuItem onClick={() => { addNode("group"); setCtxMenu(null); }}><GroupOutlined /> {t("group.node")}</MenuItem>
+            <MenuItem onClick={() => { addNode("group"); setCtxMenu(null); }}><GroupOutlined /> {t("node.group")}</MenuItem>
             <MenuDivider />
-            <MenuItem onClick={() => { addNode("director"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("director.node")}</MenuItem>
+            <MenuItem onClick={() => { addNode("director"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("node.director")}</MenuItem>
           </div>
         </div>
       )}
