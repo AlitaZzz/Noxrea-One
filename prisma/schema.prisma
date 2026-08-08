@@ -188,6 +188,7 @@ model FileObject {
   mimeType  String   @default("") @map("mime_type")
   ext       String   @default("") @map("ext")
   source    String   @default("unknown") @map("source")
+  refCount  Int      @default(0) @map("ref_count") // 引用计数，归零时可 GC
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -196,24 +197,7 @@ model FileObject {
 }
 
 // ──────────────────────────────────────────
-// 9. FileReference
-// ──────────────────────────────────────────
-model FileReference {
-  id        Int      @id @default(autoincrement())
-  fileHash  String   @map("file_hash")
-  userId    Int      @map("user_id")
-  refType   String   @map("ref_type")
-  refId     Int      @map("ref_id")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@unique([fileHash, userId, refType, refId], name: "uq_file_ref")
-  @@index([fileHash, userId], name: "idx_fr_hash_user")
-  @@index([refType, refId], name: "idx_fr_type_id")
-  @@map("file_references")
-}
-
-// ──────────────────────────────────────────
-// 10. AgentSession（按画布 project 独立的 Agent 会话）
+// 9. AgentSession（按画布 project 独立的 Agent 会话）
 // ──────────────────────────────────────────
 model AgentSession {
   id          Int      @id @default(autoincrement())
