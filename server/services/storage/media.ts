@@ -28,7 +28,7 @@ export async function getResizedWebP(
   storageKey: string,
   width: number
 ): Promise<string | null> {
-  const cacheKey = `_cache/${width}/${storageKey}`;
+  const cacheKey = `_cache/${width}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
 
   // 检查缓存
   const cached = await localStorage.stat(cacheKey);
