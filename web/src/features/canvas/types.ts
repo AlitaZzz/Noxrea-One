@@ -130,6 +130,8 @@ export type VideoNodeData = {
   taskBinding?: TaskBinding;
   upload?: UploadState;
   genSettings?: VideoGenSettings;
+  /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成，derived = 从已有资源派生 */
+  source?: "upload" | "generate" | "derived";
 };
 
 export type AudioNodeData = {
