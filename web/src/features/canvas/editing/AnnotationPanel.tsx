@@ -442,7 +442,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
         }
       });
 
-      await uploadAndAddNode(sourceId, blob, " (标注)", useCanvasStore.getState(), { naturalWidth: nw, naturalHeight: nh });
+      await uploadAndAddNode(sourceId, blob, " (标注)", useCanvasStore.getState(), { naturalWidth: nw, naturalHeight: nh, source: "derived" });
       onClose();
     } catch (e) {
       console.error("Annotation save failed:", e);

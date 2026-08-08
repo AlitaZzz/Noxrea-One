@@ -156,7 +156,8 @@ export default function InfiniteCanvas() {
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.IMAGE) return null;
-    if ((sel[0].data as ImageNodeData).source === "upload") return null;
+    const src = (sel[0].data as ImageNodeData).source;
+    if (src === "upload" || src === "derived") return null;
     return sel[0].id;
   }, [nodes]);
 

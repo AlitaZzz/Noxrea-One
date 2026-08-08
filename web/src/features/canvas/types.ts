@@ -117,8 +117,8 @@ export type ImageNodeData = {
   multiResultUrls?: string[];
   /** 多图结果：生成总张数（用于角标，缺省回退到 multiResultUrls.length） */
   multiResultTotalCount?: number;
-  /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成 */
-  source?: "upload" | "generate";
+  /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成，derived = 从已有图片派生（裁剪/切分/标注等） */
+  source?: "upload" | "generate" | "derived";
 };
 
 export type VideoNodeData = {
