@@ -30,7 +30,6 @@ import { ok, fail } from "@server/core/response";
 import {
   addAssetRef,
   removeAssetRef,
-  gcFileIfOrphaned,
   extractHashFromAsset,
 } from "@server/services/storage/ref-manager";
 
@@ -201,7 +200,7 @@ router.post("/api/assets/items", async (c) => {
 
   // 添加文件引用
   const hash = extractHashFromAsset(parsed.data.extraData as Record<string, unknown>);
-  if (hash) void addAssetRef(item.id, hash, auth.user.id);
+  if (hash) void addAssetRef(hash, auth.user.id);
 
   return c.json(ok(item));
 });
@@ -283,9 +282,9 @@ router.delete("/api/assets/items/:id", async (c) => {
 
   await deleteAsset(id);
 
-  // 异步清理引用 + GC 孤儿文件（引用归零才删物理文件）
+  // 异步递减引用计数 + GC 孤儿文件（引用归零才删物理文件）
   if (hash) {
-    void removeAssetRef(id).then(() => gcFileIfOrphaned(hash, auth.user.id));
+    void removeAssetRef(hash, auth.user.id);
   }
 
   return c.json(ok(null, "Asset deleted"));
@@ -332,7 +331,7 @@ router.post("/api/assets/items/batch", async (c) => {
     const hash = item.extraData
       ? extractHashFromAsset(item.extraData as Record<string, unknown>)
       : null;
-    if (hash) void addAssetRef(item.id, hash, auth.user.id);
+  if (hash) void addAssetRef(hash, auth.user.id);
   }
 
   return c.json(ok(created));

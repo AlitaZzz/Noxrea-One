@@ -54,31 +54,51 @@ export async function getFileObjectByHash(hash: string) {
   });
 }
 
-// FileReference
-export async function addFileReference(data: {
-  fileHash: string;
-  userId: number;
-  refType: string;
-  refId: number;
-}) {
-  return prisma.fileReference.create({
-    data: {
-      fileHash: data.fileHash,
-      userId: data.userId,
-      refType: data.refType,
-      refId: data.refId,
+// ── 引用计数操作 ──
+
+/** 原子递增文件引用计数（upsert：处理行可能已被 GC 的情况） */
+export async function incrementRefCount(hash: string, userId: number): Promise<void> {
+  await prisma.fileObject.upsert({
+    where: { userId_hash: { userId, hash } },
+    update: { refCount: { increment: 1 } },
+    create: {
+      userId,
+      hash,
+      refCount: 1,
+      size: 0,
+      mimeType: "",
+      ext: "",
     },
   });
 }
 
-export async function getFileReferences(refType: string, refId: number) {
-  return prisma.fileReference.findMany({
-    where: { refType, refId },
-  });
-}
+/** 原子递减文件引用计数，归零则条件删除行，返回是否需要 GC 物理文件 */
+export async function decrementRefCount(
+  hash: string,
+  userId: number,
+): Promise<{ needGc: boolean; ext: string } | null> {
+  try {
+    const updated = await prisma.fileObject.update({
+      where: { userId_hash: { userId, hash } },
+      data: { refCount: { decrement: 1 } },
+      select: { refCount: true, ext: true },
+    });
 
-export async function deleteFileReferences(refType: string, refId: number) {
-  return prisma.fileReference.deleteMany({
-    where: { refType, refId },
-  });
+    if (updated.refCount <= 0) {
+      // 条件删除：只有 refCount 确实是 0 才删行
+      const deleted = await prisma.fileObject.deleteMany({
+        where: { userId, hash, refCount: 0 },
+      });
+      if (deleted.count > 0) {
+        return { needGc: true, ext: updated.ext };
+      }
+    }
+    return { needGc: false, ext: updated.ext };
+  } catch (e: unknown) {
+    // P2025: 记录不存在（已 GC 或从未创建），忽略
+    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2025") {
+      return null;
+    }
+    throw e;
+  }
 }

@@ -1,15 +1,8 @@
 /**
  * 文件引用管理服务。
- * 统一管理资产与画布对文件的引用追踪，以及孤儿文件的 GC。
+ * 基于 FileObject.refCount 的原子增减实现引用追踪与孤儿文件 GC。
  */
-import { prisma } from "@server/core/database/client";
-import {
-  addFileReference,
-  deleteFileReferences,
-  getFileReferences,
-  getFileObject,
-} from "@server/crud/file";
-import { recalcFileReferences } from "@server/crud/canvas";
+import { incrementRefCount, decrementRefCount } from "@server/crud/file";
 import { localStorage } from "./backends/local";
 import { buildStorageKey } from "./service";
 import { extractHashFromUrl } from "@server/utils/extract-hashes";
@@ -22,103 +15,83 @@ export function extractHashFromAsset(extraData: Record<string, unknown>): string
   return extractHashFromUrl(sourceUrl);
 }
 
-/** 资产创建后添加引用 */
-export async function addAssetRef(
-  assetId: number,
-  hash: string,
+/** 删除物理文件 */
+async function deletePhysicalFile(userId: number, hash: string, ext: string): Promise<void> {
+  const storageKey = buildStorageKey(userId, hash, ext);
+  await localStorage.delete(storageKey);
+}
+
+/** 资产创建后递增文件引用计数 */
+export async function addAssetRef(hash: string, userId: number): Promise<void> {
+  try {
+    await incrementRefCount(hash, userId);
+  } catch (e) {
+    logger.warn({ hash, err: e }, "[ref-manager] addAssetRef failed");
+  }
+}
+
+/** 资产删除后递减文件引用计数，归零则 GC 物理文件 */
+export async function removeAssetRef(hash: string, userId: number): Promise<void> {
+  try {
+    const result = await decrementRefCount(hash, userId);
+    if (result?.needGc) {
+      await deletePhysicalFile(userId, hash, result.ext);
+    }
+  } catch (e) {
+    logger.warn({ hash, err: e }, "[ref-manager] removeAssetRef failed");
+  }
+}
+
+/**
+ * 画布更新时 diff 增减引用计数。
+ * - 新增的 hash -> increment
+ * - 移除的 hash -> decrement（内部处理 GC）
+ * - 不变的 hash -> 不动
+ */
+export async function recalcCanvasRefs(
   userId: number,
+  oldHashes: string[],
+  newHashes: string[],
 ): Promise<void> {
   try {
-    await addFileReference({
-      fileHash: hash,
-      userId,
-      refType: "asset",
-      refId: assetId,
-    });
+    const oldSet = new Set(oldHashes);
+    const newSet = new Set(newHashes);
+
+    const added = newHashes.filter((h) => !oldSet.has(h));
+    const removed = oldHashes.filter((h) => !newSet.has(h));
+
+    // 并行处理所有增减
+    const tasks: Promise<void>[] = [
+      ...added.map((h) => incrementRefCount(h, userId)),
+      ...removed.map(async (h) => {
+        const result = await decrementRefCount(h, userId);
+        if (result?.needGc) {
+          await deletePhysicalFile(userId, h, result.ext);
+        }
+      }),
+    ];
+
+    await Promise.all(tasks);
   } catch (e) {
-    // 唯一键冲突等错误不影响资产创建
-    logger.warn(`[ref-manager] addAssetRef failed: asset=${assetId} hash=${hash}`, e);
+    logger.warn({ err: e }, "[ref-manager] recalcCanvasRefs failed");
   }
 }
 
-/** 资产删除后清理引用 */
-export async function removeAssetRef(assetId: number): Promise<void> {
-  try {
-    await deleteFileReferences("asset", assetId);
-  } catch (e) {
-    logger.warn(`[ref-manager] removeAssetRef failed: asset=${assetId}`, e);
-  }
-}
-
-/** 画布更新时重算文件引用，并对被移除的 hash 做 GC */
-export async function recalcCanvasRefs(
-  projectId: number,
+/** 画布删除时递减所有文件引用计数，归零则 GC 物理文件 */
+export async function cleanCanvasRefs(
   userId: number,
   hashes: string[],
 ): Promise<void> {
   try {
-    // 记录旧 hash 集合
-    const oldRefs = await getFileReferences("canvas_project", projectId);
-    const oldHashes = new Set(oldRefs.map((r) => r.fileHash));
-
-    // 重算引用
-    const fileHashes = hashes.map((h) => ({ hash: h, userId, refType: "canvas_project" }));
-    await recalcFileReferences(projectId, fileHashes);
-
-    // 对旧集合 - 新集合的差集做 GC
-    const newHashes = new Set(hashes);
-    for (const old of oldHashes) {
-      if (!newHashes.has(old)) {
-        await gcFileIfOrphaned(old, userId);
-      }
-    }
+    await Promise.all(
+      hashes.map(async (h) => {
+        const result = await decrementRefCount(h, userId);
+        if (result?.needGc) {
+          await deletePhysicalFile(userId, h, result.ext);
+        }
+      }),
+    );
   } catch (e) {
-    logger.warn(`[ref-manager] recalcCanvasRefs failed: project=${projectId}`, e);
-  }
-}
-
-/** 画布删除时清理文件引用，并对受影响的 hash 做 GC */
-export async function cleanCanvasRefs(
-  projectId: number,
-  userId: number,
-): Promise<void> {
-  try {
-    const refs = await getFileReferences("canvas_project", projectId);
-    const hashes = refs.map((r) => r.fileHash);
-
-    await deleteFileReferences("canvas_project", projectId);
-
-    for (const hash of hashes) {
-      await gcFileIfOrphaned(hash, userId);
-    }
-  } catch (e) {
-    logger.warn(`[ref-manager] cleanCanvasRefs failed: project=${projectId}`, e);
-  }
-}
-
-/** 引用为 0 时删除物理文件 + FileObject 记录 */
-export async function gcFileIfOrphaned(
-  hash: string,
-  userId: number,
-): Promise<void> {
-  try {
-    const count = await prisma.fileReference.count({
-      where: { fileHash: hash, userId },
-    });
-    if (count > 0) return;
-
-    const fileObj = await getFileObject(userId, hash);
-    if (!fileObj) return;
-
-    const storageKey = buildStorageKey(userId, hash, fileObj.ext);
-    await localStorage.delete(storageKey);
-
-    await prisma.fileObject.delete({
-      where: {
-        userId_hash: { userId, hash },
-      },
-    });
-  } catch (e) {
-    logger.warn(`[ref-manager] gcFileIfOrphaned failed: hash=${hash}`, e);
+    logger.warn({ err: e }, "[ref-manager] cleanCanvasRefs failed");
   }
 }
