@@ -38,11 +38,14 @@ export async function persistFileObject(data: FilePersistenceInput) {
       source: data.source,
     });
   } catch (err: any) {
-    // IntegrityError → 去重命中，已存在同 hash 文件，静默忽略
+    // 记录完整错误信息，便于排查 DB 写入失败的真实原因
     logEvent("storage", {
-      stage: "dedup_hit",
+      stage: "persist_error",
       user: data.userId,
       hash: data.hash,
+      error: err?.message ?? String(err),
+      code: err?.code,
+      stack: err?.stack,
     });
   }
 }
