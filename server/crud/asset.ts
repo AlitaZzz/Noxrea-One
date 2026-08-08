@@ -228,6 +228,9 @@ export async function updateAssetsBatch(
   if (updates.folderId !== undefined) {
     data.folderId = updates.folderId;
   }
+  if (updates.type !== undefined) {
+    data.type = updates.type;
+  }
 
   const result = await prisma.assetItem.updateMany({
     where: { id: { in: ids } },
