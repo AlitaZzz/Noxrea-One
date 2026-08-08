@@ -3,6 +3,7 @@
  * 提供从视频文件中抽取指定帧并返回图片的接口。
  */
 import { Hono } from "hono";
+import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { captureVideoFrame } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
@@ -12,6 +13,11 @@ import { persistFileObject } from "@server/services/storage/persist";
 import { ok, fail } from "@server/core/response";
 import path from "path";
 import fs from "fs/promises";
+
+const captureFrameSchema = z.object({
+  video_key: z.string().min(1),
+  time: z.number().min(0).optional(),
+});
 
 const router = new Hono();
 
@@ -27,12 +33,11 @@ router.post("/api/files/capture-frame", async (c) => {
     return fail(400, "Invalid JSON body");
   }
 
-  const { video_key, time } = body as {
-    video_key?: string;
-    time?: number;
-  };
-
-  if (!video_key) return fail(400, "video_key is required");
+  const parsed = captureFrameSchema.safeParse(body);
+  if (!parsed.success) {
+    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+  }
+  const { video_key, time } = parsed.data;
 
   const videoPath = path.resolve(localStorage.baseDir, video_key);
 
