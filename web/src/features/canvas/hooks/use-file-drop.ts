@@ -13,7 +13,7 @@ import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
 import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import i18n from "@/lib/i18n/config";
 
 const GRID_COLS = 4;
 const GRID_GAP = 30;
@@ -134,20 +134,20 @@ export function useFileDrop(
       }
       const successCount = placeholderNodes.length - failed.length;
       if (successCount === 0 && notif) {
-        const t = useI18nStore.getState().t;
+        const t = i18n.t;
         // 全部失败时，优先显示服务端返回的具体原因
         const reason = failed.find((f) => f.reason)?.reason;
         notif.error({
-          title: t("file.upload.failed"),
-          description: reason ?? t("file.upload.failed.all"),
+          title: t("file.uploadFailed"),
+          description: reason ?? t("file.uploadFailedAll"),
           placement: "bottomRight",
           duration: 4,
         });
       } else if (failed.length > 0 && notif) {
-        const t = useI18nStore.getState().t;
+        const t = i18n.t;
         const reason = failed.find((f) => f.reason)?.reason;
         notif.error({
-          title: t("file.upload.failed"),
+          title: t("file.uploadFailed"),
           description: reason ? `${failed.length}/${files.length} - ${reason}` : `${failed.length}/${files.length}`,
           placement: "bottomRight",
           duration: 4,

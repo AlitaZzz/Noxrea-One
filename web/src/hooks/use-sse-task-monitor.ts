@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/utils/image-utils";
 import type { MediaGenFields } from "@/features/canvas/types";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useI18nStore } from "@/lib/i18n/store";
+import i18n from "@/lib/i18n/config";
 
 /**
  * SSE 任务监控 hook。
@@ -70,10 +70,10 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();
-                      const t = useI18nStore.getState().t;
+                      const t = i18n.t;
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t("generation.text.success"), placement: "bottomRight", duration: 5 });
+                        notifRef.current.success({ title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
@@ -108,7 +108,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                           markDirtyImmediate();
                         }
                       });
-                      const t = useI18nStore.getState().t;
+                      const t = i18n.t;
                       const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
                       // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
                       // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
@@ -119,7 +119,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t(isVideoNode ? "generation.video.success" : "generation.image.success"), description: desc, placement: "bottomRight", duration: 15 });
+                        notifRef.current.success({ title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
@@ -135,8 +135,8 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       markDirtyImmediate();
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
-                        const t = useI18nStore.getState().t;
-                        notifRef.current.error({ title: t(isVideoNode ? "generation.video.failed" : isTextNode ? "generation.failed" : "generation.image.failed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
+                        const t = i18n.t;
+                        notifRef.current.error({ title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
