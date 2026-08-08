@@ -20,15 +20,14 @@ import { memo, useCallback, useEffect,useRef, useState } from "react";
 
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
-import { createImageNode } from "@/features/canvas/node-defaults";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
-import { applyThumbnailSettings, computeNodeSize } from "@/lib/utils/image-utils";
+import { computeNodeSize, createNodeFromUrl } from "@/lib/utils/image-utils";
 import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
-import { findFreePosition, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useI18nStore } from "@/lib/i18n/store";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
@@ -42,8 +41,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [muted, setMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const addNodes = useCanvasStore((s) => s.addNodes);
-
   // Sync local src when data.src changes externally (e.g. from undo/clear),
   // adjusted during render to avoid cascading renders.
   const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
@@ -121,15 +118,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (!imgUrl) return;
 
       const nw = v.videoWidth, nh = v.videoHeight;
-      const node = createImageNode({ x: 0, y: 0 }, imgUrl);
       const label = `${data.alt || t("frame")} #${Math.round(seekTime * 10) / 10}s`;
-      applyThumbnailSettings(node, nw, nh, label);
-      const w = (node.style?.width as number) ?? 0;
-      const h = (node.style?.height as number) ?? 0;
-      node.position = findFreePosition({ width: w, height: h });
-      addNodes([node]);
+      await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" });
     } catch (e) { console.error("Frame capture failed:", e); }
-  }, [src, data.alt, addNodes]);
+  }, [src, data.alt, id]);
 
   const handleFile = useCallback(
     async (file: File) => {
