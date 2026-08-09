@@ -154,7 +154,7 @@
     "myApi": "我的 API",
     "preset": "预设",
     "addModelPlaceholder": "手动添加模型名称...",
-    "protocol": "协议",
+    "protocolLabel": "协议",
     "advancedSettings": "高级设置",
     "advConfig": "高级配置",
     "deleteChannel": "删除渠道",
