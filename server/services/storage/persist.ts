@@ -27,7 +27,7 @@ export async function persistFileObject(data: FilePersistenceInput) {
       size: data.size,
       mimeType: data.mimeType,
       ext: data.ext,
-      source: data.source ?? "ai_generated",
+      source: data.source ?? "generated",
     });
 
     logEvent("storage", {
