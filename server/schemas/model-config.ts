@@ -36,8 +36,11 @@ export type ChannelCreate = z.infer<typeof channelCreateSchema>;
 export type ChannelUpdate = z.infer<typeof channelUpdateSchema>;
 export type ChannelOut = z.infer<typeof channelOutSchema>;
 
-/** 掩码 apiKey：保留前4后4位 */
+/** 掩码 apiKey：保留前4后4位，中间用等长 * 填充，保持原始长度 */
 export function maskApiKey(key: string): string {
-  if (!key || key.length <= 8) return "****";
-  return key.slice(0, 4) + "****" + key.slice(-4);
+  if (!key || key.length <= 8) return "********";
+  const head = key.slice(0, 4);
+  const tail = key.slice(-4);
+  const stars = "*".repeat(key.length - 8);
+  return head + stars + tail;
 }
