@@ -156,11 +156,15 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     data = await response.json();
     logger.debug({ taskId, keys: Object.keys(data as object) }, "upstream response");
   } catch (err: unknown) {
-    const e = err as Error & { code?: string };
+    const e = err as Error & { code?: string; cause?: { code?: string; message?: string } };
     if (e.name === "TimeoutError" || e.code === "UND_ERR_HEADERS_TIMEOUT") {
       return { status: "failed", urls: [], error: "API call timed out" };
     }
-    return { status: "failed", urls: [], error: e.message?.slice(0, 500) ?? "Unknown error" };
+    const cause = e.cause;
+    const detail = cause
+      ? `${e.message} [cause: ${cause.code ?? cause.message}]`
+      : (e.message ?? "Unknown error");
+    return { status: "failed", urls: [], error: detail.slice(0, 500) };
   }
 
   // 2. 尝试同步提取结果
