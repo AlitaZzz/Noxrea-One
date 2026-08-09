@@ -321,7 +321,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
       description: "",
-      metadata: { sourceUrl: src },
+      metadata: {
+        sourceUrl: src,
+        prompt: d?.genSettings?.prompt,
+        source: d?.source,
+      },
     });
   }, [src, data.alt, data.label, id, addAsset]);
 
