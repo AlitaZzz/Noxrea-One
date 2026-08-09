@@ -177,7 +177,7 @@ export async function downloadAndSave(
       size: buffer.length,
       mimeType: mime,
       ext: fileExt,
-      source: "ai_generated",
+      source: "generated",
     });
 
     logEvent("storage.download", {
