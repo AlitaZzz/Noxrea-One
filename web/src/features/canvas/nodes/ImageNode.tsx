@@ -290,23 +290,20 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         if (op === "flipV") ctx.scale(1, -1);
         ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       });
-      const url = await uploadBlob(blob, `transform_${Date.now()}.png`);
+      const url = await uploadBlob(blob, `transform_${Date.now()}.png`, "derived");
       if (!url) throw new Error("Upload failed");
 
-      const nw = cw;
-      const nh = ch;
-      const { width, height } = computeNodeSize(nw, nh);
-
-      // 5. 更新节点
-      store.updateNodeData(id, {
-        src: url,
-        naturalWidth: nw,
-        naturalHeight: nh,
-        taskBinding: undefined,
-        rotation: undefined,
-        flipH: undefined,
-        flipV: undefined,
-      }, { width, height }, { skipHistory: true });
+      // 3. 创建派生新节点（与九宫格逻辑一致）
+      const suffix = op === "rot90" ? " (旋转)" : op === "flipH" ? " (水平翻转)" : " (垂直翻转)";
+      await createNodeFromUrl(
+        id,
+        url,
+        cw,
+        ch,
+        suffix,
+        useCanvasStore.getState(),
+        { source: "derived" },
+      );
       markDirtyImmediate();
     } catch (e) {
       store.updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
