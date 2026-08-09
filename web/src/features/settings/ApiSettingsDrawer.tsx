@@ -44,10 +44,10 @@ const CAPABILITY_TABS: {
   icon: ReactNode;
   color: string;
 }[] = [
-  { key: "text", labelKey: "text.cap", icon: <TextIcon />, color: "#1677ff" },
-  { key: "image", labelKey: "image.cap", icon: <PictureOutlined />, color: "#52c41a" },
-  { key: "video", labelKey: "video.cap", icon: <VideoCameraOutlined />, color: "#13c2c2" },
-  { key: "audio", labelKey: "audio.cap", icon: <AudioOutlined />, color: "#fa8c16" },
+  { key: "text", labelKey: "modelConfig.cap.text", icon: <TextIcon />, color: "#1677ff" },
+  { key: "image", labelKey: "modelConfig.cap.image", icon: <PictureOutlined />, color: "#52c41a" },
+  { key: "video", labelKey: "modelConfig.cap.video", icon: <VideoCameraOutlined />, color: "#13c2c2" },
+  { key: "audio", labelKey: "modelConfig.cap.audio", icon: <AudioOutlined />, color: "#fa8c16" },
 ];
 
 // 单行（已 memo）：仅在 m / checked / activeCap / onToggle 变化时才重渲染
@@ -161,7 +161,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     if (editChannelId) {
       updateChannel(editChannelId, {
         name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
-        apiKey: keyDirty ? (chForm.apiKey.trim() || undefined) : undefined,
+        apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
         config: configObj,
       });
       message.success(t("modelConfig.channelUpdated"));
@@ -391,7 +391,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
             <div className="flex flex-col gap-2" style={{ flex: 1 }}>
               <div className="flex gap-1">
                 <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
-                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocol")}</span>
+                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocolLabel")}</span>
                   <Select
                     size="small"
                     value={chForm.protocol}

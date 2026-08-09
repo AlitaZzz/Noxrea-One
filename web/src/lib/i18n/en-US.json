@@ -154,7 +154,7 @@
     "myApi": "My API",
     "preset": "Preset",
     "addModelPlaceholder": "Add model name manually...",
-    "protocol": "Protocol",
+    "protocolLabel": "Protocol",
     "advancedSettings": "Advanced Settings",
     "advConfig": "Advanced Config",
     "deleteChannel": "Delete Channel",
