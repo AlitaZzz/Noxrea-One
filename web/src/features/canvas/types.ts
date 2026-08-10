@@ -97,6 +97,7 @@ export interface MediaGenFields {
 export interface GroupableData {
   /** 所属组的节点 id；未分组时为 undefined */
   groupId?: string;
+  [key: string]: unknown;
 }
 
 export type TextNodeData = GroupableData & {
