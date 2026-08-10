@@ -10,7 +10,7 @@ import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
 
-import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT,NODE_TYPE } from "@/lib/constants";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { useTranslation } from "react-i18next";
 
@@ -30,18 +30,18 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const gx = groupPos?.x ?? 0;
   const gy = groupPos?.y ?? 0;
   const childMaxX = allNodes.reduce(
-    (mx, n) => (n.data?.groupId === id ? Math.max(mx, n.position.x - gx + (Number(n.style?.width) || 0)) : mx),
+    (mx, n) => (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id ? Math.max(mx, n.position.x - gx + (Number(n.style?.width) || 0)) : mx),
     0
   );
   const childMaxY = allNodes.reduce(
-    (my, n) => (n.data?.groupId === id ? Math.max(my, n.position.y - gy + (Number(n.style?.height) || 0)) : my),
+    (my, n) => (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id ? Math.max(my, n.position.y - gy + (Number(n.style?.height) || 0)) : my),
     0
   );
   const dynMinWidth = Math.max(GROUP_NODE_MIN_WIDTH, childMaxX + GROUP_NODE_PADDING);
   const dynMinHeight = Math.max(GROUP_NODE_MIN_HEIGHT, childMaxY + GROUP_NODE_PADDING);
 
   // 实时成员计数（纯派生，不落库）：拖入/拖出组时随 groupId 自动更新
-  const memberCount = allNodes.filter((n) => n.data?.groupId === id).length;
+  const memberCount = allNodes.filter((n) => n.type !== NODE_TYPE.GROUP && n.data?.groupId === id).length;
 
   return (
     <div className="group relative w-full h-full flex flex-col">

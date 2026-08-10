@@ -180,8 +180,8 @@ function CanvasElementsView() {
     const byType = new Map<string, AnyNode[]>();
     for (const n of nodes) {
       const list = byType.get(n.type || "");
-      if (list) list.push(n as AnyNode);
-      else byType.set(n.type || "", [n as AnyNode]);
+      if (list) list.push(n);
+      else byType.set(n.type || "", [n]);
     }
     for (const type of NODE_TYPE_ORDER) {
       const list = byType.get(type);
@@ -209,7 +209,7 @@ function CanvasElementsView() {
               {group.nodes.map((node) => (
                 <ElementItem
                   key={node.id}
-                  node={node as AnyNode}
+                  node={node}
                   selected={selectedNodeIds.has(node.id)}
                 />
               ))}

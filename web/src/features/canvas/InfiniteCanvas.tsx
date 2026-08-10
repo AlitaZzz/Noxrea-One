@@ -203,16 +203,17 @@ export default function InfiniteCanvas() {
   // ---- Change handlers ----
 
   const handleNodesChange = useCallback(
-    (changes: NodeChange[]) => {
+    (changes: NodeChange<AnyNode>[]) => {
       const currentNodes = useCanvasStore.getState().nodes;
 
-      const applied = applyNodeChanges(changes, currentNodes) as AnyNode[];
+      const applied = applyNodeChanges(changes, currentNodes);
 
       // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附与组跟随共用）
       const positionChanges = changes.filter(
-        (c) => c.type === "position" && (c as unknown as { dragging?: boolean }).dragging,
+        (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> =>
+          c.type === "position" && c.dragging === true,
       );
-      const draggedNodeIds = new Set(positionChanges.map((c) => (c as { id: string }).id));
+      const draggedNodeIds = new Set(positionChanges.map((c) => c.id));
 
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
@@ -273,9 +274,9 @@ export default function InfiniteCanvas() {
       // 因为节点均为绝对坐标，需把 React Flow 在 applyNodeChanges 后算出的
       // 组位移反推回成员节点（applyNodeChanges 已移动组本身）。
       const groupDrag = positionChanges.find((c) => {
-        const node = currentNodes.find((n) => n.id === (c as { id: string }).id);
+        const node = currentNodes.find((n) => n.id === c.id);
         return node?.type === NODE_TYPE.GROUP;
-      }) as (NodeChange & { type: "position"; id: string; position?: { x: number; y: number }; dragging?: boolean }) | undefined;
+      });
 
       let finalNodes = appliedNodes;
       if (groupDrag && groupDrag.position) {
@@ -285,7 +286,7 @@ export default function InfiniteCanvas() {
           const deltaY = groupDrag.position.y - groupNode.position.y;
           if (deltaX !== 0 || deltaY !== 0) {
             finalNodes = appliedNodes.map((n) => {
-              if (n.id === groupDrag.id) return n;
+              if (n.id === groupDrag.id || n.type === NODE_TYPE.GROUP) return n;
               if (n.data?.groupId === groupDrag.id) {
                 return { ...n, position: { x: n.position.x + deltaX, y: n.position.y + deltaY } };
               }
@@ -308,7 +309,7 @@ export default function InfiniteCanvas() {
   );
 
   const handleEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
+    (changes: EdgeChange<Edge>[]) => {
       setEdges(applyEdgeChanges(changes, useCanvasStore.getState().edges));
     },
     [setEdges]
@@ -359,7 +360,7 @@ export default function InfiniteCanvas() {
       const allNodes = useCanvasStore.getState().nodes;
 
       // 成员节点：拖拽停止后，若中心点已离开所属组的矩形范围，则脱离组
-      if (draggedNode.data?.groupId && draggedNode.type !== NODE_TYPE.GROUP) {
+      if (draggedNode.type !== NODE_TYPE.GROUP && draggedNode.data?.groupId) {
         const group = allNodes.find((n) => n.id === draggedNode.data?.groupId);
         if (group) {
           const groupW = Number(group.style?.width) || group.width || 0;
@@ -379,7 +380,7 @@ export default function InfiniteCanvas() {
             setNodes(
               allNodes.map((n) =>
                 n.id === draggedNode.id
-                  ? { ...n, data: { ...n.data, groupId: undefined } }
+                  ? ({ ...n, data: { ...n.data, groupId: undefined } } as AnyNode)
                   : n
               )
             );
@@ -408,7 +409,7 @@ export default function InfiniteCanvas() {
           setNodes(
             allNodes.map((n) =>
               n.id === draggedNode.id
-                ? { ...n, data: { ...n.data, groupId: targetGroup.id } }
+                ? ({ ...n, data: { ...n.data, groupId: targetGroup.id } } as AnyNode)
                 : n
             )
           );

@@ -8,7 +8,7 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { saveManager } from "@/features/project/save-manager";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
+import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT,NODE_TYPE } from "@/lib/constants";
 import type { BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
@@ -181,11 +181,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       // 删除组节点时，仅清空成员节点的 groupId 归属，不删除成员本身
       const nodes = s.nodes.map((n) => {
         if (toDelete.has(n.id)) return n;
-        if (n.data?.groupId && toDelete.has(n.data.groupId)) {
-          const { groupId: _omit, ...restData } = n.data as Record<string, unknown> & {
-            groupId?: string;
-          };
-          return { ...n, data: restData };
+        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
+          return { ...n, data: { ...n.data, groupId: undefined } } as AnyNode;
         }
         return n;
       });
@@ -265,10 +262,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     const vp = project.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
     set({
-      nodes: ((project.nodes || []) as AnyNode[]).map((n) => ({
-        ...n,
-        data: { ...n.data },
-      })) as AnyNode[],
+      nodes: (project.nodes || []).map((n) => ({ ...n, data: { ...n.data } }) as AnyNode),
       edges: (project.edges || []) as Edge[],
       viewport: vp,
       background: project.background || DEFAULT_BACKGROUND,
