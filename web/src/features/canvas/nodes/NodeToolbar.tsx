@@ -24,6 +24,7 @@ import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
+import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { EventNames } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
@@ -271,6 +272,17 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={(e) => {
                 e.stopPropagation();
                 window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
+              }}
+            />
+          </Tooltip>
+          <Tooltip title={t("common.layout")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<GroupGridIcon />}
+              onClick={(e) => {
+                e.stopPropagation();
               }}
             />
           </Tooltip>
