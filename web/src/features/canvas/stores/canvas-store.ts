@@ -177,20 +177,20 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   removeNodes: (nodeIds, options) => {
     maybePushHistory(options);
     set((s) => {
-      // 递归收集所有后代节点（子节点的 parentId 指向待删除节点）
       const toDelete = new Set(nodeIds);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const n of s.nodes) {
-          if (n.parentId && toDelete.has(n.parentId) && !toDelete.has(n.id)) {
-            toDelete.add(n.id);
-            changed = true;
-          }
+      // 删除组节点时，仅清空成员节点的 groupId 归属，不删除成员本身
+      const nodes = s.nodes.map((n) => {
+        if (toDelete.has(n.id)) return n;
+        if (n.data?.groupId && toDelete.has(n.data.groupId)) {
+          const { groupId: _omit, ...restData } = n.data as Record<string, unknown> & {
+            groupId?: string;
+          };
+          return { ...n, data: restData };
         }
-      }
+        return n;
+      });
       return {
-        nodes: s.nodes.filter((n) => !toDelete.has(n.id)),
+        nodes: nodes.filter((n) => !toDelete.has(n.id)),
         edges: s.edges.filter(
           (e) => !toDelete.has(e.source) && !toDelete.has(e.target)
         ),
