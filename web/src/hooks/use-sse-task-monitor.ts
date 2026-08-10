@@ -27,9 +27,22 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-      import("@/features/canvas/api/generation-api").then(({ generationApi }) => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    import("@/features/canvas/api/generation-api").then(({ generationApi }) => {
+      if (cancelled) return;
       const scanAndConnect = () => {
         const allNodes = useCanvasStore.getState().nodes;
+        // 清理 notifiedTasksRef：只保留当前节点中仍存在的任务 ID，避免 Set 无界增长
+        const activeTaskIds = new Set<string>();
+        for (const n of allNodes) {
+          const tb = (n.data as MediaGenFields).taskBinding;
+          if (tb?.taskId) activeTaskIds.add(tb.taskId);
+        }
+        for (const id of notifiedTasksRef.current) {
+          if (!activeTaskIds.has(id)) notifiedTasksRef.current.delete(id);
+        }
         for (const node of allNodes) {
           const binding = (node.data as MediaGenFields).taskBinding;
           if (!binding?.taskId) continue;
@@ -151,12 +164,14 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       };
 
       scanAndConnect();
-      const timer = setInterval(scanAndConnect, 3000);
-      return () => {
-        clearInterval(timer);
-        for (const ctrl of sseCtrlsRef.current.values()) ctrl.abort();
-        sseCtrlsRef.current.clear();
-      };
+      timer = setInterval(scanAndConnect, 3000);
     });
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+      for (const ctrl of sseCtrlsRef.current.values()) ctrl.abort();
+      sseCtrlsRef.current.clear();
+    };
   }, []);
 }
