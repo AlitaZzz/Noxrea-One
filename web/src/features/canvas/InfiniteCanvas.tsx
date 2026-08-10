@@ -343,6 +343,9 @@ export default function InfiniteCanvas() {
       if (currentCropping && currentCropping !== nodeId) {
         useCanvasStore.getState().setCroppingNodeId(null);
       }
+      // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
+      if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
+
       setNodes(
         useCanvasStore.getState().nodes.map((n) => ({
           ...n,
@@ -440,7 +443,7 @@ export default function InfiniteCanvas() {
         selectionMode={SelectionMode.Partial}
         nodeDragThreshold={2}
         nodeClickDistance={3}
-        multiSelectionKeyCode="Shift"
+        multiSelectionKeyCode={["Shift", "Control", "Meta"]}
         deleteKeyCode={[]}
         fitView={false}
         panOnDrag={[0, 1]}
