@@ -159,7 +159,8 @@ export function useCanvasKeyboard() {
         const prev = undoHistory(takeCanvasSnapshot());
         if (prev) {
           const s = useCanvasStore.getState();
-          s.setNodes(prev.nodes.map((n) => ({ ...n, selected: false })));
+          const restoredNodes = prev.nodes.map((n) => ({ ...n, selected: false }));
+          s.setNodes(restoredNodes);
           s.setEdges(prev.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(prev.viewport);
           s.setBackground(prev.background);
@@ -178,7 +179,8 @@ export function useCanvasKeyboard() {
         const next = redoHistory(takeCanvasSnapshot());
         if (next) {
           const s = useCanvasStore.getState();
-          s.setNodes(next.nodes.map((n) => ({ ...n, selected: false })));
+          const restoredNodes = next.nodes.map((n) => ({ ...n, selected: false }));
+          s.setNodes(restoredNodes);
           s.setEdges(next.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
           s.setViewport(next.viewport);
           s.setBackground(next.background);
