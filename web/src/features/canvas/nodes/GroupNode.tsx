@@ -8,58 +8,45 @@
 import { GroupOutlined } from "@ant-design/icons";
 import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
-import { memo, useCallback,useState } from "react";
+import { memo } from "react";
 
-import { EventNames, GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { useTranslation } from "react-i18next";
 
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(data.label || t("node.group"));
-
-  const handleLabelChange = useCallback(
-    (value: string) => {
-      setLabel(value);
-      window.dispatchEvent(
-        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-          detail: { nodeId: id, data: { ...data, label: value || t("node.group") } },
-        })
-      );
-    },
-    [id, data]
-  );
+  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
+    useEditableTitle(id, data.label || t("node.group"));
 
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title — same as ImageNode */}
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        <span className="truncate">
-          <GroupOutlined className="mr-1" />
-          {editing ? (
+        {editingTitle ? (
+          <span className="flex items-center gap-0.5 flex-1 min-w-0">
+            <GroupOutlined className="shrink-0" />
             <Input
               size="small"
               variant="borderless"
               className="text-[13px] font-medium text-white/80"
-              value={label}
-              onChange={(e) => handleLabelChange(e.target.value)}
-              onBlur={() => setEditing(false)}
-              onPressEnter={() => setEditing(false)}
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleTitleSave}
+              onPressEnter={handleTitleSave}
               autoFocus
               style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
             />
-          ) : (
-            <span
-              className="cursor-text"
-              onDoubleClick={() => setEditing(true)}
-            >
-              {label}
-            </span>
-          )}
-        </span>
+          </span>
+        ) : (
+          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
+            <GroupOutlined className="mr-1" />
+            {data.label || t("node.group")}
+          </span>
+        )}
       </div>
 
       {/* Body — subtle transparent background to show group boundary */}

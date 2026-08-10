@@ -83,6 +83,7 @@
     "video": "Video",
     "audio": "Audio",
     "group": "Group",
+    "groupWithCount": "Group of {{count}} nodes",
     "director": "3D Director",
     "directorDesc": "Build 3D scenes and multi-angle capture",
     "directorOpen": "Open Director",

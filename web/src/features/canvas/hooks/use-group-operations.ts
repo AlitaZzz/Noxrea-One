@@ -8,6 +8,7 @@ import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
 import { EventNames, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 
@@ -47,7 +48,8 @@ export function useGroupOperations() {
 
       const groupNode = createGroupNode(
         { x: groupX, y: groupY },
-        { width: groupW, height: groupH }
+        { width: groupW, height: groupH },
+        i18n.t("node.groupWithCount", { count: selected.length })
       );
 
       const store = useCanvasStore.getState();
