@@ -67,11 +67,7 @@ export function useGroupOperations() {
       const updatedNodes = store.nodes.map((n): AnyNode => {
         if (n.type === NODE_TYPE.GROUP) return n;
         if (selected.find((s) => s.id === n.id)) {
-          return {
-            ...n,
-            data: { ...n.data, groupId: groupNode.id },
-            selected: false,
-          };
+          return { ...n, data: { ...n.data, groupId: groupNode.id }, selected: false } as AnyNode;
         }
         return n;
       });
@@ -96,7 +92,7 @@ export function useGroupOperations() {
           if (n.type === NODE_TYPE.GROUP) return n;
           if (n.data.groupId === group.id) {
             const { groupId: _omit, ...restData } = n.data;
-            return { ...n, data: restData };
+            return { ...n, data: restData } as AnyNode;
           }
           return n;
         });
