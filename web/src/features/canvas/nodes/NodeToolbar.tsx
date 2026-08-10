@@ -23,6 +23,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { EventNames } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
@@ -34,6 +35,7 @@ const NODE_ACTIONS = {
   VIDEO: "video-node" as const,
   AUDIO: "audio-node" as const,
   TEXT: "text-node" as const,
+  GROUP: "group-node" as const,
 };
 
 interface NodeToolbarProps {
@@ -252,6 +254,25 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Tooltip title={t("common.clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />} disabled={!textContent}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
+          </Tooltip>
+        </>
+      )}
+
+      {/* Group node actions */}
+      {nodeType === NODE_ACTIONS.GROUP && (
+        <>
+          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={t("common.ungroup")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<UngroupIcon />}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
+              }}
+            />
           </Tooltip>
         </>
       )}
