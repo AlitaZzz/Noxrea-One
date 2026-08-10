@@ -98,6 +98,9 @@
     "gridSplit": "宫格切分",
     "gridCustom": "自定义",
     "gridSelect": "选择行列数",
+    "gridLayout": "宫格布局",
+    "verticalLayout": "垂直布局",
+    "horizontalLayout": "水平布局",
     "saveToAssets": "保存到素材",
     "alreadySaved": "已在素材库"
   },
