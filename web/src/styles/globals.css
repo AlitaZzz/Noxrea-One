@@ -116,6 +116,18 @@
 .react-flow__node { font-family: inherit; }
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
+/* Multi-select rect: expand outward by GROUP_NODE_PADDING(40) so selection
+   matches the group node's bounding box size */
+.react-flow__nodesselection-rect {
+  box-sizing: content-box;
+  padding: 40px;
+  margin: -40px;
+}
+/* Hide selection rect when all selected nodes are groups
+   (group nodes have their own border, the rect is redundant) */
+.hide-selection-rect .react-flow__nodesselection-rect {
+  display: none;
+}
 
 /* Shared reset button hover (matches modal close button hover) */
 .panel-reset-btn {
