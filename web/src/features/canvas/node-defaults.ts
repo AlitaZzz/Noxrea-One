@@ -130,7 +130,7 @@ export function createGroupNode(
     id: uid("group"),
     type: NODE_TYPE.GROUP,
     position,
-    data: { label: label || i18n.t("node.group") } as GroupNodeData,
+    data: { label: label || "" } as GroupNodeData,
     style: { width: size.width, height: size.height },
     className: "react-flow__node-group",
   };
