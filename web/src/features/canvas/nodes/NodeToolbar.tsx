@@ -283,11 +283,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon /> {t("node.gridLayout")}</span>
               </MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon /> {t("node.verticalLayout")}</span>
-              </MenuItem>
               <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon /> {t("node.horizontalLayout")}</span>
+              </MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon /> {t("node.verticalLayout")}</span>
               </MenuItem>
             </div>}>
             <Tooltip title={t("common.layout")}>
