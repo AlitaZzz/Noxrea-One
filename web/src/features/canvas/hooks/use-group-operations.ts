@@ -1,6 +1,7 @@
 /**
  * 节点编组 / 取消编组 hook。
- * 监听编组事件，计算包围盒、转换子节点相对坐标并维护父子关系与历史快照。
+ * 监听编组事件，计算包围盒并为子节点打上 groupId 逻辑归属标记（坐标保持绝对，
+ * 不再使用 React Flow 的 parentId / 相对坐标嵌套）。
  */
 "use client";
 
@@ -8,7 +9,6 @@ import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
 import { EventNames, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
-import i18n from "@/lib/i18n/config";
 import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 
@@ -48,22 +48,16 @@ export function useGroupOperations() {
 
       const groupNode = createGroupNode(
         { x: groupX, y: groupY },
-        { width: groupW, height: groupH },
-        i18n.t("node.groupWithCount", { count: selected.length })
+        { width: groupW, height: groupH }
       );
 
       const store = useCanvasStore.getState();
-      // Move selected nodes to be children of the group
+      // 给选中的节点打上逻辑归属标记（groupId），坐标保持绝对不变
       const updatedNodes = store.nodes.map((n) => {
         if (selected.find((s) => s.id === n.id)) {
           return {
             ...n,
-            parentId: groupNode.id,
-            position: {
-              x: n.position.x - groupX,
-              y: n.position.y - groupY,
-            },
-            extent: "parent" as const,
+            data: { ...n.data, groupId: groupNode.id },
             selected: false,
           };
         }
@@ -85,21 +79,11 @@ export function useGroupOperations() {
       let newNodes = [...store.nodes];
 
       for (const group of selectedGroup) {
-        const groupX = group.position.x;
-        const groupY = group.position.y;
-
-        // Move children back to absolute positions
+        // 清除归属到该组的子节点标记（坐标保持绝对不变）
         newNodes = newNodes.map((n) => {
-          if (n.parentId === group.id) {
-            return {
-              ...n,
-              parentId: undefined,
-              extent: undefined,
-              position: {
-                x: n.position.x + groupX,
-                y: n.position.y + groupY,
-              },
-            };
+          if (n.data?.groupId === group.id) {
+            const { groupId: _omit, ...restData } = n.data as Record<string, unknown> & { groupId?: string };
+            return { ...n, data: restData };
           }
           return n;
         });
