@@ -5,6 +5,7 @@
  */
 import { MarkerType } from "@xyflow/react";
 
+import i18n from "@/lib/i18n/config";
 import {
   AUDIO_NODE_HEIGHT,
   AUDIO_NODE_WIDTH,
@@ -129,7 +130,7 @@ export function createGroupNode(
     id: uid("group"),
     type: NODE_TYPE.GROUP,
     position,
-    data: { label: label || "Group" } as GroupNodeData,
+    data: { label: label || i18n.t("node.group") } as GroupNodeData,
     style: { width: size.width, height: size.height },
     className: "react-flow__node-group",
   };
