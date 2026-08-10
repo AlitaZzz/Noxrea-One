@@ -98,6 +98,9 @@
     "gridSplit": "Grid Split",
     "gridCustom": "Custom",
     "gridSelect": "Select rows & cols",
+    "gridLayout": "Grid Layout",
+    "verticalLayout": "Vertical Layout",
+    "horizontalLayout": "Horizontal Layout",
     "saveToAssets": "Save to Assets",
     "alreadySaved": "Already in assets"
   },

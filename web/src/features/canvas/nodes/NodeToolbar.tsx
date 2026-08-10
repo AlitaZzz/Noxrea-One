@@ -25,6 +25,8 @@ import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
+import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
+import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { EventNames } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
@@ -275,17 +277,28 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               }}
             />
           </Tooltip>
-          <Tooltip title={t("common.layout")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<GroupGridIcon />}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            />
-          </Tooltip>
+          <Popover trigger="click" placement="bottom"
+            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
+              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon /> {t("node.gridLayout")}</span>
+              </MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon /> {t("node.verticalLayout")}</span>
+              </MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon /> {t("node.horizontalLayout")}</span>
+              </MenuItem>
+            </div>}>
+            <Tooltip title={t("common.layout")}>
+              <Button
+                type="text"
+                size="middle"
+                style={{ padding: 8 }}
+                icon={<GroupGridIcon />}
+              />
+            </Tooltip>
+          </Popover>
         </>
       )}
     </div>
