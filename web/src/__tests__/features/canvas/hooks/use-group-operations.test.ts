@@ -39,25 +39,18 @@ function computeGroupBox(nodes: AnyNode[]): { x: number; y: number; w: number; h
   };
 }
 
-// ── 纯函数：将子节点坐标转为父节点相对坐标 ──────────────────────
+// ── 纯函数：为子节点打上 groupId 逻辑归属（坐标保持绝对不变） ──
 
-function toParentRelative(
+function assignGroup(
   nodes: AnyNode[],
   selectedIds: Set<string>,
-  groupX: number,
-  groupY: number,
   groupId: string,
 ): AnyNode[] {
   return nodes.map((n) => {
     if (selectedIds.has(n.id)) {
       return {
         ...n,
-        parentId: groupId,
-        position: {
-          x: n.position.x - groupX,
-          y: n.position.y - groupY,
-        },
-        extent: "parent" as const,
+        data: { ...n.data, groupId },
         selected: false,
       };
     }
@@ -65,25 +58,15 @@ function toParentRelative(
   });
 }
 
-// ── 纯函数：将子节点坐标恢复为绝对坐标 ──────────────────────────
+// ── 纯函数：清除子节点的 groupId 归属（坐标保持绝对不变） ────────
 
-function toAbsolutePosition(
-  nodes: AnyNode[],
-  groupId: string,
-  groupX: number,
-  groupY: number,
-): AnyNode[] {
+function clearGroup(nodes: AnyNode[], groupId: string): AnyNode[] {
   return nodes.map((n) => {
-    if (n.parentId === groupId) {
-      return {
-        ...n,
-        parentId: undefined,
-        extent: undefined,
-        position: {
-          x: n.position.x + groupX,
-          y: n.position.y + groupY,
-        },
+    if (n.data?.groupId === groupId) {
+      const { groupId: _omit, ...rest } = n.data as Record<string, unknown> & {
+        groupId?: string;
       };
+      return { ...n, data: rest };
     }
     return n;
   });
@@ -151,67 +134,60 @@ describe("computeGroupBox", () => {
   });
 });
 
-describe("toParentRelative", () => {
-  it("子节点坐标转为相对于 group 的偏移", () => {
+describe("assignGroup", () => {
+  it("为子节点打上 groupId，坐标保持绝对不变", () => {
     const nodes = [
       { id: "a", position: { x: 200, y: 150 }, style: { width: 100, height: 80 } },
       { id: "b", position: { x: 350, y: 200 }, style: { width: 120, height: 60 } },
     ] as AnyNode[];
-    const groupX = 160, groupY = 110;
-    const result = toParentRelative(nodes, new Set(["a", "b"]), groupX, groupY, "group1");
+    const result = assignGroup(nodes, new Set(["a", "b"]), "group1");
 
-    expect(result[0].parentId).toBe("group1");
-    expect(result[0].position).toEqual({ x: 40, y: 40 });  // 200-160, 150-110
-    expect(result[0].extent).toBe("parent");
+    expect((result[0].data as { groupId?: string }).groupId).toBe("group1");
+    expect(result[0].position).toEqual({ x: 200, y: 150 });  // 坐标不变
     expect(result[0].selected).toBe(false);
 
-    expect(result[1].parentId).toBe("group1");
-    expect(result[1].position).toEqual({ x: 190, y: 90 });  // 350-160, 200-110
+    expect((result[1].data as { groupId?: string }).groupId).toBe("group1");
+    expect(result[1].position).toEqual({ x: 350, y: 200 });
   });
 
   it("未选中的节点不受影响", () => {
     const nodes = [
-      { id: "a", position: { x: 100, y: 100 } },
-      { id: "b", position: { x: 300, y: 100 } },
+      { id: "a", position: { x: 100, y: 100 }, data: {} },
+      { id: "b", position: { x: 300, y: 100 }, data: {} },
     ] as AnyNode[];
-    const result = toParentRelative(nodes, new Set(["a"]), 80, 80, "g1");
-    expect(result[0].parentId).toBe("g1");
-    expect(result[1].parentId).toBeUndefined();
+    const result = assignGroup(nodes, new Set(["a"]), "g1");
+    expect((result[0].data as { groupId?: string }).groupId).toBe("g1");
+    expect((result[1].data as { groupId?: string }).groupId).toBeUndefined();
     expect(result[1].position).toEqual({ x: 300, y: 100 });
   });
 });
 
-describe("toAbsolutePosition", () => {
-  it("恢复子节点到原始绝对坐标", () => {
+describe("clearGroup", () => {
+  it("清除子节点的 groupId，坐标保持绝对不变", () => {
     const nodes = [
-      {
-        id: "a", parentId: "g1",
-        position: { x: 40, y: 40 },
-        extent: "parent" as const,
-      },
-      { id: "b", parentId: undefined, position: { x: 500, y: 200 } },
+      { id: "a", position: { x: 200, y: 150 }, data: { groupId: "g1" } },
+      { id: "b", position: { x: 500, y: 200 }, data: {} },
     ] as AnyNode[];
-    const result = toAbsolutePosition(nodes, "g1", 160, 110);
+    const result = clearGroup(nodes, "g1");
 
-    expect(result[0].parentId).toBeUndefined();
-    expect(result[0].extent).toBeUndefined();
-    expect(result[0].position).toEqual({ x: 200, y: 150 });  // 40+160, 40+110
+    expect((result[0].data as { groupId?: string }).groupId).toBeUndefined();
+    expect(result[0].position).toEqual({ x: 200, y: 150 });  // 坐标不变
     // 非子节点不受影响
-    expect(result[1].parentId).toBeUndefined();
+    expect((result[1].data as { groupId?: string }).groupId).toBeUndefined();
     expect(result[1].position).toEqual({ x: 500, y: 200 });
   });
 
-  it("多个 group 各自恢复子节点", () => {
+  it("多个 group 各自清除成员", () => {
     const nodes = [
-      { id: "a", parentId: "g1", position: { x: 10, y: 20 } },
-      { id: "b", parentId: "g2", position: { x: 30, y: 40 } },
+      { id: "a", position: { x: 10, y: 20 }, data: { groupId: "g1" } },
+      { id: "b", position: { x: 30, y: 40 }, data: { groupId: "g2" } },
     ] as AnyNode[];
-    const r1 = toAbsolutePosition(nodes, "g1", 100, 200);
-    expect(r1[0].position).toEqual({ x: 110, y: 220 });
-    expect(r1[1].position).toEqual({ x: 30, y: 40 });  // g2's child not affected
+    const r1 = clearGroup(nodes, "g1");
+    expect((r1[0].data as { groupId?: string }).groupId).toBeUndefined();
+    expect((r1[1].data as { groupId?: string }).groupId).toBe("g2");  // g2 不受影响
 
-    const r2 = toAbsolutePosition(nodes, "g2", 300, 400);
-    expect(r2[0].position).toEqual({ x: 10, y: 20 });  // g1's child not affected
-    expect(r2[1].position).toEqual({ x: 330, y: 440 });
+    const r2 = clearGroup(nodes, "g2");
+    expect((r2[0].data as { groupId?: string }).groupId).toBe("g1");  // g1 不受影响
+    expect((r2[1].data as { groupId?: string }).groupId).toBeUndefined();
   });
 });
