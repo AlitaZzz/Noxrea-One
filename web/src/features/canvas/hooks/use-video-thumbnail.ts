@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 /** 模块级全局缓存：跨组件实例与 tab 切换复用，避免重复解码视频 */
 const videoThumbCache = new Map<string, string>();
 
+/** 缓存条目上限，超出时按 FIFO 淘汰最旧条目（40 条 × ~1.5MB ≈ 60MB） */
+const MAX_VIDEO_THUMB_CACHE = 40;
+
 /** 从视频 URL 提取第一帧缩略图（带模块级缓存） */
 export function useVideoThumbnail(src: string | undefined) {
   const [thumb, setThumb] = useState<string | null>(null);
@@ -36,6 +39,11 @@ export function useVideoThumbnail(src: string | undefined) {
         canvas.height = video.videoHeight;
         canvas.getContext("2d")!.drawImage(video, 0, 0);
         const url = canvas.toDataURL("image/jpeg", 0.6);
+        // FIFO 淘汰：超出上限时删除最早插入的条目
+        if (videoThumbCache.size >= MAX_VIDEO_THUMB_CACHE) {
+          const oldest = videoThumbCache.keys().next().value;
+          if (oldest !== undefined) videoThumbCache.delete(oldest);
+        }
         videoThumbCache.set(src, url);
         setThumb(url);
       } catch { /* noop */ }
