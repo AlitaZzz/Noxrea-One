@@ -105,6 +105,15 @@ export default function InfiniteCanvas() {
     [nodes]
   );
 
+
+
+  // When all selected nodes are groups, hide the built-in selection rect
+  // (group nodes have their own border, the rect is redundant)
+  const hideSelectionRect = useMemo(() => {
+    const selected = nodes.filter((n) => n.selected);
+    return selected.length > 0 && selected.every((n) => n.type === NODE_TYPE.GROUP);
+  }, [nodes]);
+
   // 冻结 defaultViewport 引用——React Flow 仅在首次挂载时读取此值，
   // 后续 viewport 变更走 store + setRfViewport，绝不能让此 prop 随渲染更新，
   // 否则会触发 onViewportChange -> setViewport -> 重渲染 -> defaultViewport 变 -> ∞
@@ -195,17 +204,20 @@ export default function InfiniteCanvas() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const applied = applyNodeChanges(changes, useCanvasStore.getState().nodes) as AnyNode[];
+      const currentNodes = useCanvasStore.getState().nodes;
+
+      const applied = applyNodeChanges(changes, currentNodes) as AnyNode[];
+
+      // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附与组跟随共用）
+      const positionChanges = changes.filter(
+        (c) => c.type === "position" && (c as unknown as { dragging?: boolean }).dragging,
+      );
+      const draggedNodeIds = new Set(positionChanges.map((c) => (c as { id: string }).id));
+
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
 
       if (snapToGrid) {
-        // 检查是否有节点正在被拖拽
-        const positionChanges = changes.filter(
-          (c) => c.type === "position" && (c as unknown as { dragging?: boolean }).dragging,
-        );
-        const draggedNodeIds = new Set(positionChanges.map((c) => (c as { id: string }).id));
-
         appliedNodes = applied.map((n) => {
           let posX = n.position.x;
           let posY = n.position.y;
@@ -257,7 +269,33 @@ export default function InfiniteCanvas() {
         appliedNodes = applied;
       }
 
-      setNodes(appliedNodes);
+      // 拖动组节点时，手动把同 groupId 的成员节点同步平移相同 delta。
+      // 因为节点均为绝对坐标，需把 React Flow 在 applyNodeChanges 后算出的
+      // 组位移反推回成员节点（applyNodeChanges 已移动组本身）。
+      const groupDrag = positionChanges.find((c) => {
+        const node = currentNodes.find((n) => n.id === (c as { id: string }).id);
+        return node?.type === NODE_TYPE.GROUP;
+      }) as (NodeChange & { type: "position"; id: string; position?: { x: number; y: number }; dragging?: boolean }) | undefined;
+
+      let finalNodes = appliedNodes;
+      if (groupDrag && groupDrag.position) {
+        const groupNode = currentNodes.find((n) => n.id === groupDrag.id);
+        if (groupNode) {
+          const deltaX = groupDrag.position.x - groupNode.position.x;
+          const deltaY = groupDrag.position.y - groupNode.position.y;
+          if (deltaX !== 0 || deltaY !== 0) {
+            finalNodes = appliedNodes.map((n) => {
+              if (n.id === groupDrag.id) return n;
+              if (n.data?.groupId === groupDrag.id) {
+                return { ...n, position: { x: n.position.x + deltaX, y: n.position.y + deltaY } };
+              }
+              return n;
+            });
+          }
+        }
+      }
+
+      setNodes(finalNodes);
       setAlignmentGuides(newGuides);
 
       // Only mark dirty for position changes (user drag).
@@ -313,12 +351,72 @@ export default function InfiniteCanvas() {
     pushHistory(takeCanvasSnapshot());
   }, [pushHistory]);
 
-  const handleNodeDragStop = useCallback(() => {
-    // 只在拖拽开始时压栈（改动前压栈约定）。此前这里的第二次 pushHistory
-    // 是为了掩盖 undo() 的偏移，修复后必须移除，否则会产生一次"空撤销"。
-    markDirtyImmediate();
-    setAlignmentGuides([]);
-  }, []);
+  const handleNodeDragStop = useCallback(
+    (_: unknown, draggedNode: AnyNode) => {
+      markDirtyImmediate();
+      setAlignmentGuides([]);
+
+      const allNodes = useCanvasStore.getState().nodes;
+
+      // 成员节点：拖拽停止后，若中心点已离开所属组的矩形范围，则脱离组
+      if (draggedNode.data?.groupId && draggedNode.type !== NODE_TYPE.GROUP) {
+        const group = allNodes.find((n) => n.id === draggedNode.data?.groupId);
+        if (group) {
+          const groupW = Number(group.style?.width) || group.width || 0;
+          const groupH = Number(group.style?.height) || group.height || 0;
+          const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
+          const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
+          const centerX = draggedNode.position.x + nodeW / 2;
+          const centerY = draggedNode.position.y + nodeH / 2;
+          if (
+            centerX < group.position.x ||
+            centerY < group.position.y ||
+            centerX > group.position.x + groupW ||
+            centerY > group.position.y + groupH
+          ) {
+            // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
+            // 否则会把"拖出前"状态重复压栈，导致撤销/重做丢失真正的组外状态。
+            setNodes(
+              allNodes.map((n) =>
+                n.id === draggedNode.id
+                  ? { ...n, data: { ...n.data, groupId: undefined } }
+                  : n
+              )
+            );
+          }
+        }
+      } else if (draggedNode.type !== NODE_TYPE.GROUP) {
+        // 独立节点：拖拽停止后，若中心点落入某组矩形内，则加入该组
+        const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
+        const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
+        const centerX = draggedNode.position.x + nodeW / 2;
+        const centerY = draggedNode.position.y + nodeH / 2;
+
+        const targetGroup = allNodes.find(
+          (n) =>
+            n.type === NODE_TYPE.GROUP &&
+            n.id !== draggedNode.id &&
+            centerX >= n.position.x &&
+            centerX <= n.position.x + (Number(n.style?.width) || 0) &&
+            centerY >= n.position.y &&
+            centerY <= n.position.y + (Number(n.style?.height) || 0)
+        );
+
+        if (targetGroup) {
+          // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
+          // 否则会把"拖入前"状态重复压栈，导致撤销/重做丢失真正的组内状态。
+          setNodes(
+            allNodes.map((n) =>
+              n.id === draggedNode.id
+                ? { ...n, data: { ...n.data, groupId: targetGroup.id } }
+                : n
+            )
+          );
+        }
+      }
+    },
+    [markDirtyImmediate, setAlignmentGuides, setNodes, pushHistory]
+  );
 
   const handlePaneClick = useCallback(() => {
     // Exit annotation and crop mode when clicking the canvas pane
@@ -419,6 +517,7 @@ export default function InfiniteCanvas() {
 
   return (
     <div
+      className={hideSelectionRect ? "canvas-container hide-selection-rect" : "canvas-container"}
       style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
