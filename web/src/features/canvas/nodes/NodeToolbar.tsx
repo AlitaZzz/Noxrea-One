@@ -327,18 +327,20 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
       {nodeType === NODE_ACTIONS.GROUP && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("common.ungroup")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<UngroupIcon />}
-              onClick={(e) => {
-                e.stopPropagation();
-                window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
-              }}
-            />
-          </Tooltip>
+          <Popover
+            trigger="click"
+            placement="bottom"
+            content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
+          >
+            <Tooltip title={t("node.groupColor")}>
+              <Button
+                type="text"
+                size="middle"
+                style={{ padding: 8, color: groupColor && groupColor !== "default" ? getGroupColor(groupColor).border : "#ffffff" }}
+                icon={<BgColorsOutlined />}
+              />
+            </Tooltip>
+          </Popover>
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
               <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
@@ -361,20 +363,18 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               />
             </Tooltip>
           </Popover>
-          <Popover
-            trigger="click"
-            placement="bottom"
-            content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
-          >
-            <Tooltip title={t("node.groupColor")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8, color: groupColor && groupColor !== "default" ? getGroupColor(groupColor).border : "#ffffff" }}
-                icon={<BgColorsOutlined />}
-              />
-            </Tooltip>
-          </Popover>
+          <Tooltip title={t("common.ungroup")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<UngroupIcon />}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
+              }}
+            />
+          </Tooltip>
         </>
       )}
     </div>
