@@ -77,14 +77,14 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Select All ----
-      if (mod && e.key === "a") {
+      if (mod && e.key.toLowerCase() === "a") {
         e.preventDefault();
         const all = useCanvasStore.getState();
         all.setNodes(all.nodes.map((n) => ({ ...n, selected: true })));
       }
 
       // ---- Copy ----
-      if (mod && e.key === "c") {
+      if (mod && e.key.toLowerCase() === "c") {
         const selIds = getSelectedNodeIds();
         // 如果用户在画布外（如通知、弹窗文本）选中了文字，交给浏览器原生复制
         const textSelection = window.getSelection()?.toString() ?? "";
@@ -97,7 +97,7 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Paste ----
-      if (mod && e.key === "v") {
+      if (mod && e.key.toLowerCase() === "v") {
         const clip = useSelectionStore.getState().clipboard;
         if (clip && clip.nodes.length > 0) {
           e.preventDefault();
@@ -140,17 +140,18 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Group (Ctrl+G) / Ungroup (Ctrl+Shift+G) ----
-      if (mod && e.key === "g" && !e.shiftKey) {
+      // 注意：按下 Shift 时 e.key 返回大写 'G'，必须用 toLowerCase() 匹配
+      if (mod && e.key.toLowerCase() === "g" && !e.shiftKey) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent(EventNames.CANVAS_GROUP_NODES));
       }
-      if (mod && e.key === "g" && e.shiftKey) {
+      if (mod && e.key.toLowerCase() === "g" && e.shiftKey) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
       }
 
       // ---- Undo ----
-      if (mod && e.key === "z" && !e.shiftKey) {
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
         // 生成期间禁止撤销：undo 全局快照会波及生成中节点的 taskBinding，
         // 导致 SSE 结果落在过期节点上或白等后 scanAndConnect 复活僵尸任务
         if (hasGeneratingNode()) return;
@@ -172,7 +173,7 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Redo ----
-      if (mod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+      if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         if (hasGeneratingNode()) return;
         e.preventDefault();
         // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标
@@ -192,7 +193,7 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Toggle minimap ----
-      if (mod && e.key === "m") {
+      if (mod && e.key.toLowerCase() === "m") {
         e.preventDefault();
         useCanvasStore.getState().toggleMinimap();
       }
