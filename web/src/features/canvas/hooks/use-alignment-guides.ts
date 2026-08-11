@@ -43,6 +43,7 @@ export function computeAlignment(
   draggingNode: NodeBounds,
   allNodes: NodeBounds[],
   threshold = 5,
+  gap = 0,
 ): AlignmentResult {
   const guides: AlignmentGuide[] = [];
   let bestSnapX: number | null = null;
@@ -88,9 +89,9 @@ export function computeAlignment(
       { dVal: dCenterX, oVal: oLeft, offset: dw / 2 },
       { dVal: dCenterX, oVal: oRight, offset: dw / 2 },
       { dVal: dRight, oVal: oCenterX, offset: dw },
-      // 边到边的交叉对齐
-      { dVal: dLeft, oVal: oRight, offset: 0 },
-      { dVal: dRight, oVal: oLeft, offset: dw },
+      // 边到边的交叉对齐（保持 gap 间距）
+      { dVal: dLeft, oVal: oRight + gap, offset: 0 },
+      { dVal: dRight, oVal: oLeft - gap, offset: dw },
     ];
 
     for (const { dVal, oVal, offset } of vertChecks) {
@@ -119,9 +120,9 @@ export function computeAlignment(
       { dVal: dCenterY, oVal: oTop, offset: dh / 2 },
       { dVal: dCenterY, oVal: oBottom, offset: dh / 2 },
       { dVal: dBottom, oVal: oCenterY, offset: dh },
-      // 边到边的交叉
-      { dVal: dTop, oVal: oBottom, offset: 0 },
-      { dVal: dBottom, oVal: oTop, offset: dh },
+      // 边到边的交叉（保持 gap 间距）
+      { dVal: dTop, oVal: oBottom + gap, offset: 0 },
+      { dVal: dBottom, oVal: oTop - gap, offset: dh },
     ];
 
     for (const { dVal, oVal, offset } of horizChecks) {
