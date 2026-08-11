@@ -10,7 +10,7 @@ import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
 
-import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT,NODE_TYPE } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT,NODE_TYPE,getGroupColor } from "@/lib/constants";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { useTranslation } from "react-i18next";
 
@@ -43,6 +43,8 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   // 实时成员计数（纯派生，不落库）：拖入/拖出组时随 groupId 自动更新
   const memberCount = allNodes.filter((n) => n.type !== NODE_TYPE.GROUP && n.data?.groupId === id).length;
 
+  const colorPreset = getGroupColor(data.color);
+
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title — same as ImageNode */}
@@ -64,19 +66,19 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
           </span>
         ) : (
           <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-            <GroupOutlined className="mr-1" />
+            <GroupOutlined className="mr-1" style={{ color: "#ffffff" }} />
             {data.label || t("node.groupWithCount", { count: memberCount })}
           </span>
         )}
       </div>
 
-      {/* Body — subtle transparent background to show group boundary */}
+      {/* Body — 填充随配色变化，边框沿用 node-body/node-selected（与 ImageNode 一致） */}
       <div
-        className="flex-1 rounded-lg pointer-events-none"
-        style={{
-          background: "rgba(255, 255, 255, 0.1)",
-          outline: "1px solid rgba(255, 255, 255, 0.1)",
-        }}
+        className={`
+          node-body flex-1 rounded-lg pointer-events-none
+          ${selected ? "node-selected" : ""}
+        `}
+        style={{ background: colorPreset.fill }}
       />
 
       {/* Resize — same as ImageNode */}

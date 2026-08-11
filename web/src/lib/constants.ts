@@ -121,6 +121,41 @@ export function getNodeColor(type: string | undefined): string {
   return NODE_TYPE_COLOR[type] ?? DEFAULT_NODE_COLOR;
 }
 
+// ── 分组节点配色 ──
+// 分组节点的可选配色，用于视觉归类。每个色项提供边框色与填充色，
+// 填充色为低透明度以免遮挡组内节点。data.color 仅存储 key，便于后续统一调整色板。
+export interface GroupColorPreset {
+  /** 边框 / 标题图标色 */
+  border: string;
+  /** 内部填充色（低透明度） */
+  fill: string;
+}
+
+export const GROUP_COLOR_KEYS = [
+  "default", "brown", "blue", "green", "yellow", "orange", "red", "purple", "pink", "cyan",
+] as const;
+
+export type GroupColorKey = (typeof GROUP_COLOR_KEYS)[number];
+
+export const GROUP_COLORS: Record<GroupColorKey, GroupColorPreset> = {
+  default: { border: "rgba(255,255,255,0.10)", fill: "rgba(255,255,255,0.10)" },
+  brown:   { border: "rgba(150,100,60,0.55)",  fill: "rgba(150,100,60,0.12)" },
+  blue:    { border: "rgba(22,119,255,0.55)",  fill: "rgba(22,119,255,0.12)" },
+  green:   { border: "rgba(52,199,89,0.55)",   fill: "rgba(52,199,89,0.12)" },
+  yellow:  { border: "rgba(250,219,20,0.55)",  fill: "rgba(250,219,20,0.12)" },
+  orange:  { border: "rgba(255,149,0,0.55)",   fill: "rgba(255,149,0,0.12)" },
+  red:     { border: "rgba(255,59,48,0.55)",   fill: "rgba(255,59,48,0.12)" },
+  purple:  { border: "rgba(114,46,209,0.55)",  fill: "rgba(114,46,209,0.12)" },
+  pink:    { border: "rgba(235,47,150,0.55)",  fill: "rgba(235,47,150,0.12)" },
+  cyan:    { border: "rgba(48,213,200,0.55)",  fill: "rgba(48,213,200,0.12)" },
+};
+
+export const DEFAULT_GROUP_COLOR_KEY: GroupColorKey = "default";
+
+export function getGroupColor(key?: string): GroupColorPreset {
+  return GROUP_COLORS[(key as GroupColorKey)] ?? GROUP_COLORS[DEFAULT_GROUP_COLOR_KEY];
+}
+
 // ── 画布自定义事件名（原 event-names.ts，合并至此） ──
 // 组件间通过 window.dispatchEvent / addEventListener 使用这些事件通信，
 // 统一管理避免字符串字面量散落各处。

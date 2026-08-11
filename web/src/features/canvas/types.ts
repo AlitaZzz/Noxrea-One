@@ -161,6 +161,8 @@ export type AudioNodeData = GroupableData & {
 
 export type GroupNodeData = {
   label: string;
+  /** 分组配色 key（对应 GroupColorKey），未设置时使用默认灰白色 */
+  color?: string;
 };
 
 // 组节点自身不参与分组（不会成为别的组的成员），保持独立 data 形状。

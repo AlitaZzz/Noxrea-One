@@ -6,7 +6,9 @@
 "use client";
 
 import {
+  BgColorsOutlined,
   CameraOutlined,
+  CheckOutlined,
   DeleteOutlined,
   DownloadOutlined,
   HighlightOutlined,
@@ -28,7 +30,7 @@ import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
 import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import { EventNames } from "@/lib/constants";
+import { DEFAULT_GROUP_COLOR_KEY, EventNames, GROUP_COLORS, GROUP_COLOR_KEYS, getGroupColor } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useTranslation } from "react-i18next";
@@ -104,12 +106,72 @@ function GridPicker({ nodeId }: { nodeId: string }) {
   );
 }
 
+/** 分组节点配色选择器 — 9 色网格，点击即时生效 */
+function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string | undefined }) {
+  const { t } = useTranslation();
+  const handlePick = useCallback(
+    (key: string) => {
+      window.dispatchEvent(
+        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
+          detail: { nodeId, data: { color: key }, immediate: true },
+        })
+      );
+    },
+    [nodeId]
+  );
+  return (
+    <div className="p-2" style={{ background: "var(--canvas-bg)", borderRadius: 8, minWidth: 168 }}>
+      <div className="text-xs mb-2 px-1" style={{ color: "var(--canvas-text-muted)" }}>{t("node.groupColor")}</div>
+      <div className="grid grid-cols-5 gap-2">
+        {GROUP_COLOR_KEYS.map((key) => {
+          const preset = GROUP_COLORS[key];
+          const isDefault = key === "default";
+          const selected = (current ?? DEFAULT_GROUP_COLOR_KEY) === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handlePick(key)}
+              className="relative flex items-center justify-center rounded-full transition-transform hover:scale-110"
+              style={{
+                width: 26,
+                height: 26,
+                border: `2px solid ${preset.border}`,
+                background: isDefault ? "transparent" : preset.fill,
+                cursor: "pointer",
+                boxShadow: selected ? `0 0 0 2px var(--canvas-bg), 0 0 0 3px ${preset.border}` : "none",
+              }}
+            >
+              {isDefault && (
+                <span
+                  style={{
+                    position: "absolute",
+                    width: 20,
+                    height: 2,
+                    background: "var(--canvas-text-muted)",
+                    transform: "rotate(45deg)",
+                    borderRadius: 1,
+                  }}
+                />
+              )}
+              {selected && !isDefault && (
+                <CheckOutlined style={{ fontSize: 12, color: preset.border }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
   const textContent = (nodes.find(n => n.id === nodeId)?.data as { content?: string })?.content;
+  const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
@@ -296,6 +358,20 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
                 size="middle"
                 style={{ padding: 8 }}
                 icon={<GroupGridIcon />}
+              />
+            </Tooltip>
+          </Popover>
+          <Popover
+            trigger="click"
+            placement="bottom"
+            content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
+          >
+            <Tooltip title={t("node.groupColor")}>
+              <Button
+                type="text"
+                size="middle"
+                style={{ padding: 8, color: groupColor && groupColor !== "default" ? getGroupColor(groupColor).border : "#ffffff" }}
+                icon={<BgColorsOutlined />}
               />
             </Tooltip>
           </Popover>
