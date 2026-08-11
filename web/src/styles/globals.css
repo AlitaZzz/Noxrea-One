@@ -158,6 +158,7 @@
   outline: none !important;
   box-shadow: none !important;
   background: transparent !important;
+  padding: 0 !important;
 }
 .react-flow__node-group .react-flow__resize-control {
   z-index: 10;
