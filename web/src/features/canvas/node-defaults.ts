@@ -133,6 +133,8 @@ export function createGroupNode(
     data: { label: label || "" } as GroupNodeData,
     style: { width: size.width, height: size.height },
     className: "react-flow__node-group",
+    // 分组容器始终位于成员节点之下，避免选中分组时其半透明填充层盖住组内成员
+    zIndex: -1,
   };
 }
 
