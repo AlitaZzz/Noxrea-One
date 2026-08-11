@@ -116,6 +116,45 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
 
 export const DEFAULT_NODE_COLOR = "#1677ff";
 
+// ── 节点连接规则 ──
+// 连接规则区分「输入」与「输出」两个方向：
+//   • 输出规则：从某节点右侧 source Handle 拖出时，可创建的目标节点类型。
+//   • 输入规则：从某节点左侧 target Handle 拉入时，可接受的来源节点类型。
+// 规则（依据产品定义）：
+//   文本节点 输入 → 文本、音频、图片、视频    输出 → 文本、音频、图片、视频
+//   图片节点 输入 → 文本、图片               输出 → 文本、图片、视频
+//   视频节点 输入 → 文本、图片、音频、视频    输出 → 文本、视频
+//   音频节点 输入 → 文本、音频               输出 → 文本、音频、视频
+export const VALID_CONNECTION_OUTPUTS: Record<string, readonly string[]> = {
+  [NODE_TYPE.TEXT]:  [NODE_TYPE.TEXT, NODE_TYPE.AUDIO, NODE_TYPE.IMAGE, NODE_TYPE.VIDEO],
+  [NODE_TYPE.IMAGE]: [NODE_TYPE.TEXT, NODE_TYPE.IMAGE, NODE_TYPE.VIDEO],
+  [NODE_TYPE.VIDEO]: [NODE_TYPE.TEXT, NODE_TYPE.VIDEO],
+  [NODE_TYPE.AUDIO]: [NODE_TYPE.TEXT, NODE_TYPE.AUDIO, NODE_TYPE.VIDEO],
+};
+
+export const VALID_CONNECTION_INPUTS: Record<string, readonly string[]> = {
+  [NODE_TYPE.TEXT]:  [NODE_TYPE.TEXT, NODE_TYPE.AUDIO, NODE_TYPE.IMAGE, NODE_TYPE.VIDEO],
+  [NODE_TYPE.IMAGE]: [NODE_TYPE.TEXT, NODE_TYPE.IMAGE],
+  [NODE_TYPE.VIDEO]: [NODE_TYPE.TEXT, NODE_TYPE.IMAGE, NODE_TYPE.AUDIO, NODE_TYPE.VIDEO],
+  [NODE_TYPE.AUDIO]: [NODE_TYPE.TEXT, NODE_TYPE.AUDIO],
+};
+
+/**
+ * 判断从 sourceType 到 targetType 的连接是否合法。
+ * @param sourceType 连接起点（source Handle 所在）节点类型
+ * @param targetType 连接终点（target Handle 所在）节点类型
+ */
+export function canConnect(sourceType: string | undefined, targetType: string | undefined): boolean {
+  if (!sourceType || !targetType) return false;
+  return VALID_CONNECTION_OUTPUTS[sourceType]?.includes(targetType) ?? false;
+}
+
+/** 判断从某节点输入框（target）可以接受的目标节点类型是否合法 */
+export function canConnectToInput(inputType: string | undefined, sourceType: string | undefined): boolean {
+  if (!inputType || !sourceType) return false;
+  return VALID_CONNECTION_INPUTS[inputType]?.includes(sourceType) ?? false;
+}
+
 export function getNodeColor(type: string | undefined): string {
   if (!type) return DEFAULT_NODE_COLOR;
   return NODE_TYPE_COLOR[type] ?? DEFAULT_NODE_COLOR;
