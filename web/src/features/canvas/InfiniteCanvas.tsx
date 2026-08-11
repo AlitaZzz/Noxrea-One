@@ -43,6 +43,7 @@ import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
 import CenterToolbar from "@/features/canvas/controls/CenterToolbar";
+import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
@@ -671,7 +672,7 @@ export default function InfiniteCanvas() {
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
-        connectionLineStyle={{ stroke: "#1677ff", strokeWidth: 2 }}
+        connectionLineComponent={ConnectionFlowLine}
         defaultEdgeOptions={{
           type: "deletable",
           animated: false,

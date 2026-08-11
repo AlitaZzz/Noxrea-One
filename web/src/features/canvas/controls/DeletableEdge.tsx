@@ -9,27 +9,7 @@ import { BaseEdge, EdgeLabelRenderer, type EdgeProps,getBezierPath } from "@xyfl
 
 import { EventNames } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/edge-highlight-context";
-
-const DOT_COLOR = "#1D9E75";
-const DURATION = 1.6;
-const STAGGER = [0, -0.55, -1.1];
-
-/**
- * 光点 + 光晕的 SVG 元素组，沿 path 流动。
- * 每对由一个透明光晕 (r=8) 和一个实心内核 (r=3) 组成。
- */
-function FlowingDot({ path, begin, color }: { path: string; begin: number; color: string }) {
-  return (
-    <g>
-      <circle r="8" fill={`${color}33`}>
-        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
-      </circle>
-      <circle r="3" fill={color}>
-        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
-      </circle>
-    </g>
-  );
-}
+import { DOT_COLOR, FlowingDot, STAGGER } from "./edge-flow";
 
 export default function DeletableEdge({
   id,
@@ -71,8 +51,8 @@ export default function DeletableEdge({
         markerEnd={markerEnd}
       />
 
-      {/* Multi-dot flow animation (when connected node is selected) */}
-      {isHighlighted && STAGGER.map((begin) => (
+      {/* Multi-dot flow animation (when connected node selected or edge selected) */}
+      {(isHighlighted || selected) && STAGGER.map((begin) => (
         <FlowingDot key={`${id}-${begin}`} path={edgePath} begin={begin} color={DOT_COLOR} />
       ))}
 
