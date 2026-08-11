@@ -406,7 +406,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
-          .menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }
+          .menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }
           .asset-library-modal .ant-input:hover,
           .asset-library-modal .ant-input:focus,
           .asset-library-modal .ant-input-focused,

@@ -13,8 +13,12 @@ export function MenuItem({ children, onClick, dimmed, selected, iconRight }: {
   children: ReactNode; onClick?: () => void; dimmed?: boolean; selected?: boolean; iconRight?: ReactNode;
 }) {
   return (
-    <div className="menu-popover-item">
-    <button className={`menu-item-btn${selected ? " selected" : ""}`}
+    <div
+      className={`menu-popover-item${dimmed ? " menu-item-disabled" : ""}`}
+      style={dimmed ? { pointerEvents: "none" } : undefined}
+    >
+    <button
+      className={`menu-item-btn${selected ? " selected" : ""}`}
       style={{ color: selected ? undefined : (dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)") }}
       onClick={onClick}>
       <span className="flex-1">{children}</span>

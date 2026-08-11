@@ -156,7 +156,7 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
               pointerEvents: "auto",
             }}
           >
-            <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+            <style>{`.menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }`}</style>
             <MenuItem
               onClick={canCreateFolder ? () => { setMenuOpen(false); onCreateFolder?.(); } : undefined}
               dimmed={!canCreateFolder}

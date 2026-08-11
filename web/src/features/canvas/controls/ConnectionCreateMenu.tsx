@@ -8,7 +8,7 @@ import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuDivider, MenuItem } from "@/components/ui/MenuPopover";
+import { MenuItem } from "@/components/ui/MenuPopover";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
 import { useTranslation } from "react-i18next";
 
@@ -43,7 +43,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
 
   return (
     <>
-      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
+      <style>{`.menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }`}</style>
       <div className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
       <div
         className="fixed z-50 flex flex-col p-2 gap-0.5 rounded-lg shadow-xl"
@@ -67,7 +67,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
           return (
             <MenuItem
               key={opt.type}
-              disabled={disabled}
+              dimmed={disabled}
               onClick={() => {
                 if (!disabled) {
                   onSelect(opt.type);
@@ -79,8 +79,6 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
             </MenuItem>
           );
         })}
-        <MenuDivider />
-        <MenuItem dimmed onClick={onClose}>{t("common.cancel")}</MenuItem>
       </div>
     </>
   );
