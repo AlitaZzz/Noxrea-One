@@ -56,7 +56,9 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
           userSelect: "none",
         }}
       >
-        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.connectCreate")}</div>
+        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>
+          {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
+        </div>
         {nodeOptions.map((opt) => {
           const disabled =
             pending.direction === "output"

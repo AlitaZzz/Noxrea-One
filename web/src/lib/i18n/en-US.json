@@ -104,7 +104,9 @@
     "verticalLayout": "Vertical Layout",
     "horizontalLayout": "Horizontal Layout",
     "saveToAssets": "Save to Assets",
-    "alreadySaved": "Already in assets"
+    "alreadySaved": "Already in assets",
+    "connectCreateInput": "Add Context",
+    "connectCreateOutput": "Reference This Node"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",
