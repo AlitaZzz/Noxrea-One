@@ -14,14 +14,12 @@ import {
   GROUP_NODE_MIN_HEIGHT,
   GROUP_NODE_MIN_WIDTH,
   GROUP_NODE_PADDING,
+  LAYOUT_GAP,
   NODE_TITLE_HEIGHT,
   NODE_TYPE,
 } from "@/lib/constants";
 import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-
-/** 布局成员时的固定间距（px） */
-const LAYOUT_GAP = 24;
 
 /**
  * 编组/取消编组 hook。
@@ -130,22 +128,31 @@ export function useGroupOperations() {
     ): { positioned: Map<string, { x: number; y: number }>; width: number; height: number } {
       const count = members.length;
       const cols = Math.ceil(Math.sqrt(count));
-      const rows = Math.ceil(count / cols);
-      const { maxW, maxH } = measureMembers(members);
-      const cellW = maxW + LAYOUT_GAP;
-      const cellH = maxH + LAYOUT_GAP;
       const originX = group.position.x + GROUP_NODE_PADDING;
       const originY = group.position.y + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING;
 
+      // 分行流式：行内游标累加（每个节点用自身宽度），行高取该行最高节点
       const positioned = new Map<string, { x: number; y: number }>();
-      members.forEach((m, i) => {
-        const r = Math.floor(i / cols);
-        const c = i % cols;
-        positioned.set(m.id, { x: originX + c * cellW, y: originY + r * cellH });
-      });
+      let cursorY = originY;
+      let maxRowWidth = 0;
 
-      const contentW = cols * cellW - LAYOUT_GAP;
-      const contentH = rows * cellH - LAYOUT_GAP;
+      for (let i = 0; i < count; i += cols) {
+        const rowMembers = members.slice(i, i + cols);
+        let cursorX = originX;
+        let rowMaxH = 0;
+        for (const m of rowMembers) {
+          const w = Number(m.style?.width) || 0;
+          const h = Number(m.style?.height) || 0;
+          positioned.set(m.id, { x: cursorX, y: cursorY });
+          cursorX += w + LAYOUT_GAP;
+          rowMaxH = Math.max(rowMaxH, h);
+        }
+        maxRowWidth = Math.max(maxRowWidth, cursorX - originX - LAYOUT_GAP);
+        cursorY += rowMaxH + LAYOUT_GAP;
+      }
+
+      const contentW = maxRowWidth;
+      const contentH = cursorY - originY - LAYOUT_GAP;
       const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
       const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
       return { positioned, width, height };
@@ -155,20 +162,24 @@ export function useGroupOperations() {
       group: CanvasNode,
       members: CanvasNode[],
     ): { positioned: Map<string, { x: number; y: number }>; width: number; height: number } {
-      const { maxW, maxH } = measureMembers(members);
-      const stepX = maxW + LAYOUT_GAP;
+      const { maxH } = measureMembers(members);
       const originX = group.position.x + GROUP_NODE_PADDING;
       const originY = group.position.y + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING;
 
+      // 紧凑排列：游标按每个节点自身宽度累加，净间距恒定为 LAYOUT_GAP
       const positioned = new Map<string, { x: number; y: number }>();
-      members.forEach((m, i) => {
+      let cursorX = originX;
+      for (const m of members) {
+        const w = Number(m.style?.width) || 0;
+        const h = Number(m.style?.height) || 0;
         positioned.set(m.id, {
-          x: originX + i * stepX,
-          y: originY + Math.max(0, (maxH - (Number(m.style?.height) || 0)) / 2),
+          x: cursorX,
+          y: originY + Math.max(0, (maxH - h) / 2),
         });
-      });
+        cursorX += w + LAYOUT_GAP;
+      }
 
-      const contentW = members.length * stepX - LAYOUT_GAP;
+      const contentW = cursorX - originX - LAYOUT_GAP;
       const contentH = maxH;
       const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
       const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
@@ -179,21 +190,25 @@ export function useGroupOperations() {
       group: CanvasNode,
       members: CanvasNode[],
     ): { positioned: Map<string, { x: number; y: number }>; width: number; height: number } {
-      const { maxW, maxH } = measureMembers(members);
-      const stepY = maxH + LAYOUT_GAP;
+      const { maxW } = measureMembers(members);
       const originX = group.position.x + GROUP_NODE_PADDING;
       const originY = group.position.y + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING;
 
+      // 紧凑排列：游标按每个节点自身高度累加，净间距恒定为 LAYOUT_GAP
       const positioned = new Map<string, { x: number; y: number }>();
-      members.forEach((m, i) => {
+      let cursorY = originY;
+      for (const m of members) {
+        const w = Number(m.style?.width) || 0;
+        const h = Number(m.style?.height) || 0;
         positioned.set(m.id, {
-          x: originX + Math.max(0, (maxW - (Number(m.style?.width) || 0)) / 2),
-          y: originY + i * stepY,
+          x: originX + Math.max(0, (maxW - w) / 2),
+          y: cursorY,
         });
-      });
+        cursorY += h + LAYOUT_GAP;
+      }
 
       const contentW = maxW;
-      const contentH = members.length * stepY - LAYOUT_GAP;
+      const contentH = cursorY - originY - LAYOUT_GAP;
       const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
       const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
       return { positioned, width, height };

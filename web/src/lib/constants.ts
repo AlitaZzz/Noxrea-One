@@ -50,6 +50,9 @@ export const GROUP_NODE_PADDING = 40;
 export const GROUP_NODE_MIN_WIDTH = 200;
 export const GROUP_NODE_MIN_HEIGHT = 120;
 
+// 布局节点间距 & 磁吸边对边间距
+export const LAYOUT_GAP = 24;
+
 // Audio node (fixed size, ~0.7x of image default, no resize)
 export const AUDIO_NODE_WIDTH = 420;
 export const AUDIO_NODE_HEIGHT = 237;
