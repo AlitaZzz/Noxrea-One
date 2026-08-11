@@ -26,6 +26,7 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  type FinalConnectionState,
 } from "@xyflow/react";
 import { App,Popover, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
@@ -39,12 +40,13 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import AgentDrawer from "@/features/agent/components/AgentDrawer";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
+import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
 import CenterToolbar from "@/features/canvas/controls/CenterToolbar";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
-import { createEdge } from "@/features/canvas/node-defaults";
+import { createEdge, createAudioNode, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
 import DirectorNode from "@/features/canvas/nodes/DirectorNode";
 import GroupNode from "@/features/canvas/nodes/GroupNode";
@@ -63,7 +65,7 @@ import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { LAYOUT_GAP, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
+import { LAYOUT_GAP, NODE_TYPE, NODE_TYPE_COLOR, canConnect } from "@/lib/constants";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 import { useAssetsStore } from "@/features/assets/store";
@@ -351,7 +353,7 @@ export default function InfiniteCanvas() {
     [setEdges]
   );
 
-  // IMAGE / TEXT 节点的上游仅接受 TEXT / IMAGE 类型
+  // 节点连接规则：根据源/目标节点类型判断连接是否合法
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
       const srcId = connection.source;
@@ -361,12 +363,84 @@ export default function InfiniteCanvas() {
       const sourceNode = allNodes.find((n) => n.id === srcId);
       const targetNode = allNodes.find((n) => n.id === tgtId);
       if (!sourceNode || !targetNode) return true;
-      if (targetNode.type === NODE_TYPE.IMAGE || targetNode.type === NODE_TYPE.TEXT) {
-        return sourceNode.type === NODE_TYPE.TEXT || sourceNode.type === NODE_TYPE.IMAGE;
-      }
-      return true;
+      return canConnect(sourceNode.type, targetNode.type);
     },
     []
+  );
+
+  // ── 拖拽连线到空白处弹出「创建连接节点」菜单 ──
+  const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
+
+  const handleConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      // 仅在连接未落到目标节点（空白画布）上时弹出菜单
+      const toNode = "toNode" in connectionState ? connectionState.toNode : null;
+      if (toNode) return;
+
+      const sourceNode = "fromNode" in connectionState ? connectionState.fromNode : null;
+      if (!sourceNode) return;
+
+      // 由起始 Handle 的 type 判断连接方向：
+      //   source = 从右侧输出 Handle 拖出 → 新节点为下游（output）
+      //   target = 从左侧输入 Handle 拉入 → 新节点为上游（input）
+      const fromHandle = "fromHandle" in connectionState ? connectionState.fromHandle : null;
+      const direction: "input" | "output" = fromHandle?.type === "target" ? "input" : "output";
+
+      // 取鼠标/触摸的屏幕坐标
+      let clientX = 0, clientY = 0;
+      if ("changedTouches" in event && event.changedTouches.length > 0) {
+        clientX = event.changedTouches[0].clientX;
+        clientY = event.changedTouches[0].clientY;
+      } else if ("clientX" in event) {
+        clientX = event.clientX;
+        clientY = event.clientY;
+      }
+
+      const canvasPosition = screenToFlowPosition({ x: clientX, y: clientY });
+      setPendingConnectionCreate({
+        sourceNodeId: sourceNode.id,
+        sourceNodeType: sourceNode.type ?? "",
+        direction,
+        canvasPosition,
+        screenPosition: { x: clientX, y: clientY },
+      });
+    },
+    [screenToFlowPosition]
+  );
+
+  const handleCreateConnectedNode = useCallback(
+    (nodeType: string) => {
+      if (!pendingConnectionCreate) return;
+      const { sourceNodeId, canvasPosition, direction } = pendingConnectionCreate;
+
+      let newNode: AnyNode;
+      switch (nodeType) {
+        case NODE_TYPE.TEXT:
+          newNode = createTextNode(canvasPosition);
+          break;
+        case NODE_TYPE.IMAGE:
+          newNode = createImageNode(canvasPosition);
+          break;
+        case NODE_TYPE.VIDEO:
+          newNode = createVideoNode(canvasPosition);
+          break;
+        case NODE_TYPE.AUDIO:
+          newNode = createAudioNode(canvasPosition);
+          break;
+        default:
+          return;
+      }
+
+      addNodes([newNode]);
+      // 输出方向：源节点 → 新节点；输入方向：新节点 → 源节点
+      const edge =
+        direction === "output"
+          ? createEdge(sourceNodeId, newNode.id)
+          : createEdge(newNode.id, sourceNodeId);
+      setEdges([...useCanvasStore.getState().edges, edge]);
+      markDirtyImmediate();
+    },
+    [pendingConnectionCreate, addNodes, setEdges]
   );
 
   const handleViewportChange = useCallback(
@@ -561,6 +635,7 @@ export default function InfiniteCanvas() {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        onConnectEnd={handleConnectEnd}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
         onNodeDragStart={handleNodeDragStart}
@@ -793,6 +868,14 @@ export default function InfiniteCanvas() {
         onAddDirector={handleAddDirector}
         onResetView={handleResetView}
       />
+
+      {pendingConnectionCreate && (
+        <ConnectionCreateMenu
+          pending={pendingConnectionCreate}
+          onSelect={handleCreateConnectedNode}
+          onClose={() => setPendingConnectionCreate(null)}
+        />
+      )}
 
       <NodeInspector
         open={inspectedNodeId !== null}
