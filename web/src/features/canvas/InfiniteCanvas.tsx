@@ -581,6 +581,7 @@ export default function InfiniteCanvas() {
         zoomOnDoubleClick={false}
         minZoom={0.1}
         maxZoom={5}
+        elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
         connectionLineStyle={{ stroke: "#1677ff", strokeWidth: 2 }}
