@@ -85,7 +85,7 @@
     "audio": "Audio",
     "group": "Group",
     "groupWithCount": "Group of {{count}} nodes",
-    "groupColor": "Group color",
+    "groupColor": "Color",
     "groupColorDefault": "Default",
     "director": "3D Director",
     "directorDesc": "Build 3D scenes and multi-angle capture",

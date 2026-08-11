@@ -85,7 +85,7 @@
     "audio": "音频",
     "group": "分组",
     "groupWithCount": "分组 {{count}}个节点",
-    "groupColor": "分组颜色",
+    "groupColor": "颜色",
     "groupColorDefault": "默认",
     "director": "3D导演台",
     "directorDesc": "3D空间搭建场景并进行多视角截图",
