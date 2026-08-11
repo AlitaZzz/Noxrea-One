@@ -30,7 +30,7 @@ import {
 } from "@xyflow/react";
 import { App,Popover, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo,useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -370,6 +370,15 @@ export default function InfiniteCanvas() {
 
   // ── 拖拽连线到空白处弹出「创建连接节点」菜单 ──
   const [pendingConnectionCreate, setPendingConnectionCreate] = useState<PendingConnectionCreate | null>(null);
+  // 记录连接起始 Handle 类型（onConnectStart 提供，比 onConnectEnd 的 fromHandle.type 可靠）
+  const connectStartHandleTypeRef = useRef<"source" | "target" | null>(null);
+
+  const handleConnectStart = useCallback(
+    (_: unknown, params: { handleType: "source" | "target" | null }) => {
+      connectStartHandleTypeRef.current = params.handleType ?? null;
+    },
+    []
+  );
 
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
@@ -383,8 +392,10 @@ export default function InfiniteCanvas() {
       // 由起始 Handle 的 type 判断连接方向：
       //   source = 从右侧输出 Handle 拖出 → 新节点为下游（output）
       //   target = 从左侧输入 Handle 拉入 → 新节点为上游（input）
-      const fromHandle = "fromHandle" in connectionState ? connectionState.fromHandle : null;
-      const direction: "input" | "output" = fromHandle?.type === "target" ? "input" : "output";
+      // 使用 onConnectStart 记录的 handleType（比 connectionState.fromHandle.type 更可靠）
+      const direction: "input" | "output" =
+        connectStartHandleTypeRef.current === "target" ? "input" : "output";
+      connectStartHandleTypeRef.current = null;
 
       // 取鼠标/触摸的屏幕坐标
       let clientX = 0, clientY = 0;
@@ -635,6 +646,7 @@ export default function InfiniteCanvas() {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        onConnectStart={handleConnectStart}
         onConnectEnd={handleConnectEnd}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
