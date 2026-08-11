@@ -63,7 +63,7 @@ import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
+import { LAYOUT_GAP, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 import { useAssetsStore } from "@/features/assets/store";
@@ -218,8 +218,30 @@ export default function InfiniteCanvas() {
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
 
+      // 提前检测是否在拖拽分组节点，并收集其成员节点 ID。
+      // 成员节点在分组拖动时只需跟随平移，不应被独立磁吸，否则会导致累积偏移。
+      const groupDrag = positionChanges.find((c) => {
+        const node = currentNodes.find((n) => n.id === c.id);
+        return node?.type === NODE_TYPE.GROUP;
+      });
+      const groupChildIds = new Set<string>();
+      if (groupDrag) {
+        for (const n of currentNodes) {
+          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId === groupDrag.id) {
+            groupChildIds.add(n.id);
+          }
+        }
+      }
+
       if (snapToGrid) {
         appliedNodes = applied.map((n) => {
+          // 分组成员节点在分组拖动时：丢弃 React Flow 的多选位移，使用原始位置，
+          // 后面会通过 delta 同步平移，避免双倍位移破坏布局间距。
+          if (groupChildIds.has(n.id)) {
+            const original = currentNodes.find((orig) => orig.id === n.id);
+            return original ?? n;
+          }
+
           let posX = n.position.x;
           let posY = n.position.y;
 
@@ -229,17 +251,19 @@ export default function InfiniteCanvas() {
               width: Number(n.style?.width) || Number(n.measured?.width) || 200,
               height: Number(n.style?.height) || Number(n.measured?.height) || 120,
             };
-            const nodeBounds = applied.map((m) => ({
-              id: m.id,
-              position: { x: m.position.x, y: m.position.y },
-              width: Number(m.style?.width) || Number(m.measured?.width) || 200,
-              height: Number(m.style?.height) || Number(m.measured?.height) || 120,
-            }));
+            const nodeBounds = applied
+              .map((m) => ({
+                id: m.id,
+                position: { x: m.position.x, y: m.position.y },
+                width: Number(m.style?.width) || Number(m.measured?.width) || 200,
+                height: Number(m.style?.height) || Number(m.measured?.height) || 120,
+              }));
 
             const result = computeAlignment(
               { id: n.id, position: { x: posX, y: posY }, ...nodeSize },
               nodeBounds,
               snapThreshold,
+              LAYOUT_GAP,
             );
 
             if (result.snapX !== null) {
@@ -256,9 +280,10 @@ export default function InfiniteCanvas() {
 
             newGuides = result.guides;
           } else {
-            // 非拖拽变更：仅网格吸附
-            posX = Math.round(posX / snapGridSize) * snapGridSize;
-            posY = Math.round(posY / snapGridSize) * snapGridSize;
+            // 非拖拽变更：保持 store 中的位置，避免释放鼠标时 React Flow 用未吸附的位置覆盖
+            const original = currentNodes.find((orig) => orig.id === n.id);
+            posX = original?.position.x ?? posX;
+            posY = original?.position.y ?? posY;
           }
 
           return {
@@ -267,23 +292,26 @@ export default function InfiniteCanvas() {
           };
         });
       } else {
-        appliedNodes = applied;
+        // snapToGrid 关闭：仍需处理分组子节点，避免 React Flow 多选位移 + delta 双倍移动
+        appliedNodes = applied.map((n) => {
+          if (groupChildIds.has(n.id)) {
+            const original = currentNodes.find((orig) => orig.id === n.id);
+            return original ?? n;
+          }
+          return n;
+        });
       }
 
       // 拖动组节点时，手动把同 groupId 的成员节点同步平移相同 delta。
-      // 因为节点均为绝对坐标，需把 React Flow 在 applyNodeChanges 后算出的
-      // 组位移反推回成员节点（applyNodeChanges 已移动组本身）。
-      const groupDrag = positionChanges.find((c) => {
-        const node = currentNodes.find((n) => n.id === c.id);
-        return node?.type === NODE_TYPE.GROUP;
-      });
-
+      // 关键：delta 必须基于分组节点吸附后的最终位置来计算，而非 React Flow
+      // 报告的原始位置，否则分组与成员之间会产生累积偏移。
       let finalNodes = appliedNodes;
-      if (groupDrag && groupDrag.position) {
+      if (groupDrag) {
         const groupNode = currentNodes.find((n) => n.id === groupDrag.id);
-        if (groupNode) {
-          const deltaX = groupDrag.position.x - groupNode.position.x;
-          const deltaY = groupDrag.position.y - groupNode.position.y;
+        const snappedGroup = appliedNodes.find((n) => n.id === groupDrag.id);
+        if (groupNode && snappedGroup) {
+          const deltaX = snappedGroup.position.x - groupNode.position.x;
+          const deltaY = snappedGroup.position.y - groupNode.position.y;
           if (deltaX !== 0 || deltaY !== 0) {
             finalNodes = appliedNodes.map((n) => {
               if (n.id === groupDrag.id || n.type === NODE_TYPE.GROUP) return n;
