@@ -459,7 +459,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               style={{ border: "none", cursor: "pointer" }}>
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
-                {(() => { const e = allModels.find((m) => m.value === modelKey); return e ? `${e.channelName}/${e.name}` : "Select model"; })()}
+                {allModels.find((m) => m.value === modelKey)?.name ?? "Select model"}
               </span>
             </Button>
           }
@@ -467,7 +467,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
               <span className="flex items-center gap-1.5">
                 <ModelIcon model={m.name} className="size-4 shrink-0" />
-                {`${m.channelName}/${m.name}`}
+                <span className="truncate">{m.name}</span>
+                {m.channelName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.channelName}</span> : null}
               </span>
             </MenuItem>
           ))}
