@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { Popover } from "antd";
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
@@ -45,43 +46,52 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
 
   return (
     <>
-      <style>{`.menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }`}</style>
-      <div className="fixed inset-0 z-50" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-      <div
-        className="fixed z-50 flex flex-col p-2 gap-0.5 rounded-lg shadow-xl"
-        style={{
-          left: Math.min(pending.screenPosition.x, window.innerWidth - 180),
-          top: Math.min(pending.screenPosition.y, window.innerHeight - 240),
-          background: "var(--canvas-bg)",
-          border: "1px solid var(--canvas-border)",
-          minWidth: 175,
-          userSelect: "none",
-        }}
+      <Popover
+        open
+        trigger={[]}
+        placement="bottomLeft"
+        arrow={false}
+        getPopupContainer={() => document.body}
+        onOpenChange={(v) => { if (!v) onClose(); }}
+        styles={{ body: { padding: 0 }, container: { padding: 0, background: "transparent" } }}
+        content={
+          <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
+            <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>
+              {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
+            </div>
+            {nodeOptions.map((opt) => {
+              const disabled =
+                pending.direction === "output"
+                  ? !canConnect(pending.sourceNodeType, opt.type)
+                  : !canConnectToInput(pending.sourceNodeType, opt.type);
+              return (
+                <MenuItem
+                  key={opt.type}
+                  dimmed={disabled}
+                  onClick={() => {
+                    if (!disabled) {
+                      onSelect(opt.type);
+                      onClose();
+                    }
+                  }}
+                >
+                  {opt.icon} {opt.label}
+                </MenuItem>
+              );
+            })}
+          </div>
+        }
       >
-        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>
-          {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
-        </div>
-        {nodeOptions.map((opt) => {
-          const disabled =
-            pending.direction === "output"
-              ? !canConnect(pending.sourceNodeType, opt.type)
-              : !canConnectToInput(pending.sourceNodeType, opt.type);
-          return (
-            <MenuItem
-              key={opt.type}
-              dimmed={disabled}
-              onClick={() => {
-                if (!disabled) {
-                  onSelect(opt.type);
-                  onClose();
-                }
-              }}
-            >
-              {opt.icon} {opt.label}
-            </MenuItem>
-          );
-        })}
-      </div>
+        <span
+          style={{
+            position: "fixed",
+            left: Math.min(pending.screenPosition.x, window.innerWidth - 180),
+            top: Math.min(pending.screenPosition.y, window.innerHeight - 240),
+            width: 1, height: 1, pointerEvents: "none",
+          }}
+        />
+      </Popover>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
     </>
   );
 }

@@ -5,11 +5,12 @@
  */
 "use client";
 
+import { Popover } from "antd";
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
+import { MenuDivider, MenuItem } from "@/components/ui/MenuPopover";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useTranslation } from "react-i18next";
 
@@ -26,33 +27,42 @@ export default function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();
   const { x, y, visible, hide } = useContextMenuStore();
 
-  if (!visible) return null;
-
   return (
     <>
-      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-      <div className="fixed inset-0 z-50" onClick={hide} onContextMenu={(e) => { e.preventDefault(); hide(); }} />
-      <div
-        className="fixed z-50 flex flex-col p-2 gap-0.5 rounded-lg shadow-xl"
-        style={{
-          left: Math.min(x, window.innerWidth - 180),
-          top: Math.min(y, window.innerHeight - 240),
-          background: "var(--canvas-bg)",
-          border: "1px solid var(--canvas-border)",
-          minWidth: 175,
-          userSelect: "none",
-        }}
+      <Popover
+        open={visible}
+        trigger={[]}
+        placement="bottomLeft"
+        arrow={false}
+        getPopupContainer={() => document.body}
+        onOpenChange={(v) => { if (!v) hide(); }}
+        styles={{ body: { padding: 0 }, container: { padding: 0, background: "transparent" } }}
+        content={
+          <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
+            <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.add")}</div>
+            <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("node.text")}</MenuItem>
+            <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("node.image")}</MenuItem>
+            <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
+            <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("node.audio")}</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("node.director")}</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
+          </div>
+        }
       >
-        <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.add")}</div>
-        <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("node.text")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("node.image")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
-        <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("node.audio")}</MenuItem>
-        <MenuDivider />
-        <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("node.director")}</MenuItem>
-        <MenuDivider />
-        <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
-      </div>
+        <span
+          style={{
+            position: "fixed",
+            left: Math.min(x, window.innerWidth - 180),
+            top: Math.min(y, window.innerHeight - 240),
+            width: 1, height: 1, pointerEvents: "none",
+          }}
+        />
+      </Popover>
+      {visible && (
+        <div className="fixed inset-0 z-40" onClick={hide} onContextMenu={(e) => { e.preventDefault(); hide(); }} />
+      )}
     </>
   );
 }
