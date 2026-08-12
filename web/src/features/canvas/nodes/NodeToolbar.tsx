@@ -12,6 +12,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   ExpandOutlined,
+  FileTextOutlined,
   HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
@@ -20,7 +21,7 @@ import {
   StarOutlined,
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
-import { Eraser, FlipHorizontal, FlipVertical, ScanText, Wand2 } from "lucide-react";
+import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
@@ -69,7 +70,7 @@ function GridPicker({ nodeId }: { nodeId: string }) {
       {[2, 3, 4, 5].map((n) => (
         <MenuItem key={n} onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <GridSplitIcon />
+            <GridSplitIcon style={{ fontSize: 16 }} />
             {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}×{n}
           </span>
         </MenuItem>
@@ -228,9 +229,9 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Popover trigger="click" placement="bottom"
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
               <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 14 }} /> {t("node.rotate90")}</span></MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={14} /> {t("node.flipH")}</span></MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={14} /> {t("node.flipV")}</span></MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 16 }} /> {t("node.rotate90")}</span></MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={16} /> {t("node.flipH")}</span></MenuItem>
+              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={16} /> {t("node.flipV")}</span></MenuItem>
             </div>}>
             <Tooltip title={t("node.transform")}>
               <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
@@ -279,7 +280,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               <>
                 <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-reverse"); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <ScanText size={16} />
+                    <FileTextOutlined style={{ fontSize: 16 }} />
                     {t("node.creationReverse")}
                   </span>
                 </MenuItem>
@@ -316,7 +317,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           {/* Reset */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />} disabled={!assetSrc}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
@@ -331,7 +332,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
           <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
           <Tooltip title={t("node.previewFullscreen")}>
@@ -350,7 +351,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
           <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
@@ -361,7 +362,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />} disabled={!textContent}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />} disabled={!textContent}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
@@ -389,13 +390,13 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
               <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
               <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon /> {t("node.gridLayout")}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
               </MenuItem>
               <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon /> {t("node.horizontalLayout")}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
               </MenuItem>
               <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon /> {t("node.verticalLayout")}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
               </MenuItem>
             </div>}>
             <Tooltip title={t("common.layout")}>

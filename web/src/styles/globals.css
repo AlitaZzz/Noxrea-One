@@ -537,6 +537,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .gen-panel-btn:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
 .gen-panel-btn:active { background: var(--canvas-bg-active) !important; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
+/* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
+.canvas-toolbar .ant-btn { font-size: 16px; }
+/* 下拉菜单内图标统一 16px（lucide 默认 24 已被 size 覆盖；AntD/自绘跟随 font-size） */
+.menu-popover { font-size: 16px; }
 
 /* 节点上传/参考按钮 */
 .node-upload-btn { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); border: none; cursor: pointer; transition: background .15s, color .15s; }
