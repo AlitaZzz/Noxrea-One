@@ -9,6 +9,7 @@ import { DeepSeekIcon } from "@/components/ui/icons/models/DeepSeekIcon";
 import { GLMIcon } from "@/components/ui/icons/models/GLMIcon";
 import { GrokIcon } from "@/components/ui/icons/models/GrokIcon";
 import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
+import { SeedanceIcon } from "@/components/ui/icons/models/SeedanceIcon";
 
 type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 
@@ -19,7 +20,8 @@ const ICON_MAP: { test: RegExp; Icon: ModelIconType }[] = [
   { test: /deepseek/i, Icon: DeepSeekIcon },
   { test: /glm|chatglm|zhipu/i, Icon: GLMIcon },
   { test: /grok|xai/i, Icon: GrokIcon },
-  { test: /doubao|豆包|seedream/i, Icon: DoubaoIcon },
+  { test: /doubao|豆包/i, Icon: DoubaoIcon },
+  { test: /seedream|seedance/i, Icon: SeedanceIcon },
 ];
 
 /** 根据模型名（支持 channel/model 整串）解析品牌图标组件，未命中返回 null */
