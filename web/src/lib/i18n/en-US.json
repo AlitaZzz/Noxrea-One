@@ -106,7 +106,8 @@
     "saveToAssets": "Save to Assets",
     "alreadySaved": "Already in assets",
     "connectCreateInput": "Add Context",
-    "connectCreateOutput": "Reference This Node"
+    "connectCreateOutput": "Reference This Node",
+    "reversePrompt": "Reverse Prompt"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",

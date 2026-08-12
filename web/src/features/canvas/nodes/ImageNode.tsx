@@ -24,6 +24,8 @@ import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { createEdge, createTextNode } from "@/features/canvas/node-defaults";
+import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import {
 DEFAULT_NODE_HEIGHT,
@@ -33,6 +35,7 @@ import { canvasToBlob, computeNodeSize, createNodeFromUrl, loadMediaDimensions, 
 import {
   type ImageNode as ImageNodeType,
   type ImageNodeData,
+  type TextNodeData,
 } from "@/features/canvas/types";
 import { useAssetsStore } from "@/features/assets/store";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -331,6 +334,35 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
+  const handleReversePrompt = useCallback(async () => {
+    if (!src) return;
+    const template = await getPromptTemplate("reverse");
+    if (!template) return;
+
+    const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
+    if (!node) return;
+    const nodeWidth = (node.style?.width as number) || DEFAULT_NODE_WIDTH;
+    const gap = 48;
+    const position = {
+      x: node.position.x + nodeWidth + gap,
+      y: node.position.y,
+    };
+
+    const textNode = createTextNode(position);
+    // 正文 content 留空，仅将反推模板写入生成面板的提示词（genSettings.prompt）
+    textNode.data = {
+      ...textNode.data,
+      genSettings: { ...(textNode.data.genSettings || { prompt: "" }), prompt: template } as TextNodeData["genSettings"],
+    };
+
+    const edge = createEdge(id, textNode.id);
+
+    const store = useCanvasStore.getState();
+    store.addNodes([textNode]);
+    store.setEdges([...store.edges, edge]);
+    markDirtyImmediate();
+  }, [id, src]);
+
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
       src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
@@ -342,10 +374,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit };
-  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt };
+  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -361,11 +393,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
+        case "reverse-prompt": a.handleReversePrompt(); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, setCroppingNodeId, setAnnotateOpen]);
+  }, [id, src, setCroppingNodeId, setAnnotateOpen, handleReversePrompt]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };

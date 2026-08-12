@@ -19,7 +19,7 @@ import {
   StarOutlined,
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
-import { Eraser, FlipHorizontal, FlipVertical } from "lucide-react";
+import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
@@ -261,6 +261,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }}
               icon={<LightingIcon />}
               onClick={() => dispatchNodeAction(nodeId, "lighting")} disabled={!assetSrc} />
+          </Tooltip>
+          <Tooltip title={t("node.reversePrompt")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />}
+              onClick={() => dispatchNodeAction(nodeId, "reverse-prompt")} disabled={!assetSrc} />
           </Tooltip>
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
