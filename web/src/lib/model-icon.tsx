@@ -10,18 +10,34 @@ import { GLMIcon } from "@/components/ui/icons/models/GLMIcon";
 import { GrokIcon } from "@/components/ui/icons/models/GrokIcon";
 import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
 import { SeedanceIcon } from "@/components/ui/icons/models/SeedanceIcon";
+import { MiniMaxIcon } from "@/components/ui/icons/models/MiniMaxIcon";
+import { QwenIcon } from "@/components/ui/icons/models/QwenIcon";
+import { FluxIcon } from "@/components/ui/icons/models/FluxIcon";
+import { KimiIcon } from "@/components/ui/icons/models/KimiIcon";
+import { KlingIcon } from "@/components/ui/icons/models/KlingIcon";
+import { HappyHorseIcon } from "@/components/ui/icons/models/HappyHorseIcon";
+import { ViduIcon } from "@/components/ui/icons/models/ViduIcon";
+import { SunoIcon } from "@/components/ui/icons/models/SunoIcon";
 
 type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 
 const ICON_MAP: { test: RegExp; Icon: ModelIconType }[] = [
   { test: /claude|anthropic/i, Icon: ClaudeIcon },
   { test: /gpt|openai|dall|sora|chatgpt/i, Icon: OpenAIIcon },
-  { test: /gemini|google/i, Icon: GeminiIcon },
+  { test: /gemini|google|veo/i, Icon: GeminiIcon },
   { test: /deepseek/i, Icon: DeepSeekIcon },
   { test: /glm|chatglm|zhipu/i, Icon: GLMIcon },
   { test: /grok|xai/i, Icon: GrokIcon },
   { test: /doubao|豆包/i, Icon: DoubaoIcon },
   { test: /seedream|seedance/i, Icon: SeedanceIcon },
+  { test: /minimax/i, Icon: MiniMaxIcon },
+  { test: /qwen|通义|tongyi|wan2?|z-image/i, Icon: QwenIcon },
+  { test: /flux|black forest/i, Icon: FluxIcon },
+  { test: /kimi|moonshot/i, Icon: KimiIcon },
+  { test: /kling|可灵/i, Icon: KlingIcon },
+  { test: /happyhorse/i, Icon: HappyHorseIcon },
+  { test: /vidu/i, Icon: ViduIcon },
+  { test: /suno/i, Icon: SunoIcon },
 ];
 
 /** 根据模型名（支持 channel/model 整串）解析品牌图标组件，未命中返回 null */

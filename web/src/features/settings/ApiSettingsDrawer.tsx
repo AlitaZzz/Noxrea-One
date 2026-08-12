@@ -15,7 +15,6 @@ import {
   EditOutlined,
   PictureOutlined,
   PlusOutlined,
-  RobotOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { App, Button, Checkbox, Drawer,Input, Select } from "antd";
@@ -31,6 +30,7 @@ import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
+import { ModelIcon } from "@/lib/model-icon";
 
 interface Props {
   open: boolean;
@@ -73,7 +73,7 @@ const ModelRow = memo(function ModelRow({
         onChange={() => onToggle(m.id)}
         style={checked ? { accentColor: color } : undefined}
       />
-      <RobotOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
+      <ModelIcon model={m.name} className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
       <span className="flex-1 truncate">{m.name}</span>
     </label>
   );
