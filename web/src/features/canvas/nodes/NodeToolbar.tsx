@@ -66,7 +66,6 @@ function GridPicker({ nodeId }: { nodeId: string }) {
   const MAX = 5;
   return (
     <div className="flex flex-col gap-0.5">
-      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
       {[2, 3, 4, 5].map((n) => (
         <MenuItem key={n} onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -124,7 +123,7 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     [nodeId]
   );
   return (
-    <div className="p-2" style={{ background: "var(--canvas-bg)", borderRadius: 8, minWidth: 168 }}>
+    <div className="menu-popover">
       <div className="text-xs mb-2 px-1" style={{ color: "var(--canvas-text-muted)" }}>{t("node.groupColor")}</div>
       <div className="grid grid-cols-5 gap-2">
         {GROUP_COLOR_KEYS.map((key) => {
@@ -178,6 +177,9 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const [creationOpen, setCreationOpen] = useState(false);
+  const [transformOpen, setTransformOpen] = useState(false);
+  const [gridOpen, setGridOpen] = useState(false);
+  const [layoutOpen, setLayoutOpen] = useState(false);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -226,17 +228,23 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           {/* Edit */}
-          <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
-              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 16 }} /> {t("node.rotate90")}</span></MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={16} /> {t("node.flipH")}</span></MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={16} /> {t("node.flipV")}</span></MenuItem>
-            </div>}>
-            <Tooltip title={t("node.transform")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
-            </Tooltip>
-          </Popover>
+          <MenuPopover
+            open={transformOpen}
+            onOpenChange={setTransformOpen}
+            placement="bottom"
+            trigger={
+              <Tooltip title={t("node.transform")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
+              </Tooltip>
+            }
+            content={
+              <>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 16 }} /> {t("node.rotate90")}</span></MenuItem>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={16} /> {t("node.flipH")}</span></MenuItem>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={16} /> {t("node.flipV")}</span></MenuItem>
+              </>
+            }
+          />
           <Tooltip title={t("node.crop")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
@@ -245,16 +253,19 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<HighlightOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "annotate")} />
           </Tooltip>
-          <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
-              <GridPicker nodeId={nodeId} />
-            </div>}>
-            <Tooltip title={t("node.gridSplit")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}>
-                <GridSplitIcon />
-              </Button>
-            </Tooltip>
-          </Popover>
+          <MenuPopover
+            open={gridOpen}
+            onOpenChange={setGridOpen}
+            placement="bottom"
+            trigger={
+              <Tooltip title={t("node.gridSplit")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}>
+                  <GridSplitIcon />
+                </Button>
+              </Tooltip>
+            }
+            content={<GridPicker nodeId={nodeId} />}
+          />
           {/* AI */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("angle.editor")}>
@@ -375,6 +386,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Popover
             trigger="click"
             placement="bottom"
+            styles={{ container: { padding: 0, background: "transparent" } }}
             content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
           >
             <Tooltip title={t("node.groupColor")}>
@@ -386,28 +398,34 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               />
             </Tooltip>
           </Popover>
-          <Popover trigger="click" placement="bottom"
-            content={<div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 190 }}>
-              <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
-              </MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
-              </MenuItem>
-              <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
-              </MenuItem>
-            </div>}>
-            <Tooltip title={t("common.layout")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8 }}
-                icon={<GroupGridIcon />}
-              />
-            </Tooltip>
-          </Popover>
+          <MenuPopover
+            open={layoutOpen}
+            onOpenChange={setLayoutOpen}
+            placement="bottom"
+            trigger={
+              <Tooltip title={t("common.layout")}>
+                <Button
+                  type="text"
+                  size="middle"
+                  style={{ padding: 8 }}
+                  icon={<GroupGridIcon />}
+                />
+              </Tooltip>
+            }
+            content={
+              <>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
+                </MenuItem>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
+                </MenuItem>
+                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
+                </MenuItem>
+              </>
+            }
+          />
           <Tooltip title={t("common.ungroup")}>
             <Button
               type="text"

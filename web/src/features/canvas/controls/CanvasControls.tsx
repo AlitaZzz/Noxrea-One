@@ -19,7 +19,7 @@ import {
   ZoomOutOutlined,
 } from "@ant-design/icons";
 import { useReactFlow, useViewport } from "@xyflow/react";
-import { Button, InputNumber,Popover, Tooltip } from "antd";
+import { Button, InputNumber, Tooltip } from "antd";
 import { useCallback,useState } from "react";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
@@ -108,7 +108,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           onChange={(v) => { if (v != null) setInputZoom(v); }}
           onPressEnter={() => handleZoomInput(inputZoom)} />
       </div>
-      <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
       <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("canvas.zoom.in")}</MenuItem>
       <MenuItem onClick={() => { zoomOut(); setZoomOpen(false); }}><ZoomOutOutlined /> {t("canvas.zoom.out")}</MenuItem>
       <MenuItem onClick={() => { fitView({ duration: 300 }); setZoomOpen(false); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
@@ -218,21 +217,20 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
       {/* Agent 对话 */}
       {/* Zoom display + menu */}
-      <Popover
-        content={zoomMenu}
-        trigger="click"
+      <MenuPopover
         open={zoomOpen}
         onOpenChange={(v) => {
           setZoomOpen(v);
           if (v) setInputZoom(Math.round(viewport.zoom * 100));
         }}
         placement="top"
-        styles={{ container: { padding: 12, background: "var(--canvas-bg, #262626)", border: "1px solid var(--canvas-border, #3a3a3a)", borderRadius: 8 } }}
-      >
-        <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
-          {zoomPercent}%
-        </Button>
-      </Popover>
+        trigger={
+          <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
+            {zoomPercent}%
+          </Button>
+        }
+        content={zoomMenu}
+      />
     </div>
     </>
   );
