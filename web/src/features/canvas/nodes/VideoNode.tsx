@@ -8,6 +8,7 @@
 import {
   CameraOutlined,
   CaretRightOutlined,
+  CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   PauseCircleOutlined,
@@ -17,6 +18,7 @@ import {
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
@@ -43,6 +45,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // Sync local src when data.src changes externally (e.g. from undo/clear),
   // adjusted during render to avoid cascading renders.
   const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
+  const [previewOpen, setPreviewOpen] = useState(false);
   if (data.src !== prevDataSrc) {
     setPrevDataSrc(data.src);
     setSrc(data.src || "");
@@ -243,6 +246,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (detail.nodeId !== id) return;
       switch (detail.action) {
         case "download": handleDownload(); break;
+        case "preview-fullscreen": if (src) setPreviewOpen(true); break;
         case "clear": handleClear(); break;
         case "capture-frame": {
           const v = videoRef.current;
@@ -464,6 +468,81 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
       {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP }} />}
       <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP }} />
+
+      {previewOpen && src && createPortal(
+        <VideoPreviewOverlay src={src} onClose={() => setPreviewOpen(false)} />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+/** 视频全屏预览浮层：带播放控件、下载、Esc/点击背景关闭，淡入动画 */
+function VideoPreviewOverlay({ src, onClose }: { src: string; onClose: () => void }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(r);
+  }, []);
+
+  const handleDownload = () => {
+    if (!src) return;
+    const a = document.createElement("a");
+    const sep = src.includes("?") ? "&" : "?";
+    a.href = `${src}${sep}${new URLSearchParams({ download: "true" }).toString()}`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const btnBase =
+    "flex cursor-pointer items-center justify-center rounded-full text-white/90 transition hover:text-white hover:bg-white/15";
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center nodrag"
+      style={{
+        background: "rgba(0,0,0,0.92)",
+        opacity: shown ? 1 : 0,
+        transition: "opacity 0.2s ease",
+      }}
+      onClick={onClose}
+    >
+      {/* 关闭 */}
+      <button
+        className={`${btnBase} absolute right-5 top-5 h-10 w-10 text-xl`}
+        onClick={onClose}
+      >
+        <CloseOutlined />
+      </button>
+
+      {/* 下载 */}
+      <button
+        className={`${btnBase} absolute right-5 top-[68px] h-10 w-10 text-lg`}
+        onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+      >
+        <DownloadOutlined />
+      </button>
+
+      {/* 当前视频 */}
+      <video
+        src={src}
+        controls
+        autoPlay
+        loop
+        playsInline
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw",
+          maxHeight: "88vh",
+          borderRadius: 8,
+          boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+          transform: shown ? "scale(1)" : "scale(0.96)",
+          transition: "transform 0.2s ease",
+          background: "#000",
+        }}
+      />
     </div>
   );
 }
