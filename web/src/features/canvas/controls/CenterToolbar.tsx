@@ -93,7 +93,7 @@ export default function CenterToolbar() {
 
       {ctxMenu && (
         <div className="fixed z-50" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={() => setCtxMenu(null)}>
-          <div className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg" style={{ background: "var(--menu-bg)", border: "1px solid var(--menu-border)" }}>
+          <div className="menu-popover flex flex-col gap-0.5" style={{ padding: 6 }}>
             <MenuItem onClick={() => { addNode("text"); setCtxMenu(null); }}><TextIcon /> {t("node.text")}</MenuItem>
             <MenuItem onClick={() => { addNode("image"); setCtxMenu(null); }}><PictureOutlined /> {t("node.image")}</MenuItem>
             <MenuItem onClick={() => { addNode("video"); setCtxMenu(null); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
