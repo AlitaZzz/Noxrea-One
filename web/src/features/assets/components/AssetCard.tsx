@@ -227,12 +227,12 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       </div>
 
       {/* Bottom info bar */}
-      <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
+      <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg pointer-events-none">
         <div className="flex items-center gap-1">
           <div className="text-white/90 text-xs truncate font-medium flex-1 min-w-0">{asset.name}</div>
           {asset.mediaType === "audio" && (
             <button
-              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer"
+              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer pointer-events-auto"
               onClick={togglePlay}
             >
               {playing ? <PauseCircleFilled style={{ fontSize: 14 }} /> : <PlayCircleFilled style={{ fontSize: 14 }} />}
