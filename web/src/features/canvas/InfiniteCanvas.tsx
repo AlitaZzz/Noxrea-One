@@ -41,6 +41,7 @@ import AgentDrawer from "@/features/agent/components/AgentDrawer";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
+import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
 import CenterToolbar from "@/features/canvas/controls/CenterToolbar";
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
@@ -409,12 +410,23 @@ export default function InfiniteCanvas() {
       }
 
       const canvasPosition = screenToFlowPosition({ x: clientX, y: clientY });
+
+      // 计算发起端 Handle 锚点在画布坐标系中的坐标，供菜单期间持续渲染预览线。
+      // source Handle 在节点右侧、target Handle 在节点左侧，纵向均取节点中心。
+      const sourceWidth = sourceNode.measured?.width ?? sourceNode.width ?? 0;
+      const sourceHeight = sourceNode.measured?.height ?? sourceNode.height ?? 0;
+      const sourceAnchor: { x: number; y: number } =
+        direction === "output"
+          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 }
+          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 };
+
       setPendingConnectionCreate({
         sourceNodeId: sourceNode.id,
         sourceNodeType: sourceNode.type ?? "",
         direction,
         canvasPosition,
         screenPosition: { x: clientX, y: clientY },
+        sourceAnchor,
       });
     },
     [screenToFlowPosition]
@@ -870,6 +882,15 @@ export default function InfiniteCanvas() {
             )}
           </RfNodeToolbar>
         )})}
+
+        {/* 拖拽连线落在空白、弹出创建菜单期间：持续渲染绿色流光预览线 */}
+        {pendingConnectionCreate && (
+          <PendingConnectionPreview
+            from={pendingConnectionCreate.sourceAnchor}
+            to={pendingConnectionCreate.canvasPosition}
+            fromPosition={pendingConnectionCreate.direction === "output" ? Position.Right : Position.Left}
+          />
+        )}
       </ReactFlow>
       </EdgeHighlightContext.Provider>
 
