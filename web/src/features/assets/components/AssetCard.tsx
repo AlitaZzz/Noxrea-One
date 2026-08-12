@@ -220,7 +220,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
             <MenuItem onClick={handleDownload}><DownloadOutlined /> {t("common.download")}</MenuItem>
             <MenuItem onClick={handleRename}><EditOutlined /> {t("asset.rename")}</MenuItem>
             <MenuDivider />
-            <MenuItem dimmed onClick={handleDelete}><DeleteOutlined /> {t("common.delete")}</MenuItem>
+            <MenuItem onClick={handleDelete}><DeleteOutlined /> {t("common.delete")}</MenuItem>
           </div>,
           layerOverlay || document.body
         )}

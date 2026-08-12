@@ -756,7 +756,7 @@ export default function InfiniteCanvas() {
                       }}>{t("project.new")}</MenuItem>
                     <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
                     <MenuDivider />
-                    <MenuItem dimmed onClick={() => {
+                    <MenuItem onClick={() => {
                         setToolbarMenuOpen(false);
                         setLogoutConfirmOpen(true);
                       }}>{t("auth.logout")}</MenuItem>
