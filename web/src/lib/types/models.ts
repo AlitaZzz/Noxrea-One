@@ -38,7 +38,12 @@ export interface ModelChannel {
 
 /** 生成面板中的模型选项 */
 export interface ModelOption {
+  /** 基于 id 的稳定键：channelId/modelId，改名不影响已有节点 */
   value: string;
   channelId: string;
-  modelName: string;
+  modelId: string;
+  /** 模型名，发送后端与显示都用它 */
+  name: string;
+  /** 渠道名，仅显示拼接用 */
+  channelName: string;
 }
