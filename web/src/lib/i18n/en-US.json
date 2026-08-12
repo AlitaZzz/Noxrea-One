@@ -107,7 +107,10 @@
     "alreadySaved": "Already in assets",
     "connectCreateInput": "Add Context",
     "connectCreateOutput": "Reference This Node",
-    "reversePrompt": "Reverse Prompt"
+    "creation": "Creation",
+    "creationReverse": "Reverse Prompt",
+    "creationCharacterFace": "Character Face Three-View",
+    "creationCharacterThreeView": "Character Three-View"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",

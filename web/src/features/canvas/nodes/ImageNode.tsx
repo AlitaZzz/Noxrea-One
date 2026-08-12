@@ -334,9 +334,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  const handleReversePrompt = useCallback(async () => {
+  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView") => {
     if (!src) return;
-    const template = await getPromptTemplate("reverse");
+    const template = await getPromptTemplate(type);
     if (!template) return;
 
     const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
@@ -349,7 +349,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     };
 
     const textNode = createTextNode(position);
-    // 正文 content 留空，仅将反推模板写入生成面板的提示词（genSettings.prompt）
+    // 正文 content 留空，仅将模板写入生成面板的提示词（genSettings.prompt）
     textNode.data = {
       ...textNode.data,
       genSettings: { ...(textNode.data.genSettings || { prompt: "" }), prompt: template } as TextNodeData["genSettings"],
@@ -374,10 +374,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt };
-  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleReversePrompt]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate };
+  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -393,12 +393,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
-        case "reverse-prompt": a.handleReversePrompt(); break;
+        case "create-reverse": a.handleApplyTemplate("reverse"); break;
+        case "create-character-face": a.handleApplyTemplate("characterFaceThreeView"); break;
+        case "create-character-three-view": a.handleApplyTemplate("characterThreeView"); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, setCroppingNodeId, setAnnotateOpen, handleReversePrompt]);
+  }, [id, src, setCroppingNodeId, setAnnotateOpen, handleApplyTemplate]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
   const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };

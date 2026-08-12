@@ -19,7 +19,7 @@ import {
   StarOutlined,
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
-import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Eraser, FlipHorizontal, FlipVertical, ScanText, Wand2 } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
@@ -29,6 +29,8 @@ import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
 import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
+import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
+import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, GROUP_COLORS, GROUP_COLOR_KEYS, getGroupColor } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
@@ -173,6 +175,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const textContent = (nodes.find(n => n.id === nodeId)?.data as { content?: string })?.content;
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
+  const [creationOpen, setCreationOpen] = useState(false);
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -262,10 +265,38 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               icon={<LightingIcon />}
               onClick={() => dispatchNodeAction(nodeId, "lighting")} disabled={!assetSrc} />
           </Tooltip>
-          <Tooltip title={t("node.reversePrompt")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />}
-              onClick={() => dispatchNodeAction(nodeId, "reverse-prompt")} disabled={!assetSrc} />
-          </Tooltip>
+          <MenuPopover
+            open={creationOpen}
+            onOpenChange={setCreationOpen}
+            placement="bottomRight"
+            trigger={
+              <Tooltip title={t("node.creation")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />} disabled={!assetSrc} />
+              </Tooltip>
+            }
+            content={
+              <>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-reverse"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <ScanText size={16} />
+                    {t("node.creationReverse")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-character-face"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CharacterFaceThreeViewIcon style={{ fontSize: 16 }} />
+                    {t("node.creationCharacterFace")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-character-three-view"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CharacterThreeViewIcon style={{ fontSize: 16 }} />
+                    {t("node.creationCharacterThreeView")}
+                  </span>
+                </MenuItem>
+              </>
+            }
+          />
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={isInAssets ? t("node.alreadySaved") : t("node.saveToAssets")}>
