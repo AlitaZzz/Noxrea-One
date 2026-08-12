@@ -710,7 +710,7 @@ export default function InfiniteCanvas() {
         <Panel position="top-left" style={{ margin: 0, padding: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
             <div
-              className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px]"
+              className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
               style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }}
             >
               <MenuPopover
@@ -727,7 +727,7 @@ export default function InfiniteCanvas() {
                 }
                 placement="bottomLeft"
                 content={
-                  <>
+                  <div className="select-none">
                     <div className="flex items-center gap-2 px-1 py-1.5">
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
                         style={{ background: "#1677ff", color: "#fff" }}>
@@ -760,7 +760,7 @@ export default function InfiniteCanvas() {
                         setToolbarMenuOpen(false);
                         setLogoutConfirmOpen(true);
                       }}>{t("auth.logout")}</MenuItem>
-                  </>
+                  </div>
                 }
               />
               <div className="w-px h-5 mx-0.5" style={{ background: "var(--canvas-border)" }} />

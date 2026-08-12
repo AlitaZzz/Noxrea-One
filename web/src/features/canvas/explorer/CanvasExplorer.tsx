@@ -121,7 +121,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
         .canvas-sidebar ::-webkit-scrollbar-thumb { background:var(--canvas-border); border-radius:2px; }
       `}</style>
 
-      <div className="canvas-sidebar flex flex-col h-full">
+      <div className="canvas-sidebar flex flex-col h-full select-none">
         {/* Tab 切换器 */}
         <div className="flex items-center border-b flex-shrink-0" style={{ borderColor: "var(--canvas-border)" }}>
           <button
