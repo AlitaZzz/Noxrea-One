@@ -94,11 +94,12 @@ interface AssetsState {
 
   initialize: () => Promise<void>;
   markAssetUrlSaved: (url: string) => void;
+  unmarkAssetUrlSaved: (url: string) => void;
 
   addAsset: (input: CreateAssetInput) => AssetItem | null;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AssetItem[]>;
   updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<void>;
-  removeAsset: (id: string) => Promise<void>;
+  removeAsset: (id: string, sourceUrl?: string) => Promise<void>;
   updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<void>;
 
   addFolder: (name: string, spaceKey: string, parentId?: string) => Promise<AssetFolder | null>;
@@ -119,6 +120,15 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       if (s.knownAssetUrls.has(url)) return { knownAssetUrls: s.knownAssetUrls };
       const next = new Set(s.knownAssetUrls);
       next.add(url);
+      return { knownAssetUrls: next };
+    });
+  },
+
+  unmarkAssetUrlSaved: (url) => {
+    set((s) => {
+      if (!s.knownAssetUrls.has(url)) return {};
+      const next = new Set(s.knownAssetUrls);
+      next.delete(url);
       return { knownAssetUrls: next };
     });
   },
@@ -201,10 +211,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     }
   },
 
-  removeAsset: async (id) => {
+  removeAsset: async (id, sourceUrl) => {
     const intId = toIntId(id);
     if (!intId) return;
     await assetApi.deleteAsset(intId);
+    if (sourceUrl) get().unmarkAssetUrlSaved(sourceUrl);
   },
 
   updateAssetsBatch: async (ids, updates) => {
