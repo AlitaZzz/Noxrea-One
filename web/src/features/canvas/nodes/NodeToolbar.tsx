@@ -334,6 +334,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={15} />}
               onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
+          <Tooltip title={t("node.previewFullscreen")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
+          </Tooltip>
         </>
       )}
 
