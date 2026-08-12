@@ -110,7 +110,11 @@
     "creation": "Creation",
     "creationReverse": "Reverse Prompt",
     "creationCharacterFace": "Character Face Three-View",
-    "creationCharacterThreeView": "Character Three-View"
+    "creationCharacterThreeView": "Character Three-View",
+    "previewFullscreen": "Fullscreen Preview",
+    "previewPrev": "Previous",
+    "previewNext": "Next",
+    "previewDownload": "Download Current"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",
