@@ -9,8 +9,37 @@ import { getProjects, createProject, getProject, updateProject, deleteProject } 
 import { ok, fail } from "@server/core/response";
 import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
 import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
+import fs from "fs";
+import path from "path";
 
 const router = new Hono();
+
+// 提示词模板库（按 type 分桶，位于 server/resources/prompt-template.json）
+let _promptTemplates: Record<string, string> | null = null;
+function loadPromptTemplates(): Record<string, string> {
+  if (_promptTemplates) return _promptTemplates;
+  const tplPath = path.resolve(process.cwd(), "server/resources/prompt-template.json");
+  const raw = fs.readFileSync(tplPath, "utf-8");
+  _promptTemplates = JSON.parse(raw) as Record<string, string>;
+  return _promptTemplates;
+}
+
+// GET /api/canvas/prompt-template?type=reverse
+// 返回指定类型的提示词模板（模板库由后端下发，支持修改配置热更新）。
+router.get("/api/canvas/prompt-template", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const type = c.req.query("type");
+  if (!type) return fail(400, "Missing 'type' query parameter");
+
+  const templates = loadPromptTemplates();
+  const template = templates[type];
+  if (template === undefined) return fail(404, `Prompt template '${type}' not found`);
+
+  return c.json(ok({ type, template }));
+});
 
 router.get("/api/canvas/projects", async (c) => {
   const request = c.req.raw;

@@ -106,7 +106,8 @@
     "saveToAssets": "保存到素材",
     "alreadySaved": "已在素材库",
     "connectCreateInput": "添加上下文",
-    "connectCreateOutput": "引用该节点"
+    "connectCreateOutput": "引用该节点",
+    "reversePrompt": "反推提示词"
   },
   "generation": {
     "failed": "生成失败，请检查模型配置和网络连接",
