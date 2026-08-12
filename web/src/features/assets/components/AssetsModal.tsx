@@ -188,7 +188,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       const item = items.find((i) => i.id === id);
       if (item?.folderId == null) bumpUncategorizedCount(-1);
       else if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
-      removeAsset(id);
+      removeAsset(id, item?.metadata?.sourceUrl);
     }
     setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
     setTotalCount((c) => Math.max(0, c - selectedIds.size));
@@ -586,7 +586,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             if (selectedIds.size > 0) {
               handleBatchDeleteConfirm();
             } else {
-              removeAsset(deleteAsset.id);
+              removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl);
               if (deleteAsset.folderId == null) bumpUncategorizedCount(-1);
               else if (deleteAsset.folderId) useAssetsStore.getState().bumpFolderCount(deleteAsset.folderId, -1);
               setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));
