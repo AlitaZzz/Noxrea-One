@@ -476,7 +476,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="flex flex-col gap-3 p-2" style={{ width: 360, margin: -12, background: "var(--menu-bg, #262626)", border: "1px solid var(--menu-border, #3a3a3a)", borderRadius: 12 }}>
+            <div className="menu-popover gap-3" style={{ width: 360, padding: 6 }}>
               {/* ── ① 画质 ── */}
               {showQuality && (
               <div>
@@ -562,6 +562,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             </div>
           }
           trigger="click" placement="bottomLeft"
+          styles={{ container: { padding: 0, background: "transparent" } }}
         >
           <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
