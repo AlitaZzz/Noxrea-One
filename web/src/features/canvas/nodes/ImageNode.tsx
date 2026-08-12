@@ -24,7 +24,7 @@ import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
-import { createEdge, createTextNode } from "@/features/canvas/node-defaults";
+import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import {
@@ -348,18 +348,29 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       y: node.position.y,
     };
 
-    const textNode = createTextNode(position);
-    // 正文 content 留空，仅将模板写入生成面板的提示词（genSettings.prompt）
-    textNode.data = {
-      ...textNode.data,
-      genSettings: { ...(textNode.data.genSettings || { prompt: "" }), prompt: template } as TextNodeData["genSettings"],
-    };
-
-    const edge = createEdge(id, textNode.id);
-
-    const store = useCanvasStore.getState();
-    store.addNodes([textNode]);
-    store.setEdges([...store.edges, edge]);
+    // 反推提示词 -> 文本节点（承载可编辑的提示词文本）
+    // 角色面部三视图 / 角色三视图 -> 图片节点（预填提示词，供图片生成面板使用）
+    if (type === "reverse") {
+      const textNode = createTextNode(position);
+      textNode.data = {
+        ...textNode.data,
+        genSettings: { ...(textNode.data.genSettings || { prompt: "" }), prompt: template } as TextNodeData["genSettings"],
+      };
+      const edge = createEdge(id, textNode.id);
+      const store = useCanvasStore.getState();
+      store.addNodes([textNode]);
+      store.setEdges([...store.edges, edge]);
+    } else {
+      const imageNode = createImageNode(position);
+      imageNode.data = {
+        ...imageNode.data,
+        genSettings: { ...(imageNode.data.genSettings || { prompt: "" }), prompt: template } as ImageNodeData["genSettings"],
+      };
+      const edge = createEdge(id, imageNode.id);
+      const store = useCanvasStore.getState();
+      store.addNodes([imageNode]);
+      store.setEdges([...store.edges, edge]);
+    }
     markDirtyImmediate();
   }, [id, src]);
 
