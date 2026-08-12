@@ -555,9 +555,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .menu-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
 .menu-item-btn.selected { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
 /* 禁用（dimmed）菜单项：hover 时不高亮背景、文字保持灰色 */
+.menu-popover-item { user-select: none; -webkit-user-select: none; }
 .menu-popover-item.menu-item-disabled .menu-item-btn:hover { background: transparent !important; color: var(--canvas-text-dim) !important; }
 .menu-divider { height: 1px; background: var(--menu-border); margin: 2px 6px; }
-.menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); }
+.menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); user-select: none; -webkit-user-select: none; }
 
 /* 历史对话弹层：320px 宽，配色沿用 canvas 变量族 */
 .chat-history-popover { min-width: 300px !important; width: 320px !important; }
