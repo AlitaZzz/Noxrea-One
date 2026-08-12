@@ -107,7 +107,10 @@
     "alreadySaved": "已在素材库",
     "connectCreateInput": "添加上下文",
     "connectCreateOutput": "引用该节点",
-    "reversePrompt": "反推提示词"
+    "creation": "创作",
+    "creationReverse": "反推提示词",
+    "creationCharacterFace": "角色面部三视图",
+    "creationCharacterThreeView": "角色三视图"
   },
   "generation": {
     "failed": "生成失败，请检查模型配置和网络连接",
