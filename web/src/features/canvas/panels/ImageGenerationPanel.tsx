@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined,RobotOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Popover, Tooltip } from "antd";
 import { memo, useEffect, useMemo,useRef, useState } from "react";
 
@@ -15,6 +15,7 @@ import { MenuItem,MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
 import { apiUpload } from "@/lib/api/client";
+import { ModelIcon } from "@/lib/model-icon";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { EventNames, isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
@@ -36,7 +37,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const findModelParams = useModelStore((s) => s.findModelParams);
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const allModels = channels.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name }))
+    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
   // Read persisted settings from node data
@@ -44,7 +45,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<GenSettings>;
     const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
-      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.modelName, "image") : null;
+      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
     const d = mp?.defaults ?? {};
     return {
       prompt: s.prompt || "",
@@ -69,7 +70,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置（params + defaults + constraints）
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.modelName, "image") : null;
+    return entry ? findModelParams(entry.name, "image") : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
@@ -216,7 +217,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       const res = await generationApi.submitGenerationTask({
         type: "image",
         prompt: p.trim(),
-        model: entry.modelName,
+        model: entry.name,
         channelId: entry.channelId,
         quality: (!modelParams || modelParams.params.includes("quality")) ? q : undefined,
         resolution: (!modelParams || modelParams.params.includes("resolution")) ? resolution : undefined,
@@ -454,15 +455,20 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         <MenuPopover
           open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
           trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm truncate"
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm max-w-[180px]"
               style={{ border: "none", cursor: "pointer" }}>
-              <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
-              {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
+              <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
+              <span className="truncate">
+                {(() => { const e = allModels.find((m) => m.value === modelKey); return e ? `${e.channelName}/${e.name}` : "Select model"; })()}
+              </span>
             </Button>
           }
           content={allModels.map((m) => (
             <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
-              {m.value}
+              <span className="flex items-center gap-1.5">
+                <ModelIcon model={m.name} className="size-4 shrink-0" />
+                {`${m.channelName}/${m.name}`}
+              </span>
             </MenuItem>
           ))}
         />

@@ -5,12 +5,13 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
+import { ModelIcon } from "@/lib/model-icon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import { apiUpload } from "@/lib/api/client";
@@ -32,7 +33,9 @@ interface Props {
 interface ModelOption {
   value: string;
   channelId: string;
-  modelName: string;
+  modelId: string;
+  name: string;
+  channelName: string;
 }
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
@@ -44,7 +47,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     .flatMap((c) =>
       c.models
         .filter((m) => m.capabilities?.includes("text"))
-        .map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name })),
+        .map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name })),
     )
     .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
@@ -232,7 +235,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const res = await generationApi.submitGenerationTask({
         type: "llm",
         prompt: finalPrompt,
-        model: entry.modelName,
+        model: entry.name,
         channelId: entry.channelId,
         nodeId,
         messages,
@@ -420,11 +423,13 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               <Button
                 size="small"
                 type="text"
-                className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm truncate"
+                className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm max-w-[180px]"
                 style={{ border: "none", cursor: "pointer" }}
               >
-                <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
-                {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
+                <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
+                <span className="truncate">
+                  {(() => { const e = allModels.find((m) => m.value === modelKey); return e ? `${e.channelName}/${e.name}` : "Select model"; })()}
+                </span>
               </Button>
             }
             content={allModels.map((m) => (
@@ -436,7 +441,10 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 }}
                 selected={modelKey === m.value}
               >
-                {m.value}
+                <span className="flex items-center gap-1.5">
+                  <ModelIcon model={m.name} className="size-4 shrink-0" />
+                  {`${m.channelName}/${m.name}`}
+                </span>
               </MenuItem>
             ))}
           />

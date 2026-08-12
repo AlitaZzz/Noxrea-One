@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Popover, Slider, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -20,6 +20,7 @@ import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 
 
 import { apiRaw, apiUpload } from "@/lib/api/client";
+import { ModelIcon } from "@/lib/model-icon";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
@@ -41,7 +42,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const channels = useModelStore((s) => s.channels);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = channels.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.name}/${m.name}`, channelId: c.id, modelName: m.name }))
+    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
   // Read persisted settings from node data
@@ -50,7 +51,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
     const mk = s.modelKey || allModels[0]?.value || "";
     const entry = allModels.find((m) => m.value === mk);
-    const mp = entry ? findModelParams(entry.modelName, "video") : null;
+    const mp = entry ? findModelParams(entry.name, "video") : null;
     const d = mp?.defaults ?? {};
     return {
       prompt: s.prompt || "",
@@ -78,7 +79,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.modelName, "video") : null;
+    return entry ? findModelParams(entry.name, "video") : null;
    
   }, [modelKey, allModels, findModelParams]);
 
@@ -156,7 +157,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       const res2 = await generationApi.submitGenerationTask({
         type: "video",
         prompt: p.trim(),
-        model: entry.modelName,
+        model: entry.name,
         channelId: entry.channelId,
         resolution: (!modelParams || modelParams.params.includes("resolution")) ? res : undefined,
         ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
@@ -394,15 +395,20 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         <MenuPopover
           open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
           trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm truncate"
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm max-w-[180px]"
               style={{ border: "none", cursor: "pointer" }}>
-              <RobotOutlined style={{ fontSize: 14, flexShrink: 0 }} />
-              {modelKey ? allModels.find((m) => m.value === modelKey)?.value : "Select model"}
+              <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
+              <span className="truncate">
+                {(() => { const e = allModels.find((m) => m.value === modelKey); return e ? `${e.channelName}/${e.name}` : "Select model"; })()}
+              </span>
             </Button>
           }
           content={allModels.map((m) => (
             <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
-              {m.value}
+              <span className="flex items-center gap-1.5">
+                <ModelIcon model={m.name} className="size-4 shrink-0" />
+                {`${m.channelName}/${m.name}`}
+              </span>
             </MenuItem>
           ))}
         />
