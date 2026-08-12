@@ -11,6 +11,7 @@ import {
   CheckOutlined,
   DeleteOutlined,
   DownloadOutlined,
+  ExpandOutlined,
   HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
@@ -307,6 +308,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
+          </Tooltip>
+          <Tooltip title={t("node.previewFullscreen")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
           </Tooltip>
           {/* Reset */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
