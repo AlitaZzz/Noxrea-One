@@ -6,10 +6,13 @@
 "use client";
 
 import {
+  CloseOutlined,
   CrownOutlined,
   DownloadOutlined,
   FullscreenOutlined,
+  LeftOutlined,
   PictureOutlined,
+  RightOutlined,
   ScissorOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
@@ -91,6 +94,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     setAnnotateOpenInternal(annotatingNodeId === id);
   }, [annotatingNodeId, id]);
   const [expanded, setExpanded] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const nodeRef = useRef<HTMLDivElement>(null);
 
   // 点击节点外部时收起展开视图
@@ -239,6 +244,26 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     document.body.removeChild(a);
   }, [data.alt]);
 
+  // 预览浮层：图片列表优先用多图结果，单图时退化为 [src]
+  const previewList = useMemo(
+    () => (isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls : [src]),
+    [isMulti, data.multiResultUrls, src]
+  );
+  const openPreview = useCallback(() => {
+    if (!src) return;
+    const idx = isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls.indexOf(src) : 0;
+    setPreviewIndex(idx < 0 ? 0 : idx);
+    setPreviewOpen(true);
+  }, [src, isMulti, data.multiResultUrls]);
+
+  // 预览浮层：Esc 关闭
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPreviewOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewOpen]);
+
   /** 多图模式：把某张结果图设为主图（更新 src 与真实尺寸，并收起网格） */
   const handleSetMain = useCallback((url: string) => {
     if (!url) return;
@@ -385,10 +410,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate };
-  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview };
+  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -401,6 +426,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "lighting": if (src) setLightingOpen(true); break;
         case "annotate": if (src) setAnnotateOpen(true); break;
+        case "preview-fullscreen": a.openPreview(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
@@ -679,7 +705,149 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       <LightingPanel src={src} onClose={() => setLightingOpen(false)} />,
       document.body
     )}
+    {previewOpen && createPortal(
+      <PreviewOverlay
+        list={previewList}
+        index={previewIndex}
+        onIndexChange={setPreviewIndex}
+        onClose={() => setPreviewOpen(false)}
+      />,
+      document.body
+    )}
     </>
+  );
+}
+
+/** 全屏预览浮层：支持多图切换、下载、Esc/点击背景关闭，带淡入动画 */
+function PreviewOverlay({
+  list, index, onIndexChange, onClose,
+}: {
+  list: string[];
+  index: number;
+  onIndexChange: (i: number) => void;
+  onClose: () => void;
+}) {
+  const [shown, setShown] = useState(false);
+  const current = list[Math.max(0, Math.min(index, list.length - 1))] || "";
+  const count = list.length;
+  const go = (dir: number) => {
+    if (count <= 1) return;
+    onIndexChange((index + dir + count) % count);
+  };
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(r);
+  }, []);
+
+  const handleDownload = () => {
+    if (!current) return;
+    const a = document.createElement("a");
+    const sep = current.includes("?") ? "&" : "?";
+    a.href = `${current}${sep}${new URLSearchParams({ download: "true" }).toString()}`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const btnBase =
+    "flex cursor-pointer items-center justify-center rounded-full text-white/90 transition hover:text-white hover:bg-white/15";
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center nodrag"
+      style={{
+        background: "rgba(0,0,0,0.92)",
+        opacity: shown ? 1 : 0,
+        transition: "opacity 0.2s ease",
+      }}
+      onClick={onClose}
+    >
+      {/* 关闭 */}
+      <button
+        className={`${btnBase} absolute right-5 top-5 h-10 w-10 text-xl`}
+        onClick={onClose}
+      >
+        <CloseOutlined />
+      </button>
+
+      {/* 下载 */}
+      <button
+        className={`${btnBase} absolute right-5 top-[68px] h-10 w-10 text-lg`}
+        onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+      >
+        <DownloadOutlined />
+      </button>
+
+      {/* 上一张 */}
+      {count > 1 && (
+        <button
+          className={`${btnBase} absolute left-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
+          onClick={(e) => { e.stopPropagation(); go(-1); }}
+        >
+          <LeftOutlined />
+        </button>
+      )}
+
+      {/* 当前图片 */}
+      {current && (
+        <img
+          src={current}
+          alt=""
+          draggable={false}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: "90vw",
+            maxHeight: "88vh",
+            objectFit: "contain",
+            borderRadius: 8,
+            boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            transform: shown ? "scale(1)" : "scale(0.96)",
+            transition: "transform 0.2s ease",
+          }}
+        />
+      )}
+
+      {/* 下一张 */}
+      {count > 1 && (
+        <button
+          className={`${btnBase} absolute right-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
+          onClick={(e) => { e.stopPropagation(); go(1); }}
+        >
+          <RightOutlined />
+        </button>
+      )}
+
+      {/* 计数 */}
+      {count > 1 && (
+        <div
+          className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-sm text-white/90"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {index + 1} / {count}
+        </div>
+      )}
+
+      {/* 缩略图条 */}
+      {count > 1 && (
+        <div
+          className="absolute bottom-14 left-1/2 flex max-w-[90vw] -translate-x-1/2 gap-2 overflow-x-auto rounded-xl bg-black/40 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {list.map((url, i) => (
+            <button
+              key={i}
+              onClick={() => onIndexChange(i)}
+              className={`h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-md transition ${
+                i === index ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
+              }`}
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
