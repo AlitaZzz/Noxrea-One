@@ -679,7 +679,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
         onKeyDown={handleKeyDown}
         onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
         onMouseLeave={handleCardLeave}
-        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all"
+        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
         style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
       >
         {/* Hover overlay — send to canvas */}
