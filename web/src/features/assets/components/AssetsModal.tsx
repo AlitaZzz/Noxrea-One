@@ -397,7 +397,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         width="90vw"
         centered
         destroyOnHidden
-        className="asset-library-modal"
+        className="asset-library-modal select-none"
         styles={{
             header: { background: "var(--canvas-bg)" },
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 140px)", overflow: "hidden" },

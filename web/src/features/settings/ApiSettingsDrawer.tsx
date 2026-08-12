@@ -314,12 +314,12 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       closable={{ placement: "end" }}
       destroyOnHidden
       styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" },
+        header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)", userSelect: "none" },
         body: { background: "var(--canvas-bg)", padding: 0, display: "flex", flexDirection: "column", height: "100%" },
         section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
       }}
     >
-    <div className="model-config-wrap flex flex-col h-full overflow-y-auto">
+    <div className="model-config-wrap flex flex-col h-full overflow-y-auto select-none">
       <style>{`
         .model-config-wrap { scrollbar-width: none; -ms-overflow-style: none; }
         .model-config-wrap::-webkit-scrollbar { display: none; }
