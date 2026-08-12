@@ -559,7 +559,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
             {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
-            {showQuality && <> · {t(`quality.${quality}`)}</>}
+            {showQuality && <> · {t(`generation.quality.${quality}`)}</>}
             {showResolution && <> · {resolution}</>}
             {showN && <> · {n}{t("generation.countUnit")}</>}
           </button>
