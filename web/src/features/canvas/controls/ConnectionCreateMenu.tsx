@@ -23,6 +23,8 @@ export interface PendingConnectionCreate {
   canvasPosition: { x: number; y: number };
   /** 屏幕坐标（用于菜单定位） */
   screenPosition: { x: number; y: number };
+  /** 发起端 Handle 在画布坐标系中的锚点坐标（用于菜单期间持续渲染预览线） */
+  sourceAnchor: { x: number; y: number };
 }
 
 interface Props {
