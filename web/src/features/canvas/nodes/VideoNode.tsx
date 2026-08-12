@@ -351,7 +351,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
+          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 overflow-hidden" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
+            <div className="absolute inset-0" style={{ background: "radial-gradient(circle at 50% 45%, rgba(59,130,246,0.35), transparent 70%)", animation: "breathe 3s ease-in-out infinite" }} />
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-white/70 font-medium">{t("common.generating")}</span>
           </div>
