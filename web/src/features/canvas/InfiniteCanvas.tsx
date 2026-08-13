@@ -67,7 +67,7 @@ import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { LAYOUT_GAP, NODE_TYPE, NODE_TYPE_COLOR, canConnect } from "@/lib/constants";
+import { LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, canConnect } from "@/lib/constants";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 import { useAssetsStore } from "@/features/assets/store";
@@ -417,8 +417,8 @@ export default function InfiniteCanvas() {
       const sourceHeight = sourceNode.measured?.height ?? sourceNode.height ?? 0;
       const sourceAnchor: { x: number; y: number } =
         direction === "output"
-          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 }
-          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 };
+          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 + NODE_TITLE_HEIGHT / 2 }
+          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 + NODE_TITLE_HEIGHT / 2 };
 
       setPendingConnectionCreate({
         sourceNodeId: sourceNode.id,
