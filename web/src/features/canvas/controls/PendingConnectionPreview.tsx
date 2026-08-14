@@ -38,7 +38,7 @@ export default function PendingConnectionPreview({ from, to, fromPosition }: Pro
         <path
           d={edgePath}
           fill="none"
-          style={{ stroke: DOT_COLOR, strokeWidth: 2, strokeDasharray: "5,5" }}
+          style={{ stroke: DOT_COLOR, strokeWidth: 2 }}
         />
         {STAGGER.map((begin) => (
           <FlowingDot key={begin} path={edgePath} begin={begin} color={DOT_COLOR} />
