@@ -344,7 +344,18 @@
   "panorama": {
     "reset": "重置视角",
     "screenshot": "截图",
+    "multiScreenshot": "多视角截图",
+    "view4": "四视角截图",
+    "view8": "八视角截图",
+    "view12": "十二视角截图",
+    "viewFront": "前方",
+    "viewRight": "右侧",
+    "viewBack": "后方",
+    "viewLeft": "左侧",
     "exit": "退出全景",
+    "aspect": "画面比例",
+    "aspectOriginal": "默认（原始比例）",
+    "toggleGrid": "三分构图线",
     "notEquirect": "该图片可能不是标准全景图（建议 2:1），仍要浏览吗？"
   },
   "crop": {
