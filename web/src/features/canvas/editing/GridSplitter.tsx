@@ -52,6 +52,7 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
               useCanvasStore.getState(),
               { source: "derived" },
               pos,
+              `宫格切分 (${r + 1}-${c + 1})`,
             );
           }
         }
