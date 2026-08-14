@@ -399,7 +399,8 @@
   },
   "file": {
     "uploadFailed": "Upload failed",
-    "uploadFailedAll": "All files failed to upload"
+    "uploadFailedAll": "All files failed to upload",
+    "dropToAdd": "Drop to add files"
   },
   "save": {
     "nothingToSave": "Nothing to save",
