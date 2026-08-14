@@ -983,7 +983,7 @@ export default function InfiniteCanvas() {
           >
             <DirUploadIcon
               className="animate-bounce"
-              style={{ width: 56, height: 56, color: "var(--canvas-accent, #1677ff)" }}
+              style={{ width: 56, height: 56, color: "rgb(29, 158, 117)" }}
             />
             <div className="text-lg font-medium" style={{ color: "var(--canvas-text)" }}>
               {t("file.dropToAdd")}
