@@ -7,9 +7,7 @@
 
 import {
   BgColorsOutlined,
-  CameraOutlined,
   CheckOutlined,
-  DeleteOutlined,
   DownloadOutlined,
   ExpandOutlined,
   FileTextOutlined,
@@ -181,16 +179,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
-  const handleDelete = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      window.dispatchEvent(
-        new CustomEvent(EventNames.CANVAS_DELETE_NODES, { detail: { nodeIds: [nodeId] } })
-      );
-    },
-    [nodeId]
-  );
-
   const handleInfo = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -211,16 +199,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
           style={{ padding: 8 }}
           icon={<InfoCircleOutlined />}
           onClick={handleInfo}
-        />
-      </Tooltip>
-      <Tooltip title={`${t("common.delete")} (Delete)`}>
-        <Button
-          type="text"
-          size="middle"
-          style={{ padding: 8 }}
-          className="text-white/40 hover:text-white"
-          icon={<DeleteOutlined />}
-          onClick={handleDelete}
         />
       </Tooltip>
 
