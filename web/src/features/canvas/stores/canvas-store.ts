@@ -121,6 +121,8 @@ interface CanvasState {
   setAnnotatingNodeId: (id: string | null) => void;
   croppingNodeId: string | null;
   setCroppingNodeId: (id: string | null) => void;
+  panoramaNodeId: string | null;
+  setPanoramaNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -239,6 +241,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setAnnotatingNodeId: (id) => set({ annotatingNodeId: id }),
   croppingNodeId: null,
   setCroppingNodeId: (id) => set({ croppingNodeId: id }),
+  panoramaNodeId: null,
+  setPanoramaNodeId: (id) => set({ panoramaNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
