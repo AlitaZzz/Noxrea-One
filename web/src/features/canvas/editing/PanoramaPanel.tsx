@@ -12,7 +12,7 @@ import { AspectRatioIcon } from "@/components/ui/icons/canvas/AspectRatioIcon";
 import { Grid4Icon } from "@/components/ui/icons/canvas/Grid4Icon";
 import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
 import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
-import { uploadAndAddNode } from "@/lib/utils/image-utils";
+import { computeDerivedGrid, gridPositionAt, uploadAndAddNode } from "@/lib/utils/image-utils";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useTranslation } from "react-i18next";
 
@@ -46,8 +46,8 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
   const [aspect, setAspect] = useState<AspectKey>("original");
   // 比例菜单开关
   const [aspectOpen, setAspectOpen] = useState(false);
-  // 三分构图线开关
-  const [showGrid, setShowGrid] = useState(true);
+  // 三分构图线开关（默认不显示）
+  const [showGrid, setShowGrid] = useState(false);
   // 容器尺寸，用于计算取景框覆盖层
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
@@ -253,14 +253,12 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
         return { yaw, label };
       });
 
-      // 以源节点为基准，按网格错开摆放，避免新节点互相遮挡
+      // 以源节点为基准，用统一派生网格布局错开摆放（显示尺寸 + 间隙），避免新节点互相遮挡
       const store = useCanvasStore.getState();
       const origNode = store.nodes.find((n) => n.id === sourceId);
-      const baseX = (origNode?.position.x || 0) + ((origNode?.style?.width as number) || 600) + 60;
-      const baseY = origNode?.position.y || 0;
-      const COLS = 4;
-      const STEP_X = frameW + 40;
-      const STEP_Y = frameH + 60;
+      // 多视角按接近方形的宫格排布：4 视角用 2×2，8/12 视角用多行 4 列，避免横着平铺
+      const COLS = COUNT <= 4 ? 2 : 4;
+      const layout = computeDerivedGrid(origNode, frameW, frameH, COLS);
 
       const currentPitch = viewer.getPosition().pitch;
       for (let i = 0; i < VIEWS.length; i++) {
@@ -279,15 +277,13 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
           canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
         );
 
-        const col = i % COLS;
-        const row = Math.floor(i / COLS);
         await uploadAndAddNode(
           sourceId,
           blob,
           ` (${view.label})`,
           useCanvasStore.getState(),
           { naturalWidth: frameW, naturalHeight: frameH, source: "derived" },
-          { x: baseX + col * STEP_X, y: baseY + row * STEP_Y },
+          gridPositionAt(layout, i),
           "derived",
         );
       }
@@ -326,13 +322,6 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
           transformOrigin: "center bottom",
         }}
       >
-        {/* 重置视角 */}
-        <Tooltip title={t("panorama.reset")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<ReloadOutlined />} onClick={handleReset} />
-        </Tooltip>
-
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-
         {/* 截图：截取当前视角并新建图片节点 */}
         <Tooltip title={t("panorama.screenshot")}>
           <Button
@@ -377,6 +366,8 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
           />
         </Tooltip>
 
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
         {/* 画面比例：选择截图输出比例，同时显示对应取景框 */}
         <MenuPopover
           open={aspectOpen}
@@ -410,6 +401,15 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
             onClick={() => setShowGrid((v) => !v)}
           />
         </Tooltip>
+
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
+        {/* 重置视角，单独一组 */}
+        <Tooltip title={t("panorama.reset")}>
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<ReloadOutlined />} onClick={handleReset} />
+        </Tooltip>
+
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* 退出全景（等价于裁剪的取消按钮） */}
         <Tooltip title={t("panorama.exit")}>
