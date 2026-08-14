@@ -201,7 +201,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
 
   return (
     <div
-      className="canvas-toolbar absolute -top-[62px] left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-xl z-20"
+      className="canvas-toolbar flex items-center gap-1 rounded-xl z-20"
       style={{ height: 50, padding: "6px 10px", whiteSpace: "nowrap" }}
     >
       <Tooltip title={t("common.info")}>

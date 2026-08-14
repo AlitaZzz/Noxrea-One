@@ -872,7 +872,7 @@ export default function InfiniteCanvas() {
         {Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
           return (
-          <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={-8}>
+          <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
             {(annotatingNodeId === nid || croppingNodeId === nid || panoramaNodeId === nid) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
