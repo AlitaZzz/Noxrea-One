@@ -554,7 +554,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         ) : isGenerating(data.taskBinding) ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
             <div className="absolute inset-0" style={{ background: "radial-gradient(circle at 50% 45%, rgba(59,130,246,0.35), transparent 70%)", animation: "breathe 3s ease-in-out infinite" }} />
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#1D9E75", borderTopColor: "transparent" }} />
             <span className="text-sm text-white/50">{t("common.generating")}</span>
           </div>
         ) : isMulti && hasImage ? (
