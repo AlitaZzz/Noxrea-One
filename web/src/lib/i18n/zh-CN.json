@@ -114,7 +114,8 @@
     "previewFullscreen": "预览",
     "previewPrev": "上一张",
     "previewNext": "下一张",
-    "previewDownload": "下载当前图片"
+    "previewDownload": "下载当前图片",
+    "panorama": "全景"
   },
   "generation": {
     "failed": "生成失败，请检查模型配置和网络连接",
@@ -339,6 +340,12 @@
       "rect": "矩形",
       "text": "文字"
     }
+  },
+  "panorama": {
+    "reset": "重置视角",
+    "screenshot": "截图",
+    "exit": "退出全景",
+    "notEquirect": "该图片可能不是标准全景图（建议 2:1），仍要浏览吗？"
   },
   "crop": {
     "reset": "重置",

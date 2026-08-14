@@ -114,7 +114,8 @@
     "previewFullscreen": "Preview",
     "previewPrev": "Previous",
     "previewNext": "Next",
-    "previewDownload": "Download Current"
+    "previewDownload": "Download Current",
+    "panorama": "Panorama"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",
@@ -339,6 +340,12 @@
       "rect": "Rectangle",
       "text": "Text"
     }
+  },
+  "panorama": {
+    "reset": "Reset View",
+    "screenshot": "Screenshot",
+    "exit": "Exit Panorama",
+    "notEquirect": "This image may not be a standard panorama (2:1 recommended). View anyway?"
   },
   "crop": {
     "reset": "Reset",

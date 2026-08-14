@@ -102,6 +102,7 @@ export default function InfiniteCanvas() {
   const snapThreshold = useCanvasStore((s) => s.snapThreshold);
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
+  const panoramaNodeId = useCanvasStore((s) => s.panoramaNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -547,6 +548,7 @@ export default function InfiniteCanvas() {
 
   const handlePaneClick = useCallback(() => {
     // Exit annotation and crop mode when clicking the canvas pane
+    // 全景模式仅支持手动退出，点击画布空白处不关闭
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
     // Deselect all nodes and edges
@@ -568,6 +570,7 @@ export default function InfiniteCanvas() {
       if (currentCropping && currentCropping !== nodeId) {
         useCanvasStore.getState().setCroppingNodeId(null);
       }
+      // 全景模式仅支持手动退出，点击其他节点不关闭
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
 
@@ -870,7 +873,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={-8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || panoramaNodeId === nid) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}

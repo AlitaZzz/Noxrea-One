@@ -26,6 +26,7 @@ import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
+import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
@@ -91,6 +92,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   useEffect(() => {
     setAnnotateOpenInternal(annotatingNodeId === id);
   }, [annotatingNodeId, id]);
+  // 全景模式：由 store 的 panoramaNodeId 驱动，仅支持手动退出（工具栏关闭按钮）
+  const setPanoramaNodeId = useCanvasStore((s) => s.setPanoramaNodeId);
+  const panoramaNodeId = useCanvasStore((s) => s.panoramaNodeId);
+  const [panoramaOpen, setPanoramaOpenInternal] = useState(false);
+  const setPanoramaOpen = useCallback((open: boolean) => {
+    useCanvasStore.getState().setPanoramaNodeId(open ? id : null);
+  }, [id]);
+  useEffect(() => {
+    setPanoramaOpenInternal(panoramaNodeId === id);
+  }, [panoramaNodeId, id]);
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -424,6 +435,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "lighting": if (src) setLightingOpen(true); break;
         case "annotate": if (src) setAnnotateOpen(true); break;
+        case "panorama": if (src) setPanoramaOpen(true); break;
         case "preview-fullscreen": a.openPreview(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
@@ -675,6 +687,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       {cropOpen && src && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
           <CropPanel src={src} sourceId={id} onClose={() => setCroppingNodeId(null)} />
+        </div>
+      )}
+      {panoramaOpen && src && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          <PanoramaPanel src={src} sourceId={id} onClose={() => setPanoramaOpen(false)} />
         </div>
       )}
       </div>

@@ -27,6 +27,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
@@ -227,6 +228,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
       {nodeType === NODE_ACTIONS.IMAGE && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          {/* 全景 */}
+          <Tooltip title={t("node.panorama")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<PanoramaIcon />} disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "panorama")} />
+          </Tooltip>
           {/* Edit */}
           <MenuPopover
             open={transformOpen}
