@@ -20,9 +20,10 @@ import {
 } from "@ant-design/icons";
 import { useReactFlow, useViewport } from "@xyflow/react";
 import { Button, InputNumber, Tooltip } from "antd";
-import { useCallback,useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
@@ -73,6 +74,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   const [zoomOpen, setZoomOpen] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [inputZoom, setInputZoom] = useState(Math.round(viewport.zoom * 100));
 
   const handleZoomInput = useCallback(
@@ -214,6 +216,49 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       <Tooltip title={t("common.assets")}>
         <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AssetsIcon />} onClick={onOpenAssets} />
       </Tooltip>
+
+      <span className="canvas-toolbar-sep" style={{ height: 18 }} />
+
+      {/* Shortcuts — 屏幕居中浮层（非 Modal） */}
+      <Tooltip title={t("shortcuts.title")}>
+        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} onClick={() => setShortcutsOpen((v) => !v)} />
+      </Tooltip>
+      {shortcutsOpen && (
+        <div className="fixed inset-0 z-50" onClick={() => setShortcutsOpen(false)}>
+          <div
+            className="flex gap-10 p-6 select-none shortcut-fade-in"
+            style={{
+              position: "fixed",
+              bottom: 96,
+              left: "50%",
+              transform: "translateX(-50%)",
+              color: "var(--dir-dim)",
+              background: "var(--menu-bg)",
+              borderRadius: 12,
+              border: "1px solid var(--menu-border)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[
+              { title: t("shortcuts.zoom"), items: [["Ctrl+=", t("shortcuts.desc.zoomin")], ["Ctrl+-", t("shortcuts.desc.zoomout")], ["Ctrl+0", t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
+              { title: t("shortcuts.pan"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.pan")], [t("shortcuts.key.spaceDrag"), t("shortcuts.desc.temppan")]] },
+              { title: t("shortcuts.edit"), items: [["Ctrl+C", t("shortcuts.desc.copy")], ["Ctrl+V", t("shortcuts.desc.paste")], ["Ctrl+Z", t("shortcuts.desc.undo")], ["Ctrl+Shift+Z", t("shortcuts.desc.redo")], ["Delete", t("shortcuts.desc.delete")]] },
+              { title: t("shortcuts.group"), items: [["Ctrl+G", t("shortcuts.desc.group")], ["Ctrl+Shift+G", t("shortcuts.desc.ungroup")]] },
+              { title: t("shortcuts.other"), items: [["Ctrl+A", t("shortcuts.desc.selectall")], ["Ctrl+M", t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
+            ].map((group, i, arr) => (
+              <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-white/10 pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
+                <div className="text-white/50 text-sm font-medium mb-3">{group.title}</div>
+                {group.items.map(([key, desc]) => (
+                  <div key={key} className="flex items-center justify-between gap-3 py-2">
+                    <kbd className="bg-white/10 px-2.5 py-1 rounded text-sm font-mono text-white/80 whitespace-nowrap">{key}</kbd>
+                    <span className="text-sm text-right">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Agent 对话 */}
       {/* Zoom display + menu */}

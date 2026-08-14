@@ -6,6 +6,15 @@
   to { opacity: 1; }
 }
 
+/* 快捷键浮层：淡入 + 轻微上移，与菜单弹出动画一致 */
+@keyframes shortcutFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.shortcut-fade-in {
+  animation: shortcutFadeIn 0.18s ease-out;
+}
+
 /* 登录页：背景光雾缓慢漂移 */
 @keyframes drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }

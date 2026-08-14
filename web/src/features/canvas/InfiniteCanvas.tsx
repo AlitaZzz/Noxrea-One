@@ -44,7 +44,6 @@ import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
-import CenterToolbar from "@/features/canvas/controls/CenterToolbar";
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
@@ -865,11 +864,6 @@ export default function InfiniteCanvas() {
             <TextGenerationPanel nodeId={textTarget.id} />
           </RfNodeToolbar>
         )}
-
-        {/* Bottom-center: add node toolbar */}
-        <Panel position="bottom-center" style={{ margin: 0, padding: 0, paddingBottom: 30 }}>
-          <CenterToolbar />
-        </Panel>
 
         {/* Node toolbars */}
         {Array.from(selectedNodeIds).map((nid) => {
