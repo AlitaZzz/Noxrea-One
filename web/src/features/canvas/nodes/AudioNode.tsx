@@ -23,7 +23,7 @@ import AudioWaveform from "./AudioWaveform";
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
   const [src, setSrc] = useState(data.src || "");
-  const [isDragOver, setIsDragOver] = useState(false);
+
   const [duration, setDuration] = useState(data.duration || 0);
   const [playing, setPlaying] = useState(false);
 
@@ -212,16 +212,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
-          ${isDragOver ? "node-drag-over" : ""}
         `}
         style={{ background: "var(--canvas-bg, #262626)" }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
-        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }}
-        onDrop={(e) => {
-          e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
-          const file = e.dataTransfer.files?.[0];
-          if (file) handleFile(file);
-        }}
         onContextMenu={(e) => e.preventDefault()}
       >
         {data.upload?.uploading ? (
