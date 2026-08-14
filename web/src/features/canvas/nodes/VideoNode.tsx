@@ -366,10 +366,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               onEnded={() => setPlaying(false)}
               onContextMenu={(e) => e.preventDefault()}
             />
+            {/* 底部渐变遮罩：保证纯白/浅色视频下控件可见 */}
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 z-[5] video-controls-scrim" />
             {/* Controls bar */}
-            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex items-center gap-2 px-2 ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
+            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex items-center gap-2 px-2 video-controls-bar ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
               <button
-                className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
                 onClick={(e) => { e.stopPropagation(); togglePlay(); }}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               >
@@ -394,7 +396,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 {formatTime(duration)}
               </span>
               <button
-                className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
                 onClick={(e) => { e.stopPropagation(); setMuted(!muted); }}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               >
@@ -427,7 +429,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 }
               >
                 <button
-                  className="flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                  className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
                   onClick={(e) => { e.stopPropagation(); captureFrame(videoRef.current?.currentTime ?? null); }}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
                 >
