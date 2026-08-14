@@ -14,6 +14,7 @@ import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib
 import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import i18n from "@/lib/i18n/config";
+import { showGlobalMessage } from "@/lib/global-message";
 
 const GRID_COLS = 4;
 const GRID_GAP = 30;
@@ -129,13 +130,17 @@ export function useFileDrop(
 
       // 1) 先从本地 blob URL 预加载图片/视频尺寸，再按正确尺寸创建节点
       const placeholders: { node: AudioNode | ImageNode | VideoNode; file: File; idx: number }[] = [];
+      let ignoredCount = 0; // 不被支持的文件数量，用于后续提示
       let mediaIdx = 0;
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
         const isImage = file.type.startsWith("image/");
         const isVideo = file.type.startsWith("video/");
         const isAudio = file.type.startsWith("audio/");
-        if (!isImage && !isVideo && !isAudio) continue;
+        if (!isImage && !isVideo && !isAudio) {
+          ignoredCount++;
+          continue;
+        }
 
         const col = mediaIdx % GRID_COLS;
         const row = Math.floor(mediaIdx / GRID_COLS);
@@ -169,7 +174,17 @@ export function useFileDrop(
         }
       }
 
-      if (placeholders.length === 0) return;
+      if (placeholders.length === 0) {
+        // 全部为不支持的文件类型：用顶部居中的轻提示（message），
+        // 与「保存/配置校验」等用户操作反馈保持一致，而非右下角系统级通知
+        showGlobalMessage().error(i18n.t("file.unsupportedType"));
+        return;
+      }
+
+      // 混合拖放：支持的已照常上传，被忽略的不支持文件提示一次（不列具体文件名）
+      if (ignoredCount > 0) {
+        showGlobalMessage().error(i18n.t("file.ignoredSome"));
+      }
       const placeholderNodes = placeholders.map((p) => p.node);
       addNodes(placeholderNodes);
 
