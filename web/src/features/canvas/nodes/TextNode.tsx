@@ -179,8 +179,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
       )}
 
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
+      <Handle type="target" position={Position.Left} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP }} />
     </div>
   );
 }

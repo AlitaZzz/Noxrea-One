@@ -179,8 +179,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col" style={{ width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }}>
       {/* 拖入连接点 */}
-      <Handle id="in" type="target" position={Position.Left} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.AUDIO], top: NODE_HANDLE_TOP, transform: "translate(-50%, -50%)", zIndex: 10 }} />
-      <Handle id="out" type="source" position={Position.Right} style={{ width: 10, height: 10, background: NODE_TYPE_COLOR[NODE_TYPE.AUDIO], top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
+      <Handle id="in" type="target" position={Position.Left} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.AUDIO], top: NODE_HANDLE_TOP, transform: "translate(-50%, -50%)", zIndex: 10 }} />
+      <Handle id="out" type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.AUDIO], top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
 
       <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (

@@ -189,6 +189,18 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .react-flow__node-director-node { overflow: visible !important; }
 .react-flow__node-video-node { overflow: visible !important; }
 .react-flow__node-text-node { overflow: visible !important; }
+
+/* 节点连接点（Handle）：默认放大，hover 时进一步放大 */
+.react-flow__handle {
+  width: 12px !important;
+  height: 12px !important;
+  transition: width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+}
+.react-flow__handle:hover {
+  width: 16px !important;
+  height: 16px !important;
+  box-shadow: 0 0 0 4px rgba(29, 158, 117, 0.25);
+}
 .ant-btn-sm { font-size: 13px; }
 
 /* Button sizing (global) */
