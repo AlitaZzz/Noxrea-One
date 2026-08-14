@@ -14,6 +14,7 @@ import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useTranslation } from "react-i18next";
@@ -465,7 +466,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: `calc(100% + 8px)`,
+          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
           transform: `translateX(-50%) scale(${1 / zoom})`,
           transformOrigin: "center bottom",
         }}
