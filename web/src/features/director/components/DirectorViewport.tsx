@@ -572,7 +572,7 @@ export default function DirectorViewport() {
             i.onerror = () => reject(new Error("Failed to load shot image"));
             i.src = shot.url;
           });
-          await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" });
+          await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
           notification.success({ title: `已发送到画布：${shot.name}`, placement: "bottomRight" });
         } catch {
           notification.error({ title: "发送到画布失败", placement: "bottomRight" });

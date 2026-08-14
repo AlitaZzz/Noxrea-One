@@ -332,6 +332,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
       // 3. 创建派生新节点（与九宫格逻辑一致）
       const suffix = op === "rot90" ? " (旋转)" : op === "flipH" ? " (水平翻转)" : " (垂直翻转)";
+      const derivedLabel = op === "rot90" ? "旋转" : op === "flipH" ? "水平翻转" : "垂直翻转";
       await createNodeFromUrl(
         id,
         url,
@@ -340,6 +341,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         suffix,
         useCanvasStore.getState(),
         { source: "derived" },
+        undefined,
+        derivedLabel,
       );
       markDirtyImmediate();
     } catch (e) {

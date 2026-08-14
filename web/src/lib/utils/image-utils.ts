@@ -181,6 +181,7 @@ export async function createNodeFromUrl(
   storeApi: CanvasStoreApi,
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
+  labelOverride?: string,
 ): Promise<AnyNode | null> {
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
 
@@ -201,7 +202,7 @@ export async function createNodeFromUrl(
   const dotIdx = origName.lastIndexOf(".");
   const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
   const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
-  const label = `${base}${labelSuffix}${ext}`;
+  const label = labelOverride ?? `${base}${labelSuffix}${ext}`;
 
   const newNode = createImageNode({ x, y }, url);
   applyThumbnailSettings(newNode, naturalW, naturalH, label);
@@ -225,6 +226,7 @@ export async function createNodeFromUrl(
  * @param storeApi        由调用方注入的 store 操作接口
  * @param extraNodeData   可选，额外写入 node.data 的字段
  * @param positionOverride  节点位置（不传则默认放在原图节点右侧）
+ * @param labelOverride    可选，直接指定完整 label（覆盖「原图名+后缀」的默认拼接）
  * @returns 新创建的节点，或 null（失败时）
  */
 export async function uploadAndAddNode(
@@ -235,6 +237,7 @@ export async function uploadAndAddNode(
   extraNodeData?: Record<string, unknown>,
   positionOverride?: { x: number; y: number },
   source?: "upload" | "derived",
+  labelOverride?: string,
 ): Promise<AnyNode | null> {
   const url = await uploadBlob(blob, undefined, source);
   if (!url) return null;
@@ -242,7 +245,17 @@ export async function uploadAndAddNode(
   const nw = (extraNodeData?.naturalWidth as number) || 0;
   const nh = (extraNodeData?.naturalHeight as number) || 0;
 
-  return createNodeFromUrl(sourceId, url, nw, nh, labelSuffix, storeApi, extraNodeData, positionOverride);
+  return createNodeFromUrl(
+    sourceId,
+    url,
+    nw,
+    nh,
+    labelSuffix,
+    storeApi,
+    extraNodeData,
+    positionOverride,
+    labelOverride,
+  );
 }
 
 // ── 派生节点网格布局 ──

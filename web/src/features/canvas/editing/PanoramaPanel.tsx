@@ -179,6 +179,7 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
         { naturalWidth: targetW, naturalHeight: targetH, source: "derived" },
         undefined,
         "derived",
+        "全景截图",
       );
       // 截图成功后保持全景模式，不退出
     } catch (e) {
@@ -285,6 +286,7 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
           { naturalWidth: frameW, naturalHeight: frameH, source: "derived" },
           gridPositionAt(layout, i),
           "derived",
+          `全景截图 (${view.label})`,
         );
       }
 

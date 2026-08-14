@@ -121,7 +121,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
       const nw = v.videoWidth, nh = v.videoHeight;
       const label = `${data.alt || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
-      await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" });
+      await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, id]);
 
