@@ -547,10 +547,10 @@ export default function InfiniteCanvas() {
   );
 
   const handlePaneClick = useCallback(() => {
-    // Exit annotation and crop mode when clicking the canvas pane
-    // 全景模式仅支持手动退出，点击画布空白处不关闭
+    // Exit annotation, crop and panorama mode when clicking the canvas pane
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
+    useCanvasStore.getState().setPanoramaNodeId(null);
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
@@ -570,7 +570,10 @@ export default function InfiniteCanvas() {
       if (currentCropping && currentCropping !== nodeId) {
         useCanvasStore.getState().setCroppingNodeId(null);
       }
-      // 全景模式仅支持手动退出，点击其他节点不关闭
+      const currentPanorama = useCanvasStore.getState().panoramaNodeId;
+      if (currentPanorama && currentPanorama !== nodeId) {
+        useCanvasStore.getState().setPanoramaNodeId(null);
+      }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
 
