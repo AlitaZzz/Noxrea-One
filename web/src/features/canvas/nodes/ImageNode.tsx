@@ -699,8 +699,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />}
-      <Handle type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP }} />
+      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 50 }} />}
+      <Handle type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 50 }} />
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
