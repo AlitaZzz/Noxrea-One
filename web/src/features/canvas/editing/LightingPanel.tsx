@@ -161,6 +161,7 @@ export default function LightingPanel({ src, onClose }: Props) {
       onCancel={onClose}
       width={780}
       footer={null}
+      className="select-none"
     >
       <WheelGuard>
         <div className="flex flex-col gap-3" style={{ minHeight: 400 }}>
