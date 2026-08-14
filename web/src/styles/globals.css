@@ -114,6 +114,10 @@
 .react-flow__pane { cursor: grab; }
 .react-flow__pane:active { cursor: grabbing; }
 .react-flow__node { font-family: inherit; }
+/* 选中节点提升至最上层，但组节点例外（组始终作为底层容器，避免盖住成员） */
+.react-flow__node.selected:not(.react-flow__node-group) {
+  z-index: 1000 !important;
+}
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
 /* Multi-select rect: expand outward by GROUP_NODE_PADDING(40) so selection
