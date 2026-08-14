@@ -344,7 +344,18 @@
   "panorama": {
     "reset": "Reset View",
     "screenshot": "Screenshot",
+    "multiScreenshot": "Multi-View Screenshot",
+    "view4": "4-View Screenshot",
+    "view8": "8-View Screenshot",
+    "view12": "12-View Screenshot",
+    "viewFront": "Front",
+    "viewRight": "Right",
+    "viewBack": "Back",
+    "viewLeft": "Left",
     "exit": "Exit Panorama",
+    "aspect": "Aspect Ratio",
+    "aspectOriginal": "Original",
+    "toggleGrid": "Rule of Thirds Grid",
     "notEquirect": "This image may not be a standard panorama (2:1 recommended). View anyway?"
   },
   "crop": {
