@@ -6,9 +6,9 @@
 "use client";
 
 import { BorderOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined,HighlightOutlined } from "@ant-design/icons";
-import { useViewport } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useViewport } from "@xyflow/react";
 
 import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
@@ -40,8 +40,9 @@ interface TextAnnotation {
 
 export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
-  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const { zoom } = useViewport();
+  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
+
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
