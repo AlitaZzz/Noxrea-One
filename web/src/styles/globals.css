@@ -15,6 +15,18 @@
   animation: shortcutFadeIn 0.18s ease-out;
 }
 
+/* 视频节点：底部渐变遮罩，保证纯白/浅色视频下控件可见 */
+.video-controls-scrim {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.15) 55%, transparent);
+}
+/* 控件图标描边/投影：双保险，即便渐变未完全覆盖也能看清 */
+.video-control-btn svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.video-controls-bar span {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
 /* 登录页：背景光雾缓慢漂移 */
 @keyframes drift {
   0% { transform: translate3d(0, 0, 0) scale(1); }
