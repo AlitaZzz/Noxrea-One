@@ -8,8 +8,9 @@ import { useCallback } from "react";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import {
   canvasToBlob,
-  computeThumbScale,
+  computeDerivedGrid,
   createNodeFromUrl,
+  gridPositionAt,
   uploadBlob,
 } from "@/lib/utils/image-utils";
 
@@ -28,13 +29,10 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
 
         const pieceW = img.naturalWidth / cols;
         const pieceH = img.naturalHeight / rows;
-        const { displayW, displayH } = computeThumbScale(pieceW, pieceH);
 
         // Get original node position for grid layout
         const origNode = useCanvasStore.getState().nodes.find((n) => n.id === sourceId);
-        const baseX = (origNode?.position.x || 0) + (origNode?.style?.width as number || 600) + 60;
-        const baseY = origNode?.position.y || 0;
-        const gap = 12;
+        const layout = computeDerivedGrid(origNode, pieceW, pieceH, cols);
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -44,7 +42,7 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
             const url = await uploadBlob(blob, `grid_${r}_${c}.png`, "derived");
             if (!url) continue;
 
-            const pos = { x: baseX + c * (displayW + gap), y: baseY + r * (displayH + gap) };
+            const pos = gridPositionAt(layout, r * cols + c);
             await createNodeFromUrl(
               sourceId,
               url,
