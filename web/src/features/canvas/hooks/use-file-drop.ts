@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { type DragEvent,useCallback } from "react";
+import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
@@ -32,21 +32,96 @@ export function useFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
   notif?: { error: Function; warning?: Function; info?: Function },
   shouldIgnore?: (target: HTMLElement) => boolean,
+  containerRef?: React.RefObject<HTMLElement | null>,
 ) {
   const addNodes = useCanvasStore((s) => s.addNodes);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
 
+  // 组件卸载时清理心跳定时器
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  // 用「window 级 dragover 心跳」判定拖拽是否仍在画布内：
+  // 因为 React Flow 节点会在 dragover 上 stopPropagation，导致拖到节点上方时
+  // 画布容器的 onDragOver 收不到事件、心跳停止从而遮罩消失。
+  // 改为监听 window（捕获阶段，节点无法拦截），只要坐标仍在画布容器内就刷新心跳，
+  // 定时器超时即隐藏遮罩。该方案不依赖任何「离开事件」的可靠性。
+  const [isFileDragging, setFileDragging] = useState(false);
+  const lastActiveRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const draggingRef = useRef(false); // 当前是否处于文件拖拽中（首次进入时置位）
+
+  const isInsideCanvas = useCallback(
+    (e: DragEvent) => {
+      if (!containerRef?.current) return true; // 无 ref 时退化为「命中即显示」
+      const rect = containerRef.current.getBoundingClientRect();
+      const { clientX: x, clientY: y } = e;
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    },
+    [containerRef],
+  );
+
+  // 监听 window 上的 dragover（捕获），只要携带文件且仍在画布内就刷新心跳
+  useEffect(() => {
+    const onWindowDragOver = (e: DragEvent) => {
+      if (!draggingRef.current) return;
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      if (shouldIgnore?.(e.target as HTMLElement)) return;
+      if (!isInsideCanvas(e)) return;
+      lastActiveRef.current = Date.now();
+      if (!isFileDragging) setFileDragging(true);
+    };
+    window.addEventListener("dragover", onWindowDragOver, true);
+    return () => window.removeEventListener("dragover", onWindowDragOver, true);
+  }, [shouldIgnore, isInsideCanvas, isFileDragging]);
+
+  const startWatcher = useCallback(() => {
+    draggingRef.current = true;
+    lastActiveRef.current = Date.now();
+    setFileDragging(true);
+    if (timerRef.current) return;
+    timerRef.current = setInterval(() => {
+      // 超过 120ms 未收到画布内的 dragover，判定已离开
+      if (Date.now() - lastActiveRef.current > 120) {
+        draggingRef.current = false;
+        setFileDragging(false);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      }
+    }, 60);
+  }, []);
+
+  const stopWatcher = useCallback(() => {
+    draggingRef.current = false;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setFileDragging(false);
+  }, []);
+
   const handleDragOver = useCallback((e: DragEvent) => {
     if (shouldIgnore?.(e.target as HTMLElement)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-  }, [shouldIgnore]);
+    if (e.dataTransfer.types.includes("Files")) startWatcher();
+  }, [shouldIgnore, startWatcher]);
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
       if (shouldIgnore?.(e.target as HTMLElement)) return;
       e.preventDefault();
+      // 释放后隐藏遮罩并停止心跳定时器
+      stopWatcher();
       const files = Array.from(e.dataTransfer.files || []);
       if (files.length === 0) return;
 
@@ -180,5 +255,5 @@ export function useFileDrop(
     [addNodes, removeNodes, updateNodeData, screenToFlowPosition, shouldIgnore],
   );
 
-  return { handleDragOver, handleDrop };
+  return { handleDragOver, handleDrop, isFileDragging };
 }

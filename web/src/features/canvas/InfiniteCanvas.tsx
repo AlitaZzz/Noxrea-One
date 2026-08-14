@@ -35,6 +35,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
+import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import AgentDrawer from "@/features/agent/components/AgentDrawer";
@@ -602,7 +603,8 @@ export default function InfiniteCanvas() {
     return target.closest('.asset-library-modal') !== null;
   }, []);
 
-  const { handleDragOver, handleDrop } = useFileDrop(screenToFlowPosition, notif, shouldIgnoreFileDrop);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const { handleDragOver, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, notif, shouldIgnoreFileDrop, canvasContainerRef);
 
   // ---- Highlight selected node's connections ----
 
@@ -644,6 +646,7 @@ export default function InfiniteCanvas() {
 
   return (
     <div
+      ref={canvasContainerRef}
       className={hideSelectionRect ? "canvas-container hide-selection-rect" : "canvas-container"}
       style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
       onDragOver={handleDragOver}
@@ -967,6 +970,27 @@ export default function InfiniteCanvas() {
         onClose={() => setChatOpen(false)}
         projectId={activeProjectId ? Number(activeProjectId) : undefined}
       />
+
+      {/* 拖入文件时的全屏模糊遮罩 + 释放提示 */}
+      {isFileDragging && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md"
+          style={{ background: "color-mix(in srgb, var(--canvas-bg) 55%, transparent)", pointerEvents: "none" }}
+        >
+          <div
+            className="flex flex-col items-center gap-4 rounded-2xl px-16 py-12"
+            style={{ border: "2px dashed var(--canvas-border-light)", background: "color-mix(in srgb, var(--canvas-bg) 40%, transparent)" }}
+          >
+            <DirUploadIcon
+              className="animate-bounce"
+              style={{ width: 56, height: 56, color: "var(--canvas-accent, #1677ff)" }}
+            />
+            <div className="text-lg font-medium" style={{ color: "var(--canvas-text)" }}>
+              {t("file.dropToAdd")}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

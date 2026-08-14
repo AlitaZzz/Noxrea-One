@@ -399,7 +399,8 @@
   },
   "file": {
     "uploadFailed": "上传失败",
-    "uploadFailedAll": "全部文件上传失败"
+    "uploadFailedAll": "全部文件上传失败",
+    "dropToAdd": "释放以添加文件"
   },
   "save": {
     "nothingToSave": "无可保存内容",
