@@ -18,7 +18,7 @@ interface Props {
  * 对齐辅助线渲染组件。
  *
  * 将画布坐标系下的对齐线数据通过 `flowToScreenPosition` 转换为屏幕坐标，
- * 以半透明蓝色虚线绘制在画布叠加层上。
+ * 以半透明绿色虚线绘制在画布叠加层上。
  */
 export default function AlignmentGuides({ guides }: Props) {
   const rf = useReactFlow();
@@ -50,7 +50,7 @@ export default function AlignmentGuides({ guides }: Props) {
           y1={line.y1}
           x2={line.x2}
           y2={line.y2}
-          stroke="#1677ff"
+          stroke="rgb(29, 158, 117)"
           strokeWidth={1}
           strokeDasharray="4 4"
           opacity={0.7}
