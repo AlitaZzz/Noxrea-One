@@ -72,8 +72,6 @@ function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t } = useTranslation();
-  const dropRef = useRef<HTMLDivElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   // cropOpen driven by store's croppingNodeId (same pattern as annotateOpen)
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
@@ -439,14 +437,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id, src, setCroppingNodeId, setAnnotateOpen, handleApplyTemplate]);
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
-  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
-  };
-
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.alt || data.label || t("node.image"), { syncAlt: true });
 
@@ -492,13 +482,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
           ${isMulti ? "overflow-visible" : "overflow-hidden"}
           ${selected ? "node-selected" : ""}
-          ${isDragOver ? "node-drag-over" : ""}
         `}
         style={{ background: hasImage ? "transparent" : "var(--canvas-bg, #262626)" }}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        ref={dropRef}
       >
         {isMulti && !expanded && (
           <div className="absolute top-2 right-2 z-20 nodrag">

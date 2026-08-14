@@ -35,7 +35,7 @@ import { useTranslation } from "react-i18next";
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   const [src, setSrc] = useState(data.src || "");
-  const [isDragOver, setIsDragOver] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -301,16 +301,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
-          ${isDragOver ? "node-drag-over" : ""}
         `}
         style={{ background: hasVideo ? "transparent" : "var(--canvas-bg, #262626)" }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
-        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }}
-        onDrop={(e) => {
-          e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
-          const file = e.dataTransfer.files?.[0];
-          if (file) handleFile(file);
-        }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
