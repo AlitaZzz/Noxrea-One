@@ -7,6 +7,7 @@ import { Viewer } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 
 import WheelGuard from "@/components/ui/WheelGuard";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { AspectRatioIcon } from "@/components/ui/icons/canvas/AspectRatioIcon";
 import { Grid4Icon } from "@/components/ui/icons/canvas/Grid4Icon";
 import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
@@ -320,7 +321,7 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: "calc(100% + 8px)",
+          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
           transform: `translateX(-50%) scale(${1 / zoom})`,
           transformOrigin: "center bottom",
         }}
