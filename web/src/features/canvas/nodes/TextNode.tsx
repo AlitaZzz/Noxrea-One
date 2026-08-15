@@ -8,14 +8,15 @@
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
-import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
-import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import type { TextNode as TextNodeType } from "@/features/canvas/types";
+import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 
+import GeneratingOverlay from "./GeneratingOverlay";
 import ResizeHandle from "./ResizeHandle";
 
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
@@ -166,13 +167,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
             }
           }}
         />
-        {generating && (
-          <div className="absolute inset-0 rounded-lg flex flex-col items-center justify-center gap-3 overflow-hidden" style={{ background: "var(--canvas-bg, #262626)" }}>
-            <div className="absolute inset-0" style={{ background: "radial-gradient(circle at 50% 45%, rgba(59,130,246,0.35), transparent 70%)", animation: "breathe 3s ease-in-out infinite" }} />
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/50">{t("common.generating")}</span>
-          </div>
-        )}
+        {generating && <GeneratingOverlay absolute rounded />}
       </div>
 
       {selected && (

@@ -18,18 +18,20 @@ import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
-import { apiUploadWithProgress } from "@/lib/api/client";
 import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
-import { computeNodeSize, createNodeFromUrl, loadMediaDimensions } from "@/lib/utils/image-utils";
-import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
-import { formatTime } from "@/lib/utils/format";
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
+import { apiUploadWithProgress } from "@/lib/api/client";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
+import { formatTime } from "@/lib/utils/format";
+import { computeNodeSize, createNodeFromUrl, loadMediaDimensions } from "@/lib/utils/image-utils";
+
+import GeneratingOverlay from "./GeneratingOverlay";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
@@ -346,11 +348,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 overflow-hidden" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
-            <div className="absolute inset-0" style={{ background: "radial-gradient(circle at 50% 45%, rgba(59,130,246,0.35), transparent 70%)", animation: "breathe 3s ease-in-out infinite" }} />
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{t("common.generating")}</span>
-          </div>
+          <GeneratingOverlay absolute={false} />
         ) : hasVideo ? (
           <div className="w-full h-full relative">
             <video
