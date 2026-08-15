@@ -5,17 +5,18 @@
  */
 "use client";
 
+import "@/lib/i18n/config";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntApp, ConfigProvider } from "antd";
 import { ReactNode, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import "@/lib/i18n/config";
 import { directorTheme } from "@/styles/theme";
-import { useTranslation } from "react-i18next";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -10,6 +10,9 @@ import { App } from "antd";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
+import { NavSvg } from "@/components/ui/icons/director/NavSvg";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
 import type { CameraPresetCtx } from "@/features/director/core/camera-presets";
 import { CAMERA_PRESETS } from "@/features/director/core/camera-presets";
 import { CameraRig } from "@/features/director/core/camera-rig";
@@ -22,12 +25,9 @@ import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
-import { NavSvg } from "@/components/ui/icons/director/NavSvg";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
 import { createNodeFromUrl,uploadBlob } from "@/lib/utils/image-utils";
-import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 type _SceneSnapshot = {
   scale?: number;

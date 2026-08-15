@@ -8,21 +8,21 @@
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import { ModelIcon } from "@/lib/model-icon";
 import WheelGuard from "@/components/ui/WheelGuard";
-import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
-import { apiUpload } from "@/lib/api/client";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { applyThumbnailSettings } from "@/lib/utils/image-utils";
-import type { GenSettings, TextNodeData } from "@/features/canvas/types";
+import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useTranslation } from "react-i18next";
+import type { GenSettings, TextNodeData } from "@/features/canvas/types";
+import { apiUpload } from "@/lib/api/client";
+import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
+import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 

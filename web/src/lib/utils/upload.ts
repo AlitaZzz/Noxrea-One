@@ -85,7 +85,7 @@ export async function uploadWithRetry(
 
       if (res.code !== 200 || !res.data?.url) {
         // 服务端返回错误（非网络问题），不重试
-        throw new UploadBusinessError((res as any).detail ?? res.msg);
+        throw new UploadBusinessError((res as unknown as { detail?: string }).detail ?? res.msg);
       }
 
       return res.data;

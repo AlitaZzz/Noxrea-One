@@ -8,8 +8,8 @@
 import { useCallback, useRef } from "react";
 
 import { ResizeCornerIcon } from "@/components/ui/icons/canvas/ResizeCornerIcon";
-import { EventNames } from "@/lib/constants";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { EventNames } from "@/lib/constants";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 

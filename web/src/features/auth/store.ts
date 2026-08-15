@@ -5,8 +5,8 @@
  */
 import { create } from "zustand";
 
-import { setToken } from "@/lib/api/client";
 import { authApi } from "@/features/auth/api";
+import { setToken } from "@/lib/api/client";
 
 export interface UserInfo {
   id: number;

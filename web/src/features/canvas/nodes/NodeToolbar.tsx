@@ -21,22 +21,22 @@ import {
 import { Button, Popover,Tooltip } from "antd";
 import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
+import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
+import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
+import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
+import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
-import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
-import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
-import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
-import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
-import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import { DEFAULT_GROUP_COLOR_KEY, EventNames, GROUP_COLORS, GROUP_COLOR_KEYS, getGroupColor } from "@/lib/constants";
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,

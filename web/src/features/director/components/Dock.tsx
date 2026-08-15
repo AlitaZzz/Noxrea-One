@@ -8,8 +8,6 @@
 import { App,InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 
-import { groupedPresets } from "@/features/director/core/camera-presets";
-import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/ui/icons/director/DirCubeIcon";
 import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
@@ -24,6 +22,8 @@ import { DirScaleIcon } from "@/components/ui/icons/director/DirScaleIcon";
 import { DirShotIcon } from "@/components/ui/icons/director/DirShotIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { DirVideoIcon } from "@/components/ui/icons/director/DirVideoIcon";
+import { groupedPresets } from "@/features/director/core/camera-presets";
+import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 
 const IC_MAP = {
   pointer: DirPointerIcon,

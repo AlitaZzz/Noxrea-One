@@ -7,10 +7,10 @@
 
 import { FolderOutlined } from "@ant-design/icons";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import NavButton from "@/components/ui/NavButton";
 import type { AssetFolder } from "@/features/assets/types";
-import { useTranslation } from "react-i18next";
 
 interface SpaceItem {
   key: string;

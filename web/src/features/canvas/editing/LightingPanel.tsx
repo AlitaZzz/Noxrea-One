@@ -8,12 +8,12 @@
 import { ArrowUpOutlined } from "@ant-design/icons";
 import { Button, ColorPicker, Slider, Switch } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 
 interface LightingState {
   intensity: number;
@@ -59,8 +59,10 @@ export default function LightingPanel({ src, onClose }: Props) {
   const dragRef = useRef({ on: false, lastX: 0, lastY: 0 });
   const azRef = useRef(state.azimuth);
   const elRef = useRef(state.elevation);
-  azRef.current = state.azimuth;
-  elRef.current = state.elevation;
+  useEffect(() => {
+    azRef.current = state.azimuth;
+    elRef.current = state.elevation;
+  }, [state.azimuth, state.elevation]);
 
   useEffect(() => {
     setModalOpen(true);

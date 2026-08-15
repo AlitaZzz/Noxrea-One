@@ -6,15 +6,15 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
+import { useViewport } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useViewport } from "@xyflow/react";
+import { useTranslation } from "react-i18next";
 
 import WheelGuard from "@/components/ui/WheelGuard";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;

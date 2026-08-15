@@ -10,90 +10,90 @@ export { default as InfiniteCanvas } from "./InfiniteCanvas";
 
 // ── 类型 ──
 export type {
-  AnyNode,
   AnyEdge,
-  TextNode,
-  ImageNode,
-  VideoNode,
+  AnyNode,
   AudioNode,
-  DirectorNode,
-  GroupNode,
-  TextNodeData,
-  ImageNodeData,
-  VideoNodeData,
   AudioNodeData,
-  GroupNodeData,
-  DirectorNodeData,
+  BackgroundType,
   DirectorEntityState,
+  DirectorNode,
+  DirectorNodeData,
   DirectorStateData,
   GenSettings,
-  VideoGenSettings,
+  GroupNode,
+  GroupNodeData,
+  ImageNode,
+  ImageNodeData,
   MediaGenFields,
-  ViewportState,
   TaskBinding,
   TaskStatus,
-  UploadState,
-  BackgroundType,
+  TextNode,
+  TextNodeData,
   ThemeMode,
+  UploadState,
+  VideoGenSettings,
+  VideoNode,
+  VideoNodeData,
+  ViewportState,
 } from "./types";
 
 // ── 节点工厂 ──
 export {
-  createTextNode,
-  createImageNode,
-  createVideoNode,
   createAudioNode,
-  directorNode,
-  createGroupNode,
-  duplicateNode,
   createEdge,
+  createGroupNode,
+  createImageNode,
+  createTextNode,
+  createVideoNode,
+  directorNode,
+  duplicateNode,
 } from "./node-defaults";
 
 // ── 节点元信息 ──
 export {
-  NODE_TYPE_I18N,
-  NODE_TYPE_ORDER,
   getNodeTypeColor,
   getNodeTypeIcon,
-} from "./node-type-meta";
+  NODE_TYPE_I18N,
+  NODE_TYPE_ORDER,
+} from "./NodeTypeMeta";
 
 // ── Stores ──
 export {
-  useCanvasStore,
+  findFreePosition,
+  flushAndWait,
+  flushOnUnload,
+  getLiveViewport,
+  getViewportCenter,
   markDirty,
   markDirtyImmediate,
   syncLiveViewport,
-  getLiveViewport,
-  flushAndWait,
-  flushOnUnload,
   takeCanvasSnapshot,
-  getViewportCenter,
-  findFreePosition,
+  useCanvasStore,
 } from "./stores/canvas-store";
-export { useHistoryStore } from "./stores/history-store";
 export { useContextMenuStore } from "./stores/context-menu-store";
+export { useHistoryStore } from "./stores/history-store";
 export { useSelectionStore } from "./stores/selection-store";
 
 // ── Hooks ──
-export { useCanvasEvents } from "./hooks/use-canvas-events";
-export { useCanvasKeyboard } from "./hooks/use-canvas-keyboard";
-export { useFileDrop } from "./hooks/use-file-drop";
-export { useAddNode, type AddNodeType } from "./hooks/use-add-node";
-export { useGroupOperations } from "./hooks/use-group-operations";
-export { useEditableTitle } from "./hooks/use-editable-title";
+export { type AddNodeType,useAddNode } from "./hooks/use-add-node";
 export {
-  computeAlignment,
   type AlignmentGuide,
   type AlignmentResult,
+  computeAlignment,
 } from "./hooks/use-alignment-guides";
+export { useCanvasEvents } from "./hooks/use-canvas-events";
+export { useCanvasKeyboard } from "./hooks/use-canvas-keyboard";
+export { useEditableTitle } from "./hooks/use-editable-title";
+export { useFileDrop } from "./hooks/use-file-drop";
+export { useGroupOperations } from "./hooks/use-group-operations";
 export { useVideoThumbnail } from "./hooks/use-video-thumbnail";
 
 // ── API ──
+export { captureFrame } from "./api/file-api";
 export {
-  generationApi,
-  submitGenerationTask,
   cancelGenerationTask,
+  generationApi,
   streamGenerationTask,
+  submitGenerationTask,
   type SubmitGenerationTaskBody,
 } from "./api/generation-api";
-export { captureFrame } from "./api/file-api";

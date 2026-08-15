@@ -9,7 +9,8 @@ import { BaseEdge, EdgeLabelRenderer, type EdgeProps,getBezierPath } from "@xyfl
 
 import { EventNames } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/edge-highlight-context";
-import { DOT_COLOR, FlowingDot, STAGGER } from "./edge-flow";
+
+import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
 
 export default function DeletableEdge({
   id,

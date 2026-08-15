@@ -7,12 +7,12 @@
 import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
-import { saveManager } from "@/features/project/save-manager";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT,NODE_TYPE } from "@/lib/constants";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
+import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT,NODE_TYPE } from "@/lib/constants";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
 const HISTORY_THROTTLE = 300;

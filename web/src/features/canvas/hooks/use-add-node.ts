@@ -13,8 +13,8 @@ import {
   createVideoNode,
   directorNode,
 } from "@/features/canvas/node-defaults";
-import type { AnyNode } from "@/features/canvas/types";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AnyNode } from "@/features/canvas/types";
 
 /** 支持的节点类型 */
 export type AddNodeType = "text" | "image" | "video" | "audio" | "group" | "director";

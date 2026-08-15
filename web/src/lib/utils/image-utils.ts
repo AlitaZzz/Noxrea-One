@@ -6,10 +6,10 @@
 "use client";
 
 import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
-import { apiUpload } from "@/lib/api/client";
-import { NODE_DISPLAY_MAX } from "@/lib/constants";
 import type { AnyEdge } from "@/features/canvas/types";
 import type { AnyNode, ImageNode } from "@/features/canvas/types";
+import { apiUpload } from "@/lib/api/client";
+import { NODE_DISPLAY_MAX } from "@/lib/constants";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -286,7 +286,7 @@ export interface DerivedGridLayout {
  * @param cols          网格每行放置的节点数
  */
 export function computeDerivedGrid(
-  sourceNode: { position: { x: number; y: number }; style?: { width?: number } } | undefined,
+  sourceNode: { position: { x: number; y: number }; style?: { width?: number | string } } | undefined,
   cellNaturalW: number,
   cellNaturalH: number,
   cols: number,

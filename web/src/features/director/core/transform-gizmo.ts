@@ -27,7 +27,7 @@ export class TransformGizmo {
     this.control.setSize(0.85);
 
     const ctrl = this.control as unknown as { getHelper?: () => THREE.Object3D };
-    this._helper = ctrl.getHelper?.()!;
+    this._helper = ctrl.getHelper?.() ?? new THREE.Object3D();
     scene.add(this._helper);
     this.control.enabled = false;
     this._setHelperVisible(false);

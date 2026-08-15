@@ -5,10 +5,10 @@
 "use client";
 
 import { Segmented } from "antd";
-
-import { ASSET_CATEGORIES } from "@/lib/constants";
-import type { AssetType } from "@/features/assets/types";
 import { useTranslation } from "react-i18next";
+
+import type { AssetType } from "@/features/assets/types";
+import { ASSET_CATEGORIES } from "@/lib/constants";
 
 interface Props {
   active: AssetType | "all";

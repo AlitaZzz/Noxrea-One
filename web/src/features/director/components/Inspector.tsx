@@ -10,16 +10,16 @@ import { Button, ColorPicker, Input, InputNumber,Select, Slider, Tooltip } from 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
-import { CameraEntity } from "@/features/director/entities/camera";
-import { Character } from "@/features/director/entities/character";
-import { Crowd } from "@/features/director/entities/crowd";
-import { POSE_PRESETS } from "@/features/director/entities/pose-presets";
 import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
 import { DirEyeIcon } from "@/components/ui/icons/director/DirEyeIcon";
 import { DirEyeOffIcon } from "@/components/ui/icons/director/DirEyeOffIcon";
 import { DirSendIcon } from "@/components/ui/icons/director/DirSendIcon";
 import { DirTrashIcon } from "@/components/ui/icons/director/DirTrashIcon";
+import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
+import { CameraEntity } from "@/features/director/entities/camera";
+import { Character } from "@/features/director/entities/character";
+import { Crowd } from "@/features/director/entities/crowd";
+import { POSE_PRESETS } from "@/features/director/entities/pose-presets";
 import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";

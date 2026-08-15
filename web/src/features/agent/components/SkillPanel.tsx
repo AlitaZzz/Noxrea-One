@@ -44,7 +44,7 @@ export default function SkillPanel({ onSelect }: Props) {
   }, []);
 
   useEffect(() => {
-    if (open && skills.length === 0) load();
+    if (open && skills.length === 0) queueMicrotask(load);
   }, [open, skills.length, load]);
 
   const content = (

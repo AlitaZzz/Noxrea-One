@@ -9,13 +9,13 @@ import { PartitionOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
-
-import { useDirectorStore } from "@/features/director/director-store";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
-import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useTranslation } from "react-i18next";
+
+import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
+import { useDirectorStore } from "@/features/director/director-store";
+import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   const { t } = useTranslation();

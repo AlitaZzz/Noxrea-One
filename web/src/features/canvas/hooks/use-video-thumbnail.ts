@@ -19,10 +19,13 @@ export function useVideoThumbnail(src: string | undefined) {
   useEffect(() => {
     if (!src) return;
     const cached = videoThumbCache.get(src);
-    if (cached) { setThumb(cached); return; }
+    if (cached) {
+      // 缓存命中：仅在下一 tick 写入 state，避免在 effect 内同步 setState 引发级联渲染
+      queueMicrotask(() => setThumb(cached));
+      return;
+    }
     let cancelled = false;
-    setLoading(true);
-    setThumb(null);
+    queueMicrotask(() => { setLoading(true); setThumb(null); });
 
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";

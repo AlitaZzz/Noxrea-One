@@ -45,9 +45,11 @@ export default function AudioWaveform({
 
   // 用 ref 保存最新回调，避免重建 wavesurfer 实例
   const onProgressRef = useRef(onProgress);
-  onProgressRef.current = onProgress;
   const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+    onReadyRef.current = onReady;
+  }, [onProgress, onReady]);
 
   // 初始化 / 切换音源
   useEffect(() => {

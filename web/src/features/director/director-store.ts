@@ -6,8 +6,8 @@
  */
 import { create } from "zustand";
 
-import type { Stage } from "@/features/director/core/stage";
 import type { DirectorStateData } from "@/features/canvas/types";
+import type { Stage } from "@/features/director/core/stage";
 
 import type {
   CameraEntity,

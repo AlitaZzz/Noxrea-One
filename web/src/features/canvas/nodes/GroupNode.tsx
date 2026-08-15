@@ -9,13 +9,13 @@ import { GroupOutlined } from "@ant-design/icons";
 import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
-
-import { GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT,NODE_TYPE,getGroupColor } from "@/lib/constants";
-import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { useTranslation } from "react-i18next";
 
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
+import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TITLE_HEIGHT,NODE_TYPE } from "@/lib/constants";
+
 import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {

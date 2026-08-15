@@ -3,4 +3,4 @@
  * 模型渠道配置相关的类型从 lib/types/models 重新导出，
  * 供 ApiSettingsDrawer 等组件统一从 feature 内部引用。
  */
-export type { ModelInfo, ModelCapability, ModelChannel } from "@/lib/types/models";
+export type { ModelCapability, ModelChannel,ModelInfo } from "@/lib/types/models";

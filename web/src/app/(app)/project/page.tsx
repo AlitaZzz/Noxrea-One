@@ -9,19 +9,19 @@ import { ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, P
 import { Popover } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-import SettingsModal from "@/features/auth/components/SettingsModal";
 import AppShell from "@/components/layout/AppShell";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { ThemeDarkIcon } from "@/components/ui/icons/theme/ThemeDarkIcon";
 import { ThemeLightIcon } from "@/components/ui/icons/theme/ThemeLightIcon";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import type { CanvasProject } from "@/features/project/types";
+import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/features/project/store";
+import type { CanvasProject } from "@/features/project/types";
 
 export default function ProjectPage() {
   const router = useRouter();

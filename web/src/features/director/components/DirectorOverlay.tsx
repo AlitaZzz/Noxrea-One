@@ -8,12 +8,12 @@
 import { CloseOutlined } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import Dock from "@/features/director/components/Dock";
 import Inspector from "@/features/director/components/Inspector";
 import Outliner from "@/features/director/components/Outliner";
 import ScenePanel from "@/features/director/components/ScenePanel";
 import { useDirectorStore } from "@/features/director/director-store";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 const DirectorViewport = dynamic(() => import("@/features/director/components/DirectorViewport"), {
   ssr: false,

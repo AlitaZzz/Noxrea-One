@@ -17,6 +17,7 @@ import {
   type Connection,
   type Edge,
   type EdgeChange,
+  type FinalConnectionState,
   MarkerType,
   MiniMap,
   type NodeChange,
@@ -26,29 +27,37 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
-  type FinalConnectionState,
 } from "@xyflow/react";
 import { App, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-import AssetsModal from "@/features/assets/components/AssetsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
-import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
+import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import AgentDrawer from "@/features/agent/components/AgentDrawer";
+import AssetsModal from "@/features/assets/components/AssetsModal";
+import { useAssetsStore } from "@/features/assets/store";
+import { useAuthStore } from "@/features/auth/store";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
-import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
-import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
+import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
-import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
+import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
-import { createEdge, createAudioNode, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
+import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
+import { useAddNode } from "@/features/canvas/hooks/use-add-node";
+import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
+import { computeAlignment } from "@/features/canvas/hooks/use-alignment-guides";
+import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
+import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
+import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
+import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
 import DirectorNode from "@/features/canvas/nodes/DirectorNode";
 import GroupNode from "@/features/canvas/nodes/GroupNode";
@@ -56,28 +65,19 @@ import ImageNode from "@/features/canvas/nodes/ImageNode";
 import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
 import TextNode from "@/features/canvas/nodes/TextNode";
 import VideoNode from "@/features/canvas/nodes/VideoNode";
-import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
-import { useAddNode } from "@/features/canvas/hooks/use-add-node";
-import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
-import { computeAlignment } from "@/features/canvas/hooks/use-alignment-guides";
-import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
-import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
-import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
-import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, canConnect } from "@/lib/constants";
-import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
-import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
-import { useAssetsStore } from "@/features/assets/store";
-import { useAuthStore } from "@/features/auth/store";
 import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useTranslation } from "react-i18next";
-import { useModelStore } from "@/lib/model-store";
-import { useProjectStore } from "@/features/project/store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
+import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
+import { useProjectStore } from "@/features/project/store";
+import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
+import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
+import { canConnect,LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
+import { useModelStore } from "@/lib/model-store";
+import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 
 export default function InfiniteCanvas() {
   const router = useRouter();

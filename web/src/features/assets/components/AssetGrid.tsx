@@ -7,10 +7,10 @@
 
 import { Empty, Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
-
-import { UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
-import type { AssetFolder,AssetItem } from "@/features/assets/types";
 import { useTranslation } from "react-i18next";
+
+import type { AssetFolder,AssetItem } from "@/features/assets/types";
+import { UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";

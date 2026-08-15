@@ -22,7 +22,7 @@ export function setGlobalNotificationApi(api: NotificationApi) {
   _notifApi = api;
 }
 
-function adapt(instance: any): NotificationApi {
+function adapt(instance: typeof antdNotification): NotificationApi {
   return {
     error: (o) => instance.error({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
     success: (o) => instance.success({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),

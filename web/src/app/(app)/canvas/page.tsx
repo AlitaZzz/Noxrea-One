@@ -9,13 +9,13 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
 import { LayerModal } from "@/components/ui/modal/LayerModal";
-import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
+import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/features/project/store";
 
 const DirectorOverlay = dynamic(

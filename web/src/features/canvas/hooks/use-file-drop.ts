@@ -8,13 +8,13 @@
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
-import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import i18n from "@/lib/i18n/config";
-import { showGlobalMessage } from "@/lib/global-message";
 
 const GRID_COLS = 4;
 const GRID_GAP = 30;
@@ -60,7 +60,7 @@ export function useFileDrop(
   const draggingRef = useRef(false); // 当前是否处于文件拖拽中（首次进入时置位）
 
   const isInsideCanvas = useCallback(
-    (e: DragEvent) => {
+    (e: globalThis.DragEvent) => {
       if (!containerRef?.current) return true; // 无 ref 时退化为「命中即显示」
       const rect = containerRef.current.getBoundingClientRect();
       const { clientX: x, clientY: y } = e;
@@ -71,7 +71,7 @@ export function useFileDrop(
 
   // 监听 window 上的 dragover（捕获），只要携带文件且仍在画布内就刷新心跳
   useEffect(() => {
-    const onWindowDragOver = (e: DragEvent) => {
+    const onWindowDragOver = (e: globalThis.DragEvent) => {
       if (!draggingRef.current) return;
       if (!e.dataTransfer?.types.includes("Files")) return;
       if (shouldIgnore?.(e.target as HTMLElement)) return;
@@ -88,6 +88,7 @@ export function useFileDrop(
     lastActiveRef.current = Date.now();
     setFileDragging(true);
     if (timerRef.current) return;
+    // eslint-disable-next-line react-hooks/immutability -- timerRef 为定时器 ID 容器，事件回调中管理属标准用法；effect 清理会读取它，此处为已知误报
     timerRef.current = setInterval(() => {
       // 超过 120ms 未收到画布内的 dragover，判定已离开
       if (Date.now() - lastActiveRef.current > 120) {
@@ -105,6 +106,7 @@ export function useFileDrop(
     draggingRef.current = false;
     if (timerRef.current) {
       clearInterval(timerRef.current);
+      // eslint-disable-next-line react-hooks/immutability -- timerRef 为定时器 ID 容器，事件回调中管理属标准用法；effect 清理会读取它，此处为已知误报
       timerRef.current = null;
     }
     setFileDragging(false);

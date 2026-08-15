@@ -137,7 +137,9 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionPos, setMentionPos] = useState({ x: 0, y: 0 });
   const referencesRef = useRef(references);
-  referencesRef.current = references;
+  useEffect(() => {
+    referencesRef.current = references;
+  }, [references]);
 
   // Sync DOM ← value when value/references change externally
   useEffect(() => {

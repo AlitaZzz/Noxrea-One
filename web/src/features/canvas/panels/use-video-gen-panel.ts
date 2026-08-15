@@ -7,10 +7,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { isGenerating as isGeneratingBinding,NODE_TYPE } from "@/lib/constants";
-import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
+import { isGenerating as isGeneratingBinding,NODE_TYPE } from "@/lib/constants";
 
 import type { ReferenceItem } from "../shared/MentionPrompt";
 

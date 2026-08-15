@@ -22,21 +22,21 @@ import {
 import { type Node,useReactFlow } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
-import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
-import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { assetApi } from "@/features/assets/api";
-import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/node-type-meta";
-import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
-import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
-import type { AnyNode } from "@/features/canvas/types";
+import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
+import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
+import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
+import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeMeta";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import type { AnyNode } from "@/features/canvas/types";
+import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
@@ -380,7 +380,7 @@ function AssetsView() {
 
   // 拉取「未分类」资产数量（仅根视图需要）
   useEffect(() => {
-    if (activeFolderId !== null) { setUncategorizedCount(0); return; }
+    if (activeFolderId !== null) { queueMicrotask(() => setUncategorizedCount(0)); return; }
     let cancelled = false;
     assetApi.listAssets({ spaceKey: "personal", folderId: -1, skip: 0, limit: 1 })
       .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })

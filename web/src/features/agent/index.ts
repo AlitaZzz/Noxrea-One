@@ -7,8 +7,8 @@ export { default as AgentDrawer } from "./components/AgentDrawer";
 export { default as SkillPanel } from "./components/SkillPanel";
 
 // ── Hooks ──
-export { useAgentStream } from "./hooks/use-agent-stream";
 export { useAgentSessions } from "./hooks/use-agent-sessions";
+export { useAgentStream } from "./hooks/use-agent-stream";
 
 // ── API ──
 export { agentApi } from "./api";
@@ -16,21 +16,21 @@ export { agentApi } from "./api";
 // ── 工具 ──
 export {
   executeAgentTools,
-  registerAgentSpawner,
   getAgentSpawner,
+  registerAgentSpawner,
 } from "./tools/agent-tools";
 
 // ── 类型 ──
 export type {
-  StreamAgentOptions,
-  ToolResultOptions,
-  ChatRole,
-  ChatMessage,
-  ToolCallView,
+  AddNodes,
+  AgentSpawner,
   AgentToolCall,
   AgentToolResult,
-  AgentSpawner,
-  AddNodes,
+  ChatMessage,
+  ChatRole,
   FindFreePosition,
   SessionListItem,
+  StreamAgentOptions,
+  ToolCallView,
+  ToolResultOptions,
 } from "./types";
