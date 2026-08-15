@@ -19,7 +19,10 @@ import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
+import { useAssetsStore } from "@/features/assets/store";
+import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
@@ -28,21 +31,20 @@ import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
-import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
+import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import {
+  type ImageNode as ImageNodeType,
+  type ImageNodeData,
+  type TextNodeData,
+} from "@/features/canvas/types";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
 import { isGenerating, NODE_TYPE } from "@/lib/constants";
 import { canvasToBlob, computeNodeSize, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
-import {
-  type ImageNode as ImageNodeType,
-  type ImageNodeData,
-  type TextNodeData,
-} from "@/features/canvas/types";
-import { useAssetsStore } from "@/features/assets/store";
-import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+
+import GeneratingOverlay from "./GeneratingOverlay";
 
 /**
  * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
@@ -74,25 +76,20 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t } = useTranslation();
   // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选
   const multiSelect = useCanvasStore((s) => s.nodes.filter((n) => n.selected).length > 1);
-  const [cropOpen, setCropOpen] = useState(false);
-  // cropOpen driven by store's croppingNodeId (same pattern as annotateOpen)
+  // cropOpen / annotateOpen 完全由 store 的 croppingNodeId / annotatingNodeId 驱动，
+  // 直接派生即可，避免「setState-in-effect」导致的级联渲染。
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
-  useEffect(() => {
-    setCropOpen(croppingNodeId === id);
-  }, [croppingNodeId, id]);
+  const cropOpen = croppingNodeId === id;
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [lightingOpen, setLightingOpen] = useState(false);
-  const [annotateOpen, setAnnotateOpenInternal] = useState(false);
   // annotateOpen is driven by the store's annotatingNodeId so that clicking
   // other nodes or the pane can close annotation mode externally.
+  const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
+  const annotateOpen = annotatingNodeId === id;
   const setAnnotateOpen = useCallback((open: boolean) => {
     useCanvasStore.getState().setAnnotatingNodeId(open ? id : null);
   }, [id]);
-  const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
-  useEffect(() => {
-    setAnnotateOpenInternal(annotatingNodeId === id);
-  }, [annotatingNodeId, id]);
   // 全景模式：由节点 data.panorama 布尔字段驱动（随节点落库，刷新后自动恢复），
   // 仅支持手动退出（工具栏关闭按钮）；每个节点独立判断，可多个节点同时开启
   const [panoramaOpen, setPanoramaOpenInternal] = useState<boolean>(() => !!data.panorama);
@@ -553,11 +550,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
-          <div className="absolute inset-0 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3" style={{ background: "var(--canvas-bg)" }}>
-            <div className="absolute inset-0" style={{ background: "radial-gradient(circle at 50% 45%, rgba(59,130,246,0.35), transparent 70%)", animation: "breathe 3s ease-in-out infinite" }} />
-            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#1D9E75", borderTopColor: "transparent" }} />
-            <span className="text-sm text-white/50">{t("common.generating")}</span>
-          </div>
+          <GeneratingOverlay absolute rounded />
         ) : isMulti && hasImage ? (
             expanded ? (
               // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）
