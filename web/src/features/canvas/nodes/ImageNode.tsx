@@ -13,11 +13,10 @@ import {
   LeftOutlined,
   PictureOutlined,
   RightOutlined,
-  ScissorOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { Input,Popover, Tooltip } from "antd";
+import { Input, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
