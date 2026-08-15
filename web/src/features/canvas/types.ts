@@ -131,6 +131,8 @@ export type ImageNodeData = GroupableData & {
   multiResultTotalCount?: number;
   /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成，derived = 从已有图片派生（裁剪/切分/标注等） */
   source?: "upload" | "generate" | "derived";
+  /** 全景模式：为 true 时该节点进入全景模式渲染，false/缺省时普通模式（随节点 data 落库） */
+  panorama?: boolean;
 };
 
 export type VideoNodeData = GroupableData & {

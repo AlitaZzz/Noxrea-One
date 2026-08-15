@@ -102,7 +102,6 @@ export default function InfiniteCanvas() {
   const snapThreshold = useCanvasStore((s) => s.snapThreshold);
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
-  const panoramaNodeId = useCanvasStore((s) => s.panoramaNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -250,8 +249,8 @@ export default function InfiniteCanvas() {
           let posX = n.position.x;
           let posY = n.position.y;
 
-          // 对于拖拽中的节点，先尝试节点间对齐吸附
-          if (draggedNodeIds.has(n.id) && draggedNodeIds.size <= 3) {
+          // 拖拽中的节点：仅单选时尝试节点间对齐吸附，多选直接移动不吸附（避免 O(n²) 且多选对齐意义不大）
+          if (draggedNodeIds.has(n.id) && draggedNodeIds.size === 1) {
             const nodeSize = {
               width: Number(n.style?.width) || Number(n.measured?.width) || 200,
               height: Number(n.style?.height) || Number(n.measured?.height) || 120,
@@ -284,12 +283,13 @@ export default function InfiniteCanvas() {
             }
 
             newGuides = result.guides;
-          } else {
-            // 非拖拽变更：保持 store 中的位置，避免释放鼠标时 React Flow 用未吸附的位置覆盖
+          } else if (!draggedNodeIds.has(n.id)) {
+            // 非拖拽变更（如 dimension 等）：保持 store 中的位置，避免释放鼠标时被未吸附的位置覆盖
             const original = currentNodes.find((orig) => orig.id === n.id);
             posX = original?.position.x ?? posX;
             posY = original?.position.y ?? posY;
           }
+          // 多选拖动时：跳过节点间对齐吸附，但照常跟随 React Flow 移动（posX/posY 保持 n.position 的拖拽值）
 
           return {
             ...n,
@@ -547,10 +547,9 @@ export default function InfiniteCanvas() {
   );
 
   const handlePaneClick = useCallback(() => {
-    // Exit annotation, crop and panorama mode when clicking the canvas pane
+    // Exit annotation and crop mode when clicking the canvas pane
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
-    useCanvasStore.getState().setPanoramaNodeId(null);
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
@@ -569,10 +568,6 @@ export default function InfiniteCanvas() {
       const currentCropping = useCanvasStore.getState().croppingNodeId;
       if (currentCropping && currentCropping !== nodeId) {
         useCanvasStore.getState().setCroppingNodeId(null);
-      }
-      const currentPanorama = useCanvasStore.getState().panoramaNodeId;
-      if (currentPanorama && currentPanorama !== nodeId) {
-        useCanvasStore.getState().setPanoramaNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -876,7 +871,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || panoramaNodeId === nid) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
