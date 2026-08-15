@@ -1,13 +1,11 @@
 /**
  * 自定义连线组件（贝塞尔曲线）。
- * 悬停 / 选中时在中点显示剪断按钮以删除连线，参与生成的连线会渲染流动光点动画。
+ * 生成连线会渲染流动光点动画。删除连线使用键盘 Delete 键（见 use-canvas-keyboard）。
  */
 "use client";
 
-import { ScissorOutlined } from "@ant-design/icons";
-import { BaseEdge, EdgeLabelRenderer, type EdgeProps,getBezierPath } from "@xyflow/react";
+import { BaseEdge, type EdgeProps,getBezierPath } from "@xyflow/react";
 
-import { EventNames } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/edge-highlight-context";
 
 import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
@@ -24,7 +22,7 @@ export default function DeletableEdge({
   style = {},
   markerEnd,
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath] = getBezierPath({
     sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
   });
 
@@ -32,13 +30,6 @@ export default function DeletableEdge({
   const isHighlighted = highlightedEdgeIds.has(id);
   // 选中节点关联的边高亮：由组件自身按 Context 判断，避免父级逐边重建全部边对象
   const isConnected = isHighlighted || selected;
-
-  const onEdgeClick = (evt: React.MouseEvent) => {
-    evt.stopPropagation();
-    window.dispatchEvent(
-      new CustomEvent(EventNames.CANVAS_DELETE_EDGES, { detail: { edgeIds: [id] } })
-    );
-  };
 
   return (
     <>
@@ -58,34 +49,6 @@ export default function DeletableEdge({
       {isConnected && STAGGER.map((begin) => (
         <FlowingDot key={`${id}-${begin}`} path={edgePath} begin={begin} color={DOT_COLOR} />
       ))}
-
-      {/* Delete button */}
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: selected ? "all" : "none",
-          }}
-        >
-          <button
-            onClick={onEdgeClick}
-            className="nodrag nopan flex items-center justify-center rounded-full"
-            style={{
-              width: 30,
-              height: 30,
-              background: "var(--canvas-bg, #262626)",
-              border: "1px solid var(--canvas-border)",
-              cursor: "pointer",
-              opacity: selected ? 1 : 0,
-              transition: "opacity 0.15s",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.5)",
-            }}
-          >
-            <ScissorOutlined style={{ color: "var(--canvas-text-dim)", fontSize: 16 }} />
-          </button>
-        </div>
-      </EdgeLabelRenderer>
     </>
   );
 }
