@@ -51,7 +51,8 @@ import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
-import { useAddNode } from "@/features/canvas/hooks/use-add-node";
+import { type AddNodeType,useAddNode } from "@/features/canvas/hooks/use-add-node";
+import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
@@ -591,12 +592,20 @@ export default function InfiniteCanvas() {
 
   useGroupOperations();
   useCanvasEvents();
-  const { addNode: addNodeAtCenter } = useAddNode();
-  const handleAddText = useCallback(() => addNodeAtCenter("text"), [addNodeAtCenter]);
-  const handleAddImage = useCallback(() => addNodeAtCenter("image"), [addNodeAtCenter]);
-  const handleAddVideo = useCallback(() => addNodeAtCenter("video"), [addNodeAtCenter]);
-  const handleAddAudio = useCallback(() => addNodeAtCenter("audio"), [addNodeAtCenter]);
-  const handleAddDirector = useCallback(() => addNodeAtCenter("director"), [addNodeAtCenter]);
+  const { addNode } = useAddNode();
+  // 从右键/双击菜单新增节点时，锚定到触发菜单的点击点（世界坐标）
+  const addNodeAtMenu = useCallback(
+    (type: AddNodeType) => {
+      const { x, y } = useContextMenuStore.getState();
+      addNode(type, screenToFlowPosition({ x, y }));
+    },
+    [addNode, screenToFlowPosition],
+  );
+  const handleAddText = useCallback(() => addNodeAtMenu("text"), [addNodeAtMenu]);
+  const handleAddImage = useCallback(() => addNodeAtMenu("image"), [addNodeAtMenu]);
+  const handleAddVideo = useCallback(() => addNodeAtMenu("video"), [addNodeAtMenu]);
+  const handleAddAudio = useCallback(() => addNodeAtMenu("audio"), [addNodeAtMenu]);
+  const handleAddDirector = useCallback(() => addNodeAtMenu("director"), [addNodeAtMenu]);
 
   const handleResetView = useCallback(() => {
     const s = useCanvasStore.getState();

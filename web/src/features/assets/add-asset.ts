@@ -11,8 +11,11 @@ import type { AnyNode } from "@/features/canvas/types";
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
-/** 位置计算函数签名（由调用方从 store 注入） */
-export type FindFreePosition = (size: { width: number; height: number }) => { x: number; y: number };
+/** 位置计算函数签名（由调用方从 store 注入；center 为锚点中心点，必填） */
+export type FindFreePosition = (
+  size: { width: number; height: number },
+  center: { x: number; y: number },
+) => { x: number; y: number };
 
 /**
  * 根据资产创建画布节点（纯函数，不直接操作 store）。
@@ -20,11 +23,15 @@ export type FindFreePosition = (size: { width: number; height: number }) => { x:
  * 以 AssetsModal 原有逻辑为准，统一处理图片/视频/音频节点创建、尺寸计算与字段填充。
  * 调用方负责将返回的节点通过 store.addNodes 添加到画布。
  */
-export function createAssetNode(asset: AssetItem, findFreePosition: FindFreePosition): AnyNode | null {
+export function createAssetNode(
+  asset: AssetItem,
+  center: { x: number; y: number },
+  findFreePosition: FindFreePosition,
+): AnyNode | null {
   const nw = asset.width || DEFAULT_NODE_WIDTH;
   const nh = asset.height || DEFAULT_NODE_HEIGHT;
   const { width: dw, height: dh } = computeNodeSize(nw, nh);
-  const pos = findFreePosition({ width: dw, height: dh });
+  const pos = findFreePosition({ width: dw, height: dh }, center);
 
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
   const isAudio = asset.mediaType === "audio";

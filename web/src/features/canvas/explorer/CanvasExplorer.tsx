@@ -34,7 +34,7 @@ import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAsset
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeMeta";
-import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
@@ -406,7 +406,7 @@ function AssetsView() {
   }, [hasMore, loadingMore]);
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    const node = createAssetNode(asset, findFreePosition);
+    const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
     if (node) useCanvasStore.getState().addNodes([node]);
     notif.success({
       title: t("asset.added"),

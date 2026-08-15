@@ -300,28 +300,41 @@ export function getViewportCenter(): { x: number; y: number } {
 }
 
 /**
- * 在视口中心附近为新节点寻找位置。
+ * 在指定锚点中心附近为新节点寻找位置。
  *
- * 从视口中心开始，每次固定偏移一小段距离（默认 30px），
- * 允许部分重叠，仅保证用户能识别新节点。类似 Figma 连续粘贴行为。
+ * 仅统计与锚点区域重叠的节点数来决定偏移量，避免远处节点累积偏移把新节点推出锚点。
+ * 从锚点开始每次固定偏移一小段距离（默认 30px），允许部分重叠，仅保证用户能识别新节点。
+ * 类似 Figma 连续粘贴行为。
  *
  * @param nodeSize 新节点的尺寸
- * @param options.offset 每次偏移量（默认 30px）
+ * @param center 锚定中心点（世界坐标），必填
+ * @param offset 每次偏移量（默认 30px）
  * @returns 节点左上角坐标
  */
 export function findFreePosition(
   nodeSize: { width: number; height: number },
-  options?: { offset?: number },
+  center: { x: number; y: number },
+  offset = 30,
 ): { x: number; y: number } {
-  const offset = options?.offset ?? 30;
-  const { x: cx, y: cy } = getViewportCenter();
+  const { x: cx, y: cy } = center;
   const nodes = useCanvasStore.getState().nodes;
 
-  // 偏移次数 = 当前视口附近的节点数
-  const i = nodes.length;
+  // 偏移次数 = 与锚点区域重叠的节点数（忽略远处节点，避免把新节点推出锚点）
+  const overlapCount = nodes.filter((n) => {
+    const w = (n.style?.width as number) ?? 200;
+    const h = (n.style?.height as number) ?? 120;
+    const nx = n.position.x;
+    const ny = n.position.y;
+    return (
+      nx < cx + nodeSize.width / 2 &&
+      nx + w > cx - nodeSize.width / 2 &&
+      ny < cy + nodeSize.height / 2 &&
+      ny + h > cy - nodeSize.height / 2
+    );
+  }).length;
 
   return {
-    x: cx - nodeSize.width / 2 + i * offset,
-    y: cy - nodeSize.height / 2 + i * offset,
+    x: cx - nodeSize.width / 2 + overlapCount * offset,
+    y: cy - nodeSize.height / 2 + overlapCount * offset,
   };
 }
