@@ -358,6 +358,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               loop
               muted={muted}
               playsInline
+              preload="metadata"
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoadedMeta}
               onEnded={() => setPlaying(false)}

@@ -10,6 +10,7 @@ import type { NodeProps } from "@xyflow/react";
 import { Input } from "antd";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -23,25 +24,37 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.label || t("node.group"));
 
-  // Dynamic min size: children bounding box + padding, floored by GROUP_NODE_MIN_*
-  // 子节点使用绝对坐标，需减去组节点自身坐标得到组内偏移
-  const allNodes = useCanvasStore((s) => s.nodes);
-  const groupPos = useCanvasStore((s) => s.nodes.find((n) => n.id === id)?.position);
-  const gx = groupPos?.x ?? 0;
-  const gy = groupPos?.y ?? 0;
-  const childMaxX = allNodes.reduce(
-    (mx, n) => (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id ? Math.max(mx, n.position.x - gx + (Number(n.style?.width) || 0)) : mx),
-    0
-  );
-  const childMaxY = allNodes.reduce(
-    (my, n) => (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id ? Math.max(my, n.position.y - gy + (Number(n.style?.height) || 0)) : my),
-    0
+  // Dynamic min size + member count.
+  // 只派生 GroupNode 真正依赖的原始值（自身位置、成员外接矩形、成员数），
+  // 用 useShallow 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
+  // （如选中状态、无关节点位移）都重渲染整个组。
+  const { gx, gy, childMaxX, childMaxY, memberCount } = useCanvasStore(
+    useShallow((s) => {
+      const nodes = s.nodes;
+      let gx = 0, gy = 0;
+      let maxX = 0, maxY = 0;
+      let count = 0;
+      for (const n of nodes) {
+        if (n.id === id) {
+          gx = n.position.x;
+          gy = n.position.y;
+          continue;
+        }
+        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id) {
+          const w = Number(n.style?.width) || 0;
+          const h = Number(n.style?.height) || 0;
+          const x = n.position.x - gx + w;
+          const y = n.position.y - gy + h;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+          count++;
+        }
+      }
+      return { gx, gy, childMaxX: maxX, childMaxY: maxY, memberCount: count };
+    })
   );
   const dynMinWidth = Math.max(GROUP_NODE_MIN_WIDTH, childMaxX + GROUP_NODE_PADDING);
   const dynMinHeight = Math.max(GROUP_NODE_MIN_HEIGHT, childMaxY + GROUP_NODE_PADDING);
-
-  // 实时成员计数（纯派生，不落库）：拖入/拖出组时随 groupId 自动更新
-  const memberCount = allNodes.filter((n) => n.type !== NODE_TYPE.GROUP && n.data?.groupId === id).length;
 
   const colorPreset = getGroupColor(data.color);
 

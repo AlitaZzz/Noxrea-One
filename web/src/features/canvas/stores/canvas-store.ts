@@ -278,8 +278,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 export function takeCanvasSnapshot(): HistorySnapshot {
   const s = useCanvasStore.getState();
   return {
-    nodes: JSON.parse(JSON.stringify(s.nodes)),
-    edges: JSON.parse(JSON.stringify(s.edges)),
+    // 节点 data 为纯 JSON 数据，用 structuredClone 深拷贝，比 JSON.parse(JSON.stringify())
+    // 更快且能正确处理 Date/Map/Set/Blob 等类型（若有）。
+    nodes: structuredClone(s.nodes),
+    edges: structuredClone(s.edges),
     viewport: { ..._liveViewport },
     background: s.background,
     theme: s.theme,
