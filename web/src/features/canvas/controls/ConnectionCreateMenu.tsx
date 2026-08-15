@@ -4,14 +4,14 @@
  */
 "use client";
 
-import { Popover } from "antd";
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { Popover } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem } from "@/components/ui/MenuPopover";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
-import { useTranslation } from "react-i18next";
 
 export interface PendingConnectionCreate {
   /** 发起拖拽的节点（即用户从它的 Handle 拖出的那个节点） */
@@ -53,7 +53,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
         arrow={false}
         getPopupContainer={() => document.body}
         onOpenChange={(v) => { if (!v) onClose(); }}
-        styles={{ body: { padding: 0 }, container: { padding: 0, background: "transparent" } }}
+        styles={{ container: { padding: 0, background: "transparent" } }}
         content={
           <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
             <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>

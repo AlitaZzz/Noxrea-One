@@ -9,6 +9,7 @@
 import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Button, Input, Select, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -16,11 +17,10 @@ import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { assetApi } from "@/features/assets/api";
-import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
-import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
+import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
 import AssetCreateDialog from "./AssetCreateDialog";
@@ -82,10 +82,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
-  // 每次打开「修改类型」弹窗时重置，默认什么都不选
-  useEffect(() => {
-    if (batchTypeOpen) setBatchTypeValue(undefined);
-  }, [batchTypeOpen]);
 
   const handleToggleSelect = useCallback((asset: AssetItem) => {
     setSelectedIds((prev) => {
@@ -144,22 +140,19 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // Fetch when modal opens or filters change
   useEffect(() => {
-    if (!open) { setLoadError(false); setLoading(false); return; }
+    if (!open) { queueMicrotask(() => { setLoadError(false); setLoading(false); }); return; }
     // 根视图：只展示文件夹（含虚拟「未分类」），不拉取散落资产
     if (activeFolderId === null) {
-      setItems([]);
-      setTotalCount(0);
-      setLoading(false);
-      setLoadError(false);
+      queueMicrotask(() => { setItems([]); setTotalCount(0); setLoading(false); setLoadError(false); });
       return;
     }
     const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-    fetchAndReplace({ category, search, folderId, spaceKey: activeSpace });
+    queueMicrotask(() => fetchAndReplace({ category, search, folderId, spaceKey: activeSpace }));
   }, [open, category, search, activeFolderId, activeSpace, fetchAndReplace]);
 
   // 拉取「未分类」资产数量（仅根视图需要）
   useEffect(() => {
-    if (activeFolderId !== null) { setUncategorizedCount(0); return; }
+    if (activeFolderId !== null) { queueMicrotask(() => setUncategorizedCount(0)); return; }
     if (!open) return;
     let cancelled = false;
     assetApi.listAssets({ spaceKey: activeSpace, folderId: -1, skip: 0, limit: 1 })
@@ -188,7 +181,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       const item = items.find((i) => i.id === id);
       if (item?.folderId == null) bumpUncategorizedCount(-1);
       else if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
-      removeAsset(id, item?.metadata?.sourceUrl);
+      removeAsset(id, item?.metadata?.sourceUrl as string | undefined);
     }
     setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
     setTotalCount((c) => Math.max(0, c - selectedIds.size));
@@ -499,7 +492,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               onSelectAll={handleSelectAll}
               onBatchDelete={handleBatchDelete}
               onBatchMove={() => setBatchMoveOpen(true)}
-              onBatchType={() => setBatchTypeOpen(true)}
+              onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
               onUpload={() => setCreateOpen(true)}
               onCreateFolder={() => setFolderCreateOpen(true)}
               canCreateFolder={canCreateFolder}
@@ -586,7 +579,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             if (selectedIds.size > 0) {
               handleBatchDeleteConfirm();
             } else {
-              removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl);
+              removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl as string | undefined);
               if (deleteAsset.folderId == null) bumpUncategorizedCount(-1);
               else if (deleteAsset.folderId) useAssetsStore.getState().bumpFolderCount(deleteAsset.folderId, -1);
               setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));

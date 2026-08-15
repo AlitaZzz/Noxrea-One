@@ -2,8 +2,8 @@
  * Agent 相关 API 封装：会话管理、技能绑定、流式对话与工具结果回传。
  * 前端只需选技能 + 发消息 + 回传工具结果，不关心后端状态管理。
  */
-import { apiRaw, apiStream } from "@/lib/api/client";
 import type { StreamAgentOptions, ToolResultOptions } from "@/features/agent/types";
+import { apiRaw, apiStream } from "@/lib/api/client";
 
 // ── 会话 CRUD ──
 

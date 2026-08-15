@@ -7,11 +7,11 @@
 
 import { App,Button } from "antd";
 import { useCallback, useEffect,useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { apiUpload } from "@/lib/api/client";
 import { canvasToBlob } from "@/lib/utils/image-utils";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;

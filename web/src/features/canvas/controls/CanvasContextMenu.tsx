@@ -5,14 +5,14 @@
  */
 "use client";
 
-import { Popover } from "antd";
 import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { Popover } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem } from "@/components/ui/MenuPopover";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   onAddText: () => void;
@@ -36,7 +36,7 @@ export default function CanvasContextMenu(props: Props) {
         arrow={false}
         getPopupContainer={() => document.body}
         onOpenChange={(v) => { if (!v) hide(); }}
-        styles={{ body: { padding: 0 }, container: { padding: 0, background: "transparent" } }}
+        styles={{ container: { padding: 0, background: "transparent" } }}
         content={
           <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
             <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("node.add")}</div>

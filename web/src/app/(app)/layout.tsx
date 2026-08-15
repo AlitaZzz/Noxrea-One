@@ -9,8 +9,8 @@ import { useEffect, useState } from "react";
 
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import i18n from "@/lib/i18n/config";
 import { useProjectStore } from "@/features/project/store";
+import i18n from "@/lib/i18n/config";
 
 /**
  * (app) 路由组统一鉴权 + 全局初始化守卫。

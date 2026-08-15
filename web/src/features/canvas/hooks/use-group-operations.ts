@@ -8,6 +8,8 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
+import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
 import {
   EventNames,
@@ -18,8 +20,6 @@ import {
   NODE_TITLE_HEIGHT,
   NODE_TYPE,
 } from "@/lib/constants";
-import { markDirtyImmediate,takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
 
 /**
  * 编组/取消编组 hook。

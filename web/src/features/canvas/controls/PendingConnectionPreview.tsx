@@ -9,7 +9,7 @@
 
 import { getBezierPath, Position, ViewportPortal } from "@xyflow/react";
 
-import { DOT_COLOR, FlowingDot, STAGGER } from "./edge-flow";
+import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
 
 interface Props {
   /** 发起端 Handle 锚点（画布坐标） */

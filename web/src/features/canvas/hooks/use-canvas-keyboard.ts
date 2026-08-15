@@ -9,11 +9,11 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
 import { duplicateNode } from "@/features/canvas/node-defaults";
-import { EventNames, isGenerating,PASTE_OFFSET } from "@/lib/constants";
-import type { MediaGenFields } from "@/features/canvas/types";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
+import type { MediaGenFields } from "@/features/canvas/types";
+import { EventNames, isGenerating,PASTE_OFFSET } from "@/lib/constants";
 
 /** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点） */
 function hasGeneratingNode(): boolean {

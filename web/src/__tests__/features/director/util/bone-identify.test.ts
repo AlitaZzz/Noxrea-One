@@ -6,7 +6,7 @@ import type { Object3D } from "three";
 import * as THREE from "three";
 import { describe, expect,it } from "vitest";
 
-import { identifyBones } from "./bone-identify";
+import { identifyBones } from "@/features/director/util/bone-identify";
 
 // 伪 model:traverse 依次吐出真正的 THREE.Bone 对象，通过 instanceof 检查。
 function mockModel(names: string[]) {

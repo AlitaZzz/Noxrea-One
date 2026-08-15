@@ -5,20 +5,6 @@
  */
 import { MarkerType } from "@xyflow/react";
 
-import i18n from "@/lib/i18n/config";
-import {
-  AUDIO_NODE_HEIGHT,
-  AUDIO_NODE_WIDTH,
-  DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH,
-  DIRECTOR_NODE_DEFAULT_HEIGHT,
-  DIRECTOR_NODE_DEFAULT_WIDTH,
-  TEXT_NODE_DEFAULT_HEIGHT,
-  TEXT_NODE_DEFAULT_WIDTH,
-  TEXT_NODE_MIN_HEIGHT,
-  TEXT_NODE_MIN_WIDTH,
-} from "@/lib/constants";
-import { NODE_TYPE } from "@/lib/constants";
 import {
   type AnyNode,
   type AudioNode,
@@ -33,6 +19,20 @@ import {
   type VideoNode,
   type VideoNodeData,
 } from "@/features/canvas/types";
+import {
+  AUDIO_NODE_HEIGHT,
+  AUDIO_NODE_WIDTH,
+  DEFAULT_NODE_HEIGHT,
+  DEFAULT_NODE_WIDTH,
+  DIRECTOR_NODE_DEFAULT_HEIGHT,
+  DIRECTOR_NODE_DEFAULT_WIDTH,
+  TEXT_NODE_DEFAULT_HEIGHT,
+  TEXT_NODE_DEFAULT_WIDTH,
+  TEXT_NODE_MIN_HEIGHT,
+  TEXT_NODE_MIN_WIDTH,
+} from "@/lib/constants";
+import { NODE_TYPE } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 
 let _idCounter = 0;
 function uid(prefix: string) {

@@ -8,12 +8,12 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { type AgentToolCall, type AgentToolResult, executeAgentTools } from "@/features/agent/tools/agent-tools";
-import { useAgentSessions } from "@/features/agent/hooks/use-agent-sessions";
 import { agentApi } from "@/features/agent/api";
-import { showGlobalMessage } from "@/lib/global-message";
-import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useAgentSessions } from "@/features/agent/hooks/use-agent-sessions";
+import { type AgentToolCall, type AgentToolResult, executeAgentTools } from "@/features/agent/tools/agent-tools";
 import type { ChatMessage, ChatRole, ToolCallView } from "@/features/agent/types";
+import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { showGlobalMessage } from "@/lib/global-message";
 
 /** 发给后端的工具调用形态（args 必须为对象，后端会 JSON.stringify 后透传上游） */
 interface StreamToolCall {
@@ -141,9 +141,9 @@ export function useAgentStream(modelId: string, projectId?: number) {
         const { blocks, rest } = parseBlocks(buf);
         buf = rest;
         for (const { event, data } of blocks) {
-          let parsed: any;
+          let parsed: Record<string, unknown>;
           try {
-            parsed = JSON.parse(data);
+            parsed = JSON.parse(data) as Record<string, unknown>;
           } catch {
             continue;
           }
@@ -153,25 +153,28 @@ export function useAgentStream(modelId: string, projectId?: number) {
             patchAssistant({ content: accText });
           } else if (event === "tool_call") {
             accToolCalls.push({
-              id: parsed.id,
-              name: parsed.name,
+              id: typeof parsed.id === "string" ? parsed.id : "",
+              name: typeof parsed.name === "string" ? parsed.name : "",
               args: typeof parsed.args === "string" ? parsed.args : JSON.stringify(parsed.args ?? {}),
-              ...(parsed.label ? { label: parsed.label } : {}),
+              ...(typeof parsed.label === "string" ? { label: parsed.label } : {}),
             });
           } else if (event === "skill_completed") {
             skillCompleted = true;
           } else if (event === "done") {
-            doneHasTool = Array.isArray(parsed.toolCalls) && parsed.toolCalls.length > 0;
+            const toolCalls = Array.isArray(parsed.toolCalls)
+              ? (parsed.toolCalls as Record<string, unknown>[])
+              : [];
+            doneHasTool = toolCalls.length > 0;
             if (doneHasTool) {
-              accToolCalls = (parsed.toolCalls ?? []).map((t: any) => ({
-                id: t.id,
-                name: t.name,
+              accToolCalls = toolCalls.map((t) => ({
+                id: typeof t.id === "string" ? t.id : "",
+                name: typeof t.name === "string" ? t.name : "",
                 args: typeof t.args === "string" ? t.args : JSON.stringify(t.args ?? {}),
-                ...(t.label ? { label: t.label } : {}),
+                ...(typeof t.label === "string" ? { label: t.label } : {}),
               }));
             }
           } else if (event === "error") {
-            const errMsg = parsed.error || "stream error";
+            const errMsg = typeof parsed.error === "string" ? parsed.error : "stream error";
             patchAssistant({ content: `⚠ ${errMsg}`, error: true });
             throw new Error(errMsg);
           }
@@ -306,9 +309,10 @@ export function useAgentStream(modelId: string, projectId?: number) {
             // 后续可扩展为并发续轮
           }
         }
-      } catch (err: any) {
-        if (err?.name !== "AbortError") {
-          const msg = err?.message || "对话失败";
+      } catch (err: unknown) {
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        if (!isAbort) {
+          const msg = err instanceof Error ? err.message : "对话失败";
           // 错误只渲染到气泡内：patch 最后一个空的 assistant 占位
           // SSE error 事件已由 runStream 内部 patchAssistant 处理，此处兜底非 SSE 错误（HTTP 429、超时等）
           setMessages((prev) => {

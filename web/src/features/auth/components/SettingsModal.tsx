@@ -8,13 +8,13 @@
 import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
 import { App,Button, Input } from "antd";
 import { useEffect, useRef,useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
-import { api } from "@/lib/api/client";
 import { useAuthStore, type UserInfo } from "@/features/auth/store";
-import { useTranslation } from "react-i18next";
+import { api } from "@/lib/api/client";
 
 import AvatarCropModal from "./AvatarCropModal";
 

@@ -6,8 +6,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { ChatMessage, ChatRole, SessionListItem } from "@/features/agent/types";
 import { agentApi } from "@/features/agent/api";
+import type { ChatMessage, ChatRole, SessionListItem } from "@/features/agent/types";
 import { showGlobalMessage } from "@/lib/global-message";
 
 let _seq = 0;
@@ -41,10 +41,12 @@ export function useAgentSessions(opts: {
   useEffect(() => {
     opts.onStopStream();
     opts.onClearMessages();
-    setChatId(null);
-    setChatTitle(null);
-    setActiveSkill(null);
-    setSkillStatus("idle");
+    queueMicrotask(() => {
+      setChatId(null);
+      setChatTitle(null);
+      setActiveSkill(null);
+      setSkillStatus("idle");
+    });
   }, [opts.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 创建新会话（首条消息前调用），可选传入初始标题 */

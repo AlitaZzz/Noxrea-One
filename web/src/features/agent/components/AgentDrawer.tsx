@@ -41,12 +41,11 @@ import { AttachIcon } from "@/components/ui/icons/agent/AttachIcon";
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { useAgentStream } from "@/features/agent/hooks/use-agent-stream";
 import { agentApi } from "@/features/agent/api";
+import SkillPanel from "@/features/agent/components/SkillPanel";
+import { useAgentStream } from "@/features/agent/hooks/use-agent-stream";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useModelStore } from "@/lib/model-store";
-
-import SkillPanel from "@/features/agent/components/SkillPanel";
 
 interface Props {
   open: boolean;

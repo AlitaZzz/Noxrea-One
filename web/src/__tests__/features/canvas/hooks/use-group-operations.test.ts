@@ -7,8 +7,8 @@
 
 import { describe, expect,it } from "vitest";
 
-import { GROUP_NODE_PADDING } from "@/lib/constants";
 import type { AnyNode } from "@/features/canvas/types";
+import { GROUP_NODE_PADDING } from "@/lib/constants";
 
 // ── 纯函数：计算选中节点的 bounding box ──────────────────────────
 
@@ -55,21 +55,21 @@ function assignGroup(
       };
     }
     return n;
-  });
+  }) as AnyNode[];
 }
 
 // ── 纯函数：清除子节点的 groupId 归属（坐标保持绝对不变） ────────
 
 function clearGroup(nodes: AnyNode[], groupId: string): AnyNode[] {
   return nodes.map((n) => {
-    if (n.data?.groupId === groupId) {
+    if ((n.data as { groupId?: string })?.groupId === groupId) {
       const { groupId: _omit, ...rest } = n.data as Record<string, unknown> & {
         groupId?: string;
       };
       return { ...n, data: rest };
     }
     return n;
-  });
+  }) as AnyNode[];
 }
 
 // ── 测试 ─────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { createNodeFromUrl, uploadAndAddNode,uploadBlob } from "@/lib/utils/image-utils";
+import { type CanvasStoreApi, createNodeFromUrl, uploadAndAddNode, uploadBlob } from "@/lib/utils/image-utils";
 
 // ── Mock Zustand stores ────────────────────────────────────────
 const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
@@ -61,7 +61,7 @@ const mockStoreApi = {
   edges: [],
   addNodes: vi.fn(),
   setEdges: vi.fn(),
-} as any;
+} as CanvasStoreApi;
 
 // ── Import pure functions from save-manager ─────────────────────
 // These aren't exported; we re-implement or extract. Extract them:

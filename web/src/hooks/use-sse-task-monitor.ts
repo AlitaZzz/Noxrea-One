@@ -7,10 +7,10 @@
 
 import { useEffect, useRef } from "react";
 
-import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/utils/image-utils";
-import type { MediaGenFields } from "@/features/canvas/types";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
+import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 /**
  * SSE 任务监控 hook。

@@ -6,18 +6,18 @@
 "use client";
 
 import { BorderOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined,HighlightOutlined } from "@ant-design/icons";
+import { useViewport } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useViewport } from "@xyflow/react";
+import { useTranslation } from "react-i18next";
 
 import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;
@@ -61,6 +61,9 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const redoStackRef = useRef<ImageData[]>([]);
   const [undoCount, setUndoCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
+  // 文本批注的撤销/重做栈长度（用 state 驱动按钮可用态，避免渲染期读取 ref）
+  const [textUndoLen, setTextUndoLen] = useState(0);
+  const [textRedoLen, setTextRedoLen] = useState(0);
 
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -184,6 +187,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     textUndoStackRef.current.push([...textAnnotations]);
     if (textUndoStackRef.current.length > MAX_UNDO) textUndoStackRef.current.shift();
     textRedoStackRef.current = [];
+    setTextUndoLen(textUndoStackRef.current.length);
+    setTextRedoLen(0);
 
     setTextAnnotations((prev) => [...prev, newAnnotation]);
     setTextInputVisible(false);
@@ -211,6 +216,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     textUndoStackRef.current.push([...textAnnotations]);
     if (textUndoStackRef.current.length > MAX_UNDO) textUndoStackRef.current.shift();
     textRedoStackRef.current = [];
+    setTextUndoLen(textUndoStackRef.current.length);
+    setTextRedoLen(0);
     setTextAnnotations((prev) => prev.filter((a) => a.id !== id));
   }, [textAnnotations]);
 
@@ -370,6 +377,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     if (textUndoStackRef.current.length > 0) {
       const prev = textUndoStackRef.current.pop()!;
       textRedoStackRef.current.push([...textAnnotations]);
+      setTextUndoLen(textUndoStackRef.current.length);
+      setTextRedoLen(textRedoStackRef.current.length);
       setTextAnnotations(prev);
       return;
     }
@@ -395,6 +404,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     if (textRedoStackRef.current.length > 0) {
       const next = textRedoStackRef.current.pop()!;
       textUndoStackRef.current.push([...textAnnotations]);
+      setTextUndoLen(textUndoStackRef.current.length);
+      setTextRedoLen(textRedoStackRef.current.length);
       setTextAnnotations(next);
       return;
     }
@@ -454,8 +465,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   }, [sourceId, naturalSize, textAnnotations, onClose]);
 
   // Allow undo on canvas OR text annotations
-  const canUndo = undoCount > 1 || textUndoStackRef.current.length > 0;
-  const canRedo = redoCount > 0 || textRedoStackRef.current.length > 0;
+  const canUndo = undoCount > 1 || textUndoLen > 0;
+  const canRedo = redoCount > 0 || textRedoLen > 0;
 
   return (
     <>

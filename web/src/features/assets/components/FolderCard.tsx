@@ -5,9 +5,9 @@
 "use client";
 
 import { DeleteOutlined, FolderOutlined } from "@ant-design/icons";
+import { useTranslation } from "react-i18next";
 
 import type { AssetFolder } from "@/features/assets/types";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   folder: AssetFolder;

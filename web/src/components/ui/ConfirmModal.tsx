@@ -4,9 +4,10 @@
  */
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 import AppModal from "@/components/ui/AppModal";
 import ModalButton from "@/components/ui/ModalButton";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;

@@ -5,11 +5,11 @@
  */
 import { create } from "zustand";
 
-import { projectApi } from "@/features/project/api";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
 import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
+import { projectApi } from "@/features/project/api";
 import type { CanvasProject } from "@/features/project/types";
+import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT } from "@/lib/constants";
 
 // ===== localStorage helpers (active project only) =====
 

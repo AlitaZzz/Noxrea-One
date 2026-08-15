@@ -20,17 +20,17 @@ import {
 import { App, Button, Checkbox, Drawer,Input, Select } from "antd";
 import type { ReactNode } from "react";
 import { memo, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
-import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
-import { useModelStore } from "@/lib/model-store";
 import { ModelIcon } from "@/lib/model-icon";
+import { useModelStore } from "@/lib/model-store";
+import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 
 interface Props {
   open: boolean;

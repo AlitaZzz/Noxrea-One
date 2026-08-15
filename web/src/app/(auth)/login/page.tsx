@@ -12,8 +12,8 @@ import { useCallback, useEffect,useState } from "react";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
-import { showGlobalMessage } from "@/lib/global-message";
 import { useAuthStore } from "@/features/auth/store";
+import { showGlobalMessage } from "@/lib/global-message";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
 

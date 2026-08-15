@@ -8,12 +8,12 @@
 import { ArrowUpOutlined } from "@ant-design/icons";
 import { Button, Slider } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 
 interface Props {
   src: string;
@@ -64,8 +64,10 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
   const dragRef = useRef({ on: false, lastX: 0, lastY: 0 });
   const azimuthRef = useRef(azimuth);
   const elevationRef = useRef(elevation);
-  azimuthRef.current = azimuth;
-  elevationRef.current = elevation;
+  useEffect(() => {
+    azimuthRef.current = azimuth;
+    elevationRef.current = elevation;
+  }, [azimuth, elevation]);
 
   const dragModeRef = useRef<"marker" | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);

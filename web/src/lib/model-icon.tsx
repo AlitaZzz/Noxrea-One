@@ -1,23 +1,23 @@
+import { RobotOutlined } from "@ant-design/icons";
 import type { ComponentType } from "react";
 import type { CSSProperties } from "react";
-import { RobotOutlined } from "@ant-design/icons";
 
 import { ClaudeIcon } from "@/components/ui/icons/models/ClaudeIcon";
-import { OpenAIIcon } from "@/components/ui/icons/models/OpenAIIcon";
-import { GeminiIcon } from "@/components/ui/icons/models/GeminiIcon";
 import { DeepSeekIcon } from "@/components/ui/icons/models/DeepSeekIcon";
+import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
+import { FluxIcon } from "@/components/ui/icons/models/FluxIcon";
+import { GeminiIcon } from "@/components/ui/icons/models/GeminiIcon";
 import { GLMIcon } from "@/components/ui/icons/models/GLMIcon";
 import { GrokIcon } from "@/components/ui/icons/models/GrokIcon";
-import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
-import { SeedanceIcon } from "@/components/ui/icons/models/SeedanceIcon";
-import { MiniMaxIcon } from "@/components/ui/icons/models/MiniMaxIcon";
-import { QwenIcon } from "@/components/ui/icons/models/QwenIcon";
-import { FluxIcon } from "@/components/ui/icons/models/FluxIcon";
+import { HappyHorseIcon } from "@/components/ui/icons/models/HappyHorseIcon";
 import { KimiIcon } from "@/components/ui/icons/models/KimiIcon";
 import { KlingIcon } from "@/components/ui/icons/models/KlingIcon";
-import { HappyHorseIcon } from "@/components/ui/icons/models/HappyHorseIcon";
-import { ViduIcon } from "@/components/ui/icons/models/ViduIcon";
+import { MiniMaxIcon } from "@/components/ui/icons/models/MiniMaxIcon";
+import { OpenAIIcon } from "@/components/ui/icons/models/OpenAIIcon";
+import { QwenIcon } from "@/components/ui/icons/models/QwenIcon";
+import { SeedanceIcon } from "@/components/ui/icons/models/SeedanceIcon";
 import { SunoIcon } from "@/components/ui/icons/models/SunoIcon";
+import { ViduIcon } from "@/components/ui/icons/models/ViduIcon";
 
 type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 
@@ -57,7 +57,9 @@ interface ModelIconProps {
 /** 渲染模型品牌图标，未命中时回退到通用 RobotOutlined */
 export function ModelIcon({ model, className, style }: ModelIconProps) {
   const cls = className ?? "size-4 shrink-0";
-  const Icon = resolveModelIcon(model);
-  if (Icon) return <Icon className={cls} style={style} />;
+  // 直接遍历顶层声明的 ICON_MAP（组件均为模块级常量），避免「渲染期创建组件」
+  for (const { test, Icon } of ICON_MAP) {
+    if (test.test(model)) return <Icon className={cls} style={style} />;
+  }
   return <RobotOutlined className={cls} style={style} />;
 }

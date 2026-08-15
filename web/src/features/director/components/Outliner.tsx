@@ -9,8 +9,6 @@ import { Button,Input } from "antd";
 import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useDirectorStore } from "@/features/director/director-store";
-import type { Entity } from "@/features/director/entities/entity";
 import { DirCameraIcon } from "@/components/ui/icons/director/DirCameraIcon";
 import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/ui/icons/director/DirCubeIcon";
@@ -19,6 +17,8 @@ import { DirEyeOffIcon } from "@/components/ui/icons/director/DirEyeOffIcon";
 import { DirGroupIcon } from "@/components/ui/icons/director/DirGroupIcon";
 import { DirPersonIcon } from "@/components/ui/icons/director/DirPersonIcon";
 import { DirTrashIcon } from "@/components/ui/icons/director/DirTrashIcon";
+import { useDirectorStore } from "@/features/director/director-store";
+import type { Entity } from "@/features/director/entities/entity";
 
 const ICON_MAP = {
   camera: DirCameraIcon,

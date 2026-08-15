@@ -1,6 +1,6 @@
-import path from "path";
-import { readFileSync, existsSync } from "fs";
+import { existsSync,readFileSync } from "fs";
 import type { NextConfig } from "next";
+import path from "path";
 
 // 从项目根目录 .env 读取全部变量
 function loadRootEnv(): Record<string, string> {

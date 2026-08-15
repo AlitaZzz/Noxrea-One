@@ -4,9 +4,9 @@
  */
 "use client";
 
-import { BaseEdge, getBezierPath, Position, type ConnectionLineComponentProps } from "@xyflow/react";
+import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } from "@xyflow/react";
 
-import { DOT_COLOR, FlowingDot, STAGGER } from "./edge-flow";
+import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
 
 export default function ConnectionFlowLine({
   fromX,

@@ -18,10 +18,10 @@
 
 import { beforeEach,describe, expect, it } from "vitest";
 
-import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
-import type { HistorySnapshot } from "@/features/project/types";
 import { takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
+import type { HistorySnapshot } from "@/features/project/types";
 
 function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unknown>[] = []): HistorySnapshot {
   const nodes = Array.from({ length: nodesCount }, (_, i) => ({

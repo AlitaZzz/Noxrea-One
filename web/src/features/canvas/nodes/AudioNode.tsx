@@ -8,15 +8,15 @@
 import { UploadOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { apiUploadWithProgress } from "@/lib/api/client";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
-import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { formatTime } from "@/lib/utils/format";
-import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
 
 import AudioWaveform from "./AudioWaveform";
 

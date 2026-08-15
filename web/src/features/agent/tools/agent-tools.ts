@@ -5,21 +5,21 @@
  */
 "use client";
 
-import { createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
-import type { AnyNode, GenSettings, VideoGenSettings } from "@/features/canvas/types";
 import type {
+  AddNodes,
+  AgentSpawner,
   AgentToolCall,
   AgentToolResult,
-  AgentSpawner,
-  AddNodes,
   FindFreePosition,
 } from "@/features/agent/types";
+import { createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
+import type { AnyNode, GenSettings, VideoGenSettings } from "@/features/canvas/types";
 
 export type {
+  AddNodes,
+  AgentSpawner,
   AgentToolCall,
   AgentToolResult,
-  AgentSpawner,
-  AddNodes,
   FindFreePosition,
 } from "@/features/agent/types";
 

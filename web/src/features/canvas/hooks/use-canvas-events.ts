@@ -7,10 +7,10 @@
 
 import { useEffect } from "react";
 
-import { EventNames } from "@/lib/constants";
 import { markDirty, markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
+import { EventNames } from "@/lib/constants";
 
 /**
  * 画布自定义事件监听 hook。

@@ -8,13 +8,13 @@
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
 import { type ReactNode,useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
-import { captureFrame } from "@/features/canvas/api/file-api";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { useTranslation } from "react-i18next";
+import { captureFrame } from "@/features/canvas/api/file-api";
 import { type UploadResult, uploadWithRetry } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [

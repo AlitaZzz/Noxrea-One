@@ -14,6 +14,6 @@ export { saveManager } from "./save-manager";
 // ── 类型 ──
 export type {
   CanvasProject,
-  HistorySnapshot,
   ClipboardData,
+  HistorySnapshot,
 } from "./types";

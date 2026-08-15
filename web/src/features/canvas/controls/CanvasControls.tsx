@@ -21,16 +21,16 @@ import {
 import { useReactFlow, useViewport } from "@xyflow/react";
 import { Button, InputNumber, Tooltip } from "antd";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
-import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
+import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
-import type { BackgroundType } from "@/features/canvas/types";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import type { BackgroundType } from "@/features/canvas/types";
+import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 
 function LanguageToggle() {
   const { i18n } = useTranslation();

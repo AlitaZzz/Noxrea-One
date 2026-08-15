@@ -3,8 +3,8 @@
  */
 
 // ── 组件 ──
-export { default as SettingsModal } from "./components/SettingsModal";
 export { default as AvatarCropModal } from "./components/AvatarCropModal";
+export { default as SettingsModal } from "./components/SettingsModal";
 
 // ── API ──
 export { authApi } from "./api";

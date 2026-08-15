@@ -1,10 +1,10 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import boundaries from "eslint-plugin-boundaries";
 import checkFile from "eslint-plugin-check-file";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
-import boundaries from "eslint-plugin-boundaries";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -29,15 +29,17 @@ const eslintConfig = defineConfig([
       "boundaries/ignore": ["**/*.test.ts", "**/*.test.tsx"],
     },
     rules: {
-      // 文件名命名约定：组件 PascalCase，测试 kebab，其余 kebab-case。
+      // 文件名命名约定：组件（.tsx）统一 PascalCase（符合 React 行业惯例），
+      // 非组件（.ts）与测试（.test.ts）统一 kebab-case。
+      // Next.js 约定文件（page/layout/loading/error/not-found/template 等）固定小写，必须豁免。
       // 注意：glob 必须互斥，否则组件 .tsx 会同时命中默认 kebab 规则而误报。
       "check-file/filename-naming-convention": [
         "error",
         {
-          "src/components/**/*.tsx": "PASCAL_CASE",
           "src/**/*.test.ts": "KEBAB_CASE",
           "src/**/*.ts": "KEBAB_CASE",
-          "src/!(components)/**/*.tsx": "KEBAB_CASE",
+          "src/app/**/*.tsx": "@(page|layout|loading|error|not-found|template|route|global-error|index)",
+          "src/!app/**/*.tsx": "PASCAL_CASE",
         },
         { ignoreMiddleExtensions: true },
       ],

@@ -1,20 +1,21 @@
-import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
-import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import { Button, Tooltip } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useViewport } from "@xyflow/react";
-import { Viewer } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 
-import WheelGuard from "@/components/ui/WheelGuard";
-import { NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Viewer } from "@photo-sphere-viewer/core";
+import { useViewport } from "@xyflow/react";
+import { Button, Tooltip } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import { AspectRatioIcon } from "@/components/ui/icons/canvas/AspectRatioIcon";
 import { Grid4Icon } from "@/components/ui/icons/canvas/Grid4Icon";
 import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
 import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
-import { computeDerivedGrid, gridPositionAt, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
+import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useTranslation } from "react-i18next";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { computeDerivedGrid, gridPositionAt, uploadAndAddNode } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -87,7 +88,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
         defaultZoomLvl: 30,
         navbar: [],
         // 彻底隐藏空 navbar 容器，避免底部残留灰色底栏
-        caption: null,
+        caption: undefined,
         // 保留 WebGL 绘制缓冲，便于截图时读取画布像素
         rendererParameters: { preserveDrawingBuffer: true },
       });
@@ -100,7 +101,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       viewerRef.current = null;
     };
     // 仅依赖 src：viewer 随组件挂载创建、随卸载销毁（退出全景即卸载）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [src]);
 
   // 截图目标尺寸上限：按原始分辨率输出，但避免超大全景图导致内存峰值过高

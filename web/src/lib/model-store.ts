@@ -213,9 +213,9 @@ export const useModelStore = create<ModelState>((set, get) => ({
       }
       await get().setChannelModels(channelId, merged);
       return { success: true };
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Fetch models failed:", e);
-      return { success: false, error: e?.message ?? "Unknown error" };
+      return { success: false, error: e instanceof Error ? e.message : "Unknown error" };
     }
   },
 }));
