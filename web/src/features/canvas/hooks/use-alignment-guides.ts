@@ -39,6 +39,36 @@ interface NodeBounds {
  * @param threshold 吸附阈值（px），默认 5
  * @returns 对齐结果
  */
+/**
+ * 判断 other 节点是否可能与拖拽节点产生对齐吸附。
+ *
+ * 吸附成立需某一坐标（左/中/右 或 上/中/下）相距 < threshold，且边到边
+ * 吸附额外允许 gap。因此对 X/Y 轴分别用"矩形区间 + gap + threshold"外扩的
+ * 保守判定即可，空间上远在阈值之外的节点绝不会触发吸附，可直接跳过，
+ * 从而把每帧 O(n) 的全量比对降为仅邻近节点子集。
+ */
+export function isAlignmentCandidate(
+  draggingNode: NodeBounds,
+  other: NodeBounds,
+  threshold: number,
+  gap: number,
+): boolean {
+  const dMinX = draggingNode.position.x;
+  const dMaxX = dMinX + draggingNode.width;
+  const dMinY = draggingNode.position.y;
+  const dMaxY = dMinY + draggingNode.height;
+
+  const oMinX = other.position.x;
+  const oMaxX = oMinX + other.width;
+  const oMinY = other.position.y;
+  const oMaxY = oMinY + other.height;
+
+  const pad = threshold + gap;
+  const nearX = dMinX - pad <= oMaxX && oMinX <= dMaxX + pad;
+  const nearY = dMinY - pad <= oMaxY && oMinY <= dMaxY + pad;
+  return nearX || nearY;
+}
+
 export function computeAlignment(
   draggingNode: NodeBounds,
   allNodes: NodeBounds[],
@@ -66,6 +96,8 @@ export function computeAlignment(
 
   for (const other of allNodes) {
     if (other.id === draggingNode.id) continue;
+    // 空间分区：跳过远在吸附阈值之外的节点，大幅降低大画布下的每帧成本
+    if (!isAlignmentCandidate(draggingNode, other, threshold, gap)) continue;
 
     const ow = other.width;
     const oh = other.height;

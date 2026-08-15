@@ -53,7 +53,7 @@ import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
-import { computeAlignment } from "@/features/canvas/hooks/use-alignment-guides";
+import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
@@ -231,6 +231,9 @@ export default function InfiniteCanvas() {
         }
       }
 
+      // 性能关键：未变化的节点保持原引用（返回 n 本身），仅对位置真正变化的节点
+      // 创建新对象引用。否则每帧对全部节点 spread 重建，React Flow 会认为所有节点
+      // 都变了而全量重渲染，拖拽时开销巨大。
       if (snapToGrid) {
         appliedNodes = applied.map((n) => {
           // 分组成员节点在分组拖动时：丢弃 React Flow 的多选位移，使用原始位置，
@@ -249,7 +252,15 @@ export default function InfiniteCanvas() {
               width: Number(n.style?.width) || Number(n.measured?.width) || 200,
               height: Number(n.style?.height) || Number(n.measured?.height) || 120,
             };
+            // 空间分区：只对可能产生吸附的邻近节点构建边界，大幅降低大画布下每帧开销
+            const dragBounds = { id: n.id, position: { x: posX, y: posY }, ...nodeSize };
             const nodeBounds = applied
+              .filter((m) => m.id === n.id || isAlignmentCandidate(dragBounds, {
+                id: m.id,
+                position: { x: m.position.x, y: m.position.y },
+                width: Number(m.style?.width) || Number(m.measured?.width) || 200,
+                height: Number(m.style?.height) || Number(m.measured?.height) || 120,
+              }, snapThreshold, LAYOUT_GAP))
               .map((m) => ({
                 id: m.id,
                 position: { x: m.position.x, y: m.position.y },
@@ -258,7 +269,7 @@ export default function InfiniteCanvas() {
               }));
 
             const result = computeAlignment(
-              { id: n.id, position: { x: posX, y: posY }, ...nodeSize },
+              dragBounds,
               nodeBounds,
               snapThreshold,
               LAYOUT_GAP,
@@ -285,6 +296,8 @@ export default function InfiniteCanvas() {
           }
           // 多选拖动时：跳过节点间对齐吸附，但照常跟随 React Flow 移动（posX/posY 保持 n.position 的拖拽值）
 
+          // 位置未变化则复用原引用，避免无关节点重渲染
+          if (n.position.x === posX && n.position.y === posY) return n;
           return {
             ...n,
             position: { x: posX, y: posY },
@@ -600,25 +613,6 @@ export default function InfiniteCanvas() {
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const { handleDragOver, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, notif, shouldIgnoreFileDrop, canvasContainerRef);
 
-  // ---- Highlight selected node's connections ----
-
-  const highlightedEdges = useMemo(
-    () =>
-      edges.map((e) => ({
-        ...e,
-        style: {
-          ...e.style,
-          stroke:
-            selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)
-              ? "#1D9E75"
-              : (e.style?.stroke as string) || (theme === "dark" ? "#666" : "#999"),
-          strokeWidth:
-            selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target) ? 3 : 2,
-        },
-      })),
-    [edges, selectedNodeIds, theme]
-  );
-
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
     return () => { flushOnUnload(); };
@@ -650,7 +644,7 @@ export default function InfiniteCanvas() {
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <ReactFlow
         nodes={nodes}
-        edges={highlightedEdges}
+        edges={edges}
         nodeTypes={rfNodeTypes}
         edgeTypes={rfEdgeTypes}
         onNodesChange={handleNodesChange}

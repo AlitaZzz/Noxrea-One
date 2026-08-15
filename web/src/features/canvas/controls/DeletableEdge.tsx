@@ -30,6 +30,8 @@ export default function DeletableEdge({
 
   const highlightedEdgeIds = useHighlightedEdges();
   const isHighlighted = highlightedEdgeIds.has(id);
+  // 选中节点关联的边高亮：由组件自身按 Context 判断，避免父级逐边重建全部边对象
+  const isConnected = isHighlighted || selected;
 
   const onEdgeClick = (evt: React.MouseEvent) => {
     evt.stopPropagation();
@@ -46,14 +48,14 @@ export default function DeletableEdge({
         path={edgePath}
         style={{
           ...style,
-          strokeWidth: selected ? 3 : 2,
-          stroke: selected ? "#1D9E75" : (style.stroke as string || "var(--canvas-text-muted)"),
+          strokeWidth: isConnected ? 3 : 2,
+          stroke: isConnected ? "#1D9E75" : (style.stroke as string || "var(--canvas-text-muted)"),
         }}
         markerEnd={markerEnd}
       />
 
       {/* Multi-dot flow animation (when connected node selected or edge selected) */}
-      {(isHighlighted || selected) && STAGGER.map((begin) => (
+      {isConnected && STAGGER.map((begin) => (
         <FlowingDot key={`${id}-${begin}`} path={edgePath} begin={begin} color={DOT_COLOR} />
       ))}
 
