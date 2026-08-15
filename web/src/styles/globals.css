@@ -559,6 +559,8 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   border: 1px solid var(--canvas-border);
   color: var(--canvas-text);
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   transition: background .12s, border-color .12s, transform .12s;
 }
 .canvas-agent-btn:hover {
