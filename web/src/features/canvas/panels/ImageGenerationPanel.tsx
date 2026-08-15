@@ -6,7 +6,7 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Button, Popover, Tooltip } from "antd";
+import { Button, Popover, Tooltip } from "antd";
 import { memo, useEffect, useMemo,useRef, useState } from "react";
 
 import { RatioIcon } from "@/components/ui/icons/canvas/RatioIcon";
@@ -17,12 +17,12 @@ import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
 import { apiUpload } from "@/lib/api/client";
 import { ModelIcon } from "@/lib/model-icon";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import { EventNames, isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import type { ModelChannel } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 import type { GenSettings, MediaGenFields } from "@/features/canvas/types";
-import { flushAndWait,markDirty, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
@@ -160,17 +160,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const node = canvasNodes.find((n) => n.id === nodeId);
     return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
-  const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState("");
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
   const latestSettingsRef = useRef({ prompt, modelKey, quality, resolution, ratio, refOrder, n });
   useEffect(() => {
     latestSettingsRef.current = { prompt, modelKey, quality, resolution, ratio, refOrder, n };
   }, [prompt, modelKey, quality, resolution, ratio, refOrder, n]);
-  const { notification } = App.useApp();
-
   // Persist settings to node data on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -198,16 +193,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     };
   }, []);
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  const is: React.CSSProperties = {
-    background: "transparent", border: "none", color: "var(--canvas-text)", borderRadius: 4, fontSize: 13,
-  };
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
@@ -296,26 +281,20 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const channel = channels.find((c) => c.id === entry.channelId);
     if (!channel) return;
 
-    setError("");
     // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
-    setElapsed(0);
     retryRef.current = { count: 0, prompt: finalPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, channel };
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
 
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-
     if (errMsg === null) {
-      setError("");
+      // 生成成功
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
       // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
       useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
-      setError(errMsg);
     }
   };
 
@@ -331,7 +310,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     markDirtyImmediate();
     // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
     useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
-    setError("");
   };
 
   return (

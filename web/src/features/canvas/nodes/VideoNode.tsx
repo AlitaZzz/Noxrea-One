@@ -9,7 +9,6 @@ import {
   CameraOutlined,
   CaretRightOutlined,
   CloseOutlined,
-  DeleteOutlined,
   DownloadOutlined,
   PauseCircleOutlined,
   UploadOutlined,

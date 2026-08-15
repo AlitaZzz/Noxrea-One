@@ -28,7 +28,7 @@ import {
   useReactFlow,
   type FinalConnectionState,
 } from "@xyflow/react";
-import { App,Popover, Tooltip } from "antd";
+import { App, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -72,7 +72,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 import { useAssetsStore } from "@/features/assets/store";
 import { useAuthStore } from "@/features/auth/store";
-import { flushAndWait, flushOnUnload,getViewportCenter, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useTranslation } from "react-i18next";
 import { useModelStore } from "@/lib/model-store";
@@ -91,9 +91,6 @@ export default function InfiniteCanvas() {
   const setNodes = useCanvasStore((s) => s.setNodes);
   const setEdges = useCanvasStore((s) => s.setEdges);
   const addNodes = useCanvasStore((s) => s.addNodes);
-  const updateNodeData = useCanvasStore((s) => s.updateNodeData);
-  const removeNodes = useCanvasStore((s) => s.removeNodes);
-  const removeEdges = useCanvasStore((s) => s.removeEdges);
   const background = useCanvasStore((s) => s.background);
   const theme = useCanvasStore((s) => s.theme);
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
@@ -128,9 +125,6 @@ export default function InfiniteCanvas() {
     () => new Set(edges.filter((e) => selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)).map((e) => e.id)),
     [edges, selectedNodeIds]
   );
-
-  // Clipboard for copy/paste
-  const copySelected = useSelectionStore((s) => s.copySelected);
 
   // History
   const pushHistory = useHistoryStore((s) => s.push);
