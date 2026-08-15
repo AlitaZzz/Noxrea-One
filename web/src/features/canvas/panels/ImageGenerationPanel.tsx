@@ -18,7 +18,7 @@ import { generationApi } from "@/features/canvas/api/generation-api";
 import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { GenSettings, MediaGenFields } from "@/features/canvas/types";
+import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { ModelIcon } from "@/lib/model-icon";
@@ -43,7 +43,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // Read persisted settings from node data
   const saved = useMemo(() => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<GenSettings>;
+    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<ImageGenSettings>;
     const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
       findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
     const d = mp?.defaults ?? {};
@@ -162,15 +162,15 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, [canvasNodes, nodeId]);
 
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
-  const latestSettingsRef = useRef({ prompt, modelKey, quality, resolution, ratio, refOrder, n });
+  const latestSettingsRef = useRef({ kind: "image" as const, prompt, modelKey, quality, resolution, ratio, refOrder, n });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, quality, resolution, ratio, refOrder, n };
+    latestSettingsRef.current = { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder, n };
   }, [prompt, modelKey, quality, resolution, ratio, refOrder, n]);
   // Persist settings to node data on change (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, quality, resolution, ratio, refOrder, n },
+        genSettings: { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
@@ -181,7 +181,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return () => {
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<GenSettings> | undefined;
+      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<ImageGenSettings> | undefined;
       // 没有已保存值 或 任一字段变化 -> flush（refOrder 用 JSON.stringify 比较）
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&

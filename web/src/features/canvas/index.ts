@@ -12,6 +12,7 @@ export { default as InfiniteCanvas } from "./InfiniteCanvas";
 export type {
   AnyEdge,
   AnyNode,
+  AudioGenSettings,
   AudioNode,
   AudioNodeData,
   BackgroundType,
@@ -20,6 +21,7 @@ export type {
   DirectorNodeData,
   DirectorStateData,
   GenSettings,
+  ImageGenSettings,
   GroupNode,
   GroupNodeData,
   ImageNode,
@@ -27,6 +29,7 @@ export type {
   MediaGenFields,
   TaskBinding,
   TaskStatus,
+  TextGenSettings,
   TextNode,
   TextNodeData,
   ThemeMode,

@@ -17,7 +17,7 @@ import { generationApi } from "@/features/canvas/api/generation-api";
 import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { GenSettings, TextNodeData } from "@/features/canvas/types";
+import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { ModelIcon } from "@/lib/model-icon";
@@ -54,7 +54,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // Read persisted settings from node data
   const saved = useMemo(() => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as { genSettings?: Partial<GenSettings> })?.genSettings ?? {}) as Partial<GenSettings>;
+    const s = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
     return {
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
@@ -133,7 +133,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { prompt, modelKey, quality: "", resolution: "", ratio: "", refOrder, n: 1 } },
+        { genSettings: { kind: "text", prompt, modelKey, refOrder } },
         undefined,
         { skipHistory: true },
       );
@@ -146,7 +146,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     return () => {
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const savedGen = (node?.data as { genSettings?: GenSettings })?.genSettings;
+      const savedGen = (node?.data as { genSettings?: TextGenSettings })?.genSettings;
       if (
         savedGen &&
         savedGen.prompt === latest.prompt &&
@@ -156,7 +156,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         return;
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { prompt: latest.prompt, modelKey: latest.modelKey, quality: "", resolution: "", ratio: "", refOrder: latest.refOrder, n: 1 } },
+        { genSettings: { kind: "text", prompt: latest.prompt, modelKey: latest.modelKey, refOrder: latest.refOrder } },
         undefined,
         { skipHistory: true },
       );
