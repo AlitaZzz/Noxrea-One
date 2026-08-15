@@ -497,7 +497,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       <div
         className={`
           node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
-          ${isMulti && expanded ? "overflow-visible" : "overflow-hidden"}
+          ${isMulti ? "overflow-visible" : "overflow-hidden"}
           ${selected ? "node-selected" : ""}
         `}
         style={{ background: hasImage ? "transparent" : "var(--canvas-bg, #262626)" }}
