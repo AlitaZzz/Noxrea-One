@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 interface Props {
   src: string;
   sourceId: string;
+  selected?: boolean;
   onClose: () => void;
 }
 
@@ -33,7 +34,7 @@ const ASPECT_RATIOS: Record<Exclude<AspectKey, "original">, number> = {
 // 多视角截图数量：4 / 8 / 12，对应 90° / 45° / 30° 等分 360°
 type ViewCount = 4 | 8 | 12;
 
-export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
+export default function PanoramaPanel({ src, sourceId, selected, onClose }: Props) {
   const { t } = useTranslation();
   const { zoom } = useViewport();
 
@@ -98,6 +99,8 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
       viewerRef.current?.destroy();
       viewerRef.current = null;
     };
+    // 仅依赖 src：viewer 随组件挂载创建、随卸载销毁（退出全景即卸载）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
   // 截图目标尺寸上限：按原始分辨率输出，但避免超大全景图导致内存峰值过高
@@ -312,8 +315,8 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
 
   return (
     <>
-      {/* 全景专属工具栏：样式/位置完全参考裁剪、标注 */}
-      <WheelGuard
+      {/* 全景专属工具栏：样式/位置完全参考裁剪、标注；仅当节点被选中时显示 */}
+      {selected && <WheelGuard
         className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
         style={{
           height: 50,
@@ -417,12 +420,12 @@ export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
         <Tooltip title={t("panorama.exit")}>
           <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
         </Tooltip>
-      </WheelGuard>
+      </WheelGuard>}
 
       {/* 全景画布：覆盖原图，z-30 蒙版 */}
       <div
         ref={mountRef}
-        className="nodrag absolute inset-0 z-30 pointer-events-auto rounded-lg overflow-hidden"
+        className={`nodrag absolute inset-0 z-30 rounded-lg overflow-hidden ${selected ? "pointer-events-auto" : "pointer-events-none"}`}
         style={{ touchAction: "none" }}
       >
         {/* 取景框：按所选比例显示截图范围，非原始比例时叠加 */}

@@ -73,6 +73,8 @@ function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t } = useTranslation();
+  // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选
+  const multiSelect = useCanvasStore((s) => s.nodes.filter((n) => n.selected).length > 1);
   const [cropOpen, setCropOpen] = useState(false);
   // cropOpen driven by store's croppingNodeId (same pattern as annotateOpen)
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
@@ -92,16 +94,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   useEffect(() => {
     setAnnotateOpenInternal(annotatingNodeId === id);
   }, [annotatingNodeId, id]);
-  // 全景模式：由 store 的 panoramaNodeId 驱动，仅支持手动退出（工具栏关闭按钮）
-  const setPanoramaNodeId = useCanvasStore((s) => s.setPanoramaNodeId);
-  const panoramaNodeId = useCanvasStore((s) => s.panoramaNodeId);
-  const [panoramaOpen, setPanoramaOpenInternal] = useState(false);
-  const setPanoramaOpen = useCallback((open: boolean) => {
-    useCanvasStore.getState().setPanoramaNodeId(open ? id : null);
-  }, [id]);
-  useEffect(() => {
-    setPanoramaOpenInternal(panoramaNodeId === id);
-  }, [panoramaNodeId, id]);
+  // 全景模式：由节点 data.panorama 布尔字段驱动（随节点落库，刷新后自动恢复），
+  // 仅支持手动退出（工具栏关闭按钮）；每个节点独立判断，可多个节点同时开启
+  const [panoramaOpen, setPanoramaOpenInternal] = useState<boolean>(() => !!data.panorama);
+  const setPanoramaOpen = useCallback(
+    (open: boolean) => {
+      setPanoramaOpenInternal(open);
+      useCanvasStore.getState().updateNodeData(id, { panorama: open });
+    },
+    [id]
+  );
   const [expanded, setExpanded] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -694,7 +696,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       {panoramaOpen && src && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <PanoramaPanel src={src} sourceId={id} onClose={() => setPanoramaOpen(false)} />
+          <PanoramaPanel
+            src={src}
+            sourceId={id}
+            selected={selected && !multiSelect}
+            onClose={() => setPanoramaOpen(false)}
+          />
         </div>
       )}
       </div>
