@@ -70,8 +70,11 @@ export interface AgentToolResult {
   content: string;
 }
 
-/** 位置计算函数签名（由调用方注入） */
-export type FindFreePosition = (size: { width: number; height: number }) => { x: number; y: number };
+/** 位置计算函数签名（由调用方注入；center 为锚点中心点，必填） */
+export type FindFreePosition = (
+  size: { width: number; height: number },
+  center: { x: number; y: number },
+) => { x: number; y: number };
 
 /** 添加节点函数签名（由调用方注入） */
 export type AddNodes = (nodes: import("@/features/canvas/types").AnyNode[]) => void;

@@ -12,6 +12,7 @@ import type {
   AgentToolResult,
   FindFreePosition,
 } from "@/features/agent/types";
+import { getViewportCenter } from "@/features/canvas/stores/canvas-store";
 import { createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import type { AnyNode, GenSettings, VideoGenSettings } from "@/features/canvas/types";
 
@@ -41,7 +42,7 @@ function spawnImageNode(prompt: string, findFreePosition: FindFreePosition): Any
   const node = createImageNode({ x: 0, y: 0 });
   const w = (node.style?.width as number) ?? 300;
   const h = (node.style?.height as number) ?? 200;
-  node.position = findFreePosition({ width: w, height: h });
+  node.position = findFreePosition({ width: w, height: h }, getViewportCenter());
   const genSettings: GenSettings = {
     kind: "image",
     prompt,
@@ -64,7 +65,7 @@ function spawnVideoNode(prompt: string, findFreePosition: FindFreePosition): Any
   const node = createVideoNode({ x: 0, y: 0 });
   const w = (node.style?.width as number) ?? 300;
   const h = (node.style?.height as number) ?? 200;
-  node.position = findFreePosition({ width: w, height: h });
+  node.position = findFreePosition({ width: w, height: h }, getViewportCenter());
   const genSettings: VideoGenSettings = {
     kind: "video",
     prompt,

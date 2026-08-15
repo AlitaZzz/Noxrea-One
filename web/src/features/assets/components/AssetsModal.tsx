@@ -19,7 +19,7 @@ import { createAssetNode } from "@/features/assets/add-asset";
 import { assetApi } from "@/features/assets/api";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
@@ -275,7 +275,7 @@ export default function AssetsModal({ open, onClose }: Props) {
   // --- Handlers ---
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    const node = createAssetNode(asset, findFreePosition);
+    const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
     if (node) useCanvasStore.getState().addNodes([node]);
     notif.success({
       title: t("asset.added"),
