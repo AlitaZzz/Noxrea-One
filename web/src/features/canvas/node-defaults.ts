@@ -12,10 +12,13 @@ import {
   type DirectorNode,
   type GroupNode,
   type GroupNodeData,
+  type ImageGenSettings,
   type ImageNode,
   type ImageNodeData,
+  type TextGenSettings,
   type TextNode,
   type TextNodeData,
+  type VideoGenSettings,
   type VideoNode,
   type VideoNodeData,
 } from "@/features/canvas/types";
@@ -45,7 +48,11 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
     id: uid("text"),
     type: NODE_TYPE.TEXT,
     position,
-    data: { label: "", content: "" } as TextNodeData,
+    data: {
+      label: "",
+      content: "",
+      genSettings: { kind: "text", prompt: "", modelKey: "", refOrder: [] } satisfies TextGenSettings,
+    } as TextNodeData,
     style: {
       width: TEXT_NODE_DEFAULT_WIDTH,
       height: TEXT_NODE_DEFAULT_HEIGHT,
@@ -70,6 +77,7 @@ export function createImageNode(
       naturalWidth: DEFAULT_NODE_WIDTH,
       naturalHeight: DEFAULT_NODE_HEIGHT,
       alt: "",
+      genSettings: { kind: "image", prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refOrder: [], n: 1 } satisfies ImageGenSettings,
     } as ImageNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };
@@ -89,6 +97,7 @@ export function createVideoNode(
       naturalWidth: 320,
       naturalHeight: 180,
       alt: "",
+      genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], n: 1 } satisfies VideoGenSettings,
     } as VideoNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };

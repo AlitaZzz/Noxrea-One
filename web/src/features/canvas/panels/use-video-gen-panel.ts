@@ -137,17 +137,17 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestSettingsRef = useRef({
-    prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n,
+    kind: "video" as const, prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n,
   });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n };
+    latestSettingsRef.current = { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n };
   }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, n]);
 
   // Persist settings to node data on change (debounced)。
   useEffect(() => {
     const timer = setTimeout(() => {
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n },
+        genSettings: { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);

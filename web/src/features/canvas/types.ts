@@ -56,34 +56,53 @@ export interface UploadState {
 // 生成面板设置（持久化到节点）
 // ============================================================
 
-export interface GenSettings {
+/** 各生成类型共享的基础字段 */
+interface BaseGenSettings {
+  /** 判别字段：标识生成类型 */
+  kind: string;
   prompt: string;
   modelKey: string;
+  refOrder: string[];
+}
+
+/** 文本生成设置 */
+export interface TextGenSettings extends BaseGenSettings {
+  kind: "text";
+}
+
+/** 图片生成设置 */
+export interface ImageGenSettings extends BaseGenSettings {
+  kind: "image";
   quality: string;
   resolution: string;
   ratio: string;
-  refOrder: string[];
   n: number;
 }
 
-/** 视频生成面板设置 */
-export interface VideoGenSettings {
-  prompt: string;
-  modelKey: string;
+/** 视频生成设置 */
+export interface VideoGenSettings extends BaseGenSettings {
+  kind: "video";
   resolution: string;
   ratio: string;
   seconds: number;
   generateAudio: boolean;
-  refOrder: string[];
   refAudioOrder: string[];
   n: number;
 }
+
+/** 语音生成设置 */
+export interface AudioGenSettings extends BaseGenSettings {
+  kind: "audio";
+}
+
+/** 生成设置判别联合：文本 / 图片 / 视频 / 语音 */
+export type GenSettings = TextGenSettings | ImageGenSettings | VideoGenSettings | AudioGenSettings;
 
 /** 图片/视频节点共享的生成相关子字段 */
 export interface MediaGenFields {
   taskBinding?: TaskBinding;
   upload?: UploadState;
-  genSettings?: GenSettings | VideoGenSettings;
+  genSettings?: GenSettings;
 }
 
 // ============================================================
@@ -103,7 +122,7 @@ export interface GroupableData {
 export type TextNodeData = GroupableData & {
   label: string;
   content: string;
-  genSettings?: GenSettings;
+  genSettings?: TextGenSettings;
   taskBinding?: TaskBinding;
 };
 
@@ -124,7 +143,7 @@ export type ImageNodeData = GroupableData & {
   flipV?: boolean;
   taskBinding?: TaskBinding;
   upload?: UploadState;
-  genSettings?: GenSettings;
+  genSettings?: ImageGenSettings;
   /** 多图结果：所有结果图的 URL 列表（children）。存在且长度>=2 时，节点以「堆叠卡片/展开网格」模式展示 */
   multiResultUrls?: string[];
   /** 多图结果：生成总张数（用于角标，缺省回退到 multiResultUrls.length） */

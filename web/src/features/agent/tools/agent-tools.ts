@@ -43,6 +43,7 @@ function spawnImageNode(prompt: string, findFreePosition: FindFreePosition): Any
   const h = (node.style?.height as number) ?? 200;
   node.position = findFreePosition({ width: w, height: h });
   const genSettings: GenSettings = {
+    kind: "image",
     prompt,
     modelKey: "",
     quality: "",
@@ -65,6 +66,7 @@ function spawnVideoNode(prompt: string, findFreePosition: FindFreePosition): Any
   const h = (node.style?.height as number) ?? 200;
   node.position = findFreePosition({ width: w, height: h });
   const genSettings: VideoGenSettings = {
+    kind: "video",
     prompt,
     modelKey: "",
     resolution: "",
