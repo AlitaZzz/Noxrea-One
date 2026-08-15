@@ -581,8 +581,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                       }}
                     >
                           <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
-                          {/* 操作按钮 */}
-                          <div className="absolute top-1 right-1 flex gap-1 z-10 nodrag">
+                          {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
+                          <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
                             <Tooltip title={t("common.download")}>
                               <button
                                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
