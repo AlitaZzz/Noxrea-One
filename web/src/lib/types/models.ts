@@ -39,8 +39,6 @@ export interface ParamField {
 export interface Capability {
   /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
   options?: string[];
-  /** 数量上限（refVideos/refAudios/refImages） */
-  max?: number;
   /** 默认值 */
   default?: boolean | string | number;
 }
@@ -49,6 +47,10 @@ export interface ModelParamConfig {
   fields: ParamField[];
   /** 能力开关声明：前端据此动态渲染开关（refMode/generateAudio/refVideos/refAudios） */
   capabilities?: Record<string, Capability>;
+  /**
+   * 该能力允许接收的业务字段白名单（后端入参校验与 build() 兜底过滤的权威来源）。
+   */
+  allowedFields?: string[];
 }
 
 /** 模型信息（与 API 契约一致，camelCase） */
