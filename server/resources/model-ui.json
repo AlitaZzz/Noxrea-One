@@ -34,7 +34,9 @@
   "*apimart*": {
     "_endpoints": {
       "image.edits": "/images/generations",
-      "video.generations": "/videos/generations"
+      "video.generations": "/videos/generations",
+      "image.poll": "/tasks/{task_id}",
+      "video.poll": "/tasks/{task_id}"
     },
     "*gpt-image*": {
       "image": {
