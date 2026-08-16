@@ -21,8 +21,8 @@ interface ModelState {
   initialize: () => Promise<void>;
   findModelParams: (modelName: string, capability: string) => ModelParamConfig | null;
 
-  addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) => Promise<void>;
-  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol" | "config">>) => Promise<void>;
+  addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<void>;
+  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<void>;
   fetchChannelApiKey: (id: string) => Promise<string>;
   deleteChannel: (id: string) => Promise<void>;
 
@@ -94,12 +94,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
   },
 
-  addChannel: async (name, baseUrl, apiKey, protocol, config) => {
-    const res = await modelApi.createChannel(name, baseUrl, apiKey, protocol, config);
+  addChannel: async (name, baseUrl, apiKey, protocol) => {
+    const res = await modelApi.createChannel(name, baseUrl, apiKey, protocol);
     if (res.code === 200 && res.data) {
       const channel: ModelChannel = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
       if (protocol) channel.protocol = protocol;
-      if (config) channel.config = config;
       set((s) => ({ channels: [...s.channels, channel] }));
     }
   },
@@ -110,7 +109,6 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
     if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
-    if (patch.config !== undefined) body.config = patch.config;
     await modelApi.updateChannel(id, body);
     // 只合并非 undefined 的字段，避免 undefined 覆盖原有值
     set((s) => ({

@@ -8,7 +8,6 @@ export interface ProviderPreset {
   name: string;
   baseUrl: string;
   protocol?: string;
-  config?: Record<string, unknown>;
 }
 
 export type ParamFieldType = "segmented" | "select" | "slider" | "switch" | "number";
@@ -36,9 +35,20 @@ export interface ParamField {
   falseShort?: string;
 }
 
+/** 能力开关声明：模型支持哪些参考/附加能力 + 约束 */
+export interface Capability {
+  /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
+  options?: string[];
+  /** 数量上限（refVideos/refAudios/refImages） */
+  max?: number;
+  /** 默认值 */
+  default?: boolean | string | number;
+}
+
 export interface ModelParamConfig {
   fields: ParamField[];
-  transforms?: Record<string, unknown>;
+  /** 能力开关声明：前端据此动态渲染开关（refMode/generateAudio/refVideos/refAudios） */
+  capabilities?: Record<string, Capability>;
 }
 
 /** 模型信息（与 API 契约一致，camelCase） */
@@ -56,7 +66,6 @@ export interface ModelChannel {
   baseUrl: string;
   apiKey: string;
   protocol?: string;
-  config?: Record<string, unknown>;
   models: ModelInfo[];
 }
 

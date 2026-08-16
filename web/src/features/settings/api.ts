@@ -42,10 +42,10 @@ export const modelApi = {
     api<T>(`/api/model-config/channels`),
 
   /** 创建通道。 */
-  createChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string, config?: Record<string, unknown>) =>
+  createChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string) =>
     api<{ id: string }>(`/api/model-config/channels`, {
       method: "POST",
-      body: JSON.stringify({ name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey, protocol, config }),
+      body: JSON.stringify({ name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey, protocol }),
     }),
 
   /** 拉取模型参数定义。 */
