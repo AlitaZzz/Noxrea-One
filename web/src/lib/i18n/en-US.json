@@ -114,6 +114,8 @@
     "creationNineGrid": "Scene Multi-Camera 3×3 Grid",
    "creation25Grid": "25-Grid Storyboard",
    "creation4Grid": "4-Grid Storyboard",
+   "creationForward3s": "Frame Prediction - 3S Later",
+   "creationBack5s": "Frame Prediction - 5S Earlier",
     "previewFullscreen": "Preview",
     "previewPrev": "Previous",
     "previewNext": "Next",
