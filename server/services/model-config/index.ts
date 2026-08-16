@@ -24,14 +24,21 @@ function getProjectRoot(): string {
 
 // 预设
 
+// 按文件修改时间缓存，presets.json 变更后（无需重启）自动重新加载。
 let _presets: Record<string, unknown> | null = null;
+let _presetsMtime = 0;
 
 /** 加载预设配置（供前端 API 使用） */
 export function loadPresets(): Record<string, unknown> {
-  if (_presets) return _presets;
   const presetPath = path.resolve(getProjectRoot(), "server/resources/presets.json");
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(presetPath).mtimeMs;
+  } catch { /* 文件暂不可读时保留旧缓存 */ }
+  if (_presets && mtime === _presetsMtime) return _presets;
   const raw = fs.readFileSync(presetPath, "utf-8");
   _presets = JSON.parse(raw);
+  _presetsMtime = mtime;
   return _presets!;
 }
 
@@ -43,13 +50,20 @@ export interface ModelParamConfig {
   transforms: Record<string, unknown>;
 }
 
+// 按文件修改时间缓存，model_params.json 变更后（无需重启）自动重新加载。
 let _modelParamsRaw: Record<string, Record<string, unknown>> | null = null;
+let _modelParamsMtime = 0;
 
 function loadRaw(): Record<string, Record<string, unknown>> {
-  if (_modelParamsRaw) return _modelParamsRaw;
   const paramsPath = path.resolve(getProjectRoot(), "server/resources/model_params.json");
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(paramsPath).mtimeMs;
+  } catch { /* 文件暂不可读时保留旧缓存 */ }
+  if (_modelParamsRaw && mtime === _modelParamsMtime) return _modelParamsRaw;
   const raw = fs.readFileSync(paramsPath, "utf-8");
   _modelParamsRaw = JSON.parse(raw) as Record<string, Record<string, unknown>>;
+  _modelParamsMtime = mtime;
   return _modelParamsRaw;
 }
 
