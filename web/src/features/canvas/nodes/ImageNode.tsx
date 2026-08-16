@@ -377,7 +377,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView") => {
+  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene") => {
     if (!src) return;
     const template = await getPromptTemplate(type);
     if (!template) return;
@@ -392,7 +392,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     };
 
     // 反推提示词 -> 文本节点（承载可编辑的提示词文本）
-    // 角色面部三视图 / 角色三视图 -> 图片节点（预填提示词，供图片生成面板使用）
+    // 角色面部三视图 / 角色三视图 / 多机位九宫格 -> 图片节点（预填提示词，供图片生成面板使用）
     if (type === "reverse") {
       const textNode = createTextNode(position);
       textNode.data = {
@@ -452,6 +452,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "create-reverse": a.handleApplyTemplate("reverse"); break;
         case "create-character-face": a.handleApplyTemplate("characterFaceThreeView"); break;
         case "create-character-three-view": a.handleApplyTemplate("characterThreeView"); break;
+        case "create-nine-grid-scene": a.handleApplyTemplate("nineGridScene"); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);

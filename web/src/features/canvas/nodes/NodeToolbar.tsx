@@ -31,6 +31,7 @@ import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
@@ -289,6 +290,12 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <CharacterThreeViewIcon style={{ fontSize: 16 }} />
                     {t("node.creationCharacterThreeView")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-nine-grid-scene"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <NineGridIcon style={{ fontSize: 16 }} />
+                    {t("node.creationNineGrid")}
                   </span>
                 </MenuItem>
               </>
