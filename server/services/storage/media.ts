@@ -48,7 +48,7 @@ export async function getResizedWebP(
       .webp({ quality: 75 })
       .toFile(cachePath);
 
-    logEvent("media", { stage: "resize_cache", key: storageKey, width });
+    logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width });
 
     return cacheKey;
   } catch (err: unknown) {
