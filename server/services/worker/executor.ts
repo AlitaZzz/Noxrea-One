@@ -104,7 +104,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     // 4. 规范化 baseUrl（去末尾斜杠）
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
 
-    // 5. 从 model-params.json 获取模型默认参数
+    // 5. 从 model-ui.json 获取模型默认参数
     const modelParams = getModelParams(model, capability);
     const modelDefaults = modelFieldDefaults(modelParams);
 

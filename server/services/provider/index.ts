@@ -2,7 +2,7 @@
  * 供应商（provider）解析。
  * 通过 baseUrl 的 host 匹配供应商，读取该供应商的字段映射配置。
  *
- * provider-map.json 结构：
+ * upstream-map.json 结构：
  * {
  *   "_default": { "protocol": "...", "models": { ... } },
  *   "<host>":   { "protocol": "...", "models": { ... } }
@@ -51,7 +51,7 @@ export type ProviderMap = Record<string, ProviderConfig>;
 
 /** 从 baseUrl 解析 host，并匹配供应商（命中不到则 _default 兜底） */
 export function resolveProvider(baseUrl: string): ProviderConfig {
-  const map = loadJson<ProviderMap>("server/resources/provider-map.json");
+  const map = loadJson<ProviderMap>("server/resources/upstream-map.json");
   let host: string;
   try {
     host = new URL(baseUrl).hostname;

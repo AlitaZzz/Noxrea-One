@@ -3,7 +3,7 @@
  * 将前端固定语义字段，按供应商（baseUrl host）+ 模型 + 能力，
  * 转换为上游真实字段（字段名 + 结构 + 值换算）。
  *
- * 数据来源：provider-map.json（经 resolveProvider / resolveKindSpec 读取，支持热更新）。
+ * 数据来源：upstream-map.json（经 resolveProvider / resolveKindSpec 读取，支持热更新）。
  * 前端永远传固定语义字段名（ratio/seconds/refImages/refMode...），
  * 后端据供应商与模型自动转换，前端不感知上游字段。
  */
