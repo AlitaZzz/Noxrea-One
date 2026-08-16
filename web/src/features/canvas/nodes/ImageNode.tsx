@@ -377,7 +377,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene" | "storyboard25") => {
+  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene" | "storyboard25" | "storyboard4") => {
     if (!src) return;
     const template = await getPromptTemplate(type);
     if (!template) return;
@@ -454,6 +454,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "create-character-three-view": a.handleApplyTemplate("characterThreeView"); break;
         case "create-nine-grid-scene": a.handleApplyTemplate("nineGridScene"); break;
         case "create-25-grid-storyboard": a.handleApplyTemplate("storyboard25"); break;
+        case "create-4-grid-storyboard": a.handleApplyTemplate("storyboard4"); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
