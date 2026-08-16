@@ -10,7 +10,6 @@
 
 import { getAllowedFields, resolveFieldMapSpec, hostFromBaseUrl } from "@server/services/model-config";
 import { resolveRefSlots, resolveByKind, applyTransform, setNested } from "./resolve";
-import { logEvent } from "@server/core/logger/utils";
 
 
 export interface BuildInput {
@@ -85,17 +84,6 @@ export function build(input: BuildInput): Record<string, unknown> {
       result[key] = rawValue;
     }
   }
-
-  // 日志：回显请求构建结果
-  logEvent("builder", {
-    stage: "built",
-    taskId: input.taskId,
-    model: input.modelName,
-    capability: input.capability,
-    protocol: input.protocol,
-    bodyKeys: Object.keys(result),
-    ...(typeof result.prompt === "string" ? { promptLen: result.prompt.length } : {}),
-  });
 
   return result;
 }

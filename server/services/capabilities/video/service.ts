@@ -13,7 +13,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
-import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
+import { logEvent } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
 
 class VideoCapabilityService implements CapabilityService {
@@ -27,14 +27,6 @@ class VideoCapabilityService implements CapabilityService {
     if (!protocol?.buildVideoRequest) {
       throw new Error(`Protocol ${ctx.protocol} does not support video generation`);
     }
-
-    logEvent("capability.video", {
-      stage: "params_raw",
-      taskId: ctx.taskId,
-      params: { ...params, prompt: summarizeText(params.prompt) },
-      model: ctx.model,
-      protocol: ctx.protocol,
-    });
 
     const body = build({
       params,
@@ -51,24 +43,14 @@ class VideoCapabilityService implements CapabilityService {
 
     const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);
 
+    // 转译完成阶段（对标外部服务的"转译完成, 返回 plan"）
     logEvent("capability.video", {
-      stage: "dispatch",
-      taskId: ctx.taskId,
-      upstream: {
-        url: req.url,
-        method: req.method,
-        headers: { ...req.headers, Authorization: "Bearer ***" },
-        body: summarizeBody(req.body),
-      },
-    });
-
-    // 完整最终 body（base64 原样保留，仅脱敏 Authorization），用于核对真实发送内容
-    logEvent("capability.video", {
-      stage: "dispatch_full",
+      banner: true,
+      bannerTitle: "视频转译完成",
+      stage: "translation_done",
       taskId: ctx.taskId,
       url: req.url,
       method: req.method,
-      headers: { ...req.headers, Authorization: "Bearer ***" },
       body: req.body,
     });
 
