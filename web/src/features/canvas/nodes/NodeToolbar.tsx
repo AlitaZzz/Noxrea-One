@@ -34,6 +34,7 @@ import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
+import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
@@ -303,6 +304,12 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <Storyboard25Icon style={{ fontSize: 16 }} />
                     {t("node.creation25Grid")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-4-grid-storyboard"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Storyboard4Icon style={{ fontSize: 16 }} />
+                    {t("node.creation4Grid")}
                   </span>
                 </MenuItem>
               </>
