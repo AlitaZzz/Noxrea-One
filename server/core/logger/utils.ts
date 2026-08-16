@@ -36,22 +36,31 @@ function sanitizeString(v: string, maxLen = 200): string {
 /**
  * 结构化日志事件。
  * 格式：[module] stage=xxx task=xxx | key=val | ...
+ *
+ * 横幅（banner）：当 fields.banner 为 true 时，额外输出一行分隔线，
+ * 用于标记关键节点（如请求开始/结束、转译完成），对齐外部服务的阶段分隔风格。
+ * 横幅内容取自 fields.bannerTitle（缺省回退到 stage 或 module）。
  */
 export function logEvent(
   module: string,
   fields: {
     taskId?: string | null;
     stage?: string | null;
+    banner?: boolean;
+    bannerTitle?: string;
+    bannerAtEnd?: boolean;
+    level?: "info" | "debug" | "warn" | "error";
     [key: string]: unknown;
   }
 ): void {
+  const level = fields.level ?? "info";
   const parts: string[] = [];
 
   if (fields.taskId) parts.push(`task=${fields.taskId}`);
   if (fields.stage) parts.push(`stage=${fields.stage}`);
 
   for (const [k, v] of Object.entries(fields)) {
-    if (k === "taskId" || k === "stage") continue;
+    if (k === "taskId" || k === "stage" || k === "banner" || k === "bannerTitle" || k === "bannerAtEnd" || k === "level") continue;
     if (v === null || v === undefined) continue;
     if (typeof v === "boolean") {
       parts.push(`${k}=${v ? "true" : "false"}`);
@@ -65,7 +74,24 @@ export function logEvent(
   }
 
   const msg = `[${module}] ${parts.join(" | ")}`;
-  logger.info(msg);
+
+  const emitBanner = () => {
+    const title = fields.bannerTitle ?? fields.stage ?? module;
+    const bar = "═".repeat(Math.min(60, Math.max(20, title.length + 8)));
+    logger.info(bar);
+    logger.info(`═ ${title} ═`);
+    logger.info(bar);
+  };
+
+  if (fields.banner && fields.bannerAtEnd) {
+    // banner 后置：先正文，后 banner（banner 成为最后一条）
+    logger[level](msg);
+    emitBanner();
+  } else {
+    // 默认：banner 前置，正文在后
+    if (fields.banner) emitBanner();
+    logger[level](msg);
+  }
 }
 
 /**
