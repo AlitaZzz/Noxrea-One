@@ -112,6 +112,17 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   const req = input.buildRequest();
   let data: unknown;
 
+  // 开始发送请求（同步阻塞前打印，便于在等待期间观察出参）
+  logEvent("taskmgr", {
+    banner: true,
+    bannerTitle: "开始发送请求",
+    stage: "request_preparing",
+    taskId,
+    url: req.url,
+    method: req.method,
+    body: req.body,
+  });
+
   try {
     const response = await fetchWithTimeout(req.url, {
       method: req.method,
@@ -170,14 +181,28 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   // 2. 尝试同步提取结果
   const result = input.parseResponse(data);
   if (result.urls.length > 0 || result.text) {
-    logEvent("taskmgr", { stage: "sync_completed", taskId, urls: result.urls.length, hasText: !!result.text });
+    logEvent("taskmgr", {
+      banner: true,
+      bannerTitle: "已获取生成结果",
+      stage: "sync_completed",
+      taskId,
+      urls: result.urls.length,
+      hasText: !!result.text,
+    });
     return { status: "completed", urls: result.urls, text: result.text };
   }
 
   // 3. 尝试提取异步 task_id → 进入轮询
   const upstreamTaskId = protocol.extractTaskId?.(data, channelConfig, capability);
   if (upstreamTaskId) {
-    logEvent("taskmgr", { stage: "async_detected", taskId, upstreamTaskId });
+    logEvent("taskmgr", {
+      banner: true,
+      bannerTitle: "已获取任务 ID，开始轮询",
+      stage: "polling",
+      taskId,
+      upstreamTaskId,
+      pollUrl: `${baseUrl}/tasks/${upstreamTaskId}`,
+    });
     if (await _checkCancelled(taskId)) {
       return { status: "failed", urls: [], error: "Cancelled" };
     }
@@ -242,6 +267,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
 
   logEvent("taskmgr", {
+    level: "debug",
     stage: "poll_start",
     taskId,
     upstreamTaskId,
@@ -276,12 +302,12 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     }
 
     try {
-      logEvent("taskmgr", { stage: "poll_attempt", taskId, attempt: attempt + 1, pollUrl });
+      logEvent("taskmgr", { level: "debug", stage: "poll_attempt", taskId, attempt: attempt + 1, pollUrl });
       const pollResp = await fetchWithTimeout(pollUrl, {
         headers,
         scene: "poll",
       });
-      logEvent("taskmgr", { stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
+      logEvent("taskmgr", { level: "debug", stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
 
       if (!pollResp.ok) {
         logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll bad status");
@@ -289,12 +315,13 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       }
 
       const pollData = await pollResp.json();
-      logEvent("taskmgr", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(pollData) });
+      logEvent("taskmgr", { level: "debug", stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(pollData) });
       lastPollData = pollData;
 
       const parsed: PollResult = protocol.parsePollResponse?.(pollData)
         ?? { status: "pending", urls: [] };
       logEvent("taskmgr", {
+        level: "debug",
         stage: "poll_parsed",
         taskId,
         attempt: attempt + 1,
@@ -305,6 +332,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
 
       if (parsed.status === "completed") {
         logEvent("taskmgr", {
+          level: "debug",
           stage: "poll_completed",
           taskId,
           attempt: attempt + 1,

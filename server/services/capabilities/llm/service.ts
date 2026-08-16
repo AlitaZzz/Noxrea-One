@@ -13,7 +13,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
-import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
+import { logEvent } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
 
 /**
@@ -85,25 +85,17 @@ class LlmCapabilityService implements CapabilityService {
       taskId: ctx.taskId,
     });
 
-    logEvent("capability.llm", {
-      stage: "params_raw",
-      taskId: ctx.taskId,
-      params: { ...params, prompt: summarizeText(params.prompt) },
-      model: ctx.model,
-      protocol: ctx.protocol,
-    });
-
     const req = protocol.buildLlmRequest(ctx.baseUrl, ctx.apiKey, body);
 
+    // 开始发送请求（对齐 taskmgr.request_preparing）
     logEvent("capability.llm", {
-      stage: "dispatch",
+      banner: true,
+      bannerTitle: "开始发送请求",
+      stage: "request_preparing",
       taskId: ctx.taskId,
-      upstream: {
-        url: req.url,
-        method: req.method,
-        headers: { ...req.headers, Authorization: "Bearer ***" },
-        body: summarizeBody(req.body),
-      },
+      url: req.url,
+      method: req.method,
+      body: req.body,
     });
 
     const response = await fetchWithTimeout(req.url, {
@@ -122,6 +114,15 @@ class LlmCapabilityService implements CapabilityService {
     const parsed = protocol.parseLlmResponse
       ? protocol.parseLlmResponse(data)
       : { urls: [], text: "" };
+
+    // 已获取生成结果（对齐 taskmgr.sync_completed）
+    logEvent("capability.llm", {
+      banner: true,
+      bannerTitle: "已获取生成结果",
+      stage: "sync_completed",
+      taskId: ctx.taskId,
+      hasText: !!parsed.text,
+    });
 
     return { urls: [], text: parsed.text };
   }

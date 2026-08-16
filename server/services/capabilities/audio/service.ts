@@ -12,7 +12,7 @@ import {
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
-import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
+import { logEvent } from "@server/core/logger/utils";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
@@ -42,25 +42,17 @@ class AudioCapabilityService implements CapabilityService {
       taskId: ctx.taskId,
     });
 
-    logEvent("capability.audio", {
-      stage: "params_raw",
-      taskId: ctx.taskId,
-      params: { ...params, prompt: summarizeText(params.prompt) },
-      model: ctx.model,
-      protocol: ctx.protocol,
-    });
-
     const req = protocol.buildAudioRequest(ctx.baseUrl, ctx.apiKey, body);
 
+    // 转译完成阶段（对标外部服务的"转译完成, 返回 plan"）
     logEvent("capability.audio", {
-      stage: "dispatch",
+      banner: true,
+      bannerTitle: "音频转译完成",
+      stage: "translation_done",
       taskId: ctx.taskId,
-      upstream: {
-        url: req.url,
-        method: req.method,
-        headers: { ...req.headers, Authorization: "Bearer ***" },
-        body: summarizeBody(req.body),
-      },
+      url: req.url,
+      method: req.method,
+      body: req.body,
     });
 
     const response = await fetchWithTimeout(req.url, {

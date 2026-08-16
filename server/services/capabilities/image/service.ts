@@ -13,7 +13,6 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
-import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
 
 class ImageCapabilityService implements CapabilityService {
@@ -28,13 +27,8 @@ class ImageCapabilityService implements CapabilityService {
       throw new Error(`Protocol ${ctx.protocol} does not support image generation`);
     }
 
-    logEvent("capability.image", {
-      stage: "params_raw",
-      taskId: ctx.taskId,
-      params: { ...params, prompt: summarizeText(params.prompt) },
-      model: ctx.model,
-      protocol: ctx.protocol,
-    });
+    // 渠道识别阶段：记录上游 endpoints 来源（对标外部服务的"识别为 XXX 渠道"）
+    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "image");
 
     // 管线构建请求体：transforms → auto-clean → mapping → patch
     const body = build({
@@ -46,15 +40,7 @@ class ImageCapabilityService implements CapabilityService {
       taskId: ctx.taskId,
     });
 
-    logEvent("capability.image", {
-      stage: "body_built",
-      taskId: ctx.taskId,
-      bodyKeys: Object.keys(body),
-      body: { ...body, prompt: summarizeText(body.prompt as string) },
-    });
-
     // 从 model-ui.json 上游级解析 endpoints（替代旧的用户渠道 config）
-    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "image");
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
 
     // 依据前端原始 refImages 判断是否有参考图（决定 edits / generations 路由）
@@ -62,17 +48,6 @@ class ImageCapabilityService implements CapabilityService {
     const hasRef = Array.isArray(rawRefImages) && rawRefImages.length > 0;
 
     const req = protocol.buildImageRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg, hasRef);
-
-    logEvent("capability.image", {
-      stage: "dispatch",
-      taskId: ctx.taskId,
-      upstream: {
-        url: req.url,
-        method: req.method,
-        headers: { ...req.headers, Authorization: "Bearer ***" },
-        body: summarizeBody(req.body),
-      },
-    });
 
     // 同步优先异步兜底（对齐 Python TaskManager.submit_and_wait）
     const result = await submitAndWait({
