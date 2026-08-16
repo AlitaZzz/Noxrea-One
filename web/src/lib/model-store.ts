@@ -47,7 +47,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         // API 返回 camelCase，与前端 ModelChannel 类型一致，直接使用
         set({ channels: res.data, initialized: true });
         await get().fetchPresets();
-        // 拉取模型参数配置（params + defaults + constraints）
+        // 拉取模型参数配置（fields 为唯一数据源）
         try {
           const mpRes = await modelApi.fetchModelParams<Record<string, Record<string, ModelParamConfig>>>();
           if (mpRes.code === 200 && mpRes.data) {

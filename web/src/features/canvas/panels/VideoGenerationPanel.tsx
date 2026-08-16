@@ -6,11 +6,10 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Button, Popover, Slider, Tooltip } from "antd";
+import { App, Button, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { RatioIcon } from "@/components/ui/icons/canvas/RatioIcon";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
 import { StopIcon } from "@/components/ui/icons/media/StopIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
@@ -19,6 +18,7 @@ import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
+import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
@@ -50,14 +50,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const mk = s.modelKey || allModels[0]?.value || "";
     const entry = allModels.find((m) => m.value === mk);
     const mp = entry ? findModelParams(entry.name, "video") : null;
-    const d = mp?.defaults ?? {};
+    const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
       modelKey: mk,
-      resolution: s.resolution || (d.resolution as string) || "720p",
+      resolution: s.resolution || (d.resolution as string) || "1K",
       ratio: s.ratio || (d.ratio as string) || "16:9",
       seconds: s.seconds ?? (d.seconds as number) ?? 5,
-      generateAudio: s.generateAudio ?? true,
+      generateAudio: s.generateAudio ?? (d.generateAudio as boolean) ?? true,
       refOrder: s.refOrder || [],
       refAudioOrder: s.refAudioOrder || [],
       n: s.n || (d.n as number) || 1,
@@ -81,26 +81,25 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
    
   }, [modelKey, allModels, findModelParams]);
 
-  const ratioOptions = modelParams?.constraints?.ratio ?? ["1:1", "9:16", "16:9", "3:4", "4:3"];
-  const resolutionOptions = modelParams?.constraints?.resolution ?? ["480p", "720p", "1080p", "4K"];
-  const showRatio = !modelParams || modelParams.params.includes("ratio");
-  const showResolution = !modelParams || modelParams.params.includes("resolution");
-  const showSeconds = !modelParams || modelParams.params.includes("seconds");
-  const showN = !modelParams || modelParams.params.includes("n");
+  // fields 为唯一数据源：渲染控件 + 默认值
+  const fields = modelParams?.fields ?? [];
+  const fieldValues: Record<string, unknown> = { resolution, ratio, seconds, generateAudio, n };
+  const setField = (name: string, value: unknown) => {
+    if (name === "resolution") setResolution(value as string);
+    else if (name === "ratio") setRatio(value as string);
+    else if (name === "seconds") setSeconds(value as number);
+    else if (name === "generateAudio") setGenerateAudio(value as boolean);
+    else if (name === "n") setN(value as number);
+  };
 
-  // 模型切换时：重置不在新模型 constraints 中的参数
+  // 模型切换时：重置不在新模型 options 中的参数
   useEffect(() => {
     if (!modelParams) return;
-    const d = modelParams.defaults;
-    const c = modelParams.constraints;
-    const p = modelParams.params;
-    if (p.includes("ratio") && c.ratio && !c.ratio.includes(ratio)) {
-      queueMicrotask(() => setRatio((d.ratio as string) || "16:9"));
-    }
-    if (!p.includes("resolution")) {
-      queueMicrotask(() => setResolution(""));
-    } else if (c.resolution && !c.resolution.includes(resolution)) {
-      queueMicrotask(() => setResolution((d.resolution as string) || "720p"));
+    for (const f of modelParams.fields) {
+      const cur = fieldValues[f.name] as string | number | undefined;
+      if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
+        setField(f.name, f.default);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelParams]);
@@ -157,11 +156,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         prompt: p.trim(),
         model: entry.name,
         channelId: entry.channelId,
-        resolution: (!modelParams || modelParams.params.includes("resolution")) ? res : undefined,
-        ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
-        seconds: (!modelParams || modelParams.params.includes("seconds")) ? sec : undefined,
-        generateAudio: audio,
-        n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
+        resolution: hasField(fields, "resolution") ? res : undefined,
+        ratio: hasField(fields, "ratio") ? r : undefined,
+        seconds: hasField(fields, "seconds") ? sec : undefined,
+        generateAudio: hasField(fields, "generateAudio") ? audio : undefined,
+        n: hasField(fields, "n") ? num : undefined,
         refImages: refs.length > 0 ? refs : undefined,
         refAudio: auds.length > 0 ? auds : undefined,
         nodeId,
@@ -414,113 +413,15 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="flex flex-col gap-3 p-2" style={{ width: 360, margin: -12, background: "var(--menu-bg, #262626)", border: "1px solid var(--menu-border, #3a3a3a)", borderRadius: 12 }}>
-              {/* ── ① 比例 ── */}
-              {showRatio && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.ratio")}</div>
-                <div className="grid grid-cols-5 gap-1">
-                  {ratioOptions.map((v) => {
-                    const [w, h] = v.split(":").map(Number);
-                    const maxDim = 18;
-                    const boxW = Math.max(4, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
-                    const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
-                    const active = ratio === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="flex flex-col items-center justify-center rounded-md transition-colors"
-                        style={{ height: "auto", minHeight: 48, padding: "8px 2px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setRatio(v)}>
-                        <div className="flex items-center justify-center" style={{ height: 20 }}>
-                          <div className="border"
-                            style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border-light)", transition: "border-color 0.15s" }} />
-                        </div>
-                        <span className="text-xs mt-1 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
-              {/* ── ② 清晰度 ── */}
-              {showResolution && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.clarity")}</div>
-                <div className="grid grid-cols-4 gap-1">
-                  {resolutionOptions.map((v) => {
-                    const active = resolution === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setResolution(v)}>{v}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
-              {/* ── ③ 时长 (Slider) ── */}
-              {showSeconds && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.duration")}</div>
-                <Slider
-                  min={1} max={15} step={1}
-                  value={seconds}
-                  onChange={(v) => setSeconds(v)}
-                  style={{ margin: "0 4px" }}
-                  marks={{ 5: "5s", 10: "10s", 15: "15s" }}
-                  tooltip={{ formatter: (v) => `${v}s` }}
-                />
-              </div>
-              )}
-              {/* ── ④ 生成音频 ── */}
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.audio")}</div>
-                <div className="grid grid-cols-2 gap-1">
-                  {[true, false].map((v) => {
-                    const active = generateAudio === v;
-                    const label = v ? t("generation.audioOn") : t("generation.audioOff");
-                    return (
-                      <Button size="small" type="text" key={String(v)} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 0", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setGenerateAudio(v)}>{label}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* ── ⑤ 生成数量 ── */}
-              {showN && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.count")}</div>
-                <div className="grid grid-cols-3 gap-1">
-                  {[1, 2, 4].map((v) => {
-                    const active = n === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setN(v)}>{v}{t("generation.countUnitVideo")}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
+            <div className="menu-popover" style={{ width: 360, padding: 6 }}>
+              <ParamFields fields={fields} values={fieldValues} onChange={setField} />
             </div>
           }
           trigger="click" placement="bottomLeft"
         >
           <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
-            {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
-            {showResolution && <> · {resolution}</>}
-            {showSeconds && <> · {seconds}{t("generation.secondsUnit")}</>}
-            <> · {generateAudio ? t("generation.audioOnShort") : t("generation.audioOffShort")}</>
-            {showN && <> · {n}{t("generation.countUnitVideo")}</>}
+            <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>
         <div className="flex-1" />

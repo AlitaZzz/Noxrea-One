@@ -1,32 +1,30 @@
 {
   "_default": {
     "image": {
-      "params": ["quality", "resolution", "ratio", "n"],
-      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "9:16", "n": 1 },
-      "constraints": {
-        "quality": ["auto", "high", "medium", "low"],
-        "resolution": ["1K", "2K", "4K"],
-        "ratio": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]
-      }
+      "fields": [
+        { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1K", "2K", "4K"], "default": "1K" },
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "9:16" },
+        { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+      ]
     },
     "video": {
-      "params": ["resolution", "ratio", "seconds"],
-      "defaults": { "resolution": "1K", "ratio": "16:9", "seconds": 5 },
-      "constraints": {
-        "resolution": ["1K", "2K", "4K"],
-        "ratio": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]
-      }
+      "fields": [
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1K", "2K", "4K"], "default": "1K" },
+        { "name": "seconds", "type": "slider", "label": "generation.duration", "order": 3, "min": 1, "max": 15, "step": 1, "default": 5, "unit": "generation.secondsUnit" },
+        { "name": "generateAudio", "type": "switch", "label": "generation.audio", "order": 4, "default": true, "trueLabel": "generation.audioOn", "falseLabel": "generation.audioOff", "trueShort": "generation.audioOnShort", "falseShort": "generation.audioOffShort" }
+      ]
     }
   },
   "*gpt-image*": {
     "image": {
-      "params": ["quality", "resolution", "ratio", "n"],
-      "defaults": { "quality": "auto", "resolution": "1K", "ratio": "16:9", "n": 1 },
-      "constraints": {
-        "quality": ["auto", "high", "medium", "low"],
-        "resolution": ["1K", "2K", "4K"],
-        "ratio": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]
-      },
+      "fields": [
+        { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1K", "2K", "4K"], "default": "1K" },
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+        { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+      ],
       "transforms": {
         "ratio": {
           "type": "lookup",
@@ -84,22 +82,20 @@
   },
   "*nano-banana*": {
     "image": {
-      "params": ["quality", "ratio", "n"],
-      "defaults": { "quality": "auto", "ratio": "16:9", "n": 1 },
-      "constraints": {
-        "quality": ["auto", "high", "medium", "low"],
-        "ratio": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
-      }
+      "fields": [
+        { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "16:9" },
+        { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+      ]
     }
   },
   "*agnes-image*": {
     "image": {
-      "params": ["resolution", "ratio", "n"],
-      "defaults": { "resolution": "1K", "ratio": "16:9", "n": 1 },
-      "constraints": {
-        "resolution": ["1K", "2K", "4K"],
-        "ratio": ["1:1", "2:3", "3:2",  "3:4", "4:3", "9:16", "16:9", "21:9"]
-      }
+      "fields": [
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" },
+        { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+      ]
     }
   }
 }

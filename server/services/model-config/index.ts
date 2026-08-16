@@ -43,10 +43,33 @@ export function loadPresets(): Record<string, unknown> {
 }
 
 // 模型参数
+export type ParamFieldType = "segmented" | "select" | "slider" | "switch" | "number";
+
+export interface ParamField {
+  name: string;
+  type: ParamFieldType;
+  label: string;
+  order: number;
+  options?: (string | number)[];
+  default?: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** 渲染辅助：选项 i18n 前缀（如 generation.quality） */
+  optionI18nPrefix?: string;
+  /** 渲染辅助：值后缀 i18n key（如 generation.countUnit） */
+  unit?: string;
+  /** 渲染辅助：是否按比例格子渲染（ratio 专用） */
+  ratio?: boolean;
+  /** switch 专用：true/false 及简称 i18n key */
+  trueLabel?: string;
+  falseLabel?: string;
+  trueShort?: string;
+  falseShort?: string;
+}
+
 export interface ModelParamConfig {
-  params: string[];
-  defaults: Record<string, unknown>;
-  constraints: Record<string, string[]>;
+  fields: ParamField[];
   transforms: Record<string, unknown>;
 }
 
@@ -111,15 +134,14 @@ export function getModelParams(modelName: string, capability: string): ModelPara
 
 /**
  * 合并配置：模型级配置优先，缺失的字段从 default 配置补充。
+ * fields 为唯一数据源：模型级声明了 fields 则以模型级为准，否则继承 _default。
  * transforms 尤其重要：模型级通常没有 transforms，需要从 _default 继承。
  */
 function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | null): ModelParamConfig {
   if (!defaultCfg) return specific;
 
   return {
-    params: specific.params.length > 0 ? specific.params : defaultCfg.params,
-    defaults: { ...defaultCfg.defaults, ...specific.defaults },
-    constraints: Object.keys(specific.constraints).length > 0 ? specific.constraints : defaultCfg.constraints,
+    fields: specific.fields.length > 0 ? specific.fields : defaultCfg.fields,
     transforms: Object.keys(specific.transforms).length > 0 ? specific.transforms : defaultCfg.transforms,
   };
 }
@@ -127,9 +149,20 @@ function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | 
 function parseConfig(raw: unknown): ModelParamConfig {
   const obj = raw as Record<string, unknown> ?? {};
   return {
-    params: (obj.params as string[]) ?? [],
-    defaults: (obj.defaults as Record<string, unknown>) ?? {},
-    constraints: (obj.constraints as Record<string, string[]>) ?? {},
+    fields: (obj.fields as ParamField[]) ?? [],
     transforms: (obj.transforms as Record<string, unknown>) ?? {},
   };
+}
+
+/**
+ * 从 fields 提取默认值映射（name -> default）。
+ * 供生成执行时使用，替代旧的 defaults 字段。
+ */
+export function modelFieldDefaults(modelParams: ModelParamConfig | null): Record<string, unknown> {
+  if (!modelParams) return {};
+  const out: Record<string, unknown> = {};
+  for (const f of modelParams.fields) {
+    if (f.default !== undefined) out[f.name] = f.default;
+  }
+  return out;
 }
