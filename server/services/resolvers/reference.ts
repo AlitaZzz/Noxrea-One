@@ -62,14 +62,16 @@ async function readSelfFile(relPath: string, userId: number): Promise<string | n
 }
 
 /**
- * 解析参考图列表（对齐 Python resolve_refs 三档策略）：
- * 1) 同源 URL → 直接读本机磁盘转 base64 data URL
- * 2) 存储路径（如 "3/35/xxx.png"） → 同源处理，转 base64
+ * 参考素材通用解析（对齐 Python resolve_refs 三档策略）：
+ * 1) data: URL → 直接透传
+ * 2) 同源 URL（/api/files/ 或纯存储路径） → 读本机磁盘转 base64 data URL
  * 3) 外链 URL → 透传原串
+ * 失败时透传原 URL。
  */
-export async function resolveRefImages(
+async function resolveRefList(
   urls: string[],
-  userId: number
+  userId: number,
+  stage: string
 ): Promise<string[]> {
   if (!urls || urls.length === 0) return [];
 
@@ -83,27 +85,11 @@ export async function resolveRefImages(
         continue;
       }
 
-      // /api/files/ 开头的同源 URL → 提取相对路径 → 转 base64
-      if (url.startsWith("/api/files/")) {
-        const relPath = url.replace(/^\/api\/files\//, "");
+      // 同源 URL（/api/files/ 或纯存储路径）→ 提取相对路径 → 转 base64
+      if (url.startsWith("/api/files/") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+        const relPath = url.startsWith("/api/files/") ? url.replace(/^\/api\/files\//, "") : url;
         const dataUrl = await readSelfFile(relPath, userId);
-        if (dataUrl) {
-          resolved.push(dataUrl);
-          continue;
-        }
-        // 读盘失败，推原路径
-        resolved.push(url);
-        continue;
-      }
-
-      // 纯存储路径（非 HTTP、非 /api/files/）→ 转 base64
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        const dataUrl = await readSelfFile(url, userId);
-        if (dataUrl) {
-          resolved.push(dataUrl);
-          continue;
-        }
-        resolved.push(url);
+        resolved.push(dataUrl ?? url);
         continue;
       }
 
@@ -111,7 +97,7 @@ export async function resolveRefImages(
       resolved.push(url);
     } catch (err) {
       logEvent("resolver.reference", {
-        stage: "resolve_failed",
+        stage,
         url: url.slice(0, 80),
         error: (err as Error).message,
       });
@@ -122,62 +108,17 @@ export async function resolveRefImages(
   return resolved;
 }
 
-/**
- * 解析参考音频列表（与 resolveRefImages 同策略：
- * 1) 同源 URL → 读本机磁盘转 base64 data URL
- * 2) 存储路径 → 同源处理，转 base64
- * 3) 外链 URL → 透传原串
- */
-export async function resolveRefAudio(
-  urls: string[],
-  userId: number
-): Promise<string[]> {
-  if (!urls || urls.length === 0) return [];
+/** 解析参考图列表 */
+export async function resolveRefImages(urls: string[], userId: number): Promise<string[]> {
+  return resolveRefList(urls, userId, "resolve_failed");
+}
 
-  const resolved: string[] = [];
+/** 解析参考音频列表 */
+export async function resolveRefAudio(urls: string[], userId: number): Promise<string[]> {
+  return resolveRefList(urls, userId, "resolve_audio_failed");
+}
 
-  for (const url of urls) {
-    try {
-      // 已经是 data: URL → 直接透传
-      if (url.startsWith("data:")) {
-        resolved.push(url);
-        continue;
-      }
-
-      // /api/files/ 开头的同源 URL → 提取相对路径 → 转 base64
-      if (url.startsWith("/api/files/")) {
-        const relPath = url.replace(/^\/api\/files\//, "");
-        const dataUrl = await readSelfFile(relPath, userId);
-        if (dataUrl) {
-          resolved.push(dataUrl);
-          continue;
-        }
-        resolved.push(url);
-        continue;
-      }
-
-      // 纯存储路径（非 HTTP、非 /api/files/）→ 转 base64
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        const dataUrl = await readSelfFile(url, userId);
-        if (dataUrl) {
-          resolved.push(dataUrl);
-          continue;
-        }
-        resolved.push(url);
-        continue;
-      }
-
-      // 外链 → 透传
-      resolved.push(url);
-    } catch (err) {
-      logEvent("resolver.reference", {
-        stage: "resolve_audio_failed",
-        url: url.slice(0, 80),
-        error: (err as Error).message,
-      });
-      resolved.push(url);
-    }
-  }
-
-  return resolved;
+/** 解析参考视频列表 */
+export async function resolveRefVideo(urls: string[], userId: number): Promise<string[]> {
+  return resolveRefList(urls, userId, "resolve_video_failed");
 }

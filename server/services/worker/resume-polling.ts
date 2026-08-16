@@ -9,6 +9,7 @@ import { getConfig } from "@server/core/config";
 import { getChannel } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
+import { resolveProvider } from "@server/services/provider";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { updateTaskStatus, isTaskCancelled } from "@server/crud/task";
@@ -61,7 +62,9 @@ async function _doResumePoll(
     if (!protocol?.buildPollUrl) throw new Error("Protocol does not support polling");
 
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
-    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, (channel as Record<string, unknown>).config as Record<string, unknown> | undefined);
+    const provider = resolveProvider(baseUrl);
+    const endpointCfg = provider.endpoints ? { protocol: { endpoints: provider.endpoints } } : undefined;
+    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type);
   } catch (err: unknown) {
     await _failTask(taskId, `Failed to resume polling: ${(err as Error).message}`);
     return;

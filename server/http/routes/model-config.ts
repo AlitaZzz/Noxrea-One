@@ -55,7 +55,6 @@ router.post("/api/model-config/channels", async (c) => {
     baseUrl: parsed.data.baseUrl,
     apiKey: parsed.data.apiKey,
     protocol: parsed.data.protocol,
-    config: parsed.data.config,
   });
 
   return c.json(
@@ -135,7 +134,6 @@ router.put("/api/model-config/channels/:id", async (c) => {
     baseUrl: parsed.data.baseUrl,
     apiKey: parsed.data.apiKey,
     protocol: parsed.data.protocol,
-    config: parsed.data.config,
   });
 
   return c.json(

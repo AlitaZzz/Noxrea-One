@@ -81,7 +81,7 @@ class LlmCapabilityService implements CapabilityService {
       modelName: ctx.model,
       capability: "llm",
       protocol: ctx.protocol,
-      channelConfig: ctx.config,
+      baseUrl: ctx.baseUrl,
       taskId: ctx.taskId,
     });
 

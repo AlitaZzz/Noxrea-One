@@ -11,6 +11,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
+import { resolveProvider } from "@server/services/provider";
 import { submitAndWait } from "@server/services/tasks/manager";
 import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
@@ -40,11 +41,15 @@ class VideoCapabilityService implements CapabilityService {
       modelName: ctx.model,
       capability: "video",
       protocol: ctx.protocol,
-      channelConfig: ctx.config,
+      baseUrl: ctx.baseUrl,
       taskId: ctx.taskId,
     });
 
-    const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, ctx.config);
+    // 从 provider 解析 endpoints（替代旧的用户渠道 config）
+    const provider = resolveProvider(ctx.baseUrl);
+    const endpointCfg = provider.endpoints ? { protocol: { endpoints: provider.endpoints } } : undefined;
+
+    const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);
 
     logEvent("capability.video", {
       stage: "dispatch",
@@ -57,6 +62,16 @@ class VideoCapabilityService implements CapabilityService {
       },
     });
 
+    // 完整最终 body（base64 原样保留，仅脱敏 Authorization），用于核对真实发送内容
+    logEvent("capability.video", {
+      stage: "dispatch_full",
+      taskId: ctx.taskId,
+      url: req.url,
+      method: req.method,
+      headers: { ...req.headers, Authorization: "Bearer ***" },
+      body: req.body,
+    });
+
     const result = await submitAndWait({
       taskId: ctx.taskId,
       userId: ctx.userId,
@@ -65,7 +80,7 @@ class VideoCapabilityService implements CapabilityService {
       baseUrl: ctx.baseUrl,
       apiKey: ctx.apiKey,
       body,
-      channelConfig: ctx.config,
+      channelConfig: endpointCfg,
       buildRequest: () => req,
       parseResponse: (data) => {
         const parsed = protocol.parseVideoResponse

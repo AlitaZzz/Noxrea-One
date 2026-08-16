@@ -9,29 +9,13 @@ import { getProjects, createProject, getProject, updateProject, deleteProject } 
 import { ok, fail } from "@server/core/response";
 import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
 import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
-import fs from "fs";
-import path from "path";
+import { loadJson } from "@server/services/json-loader";
 
 const router = new Hono();
 
-// 提示词模板库（按 type 分桶，位于 server/resources/prompt-template.json）
-// 按文件修改时间缓存，模板文件变更后（无需重启）自动重新加载。
-const _promptTemplatePath = () => path.resolve(process.cwd(), "server/resources/prompt-template.json");
-let _promptTemplates: Record<string, string> | null = null;
-let _promptTemplatesMtime = 0;
+// 提示词模板库（按 type 分桶，位于 server/resources/prompt-template.json），支持热更新
 function loadPromptTemplates(): Record<string, string> {
-  const tplPath = _promptTemplatePath();
-  let mtime = 0;
-  try {
-    mtime = fs.statSync(tplPath).mtimeMs;
-  } catch {
-    // 文件暂不可读时保留旧缓存
-  }
-  if (_promptTemplates && mtime === _promptTemplatesMtime) return _promptTemplates;
-  const raw = fs.readFileSync(tplPath, "utf-8");
-  _promptTemplates = JSON.parse(raw) as Record<string, string>;
-  _promptTemplatesMtime = mtime;
-  return _promptTemplates;
+  return loadJson<Record<string, string>>("server/resources/prompt-template.json");
 }
 
 // GET /api/canvas/prompt-template?type=reverse

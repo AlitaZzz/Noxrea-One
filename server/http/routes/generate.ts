@@ -7,6 +7,7 @@ import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
 import { createTask, getTask, cancelTask } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
+import { getAllowedFields, normalizeCapability } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { ok, fail } from "@server/core/response";
@@ -40,8 +41,10 @@ router.post("/api/generate/task", async (c) => {
 
   const data = parsed.data;
 
-  // 模态：以 type 为准（image | video | llm）
-  const capability = data.type ?? "image";
+  // 模态：以 type 为准，并归一化 text → llm
+  const capability = normalizeCapability(data.type ?? "image");
+  const model = data.model ?? "";
+  const allowedFields = getAllowedFields(model, capability);
 
   if (!data.channelId) {
     return fail(400, "channelId is required");
@@ -55,29 +58,35 @@ router.post("/api/generate/task", async (c) => {
   }
   const channelProtocol = channel.protocol;
 
-  // config 白名单构建
+  // config 白名单构建：内部字段固定注入，业务字段仅放行 allowedFields 内的键
   const config: Record<string, unknown> = {};
   if (data.channelId) config.channelId = data.channelId;
   if (data.model) config.model = data.model;
   if (data.protocol) config.protocol = data.protocol;
 
-  const paramFields = new Set([
-    "resolution", "ratio", "quality", "n", "strength", "seed", "background",
-    "seconds", "frame_rate",
-    "messages", "temperature", "max_tokens", "top_p", "stream", "stop",
-    "frequency_penalty", "presence_penalty",
-    "mode", "input", "voice", "audio_file",
-    "references",
-  ]);
-  for (const key of paramFields) {
+  const allowedSet = new Set(allowedFields);
+  // 参考素材字段有独立存储路径（task.refImages/refAudios/refVideos），不进 config
+  const refKeys = new Set(["refImages", "refAudios", "refVideos"]);
+
+  // 顶层业务参数：仅放行 allowedFields 内的字段，其余静默丢弃
+  for (const key of Object.keys(data as Record<string, unknown>)) {
+    if (!allowedSet.has(key) || refKeys.has(key)) continue;
     const val = (data as Record<string, unknown>)[key];
     if (val !== undefined && val !== null) {
       config[key] = val;
     }
   }
 
+  // data.config 透传收紧：只放行 allowedFields 内的键，其余丢弃
   if (data.config && typeof data.config === "object") {
-    Object.assign(config, data.config as Record<string, unknown>);
+    const rawConfig = data.config as Record<string, unknown>;
+    for (const key of Object.keys(rawConfig)) {
+      if (!allowedSet.has(key) || refKeys.has(key)) continue;
+      const val = rawConfig[key];
+      if (val !== undefined && val !== null) {
+        config[key] = val;
+      }
+    }
   }
 
   if (typeof config.n === "number") {
@@ -90,13 +99,14 @@ router.post("/api/generate/task", async (c) => {
 
   const task = await createTask({
     userId: auth.user.id,
-    type: data.type ?? capability,
+    type: capability,
     protocol: data.protocol ?? channelProtocol ?? undefined,
     model: data.model ?? undefined,
     prompt,
     config,
     refImages: data.refImages,
-    refAudio: data.refAudio,
+    refAudios: data.refAudios,
+    refVideos: data.refVideos,
     nodeId: data.nodeId ?? "",
   });
 
