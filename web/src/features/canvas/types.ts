@@ -87,6 +87,10 @@ export interface VideoGenSettings extends BaseGenSettings {
   seconds: number;
   generateAudio: boolean;
   refAudioOrder: string[];
+  /** 参考视频顺序（上游 VIDEO 节点 src） */
+  refVideoOrder: string[];
+  /** 参考方式：none/first/first-last/full，空或 none = 文生视频 */
+  refMode?: string;
   n: number;
 }
 

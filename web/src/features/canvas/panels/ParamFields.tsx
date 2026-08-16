@@ -36,7 +36,7 @@ const ParamFields = memo(function ParamFields({ fields, values, onChange }: Para
   const sorted = [...fields].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {sorted.map((f) => (
         <div key={f.name}>
           <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>
@@ -157,16 +157,18 @@ function SelectGrid({ field, value, onChange }: Ctx) {
   );
 }
 
-function RatioGrid({ field, value, onChange }: Ctx) {
+function RatioGrid({ field, value, onChange, t }: Ctx & { t: (key: string) => string }) {
   const options = (field.options ?? []) as string[];
   return (
     <div className="grid grid-cols-5 gap-1">
       {options.map((v) => {
-        const [w, h] = v.split(":").map(Number);
         const maxDim = 18;
+        const parsed = (v === "adaptive" ? "1:1" : v).split(":").map(Number);
+        const [w, h] = Number.isFinite(parsed[0]) && Number.isFinite(parsed[1]) ? [parsed[0], parsed[1]] : [1, 1];
         const boxW = Math.max(4, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
         const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
         const active = value === v;
+        const label = v === "adaptive" ? t("common.adaptive") : v;
         return (
           <Button size="small" type="text" key={v} className="flex flex-col items-center justify-center rounded-md transition-colors"
             style={{ height: "auto", minHeight: 48, padding: "8px 2px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
@@ -177,7 +179,7 @@ function RatioGrid({ field, value, onChange }: Ctx) {
               <div className="border"
                 style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border-light)", transition: "border-color 0.15s" }} />
             </div>
-            <span className="text-xs mt-1 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
+            <span className="text-xs mt-1 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{label}</span>
           </Button>
         );
       })}
@@ -212,7 +214,7 @@ export const ParamSummary = memo(function ParamSummary({
       if (f.type === "slider") {
         return `${v}${f.unit ? t(f.unit) : ""}`;
       }
-      const label = f.optionI18nPrefix ? t(`${f.optionI18nPrefix}.${v}`) : String(v);
+      const label = f.optionI18nPrefix ? t(`${f.optionI18nPrefix}.${v}`) : (f.ratio && v === "adaptive" ? t("common.adaptive") : String(v));
       return f.unit ? `${label}${f.ratio ? "" : t(f.unit)}` : label;
     })
     .filter(Boolean) as string[];
@@ -222,6 +224,8 @@ export const ParamSummary = memo(function ParamSummary({
 
 function btnStyle(active: boolean): React.CSSProperties {
   return {
+    height: "auto",
+    minHeight: 36,
     padding: "4px 8px",
     background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent",
     color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)",

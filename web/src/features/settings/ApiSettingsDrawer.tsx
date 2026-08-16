@@ -105,8 +105,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const [activeCap, setActiveCap] = useState<ModelCapability>("image");
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [editChannelId, setEditChannelId] = useState<string | null>(null);
-  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyRevealed, setApiKeyRevealed] = useState(false);
   const [apiKeyMasked, setApiKeyMasked] = useState("");
@@ -131,8 +130,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   }
 
   const resetChForm = () => {
-    setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai", config: "" });
-    setShowAdvanced(false);
+    setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
     setEditChannelId(null);
     setShowAddChannel(false);
     setApiKeyVisible(false);
@@ -143,30 +141,14 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   const handleSaveChannel = () => {
     if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
-    // 校验高级设置 JSON 合法性
-    let configObj: Record<string, unknown> | undefined = undefined;
-    if (chForm.config.trim()) {
-      try {
-        const parsed = JSON.parse(chForm.config);
-        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-          message.error(t("modelConfig.configMustBeObject"));
-          return;
-        }
-        configObj = parsed as Record<string, unknown>;
-      } catch {
-        message.error(t("modelConfig.configJsonInvalid"));
-        return;
-      }
-    }
     if (editChannelId) {
       updateChannel(editChannelId, {
         name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
         apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
-        config: configObj,
       });
       message.success(t("modelConfig.channelUpdated"));
     } else {
-      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol, configObj);
+      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
       message.success(t("modelConfig.channelAdded"));
     }
     resetChForm();
@@ -175,7 +157,6 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const handleEditChannel = (id: string) => {
     const ch = channels.find((c) => c.id === id);
     if (!ch) return;
-    const fmt = (v: unknown) => (v && typeof v === "object" ? JSON.stringify(v, null, 2) : "");
     // 预填掩码 apiKey：用户可见掩码值，点击小眼睛拉取明文
     setApiKeyMasked(ch.apiKey);
     setApiKeyRevealed(false);
@@ -184,7 +165,6 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     setChForm({
       name: ch.name, baseUrl: ch.baseUrl, apiKey: ch.apiKey,
       protocol: ch.protocol || "openai",
-      config: fmt(ch.config),
     });
     setEditChannelId(id);
     setShowAddChannel(true);
@@ -413,12 +393,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                     onChange={(name) => {
                       const p = presets.find((pr) => pr.name === name);
                       if (!p) return;
-                      const fmt = (v: unknown) => (v && typeof v === "object" && Object.keys(v as object).length > 0 ? JSON.stringify(v, null, 2) : "");
                       setChForm((f) => ({
                         ...f,
                         baseUrl: p.baseUrl ?? "",
                         protocol: p.protocol || "openai",
-                        config: fmt(p.config),
                       }));
                     }}
                   />
@@ -451,90 +429,6 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 </div>
           </div>
           </div>
-          </div>
-          {/* 高级设置折叠区 */}
-          <div className="flex flex-col gap-0.5">
-            <button
-              className="flex items-center gap-1 text-[12px] cursor-pointer"
-              style={{ color: "var(--canvas-text-muted)", background: "transparent", border: "none", padding: 0, width: "fit-content", outline: "none", boxShadow: "none" }}
-              onClick={() => setShowAdvanced((v) => !v)}
-            >
-              <span style={{ display: "inline-block", width: 0, height: 0, borderLeft: "5px solid var(--canvas-text)", borderTop: "4px solid transparent", borderBottom: "4px solid transparent", transition: "transform 0.2s", transform: showAdvanced ? "rotate(90deg)" : "rotate(0deg)" }} />
-              {t("modelConfig.advancedSettings")}
-            </button>
-            {showAdvanced && (
-              <div className="flex flex-col gap-1.5 mt-0.5">
-                {/* 合并后的 config 编辑器 */}
-                <Input.TextArea
-                  size="small"
-                  placeholder={
-                    '渠道高级配置，用于适配不同供应商的 API 格式\n' +
-                    '所有字段均可留空 {}，未配置则不生效\n' +
-                    '\n' +
-                    '━━━ request 请求构造 ━━━\n' +
-                    '执行顺序：transforms(后端 model_params.json) → auto-clean → mapping → body_patch\n' +
-                    '\n' +
-                    '  mapping          字段重映射：改名或移动到嵌套路径\n' +
-                    '                   {"源字段": "目标.路径"}             移动并重命名\n' +
-                    '                   {"ratio": "size"}                  ratio → size\n' +
-                    '                   {"refImages": "extra_body.image"}  挪到嵌套\n' +
-                    '                   {"images": "images[].image_url"}  数组展开（见下方）\n' +
-                    '                   {"待删除字段": null}              删除该字段\n' +
-                    '\n' +
-                    '  body_patch       固定注入：deep merge 到最终请求体\n' +
-                    '                   {"response_format": "url"}\n' +
-                    '                   {"extra_body": {"return_base64": true}}\n' +
-                    '\n' +
-                    '  model_overrides  按模型覆盖（key 支持 fnmatch 通配符 * ?）\n' +
-                    '                   匹配优先级：精确名 > 通配符\n' +
-                    '                   可覆盖 mapping 和 body_patch\n' +
-                    '\n' +
-                    '━━━ protocol 协议配置 ━━━\n' +
-                    '\n' +
-                    '  endpoints        端点路径覆盖，可用 key：\n' +
-                    '                   image.generations  纯文本生图\n' +
-                    '                   image.edits        图生图/编辑（有参考图）\n' +
-                    '                   video.generations  视频生成\n' +
-                    '                   poll               异步轮询路径（自动拼接 taskId）\n' +
-                    '                   例：{"image.generations": "/v1/images/generations",\n' +
-                    '                        "poll": "/v1/tasks"}\n' +
-                    '\n' +
-                    '━━━ 数组映射语法 ━━━\n' +
-                    '  {"images": "images[]"}            → images: ["u1","u2"]\n' +
-                    '  {"images": "images[].image_url"}  → images: [{"image_url":"u1"},...]\n' +
-                    '\n' +
-                    '━━━ 完整示例 ━━━\n' +
-                    '{\n' +
-                    '  "request": {\n' +
-                    '    "mapping": {\n' +
-                    '      "ratio": "size",\n' +
-                    '      "refImages": "extra_body.image"\n' +
-                    '    },\n' +
-                    '    "body_patch": {\n' +
-                    '      "response_format": "url"\n' +
-                    '    },\n' +
-                    '    "model_overrides": {\n' +
-                    '      "gpt-image-*": {\n' +
-                    '        "mapping": {"ratio": "image_size"},\n' +
-                    '        "body_patch": {"quality": "hd"}\n' +
-                    '      }\n' +
-                    '    }\n' +
-                    '  },\n' +
-                    '  "protocol": {\n' +
-                    '    "endpoints": {\n' +
-                    '      "image.generations": "/v1/images/generations",\n' +
-                    '      "image.edits": "/v1/images/edits",\n' +
-                    '      "poll": "/v1/tasks"\n' +
-                    '    }\n' +
-                    '}'
-                  }
-                  value={chForm.config}
-                  onChange={(e) => setChForm((f) => ({ ...f, config: e.target.value }))}
-                  rows={20}
-                  style={{ fontSize: 12, fontFamily: "monospace", resize: "none", overflow: "auto" }}
-                />
-              </div>
-            )}
           </div>
           <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("common.cancel")}</Button>

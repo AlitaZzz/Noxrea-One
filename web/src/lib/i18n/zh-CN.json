@@ -37,7 +37,9 @@
     "enabled": "已启用",
     "available": "可用（点击启用）",
     "saved": "已保存",
-    "zoom": "缩放"
+    "zoom": "缩放",
+    "fit": "适应屏幕",
+    "adaptive": "自适应"
   },
   "theme": {
     "dark": "深色模式",
@@ -74,8 +76,7 @@
       "out": "缩小",
       "to50": "缩放到 50%",
       "to100": "缩放到 100%"
-    },
-    "fit": "适应屏幕"
+    }
   },
   "node": {
     "add": "添加节点",
@@ -159,8 +160,6 @@
     "addChannel": "添加渠道",
     "channelUpdated": "渠道已更新",
     "channelAdded": "渠道已添加",
-    "configJsonInvalid": "高级配置 JSON 格式无效，请检查后重试",
-    "configMustBeObject": "高级配置必须是 JSON 对象",
     "fetchModels": "拉取模型",
     "noChannels": "暂无渠道",
     "noModels": "暂无模型",
@@ -178,8 +177,6 @@
     "preset": "预设",
     "addModelPlaceholder": "手动添加模型名称...",
     "protocolLabel": "协议",
-    "advancedSettings": "高级设置",
-    "advConfig": "高级配置",
     "deleteChannel": "删除渠道",
     "protocol": {
       "openai": "OpenAI",
@@ -434,5 +431,13 @@
   "agent": {
     "title": "Agent",
     "chat": "打开 Agent 对话"
+  },
+  "video": {
+    "refModeTitle": "视频生成模式",
+    "refMode": {
+      "first": "图生视频",
+      "first-last": "首尾帧",
+      "full": "全能参考"
+    }
   }
 }

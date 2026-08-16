@@ -5,20 +5,26 @@
 import { apiRaw, apiStream } from "@/lib/api/client";
 
 export interface SubmitGenerationTaskBody {
-  type: "video" | "text" | "image" | "llm";
+  type: "video" | "image" | "llm";
   prompt: string;
   model: string;
   channelId: string;
+  nodeId: string;
+  // image 业务字段
+  quality?: string;
   resolution?: string;
   ratio?: string;
-  seconds?: number;
-  generateAudio?: boolean;
   n?: number;
   refImages?: string[];
-  refAudio?: string[];
-  nodeId: string;
-  // 允许各面板追加的扩展字段（如 image 的尺寸、text 的语气等）
-  [key: string]: unknown;
+  // video 业务字段
+  seconds?: number;
+  generateAudio?: boolean;
+  refAudios?: string[];
+  refVideos?: string[];
+  refMode?: string;
+  // llm 业务字段
+  messages?: unknown[];
+  stream?: boolean;
 }
 
 /** 提交生成任务，返回原始 Response（调用方解析 data.id）。 */

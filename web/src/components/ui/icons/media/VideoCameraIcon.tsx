@@ -1,0 +1,29 @@
+/**
+ * 摄像机图标，用于「图生视频」等视频模式。
+ */
+"use client";
+
+import type { CSSProperties } from "react";
+
+interface IconProps {
+  className?: string;
+  style?: CSSProperties;
+}
+
+export function VideoCameraIcon({ className, style }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className={className}
+      style={{ display: "inline-block", width: "1em", height: "1em", verticalAlign: "-0.125em", ...style }}
+    >
+      <g transform="translate(2.165 2.165)">
+        <path d="M9.99 0c.93.05 1.68.82 1.68 1.77v8.22c-.05.9-.78 1.63-1.68 1.67H1.77A1.75 1.75 0 0 1 0 10V1.77C0 .79.8 0 1.77 0zM1.85 10.62H9.9c.4 0 .72-.32.72-.72V8.18l-3.3-2.54zm-.08-9.57c-.4 0-.72.32-.72.72v8.15L6.8 4.7a.8.8 0 0 1 .92-.08l.06.04 2.85 2.2v-5.1a.7.7 0 0 0-.72-.71zM3.5 2.33a1.17 1.17 0 1 1 0 2.34 1.17 1.17 0 0 1 0-2.34" fill="currentColor" />
+      </g>
+    </svg>
+  );
+}
+
+export default VideoCameraIcon;

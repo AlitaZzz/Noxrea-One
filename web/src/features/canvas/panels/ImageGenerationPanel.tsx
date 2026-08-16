@@ -313,7 +313,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       style={{
         background: "var(--canvas-bg, #262626)",
         border: "1px solid var(--canvas-border, #3a3a3a)",
-        width: 580,
+        width: 640,
       }}
     >
       <Button size="small" type="text"
@@ -454,8 +454,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           trigger="click" placement="bottomLeft"
           styles={{ container: { padding: 0, background: "transparent" } }}
         >
-          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
-            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
+          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-sm"
+            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
             <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>

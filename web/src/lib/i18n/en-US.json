@@ -37,7 +37,9 @@
     "enabled": "Enabled",
     "available": "Available (click to enable)",
     "saved": "Saved",
-    "zoom": "Zoom"
+    "zoom": "Zoom",
+    "fit": "Fit to Screen",
+    "adaptive": "Auto"
   },
   "theme": {
     "dark": "Dark Mode",
@@ -74,8 +76,7 @@
       "out": "Zoom Out",
       "to50": "Zoom to 50%",
       "to100": "Zoom to 100%"
-    },
-    "fit": "Fit to Screen"
+    }
   },
   "node": {
     "add": "Add Node",
@@ -159,8 +160,6 @@
     "addChannel": "Add Channel",
     "channelUpdated": "Channel updated",
     "channelAdded": "Channel added",
-    "configJsonInvalid": "Advanced config JSON is invalid, please check and try again",
-    "configMustBeObject": "Advanced config must be a JSON object",
     "fetchModels": "Fetch Models",
     "noChannels": "No channels",
     "noModels": "No models",
@@ -178,8 +177,6 @@
     "preset": "Preset",
     "addModelPlaceholder": "Add model name manually...",
     "protocolLabel": "Protocol",
-    "advancedSettings": "Advanced Settings",
-    "advConfig": "Advanced Config",
     "deleteChannel": "Delete Channel",
     "protocol": {
       "openai": "OpenAI",
@@ -434,5 +431,13 @@
   "agent": {
     "title": "Agent",
     "chat": "Open Agent Chat"
+  },
+  "video": {
+    "refModeTitle": "Video Mode",
+    "refMode": {
+      "first": "Image-to-Video",
+      "first-last": "First+Last",
+      "full": "Full Reference"
+    }
   }
 }

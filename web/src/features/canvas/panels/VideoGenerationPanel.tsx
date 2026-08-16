@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined, DownOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,9 @@ import { useTranslation } from "react-i18next";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
 import { StopIcon } from "@/components/ui/icons/media/StopIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
+import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
+import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -60,6 +63,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       generateAudio: s.generateAudio ?? (d.generateAudio as boolean) ?? true,
       refOrder: s.refOrder || [],
       refAudioOrder: s.refAudioOrder || [],
+      refVideoOrder: s.refVideoOrder || [],
+      refMode: s.refMode || "full",
       n: s.n || (d.n as number) || 1,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +78,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [n, setN] = useState(saved.n);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const [refModeOpen, setRefModeOpen] = useState(false);
 
   // 查找当前模型的参数配置
   const modelParams = useMemo(() => {
@@ -80,6 +86,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return entry ? findModelParams(entry.name, "video") : null;
    
   }, [modelKey, allModels, findModelParams]);
+
+  // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
+  const refModeOptions = modelParams?.capabilities?.refMode?.options ?? [];
 
   // fields 为唯一数据源：渲染控件 + 默认值
   const fields = modelParams?.fields ?? [];
@@ -107,13 +116,15 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [audioOrder, setAudioOrder] = useState<string[]>(saved.refAudioOrder || []);
+  const [refVideoOrder, setRefVideoOrder] = useState<string[]>(saved.refVideoOrder || []);
+  const [refMode, setRefMode] = useState<string>(saved.refMode || "");
 
   // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
   const {
-    refImages, upstreamTexts, upstreamAudio, audioSrcLabel, references, finalPrompt, isGenerating,
+    refImages, upstreamTexts, upstreamAudio, upstreamVideos, audioSrcLabel, references, finalPrompt, isGenerating,
     elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
   } = useVideoGenPanel({
-    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refOrder, audioOrder,
+    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refOrder, audioOrder, refVideoOrder, refMode,
   });
 
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -138,8 +149,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       return [...alive, ...added];
     });
   }
+  const videoSrcSet = useMemo(() => new Set(upstreamVideos.map((v) => v.src)), [upstreamVideos]);
+  const [prevVideoSrcs, setPrevVideoSrcs] = useState(videoSrcSet);
+  if (videoSrcSet !== prevVideoSrcs) {
+    setPrevVideoSrcs(videoSrcSet);
+    setRefVideoOrder((prev) => {
+      const alive = prev.filter((u) => videoSrcSet.has(u));
+      const added = [...videoSrcSet].filter((u) => !prev.includes(u));
+      if (added.length === 0 && alive.length === prev.length) return prev;
+      return [...alive, ...added];
+    });
+  }
 
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudio: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudio: [] as string[], n: 1, entry: null, channel: null });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, channel: null });
   const { notification } = App.useApp();
 
   const is: React.CSSProperties = {
@@ -148,7 +170,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudio: auds, n: num } = retryRef.current;
+    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
     if (!entry || !channel) return "缺少模型配置";
     try {
       const res2 = await generationApi.submitGenerationTask({
@@ -162,7 +184,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         generateAudio: hasField(fields, "generateAudio") ? audio : undefined,
         n: hasField(fields, "n") ? num : undefined,
         refImages: refs.length > 0 ? refs : undefined,
-        refAudio: auds.length > 0 ? auds : undefined,
+        refAudios: auds.length > 0 ? auds : undefined,
+        refVideos: vids.length > 0 ? vids : undefined,
+        refMode: rm || undefined,
         nodeId,
       });
       if (!res2.ok) {
@@ -236,7 +260,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudio: audioOrder, n, entry, channel };
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudios: audioOrder, refVideos: refVideoOrder, refMode, n, entry, channel };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -275,7 +299,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       style={{
         background: "var(--canvas-bg, #262626)",
         border: "1px solid var(--canvas-border, #3a3a3a)",
-        width: 580,
+        width: 640,
       }}
     >
       <Button size="small" type="text"
@@ -286,7 +310,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         onClick={handleRefUpload}>
         <PlusOutlined style={{ fontSize: 12 }} /> {t("common.reference")}
       </Button>
-      {(refOrder.length > 0 || upstreamTexts.length > 0 || upstreamAudio.length > 0) && (
+      {(refOrder.length > 0 || upstreamTexts.length > 0 || upstreamAudio.length > 0 || upstreamVideos.length > 0) && (
         <div
           className="flex gap-2 flex-wrap"
           onDragOver={(e) => {
@@ -325,6 +349,17 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           {/* 上游 Audio 节点 - 不可拖动，排在文本之后、图片之前 */}
           {upstreamAudio.map((aud) => (
             <AudioRefCard key={`audio-${aud.id}`} audio={aud} nodeId={nodeId} />
+          ))}
+          {/* 上游 Video 节点 - 参考视频，可移除 */}
+          {refVideoOrder.map((vid, i) => (
+            <div key={`video-${vid}`} className="relative group h-16 w-16 rounded flex items-center justify-center"
+              style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+              <PlayIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
+              <span className="absolute -bottom-1 left-0 right-0 text-center text-[9px] text-white/60 pointer-events-none">V{i + 1}</span>
+              <Button type="text" size="small"
+                className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+                onClick={() => setRefVideoOrder((prev) => prev.filter((u) => u !== vid))}>✕</Button>
+            </div>
           ))}
           {refOrder.map((img, i) => (
             <div
@@ -411,6 +446,55 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           ))}
         />
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
+        {refModeOptions.length > 0 && (
+          <MenuPopover
+            open={refModeOpen}
+            onOpenChange={setRefModeOpen}
+            placement="bottomLeft"
+            trigger={
+              <Button size="small" type="text"
+                className="gen-panel-btn flex items-center justify-between gap-1.5 px-3 rounded text-sm"
+                style={{ border: "none", cursor: "pointer", width: 120 }}>
+                <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
+                  {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
+                  {refMode === "first-last" && <VideoFrameIcon style={{ fontSize: 14 }} />}
+                  {refMode === "first" && <VideoCameraIcon style={{ fontSize: 14 }} />}
+                  {t(`video.refMode.${refMode}`)}
+                </span>
+                <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
+              </Button>
+            }
+            content={
+              <>
+                <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
+                {refModeOptions.map((m: string) => (
+                  <MenuItem key={m} selected={refMode === m}
+                    onClick={() => { setRefMode(m); setRefModeOpen(false); }}>
+                    {m === "full" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <VideoRefIcon style={{ fontSize: 14 }} />
+                        {t(`video.refMode.${m}`)}
+                      </span>
+                    )}
+                    {m === "first-last" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <VideoFrameIcon style={{ fontSize: 14 }} />
+                        {t(`video.refMode.${m}`)}
+                      </span>
+                    )}
+                    {m === "first" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <VideoCameraIcon style={{ fontSize: 14 }} />
+                        {t(`video.refMode.${m}`)}
+                      </span>
+                    )}
+                    {m !== "full" && m !== "first-last" && m !== "first" && t(`video.refMode.${m}`)}
+                  </MenuItem>
+                ))}
+              </>
+            }
+          />
+        )}
         <Popover
           content={
             <div className="menu-popover" style={{ width: 360, padding: 6 }}>
@@ -418,9 +502,10 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </div>
           }
           trigger="click" placement="bottomLeft"
+          styles={{ container: { padding: 0, background: "transparent" } }}
         >
-          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
-            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
+          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-sm"
+            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
             <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>
