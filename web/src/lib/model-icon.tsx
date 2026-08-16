@@ -24,7 +24,7 @@ type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }
 const ICON_MAP: { test: RegExp; Icon: ModelIconType }[] = [
   { test: /claude|anthropic/i, Icon: ClaudeIcon },
   { test: /gpt|openai|dall|sora|chatgpt/i, Icon: OpenAIIcon },
-  { test: /gemini|google|veo/i, Icon: GeminiIcon },
+  { test: /gemini|google|veo|nano-?banana/i, Icon: GeminiIcon },
   { test: /deepseek/i, Icon: DeepSeekIcon },
   { test: /glm|chatglm|zhipu/i, Icon: GLMIcon },
   { test: /grok|xai/i, Icon: GrokIcon },
