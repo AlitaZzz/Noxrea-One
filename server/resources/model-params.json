@@ -14,7 +14,8 @@
         { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1K", "2K", "4K"], "default": "1K" },
         { "name": "seconds", "type": "slider", "label": "generation.duration", "order": 3, "min": 1, "max": 15, "step": 1, "default": 5, "unit": "generation.secondsUnit" },
         { "name": "generateAudio", "type": "switch", "label": "generation.audio", "order": 4, "default": true, "trueLabel": "generation.audioOn", "falseLabel": "generation.audioOff", "trueShort": "generation.audioOnShort", "falseShort": "generation.audioOffShort" }
-      ]
+      ],
+      "mapping": {}
     }
   },
   "*gpt-image*": {
@@ -96,6 +97,23 @@
         { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" },
         { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
       ]
+    }
+  },
+  "*seedance*": {
+    "video": {
+      "fields": [
+        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 1, "ratio": true, "options": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"], "default": "16:9" },
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["480p", "720p", "1080p"], "default": "720p" },
+        { "name": "seconds", "type": "slider", "label": "generation.duration", "order": 3, "min": 4, "max": 30, "step": 1, "default": 5, "unit": "generation.secondsUnit" },
+        { "name": "generateAudio", "type": "switch", "label": "generation.audio", "order": 4, "default": false, "trueLabel": "generation.audioOn", "falseLabel": "generation.audioOff", "trueShort": "generation.audioOnShort", "falseShort": "generation.audioOffShort" }
+      ],
+      "mapping": {
+        "ratio": "size",
+        "seconds": "duration",
+        "generateAudio": "generate_audio",
+        "refImages": "image_urls",
+        "refAudio": "audio_urls"
+      }
     }
   }
 }
