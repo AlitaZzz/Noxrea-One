@@ -11,10 +11,34 @@ export interface ProviderPreset {
   config?: Record<string, unknown>;
 }
 
+export type ParamFieldType = "segmented" | "select" | "slider" | "switch" | "number";
+
+export interface ParamField {
+  name: string;
+  type: ParamFieldType;
+  label: string;
+  order: number;
+  options?: (string | number)[];
+  default?: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** 渲染辅助：选项 i18n 前缀（如 generation.quality） */
+  optionI18nPrefix?: string;
+  /** 渲染辅助：值后缀 i18n key（如 generation.countUnit） */
+  unit?: string;
+  /** 渲染辅助：是否按比例格子渲染（ratio 专用） */
+  ratio?: boolean;
+  /** switch 专用：true/false 及简称 i18n key */
+  trueLabel?: string;
+  falseLabel?: string;
+  trueShort?: string;
+  falseShort?: string;
+}
+
 export interface ModelParamConfig {
-  params: string[];
-  defaults: Record<string, unknown>;
-  constraints: Record<string, string[]>;
+  fields: ParamField[];
+  transforms?: Record<string, unknown>;
 }
 
 /** 模型信息（与 API 契约一致，camelCase） */

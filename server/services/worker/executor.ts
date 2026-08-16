@@ -9,7 +9,7 @@ import { getChannel } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
-import { getModelParams } from "@server/services/model-config";
+import { getModelParams, modelFieldDefaults } from "@server/services/model-config";
 import { buildContext } from "./context";
 import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
 
@@ -59,7 +59,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
 
     // 5. 从 model-params.json 获取模型默认参数
     const modelParams = getModelParams(model, capability);
-    const modelDefaults = modelParams?.defaults ?? {};
+    const modelDefaults = modelFieldDefaults(modelParams);
 
     // 6. 合并参数：默认值 < 用户传入参数
     const rawParams: Record<string, unknown> = {

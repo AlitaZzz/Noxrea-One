@@ -10,12 +10,12 @@ import { Button, Popover, Tooltip } from "antd";
 import { memo, useEffect, useMemo,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { RatioIcon } from "@/components/ui/icons/canvas/RatioIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem,MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
+import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
@@ -46,7 +46,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<ImageGenSettings>;
     const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
       findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
-    const d = mp?.defaults ?? {};
+    const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
@@ -74,31 +74,24 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
-  // 从 modelParams 获取约束值，fallback 到硬编码
-  const qualityOptions = modelParams?.constraints?.quality ?? ["auto", "high", "medium", "low"];
-  const resolutionOptions = modelParams?.constraints?.resolution ?? ["1K", "2K", "4K"];
-  const ratioOptions = modelParams?.constraints?.ratio ?? ["1:1", "1:2", "2:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21"];
-  const showQuality = !modelParams || modelParams.params.includes("quality");
-  const showResolution = !modelParams || modelParams.params.includes("resolution");
-  const showRatio = !modelParams || modelParams.params.includes("ratio");
-  const showN = !modelParams || modelParams.params.includes("n");
+  // fields 为唯一数据源：渲染控件 + 默认值
+  const fields = modelParams?.fields ?? [];
+  const fieldValues: Record<string, unknown> = { quality, resolution, ratio, n };
+  const setField = (name: string, value: unknown) => {
+    if (name === "quality") setQuality(value as string);
+    else if (name === "resolution") setResolution(value as string);
+    else if (name === "ratio") setRatio(value as string);
+    else if (name === "n") setN(value as number);
+  };
 
-  // 模型切换时：重置不在新模型 constraints 中的参数
+  // 模型切换时：重置不在新模型 options 中的参数
   useEffect(() => {
     if (!modelParams) return;
-    const d = modelParams.defaults;
-    const c = modelParams.constraints;
-    const p = modelParams.params;
-    if (p.includes("quality") && c.quality && !c.quality.includes(quality)) {
-      setQuality((d.quality as string) || "auto");
-    }
-    if (!p.includes("resolution")) {
-      setResolution("");
-    } else if (c.resolution && !c.resolution.includes(resolution)) {
-      setResolution((d.resolution as string) || "1K");
-    }
-    if (p.includes("ratio") && c.ratio && !c.ratio.includes(ratio)) {
-      setRatio((d.ratio as string) || "1:1");
+    for (const f of modelParams.fields) {
+      const cur = fieldValues[f.name] as string | number | undefined;
+      if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
+        setField(f.name, f.default);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelParams]);
@@ -204,10 +197,10 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         prompt: p.trim(),
         model: entry.name,
         channelId: entry.channelId,
-        quality: (!modelParams || modelParams.params.includes("quality")) ? q : undefined,
-        resolution: (!modelParams || modelParams.params.includes("resolution")) ? resolution : undefined,
-        ratio: (!modelParams || modelParams.params.includes("ratio")) ? r : undefined,
-        n: (!modelParams || modelParams.params.includes("n")) ? num : undefined,
+        quality: hasField(fields, "quality") ? q : undefined,
+        resolution: hasField(fields, "resolution") ? resolution : undefined,
+        ratio: hasField(fields, "ratio") ? r : undefined,
+        n: hasField(fields, "n") ? num : undefined,
         refImages: refs.length > 0 ? refs : undefined,
         nodeId,
       });
@@ -454,89 +447,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="menu-popover gap-3" style={{ width: 360, padding: 6 }}>
-              {/* ── ① 画质 ── */}
-              {showQuality && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.quality")}</div>
-                <div className="grid grid-cols-4 gap-1">
-                  {qualityOptions.map((v) => {
-                    const active = quality === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setQuality(v)}>{t(`generation.quality.${v}`)}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
-              {/* ── ② 清晰度 ── */}
-              {showResolution && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.clarity")}</div>
-                <div className="grid grid-cols-3 gap-1">
-                  {resolutionOptions.map((v) => {
-                    const active = resolution === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setResolution(v)}>{v}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
-              {/* ── ③ 比例 ── */}
-              {showRatio && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("common.ratio")}</div>
-                <div className="grid grid-cols-5 gap-1">
-                  {ratioOptions.map((v) => {
-                    const [w, h] = v.split(":").map(Number);
-                    const maxDim = 18;
-                    const boxW = Math.max(4, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
-                    const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
-                    const active = ratio === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="flex flex-col items-center justify-center rounded-md transition-colors"
-                        style={{ height: "auto", minHeight: 48, padding: "8px 2px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setRatio(v)}>
-                        <div className="flex items-center justify-center" style={{ height: 20 }}>
-                          <div className="border"
-                            style={{ width: boxW, height: boxH, borderColor: active ? "var(--canvas-text)" : "var(--canvas-border-light)", transition: "border-color 0.15s" }} />
-                        </div>
-                        <span className="text-xs mt-1 leading-none" style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)" }}>{v}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
-              {/* ── ④ 生成数量 ── */}
-              {showN && (
-              <div>
-                <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("generation.count")}</div>
-                <div className="grid grid-cols-3 gap-1">
-                  {[1, 2, 4].map((v) => {
-                    const active = n === v;
-                    return (
-                      <Button size="small" type="text" key={v} className="rounded-md text-[13px] transition-colors"
-                        style={{ padding: "4px 8px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", color: active ? "var(--canvas-text)" : "var(--canvas-text-muted)", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
-                        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-hover, #3c3c3c)"; }}
-                        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                        onClick={() => setN(v)}>{v}{t("generation.countUnit")}</Button>
-                    );
-                  })}
-                </div>
-              </div>
-              )}
+            <div className="menu-popover" style={{ width: 360, padding: 6 }}>
+              <ParamFields fields={fields} values={fieldValues} onChange={setField} />
             </div>
           }
           trigger="click" placement="bottomLeft"
@@ -544,10 +456,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         >
           <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-xs"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", minWidth: 140, justifyContent: "center" }}>
-            {showRatio && (<span className="inline-flex items-center" style={{ lineHeight: 1 }}><RatioIcon ratio={ratio} active />{ratio}</span>)}
-            {showQuality && <> · {t(`generation.quality.${quality}`)}</>}
-            {showResolution && <> · {resolution}</>}
-            {showN && <> · {n}{t("generation.countUnit")}</>}
+            <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>
         <div className="flex-1" />
