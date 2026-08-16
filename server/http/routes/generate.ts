@@ -7,7 +7,7 @@ import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
 import { createTask, getTask, cancelTask } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
-import { getAllowedFields, normalizeCapability } from "@server/services/model-config";
+import { getAllowedFields, normalizeCapability, hostFromBaseUrl } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { ok, fail } from "@server/core/response";
@@ -44,7 +44,6 @@ router.post("/api/generate/task", async (c) => {
   // 模态：以 type 为准，并归一化 text → llm
   const capability = normalizeCapability(data.type ?? "image");
   const model = data.model ?? "";
-  const allowedFields = getAllowedFields(model, capability);
 
   if (!data.channelId) {
     return fail(400, "channelId is required");
@@ -57,6 +56,8 @@ router.post("/api/generate/task", async (c) => {
     return fail(400, "Channel 未配置 protocol");
   }
   const channelProtocol = channel.protocol;
+
+  const allowedFields = getAllowedFields(hostFromBaseUrl(channel.baseUrl), model, capability);
 
   // config 白名单构建：内部字段固定注入，业务字段仅放行 allowedFields 内的键
   const config: Record<string, unknown> = {};

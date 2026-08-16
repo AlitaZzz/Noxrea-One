@@ -1,6 +1,21 @@
 /**
  * 模型配置服务。
  * 加载模型参数与能力预设，提供渠道、模型配置与预设的读取入口。
+ *
+ * model-ui.json 结构（v2）：
+ *   {
+ *     "_default": { <capability>: { fields, allowedFields, mapping } },   // 纯透传兜底
+ *     "<host通配>": {                       // 如 "*apimart*" / "*fhl.mom*" / "*agnes*"
+ *       "<模型名通配或精确>": {               // 精确优先，其次 * 通配
+ *         "<capability>": { fields, mapping }   // 该上游下该模型的参数与字段映射
+ *       }
+ *     }
+ *   }
+ *
+ * 匹配规则：
+ *   - host 通配第一个命中即返回（配置保证互斥，不出现多命中）。
+ *   - 模型名精确匹配优先于通配匹配。
+ *   - 未命中任何 host 时回退 _default（纯透传，不做任何字段改名/换算）。
  */
 
 import { loadJson } from "@server/services/json-loader";
@@ -67,14 +82,7 @@ export interface FieldMapSpec {
   byRefMode?: Record<string, FieldMapSpec>;
 }
 
-/** 渠道级覆盖：_endpoints 为特殊键（路由），其余为字段映射覆盖 */
-export interface ChannelOverride {
-  /** 渠道级 endpoint 路由（如 image.edits / video.poll） */
-  _endpoints?: Record<string, string>;
-  /** 字段映射覆盖（渠道优先于模型级 mapping） */
-  [field: string]: FieldMapSpec | Record<string, string> | undefined;
-}
-
+/** 某上游下某模型某能力的参数配置 */
 export interface ModelParamConfig {
   fields: ParamField[];
   /**
@@ -88,19 +96,17 @@ export interface ModelParamConfig {
    */
   allowedFields?: string[];
   /**
-   * 模型级默认字段映射（语义字段 → 上游字段），后端 build() 用。
+   * 默认字段映射（语义字段 → 上游字段），后端 build() 用。
    * 不返回给前端。
    */
   mapping?: Record<string, FieldMapSpec>;
-  /**
-   * 渠道级覆盖：{ host → { _endpoints, 字段覆盖 } }，后端 build() 与轮询用。
-   * 不返回给前端。
-   */
-  channels?: Record<string, ChannelOverride>;
 }
 
-function loadRaw(): Record<string, Record<string, unknown>> {
-  return loadJson<Record<string, Record<string, unknown>>>("server/resources/model-ui.json");
+/** model-ui.json 顶层：host通配 → 模型名 → capability → 配置 */
+type HostMap = Record<string, Record<string, Record<string, unknown>>>;
+
+function loadRaw(): HostMap {
+  return loadJson<HostMap>("server/resources/model-ui.json");
 }
 
 /** 返回完整 JSON（供前端 API 使用） */
@@ -109,69 +115,104 @@ export function loadModelParams(): Record<string, Record<string, unknown>> {
 }
 
 /**
- * 按模型名 + capability 查找参数配置。
- * 匹配优先级：精确名 > fnmatch 通配符 > _default
- * fields/capabilities 优先用模型级配置，缺失继承 _default。
- * 读取模型参数预设
+ * 通配符 → 正则，`*` 匹配任意字符（含域名主体子串），`?` 匹配单字符。
  */
-export function getModelParams(modelName: string, capability: string): ModelParamConfig | null {
-  const data = loadRaw();
+function wildcardToRegex(pattern: string): RegExp {
+  return new RegExp(
+    "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
+  );
+}
 
-  // _default 配置（fields/capabilities 的兜底来源）
-  const defaultCap = data["_default"]?.[capability];
-  const defaultConfig = defaultCap ? parseConfig(defaultCap) : null;
+/**
+ * 在 host 层级匹配：遍历顶层 key（含通配），第一个命中即返回。
+ * 返回 [命中的 hostKey, 其下的模型映射表]。
+ */
+function matchHost(data: HostMap, host: string): [string, Record<string, Record<string, unknown>>] | null {
+  for (const [key, models] of Object.entries(data)) {
+    if (key === "_default") continue;
+    if (key === host) return [key, models];
+    if (key.includes("*") || key.includes("?")) {
+      if (wildcardToRegex(key).test(host)) return [key, models];
+    }
+  }
+  return null;
+}
 
-  // 1. 精确名匹配
-  const exact = data[modelName]?.[capability];
-  if (exact) {
-    return mergeConfig(parseConfig(exact), defaultConfig);
+/**
+ * 在模型层级匹配：精确优先，其次通配。
+ * 返回 [命中的模型 key, 其下的能力表]。
+ */
+function matchModel(models: Record<string, Record<string, unknown>>, modelName: string): [string, Record<string, unknown>] | null {
+  // 1. 精确名优先
+  const exact = models[modelName];
+  if (exact) return [modelName, exact];
+
+  // 2. 通配匹配
+  for (const [key, caps] of Object.entries(models)) {
+    if (key === modelName) continue;
+    if (key.includes("*") || key.includes("?")) {
+      if (wildcardToRegex(key).test(modelName)) return [key, caps];
+    }
   }
 
-  // 2. fnmatch 通配符匹配
-  for (const [pattern, caps] of Object.entries(data)) {
-    if (pattern === "_default" || pattern === modelName) continue;
-    if (pattern.includes("*") || pattern.includes("?")) {
-      const regex = new RegExp(
-        "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$"
-      );
-      if (regex.test(modelName)) {
-        const capConfig = caps[capability];
-        if (capConfig) return mergeConfig(parseConfig(capConfig), defaultConfig);
+  return null;
+}
+
+/**
+ * 解析某能力配置为 ModelParamConfig。
+ */
+function parseConfig(raw: unknown): ModelParamConfig {
+  const obj = (raw as Record<string, unknown>) ?? {};
+  return {
+    fields: (obj.fields as ParamField[]) ?? [],
+    capabilities: (obj.capabilities as Record<string, Capability>) ?? undefined,
+    allowedFields: (obj.allowedFields as string[]) ?? undefined,
+    mapping: (obj.mapping as Record<string, FieldMapSpec>) ?? undefined,
+  };
+}
+
+/**
+ * 按 host + 模型名 + capability 查找参数配置。
+ * 匹配优先级：
+ *   1. host 通配第一个命中（配置互斥）→ 该 host 下模型名精确 > 通配
+ *   2. 未命中 host → _default 对应 capability（纯透传兜底）
+ * 字段缺失时继承 _default 同名 capability 的 fields/allowedFields（mapping 不继承）。
+ */
+export function getModelParams(host: string, modelName: string, capability: string): ModelParamConfig | null {
+  const data = loadRaw();
+
+  const defaultCfg = data["_default"]?.[capability];
+  const defaultConfig = defaultCfg ? parseConfig(defaultCfg) : null;
+
+  const hostHit = matchHost(data, host);
+  if (hostHit) {
+    const [, models] = hostHit;
+    const modelHit = matchModel(models, modelName);
+    if (modelHit) {
+      const [, caps] = modelHit;
+      const capRaw = caps[capability];
+      if (capRaw) {
+        return mergeConfig(parseConfig(capRaw), defaultConfig);
       }
     }
   }
 
-  // 3. _default 兜底
+  // 兜底：_default 纯透传
   return defaultConfig;
 }
 
 /**
- * 合并配置：模型级配置优先，缺失的字段从 default 配置补充。
- * fields 为唯一数据源：模型级声明了 fields 则以模型级为准，否则继承 _default。
+ * 合并配置：模型级配置优先，缺失的 fields/allowedFields 从 _default 补充。
+ * mapping 不跨模型继承（字段映射只对本模型/本上游生效）。
  */
 function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | null): ModelParamConfig {
   if (!defaultCfg) return specific;
 
   return {
     fields: specific.fields.length > 0 ? specific.fields : defaultCfg.fields,
-    // capabilities 模型级优先，缺失则继承 _default
     capabilities: specific.capabilities ?? defaultCfg.capabilities,
-    // allowedFields 模型级优先，缺失则继承 _default
     allowedFields: specific.allowedFields ?? defaultCfg.allowedFields,
-    // mapping / channels 不继承（渠道级覆盖只对本模型生效，不跨模型传递）
     mapping: specific.mapping ?? defaultCfg.mapping,
-    channels: specific.channels ?? defaultCfg.channels,
-  };
-}
-
-function parseConfig(raw: unknown): ModelParamConfig {
-  const obj = raw as Record<string, unknown> ?? {};
-  return {
-    fields: (obj.fields as ParamField[]) ?? [],
-    capabilities: (obj.capabilities as Record<string, Capability>) ?? undefined,
-    allowedFields: (obj.allowedFields as string[]) ?? undefined,
-    mapping: (obj.mapping as Record<string, FieldMapSpec>) ?? undefined,
-    channels: (obj.channels as Record<string, ChannelOverride>) ?? undefined,
   };
 }
 
@@ -197,15 +238,16 @@ export function normalizeCapability(capability: string): string {
 
 /**
  * 取某模型某能力允许接收的业务字段白名单。
- * 匹配优先级复用 getModelParams（精确名 > 通配 > _default），并对能力名做 text/llm 归一化。
+ * 白名单是能力级声明，不依赖 host；但字段白名单通常写在模型级或 _default，
+ * 这里按「host 下模型级 → _default」解析。
  */
-export function getAllowedFields(modelName: string, capability: string): string[] {
+export function getAllowedFields(host: string, modelName: string, capability: string): string[] {
   const normalized = normalizeCapability(capability);
-  const config = getModelParams(modelName, normalized);
+  const config = getModelParams(host, modelName, normalized);
   return config?.allowedFields ?? [];
 }
 
-/** 从 baseUrl 解析 host（供渠道级覆盖匹配用） */
+/** 从 baseUrl 解析 host（供渠道级匹配用） */
 export function hostFromBaseUrl(baseUrl: string): string {
   try {
     return new URL(baseUrl).hostname;
@@ -215,42 +257,37 @@ export function hostFromBaseUrl(baseUrl: string): string {
 }
 
 /**
- * 取某语义字段的映射规格（渠道级覆盖 → 模型级默认 → undefined）。
- * 优先级：channels[host][key] → mapping[key] → undefined。
+ * 取某语义字段的映射规格（本上游本模型 mapping → undefined）。
  * 命中不到返回 undefined，由 build() 按白名单原样透传。
  */
 export function resolveFieldMapSpec(
+  host: string,
   modelName: string,
   capability: string,
-  key: string,
-  host?: string
+  key: string
 ): FieldMapSpec | undefined {
-  const config = getModelParams(modelName, capability);
+  const config = getModelParams(host, modelName, capability);
   if (!config) return undefined;
-
-  // 1. 渠道级覆盖优先
-  if (host) {
-    const ch = config.channels?.[host];
-    const override = ch?.[key];
-    if (override && typeof override === "object" && "field" in override) {
-      return override as FieldMapSpec;
-    }
-  }
-
-  // 2. 模型级默认映射
   return config.mapping?.[key];
 }
 
 /**
- * 取渠道级 endpoints（channels[host]._endpoints）。
- * 返回 { image.edits, video.poll, ... }，未命中返回 undefined。
+ * 取某上游（host）的 endpoint 路由。
+ * 存放于 host 条目顶层的 `_endpoints` 键，如 { "image.edits": "/images/generations", "video.poll": "..." }。
+ * 未命中返回 undefined。
  */
 export function resolveChannelEndpoints(
-  modelName: string,
-  capability: string,
-  host: string
+  host: string,
+  _modelName: string,
+  _capability: string
 ): Record<string, string> | undefined {
-  const config = getModelParams(modelName, capability);
-  if (!config) return undefined;
-  return config.channels?.[host]?._endpoints;
+  const data = loadRaw();
+  const hostHit = matchHost(data, host);
+  if (!hostHit) return undefined;
+  const [, models] = hostHit;
+  const endpoints = models["_endpoints"];
+  if (endpoints && typeof endpoints === "object") {
+    return endpoints as Record<string, string>;
+  }
+  return undefined;
 }

@@ -45,7 +45,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<ImageGenSettings>;
     const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
-      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
+      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.channelId, allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
     const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
@@ -70,7 +70,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置（params + defaults + constraints）
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.name, "image") : null;
+    return entry ? findModelParams(entry.channelId, entry.name, "image") : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
 

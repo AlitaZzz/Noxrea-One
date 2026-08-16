@@ -9,20 +9,26 @@ import { ok } from "@server/core/response";
 
 const router = new Hono();
 
-/** 剥离后端内部字段（字段映射与渠道端点不暴露给前端） */
+/** 剥离后端内部字段（字段映射、渠道端点与 endpoint 路由不暴露给前端） */
 function stripInternal(raw: Record<string, Record<string, unknown>>): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
-  for (const [modelKey, caps] of Object.entries(raw)) {
-    const capsOut: Record<string, unknown> = {};
-    for (const [capKey, capVal] of Object.entries(caps)) {
-      if (!capVal || typeof capVal !== "object") {
-        capsOut[capKey] = capVal;
-        continue;
+  for (const [hostKey, models] of Object.entries(raw)) {
+    const modelsOut: Record<string, unknown> = {};
+    for (const [modelKey, caps] of Object.entries(models)) {
+      // 跳过 host 条目顶层的 _endpoints 路由
+      if (modelKey === "_endpoints") continue;
+      const capsOut: Record<string, unknown> = {};
+      for (const [capKey, capVal] of Object.entries(caps)) {
+        if (!capVal || typeof capVal !== "object") {
+          capsOut[capKey] = capVal;
+          continue;
+        }
+        const { mapping: _m, channels: _c, ...rest } = capVal as Record<string, unknown>;
+        capsOut[capKey] = rest;
       }
-      const { mapping: _m, channels: _c, ...rest } = capVal as Record<string, unknown>;
-      capsOut[capKey] = rest;
+      modelsOut[modelKey] = capsOut;
     }
-    out[modelKey] = capsOut;
+    out[hostKey] = modelsOut;
   }
   return out;
 }

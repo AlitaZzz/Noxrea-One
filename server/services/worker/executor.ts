@@ -9,7 +9,7 @@ import { getChannel } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
-import { getModelParams, modelFieldDefaults } from "@server/services/model-config";
+import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
 import { buildContext } from "./context";
 import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
 
@@ -104,8 +104,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     // 4. 规范化 baseUrl（去末尾斜杠）
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
 
-    // 5. 从 model-ui.json 获取模型默认参数
-    const modelParams = getModelParams(model, capability);
+    // 5. 从 model-ui.json 获取模型默认参数（按 host + 模型名 + 能力）
+    const modelParams = getModelParams(hostFromBaseUrl(baseUrl), model, capability);
     const modelDefaults = modelFieldDefaults(modelParams);
 
     // 6. 合并参数：默认值 < 用户传入参数

@@ -45,8 +45,8 @@ class VideoCapabilityService implements CapabilityService {
       taskId: ctx.taskId,
     });
 
-    // 从 model-ui.json 渠道级解析 endpoints（替代旧的用户渠道 config）
-    const endpoints = resolveChannelEndpoints(ctx.model, "video", hostFromBaseUrl(ctx.baseUrl));
+    // 从 model-ui.json 上游级解析 endpoints（替代旧的用户渠道 config）
+    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "video");
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
 
     const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);

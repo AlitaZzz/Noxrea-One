@@ -53,8 +53,8 @@ class ImageCapabilityService implements CapabilityService {
       body: { ...body, prompt: summarizeText(body.prompt as string) },
     });
 
-    // 从 model-ui.json 渠道级解析 endpoints（替代旧的用户渠道 config）
-    const endpoints = resolveChannelEndpoints(ctx.model, "image", hostFromBaseUrl(ctx.baseUrl));
+    // 从 model-ui.json 上游级解析 endpoints（替代旧的用户渠道 config）
+    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "image");
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
 
     // 依据前端原始 refImages 判断是否有参考图（决定 edits / generations 路由）
