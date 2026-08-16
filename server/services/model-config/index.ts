@@ -71,6 +71,12 @@ export interface ParamField {
 export interface ModelParamConfig {
   fields: ParamField[];
   transforms: Record<string, unknown>;
+  /**
+   * 模型级字段映射：统一字段 → 模型逻辑字段。
+   * 解决"同渠道不同模型字段不同"：在渠道级 mapping 之前应用，把前端统一字段
+   * 转成该模型自己的逻辑字段，再由渠道级 mapping 转成渠道实际字段。
+   */
+  mapping?: Record<string, unknown>;
 }
 
 // 按文件修改时间缓存，model-params.json 变更后（无需重启）自动重新加载。
@@ -143,6 +149,11 @@ function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | 
   return {
     fields: specific.fields.length > 0 ? specific.fields : defaultCfg.fields,
     transforms: Object.keys(specific.transforms).length > 0 ? specific.transforms : defaultCfg.transforms,
+    // mapping 模型级优先，缺失则继承 _default
+    mapping:
+      specific.mapping && Object.keys(specific.mapping).length > 0
+        ? specific.mapping
+        : defaultCfg.mapping,
   };
 }
 
@@ -151,6 +162,7 @@ function parseConfig(raw: unknown): ModelParamConfig {
   return {
     fields: (obj.fields as ParamField[]) ?? [],
     transforms: (obj.transforms as Record<string, unknown>) ?? {},
+    mapping: (obj.mapping as Record<string, unknown>) ?? undefined,
   };
 }
 
