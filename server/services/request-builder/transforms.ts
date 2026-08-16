@@ -1,10 +1,10 @@
 /**
  * 参数变换。
- * 根据 model_params.json 的 transforms 配置执行值变换，支持 base64 与查表。
+ * 根据 model-params.json 的 transforms 配置执行值变换，支持 base64 与查表。
  */
 
 /**
- * 从 model_params.json 的 transforms 配置执行值变换。
+ * 从 model-params.json 的 transforms 配置执行值变换。
  *
  * 支持的变换类型：
  *   - "base64": URL 列表 → base64 data URL
