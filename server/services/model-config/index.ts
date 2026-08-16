@@ -63,7 +63,7 @@ export interface ModelParamConfig {
 }
 
 function loadRaw(): Record<string, Record<string, unknown>> {
-  return loadJson<Record<string, Record<string, unknown>>>("server/resources/model-params.json");
+  return loadJson<Record<string, Record<string, unknown>>>("server/resources/model-ui.json");
 }
 
 /** 返回完整 JSON（供前端 API 使用） */

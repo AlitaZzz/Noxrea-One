@@ -1,6 +1,6 @@
 /**
  * ParamFields 通用参数渲染器。
- * 以 model-params 的 fields 声明为唯一数据源，按 type 分发控件、按 order 排序。
+ * 以 model-ui 的 fields 声明为唯一数据源，按 type 分发控件、按 order 排序。
  * 支持：segmented / select / slider / switch / number。
  */
 "use client";

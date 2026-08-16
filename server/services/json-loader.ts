@@ -20,7 +20,7 @@ const cache = new Map<string, CacheEntry>();
  * 加载并缓存 JSON（相对项目根路径）。
  *
  * 用法：
- *   const data = loadJson<ProviderMap>("server/resources/provider-map.json");
+ *   const data = loadJson<ProviderMap>("server/resources/upstream-map.json");
  */
 export function loadJson<T>(relPath: string): T {
   const abs = resolveFromRoot(relPath);
