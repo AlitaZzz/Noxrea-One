@@ -18,50 +18,6 @@ import { getConfig } from "@server/core/config";
 import type { GenerationTask } from "@prisma/client";
 
 /**
- * 将发送参数转为日志安全形态：
- * - 疑似 base64 / 超长字符串掩码，避免泄露与日志膨胀
- * - 参考素材数组（refImages/refAudios/refVideos）只保留长度与首元素预览
- */
-function sanitizeForLog(value: unknown, depth = 0): unknown {
-  if (depth > 4) return "…";
-  if (Array.isArray(value)) {
-    if (value.length === 0) return [];
-    const keys = ["refImages", "refAudios", "refVideos"];
-    const first = typeof value[0] === "string" ? String(value[0]).slice(0, 64) : value[0];
-    return { __len: value.length, __first: first };
-  }
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (k.startsWith("ref") && Array.isArray(v)) {
-        out[k] = sanitizeForLog(v, depth + 1);
-      } else if (typeof v === "string" && isHidden(v)) {
-        out[k] = `<hidden len=${v.length}>`;
-      } else if (typeof v === "object" && v !== null) {
-        out[k] = sanitizeForLog(v, depth + 1);
-      } else {
-        out[k] = v;
-      }
-    }
-    return out;
-  }
-  if (typeof value === "string" && isHidden(value)) {
-    return `<hidden len=${value.length}>`;
-  }
-  return value;
-}
-
-/** 判断字符串是否疑似 base64 数据或过长需要隐藏 */
-function isHidden(s: string): boolean {
-  if (s.length > 256) return true;
-  // data URI / 长 base64（无空格、字符集受限、长度较长）
-  if (s.length > 64 && /^[A-Za-z0-9+/=\s-]+$/.test(s) && /(?:^[A-Za-z0-9+/]{40,}={0,2}$)/.test(s.trim())) {
-    return true;
-  }
-  return false;
-}
-
-/**
  * 执行单个任务的生命周期：
  * 解析 → 渠道配置 → 参考图 → AI 调用 → 结果下载落盘 → 落库 → 发事件
  *
@@ -118,16 +74,6 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       ...(resolvedVideo.length > 0 ? { refVideos: resolvedVideo } : {}),
     };
 
-    logEvent("executor", {
-      stage: "params_merged",
-      taskId: task.id,
-      model,
-      capability,
-      protocol,
-      paramsKeys: Object.keys(rawParams),
-      defaults: Object.keys(modelDefaults),
-    });
-
     const routeCtx = {
       capability,
       protocol,
@@ -139,18 +85,6 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       taskId: task.id,
       params: rawParams,
     };
-
-    // 打印真正发送给上游的参数（隐藏 base64 / 大体积值，避免泄露与日志膨胀）
-    // 放在 SSRF 校验之前，确保 DNS 失败时也能看到将要发送的参数内容。
-    logEvent("executor", {
-      stage: "sending_request",
-      taskId: task.id,
-      capability,
-      protocol,
-      baseUrl,
-      model,
-      params: sanitizeForLog(routeCtx.params),
-    });
 
     // SSRF 校验 + DNS pinning
     try {
@@ -172,6 +106,9 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       });
 
       logEvent("executor", {
+        banner: true,
+        bannerAtEnd: true,
+        bannerTitle: "生成结束，任务已完成",
         stage: "completed",
         taskId: task.id,
         textLen: result.text.length,
@@ -204,9 +141,15 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       completedAt: new Date(),
     });
 
+    // 全部动作（保存 + 状态更新 + 媒体处理）完成后再输出收尾节点
+    const saved = resultUrls.length > 0;
     logEvent("executor", {
+      banner: true,
+      bannerAtEnd: true,
+      bannerTitle: saved ? "生成结束，已下载并保存" : "生成结束，但无结果保存",
       stage: "completed",
       taskId: task.id,
+      saved,
       urls: resultUrls,
       text: result?.text,
     });

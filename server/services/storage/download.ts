@@ -36,14 +36,6 @@ export async function downloadAndSave(
   // 初始扩展名仅作为 fallback，后续会通过 sniffMime 校正
   const ext = capability === "video" ? ".mp4" : capability === "audio" ? ".mp3" : ".png";
 
-  logEvent("storage.download", {
-    stage: "start",
-    taskId,
-    userId,
-    capability,
-    url: cdnUrl.slice(0, 120),
-  });
-
   try {
     let buffer: Buffer;
 
@@ -124,7 +116,6 @@ export async function downloadAndSave(
           }
 
           downloadedBuffer = Buffer.concat(chunks);
-          logEvent("storage.download", { stage: "downloaded", taskId, size: downloadedBuffer.length });
           break; // 成功，跳出重试循环
         } catch (err) {
           lastErr = err;
@@ -178,14 +169,6 @@ export async function downloadAndSave(
       mimeType: mime,
       ext: fileExt,
       source: "generated",
-    });
-
-    logEvent("storage.download", {
-      stage: "saved",
-      taskId,
-      key: storageKey,
-      size: buffer.length,
-      hash: fileHash,
     });
 
     return storageKey;

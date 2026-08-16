@@ -59,7 +59,12 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
       const tasks = await claimPendingTasks(cfg.WORKER_MAX_CONCURRENCY);
 
       if (tasks.length > 0) {
-        logEvent("worker.loop", { stage: "claimed", count: tasks.length });
+        logEvent("worker.loop", {
+          banner: true,
+          bannerTitle: "认领并开始执行任务",
+          stage: "claimed",
+          count: tasks.length,
+        });
       }
 
       // 3. 并发执行

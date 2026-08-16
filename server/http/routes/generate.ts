@@ -10,6 +10,7 @@ import { getChannel } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
+import { logEvent } from "@server/core/logger/utils";
 import { ok, fail } from "@server/core/response";
 import { buildFileUrl } from "@server/services/storage/service";
 
@@ -40,6 +41,15 @@ router.post("/api/generate/task", async (c) => {
   }
 
   const data = parsed.data;
+
+  // 入口阶段日志：收到生成请求（对标外部服务的"收到直连参数转译请求"）
+  // 原样回显前端传来的全部字段与值，便于核对请求入参
+  logEvent("http.generate", {
+    banner: true,
+    bannerTitle: "收到生成请求",
+    stage: "received",
+    payload: data,
+  });
 
   // 模态：以 type 为准，并归一化 text → llm
   const capability = normalizeCapability(data.type ?? "image");
