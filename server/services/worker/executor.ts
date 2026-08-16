@@ -7,7 +7,7 @@ import { routeGenerate } from "@server/services/gateway/router";
 import { updateTaskStatus, getTaskStatus } from "@server/crud/task";
 import { getChannel } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
-import { resolveRefImages, resolveRefAudio } from "@server/services/resolvers/reference";
+import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams, modelFieldDefaults } from "@server/services/model-config";
 import { buildContext } from "./context";
@@ -16,6 +16,50 @@ import { logEvent, classifyError, summarizeText } from "@server/core/logger/util
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import type { GenerationTask } from "@prisma/client";
+
+/**
+ * 将发送参数转为日志安全形态：
+ * - 疑似 base64 / 超长字符串掩码，避免泄露与日志膨胀
+ * - 参考素材数组（refImages/refAudios/refVideos）只保留长度与首元素预览
+ */
+function sanitizeForLog(value: unknown, depth = 0): unknown {
+  if (depth > 4) return "…";
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [];
+    const keys = ["refImages", "refAudios", "refVideos"];
+    const first = typeof value[0] === "string" ? String(value[0]).slice(0, 64) : value[0];
+    return { __len: value.length, __first: first };
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k.startsWith("ref") && Array.isArray(v)) {
+        out[k] = sanitizeForLog(v, depth + 1);
+      } else if (typeof v === "string" && isHidden(v)) {
+        out[k] = `<hidden len=${v.length}>`;
+      } else if (typeof v === "object" && v !== null) {
+        out[k] = sanitizeForLog(v, depth + 1);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  }
+  if (typeof value === "string" && isHidden(value)) {
+    return `<hidden len=${value.length}>`;
+  }
+  return value;
+}
+
+/** 判断字符串是否疑似 base64 数据或过长需要隐藏 */
+function isHidden(s: string): boolean {
+  if (s.length > 256) return true;
+  // data URI / 长 base64（无空格、字符集受限、长度较长）
+  if (s.length > 64 && /^[A-Za-z0-9+/=\s-]+$/.test(s) && /(?:^[A-Za-z0-9+/]{40,}={0,2}$)/.test(s.trim())) {
+    return true;
+  }
+  return false;
+}
 
 /**
  * 执行单个任务的生命周期：
@@ -47,7 +91,10 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
 
     // 2.5 解析参考音频
-    const resolvedAudio = await resolveRefAudio(ctx.refAudio, task.userId);
+    const resolvedAudio = await resolveRefAudio(ctx.refAudios, task.userId);
+
+    // 2.6 解析参考视频
+    const resolvedVideo = await resolveRefVideo(ctx.refVideos, task.userId);
 
     // 3. 基础参数
     const capability = task.type ?? "image";
@@ -67,7 +114,8 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       prompt: task.prompt,
       ...ctx.config,
       refImages: resolvedImages,
-      ...(resolvedAudio.length > 0 ? { refAudio: resolvedAudio } : {}),
+      ...(resolvedAudio.length > 0 ? { refAudios: resolvedAudio } : {}),
+      ...(resolvedVideo.length > 0 ? { refVideos: resolvedVideo } : {}),
     };
 
     logEvent("executor", {
@@ -80,14 +128,6 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       defaults: Object.keys(modelDefaults),
     });
 
-    // SSRF 校验 + DNS pinning
-    try {
-      const hostname = new URL(baseUrl).hostname;
-      await resolveAndValidate(hostname);
-    } catch (err: unknown) {
-      throw new Error(`SSRF validation failed for baseUrl: ${(err as Error).message}`);
-    }
-
     const routeCtx = {
       capability,
       protocol,
@@ -97,9 +137,28 @@ export async function executeTask(task: GenerationTask): Promise<void> {
       channelId,
       userId: task.userId,
       taskId: task.id,
-      config: (channel.config as Record<string, unknown>) ?? undefined,
       params: rawParams,
     };
+
+    // 打印真正发送给上游的参数（隐藏 base64 / 大体积值，避免泄露与日志膨胀）
+    // 放在 SSRF 校验之前，确保 DNS 失败时也能看到将要发送的参数内容。
+    logEvent("executor", {
+      stage: "sending_request",
+      taskId: task.id,
+      capability,
+      protocol,
+      baseUrl,
+      model,
+      params: sanitizeForLog(routeCtx.params),
+    });
+
+    // SSRF 校验 + DNS pinning
+    try {
+      const hostname = new URL(baseUrl).hostname;
+      await resolveAndValidate(hostname);
+    } catch (err: unknown) {
+      throw new Error(`SSRF validation failed for baseUrl: ${(err as Error).message}`);
+    }
 
     // 调用 CapabilityService（同步/异步由内部 TaskManager 自动判定）
     const result = await routeGenerate(routeCtx);

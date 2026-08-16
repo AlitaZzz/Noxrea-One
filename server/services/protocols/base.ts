@@ -45,7 +45,8 @@ export interface ProtocolService {
     baseUrl: string,
     apiKey: string,
     body: Record<string, unknown>,
-    channelConfig?: Record<string, unknown>
+    channelConfig?: Record<string, unknown>,
+    hasRef?: boolean
   ): ProtocolRequestResult;
 
   /** 构建视频生成请求 */
@@ -85,10 +86,10 @@ export interface ProtocolService {
   // 异步任务支持
 
   /** 从响应中提取上游异步 task_id */
-  extractTaskId?(data: unknown, channelConfig?: Record<string, unknown>): string | null;
+  extractTaskId?(data: unknown, channelConfig?: Record<string, unknown>, capability?: string): string | null;
 
   /** 构造轮询 URL */
-  buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string;
+  buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string): string;
 
   /** 解析轮询响应 */
   parsePollResponse?(data: unknown): PollResult;

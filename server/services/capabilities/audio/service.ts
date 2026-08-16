@@ -38,7 +38,7 @@ class AudioCapabilityService implements CapabilityService {
       modelName: ctx.model,
       capability: "audio",
       protocol: ctx.protocol,
-      channelConfig: ctx.config,
+      baseUrl: ctx.baseUrl,
       taskId: ctx.taskId,
     });
 

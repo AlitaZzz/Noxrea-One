@@ -24,13 +24,31 @@ function normalizeStatus(raw: string): string {
   return s;
 }
 
-/** 从 channelConfig.protocol.endpoints.poll 中提取占位符名，如 "/videos/{task_id}" → "task_id" */
-function getPollFieldName(channelConfig?: Record<string, unknown>): string | null {
+/**
+ * 从 channelConfig.protocol.endpoints 提取轮询占位符名。
+ * 按能力优先读 {capability}.poll（如 image.poll / video.poll），回退通用 poll。
+ */
+function getPollFieldName(
+  channelConfig?: Record<string, unknown>,
+  capability?: string
+): string | null {
   const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
-  const pollPath = endpoints?.["poll"];
+  const pollPath = (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
   if (!pollPath) return null;
   const match = pollPath.match(/\{([^}]+)\}/);
   return match ? match[1] : null;
+}
+
+/**
+ * 从 channelConfig.protocol.endpoints 提取轮询路径。
+ * 按能力优先读 {capability}.poll，回退通用 poll。
+ */
+function getPollPath(
+  channelConfig?: Record<string, unknown>,
+  capability?: string
+): string | undefined {
+  const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+  return (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
 }
 
 export class OpenAiImageProtocol implements ProtocolService {
@@ -40,17 +58,14 @@ export class OpenAiImageProtocol implements ProtocolService {
     baseUrl: string,
     apiKey: string,
     body: Record<string, unknown>,
-    channelConfig?: Record<string, unknown>
+    channelConfig?: Record<string, unknown>,
+    hasRef?: boolean
   ): ProtocolRequestResult {
     // 解析 channel config 中的 endpoints
     const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
 
     // 有参考图（图生图/编辑）→ /images/edits，否则 → /images/generations
-    // 检查 mapping 前后两种字段名：refImages（原始）或 images（mapping 后）
-    const refImages = body.refImages ?? body.images;
-    const hasRef = Array.isArray(refImages) && refImages.length > 0;
-
-    // 渠道自定义 endpoint 优先，否则用默认逻辑
+    // hasRef 由调用方依据前端原始 refImages 判定，而非 body 里已被映射的字段。
     let endpoint: string;
     if (hasRef) {
       endpoint = endpoints?.["image.edits"] ?? "/images/edits";
@@ -79,12 +94,12 @@ export class OpenAiImageProtocol implements ProtocolService {
 
   // 异步任务支持
 
-  extractTaskId(data: unknown, channelConfig?: Record<string, unknown>): string | null {
+  extractTaskId(data: unknown, channelConfig?: Record<string, unknown>, capability?: string): string | null {
     if (!data || typeof data !== "object") return null;
     const d = data as Record<string, unknown>;
 
     // 0. 从 poll 路径占位符推导字段名（如 {video_id} → "video_id"），优先匹配
-    const pollField = getPollFieldName(channelConfig);
+    const pollField = getPollFieldName(channelConfig, capability);
 
     // 辅助：按指定字段名在顶层和 data 嵌套中查找
     const findField = (fieldName: string): string | null => {
@@ -122,9 +137,8 @@ export class OpenAiImageProtocol implements ProtocolService {
     return null;
   }
 
-  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>): string {
-    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
-    const customPath = endpoints?.["poll"];
+  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string): string {
+    const customPath = getPollPath(channelConfig, capability);
     if (customPath) {
       // 如果已是完整 URL（含协议头），直接替换占位符返回
       if (/^https?:\/\//.test(customPath)) {
