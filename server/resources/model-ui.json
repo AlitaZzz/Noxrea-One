@@ -125,7 +125,7 @@
   "*agnes-image*": {
     "image": {
       "fields": [
-        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1k", "2k", "4k"], "default": "1k" },
+        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
         { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" },
         { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
       ],
