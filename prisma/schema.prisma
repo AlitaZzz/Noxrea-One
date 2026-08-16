@@ -42,26 +42,32 @@ model User {
 // 2. GenerationTask
 // ──────────────────────────────────────────
 model GenerationTask {
-  id             String   @id @map("id") // UUID 字符串主键
-  userId         Int      @map("user_id")
-  type           String   @map("type") // 权威模态字段：image | video | llm
-  protocol       String?  @map("protocol") // 落库值来自 channel.protocol，仅供记录可读；恢复轮询仍以 task.protocol ?? channel.protocol 链为准
-  model          String?  @map("model")
-  upstreamTaskId String?  @map("upstream_task_id")
-  status         String   @default("pending") @map("status")
-  retryCount     Int      @default(0) @map("retry_count")
+  id             String    @id @map("id") // UUID 字符串主键
+  userId         Int       @map("user_id")
+  nodeId         String    @map("node_id")
+
+  type           String    @map("type") // 权威模态字段：image | video | llm
+  model          String?   @map("model")
+  protocol       String?   @map("protocol") // 落库值来自 channel.protocol，仅供记录可读；恢复轮询仍以 task.protocol ?? channel.protocol 链为准
+  prompt         String    @default("") @map("prompt")
+  config         String    @default("{}") @map("config") // JSON TEXT
+
+  refImages      String?   @map("ref_images") // JSON TEXT：参考图 URL 数组
+  refAudios      String?   @map("ref_audios") // JSON TEXT：参考音频 URL 数组
+  refVideos      String?   @map("ref_videos") // JSON TEXT：参考视频 URL 数组
+
+  resultUrls     String?   @map("result_urls") // JSON TEXT
+  resultText     String?   @map("result_text")
+
+  status         String    @default("pending") @map("status")
+  error          String?   @map("error")
+  retryCount     Int       @default(0) @map("retry_count")
+  upstreamTaskId String?   @map("upstream_task_id")
   startedAt      DateTime? @map("started_at")
   completedAt    DateTime? @map("completed_at")
-  prompt         String   @default("") @map("prompt")
-  config         String   @default("{}") @map("config") // JSON TEXT
-  refImages      String?  @map("ref_images") // JSON TEXT
-  refAudio       String?  @map("ref_audio") // JSON TEXT
-  resultUrls     String?  @map("result_urls") // JSON TEXT
-  resultText     String?  @map("result_text")
-  error          String?  @map("error")
-  nodeId         String   @map("node_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
 
   // 关系
   user User @relation(fields: [userId], references: [id])
@@ -99,7 +105,6 @@ model ModelChannel {
   baseUrl   String    @map("base_url")
   apiKey    String    @default("") @map("api_key")
   protocol  String    @default("openai") @map("protocol")
-  config    String?   @map("config") // JSON TEXT
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
 

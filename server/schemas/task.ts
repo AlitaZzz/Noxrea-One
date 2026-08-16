@@ -12,7 +12,8 @@ export const taskCreateSchema = z.object({
   prompt: z.string().optional(),
   config: z.record(z.unknown()).optional(),
   refImages: z.array(z.string()).optional(),
-  refAudio: z.array(z.string()).optional(),
+  refAudios: z.array(z.string()).optional(),
+  refVideos: z.array(z.string()).optional(),
   nodeId: z.string().optional(),
   // --- 白名单生成参数 ---
   resolution: z.string().optional(),
@@ -39,6 +40,7 @@ export const taskCreateSchema = z.object({
   voice: z.string().optional(),
   audio_file: z.string().optional(),
   references: z.array(z.string()).optional(),
+  refMode: z.string().optional(),
 });
 
 export const taskOutSchema = z.object({
@@ -52,7 +54,8 @@ export const taskOutSchema = z.object({
   prompt: z.string(),
   config: z.record(z.unknown()),
   refImages: z.array(z.string()).nullable(),
-  refAudio: z.array(z.string()).nullable(),
+  refAudios: z.array(z.string()).nullable(),
+  refVideos: z.array(z.string()).nullable(),
   resultUrls: z.array(z.string()).nullable(),
   resultText: z.string().nullable(),
   error: z.string().nullable(),

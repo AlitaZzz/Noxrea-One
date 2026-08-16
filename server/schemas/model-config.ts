@@ -9,7 +9,6 @@ export const channelCreateSchema = z.object({
   baseUrl: z.string().min(1).max(500),
   apiKey: z.string().max(500).optional(),
   protocol: z.string().max(30).optional(),
-  config: z.record(z.unknown()).optional(),
 });
 
 export const channelUpdateSchema = z.object({
@@ -17,7 +16,6 @@ export const channelUpdateSchema = z.object({
   baseUrl: z.string().min(1).max(500).optional(),
   apiKey: z.string().max(500).optional(),
   protocol: z.string().max(30).optional(),
-  config: z.record(z.unknown()).optional(),
 });
 
 export const channelOutSchema = z.object({
@@ -27,7 +25,6 @@ export const channelOutSchema = z.object({
   baseUrl: z.string(),
   apiKey: z.string(),
   protocol: z.string(),
-  config: z.record(z.unknown()).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
