@@ -1,15 +1,14 @@
 /**
  * 请求构建管线引擎。
- * 将前端固定语义字段，按供应商（baseUrl host）+ 模型 + 能力，
+ * 将前端固定语义字段，按模型 + 渠道（baseUrl host）+ 能力，
  * 转换为上游真实字段（字段名 + 结构 + 值换算）。
  *
- * 数据来源：upstream-map.json（经 resolveProvider / resolveKindSpec 读取，支持热更新）。
+ * 数据来源：model-ui.json（经 resolveFieldMapSpec 读取，支持热更新）。
  * 前端永远传固定语义字段名（ratio/seconds/refImages/refMode...），
- * 后端据供应商与模型自动转换，前端不感知上游字段。
+ * 后端据模型 + 渠道自动转换，前端不感知上游字段。
  */
 
-import { resolveProvider, resolveKindSpec } from "@server/services/provider";
-import { getAllowedFields } from "@server/services/model-config";
+import { getAllowedFields, resolveFieldMapSpec, hostFromBaseUrl } from "@server/services/model-config";
 import { resolveRefSlots, resolveByKind, applyTransform, setNested } from "./resolve";
 import { logEvent } from "@server/core/logger/utils";
 
@@ -23,7 +22,7 @@ export interface BuildInput {
   capability: string;
   /** 协议名（openai/gemini/ark） */
   protocol: string;
-  /** 上游 baseUrl，用于匹配供应商 */
+  /** 上游 baseUrl，用于匹配渠道 */
   baseUrl: string;
   /** 任务 ID（日志关联） */
   taskId?: string;
@@ -36,20 +35,18 @@ const INTERNAL_FIELDS = new Set(["capability", "refMode", "channelId"]);
 const UNIVERSAL_FIELDS = new Set(["prompt", "model"]);
 
 /** 参考类语义字段：需要从 refImages/refMode 派生槽位后按 kind 组装 */
-const REF_KEYS = new Set(["refImages", "firstFrame", "lastFrame"]);
+const REF_KEYS = new Set(["refImages"]);
 
 /**
  * 构建上游请求体：
- *   1. 按 baseUrl 匹配供应商
- *   2. 解析参考槽位（refMode + refImages → firstFrame/lastFrame/refImages）
- *   3. 逐个语义字段查 {field, kind, transform}，改名 + 组结构 + 换算值
- *   4. 未映射字段原样透传；内部字段清除
+ *   1. 解析参考槽位（refMode + refImages → firstFrame/lastFrame/refImages）
+ *   2. 逐个语义字段查 {field, kind, transform}，改名 + 组结构 + 换算值
+ *   3. 未映射字段原样透传；内部字段清除
  */
 export function build(input: BuildInput): Record<string, unknown> {
-  const provider = resolveProvider(input.baseUrl);
-
   // 0. 能力字段白名单兜底：只放行该能力允许的业务字段 + 通用字段，其余丢弃
   const allowedSet = new Set(getAllowedFields(input.modelName, input.capability));
+  const host = hostFromBaseUrl(input.baseUrl);
 
   // 1. 解析参考槽位
   const refMode = input.params.refMode as string | undefined;
@@ -67,12 +64,12 @@ export function build(input: BuildInput): Record<string, unknown> {
     // 兜底过滤：既非通用字段、也不在能力白名单内的字段，静默丢弃
     if (!UNIVERSAL_FIELDS.has(key) && !allowedSet.has(key)) continue;
 
-    const spec = resolveKindSpec(provider, input.modelName, input.capability, key);
+    const spec = resolveFieldMapSpec(input.modelName, input.capability, key, host);
 
     // 有映射规格：参考类走 kind 组结构；普通类走改名 + transform
     if (spec) {
       // 按参考模式分派映射规格（如 seedance 首帧用 image_urls，首尾帧用 image_with_roles）
-      const effectiveSpec = spec.byRefMode?.[refMode] ?? spec;
+      const effectiveSpec = (refMode && spec.byRefMode?.[refMode]) ?? spec;
       if (REF_KEYS.has(key)) {
         const [field, value] = resolveByKind(effectiveSpec, slots);
         if (value !== undefined) setNested(result, field, value);

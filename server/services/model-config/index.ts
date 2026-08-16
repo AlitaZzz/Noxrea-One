@@ -42,10 +42,37 @@ export interface ParamField {
 export interface Capability {
   /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
   options?: string[];
-  /** 数量上限（refVideos/refAudios/refImages） */
-  max?: number;
   /** 默认值 */
   default?: boolean | string | number;
+}
+
+/** 值换算规则（声明式，写 JSON） */
+export interface TransformSpec {
+  type: "lookup" | "map" | "ratio";
+  /** lookup 专用：参与组合的字段列表，如 ["ratio", "resolution"] */
+  composite?: string[];
+  /** lookup / map 专用：查表 */
+  table?: Record<string, string | string[]>;
+}
+
+/** 单个语义字段的映射规格 */
+export interface FieldMapSpec {
+  /** 上游字段名（含嵌套路径，如 extra_body.image） */
+  field: string;
+  /** 结构枚举：single / array / array[].k / role:xxx / role:first-last / slot:first / slot:last */
+  kind: string;
+  /** 可选：值换算规则 */
+  transform?: TransformSpec;
+  /** 可选：按参考模式（refMode）分派映射规格，命中则覆盖 field/kind/transform */
+  byRefMode?: Record<string, FieldMapSpec>;
+}
+
+/** 渠道级覆盖：_endpoints 为特殊键（路由），其余为字段映射覆盖 */
+export interface ChannelOverride {
+  /** 渠道级 endpoint 路由（如 image.edits / video.poll） */
+  _endpoints?: Record<string, string>;
+  /** 字段映射覆盖（渠道优先于模型级 mapping） */
+  [field: string]: FieldMapSpec | Record<string, string> | undefined;
 }
 
 export interface ModelParamConfig {
@@ -60,6 +87,16 @@ export interface ModelParamConfig {
    * 后端入参校验与 build() 兜底过滤的权威来源。
    */
   allowedFields?: string[];
+  /**
+   * 模型级默认字段映射（语义字段 → 上游字段），后端 build() 用。
+   * 不返回给前端。
+   */
+  mapping?: Record<string, FieldMapSpec>;
+  /**
+   * 渠道级覆盖：{ host → { _endpoints, 字段覆盖 } }，后端 build() 与轮询用。
+   * 不返回给前端。
+   */
+  channels?: Record<string, ChannelOverride>;
 }
 
 function loadRaw(): Record<string, Record<string, unknown>> {
@@ -121,6 +158,9 @@ function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | 
     capabilities: specific.capabilities ?? defaultCfg.capabilities,
     // allowedFields 模型级优先，缺失则继承 _default
     allowedFields: specific.allowedFields ?? defaultCfg.allowedFields,
+    // mapping / channels 不继承（渠道级覆盖只对本模型生效，不跨模型传递）
+    mapping: specific.mapping ?? defaultCfg.mapping,
+    channels: specific.channels ?? defaultCfg.channels,
   };
 }
 
@@ -130,6 +170,8 @@ function parseConfig(raw: unknown): ModelParamConfig {
     fields: (obj.fields as ParamField[]) ?? [],
     capabilities: (obj.capabilities as Record<string, Capability>) ?? undefined,
     allowedFields: (obj.allowedFields as string[]) ?? undefined,
+    mapping: (obj.mapping as Record<string, FieldMapSpec>) ?? undefined,
+    channels: (obj.channels as Record<string, ChannelOverride>) ?? undefined,
   };
 }
 
@@ -161,4 +203,54 @@ export function getAllowedFields(modelName: string, capability: string): string[
   const normalized = normalizeCapability(capability);
   const config = getModelParams(modelName, normalized);
   return config?.allowedFields ?? [];
+}
+
+/** 从 baseUrl 解析 host（供渠道级覆盖匹配用） */
+export function hostFromBaseUrl(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname;
+  } catch {
+    return baseUrl;
+  }
+}
+
+/**
+ * 取某语义字段的映射规格（渠道级覆盖 → 模型级默认 → undefined）。
+ * 优先级：channels[host][key] → mapping[key] → undefined。
+ * 命中不到返回 undefined，由 build() 按白名单原样透传。
+ */
+export function resolveFieldMapSpec(
+  modelName: string,
+  capability: string,
+  key: string,
+  host?: string
+): FieldMapSpec | undefined {
+  const config = getModelParams(modelName, capability);
+  if (!config) return undefined;
+
+  // 1. 渠道级覆盖优先
+  if (host) {
+    const ch = config.channels?.[host];
+    const override = ch?.[key];
+    if (override && typeof override === "object" && "field" in override) {
+      return override as FieldMapSpec;
+    }
+  }
+
+  // 2. 模型级默认映射
+  return config.mapping?.[key];
+}
+
+/**
+ * 取渠道级 endpoints（channels[host]._endpoints）。
+ * 返回 { image.edits, video.poll, ... }，未命中返回 undefined。
+ */
+export function resolveChannelEndpoints(
+  modelName: string,
+  capability: string,
+  host: string
+): Record<string, string> | undefined {
+  const config = getModelParams(modelName, capability);
+  if (!config) return undefined;
+  return config.channels?.[host]?._endpoints;
 }

@@ -7,10 +7,10 @@
  *   - "single"        单值：取 refImages[0]
  *   - "array"         字符串数组：整个 refImages[]
  *   - "array[].k"     对象数组展开：refImages[] → [{ k: url }]
- *   - "role:first-last" 首尾帧成对：firstFrame/lastFrame → [{url, role:first_frame}, {url, role:last_frame}]
- *   - "role:xxx"      带角色对象：firstFrame/lastFrame/refImages → [{ url, role }]
- *   - "slot:first"    首帧单值：firstFrame
- *   - "slot:last"     尾帧单值：lastFrame
+ *   - "role:first-last" 首尾帧成对：slots.firstFrame/lastFrame → [{url, role:first_frame}, {url, role:last_frame}]
+ *   - "role:xxx"      带角色对象：slots.firstFrame/lastFrame/refImages → [{ url, role }]
+ *   - "slot:first"    首帧单值：slots.firstFrame
+ *   - "slot:last"     尾帧单值：slots.lastFrame
  *
  * transform 值换算（声明式）：
  *   - "lookup"        多字段组合查表（composite + table）
@@ -18,7 +18,7 @@
  *   - "ratio"         像素尺寸反推比例（如 1024x1024 → 1:1）
  */
 
-import type { FieldMapSpec, TransformSpec } from "@server/services/provider";
+import type { FieldMapSpec, TransformSpec } from "@server/services/model-config";
 
 /** 参考模式（对齐原 refmode.ts） */
 export type RefMode = "none" | "first" | "first-last" | "full";
