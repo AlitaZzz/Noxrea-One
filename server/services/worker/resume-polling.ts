@@ -64,7 +64,7 @@ async function _doResumePoll(
     const baseUrl = channel.baseUrl.replace(/\/+$/, "");
     const model = task.model ?? "";
     const endpoints = model
-      ? resolveChannelEndpoints(model, task.type, hostFromBaseUrl(baseUrl))
+      ? resolveChannelEndpoints(hostFromBaseUrl(baseUrl), model, task.type)
       : undefined;
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
     pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type);

@@ -8,18 +8,34 @@ import { create } from "zustand";
 import { modelApi } from "@/features/settings/api";
 import type { ModelCapability, ModelChannel, ModelParamConfig,ProviderPreset } from "@/lib/types/models";
 
+/** 从 baseUrl 解析 host（供上游通配匹配用） */
+function hostFromBaseUrl(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname;
+  } catch {
+    return baseUrl;
+  }
+}
+
 interface RawModelEntry {
   id?: string;
   name?: string;
 }
 
+/**
+ * model-ui.json v2 结构：
+ *   - `_default`：capability → 配置（两层）
+ *   - host 通配条目：模型名 → capability → 配置（三层），另有 `_endpoints` 路由键
+ */
+type ModelParamsMap = Record<string, Record<string, ModelParamConfig> | Record<string, Record<string, ModelParamConfig>>>;
+
 interface ModelState {
   channels: ModelChannel[];
   presets: ProviderPreset[];
-  modelParamsCache: Record<string, Record<string, ModelParamConfig>>;
+  modelParamsCache: ModelParamsMap;
   initialized: boolean;
   initialize: () => Promise<void>;
-  findModelParams: (modelName: string, capability: string) => ModelParamConfig | null;
+  findModelParams: (channelId: string, modelName: string, capability: string) => ModelParamConfig | null;
 
   addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<void>;
   updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<void>;
@@ -49,7 +65,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         await get().fetchPresets();
         // 拉取模型参数配置（fields 为唯一数据源）
         try {
-          const mpRes = await modelApi.fetchModelParams<Record<string, Record<string, ModelParamConfig>>>();
+          const mpRes = await modelApi.fetchModelParams<ModelParamsMap>();
           if (mpRes.code === 200 && mpRes.data) {
             set({ modelParamsCache: mpRes.data });
           }
@@ -62,24 +78,38 @@ export const useModelStore = create<ModelState>((set, get) => ({
     set({ initialized: true });
   },
 
-  findModelParams: (modelName: string, capability: string) => {
+  findModelParams: (channelId: string, modelName: string, capability: string) => {
     const cache = get().modelParamsCache;
-    // 1. 精确匹配
-    const exact = cache[modelName]?.[capability];
-    if (exact) return exact;
-    // 2. 通配符匹配
-    for (const [pattern, caps] of Object.entries(cache)) {
-      if (pattern === "_default" || pattern === modelName) continue;
-      if (pattern.includes("*") || pattern.includes("?")) {
-        const regex = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
-        if (regex.test(modelName)) {
-          const match = caps[capability];
-          if (match) return match;
+    // 由 channelId 找到 baseUrl 并解析 host（用于上游通配匹配）
+    const channel = get().channels.find((c) => c.id === channelId);
+    const host = channel?.baseUrl ? hostFromBaseUrl(channel.baseUrl) : "";
+    // 1. host 通配第一个命中 → 该 host 下模型名精确 > 通配
+    if (host) {
+      for (const [hostPattern, models] of Object.entries(cache)) {
+        if (hostPattern === "_default" || !models) continue;
+        const hostRegex = new RegExp("^" + hostPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+        if (hostRegex.test(host)) {
+          const modelMap = models as Record<string, Record<string, ModelParamConfig>>;
+          // 模型名精确优先
+          const exact = modelMap[modelName]?.[capability];
+          if (exact) return exact;
+          for (const [mPattern, caps] of Object.entries(modelMap)) {
+            if (mPattern === "_endpoints") continue;
+            if (mPattern.includes("*") || mPattern.includes("?")) {
+              const mRegex = new RegExp("^" + mPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+              if (mRegex.test(modelName)) {
+                const match = caps[capability];
+                if (match) return match;
+              }
+            }
+          }
+          break; // host 已命中，不再继续
         }
       }
     }
-    // 3. _default 兜底
-    const def = cache["_default"]?.[capability];
+    // 2. _default 兜底（纯透传）
+    const defCaps = cache["_default"] as Record<string, ModelParamConfig> | undefined;
+    const def = defCaps?.[capability];
     return def || null;
   },
 

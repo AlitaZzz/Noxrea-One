@@ -45,8 +45,8 @@ const REF_KEYS = new Set(["refImages"]);
  */
 export function build(input: BuildInput): Record<string, unknown> {
   // 0. 能力字段白名单兜底：只放行该能力允许的业务字段 + 通用字段，其余丢弃
-  const allowedSet = new Set(getAllowedFields(input.modelName, input.capability));
   const host = hostFromBaseUrl(input.baseUrl);
+  const allowedSet = new Set(getAllowedFields(host, input.modelName, input.capability));
 
   // 1. 解析参考槽位
   const refMode = input.params.refMode as string | undefined;
@@ -64,7 +64,7 @@ export function build(input: BuildInput): Record<string, unknown> {
     // 兜底过滤：既非通用字段、也不在能力白名单内的字段，静默丢弃
     if (!UNIVERSAL_FIELDS.has(key) && !allowedSet.has(key)) continue;
 
-    const spec = resolveFieldMapSpec(input.modelName, input.capability, key, host);
+    const spec = resolveFieldMapSpec(host, input.modelName, input.capability, key);
 
     // 有映射规格：参考类走 kind 组结构；普通类走改名 + transform
     if (spec) {

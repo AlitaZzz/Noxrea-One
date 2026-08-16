@@ -52,7 +52,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
     const mk = s.modelKey || allModels[0]?.value || "";
     const entry = allModels.find((m) => m.value === mk);
-    const mp = entry ? findModelParams(entry.name, "video") : null;
+    const mp = entry ? findModelParams(entry.channelId, entry.name, "video") : null;
     const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
@@ -83,7 +83,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.name, "video") : null;
+    return entry ? findModelParams(entry.channelId, entry.name, "video") : null;
    
   }, [modelKey, allModels, findModelParams]);
 
