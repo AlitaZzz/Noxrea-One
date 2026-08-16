@@ -377,7 +377,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene" | "storyboard25" | "storyboard4") => {
+  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene" | "storyboard25" | "storyboard4" | "forward3s" | "back5s") => {
     if (!src) return;
     const template = await getPromptTemplate(type);
     if (!template) return;
@@ -455,6 +455,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "create-nine-grid-scene": a.handleApplyTemplate("nineGridScene"); break;
         case "create-25-grid-storyboard": a.handleApplyTemplate("storyboard25"); break;
         case "create-4-grid-storyboard": a.handleApplyTemplate("storyboard4"); break;
+        case "create-forward-3s": a.handleApplyTemplate("forward3s"); break;
+        case "create-back-5s": a.handleApplyTemplate("back5s"); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);

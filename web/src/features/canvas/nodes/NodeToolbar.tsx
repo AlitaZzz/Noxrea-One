@@ -35,6 +35,8 @@ import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
+import { Forward3sIcon } from "@/components/ui/icons/canvas/Forward3sIcon";
+import { Back5sIcon } from "@/components/ui/icons/canvas/Back5sIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
@@ -310,6 +312,18 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <Storyboard4Icon style={{ fontSize: 16 }} />
                     {t("node.creation4Grid")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-forward-3s"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Forward3sIcon style={{ fontSize: 16 }} />
+                    {t("node.creationForward3s")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-back-5s"); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Back5sIcon style={{ fontSize: 16 }} />
+                    {t("node.creationBack5s")}
                   </span>
                 </MenuItem>
               </>

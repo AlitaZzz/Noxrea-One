@@ -114,6 +114,8 @@
     "creationNineGrid": "多机位九宫格",
    "creation25Grid": "25宫格剧情分镜",
    "creation4Grid": "剧情推演四宫格",
+   "creationForward3s": "画面推演 - 3S后",
+   "creationBack5s": "画面推演 - 5S前",
     "previewFullscreen": "预览",
     "previewPrev": "上一张",
     "previewNext": "下一张",
