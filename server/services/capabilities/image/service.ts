@@ -11,7 +11,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { resolveProvider } from "@server/services/provider";
+import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
 import { logEvent, summarizeText, summarizeBody } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
@@ -53,9 +53,9 @@ class ImageCapabilityService implements CapabilityService {
       body: { ...body, prompt: summarizeText(body.prompt as string) },
     });
 
-    // 从 provider 解析 endpoints（替代旧的用户渠道 config）
-    const provider = resolveProvider(ctx.baseUrl);
-    const endpointCfg = provider.endpoints ? { protocol: { endpoints: provider.endpoints } } : undefined;
+    // 从 model-ui.json 渠道级解析 endpoints（替代旧的用户渠道 config）
+    const endpoints = resolveChannelEndpoints(ctx.model, "image", hostFromBaseUrl(ctx.baseUrl));
+    const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
 
     // 依据前端原始 refImages 判断是否有参考图（决定 edits / generations 路由）
     const rawRefImages = params.refImages as string[] | undefined;
