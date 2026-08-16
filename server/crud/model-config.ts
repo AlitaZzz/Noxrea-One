@@ -3,12 +3,11 @@
  * 管理 API 渠道、模型能力与配置项的读写，并处理配置 JSON 字段的反序列化。
  */
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
+import { stringifyJson, parseJsonArray } from "./_json";
 
-function deserializeChannel<T extends { config: unknown; models: Array<{ capabilities: unknown }> }>(ch: T) {
+function deserializeChannel<T extends { models: Array<{ capabilities: unknown }> }>(ch: T) {
   return {
     ...ch,
-    config: ch.config ? parseJsonObject(ch.config) : null,
     models: ch.models.map((m) => ({
       ...m,
       capabilities: parseJsonArray(m.capabilities),
@@ -41,7 +40,6 @@ export async function createChannel(data: {
   baseUrl: string;
   apiKey?: string;
   protocol?: string;
-  config?: Record<string, unknown>;
 }) {
   const channel = await prisma.modelChannel.create({
     data: {
@@ -50,7 +48,6 @@ export async function createChannel(data: {
       baseUrl: data.baseUrl,
       apiKey: data.apiKey ?? "",
       protocol: data.protocol ?? "openai",
-      config: data.config ? stringifyJson(data.config) : null,
     },
     include: { models: true },
   });
@@ -64,7 +61,6 @@ export async function updateChannel(
     baseUrl?: string;
     apiKey?: string;
     protocol?: string;
-    config?: Record<string, unknown>;
   }
 ) {
   const updateData: Record<string, unknown> = {
@@ -75,8 +71,6 @@ export async function updateChannel(
   if (data.baseUrl !== undefined) updateData.baseUrl = data.baseUrl;
   if (data.apiKey !== undefined) updateData.apiKey = data.apiKey;
   if (data.protocol !== undefined) updateData.protocol = data.protocol;
-  if (data.config !== undefined)
-    updateData.config = stringifyJson(data.config);
 
   const channel = await prisma.modelChannel.update({
     where: { id },

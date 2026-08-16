@@ -1,38 +1,8 @@
 /**
- * 渠道配置校验模式。
- * 定义协议配置段与渠道配置的 zod 校验规则。
+ * 模型配置相关校验模式。
+ * 定义模型信息创建、批量设置与能力更新的 zod 校验规则。
  */
 import { z } from "zod";
-
-// 协议配置段
-export const protocolConfigSchema = z.object({
-  type: z.string(),
-  image_endpoint: z.string().optional(),
-  video_endpoint: z.string().optional(),
-  llm_endpoint: z.string().optional(),
-  audio_endpoint: z.string().optional(),
-  headers: z.record(z.string()).optional(),
-  extra_body: z.record(z.unknown()).optional(),
-});
-
-// 请求配置段
-export const requestConfigSchema = z.object({
-  params: z.record(z.unknown()).optional(),
-  endpoints: z.record(z.string()).optional(),
-  body: z.record(z.unknown()).optional(),
-});
-
-// 渠道完整配置（三段结构）
-export const channelConfigSchema = z.object({
-  params: z.record(z.unknown()).optional(),
-  endpoints: z.record(z.string()).optional(),
-  body: z.record(z.unknown()).optional(),
-  protocols: z.array(protocolConfigSchema).optional(),
-});
-
-export type ChannelConfig = z.infer<typeof channelConfigSchema>;
-export type ProtocolConfig = z.infer<typeof protocolConfigSchema>;
-export type RequestConfig = z.infer<typeof requestConfigSchema>;
 
 // Model Info schemas
 
