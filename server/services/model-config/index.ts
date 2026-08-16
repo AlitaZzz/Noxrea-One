@@ -3,43 +3,13 @@
  * 加载模型参数与能力预设，提供渠道、模型配置与预设的读取入口。
  */
 
-import fs from "fs";
-import path from "path";
-
-/** 项目根目录（兼容 Next.js dev/build 和 tsx 直接运行） */
-function getProjectRoot(): string {
-  let dir = process.cwd();
-  for (let i = 0; i < 3; i++) {
-    try {
-      const pkgPath = path.resolve(dir, "package.json");
-      const serverDir = path.resolve(dir, "server");
-      if (fs.existsSync(pkgPath) && fs.existsSync(serverDir)) {
-        return dir;
-      }
-    } catch { /* ignore */ }
-    dir = path.resolve(dir, "..");
-  }
-  return process.cwd();
-}
+import { loadJson } from "@server/services/json-loader";
 
 // 预设
 
-// 按文件修改时间缓存，provider-presets.json 变更后（无需重启）自动重新加载。
-let _presets: Record<string, unknown> | null = null;
-let _presetsMtime = 0;
-
-/** 加载预设配置（供前端 API 使用） */
+/** 加载预设配置（供前端 API 使用），支持热更新 */
 export function loadPresets(): Record<string, unknown> {
-  const presetPath = path.resolve(getProjectRoot(), "server/resources/provider-presets.json");
-  let mtime = 0;
-  try {
-    mtime = fs.statSync(presetPath).mtimeMs;
-  } catch { /* 文件暂不可读时保留旧缓存 */ }
-  if (_presets && mtime === _presetsMtime) return _presets;
-  const raw = fs.readFileSync(presetPath, "utf-8");
-  _presets = JSON.parse(raw);
-  _presetsMtime = mtime;
-  return _presets!;
+  return loadJson<Record<string, unknown>>("server/resources/provider-presets.json");
 }
 
 // 模型参数
@@ -68,32 +38,32 @@ export interface ParamField {
   falseShort?: string;
 }
 
-export interface ModelParamConfig {
-  fields: ParamField[];
-  transforms: Record<string, unknown>;
-  /**
-   * 模型级字段映射：统一字段 → 模型逻辑字段。
-   * 解决"同渠道不同模型字段不同"：在渠道级 mapping 之前应用，把前端统一字段
-   * 转成该模型自己的逻辑字段，再由渠道级 mapping 转成渠道实际字段。
-   */
-  mapping?: Record<string, unknown>;
+/** 能力开关声明：模型支持哪些参考/附加能力 + 约束 */
+export interface Capability {
+  /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
+  options?: string[];
+  /** 数量上限（refVideos/refAudios/refImages） */
+  max?: number;
+  /** 默认值 */
+  default?: boolean | string | number;
 }
 
-// 按文件修改时间缓存，model-params.json 变更后（无需重启）自动重新加载。
-let _modelParamsRaw: Record<string, Record<string, unknown>> | null = null;
-let _modelParamsMtime = 0;
+export interface ModelParamConfig {
+  fields: ParamField[];
+  /**
+   * 能力开关声明：前端据此动态渲染开关（refMode / generateAudio / refVideos / refAudios）。
+   * 模型未声明的能力，前端不显示对应开关。
+   */
+  capabilities?: Record<string, Capability>;
+  /**
+   * 该能力允许接收的业务字段白名单（含无 UI 控件的字段，如 refImages / messages / stream）。
+   * 后端入参校验与 build() 兜底过滤的权威来源。
+   */
+  allowedFields?: string[];
+}
 
 function loadRaw(): Record<string, Record<string, unknown>> {
-  const paramsPath = path.resolve(getProjectRoot(), "server/resources/model-params.json");
-  let mtime = 0;
-  try {
-    mtime = fs.statSync(paramsPath).mtimeMs;
-  } catch { /* 文件暂不可读时保留旧缓存 */ }
-  if (_modelParamsRaw && mtime === _modelParamsMtime) return _modelParamsRaw;
-  const raw = fs.readFileSync(paramsPath, "utf-8");
-  _modelParamsRaw = JSON.parse(raw) as Record<string, Record<string, unknown>>;
-  _modelParamsMtime = mtime;
-  return _modelParamsRaw;
+  return loadJson<Record<string, Record<string, unknown>>>("server/resources/model-params.json");
 }
 
 /** 返回完整 JSON（供前端 API 使用） */
@@ -104,13 +74,13 @@ export function loadModelParams(): Record<string, Record<string, unknown>> {
 /**
  * 按模型名 + capability 查找参数配置。
  * 匹配优先级：精确名 > fnmatch 通配符 > _default
- * defaults/params/constraints 优先用模型级配置，transforms 从 _default 兜底。
+ * fields/capabilities 优先用模型级配置，缺失继承 _default。
  * 读取模型参数预设
  */
 export function getModelParams(modelName: string, capability: string): ModelParamConfig | null {
   const data = loadRaw();
 
-  // _default 配置（transforms 的兜底来源）
+  // _default 配置（fields/capabilities 的兜底来源）
   const defaultCap = data["_default"]?.[capability];
   const defaultConfig = defaultCap ? parseConfig(defaultCap) : null;
 
@@ -141,19 +111,16 @@ export function getModelParams(modelName: string, capability: string): ModelPara
 /**
  * 合并配置：模型级配置优先，缺失的字段从 default 配置补充。
  * fields 为唯一数据源：模型级声明了 fields 则以模型级为准，否则继承 _default。
- * transforms 尤其重要：模型级通常没有 transforms，需要从 _default 继承。
  */
 function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | null): ModelParamConfig {
   if (!defaultCfg) return specific;
 
   return {
     fields: specific.fields.length > 0 ? specific.fields : defaultCfg.fields,
-    transforms: Object.keys(specific.transforms).length > 0 ? specific.transforms : defaultCfg.transforms,
-    // mapping 模型级优先，缺失则继承 _default
-    mapping:
-      specific.mapping && Object.keys(specific.mapping).length > 0
-        ? specific.mapping
-        : defaultCfg.mapping,
+    // capabilities 模型级优先，缺失则继承 _default
+    capabilities: specific.capabilities ?? defaultCfg.capabilities,
+    // allowedFields 模型级优先，缺失则继承 _default
+    allowedFields: specific.allowedFields ?? defaultCfg.allowedFields,
   };
 }
 
@@ -161,8 +128,8 @@ function parseConfig(raw: unknown): ModelParamConfig {
   const obj = raw as Record<string, unknown> ?? {};
   return {
     fields: (obj.fields as ParamField[]) ?? [],
-    transforms: (obj.transforms as Record<string, unknown>) ?? {},
-    mapping: (obj.mapping as Record<string, unknown>) ?? undefined,
+    capabilities: (obj.capabilities as Record<string, Capability>) ?? undefined,
+    allowedFields: (obj.allowedFields as string[]) ?? undefined,
   };
 }
 
@@ -177,4 +144,21 @@ export function modelFieldDefaults(modelParams: ModelParamConfig | null): Record
     if (f.default !== undefined) out[f.name] = f.default;
   }
   return out;
+}
+
+/**
+ * 能力名归一化：前端/DB 层可能用 "text"，后端生成能力统一为 "llm"。
+ */
+export function normalizeCapability(capability: string): string {
+  return capability === "text" ? "llm" : capability;
+}
+
+/**
+ * 取某模型某能力允许接收的业务字段白名单。
+ * 匹配优先级复用 getModelParams（精确名 > 通配 > _default），并对能力名做 text/llm 归一化。
+ */
+export function getAllowedFields(modelName: string, capability: string): string[] {
+  const normalized = normalizeCapability(capability);
+  const config = getModelParams(modelName, normalized);
+  return config?.allowedFields ?? [];
 }
