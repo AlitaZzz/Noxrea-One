@@ -85,7 +85,16 @@ export function build(input: BuildInput): Record<string, unknown> {
     body.model = input.modelName;
   }
 
-  // 3. Mapping：字段映射/重命名（渠道级，从 request.mapping 读取）
+  // 3. Model mapping：模型级字段映射（model-params.json 的 mapping）
+  // 把前端统一字段转成该模型自己的逻辑字段，解决"同渠道不同模型字段不同"。
+  // 在渠道级 mapping 之前执行，模型级字段再交给渠道级映射转成渠道实际字段。
+  const modelMapping = modelParams?.mapping;
+  if (modelMapping && Object.keys(modelMapping).length > 0) {
+    body = applyMapping(body, modelMapping);
+  }
+
+  // 3. Channel mapping：渠道级字段映射（从 request.mapping 读取）
+  // 把模型逻辑字段转成该渠道实际字段，解决"同模型不同渠道字段不同"。
   if (mappingConfig) {
     body = applyMapping(body, mappingConfig);
   }
