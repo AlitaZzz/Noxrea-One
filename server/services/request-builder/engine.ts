@@ -12,7 +12,7 @@ import { logEvent, summarizeText } from "@server/core/logger/utils";
 export interface BuildInput {
   /** 业务参数（前端传入的 params） */
   params: Record<string, unknown>;
-  /** 模型名，用于从 model_params.json 加载 transforms */
+  /** 模型名，用于从 model-params.json 加载 transforms */
   modelName: string;
   /** 能力名（image/video/llm/audio） */
   capability: string;
@@ -51,7 +51,7 @@ export function build(input: BuildInput): Record<string, unknown> {
   const mappingConfig = requestCfg?.mapping as Record<string, unknown> | undefined;
   const bodyPatch = requestCfg?.body_patch as Record<string, unknown> | undefined;
 
-  // 1. Transforms：从 model_params.json 加载 transforms 配置执行值变换
+  // 1. Transforms：从 model-params.json 加载 transforms 配置执行值变换
   let consumed = new Set<string>();
   if (modelParams?.transforms && Object.keys(modelParams.transforms).length > 0) {
     const result = applyTransforms(body, modelParams.transforms);
