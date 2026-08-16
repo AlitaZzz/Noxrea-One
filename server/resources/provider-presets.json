@@ -2,67 +2,21 @@
   {
     "name": "Exellome",
     "baseUrl": "https://new.exellome.online/v1",
-    "protocol": "openai",
-    "config": {
-      "request": {
-        "mapping": { "refImages": "image", "ratio": "size"},
-        "body_patch": {}
-      },
-      "protocol": {
-        "endpoints": {
-          "image.edits": "/images/edits"
-        }
-      }
-    }
+    "protocol": "openai"
   },
   {
     "name": "APIMart",
     "baseUrl": "https://api.apimart.ai/v1",
-    "protocol": "openai",
-    "config": {
-      "request": {
-        "mapping": { "refImages": "image_urls", "ratio": "size"},
-        "body_patch": { "official_fallback": false }
-      },
-      "protocol": {
-        "endpoints": {
-          "image.edits": "/images/generations"    
-        }
-      }
-    }
+    "protocol": "openai"
   },
   {
     "name": "Agnes",
     "baseUrl": "https://api.agnes-ai.cn/v1",
-    "protocol": "openai",
-    "config": {
-      "request": {
-        "mapping": { "refImages": "extra_body.image", "resolution": "size"},
-        "body_patch": {}
-      },
-      "protocol": {
-        "endpoints": {
-          "image.edits": "/images/generations",
-          "poll": "https://api.agnes-ai.cn/agnesapi?video_id={video_id}"          
-        }
-      }
-    }
+    "protocol": "openai"
   },
   {
     "name": "FHL",
     "baseUrl": "https://www.fhl.mom/v1",
-    "protocol": "openai",
-    "config": {
-      "request": {
-        "mapping": {
-          "refImages": "images[].image_url",
-          "ratio": "size"
-        },
-        "body_patch": {}
-      },
-      "protocol": {
-        "endpoints": {}
-      }
-    }
+    "protocol": "openai"
   }
 ]

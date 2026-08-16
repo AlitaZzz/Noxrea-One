@@ -1,107 +1,92 @@
 /**
  * 请求构建管线引擎。
- * 串联变换、字段映射与固定参数注入，将业务参数构建为上游请求体。
+ * 将前端固定语义字段，按供应商（baseUrl host）+ 模型 + 能力，
+ * 转换为上游真实字段（字段名 + 结构 + 值换算）。
+ *
+ * 数据来源：provider-map.json（经 resolveProvider / resolveKindSpec 读取，支持热更新）。
+ * 前端永远传固定语义字段名（ratio/seconds/refImages/refMode...），
+ * 后端据供应商与模型自动转换，前端不感知上游字段。
  */
 
-import { applyTransforms } from "./transforms";
-import { applyMapping } from "./mapping";
-import { applyPatch } from "./patch";
-import { getModelParams, type ModelParamConfig } from "@server/services/model-config";
-import { logEvent, summarizeText } from "@server/core/logger/utils";
+import { resolveProvider, resolveKindSpec } from "@server/services/provider";
+import { getAllowedFields } from "@server/services/model-config";
+import { resolveRefSlots, resolveByKind, applyTransform, setNested } from "./resolve";
+import { logEvent } from "@server/core/logger/utils";
+
 
 export interface BuildInput {
   /** 业务参数（前端传入的 params） */
   params: Record<string, unknown>;
-  /** 模型名，用于从 model-params.json 加载 transforms */
+  /** 模型名 */
   modelName: string;
   /** 能力名（image/video/llm/audio） */
   capability: string;
   /** 协议名（openai/gemini/ark） */
   protocol: string;
-  /** 渠道配置（JSON 字符串解析后的对象，含 request.mapping / request.body_patch） */
-  channelConfig?: Record<string, unknown>;
+  /** 上游 baseUrl，用于匹配供应商 */
+  baseUrl: string;
   /** 任务 ID（日志关联） */
   taskId?: string;
 }
 
 /** 引擎内置清理：这些内部字段不传给 Provider */
-const INTERNAL_FIELDS = new Set(["capability"]);
+const INTERNAL_FIELDS = new Set(["capability", "refMode", "channelId"]);
+
+/** 通用字段：所有能力都放行（不属于能力业务字段，但需透传上游） */
+const UNIVERSAL_FIELDS = new Set(["prompt", "model"]);
+
+/** 参考类语义字段：需要从 refImages/refMode 派生槽位后按 kind 组装 */
+const REF_KEYS = new Set(["refImages", "firstFrame", "lastFrame"]);
 
 /**
- * 四步管线：transforms → auto-clean → mapping → patch
- * 构建上游请求体
- *
- * channelConfig 结构（对齐 Python ChannelConfig）：
- * {
- *   request: {
- *     mapping: { "ref_images": "images[].image_url", ... },
- *     body_patch: { ... },
- *     model_overrides: [...],
- *     submit_style: "sync" | "async"
- *   },
- *   protocol: { endpoints: { ... } }
- * }
+ * 构建上游请求体：
+ *   1. 按 baseUrl 匹配供应商
+ *   2. 解析参考槽位（refMode + refImages → firstFrame/lastFrame/refImages）
+ *   3. 逐个语义字段查 {field, kind, transform}，改名 + 组结构 + 换算值
+ *   4. 未映射字段原样透传；内部字段清除
  */
 export function build(input: BuildInput): Record<string, unknown> {
-  let body = { ...input.params };
-  const modelParams = getModelParams(input.modelName, input.capability);
+  const provider = resolveProvider(input.baseUrl);
 
-  // 解析 channel config 中的 request 配置
-  const requestCfg = input.channelConfig?.request as Record<string, unknown> | undefined;
-  const mappingConfig = requestCfg?.mapping as Record<string, unknown> | undefined;
-  const bodyPatch = requestCfg?.body_patch as Record<string, unknown> | undefined;
+  // 0. 能力字段白名单兜底：只放行该能力允许的业务字段 + 通用字段，其余丢弃
+  const allowedSet = new Set(getAllowedFields(input.modelName, input.capability));
 
-  // 1. Transforms：从 model-params.json 加载 transforms 配置执行值变换
-  let consumed = new Set<string>();
-  if (modelParams?.transforms && Object.keys(modelParams.transforms).length > 0) {
-    const result = applyTransforms(body, modelParams.transforms);
-    body = result.body;
-    consumed = result.consumed;
-  }
+  // 1. 解析参考槽位
+  const refMode = input.params.refMode as string | undefined;
+  const refImages = (input.params.refImages as string[]) ?? [];
+  // refMode 是视频专属参数；图像能力不涉及首尾帧，参考图直接全量参考（由 resolveRefSlots 按能力区分）
+  const slots = resolveRefSlots(refMode, refImages, input.capability);
 
-  // 2. Auto-clean：删内部字段、删 None 值、删 composite 已消费字段
-  for (const key of Object.keys(body)) {
-    if (INTERNAL_FIELDS.has(key)) {
-      delete body[key];
-    } else if (body[key] === null) {
-      delete body[key];
-    } else if (consumed.has(key)) {
-      delete body[key];
+  // 2. 逐个字段转换
+  const result: Record<string, unknown> = {};
+
+  for (const [key, rawValue] of Object.entries(input.params)) {
+    // 内部字段清除
+    if (INTERNAL_FIELDS.has(key)) continue;
+
+    // 兜底过滤：既非通用字段、也不在能力白名单内的字段，静默丢弃
+    if (!UNIVERSAL_FIELDS.has(key) && !allowedSet.has(key)) continue;
+
+    const spec = resolveKindSpec(provider, input.modelName, input.capability, key);
+
+    // 有映射规格：参考类走 kind 组结构；普通类走改名 + transform
+    if (spec) {
+      // 按参考模式分派映射规格（如 seedance 首帧用 image_urls，首尾帧用 image_with_roles）
+      const effectiveSpec = spec.byRefMode?.[refMode] ?? spec;
+      if (REF_KEYS.has(key)) {
+        const [field, value] = resolveByKind(effectiveSpec, slots);
+        if (value !== undefined) setNested(result, field, value);
+      } else {
+        const value = applyTransform(effectiveSpec.transform, rawValue, input.params);
+        if (value !== undefined && value !== null) setNested(result, effectiveSpec.field, value);
+      }
+      continue;
     }
-  }
 
-  // 3.5 能力级白名单：LLM 能力只需 prompt/messages，不应把 image/video 的内部字段
-  // （n、refImages、channelId、model 等）透传给语言模型上游，否则上游会报未知参数。
-  if (input.capability === "llm") {
-    const LLM_ALLOWED = new Set(["prompt", "messages", "temperature", "top_p", "max_tokens", "stop", "stream"]);
-    for (const key of Object.keys(body)) {
-      if (!LLM_ALLOWED.has(key)) delete body[key];
+    // 无映射：原样透传（去除 null）
+    if (rawValue !== undefined && rawValue !== null) {
+      result[key] = rawValue;
     }
-  }
-
-  // 3.6 注入模型名：LLM 请求必须带 model，否则上游报 MissingParameter。
-  // 该字段不在白名单内，需在过滤之后、mapping 之前显式写入，确保不会被清掉。
-  if (input.capability === "llm" && input.modelName) {
-    body.model = input.modelName;
-  }
-
-  // 3. Model mapping：模型级字段映射（model-params.json 的 mapping）
-  // 把前端统一字段转成该模型自己的逻辑字段，解决"同渠道不同模型字段不同"。
-  // 在渠道级 mapping 之前执行，模型级字段再交给渠道级映射转成渠道实际字段。
-  const modelMapping = modelParams?.mapping;
-  if (modelMapping && Object.keys(modelMapping).length > 0) {
-    body = applyMapping(body, modelMapping);
-  }
-
-  // 3. Channel mapping：渠道级字段映射（从 request.mapping 读取）
-  // 把模型逻辑字段转成该渠道实际字段，解决"同模型不同渠道字段不同"。
-  if (mappingConfig) {
-    body = applyMapping(body, mappingConfig);
-  }
-
-  // 4. Patch：固定参数注入（渠道级，从 request.body_patch 读取）
-  if (bodyPatch) {
-    body = applyPatch(body, bodyPatch);
   }
 
   // 日志：回显请求构建结果
@@ -111,9 +96,9 @@ export function build(input: BuildInput): Record<string, unknown> {
     model: input.modelName,
     capability: input.capability,
     protocol: input.protocol,
-    bodyKeys: Object.keys(body),
-    ...(typeof body.prompt === "string" ? { promptLen: body.prompt.length } : {}),
+    bodyKeys: Object.keys(result),
+    ...(typeof result.prompt === "string" ? { promptLen: result.prompt.length } : {}),
   });
 
-  return body;
+  return result;
 }
