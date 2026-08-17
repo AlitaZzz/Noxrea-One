@@ -8,7 +8,7 @@ import { BaseEdge, type EdgeProps,getBezierPath } from "@xyflow/react";
 
 import { useHighlightedEdges } from "@/providers/edge-highlight-context";
 
-import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
+import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
 
 export default function DeletableEdge({
   id,
@@ -46,9 +46,7 @@ export default function DeletableEdge({
       />
 
       {/* Multi-dot flow animation (when connected node selected or edge selected) */}
-      {isConnected && STAGGER.map((begin) => (
-        <FlowingDot key={`${id}-${begin}`} path={edgePath} begin={begin} color={DOT_COLOR} />
-      ))}
+      {isConnected && <FlowingDots path={edgePath} color={DOT_COLOR} />}
     </>
   );
 }

@@ -6,7 +6,7 @@
 
 import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } from "@xyflow/react";
 
-import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
+import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
 
 export default function ConnectionFlowLine({
   fromX,
@@ -28,9 +28,7 @@ export default function ConnectionFlowLine({
   return (
     <>
       <BaseEdge path={edgePath} style={{ stroke: DOT_COLOR, strokeWidth: 2 }} />
-      {STAGGER.map((begin) => (
-        <FlowingDot key={begin} path={edgePath} begin={begin} color={DOT_COLOR} />
-      ))}
+      <FlowingDots path={edgePath} color={DOT_COLOR} />
     </>
   );
 }
