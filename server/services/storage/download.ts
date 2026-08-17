@@ -28,14 +28,10 @@ import path from "path";
 export async function downloadAndSave(
   cdnUrl: string,
   userId: number,
-  capability: string,
   taskId: string = ""
 ): Promise<string | null> {
   const cfg = getConfig();
   const maxSize = cfg.MAX_UPLOAD_SIZE_MB * 1024 * 1024;
-  // 初始扩展名仅作为 fallback，后续会通过 sniffMime 校正
-  const ext = capability === "video" ? ".mp4" : capability === "audio" ? ".mp3" : ".png";
-
   try {
     let buffer: Buffer;
 
@@ -105,7 +101,7 @@ export async function downloadAndSave(
               if (done) break;
               totalSize += value.byteLength;
               if (totalSize > maxSize) {
-                reader.cancel();
+                await reader.cancel();
                 logger.warn({ taskId, size: totalSize, max: maxSize }, "Download exceeds size limit (stream)");
                 return null;
               }
@@ -153,7 +149,9 @@ export async function downloadAndSave(
       await fs.writeFile(targetPath, buffer);
     } catch (err: unknown) {
       // Windows：文件被锁但内容相同，跳过
-      const code = (err as NodeJS.ErrnoException).code;
+      const code = typeof err === "object" && err !== null && "code" in err
+        ? err.code
+        : undefined;
       if (code === "EPERM") {
         logger.warn({ taskId, path: targetPath }, "File locked, skipping write");
       } else {

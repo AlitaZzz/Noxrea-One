@@ -12,7 +12,9 @@
     "server": "tsx --env-file=.env server/index.ts",
     "build": "npm -w web run build",
     "start": "concurrently -n web,server -c cyan,magenta \"npm -w web run start\" \"npm run server\"",
-    "lint": "npm -w web run lint",
+    "lint": "npm run lint:web && npm run lint:server",
+    "lint:web": "npm -w web run lint",
+    "lint:server": "eslint server",
     "typecheck": "tsc --noEmit",
     "test": "npm -w web run test",
     "test:watch": "npm -w web run test:watch",
@@ -23,7 +25,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "6.19.3",
     "bcryptjs": "^2.4.3",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.33",
@@ -39,8 +41,10 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "concurrently": "^9.1.0",
+    "eslint": "^9.39.5",
     "prisma": "^6.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8.67.0"
   }
 }

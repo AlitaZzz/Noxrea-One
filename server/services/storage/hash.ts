@@ -4,9 +4,7 @@
  */
 
 import crypto from "crypto";
-import fs from "fs/promises";
 import { createReadStream } from "fs";
-import path from "path";
 
 /** magic bytes 签名表（支持两段匹配：first + 可选 second） */
 const MAGIC_SIGNATURES: Array<{

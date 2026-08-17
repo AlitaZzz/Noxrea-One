@@ -3,7 +3,7 @@
  * 实现 OpenAI 上游协议的公共逻辑，提供认证头与请求结果封装。
  */
 
-import type { ProtocolRequestResult, ProtocolResponse, ProtocolService } from "@server/services/protocols/base";
+import type { ProtocolRequestResult, ProtocolService } from "@server/services/protocols/base";
 
 export abstract class OpenAiProtocol implements ProtocolService {
   readonly name = "openai";

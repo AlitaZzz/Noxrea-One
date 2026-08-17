@@ -24,7 +24,8 @@ export class OpenAiAudioProtocol implements ProtocolService {
     };
   }
 
-  parseAudioResponse(_response: unknown): ProtocolResponse {
+  parseAudioResponse(response: unknown): ProtocolResponse {
+    void response;
     return { urls: [] };
   }
 }

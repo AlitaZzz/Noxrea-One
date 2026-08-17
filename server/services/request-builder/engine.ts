@@ -68,7 +68,7 @@ export function build(input: BuildInput): Record<string, unknown> {
     // 有映射规格：参考类走 kind 组结构；普通类走改名 + transform
     if (spec) {
       // 按参考模式分派映射规格（如 seedance 首帧用 image_urls，首尾帧用 image_with_roles）
-      const effectiveSpec = (refMode && spec.byRefMode?.[refMode]) ?? spec;
+      const effectiveSpec = (refMode ? spec.byRefMode?.[refMode] : undefined) ?? spec;
       if (REF_KEYS.has(key)) {
         const [field, value] = resolveByKind(effectiveSpec, slots);
         if (value !== undefined) setNested(result, field, value);

@@ -37,15 +37,20 @@ export async function persistFileObject(data: FilePersistenceInput) {
       size: data.size,
       source: data.source,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // 记录完整错误信息，便于排查 DB 写入失败的真实原因
+    const details = err instanceof Error
+      ? { error: err.message, stack: err.stack }
+      : { error: String(err) };
+    const code = typeof err === "object" && err !== null && "code" in err
+      ? err.code
+      : undefined;
     logEvent("storage", {
       stage: "persist_error",
       user: data.userId,
       hash: data.hash,
-      error: err?.message ?? String(err),
-      code: err?.code,
-      stack: err?.stack,
+      ...details,
+      code,
     });
   }
 }

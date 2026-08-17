@@ -278,9 +278,11 @@ export function resolveFieldMapSpec(
  */
 export function resolveChannelEndpoints(
   host: string,
-  _modelName: string,
-  _capability: string
+  modelName: string,
+  capability: string
 ): Record<string, string> | undefined {
+  void modelName;
+  void capability;
   const data = loadRaw();
   const hostHit = matchHost(data, host);
   if (!hostHit) return undefined;

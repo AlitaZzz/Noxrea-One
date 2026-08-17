@@ -2,6 +2,7 @@
  * 场景化 HTTP 客户端。
  * 按下载、轮询、接口、异步等场景提供差异化的超时与请求封装。
  */
+import { ProxyAgent } from "undici";
 import { getConfig } from "@server/core/config";
 
 export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
@@ -22,8 +23,6 @@ export function getProxyDispatcher(): unknown {
   const cfg = getConfig();
   if (!cfg.USE_SYSTEM_PROXY || !cfg.PROXY_URL) return undefined;
 
-  // Node.js undici 内置 ProxyAgent（无需额外依赖）
-  const { ProxyAgent } = require("undici") as typeof import("undici");
   return new ProxyAgent(cfg.PROXY_URL);
 }
 

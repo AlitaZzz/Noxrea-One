@@ -15,15 +15,6 @@ const PRIVATE_IP_PREFIXES = [
   "198.18.", "198.19.", "198.51.100.", "203.0.113.",
 ];
 
-// IPv6 私有地址前缀（精确匹配）
-const PRIVATE_IPV6_PREFIXES = [
-  "::1",          // loopback
-  "fc00:",        // Unique Local Address (fc00::/7)
-  "fd",           // ULA 前缀的一部分
-  "fe80:",        // Link-local (fe80::/10)
-  "fe90:", "fea0:", "feb0:", // fe80::/10 范围内的变体
-];
-
 // IPv6 ULA 精确范围: fc00::/7（fc 或 fd 开头）
 const IPV6_ULA_FIRST_BYTE = new Set(["fc", "fd"]);
 
