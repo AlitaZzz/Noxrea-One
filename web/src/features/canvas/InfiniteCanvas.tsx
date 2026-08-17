@@ -52,7 +52,6 @@ import PendingConnectionPreview from "@/features/canvas/controls/PendingConnecti
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType,useAddNode } from "@/features/canvas/hooks/use-add-node";
-import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
@@ -70,6 +69,7 @@ import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel"
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";

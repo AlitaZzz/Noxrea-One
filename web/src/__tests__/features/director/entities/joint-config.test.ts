@@ -7,7 +7,7 @@ import { describe, it } from "vitest";
 
 import { JOINTS } from "@/features/director/entities/joint-config";
 
-const ASSETS = path.resolve(__dirname, "../../../../public/assets");
+const ASSETS = path.resolve(__dirname, "../../../../../public/assets");
 type GlbJson = { nodes: Array<{ name?: string; children?: number[]; rotation?: number[]; translation?: number[] }>; skins?: Array<{ joints: number[] }>; scenes?: Array<{ nodes: number[] }> };
 function parseGlbJson(file: string): GlbJson {
   const buf = fs.readFileSync(path.join(ASSETS, file));
