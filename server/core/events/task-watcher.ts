@@ -18,6 +18,8 @@ export interface TerminalTaskState {
 interface PendingSubscription {
   taskId: string;
   resolve: (value: TerminalTaskState | null) => void;
+  signal?: AbortSignal;
+  abortHandler?: () => void;
 }
 
 const globalForWatcher = globalThis as unknown as {
@@ -35,22 +37,18 @@ export class TaskWatcher {
     signal?: AbortSignal
   ): Promise<TerminalTaskState | null> {
     return new Promise((resolve) => {
-      const sub: PendingSubscription = { taskId, resolve };
+      if (signal?.aborted) {
+        resolve(null);
+        return;
+      }
 
+      const sub: PendingSubscription = { taskId, resolve, signal };
       if (signal) {
-        signal.addEventListener(
-          "abort",
-          () => {
-            const list = this.pending.get(taskId);
-            if (list) {
-              const idx = list.indexOf(sub);
-              if (idx !== -1) list.splice(idx, 1);
-              if (list.length === 0) this.pending.delete(taskId);
-            }
-            resolve(null);
-          },
-          { once: true }
-        );
+        sub.abortHandler = () => {
+          this.removeSubscription(sub);
+          resolve(null);
+        };
+        signal.addEventListener("abort", sub.abortHandler, { once: true });
       }
 
       const list = this.pending.get(taskId) ?? [];
@@ -65,12 +63,45 @@ export class TaskWatcher {
     return this.pending.size;
   }
 
+  dispose(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    for (const subs of this.pending.values()) {
+      for (const sub of subs) {
+        this.detachAbortHandler(sub);
+        sub.resolve(null);
+      }
+    }
+    this.pending.clear();
+    this.startedAt = null;
+    this.pollIntervalMs = 1000;
+  }
+
+  private removeSubscription(sub: PendingSubscription): void {
+    const list = this.pending.get(sub.taskId);
+    if (!list) return;
+    const index = list.indexOf(sub);
+    if (index !== -1) list.splice(index, 1);
+    if (list.length === 0) this.pending.delete(sub.taskId);
+    this.detachAbortHandler(sub);
+  }
+
+  private detachAbortHandler(sub: PendingSubscription): void {
+    if (sub.signal && sub.abortHandler) {
+      sub.signal.removeEventListener("abort", sub.abortHandler);
+    }
+  }
+
   private ensureTimer(): void {
     if (this.timer) return;
     if (this.pending.size === 0) return;
 
     if (!this.startedAt) this.startedAt = Date.now();
-    this.timer = setTimeout(() => this.poll(), this.pollIntervalMs);
+    this.timer = setTimeout(() => {
+      void this.poll();
+    }, this.pollIntervalMs);
   }
 
   private async poll(): Promise<void> {
@@ -103,6 +134,7 @@ export class TaskWatcher {
         };
 
         for (const sub of subs) {
+          this.detachAbortHandler(sub);
           sub.resolve(state);
         }
         this.pending.delete(task.id);
