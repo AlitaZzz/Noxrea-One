@@ -9,7 +9,7 @@
 
 import { getBezierPath, Position, ViewportPortal } from "@xyflow/react";
 
-import { DOT_COLOR, FlowingDot, STAGGER } from "./EdgeFlow";
+import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
 
 interface Props {
   /** 发起端 Handle 锚点（画布坐标） */
@@ -40,9 +40,7 @@ export default function PendingConnectionPreview({ from, to, fromPosition }: Pro
           fill="none"
           style={{ stroke: DOT_COLOR, strokeWidth: 2 }}
         />
-        {STAGGER.map((begin) => (
-          <FlowingDot key={begin} path={edgePath} begin={begin} color={DOT_COLOR} />
-        ))}
+        <FlowingDots path={edgePath} color={DOT_COLOR} />
       </svg>
     </ViewportPortal>
   );

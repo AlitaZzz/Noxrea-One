@@ -2,6 +2,8 @@
  * 连线流光（流动光点）相关常量与组件。
  * 选中节点时连线、拖拽连接预览线均复用此处，保证视觉一致。
  */
+import { useId } from "react";
+
 import { getBezierPath } from "@xyflow/react";
 
 export const DOT_COLOR = "#1D9E75";
@@ -12,16 +14,39 @@ export const STAGGER = [0, -0.55, -1.1];
  * 光点 + 光晕的 SVG 元素组，沿 path 流动。
  * 每对由一个透明光晕 (r=8) 和一个实心内核 (r=3) 组成。
  */
-export function FlowingDot({ path, begin, color }: { path: string; begin: number; color: string }) {
+function FlowingDot({ pathId, begin, color }: { pathId: string; begin: number; color: string }) {
+  const motionPathHref = `#${pathId}`;
+
   return (
     <g>
       <circle r="8" fill={`${color}33`}>
-        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
+        <animateMotion dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`}>
+          <mpath href={motionPathHref} />
+        </animateMotion>
       </circle>
       <circle r="3" fill={color}>
-        <animateMotion path={path} dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`} />
+        <animateMotion dur={`${DURATION}s`} repeatCount="indefinite" begin={`${begin}s`}>
+          <mpath href={motionPathHref} />
+        </animateMotion>
       </circle>
     </g>
+  );
+}
+
+/**
+ * 使用稳定的 mpath 引用渲染整组流光。
+ * 路径变化时只更新几何形状，不替换 animateMotion 的 path 属性，避免动画时间线重置。
+ */
+export function FlowingDots({ path, color = DOT_COLOR }: { path: string; color?: string }) {
+  const pathId = useId();
+
+  return (
+    <>
+      <path id={pathId} d={path} fill="none" stroke="none" />
+      {STAGGER.map((begin) => (
+        <FlowingDot key={begin} pathId={pathId} begin={begin} color={color} />
+      ))}
+    </>
   );
 }
 
