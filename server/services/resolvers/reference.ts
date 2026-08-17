@@ -21,7 +21,7 @@ function isPathWithin(base: string, target: string): boolean {
  * 将存储路径转为完整的 data: URL（base64）。
  * 读取自身文件并 base64 编码。
  */
-async function readSelfFile(relPath: string, userId: number): Promise<string | null> {
+async function readSelfFile(relPath: string): Promise<string | null> {
   try {
     const fullPath = path.resolve(localStorage.baseDir, relPath);
 
@@ -88,7 +88,7 @@ async function resolveRefList(
       // 同源 URL（/api/files/ 或纯存储路径）→ 提取相对路径 → 转 base64
       if (url.startsWith("/api/files/") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
         const relPath = url.startsWith("/api/files/") ? url.replace(/^\/api\/files\//, "") : url;
-        const dataUrl = await readSelfFile(relPath, userId);
+        const dataUrl = await readSelfFile(relPath);
         resolved.push(dataUrl ?? url);
         continue;
       }

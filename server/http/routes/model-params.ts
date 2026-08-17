@@ -18,12 +18,14 @@ function stripInternal(raw: Record<string, Record<string, unknown>>): Record<str
       // 跳过 host 条目顶层的 _endpoints 路由
       if (modelKey === "_endpoints") continue;
       const capsOut: Record<string, unknown> = {};
-      for (const [capKey, capVal] of Object.entries(caps)) {
+      for (const [capKey, capVal] of Object.entries(caps as Record<string, unknown>)) {
         if (!capVal || typeof capVal !== "object") {
           capsOut[capKey] = capVal;
           continue;
         }
-        const { mapping: _m, channels: _c, ...rest } = capVal as Record<string, unknown>;
+        const rest = Object.fromEntries(
+          Object.entries(capVal).filter(([key]) => key !== "mapping" && key !== "channels"),
+        );
         capsOut[capKey] = rest;
       }
       modelsOut[modelKey] = capsOut;

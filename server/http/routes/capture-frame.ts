@@ -47,7 +47,6 @@ router.post("/api/files/capture-frame", async (c) => {
     return fail(404, "Video file not found");
   }
 
-  const ext = path.extname(video_key);
   const tmpFramePath = path.resolve(localStorage.baseDir, `_tmp_frame_${Date.now()}.jpg`);
 
   try {
@@ -77,14 +76,17 @@ router.post("/api/files/capture-frame", async (c) => {
       })
     );
   } catch (err: unknown) {
-    const e = err as Error & { code?: string };
-    if (e.code === "ENOENT" || e.message?.includes("ENOENT")) {
+    const message = err instanceof Error ? err.message : "Frame capture failed";
+    const code = typeof err === "object" && err !== null && "code" in err
+      ? err.code
+      : undefined;
+    if (code === "ENOENT" || message.includes("ENOENT")) {
       return fail(500, "ffmpeg not found - please install ffmpeg and set FFMPEG_PATH in .env");
     }
-    return fail(500, e.message ?? "Frame capture failed");
+    return fail(500, message);
   } finally {
     // 清理临时文件
-    await fs.unlink(tmpFramePath).catch(() => {});
+    await fs.unlink(tmpFramePath).catch(() => undefined);
   }
 });
 

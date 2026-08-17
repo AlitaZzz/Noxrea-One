@@ -7,6 +7,17 @@ import crypto from "crypto";
  */
 import type { GenerationTask } from "@prisma/client";
 
+export type HydratedGenerationTask = Omit<
+  GenerationTask,
+  "config" | "refImages" | "refAudios" | "refVideos" | "resultUrls"
+> & {
+  config: Record<string, unknown>;
+  refImages: string[];
+  refAudios: string[];
+  refVideos: string[];
+  resultUrls: string[];
+};
+
 export async function createTask(data: {
   userId: number;
   type?: string;
@@ -219,8 +230,8 @@ export async function cleanupZombieTasks(
  * - 无 upstreamTaskId 的同步任务：重置为 pending，重新执行
  */
 export async function recoverProcessingTasks(): Promise<{
-  recovered: number;          // 同步任务重置为 pending
-  asyncTasks: GenerationTask[]; // 异步任务需要继续轮询
+  recovered: number; // 同步任务重置为 pending
+  asyncTasks: HydratedGenerationTask[]; // 异步任务需要继续轮询
 }> {
   const allProcessing = await prisma.generationTask.findMany({
     where: { status: "processing" },
@@ -265,7 +276,7 @@ export async function cancelTask(id: string) {
 
 // 反序列化工具：将 SQLite JSON 字符串解析为对象
 
-function deserializeTask(task: GenerationTask) {
+function deserializeTask(task: GenerationTask): HydratedGenerationTask {
   return {
     ...task,
     config: parseJsonObject(task.config),

@@ -4,7 +4,6 @@
  * 并在导入副作用中触发各能力实现的注册。
  */
 
-import { registerCapability } from "@server/services/capabilities/base";
 import { registerProtocol } from "@server/services/protocols/base";
 import { logEvent } from "@server/core/logger/utils";
 
