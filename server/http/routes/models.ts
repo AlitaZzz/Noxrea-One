@@ -58,7 +58,7 @@ router.post("/api/models/list", async (c) => {
   let protocol = "openai";
 
   if (channelId) {
-    const channel = await getChannel(Number(channelId));
+    const channel = await getChannel(Number(channelId), auth.user.id);
     if (!channel) return fail(404, "Channel not found");
     baseUrl = channel.baseUrl;
     apiKey = channel.apiKey || undefined;
@@ -94,24 +94,25 @@ router.post("/api/models/list", async (c) => {
           scene: "api",
         });
         if (response.ok) {
-          const raw = await response.json();
-          const models = !Array.isArray(raw) && raw && Array.isArray((raw as any).data)
-            ? (raw as any).data
-            : Array.isArray(raw)
-              ? raw
+          const raw: unknown = await response.json();
+          const models = Array.isArray(raw)
+            ? raw
+            : typeof raw === "object" && raw !== null && "data" in raw && Array.isArray(raw.data)
+              ? raw.data
               : [];
           return c.json(ok(models));
         }
         const errBody = await response.text().catch(() => "");
         lastError = `${response.status}: ${errBody}`;
-      } catch (err: any) {
-        lastError = err.message ?? "Request failed";
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : "Request failed";
       }
     }
 
     return fail(502, `Failed to fetch models from upstream. Tried: ${tried.join(", ")}. Last error: ${lastError}`);
-  } catch (err: any) {
-    return fail(500, `Failed to fetch models: ${err.message ?? "Unknown error"}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return fail(500, `Failed to fetch models: ${message}`);
   }
 });
 

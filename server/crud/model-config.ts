@@ -16,19 +16,18 @@ function deserializeChannel<T extends { models: Array<{ capabilities: unknown }>
 }
 
 // Channel
-export async function getChannels(userId?: number) {
-  const where = userId ? { userId } : {};
+export async function getChannels(userId: number) {
   const channels = await prisma.modelChannel.findMany({
-    where,
+    where: { userId },
     orderBy: { createdAt: "desc" },
     include: { models: true },
   });
   return channels.map(deserializeChannel);
 }
 
-export async function getChannel(id: number) {
-  const channel = await prisma.modelChannel.findUnique({
-    where: { id },
+export async function getChannel(id: number, userId: number) {
+  const channel = await prisma.modelChannel.findFirst({
+    where: { id, userId },
     include: { models: true },
   });
   return channel ? deserializeChannel(channel) : null;
@@ -56,6 +55,7 @@ export async function createChannel(data: {
 
 export async function updateChannel(
   id: number,
+  userId: number,
   data: {
     name?: string;
     baseUrl?: string;
@@ -63,6 +63,8 @@ export async function updateChannel(
     protocol?: string;
   }
 ) {
+  const existing = await prisma.modelChannel.findFirst({ where: { id, userId } });
+  if (!existing) return null;
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
   };
@@ -80,15 +82,19 @@ export async function updateChannel(
   return deserializeChannel(channel);
 }
 
-export async function deleteChannel(id: number) {
-  return prisma.modelChannel.delete({ where: { id } });
+export async function deleteChannel(id: number, userId: number) {
+  return prisma.modelChannel.deleteMany({ where: { id, userId } });
 }
 
 // Model
 export async function addModel(
   channelId: number,
+  userId: number,
   data: { name: string; capabilities?: string[] }
 ) {
+  const channel = await prisma.modelChannel.findFirst({ where: { id: channelId, userId } });
+  if (!channel) return null;
+
   const model = await prisma.modelInfo.create({
     data: {
       channelId,
@@ -102,17 +108,23 @@ export async function addModel(
   };
 }
 
-export async function deleteModel(modelId: number) {
-  return prisma.modelInfo.delete({ where: { id: modelId } });
+export async function deleteModel(modelId: number, userId: number) {
+  return prisma.modelInfo.deleteMany({
+    where: { id: modelId, channel: { userId } },
+  });
 }
 
 export async function batchSetModels(
   channelId: number,
+  userId: number,
   models: Array<{
     name: string;
     capabilities?: string[];
   }>
 ) {
+  const channel = await prisma.modelChannel.findFirst({ where: { id: channelId, userId } });
+  if (!channel) return null;
+
   return prisma.$transaction(async (tx) => {
     await tx.modelInfo.deleteMany({ where: { channelId } });
 
@@ -134,8 +146,14 @@ export async function batchSetModels(
 
 export async function updateModelCapability(
   modelId: number,
+  userId: number,
   capabilities: string[]
 ) {
+  const existing = await prisma.modelInfo.findFirst({
+    where: { id: modelId, channel: { userId } },
+  });
+  if (!existing) return null;
+
   const model = await prisma.modelInfo.update({
     where: { id: modelId },
     data: { capabilities: stringifyJson(capabilities) },

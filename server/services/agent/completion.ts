@@ -7,7 +7,6 @@
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { getChannel, getChannels } from "@server/crud/model-config";
-import { agentToolRegistry } from "@server/services/agent/tools/registry";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
 import { resolveSkillTools } from "@server/services/agent/tools/filter";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
@@ -17,12 +16,11 @@ import { logEvent } from "@server/core/logger/utils";
 import type { AgentMessage } from "@server/services/agent/context-builder";
 
 /** 渠道解析：按 channelId 精确查找，否则按 model 名称匹配，最后回退第一个 */
-export async function resolveChannel(channelId?: number, model?: string) {
+export async function resolveChannel(userId: number, channelId?: number, model?: string) {
   if (channelId) {
-    const ch = await getChannel(channelId);
-    if (ch) return ch;
+    return getChannel(channelId, userId);
   }
-  const channels = await getChannels();
+  const channels = await getChannels(userId);
   if (model && channels.length) {
     const matched = channels.find((ch) => ch.models.some((m: { name: string }) => m.name === model));
     if (matched) return matched;
@@ -45,7 +43,7 @@ export async function buildUpstream(args: {
   /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
   activeSkill?: string | null;
 }): Promise<BuildResult> {
-  const channel = await resolveChannel(args.channelId, args.model);
+  const channel = await resolveChannel(args.userId, args.channelId, args.model);
   if (!channel) return { ok: false, error: "no available channel" };
 
   const protocol = getProtocol(channel.protocol);
@@ -132,7 +130,7 @@ export async function runCompletion(args: {
       return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
     }
     const data = await resp.json();
-    const channel = await resolveChannel(args.channelId, args.model);
+    const channel = await resolveChannel(args.userId, args.channelId, args.model);
     const protocol = channel ? getProtocol(channel.protocol) : undefined;
     const text = protocol?.parseLlmResponse ? protocol.parseLlmResponse(data).text ?? "" : "";
     return { ok: true, text };
@@ -184,7 +182,7 @@ export async function runCompletionStream(args: {
     return { ok: false, error: built.error };
   }
 
-  const channel = await resolveChannel(args.channelId, args.model);
+  const channel = await resolveChannel(args.userId, args.channelId, args.model);
   const protocolName = channel?.protocol;
   logEvent("chat.stream", {
     stage: "upstream_start",
@@ -231,7 +229,7 @@ export async function runCompletionStream(args: {
         const data = line.slice(5).trim();
         if (data === "[DONE]") continue;
 
-        const delta = extractDelta(data, protocolName);
+        const delta = extractDelta(data);
         if (delta) {
           if (!firstDeltaLogged) {
             firstDeltaLogged = true;
@@ -322,7 +320,7 @@ class ToolCallAccumulator {
 }
 
 /** 从上游 SSE data 行提取增量文本，按协议分支 */
-function extractDelta(data: string, protocolName?: string): string {
+function extractDelta(data: string): string {
   let json: Record<string, unknown>;
   try {
     json = JSON.parse(data);
