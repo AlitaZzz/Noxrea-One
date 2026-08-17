@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { fail } from "@server/core/response";
+import { createSseResponse } from "@server/http/sse";
 import { listSkills, getSkill } from "@server/services/agent/skills/loader";
 import { agentToolRegistry } from "@server/services/agent/tools/registry";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
@@ -254,33 +255,9 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   // 有技能激活时自动注入工具
   const agent = true;
 
-  const encoder = new TextEncoder();
-  let streamClosed = false;
-  const upstreamAbort = new AbortController();
-  let heartbeat: ReturnType<typeof setInterval> | undefined;
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        if (streamClosed) return;
-        try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch {
-          streamClosed = true;
-        }
-      };
-
+  return createSseResponse(c.req.raw, async ({ emit, signal }) => {
       // ★ 立即 flush thinking，前端马上显示"思考中…"
-      send("thinking", {});
-
-      heartbeat = setInterval(() => {
-        if (streamClosed) return;
-        try {
-          controller.enqueue(encoder.encode(": ping\n\n"));
-        } catch {
-          streamClosed = true;
-        }
-      }, 15_000);
+      emit("thinking", {});
 
       // ── DB 操作移入 stream 内部，避免阻塞首个事件 ──
 
@@ -352,16 +329,13 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         userId,
         agent,
         activeSkill,
-        signal: upstreamAbort.signal,
-        onDelta: (delta: string) => send("delta", { delta }),
+        signal,
+        onDelta: (delta: string) => emit("delta", { delta }),
       });
 
-      if (heartbeat) clearInterval(heartbeat);
 
       if (!result.ok) {
-        send("error", { error: result.error });
-        streamClosed = true;
-        controller.close();
+        emit("error", { error: result.error });
         return;
       }
 
@@ -371,14 +345,12 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
       const completeIdx = toolCalls.findIndex((t) => t.name === COMPLETE_SKILL);
       if (completeIdx >= 0) {
         await completeSkill(sessionId);
-        send("skill_completed", { message: "技能已完成" });
+        emit("skill_completed", { message: "技能已完成" });
 
         // 无论有无文本都落库 assistant 消息，让 LLM 记住自己已结束技能
         await createMessage({ sessionId, role: "assistant", content: result.text || "" });
         await touchSession(sessionId);
-        send("done", { text: result.text, skillCompleted: true });
-        streamClosed = true;
-        controller.close();
+        emit("done", { text: result.text, skillCompleted: true });
         return;
       }
 
@@ -398,7 +370,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
           };
         });
         for (const call of enriched) {
-          send("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
+          emit("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
         }
         // 落库 assistant 消息（含 tool_calls 的空文本）
         await createMessage({
@@ -406,9 +378,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
           role: "assistant",
           content: result.text || "",
         });
-        send("done", { text: result.text, toolCalls: enriched });
-        streamClosed = true;
-        controller.close();
+        emit("done", { text: result.text, toolCalls: enriched });
         return;
       }
 
@@ -416,23 +386,11 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
       await createMessage({ sessionId, role: "assistant", content: result.text });
       await touchSession(sessionId);
 
-      send("done", { text: result.text });
-      streamClosed = true;
-      controller.close();
-    },
-    cancel() {
+      emit("done", { text: result.text });
+  }, {
+    onDisconnect: () => {
       logEvent("agent.stream", { stage: "client_disconnect", sessionId });
-      streamClosed = true;
-      upstreamAbort.abort();
-      if (heartbeat) clearInterval(heartbeat);
     },
-  });
-
-  return c.body(stream, 200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
   });
 });
 
@@ -467,33 +425,9 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   const activeSkill = session.activeSkill;
   const agent = true;
 
-  const encoder = new TextEncoder();
-  let streamClosed = false;
-  const upstreamAbort = new AbortController();
-  let heartbeat: ReturnType<typeof setInterval> | undefined;
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        if (streamClosed) return;
-        try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch {
-          streamClosed = true;
-        }
-      };
-
+  return createSseResponse(c.req.raw, async ({ emit, signal }) => {
       // ★ 立即 flush thinking，前端马上显示"思考中…"
-      send("thinking", {});
-
-      heartbeat = setInterval(() => {
-        if (streamClosed) return;
-        try {
-          controller.enqueue(encoder.encode(": ping\n\n"));
-        } catch {
-          streamClosed = true;
-        }
-      }, 15_000);
+      emit("thinking", {});
 
       // ── DB 操作移入 stream 内部 ──
 
@@ -524,16 +458,13 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
         userId,
         agent,
         activeSkill,
-        signal: upstreamAbort.signal,
-        onDelta: (delta: string) => send("delta", { delta }),
+        signal,
+        onDelta: (delta: string) => emit("delta", { delta }),
       });
 
-      if (heartbeat) clearInterval(heartbeat);
 
       if (!result.ok) {
-        send("error", { error: result.error });
-        streamClosed = true;
-        controller.close();
+        emit("error", { error: result.error });
         return;
       }
 
@@ -543,14 +474,12 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       const completeIdx = toolCalls.findIndex((t) => t.name === COMPLETE_SKILL);
       if (completeIdx >= 0) {
         await completeSkill(sessionId);
-        send("skill_completed", { message: "技能已完成" });
+        emit("skill_completed", { message: "技能已完成" });
 
         // 无论有无文本都落库 assistant 消息
         await createMessage({ sessionId, role: "assistant", content: result.text || "" });
         await touchSession(sessionId);
-        send("done", { text: result.text, skillCompleted: true });
-        streamClosed = true;
-        controller.close();
+        emit("done", { text: result.text, skillCompleted: true });
         return;
       }
 
@@ -570,16 +499,14 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
           };
         });
         for (const call of enriched) {
-          send("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
+          emit("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
         }
         await createMessage({
           sessionId,
           role: "assistant",
           content: result.text || "",
         });
-        send("done", { text: result.text, toolCalls: enriched });
-        streamClosed = true;
-        controller.close();
+        emit("done", { text: result.text, toolCalls: enriched });
         return;
       }
 
@@ -587,23 +514,11 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       await createMessage({ sessionId, role: "assistant", content: result.text });
       await touchSession(sessionId);
 
-      send("done", { text: result.text });
-      streamClosed = true;
-      controller.close();
-    },
-    cancel() {
+      emit("done", { text: result.text });
+  }, {
+    onDisconnect: () => {
       logEvent("agent.stream", { stage: "client_disconnect", sessionId });
-      streamClosed = true;
-      upstreamAbort.abort();
-      if (heartbeat) clearInterval(heartbeat);
     },
-  });
-
-  return c.body(stream, 200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "X-Accel-Buffering": "no",
   });
 });
 
