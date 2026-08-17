@@ -58,7 +58,7 @@ router.post("/api/generate/task", async (c) => {
   if (!data.channelId) {
     return fail(400, "channelId is required");
   }
-  const channel = await getChannel(data.channelId);
+  const channel = await getChannel(data.channelId, auth.user.id);
   if (!channel) {
     return fail(400, "Channel not found");
   }

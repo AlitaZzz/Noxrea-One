@@ -16,8 +16,8 @@ export async function getProjects(userId: number) {
   }));
 }
 
-export async function getProject(id: number) {
-  const project = await prisma.canvasProject.findUnique({ where: { id } });
+export async function getProject(id: number, userId: number) {
+  const project = await prisma.canvasProject.findFirst({ where: { id, userId } });
   if (!project) return null;
   return {
     ...project,
@@ -44,8 +44,12 @@ export async function createProject(
 
 export async function updateProject(
   id: number,
+  userId: number,
   data: { name?: string; canvasData?: Record<string, unknown> }
 ) {
+  const existing = await prisma.canvasProject.findFirst({ where: { id, userId } });
+  if (!existing) return null;
+
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
   };
@@ -67,7 +71,7 @@ export async function updateProject(
   };
 }
 
-export async function deleteProject(id: number) {
-  return prisma.canvasProject.delete({ where: { id } });
+export async function deleteProject(id: number, userId: number) {
+  return prisma.canvasProject.deleteMany({ where: { id, userId } });
 }
 

@@ -79,9 +79,8 @@ router.get("/api/canvas/projects/:id", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
   if (isNaN(id)) return fail(400, "Invalid project ID");
 
-  const project = await getProject(id);
+  const project = await getProject(id, auth.user.id);
   if (!project) return fail(404, "Project not found");
-  if (project.userId !== auth.user.id) return fail(403, "Access denied");
 
   return c.json(ok(project));
 });
@@ -95,9 +94,9 @@ router.put("/api/canvas/projects/:id", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
   if (isNaN(id)) return fail(400, "Invalid project ID");
 
-  const existing = await getProject(id);
+  const existing = await getProject(id, auth.user.id);
   if (!existing) return fail(404, "Project not found");
-  if (existing.userId !== auth.user.id) return fail(403, "Access denied");
+
 
   let body: unknown;
   try {
@@ -111,16 +110,17 @@ router.put("/api/canvas/projects/:id", async (c) => {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const project = await updateProject(id, {
+  const project = await updateProject(id, auth.user.id, {
     name: parsed.data.name,
     canvasData: parsed.data.canvasData,
   });
+  if (!project) return fail(404, "Project not found");
 
   // 文件引用重算（diff 增减）
   if (parsed.data.needRefRecalc && parsed.data.canvasData) {
     const newHashes = extractHashesFromCanvas(parsed.data.canvasData);
     const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
-    void recalcCanvasRefs(auth.user.id, oldHashes, newHashes);
+    await recalcCanvasRefs(auth.user.id, oldHashes, newHashes);
   }
 
   return c.json(ok(project));
@@ -135,15 +135,15 @@ router.delete("/api/canvas/projects/:id", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
   if (isNaN(id)) return fail(400, "Invalid project ID");
 
-  const existing = await getProject(id);
+  const existing = await getProject(id, auth.user.id);
   if (!existing) return fail(404, "Project not found");
-  if (existing.userId !== auth.user.id) return fail(403, "Access denied");
 
-  await deleteProject(id);
 
-  // 异步递减文件引用计数 + GC 孤儿文件
+  const result = await deleteProject(id, auth.user.id);
+  if (result.count === 0) return fail(404, "Project not found");
+
   const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
-  void cleanCanvasRefs(auth.user.id, oldHashes);
+  await cleanCanvasRefs(auth.user.id, oldHashes);
 
   return c.json(ok(null, "Project deleted"));
 });

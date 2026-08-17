@@ -13,14 +13,14 @@ import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { updateTaskStatus, isTaskCancelled } from "@server/crud/task";
-import type { GenerationTask } from "@prisma/client";
+import type { HydratedGenerationTask } from "@server/crud/task";
 import type { StopSignal } from "./loop";
 
 /**
  * 恢复异步任务轮询（Worker 重启时调用）。
  * 使用 undici.request 替代 fetch 确保代理和超时生效。
  */
-export function resumeAsyncPolling(task: GenerationTask, stopSignal: StopSignal): void {
+export function resumeAsyncPolling(task: HydratedGenerationTask, stopSignal: StopSignal): void {
   const taskId = task.id;
   const upstreamTaskId = task.upstreamTaskId!;
 
@@ -38,7 +38,7 @@ export function resumeAsyncPolling(task: GenerationTask, stopSignal: StopSignal)
 }
 
 async function _doResumePoll(
-  task: GenerationTask,
+  task: HydratedGenerationTask,
   stopSignal: StopSignal
 ): Promise<void> {
   const taskId = task.id;
@@ -51,9 +51,11 @@ async function _doResumePoll(
   let protocol: ReturnType<typeof getProtocol>;
 
   try {
-    const config = (task.config as Record<string, unknown>) ?? {};
-    const channelId = config.channelId as number;
-    const channel = await getChannel(channelId);
+    const channelId = task.config.channelId;
+    if (typeof channelId !== "number") {
+      throw new Error("channelId not found in task config");
+    }
+    const channel = await getChannel(channelId, task.userId);
     if (!channel) throw new Error(`Channel ${channelId} not found`);
 
     apiKey = channel.apiKey;
@@ -132,7 +134,7 @@ async function _doResumePoll(
         const resultUrls: string[] = [];
         for (const url of parsed.urls) {
           try {
-            const key = await downloadAndSave(url, task.userId, task.type ?? "image", taskId);
+            const key = await downloadAndSave(url, task.userId, taskId);
             if (key) resultUrls.push(key);
           } catch (err) {
             logger.error({ err, taskId }, "Resume poll download failed");

@@ -11,11 +11,10 @@ import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/serv
 import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
 import { buildContext } from "./context";
-import { logEvent, classifyError, summarizeText } from "@server/core/logger/utils";
+import { logEvent, classifyError } from "@server/core/logger/utils";
 
 import { logger } from "@server/core/logger";
-import { getConfig } from "@server/core/config";
-import type { GenerationTask } from "@prisma/client";
+import type { HydratedGenerationTask } from "@server/crud/task";
 
 /**
  * 执行单个任务的生命周期：
@@ -24,9 +23,8 @@ import type { GenerationTask } from "@prisma/client";
  * 同步/异步判定由 CapabilityService 内部的 TaskManager.submitAndWait 完成，
  * Executor 不再感知异步流程（对齐 Python 架构）。
  */
-export async function executeTask(task: GenerationTask): Promise<void> {
+export async function executeTask(task: HydratedGenerationTask): Promise<void> {
   const ctx = buildContext(task);
-  const cfg = getConfig();
 
   logEvent("executor", {
     stage: "start",
@@ -40,7 +38,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     const channelId = ctx.config.channelId as number | undefined;
     if (!channelId) throw new Error("channelId not found in task config");
 
-    const channel = await getChannel(channelId);
+    const channel = await getChannel(channelId, task.userId);
     if (!channel) throw new Error(`Channel ${channelId} not found`);
 
     // 2. 解析参考图
@@ -126,7 +124,7 @@ export async function executeTask(task: GenerationTask): Promise<void> {
     const resultUrls: string[] = [];
     for (const url of result?.urls ?? []) {
       try {
-        const storageKey = await downloadAndSave(url, task.userId, capability, task.id);
+        const storageKey = await downloadAndSave(url, task.userId, task.id);
         if (storageKey) resultUrls.push(storageKey);
       } catch (err) {
         logger.error({ err, taskId: task.id }, "Failed to download result");

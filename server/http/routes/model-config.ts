@@ -76,7 +76,7 @@ router.get("/api/model-config/channels/:id", async (c) => {
   const id = parseInt(rawId, 10);
   if (isNaN(id)) return fail(400, "Invalid channel ID");
 
-  const channel = await getChannel(id);
+  const channel = await getChannel(id, auth.user.id);
   if (!channel) return fail(404, "Channel not found");
 
   return c.json(
@@ -98,7 +98,7 @@ router.get("/api/model-config/channels/:id/apikey", async (c) => {
   const id = parseInt(rawId, 10);
   if (isNaN(id)) return fail(400, "Invalid channel ID");
 
-  const channel = await getChannel(id);
+  const channel = await getChannel(id, auth.user.id);
   if (!channel) return fail(404, "Channel not found");
 
   return c.json(ok({ apiKey: channel.apiKey }));
@@ -114,7 +114,7 @@ router.put("/api/model-config/channels/:id", async (c) => {
   const id = parseInt(rawId, 10);
   if (isNaN(id)) return fail(400, "Invalid channel ID");
 
-  const existing = await getChannel(id);
+  const existing = await getChannel(id, auth.user.id);
   if (!existing) return fail(404, "Channel not found");
 
   let body: unknown;
@@ -129,12 +129,13 @@ router.put("/api/model-config/channels/:id", async (c) => {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const channel = await updateChannel(id, {
+  const channel = await updateChannel(id, auth.user.id, {
     name: parsed.data.name,
     baseUrl: parsed.data.baseUrl,
     apiKey: parsed.data.apiKey,
     protocol: parsed.data.protocol,
   });
+  if (!channel) return fail(404, "Channel not found");
 
   return c.json(
     ok({
@@ -155,7 +156,8 @@ router.delete("/api/model-config/channels/:id", async (c) => {
   const id = parseInt(rawId, 10);
   if (isNaN(id)) return fail(400, "Invalid channel ID");
 
-  await deleteChannel(id);
+  const result = await deleteChannel(id, auth.user.id);
+  if (result.count === 0) return fail(404, "Channel not found");
   return c.json(ok(null, "Channel deleted"));
 });
 
@@ -186,10 +188,11 @@ router.post("/api/model-config/channels/:id/models", async (c) => {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const model = await addModel(channelId, {
+  const model = await addModel(channelId, auth.user.id, {
     name: parsed.data.name,
     capabilities: parsed.data.capabilities,
   });
+  if (!model) return fail(404, "Channel not found");
 
   return c.json(ok(model));
 });
@@ -215,7 +218,8 @@ router.post("/api/model-config/channels/:id/models/set", async (c) => {
     return fail(422, `Schema validation failed: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
 
-  const models = await batchSetModels(channelId, parsed.data.models);
+  const models = await batchSetModels(channelId, auth.user.id, parsed.data.models);
+  if (!models) return fail(404, "Channel not found");
   return c.json(ok(models));
 });
 
@@ -228,7 +232,8 @@ router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
   const modelId = parseInt(c.req.param("mid"), 10);
   if (isNaN(modelId)) return fail(400, "Invalid model ID");
 
-  await deleteModel(modelId);
+  const result = await deleteModel(modelId, auth.user.id);
+  if (result.count === 0) return fail(404, "Model not found");
   return c.json(ok(null, "Model deleted"));
 });
 
@@ -253,7 +258,8 @@ router.put("/api/model-config/channels/:id/models/:mid/capability", async (c) =>
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const model = await updateModelCapability(modelId, parsed.data.capabilities);
+  const model = await updateModelCapability(modelId, auth.user.id, parsed.data.capabilities);
+  if (!model) return fail(404, "Model not found");
   return c.json(ok(model));
 });
 
