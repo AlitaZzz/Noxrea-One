@@ -8,6 +8,7 @@
 import { bootstrap } from "@server/core/bootstrap";
 import { workerLoop } from "@server/services/worker/loop";
 import { prisma } from "@server/core/database/client";
+import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
 import { getConfig } from "@server/core/config";
@@ -41,6 +42,8 @@ async function main(): Promise<void> {
     // 4b. 停止接受新 HTTP 连接
     await stopServer();
 
+    taskWatcher.dispose();
+
     // 4c. 等待 Worker 排空在途任务（最多等 WORKER_DRAIN_TIMEOUT 秒）
     const drainTimeout = getConfig().WORKER_DRAIN_TIMEOUT * 1000;
     await Promise.race([
@@ -54,8 +57,12 @@ async function main(): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
+  });
 }
 
 main().catch((err) => {
