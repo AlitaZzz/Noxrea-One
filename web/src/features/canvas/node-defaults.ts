@@ -97,7 +97,7 @@ export function createVideoNode(
       naturalWidth: 320,
       naturalHeight: 180,
       alt: "",
-      genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], n: 1 } satisfies VideoGenSettings,
+      genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], refVideoOrder: [], n: 1 } satisfies VideoGenSettings,
     } as VideoNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };

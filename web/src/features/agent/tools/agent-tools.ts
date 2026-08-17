@@ -12,8 +12,8 @@ import type {
   AgentToolResult,
   FindFreePosition,
 } from "@/features/agent/types";
-import { getViewportCenter } from "@/features/canvas/stores/canvas-store";
 import { createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
+import { getViewportCenter } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, GenSettings, VideoGenSettings } from "@/features/canvas/types";
 
 export type {
@@ -76,6 +76,7 @@ function spawnVideoNode(prompt: string, findFreePosition: FindFreePosition): Any
     generateAudio: false,
     refOrder: [],
     refAudioOrder: [],
+    refVideoOrder: [],
     n: 1,
   };
   node.data = { ...node.data, genSettings } as typeof node.data;

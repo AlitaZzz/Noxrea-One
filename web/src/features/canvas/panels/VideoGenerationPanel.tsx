@@ -101,17 +101,18 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     else if (name === "n") setN(value as number);
   };
 
-  // 模型切换时：重置不在新模型 options 中的参数
-  useEffect(() => {
-    if (!modelParams) return;
-    for (const f of modelParams.fields) {
-      const cur = fieldValues[f.name] as string | number | undefined;
-      if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
-        setField(f.name, f.default);
+  const selectModel = (value: string) => {
+    const entry = allModels.find((model) => model.value === value);
+    const params = entry ? findModelParams(entry.channelId, entry.name, "video") : null;
+    for (const field of params?.fields ?? []) {
+      const current = fieldValues[field.name] as string | number | undefined;
+      if (field.options?.length && current !== undefined && !field.options.includes(current)) {
+        setField(field.name, field.default);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelParams]);
+    setModelKey(value);
+    setModelOpen(false);
+  };
 
   // User-controllable display order
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
@@ -436,7 +437,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </Button>
           }
           content={allModels.map((m) => (
-            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
+            <MenuItem key={m.value} onClick={() => selectModel(m.value)} selected={modelKey === m.value}>
               <span className="flex items-center gap-1.5">
                 <ModelIcon model={m.name} className="size-4 shrink-0" />
                 <span className="truncate">{m.name}</span>
