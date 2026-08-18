@@ -30,7 +30,7 @@ model User {
   // 关系
   canvasProjects  CanvasProject[]
   generationTasks GenerationTask[]
-  modelChannels   ModelChannel[]
+  modelProviders  ModelProvider[]
   assetFolders    AssetFolder[]
   assetItems      AssetItem[]
   agentSessions   AgentSession[]
@@ -96,9 +96,9 @@ model CanvasProject {
 }
 
 // ──────────────────────────────────────────
-// 4. ModelChannel
+// 4. ModelProvider
 // ──────────────────────────────────────────
-model ModelChannel {
+model ModelProvider {
   id        Int       @id @default(autoincrement())
   userId    Int?      @map("user_id")
   name      String    @map("name")
@@ -113,21 +113,21 @@ model ModelChannel {
   models ModelInfo[]
 
   @@index([userId])
-  @@map("model_channels")
+  @@map("model_providers")
 }
 
 // ──────────────────────────────────────────
 // 5. ModelInfo
 // ──────────────────────────────────────────
 model ModelInfo {
-  id                   Int      @id @default(autoincrement())
-  channelId            Int      @map("channel_id")
-  name                 String   @map("name")
-  capabilities         String   @default("[]") @map("capabilities") // JSON TEXT
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                   Int         @id @default(autoincrement())
+  providerId           Int         @map("provider_id")
+  name                 String      @map("name")
+  capabilities         String      @default("[]") @map("capabilities") // JSON TEXT
+  createdAt            DateTime    @default(now()) @map("created_at")
 
   // 关系
-  channel ModelChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  provider ModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@map("model_infos")
 }
