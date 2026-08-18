@@ -1,12 +1,12 @@
 /**
- * 模型与渠道状态仓库。
- * 管理服务商渠道及其模型清单的增删改、能力标记，
- * 支持从渠道远端拉取模型列表、读取服务商预设与模型参数配置缓存。
+ * 模型与供应商状态仓库。
+ * 管理供应商及其模型清单的增删改、能力标记，
+ * 支持从供应商远端拉取模型列表、读取服务商预设与模型参数配置缓存。
  */
 import { create } from "zustand";
 
 import { modelApi } from "@/features/settings/api";
-import type { ModelCapability, ModelChannel, ModelParamConfig,ProviderPreset } from "@/lib/types/models";
+import type { ModelCapability, ModelProvider, ModelParamConfig,ProviderPreset } from "@/lib/types/models";
 
 /** 从 baseUrl 解析 host（供上游通配匹配用） */
 function hostFromBaseUrl(baseUrl: string): string {
@@ -30,27 +30,27 @@ interface RawModelEntry {
 type ModelParamsMap = Record<string, Record<string, ModelParamConfig> | Record<string, Record<string, ModelParamConfig>>>;
 
 interface ModelState {
-  channels: ModelChannel[];
+  providers: ModelProvider[];
   presets: ProviderPreset[];
   modelParamsCache: ModelParamsMap;
   initialized: boolean;
   initialize: () => Promise<void>;
-  findModelParams: (channelId: string, modelName: string, capability: string) => ModelParamConfig | null;
+  findModelParams: (providerId: string, modelName: string, capability: string) => ModelParamConfig | null;
 
-  addChannel: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<void>;
-  updateChannel: (id: string, patch: Partial<Pick<ModelChannel, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<void>;
-  fetchChannelApiKey: (id: string) => Promise<string>;
-  deleteChannel: (id: string) => Promise<void>;
+  addProvider: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<void>;
+  updateProvider: (id: string, patch: Partial<Pick<ModelProvider, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<void>;
+  fetchProviderApiKey: (id: string) => Promise<string>;
+  deleteProvider: (id: string) => Promise<void>;
 
-  addModel: (channelId: string, name: string) => Promise<void>;
-  toggleModelCapability: (channelId: string, modelId: string, cap: ModelCapability) => Promise<void>;
-  setChannelModels: (channelId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
-  fetchModels: (channelId: string) => Promise<{ success: boolean; error?: string }>;
+  addModel: (providerId: string, name: string) => Promise<void>;
+  toggleModelCapability: (providerId: string, modelId: string, cap: ModelCapability) => Promise<void>;
+  setProviderModels: (providerId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
+  fetchModels: (providerId: string) => Promise<{ success: boolean; error?: string }>;
   fetchPresets: () => Promise<void>;
 }
 
 export const useModelStore = create<ModelState>((set, get) => ({
-  channels: [],
+  providers: [],
   presets: [],
   modelParamsCache: {},
   initialized: false,
@@ -58,10 +58,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const res = await modelApi.fetchChannels<ModelChannel[]>();
+      const res = await modelApi.fetchProviders<ModelProvider[]>();
       if (res.code === 200 && res.data) {
-        // API 返回 camelCase，与前端 ModelChannel 类型一致，直接使用
-        set({ channels: res.data, initialized: true });
+        // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
+        set({ providers: res.data, initialized: true });
         await get().fetchPresets();
         // 拉取模型参数配置（fields 为唯一数据源）
         try {
@@ -78,11 +78,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
     set({ initialized: true });
   },
 
-  findModelParams: (channelId: string, modelName: string, capability: string) => {
+  findModelParams: (providerId: string, modelName: string, capability: string) => {
     const cache = get().modelParamsCache;
-    // 由 channelId 找到 baseUrl 并解析 host（用于上游通配匹配）
-    const channel = get().channels.find((c) => c.id === channelId);
-    const host = channel?.baseUrl ? hostFromBaseUrl(channel.baseUrl) : "";
+    // 由 providerId 找到 baseUrl 并解析 host（用于上游通配匹配）
+    const provider = get().providers.find((c) => c.id === providerId);
+    const host = provider?.baseUrl ? hostFromBaseUrl(provider.baseUrl) : "";
     // 1. host 通配第一个命中 → 该 host 下模型名精确 > 通配
     if (host) {
       for (const [hostPattern, models] of Object.entries(cache)) {
@@ -124,25 +124,25 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
   },
 
-  addChannel: async (name, baseUrl, apiKey, protocol) => {
-    const res = await modelApi.createChannel(name, baseUrl, apiKey, protocol);
+  addProvider: async (name, baseUrl, apiKey, protocol) => {
+    const res = await modelApi.createProvider(name, baseUrl, apiKey, protocol);
     if (res.code === 200 && res.data) {
-      const channel: ModelChannel = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
-      if (protocol) channel.protocol = protocol;
-      set((s) => ({ channels: [...s.channels, channel] }));
+      const provider: ModelProvider = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
+      if (protocol) provider.protocol = protocol;
+      set((s) => ({ providers: [...s.providers, provider] }));
     }
   },
 
-  updateChannel: async (id, patch) => {
+  updateProvider: async (id, patch) => {
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
     if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
-    await modelApi.updateChannel(id, body);
+    await modelApi.updateProvider(id, body);
     // 只合并非 undefined 的字段，避免 undefined 覆盖原有值
     set((s) => ({
-      channels: s.channels.map((c) => {
+      providers: s.providers.map((c) => {
         if (c.id !== id) return c;
         const merged = { ...c };
         for (const [k, v] of Object.entries(patch)) {
@@ -153,43 +153,43 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }));
   },
 
-  fetchChannelApiKey: async (id) => {
-    const res = await modelApi.fetchChannelApiKey(id);
+  fetchProviderApiKey: async (id) => {
+    const res = await modelApi.fetchProviderApiKey(id);
     if (res.code === 200 && res.data) {
       return res.data.apiKey;
     }
     throw new Error("Failed to fetch API key");
   },
 
-  deleteChannel: async (id) => {
-    await modelApi.deleteChannel(id);
-    set((s) => ({ channels: s.channels.filter((c) => c.id !== id) }));
+  deleteProvider: async (id) => {
+    await modelApi.deleteProvider(id);
+    set((s) => ({ providers: s.providers.filter((c) => c.id !== id) }));
   },
 
-  addModel: async (channelId, name) => {
-    const res = await modelApi.addModel(channelId, name);
+  addModel: async (providerId, name) => {
+    const res = await modelApi.addModel(providerId, name);
     if (res.code === 200 && res.data) {
       set((s) => ({
-        channels: s.channels.map((c) =>
-          c.id === channelId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
+        providers: s.providers.map((c) =>
+          c.id === providerId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
         ),
       }));
     }
   },
 
-  toggleModelCapability: async (channelId, modelId, cap) => {
-    const channels = get().channels;
-    const ch = channels.find((c) => c.id === channelId);
+  toggleModelCapability: async (providerId, modelId, cap) => {
+    const providers = get().providers;
+    const ch = providers.find((c) => c.id === providerId);
     if (!ch) return;
     const model = ch.models.find((m) => m.id === modelId);
     if (!model) return;
     const has = model.capabilities?.includes(cap);
     const caps = has ? (model.capabilities || []).filter((x) => x !== cap) : [...(model.capabilities || []), cap];
 
-    await modelApi.setModelCapability(channelId, modelId, caps);
+    await modelApi.setModelCapability(providerId, modelId, caps);
     set((s) => ({
-      channels: s.channels.map((c) =>
-        c.id === channelId ? {
+      providers: s.providers.map((c) =>
+        c.id === providerId ? {
           ...c,
           models: c.models.map((m) => (m.id === modelId ? { ...m, capabilities: caps } : m)),
         } : c
@@ -197,26 +197,26 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }));
   },
 
-  setChannelModels: async (channelId, models) => {
-    await modelApi.setChannelModels(channelId, models);
-    const reload = await modelApi.fetchChannels<ModelChannel[]>();
+  setProviderModels: async (providerId, models) => {
+    await modelApi.setProviderModels(providerId, models);
+    const reload = await modelApi.fetchProviders<ModelProvider[]>();
     if (reload.code === 200 && reload.data) {
-      set({ channels: reload.data });
+      set({ providers: reload.data });
     }
   },
 
-  fetchModels: async (channelId) => {
-      const ch = get().channels.find((c) => c.id === channelId);
+  fetchModels: async (providerId) => {
+      const ch = get().providers.find((c) => c.id === providerId);
     if (!ch) {
-      console.error("Channel not found in store");
-      return { success: false, error: "Channel not found in store" };
+      console.error("Provider not found in store");
+      return { success: false, error: "Provider not found in store" };
     }
     if (!ch.baseUrl) {
-      console.error("Channel has no baseUrl configured");
-      return { success: false, error: "Channel has no baseUrl configured. Please update the channel URL." };
+      console.error("Provider has no baseUrl configured");
+      return { success: false, error: "Provider has no baseUrl configured. Please update the provider URL." };
     }
     try {
-      const res = await modelApi.fetchModelsList(channelId);
+      const res = await modelApi.fetchModelsList(providerId);
       const json = await res.json();
       if (json.code !== 200) {
         const msg = json.msg || `HTTP ${res.status}`;
@@ -239,7 +239,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
           merged.push({ name: f.name, capabilities: [] });
         }
       }
-      await get().setChannelModels(channelId, merged);
+      await get().setProviderModels(providerId, merged);
       return { success: true };
     } catch (e: unknown) {
       console.error("Fetch models failed:", e);

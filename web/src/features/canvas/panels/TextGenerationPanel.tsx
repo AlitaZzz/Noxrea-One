@@ -32,22 +32,22 @@ interface Props {
 
 interface ModelOption {
   value: string;
-  channelId: string;
+  providerId: string;
   modelId: string;
   name: string;
-  channelName: string;
+  providerName: string;
 }
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
-  const channels = useModelStore((s) => s.channels);
+  const providers = useModelStore((s) => s.providers);
   const { notification } = App.useApp();
 
-  const allModels = channels
+  const allModels = providers
     .flatMap((c) =>
       c.models
         .filter((m) => m.capabilities?.includes("text"))
-        .map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name })),
+        .map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name })),
     )
     .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
@@ -236,7 +236,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         type: "llm",
         prompt: finalPrompt,
         model: entry.name,
-        channelId: entry.channelId,
+        providerId: entry.providerId,
         nodeId,
         messages,
       });
@@ -444,7 +444,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 <span className="flex items-center gap-1.5">
                   <ModelIcon model={m.name} className="size-4 shrink-0" />
                   <span className="truncate">{m.name}</span>
-                  {m.channelName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.channelName}</span> : null}
+                  {m.providerName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.providerName}</span> : null}
                 </span>
               </MenuItem>
             ))}

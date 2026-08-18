@@ -29,7 +29,7 @@ import { apiRaw, apiUpload } from "@/lib/api/client";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
-import type { ModelChannel } from "@/lib/types/models";
+import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
@@ -40,10 +40,10 @@ interface Props { nodeId: string; }
 
 const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
-  const channels = useModelStore((s) => s.channels);
+  const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
-  const allModels = channels.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name }))
+  const allModels = providers.flatMap((c) =>
+    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
   // Read persisted settings from node data
@@ -52,7 +52,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
     const mk = s.modelKey || allModels[0]?.value || "";
     const entry = allModels.find((m) => m.value === mk);
-    const mp = entry ? findModelParams(entry.channelId, entry.name, "video") : null;
+    const mp = entry ? findModelParams(entry.providerId, entry.name, "video") : null;
     const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
@@ -83,7 +83,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.channelId, entry.name, "video") : null;
+    return entry ? findModelParams(entry.providerId, entry.name, "video") : null;
    
   }, [modelKey, allModels, findModelParams]);
 
@@ -103,7 +103,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   const selectModel = (value: string) => {
     const entry = allModels.find((model) => model.value === value);
-    const params = entry ? findModelParams(entry.channelId, entry.name, "video") : null;
+    const params = entry ? findModelParams(entry.providerId, entry.name, "video") : null;
     for (const field of params?.fields ?? []) {
       const current = fieldValues[field.name] as string | number | undefined;
       if (field.options?.length && current !== undefined && !field.options.includes(current)) {
@@ -162,7 +162,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     });
   }
 
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, channel: null });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, provider: null });
   const { notification } = App.useApp();
 
   const is: React.CSSProperties = {
@@ -171,14 +171,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
-    if (!entry || !channel) return "缺少模型配置";
+    const { entry, provider, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
+    if (!entry || !provider) return "缺少模型配置";
     try {
       const res2 = await generationApi.submitGenerationTask({
         type: "video",
         prompt: p.trim(),
         model: entry.name,
-        channelId: entry.channelId,
+        providerId: entry.providerId,
         resolution: hasField(fields, "resolution") ? res : undefined,
         ratio: hasField(fields, "ratio") ? r : undefined,
         seconds: hasField(fields, "seconds") ? sec : undefined,
@@ -254,14 +254,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     if (!prompt.trim() || !modelKey) return;
     const entry = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
-    const channel = channels.find((c) => c.id === entry.channelId);
-    if (!channel) return;
+    const provider = providers.find((c) => c.id === entry.providerId);
+    if (!provider) return;
 
     setError("");
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudios: audioOrder, refVideos: refVideoOrder, refMode, n, entry, channel };
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudios: audioOrder, refVideos: refVideoOrder, refMode, n, entry, provider };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -441,7 +441,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               <span className="flex items-center gap-1.5">
                 <ModelIcon model={m.name} className="size-4 shrink-0" />
                 <span className="truncate">{m.name}</span>
-                {m.channelName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.channelName}</span> : null}
+                {m.providerName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.providerName}</span> : null}
               </span>
             </MenuItem>
           ))}
