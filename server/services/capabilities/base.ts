@@ -6,7 +6,7 @@
 import type { GenerationResult } from "@server/schemas/result";
 
 export interface CapabilityContext {
-  channelId: number;
+  providerId: number;
   baseUrl: string;
   apiKey: string;
   protocol: string;

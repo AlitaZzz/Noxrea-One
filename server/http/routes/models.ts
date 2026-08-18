@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
-import { getChannel } from "@server/crud/model-config";
+import { getProvider } from "@server/crud/model-config";
 import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
@@ -47,8 +47,8 @@ router.post("/api/models/list", async (c) => {
     return fail(400, "Invalid JSON body");
   }
 
-  const { channelId, baseUrl: rawBaseUrl, apiKey: rawApiKey } = body as {
-    channelId?: number | string;
+  const { providerId, baseUrl: rawBaseUrl, apiKey: rawApiKey } = body as {
+    providerId?: number | string;
     baseUrl?: string;
     apiKey?: string;
   };
@@ -57,17 +57,17 @@ router.post("/api/models/list", async (c) => {
   let apiKey: string | undefined;
   let protocol = "openai";
 
-  if (channelId) {
-    const channel = await getChannel(Number(channelId), auth.user.id);
-    if (!channel) return fail(404, "Channel not found");
-    baseUrl = channel.baseUrl;
-    apiKey = channel.apiKey || undefined;
-    protocol = channel.protocol;
+  if (providerId) {
+    const provider = await getProvider(Number(providerId), auth.user.id);
+    if (!provider) return fail(404, "Provider not found");
+    baseUrl = provider.baseUrl;
+    apiKey = provider.apiKey || undefined;
+    protocol = provider.protocol;
   } else if (rawBaseUrl) {
     baseUrl = rawBaseUrl;
     apiKey = rawApiKey;
   } else {
-    return fail(400, "channelId or baseUrl is required");
+    return fail(400, "providerId or baseUrl is required");
   }
 
   const { baseUrl: normalizedBase, paths } = getModelPaths(protocol, baseUrl);

@@ -276,7 +276,7 @@ export function resolveFieldMapSpec(
  * 存放于 host 条目顶层的 `_endpoints` 键，如 { "image.edits": "/images/generations", "video.poll": "..." }。
  * 未命中返回 undefined。
  */
-export function resolveChannelEndpoints(
+export function resolveProviderEndpoints(
   host: string,
   modelName: string,
   capability: string

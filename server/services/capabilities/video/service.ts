@@ -11,7 +11,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
+import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
 import { logEvent } from "@server/core/logger/utils";
 import type { GenerationResult } from "@server/schemas/result";
@@ -38,7 +38,7 @@ class VideoCapabilityService implements CapabilityService {
     });
 
     // 从 model-ui.json 上游级解析 endpoints（替代旧的用户渠道 config）
-    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "video");
+    const endpoints = resolveProviderEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "video");
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
 
     const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);

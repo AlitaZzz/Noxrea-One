@@ -205,11 +205,11 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
     agent: false,
   });
 
-  const channelId = c.req.query("channelId");
+  const providerId = c.req.query("providerId");
   const model = c.req.query("model");
   const reply = await runCompletion({
     messages,
-    channelId: channelId ? Number(channelId) : undefined,
+    providerId: providerId ? Number(providerId) : undefined,
     model: model ?? undefined,
     userId,
   });
@@ -241,7 +241,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   const session = await getSession(sessionId, userId);
   if (!session) return fail(404, "session not found");
 
-  const channelId = c.req.query("channelId");
+  const providerId = c.req.query("providerId");
   const model = c.req.query("model");
 
   let payload: { content?: string; refImages?: string[]; skillName?: string };
@@ -324,7 +324,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
 
       const result = await runCompletionStream({
         messages,
-        channelId: channelId ? Number(channelId) : undefined,
+        providerId: providerId ? Number(providerId) : undefined,
         model: model ?? undefined,
         userId,
         agent,
@@ -420,7 +420,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   }
   const parsed = toolResultSchema.parse(body);
 
-  const channelId = c.req.query("channelId");
+  const providerId = c.req.query("providerId");
   const model = c.req.query("model");
   const activeSkill = session.activeSkill;
   const agent = true;
@@ -453,7 +453,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
 
       const result = await runCompletionStream({
         messages,
-        channelId: channelId ? Number(channelId) : undefined,
+        providerId: providerId ? Number(providerId) : undefined,
         model: model ?? undefined,
         userId,
         agent,

@@ -8,7 +8,7 @@ export const taskCreateSchema = z.object({
   type: z.string().max(30).optional(),
   protocol: z.string().max(30).optional(),
   model: z.string().max(200).optional(),
-  channelId: z.number().int().positive().optional(),
+  providerId: z.number().int().positive().optional(),
   prompt: z.string().optional(),
   config: z.record(z.unknown()).optional(),
   refImages: z.array(z.string()).optional(),

@@ -1,13 +1,13 @@
 /**
- * 模型渠道配置路由。
- * 处理渠道、模型与能力配置的查询、创建、更新与删除等接口。
+ * 模型供应商配置路由。
+ * 处理供应商、模型与能力配置的查询、创建、更新与删除等接口。
  */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { channelCreateSchema, channelUpdateSchema, maskApiKey } from "@server/schemas/model-config";
-import { modelInfoCreateSchema, batchSetModelsSchema, updateCapabilitySchema } from "@server/schemas/channel-config";
+import { providerCreateSchema, providerUpdateSchema, maskApiKey } from "@server/schemas/model-config";
+import { modelInfoCreateSchema, batchSetModelsSchema, updateCapabilitySchema } from "@server/schemas/provider-config";
 import {
-  getChannels, createChannel, getChannel, updateChannel, deleteChannel,
+  getProviders, createProvider, getProvider, updateProvider, deleteProvider,
   addModel, batchSetModels, deleteModel, updateModelCapability,
 } from "@server/crud/model-config";
 import { loadPresets } from "@server/services/model-config";
@@ -15,24 +15,24 @@ import { ok, fail } from "@server/core/response";
 
 const router = new Hono();
 
-// GET /api/model-config/channels
-router.get("/api/model-config/channels", async (c) => {
+// GET /api/model-config/providers
+router.get("/api/model-config/providers", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const channels = await getChannels(auth.user.id);
-  const result = channels.map((ch) => ({
-    ...ch,
-    apiKey: maskApiKey(ch.apiKey),
-    models: ch.models,
+  const providers = await getProviders(auth.user.id);
+  const result = providers.map((p) => ({
+    ...p,
+    apiKey: maskApiKey(p.apiKey),
+    models: p.models,
   }));
 
   return c.json(ok(result));
 });
 
-// POST /api/model-config/channels
-router.post("/api/model-config/channels", async (c) => {
+// POST /api/model-config/providers
+router.post("/api/model-config/providers", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
@@ -44,12 +44,12 @@ router.post("/api/model-config/channels", async (c) => {
     return fail(400, "Invalid JSON body");
   }
 
-  const parsed = channelCreateSchema.safeParse(body);
+  const parsed = providerCreateSchema.safeParse(body);
   if (!parsed.success) {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const channel = await createChannel({
+  const provider = await createProvider({
     userId: auth.user.id,
     name: parsed.data.name,
     baseUrl: parsed.data.baseUrl,
@@ -59,63 +59,63 @@ router.post("/api/model-config/channels", async (c) => {
 
   return c.json(
     ok({
-      ...channel,
-      apiKey: maskApiKey(channel.apiKey),
-      models: channel.models,
+      ...provider,
+      apiKey: maskApiKey(provider.apiKey),
+      models: provider.models,
     })
   );
 });
 
-// GET /api/model-config/channels/:id
-router.get("/api/model-config/channels/:id", async (c) => {
+// GET /api/model-config/providers/:id
+router.get("/api/model-config/providers/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid channel ID");
+  if (isNaN(id)) return fail(400, "Invalid provider ID");
 
-  const channel = await getChannel(id, auth.user.id);
-  if (!channel) return fail(404, "Channel not found");
+  const provider = await getProvider(id, auth.user.id);
+  if (!provider) return fail(404, "Provider not found");
 
   return c.json(
     ok({
-      ...channel,
-      apiKey: maskApiKey(channel.apiKey),
-      models: channel.models,
+      ...provider,
+      apiKey: maskApiKey(provider.apiKey),
+      models: provider.models,
     })
   );
 });
 
-// GET /api/model-config/channels/:id/apikey — 按需返回明文 apiKey（不掩码）
-router.get("/api/model-config/channels/:id/apikey", async (c) => {
+// GET /api/model-config/providers/:id/apikey — 按需返回明文 apiKey（不掩码）
+router.get("/api/model-config/providers/:id/apikey", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid channel ID");
+  if (isNaN(id)) return fail(400, "Invalid provider ID");
 
-  const channel = await getChannel(id, auth.user.id);
-  if (!channel) return fail(404, "Channel not found");
+  const provider = await getProvider(id, auth.user.id);
+  if (!provider) return fail(404, "Provider not found");
 
-  return c.json(ok({ apiKey: channel.apiKey }));
+  return c.json(ok({ apiKey: provider.apiKey }));
 });
 
-// PUT /api/model-config/channels/:id
-router.put("/api/model-config/channels/:id", async (c) => {
+// PUT /api/model-config/providers/:id
+router.put("/api/model-config/providers/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid channel ID");
+  if (isNaN(id)) return fail(400, "Invalid provider ID");
 
-  const existing = await getChannel(id, auth.user.id);
-  if (!existing) return fail(404, "Channel not found");
+  const existing = await getProvider(id, auth.user.id);
+  if (!existing) return fail(404, "Provider not found");
 
   let body: unknown;
   try {
@@ -124,41 +124,41 @@ router.put("/api/model-config/channels/:id", async (c) => {
     return fail(400, "Invalid JSON body");
   }
 
-  const parsed = channelUpdateSchema.safeParse(body);
+  const parsed = providerUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const channel = await updateChannel(id, auth.user.id, {
+  const provider = await updateProvider(id, auth.user.id, {
     name: parsed.data.name,
     baseUrl: parsed.data.baseUrl,
     apiKey: parsed.data.apiKey,
     protocol: parsed.data.protocol,
   });
-  if (!channel) return fail(404, "Channel not found");
+  if (!provider) return fail(404, "Provider not found");
 
   return c.json(
     ok({
-      ...channel,
-      apiKey: maskApiKey(channel.apiKey),
-      models: channel.models,
+      ...provider,
+      apiKey: maskApiKey(provider.apiKey),
+      models: provider.models,
     })
   );
 });
 
-// DELETE /api/model-config/channels/:id
-router.delete("/api/model-config/channels/:id", async (c) => {
+// DELETE /api/model-config/providers/:id
+router.delete("/api/model-config/providers/:id", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid channel ID");
+  if (isNaN(id)) return fail(400, "Invalid provider ID");
 
-  const result = await deleteChannel(id, auth.user.id);
-  if (result.count === 0) return fail(404, "Channel not found");
-  return c.json(ok(null, "Channel deleted"));
+  const result = await deleteProvider(id, auth.user.id);
+  if (result.count === 0) return fail(404, "Provider not found");
+  return c.json(ok(null, "Provider deleted"));
 });
 
 // GET /api/model-config/presets
@@ -167,14 +167,14 @@ router.get("/api/model-config/presets", (c) => {
   return c.json(ok(presets));
 });
 
-// POST /api/model-config/channels/:id/models
-router.post("/api/model-config/channels/:id/models", async (c) => {
+// POST /api/model-config/providers/:id/models
+router.post("/api/model-config/providers/:id/models", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const channelId = parseInt(c.req.param("id"), 10);
-  if (isNaN(channelId)) return fail(400, "Invalid channel ID");
+  const providerId = parseInt(c.req.param("id"), 10);
+  if (isNaN(providerId)) return fail(400, "Invalid provider ID");
 
   let body: unknown;
   try {
@@ -188,23 +188,23 @@ router.post("/api/model-config/channels/:id/models", async (c) => {
     return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
   }
 
-  const model = await addModel(channelId, auth.user.id, {
+  const model = await addModel(providerId, auth.user.id, {
     name: parsed.data.name,
     capabilities: parsed.data.capabilities,
   });
-  if (!model) return fail(404, "Channel not found");
+  if (!model) return fail(404, "Provider not found");
 
   return c.json(ok(model));
 });
 
-// POST /api/model-config/channels/:id/models/set
-router.post("/api/model-config/channels/:id/models/set", async (c) => {
+// POST /api/model-config/providers/:id/models/set
+router.post("/api/model-config/providers/:id/models/set", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const channelId = parseInt(c.req.param("id"), 10);
-  if (isNaN(channelId)) return fail(400, "Invalid channel ID");
+  const providerId = parseInt(c.req.param("id"), 10);
+  if (isNaN(providerId)) return fail(400, "Invalid provider ID");
 
   let body: unknown;
   try {
@@ -218,13 +218,13 @@ router.post("/api/model-config/channels/:id/models/set", async (c) => {
     return fail(422, `Schema validation failed: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
 
-  const models = await batchSetModels(channelId, auth.user.id, parsed.data.models);
-  if (!models) return fail(404, "Channel not found");
+  const models = await batchSetModels(providerId, auth.user.id, parsed.data.models);
+  if (!models) return fail(404, "Provider not found");
   return c.json(ok(models));
 });
 
-// DELETE /api/model-config/channels/:id/models/:mid
-router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
+// DELETE /api/model-config/providers/:id/models/:mid
+router.delete("/api/model-config/providers/:id/models/:mid", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
@@ -237,8 +237,8 @@ router.delete("/api/model-config/channels/:id/models/:mid", async (c) => {
   return c.json(ok(null, "Model deleted"));
 });
 
-// PUT /api/model-config/channels/:id/models/:mid/capability
-router.put("/api/model-config/channels/:id/models/:mid/capability", async (c) => {
+// PUT /api/model-config/providers/:id/models/:mid/capability
+router.put("/api/model-config/providers/:id/models/:mid/capability", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;

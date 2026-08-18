@@ -6,7 +6,7 @@
 
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";
-import { getChannel, getChannels } from "@server/crud/model-config";
+import { getProvider, getProviders } from "@server/crud/model-config";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
 import { resolveSkillTools } from "@server/services/agent/tools/filter";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
@@ -15,17 +15,17 @@ import { logEvent } from "@server/core/logger/utils";
 
 import type { AgentMessage } from "@server/services/agent/context-builder";
 
-/** 渠道解析：按 channelId 精确查找，否则按 model 名称匹配，最后回退第一个 */
-export async function resolveChannel(userId: number, channelId?: number, model?: string) {
-  if (channelId) {
-    return getChannel(channelId, userId);
+/** 供应商解析：按 providerId 精确查找，否则按 model 名称匹配，最后回退第一个 */
+export async function resolveProvider(userId: number, providerId?: number, model?: string) {
+  if (providerId) {
+    return getProvider(providerId, userId);
   }
-  const channels = await getChannels(userId);
-  if (model && channels.length) {
-    const matched = channels.find((ch) => ch.models.some((m: { name: string }) => m.name === model));
+  const providers = await getProviders(userId);
+  if (model && providers.length) {
+    const matched = providers.find((p) => p.models.some((m: { name: string }) => m.name === model));
     if (matched) return matched;
   }
-  return channels[0] ?? null;
+  return providers[0] ?? null;
 }
 
 type BuildResult =
@@ -35,7 +35,7 @@ type BuildResult =
 /** 构造上游请求：解析参考图、注入 stream:true、按协议组装 body */
 export async function buildUpstream(args: {
   messages: AgentMessage[];
-  channelId?: number;
+  providerId?: number;
   model?: string;
   userId: number;
   /** 是否注入 Agent 工具（仅 openai 协议支持） */
@@ -43,11 +43,11 @@ export async function buildUpstream(args: {
   /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
   activeSkill?: string | null;
 }): Promise<BuildResult> {
-  const channel = await resolveChannel(args.userId, args.channelId, args.model);
-  if (!channel) return { ok: false, error: "no available channel" };
+  const provider = await resolveProvider(args.userId, args.providerId, args.model);
+  if (!provider) return { ok: false, error: "no available provider" };
 
-  const protocol = getProtocol(channel.protocol);
-  if (!protocol?.buildLlmRequest) return { ok: false, error: `protocol ${channel.protocol} not support llm` };
+  const protocol = getProtocol(provider.protocol);
+  if (!protocol?.buildLlmRequest) return { ok: false, error: `protocol ${provider.protocol} not support llm` };
 
   const upstreamMessages: Array<Record<string, unknown>> = [];
   for (const m of args.messages) {
@@ -75,7 +75,7 @@ export async function buildUpstream(args: {
       continue;
     }
 
-    if (m.images && m.images.length > 0 && channel.protocol === "openai") {
+    if (m.images && m.images.length > 0 && provider.protocol === "openai") {
       const resolved = await resolveRefImages(m.images, args.userId);
       const content: Array<Record<string, unknown>> = [{ type: "text", text: m.content }];
       for (const url of resolved) {
@@ -88,18 +88,18 @@ export async function buildUpstream(args: {
   }
 
   const body: Record<string, unknown> = {
-    model: args.model ?? channel.models?.[0]?.name ?? "",
+    model: args.model ?? provider.models?.[0]?.name ?? "",
     messages: upstreamMessages,
     stream: true,
   };
 
-  if (args.agent && channel.protocol === "openai") {
+  if (args.agent && provider.protocol === "openai") {
     body.tools = resolveSkillTools(args.activeSkill ?? null);
     body.tool_choice = "auto";
     body.parallel_tool_calls = false;
   }
 
-  const req = protocol.buildLlmRequest(channel.baseUrl, channel.apiKey, body);
+  const req = protocol.buildLlmRequest(provider.baseUrl, provider.apiKey, body);
   return { ok: true, url: req.url, method: req.method, headers: req.headers, body: req.body };
 }
 
@@ -110,7 +110,7 @@ export type RunResult =
 /** 非流式调用（兜底接口使用） */
 export async function runCompletion(args: {
   messages: AgentMessage[];
-  channelId?: number;
+  providerId?: number;
   model?: string;
   userId: number;
 }): Promise<RunResult> {
@@ -130,8 +130,8 @@ export async function runCompletion(args: {
       return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
     }
     const data = await resp.json();
-    const channel = await resolveChannel(args.userId, args.channelId, args.model);
-    const protocol = channel ? getProtocol(channel.protocol) : undefined;
+    const provider = await resolveProvider(args.userId, args.providerId, args.model);
+    const protocol = provider ? getProtocol(provider.protocol) : undefined;
     const text = protocol?.parseLlmResponse ? protocol.parseLlmResponse(data).text ?? "" : "";
     return { ok: true, text };
   } catch (e) {
@@ -164,7 +164,7 @@ function readWithIdleTimeout(
 /** 流式调用：逐 chunk 推 delta、累积 tool_calls */
 export async function runCompletionStream(args: {
   messages: AgentMessage[];
-  channelId?: number;
+  providerId?: number;
   model?: string;
   userId: number;
   agent?: boolean;
@@ -182,11 +182,11 @@ export async function runCompletionStream(args: {
     return { ok: false, error: built.error };
   }
 
-  const channel = await resolveChannel(args.userId, args.channelId, args.model);
-  const protocolName = channel?.protocol;
+  const provider = await resolveProvider(args.userId, args.providerId, args.model);
+  const protocolName = provider?.protocol;
   logEvent("chat.stream", {
     stage: "upstream_start",
-    channel: channel?.name ?? null,
+    provider: provider?.name ?? null,
     protocol: protocolName ?? null,
     model: args.model ?? null,
     messages: args.messages.length,

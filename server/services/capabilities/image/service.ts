@@ -11,7 +11,7 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
+import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
 import type { GenerationResult } from "@server/schemas/result";
 
@@ -28,7 +28,7 @@ class ImageCapabilityService implements CapabilityService {
     }
 
     // 渠道识别阶段：记录上游 endpoints 来源（对标外部服务的"识别为 XXX 渠道"）
-    const endpoints = resolveChannelEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "image");
+    const endpoints = resolveProviderEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "image");
 
     // 管线构建请求体：transforms → auto-clean → mapping → patch
     const body = build({
