@@ -6,10 +6,10 @@
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
-import { getChannel } from "@server/crud/model-config";
+import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
-import { resolveChannelEndpoints, hostFromBaseUrl } from "@server/services/model-config";
+import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { updateTaskStatus, isTaskCancelled } from "@server/crud/task";
@@ -45,28 +45,28 @@ async function _doResumePoll(
   const upstreamTaskId = task.upstreamTaskId!;
   const cfg = getConfig();
 
-  // 获取 channel 信息
+  // 获取供应商信息
   let pollUrl: string;
   let apiKey: string;
   let protocol: ReturnType<typeof getProtocol>;
 
   try {
-    const channelId = task.config.channelId;
-    if (typeof channelId !== "number") {
-      throw new Error("channelId not found in task config");
+    const providerId = task.config.providerId;
+    if (typeof providerId !== "number") {
+      throw new Error("providerId not found in task config");
     }
-    const channel = await getChannel(channelId, task.userId);
-    if (!channel) throw new Error(`Channel ${channelId} not found`);
+    const provider = await getProvider(providerId, task.userId);
+    if (!provider) throw new Error(`Provider ${providerId} not found`);
 
-    apiKey = channel.apiKey;
-    const protoName = task.protocol ?? channel.protocol ?? "openai";
+    apiKey = provider.apiKey;
+    const protoName = task.protocol ?? provider.protocol ?? "openai";
     protocol = getProtocol(protoName);
     if (!protocol?.buildPollUrl) throw new Error("Protocol does not support polling");
 
-    const baseUrl = channel.baseUrl.replace(/\/+$/, "");
+    const baseUrl = provider.baseUrl.replace(/\/+$/, "");
     const model = task.model ?? "";
     const endpoints = model
-      ? resolveChannelEndpoints(hostFromBaseUrl(baseUrl), model, task.type)
+      ? resolveProviderEndpoints(hostFromBaseUrl(baseUrl), model, task.type)
       : undefined;
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
     pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type);

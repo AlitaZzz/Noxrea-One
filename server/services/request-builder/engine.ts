@@ -28,7 +28,7 @@ export interface BuildInput {
 }
 
 /** 引擎内置清理：这些内部字段不传给 Provider */
-const INTERNAL_FIELDS = new Set(["capability", "refMode", "channelId"]);
+const INTERNAL_FIELDS = new Set(["capability", "refMode", "providerId"]);
 
 /** 通用字段：所有能力都放行（不属于能力业务字段，但需透传上游） */
 const UNIVERSAL_FIELDS = new Set(["prompt", "model"]);

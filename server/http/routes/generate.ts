@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
 import { createTask, getTask, cancelTask } from "@server/crud/task";
-import { getChannel } from "@server/crud/model-config";
+import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
@@ -55,23 +55,23 @@ router.post("/api/generate/task", async (c) => {
   const capability = normalizeCapability(data.type ?? "image");
   const model = data.model ?? "";
 
-  if (!data.channelId) {
-    return fail(400, "channelId is required");
+  if (!data.providerId) {
+    return fail(400, "providerId is required");
   }
-  const channel = await getChannel(data.channelId, auth.user.id);
-  if (!channel) {
-    return fail(400, "Channel not found");
+  const provider = await getProvider(data.providerId, auth.user.id);
+  if (!provider) {
+    return fail(400, "Provider not found");
   }
-  if (!channel.protocol) {
-    return fail(400, "Channel 未配置 protocol");
+  if (!provider.protocol) {
+    return fail(400, "Provider 未配置 protocol");
   }
-  const channelProtocol = channel.protocol;
+  const providerProtocol = provider.protocol;
 
-  const allowedFields = getAllowedFields(hostFromBaseUrl(channel.baseUrl), model, capability);
+  const allowedFields = getAllowedFields(hostFromBaseUrl(provider.baseUrl), model, capability);
 
   // config 白名单构建：内部字段固定注入，业务字段仅放行 allowedFields 内的键
   const config: Record<string, unknown> = {};
-  if (data.channelId) config.channelId = data.channelId;
+  if (data.providerId) config.providerId = data.providerId;
   if (data.model) config.model = data.model;
   if (data.protocol) config.protocol = data.protocol;
 
@@ -111,7 +111,7 @@ router.post("/api/generate/task", async (c) => {
   const task = await createTask({
     userId: auth.user.id,
     type: capability,
-    protocol: data.protocol ?? channelProtocol ?? undefined,
+    protocol: data.protocol ?? providerProtocol ?? undefined,
     model: data.model ?? undefined,
     prompt,
     config,

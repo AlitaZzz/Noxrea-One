@@ -13,7 +13,7 @@ export interface RouteContext {
   baseUrl: string;
   apiKey: string;
   model: string;
-  channelId: number;
+  providerId: number;
   userId: number;
   taskId: string;
   config?: Record<string, unknown>;
@@ -34,7 +34,7 @@ export async function routeGenerate(ctx: RouteContext): Promise<GenerationResult
 
   return capService.generate(
     {
-      channelId: ctx.channelId,
+      providerId: ctx.providerId,
       baseUrl: ctx.baseUrl,
       apiKey: ctx.apiKey,
       protocol: ctx.protocol,

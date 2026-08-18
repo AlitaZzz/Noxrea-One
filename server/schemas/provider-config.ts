@@ -13,7 +13,7 @@ export const modelInfoCreateSchema = z.object({
 
 export const modelInfoOutSchema = z.object({
   id: z.number(),
-  channelId: z.number(),
+  providerId: z.number(),
   name: z.string(),
   capabilities: z.array(z.string()),
   createdAt: z.string(),

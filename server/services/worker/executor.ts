@@ -5,7 +5,7 @@
 
 import { routeGenerate } from "@server/services/gateway/router";
 import { updateTaskStatus, getTaskStatus } from "@server/crud/task";
-import { getChannel } from "@server/crud/model-config";
+import { getProvider } from "@server/crud/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
@@ -18,7 +18,7 @@ import type { HydratedGenerationTask } from "@server/crud/task";
 
 /**
  * 执行单个任务的生命周期：
- * 解析 → 渠道配置 → 参考图 → AI 调用 → 结果下载落盘 → 落库 → 发事件
+ * 解析 → 供应商配置 → 参考图 → AI 调用 → 结果下载落盘 → 落库 → 发事件
  *
  * 同步/异步判定由 CapabilityService 内部的 TaskManager.submitAndWait 完成，
  * Executor 不再感知异步流程（对齐 Python 架构）。
@@ -34,12 +34,12 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
   });
 
   try {
-    // 1. 获取渠道配置
-    const channelId = ctx.config.channelId as number | undefined;
-    if (!channelId) throw new Error("channelId not found in task config");
+    // 1. 获取供应商配置
+    const providerId = ctx.config.providerId as number | undefined;
+    if (!providerId) throw new Error("providerId not found in task config");
 
-    const channel = await getChannel(channelId, task.userId);
-    if (!channel) throw new Error(`Channel ${channelId} not found`);
+    const provider = await getProvider(providerId, task.userId);
+    if (!provider) throw new Error(`Provider ${providerId} not found`);
 
     // 2. 解析参考图
     const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
@@ -52,11 +52,11 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
 
     // 3. 基础参数
     const capability = task.type ?? "image";
-    const protocol = task.protocol ?? channel.protocol ?? "openai";
+    const protocol = task.protocol ?? provider.protocol ?? "openai";
     const model = task.model ?? (ctx.config.model as string) ?? "";
 
     // 4. 规范化 baseUrl（去末尾斜杠）
-    const baseUrl = channel.baseUrl.replace(/\/+$/, "");
+    const baseUrl = provider.baseUrl.replace(/\/+$/, "");
 
     // 5. 从 model-ui.json 获取模型默认参数（按 host + 模型名 + 能力）
     const modelParams = getModelParams(hostFromBaseUrl(baseUrl), model, capability);
@@ -76,9 +76,9 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       capability,
       protocol,
       baseUrl,
-      apiKey: channel.apiKey,
+      apiKey: provider.apiKey,
       model,
-      channelId,
+      providerId,
       userId: task.userId,
       taskId: task.id,
       params: rawParams,
