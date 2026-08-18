@@ -9,4 +9,4 @@ export { default as ApiSettingsDrawer } from "./ApiSettingsDrawer";
 export { modelApi } from "./api";
 
 // ── 类型 ──
-export type { ModelCapability, ModelChannel,ModelInfo } from "./types";
+export type { ModelCapability, ModelProvider, ModelInfo } from "./types";

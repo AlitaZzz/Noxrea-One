@@ -55,9 +55,9 @@ interface Props {
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
 export default function AgentDrawer({ open, onClose, projectId }: Props) {
-  const channels = useModelStore((s) => s.channels);
+  const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
-  const modelOptions = channels.flatMap((c) =>
+  const modelOptions = providers.flatMap((c) =>
     c.models
       .filter((m) => m.capabilities?.includes("text"))
       .map((m) => ({ value: `${c.name}/${m.name}`, name: m.name }))

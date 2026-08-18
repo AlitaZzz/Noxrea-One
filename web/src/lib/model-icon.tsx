@@ -40,7 +40,7 @@ const ICON_MAP: { test: RegExp; Icon: ModelIconType }[] = [
   { test: /suno/i, Icon: SunoIcon },
 ];
 
-/** 根据模型名（支持 channel/model 整串）解析品牌图标组件，未命中返回 null */
+/** 根据模型名（支持 provider/model 整串）解析品牌图标组件，未命中返回 null */
 export function resolveModelIcon(model: string): ModelIconType | null {
   for (const { test, Icon } of ICON_MAP) {
     if (test.test(model)) return Icon;

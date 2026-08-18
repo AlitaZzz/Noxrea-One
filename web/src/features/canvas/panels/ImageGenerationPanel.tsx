@@ -23,7 +23,7 @@ import { apiUpload } from "@/lib/api/client";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
-import type { ModelChannel } from "@/lib/types/models";
+import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
@@ -33,11 +33,11 @@ interface Props { nodeId: string; }
 
 const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
-  const channels = useModelStore((s) => s.channels);
+  const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
-  const allModels = channels.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.id}`, channelId: c.id, modelId: m.id, name: m.name, channelName: c.name }))
+  const allModels = providers.flatMap((c) =>
+    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
 
   // Read persisted settings from node data
@@ -45,7 +45,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<ImageGenSettings>;
     const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
-      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.channelId, allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
+      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.providerId, allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
     const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
@@ -70,7 +70,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 查找当前模型的参数配置（params + defaults + constraints）
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.channelId, entry.name, "image") : null;
+    return entry ? findModelParams(entry.providerId, entry.name, "image") : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
@@ -154,7 +154,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
 
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; channel: ModelChannel | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, channel: null });
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, provider: null });
   const latestSettingsRef = useRef({ kind: "image" as const, prompt, modelKey, quality, resolution, ratio, refOrder, n });
   useEffect(() => {
     latestSettingsRef.current = { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder, n };
@@ -189,14 +189,14 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
-    const { entry, channel, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
-    if (!entry || !channel) return "缺少模型配置";
+    const { entry, provider, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
+    if (!entry || !provider) return "缺少模型配置";
     try {
       const res = await generationApi.submitGenerationTask({
         type: "image",
         prompt: p.trim(),
         model: entry.name,
-        channelId: entry.channelId,
+        providerId: entry.providerId,
         quality: hasField(fields, "quality") ? q : undefined,
         resolution: hasField(fields, "resolution") ? resolution : undefined,
         ratio: hasField(fields, "ratio") ? r : undefined,
@@ -271,13 +271,13 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) return;
     const entry = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
-    const channel = channels.find((c) => c.id === entry.channelId);
-    if (!channel) return;
+    const provider = providers.find((c) => c.id === entry.providerId);
+    if (!provider) return;
 
     // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, channel };
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, provider };
 
     const errMsg = await submitTask();
 
@@ -439,7 +439,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               <span className="flex items-center gap-1.5">
                 <ModelIcon model={m.name} className="size-4 shrink-0" />
                 <span className="truncate">{m.name}</span>
-                {m.channelName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.channelName}</span> : null}
+                {m.providerName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.providerName}</span> : null}
               </span>
             </MenuItem>
           ))}

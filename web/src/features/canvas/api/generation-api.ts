@@ -8,7 +8,7 @@ export interface SubmitGenerationTaskBody {
   type: "video" | "image" | "llm";
   prompt: string;
   model: string;
-  channelId: string;
+  providerId: string;
   nodeId: string;
   // image 业务字段
   quality?: string;

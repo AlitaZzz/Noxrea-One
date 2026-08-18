@@ -84,15 +84,15 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
-  const channels = useModelStore((s) => s.channels);
+  const providers = useModelStore((s) => s.providers);
   const presets = useModelStore((s) => s.presets);
-  const addChannel = useModelStore((s) => s.addChannel);
-  const updateChannel = useModelStore((s) => s.updateChannel);
-  const fetchChannelApiKey = useModelStore((s) => s.fetchChannelApiKey);
-  const deleteChannel = useModelStore((s) => s.deleteChannel);
+  const addProvider = useModelStore((s) => s.addProvider);
+  const updateProvider = useModelStore((s) => s.updateProvider);
+  const fetchProviderApiKey = useModelStore((s) => s.fetchProviderApiKey);
+  const deleteProvider = useModelStore((s) => s.deleteProvider);
   const addModel = useModelStore((s) => s.addModel);
   const toggleModelCapability = useModelStore((s) => s.toggleModelCapability);
-  const setChannelModels = useModelStore((s) => s.setChannelModels);
+  const setProviderModels = useModelStore((s) => s.setProviderModels);
   const fetchModels = useModelStore((s) => s.fetchModels);
 
   // Drawer 打开时阻止画布快捷键透传
@@ -101,10 +101,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     return () => setModalOpen(false);
   }, [open, setModalOpen]);
 
-  const [channelId, setChannelId] = useState<string | null>(null);
+  const [providerId, setProviderId] = useState<string | null>(null);
   const [activeCap, setActiveCap] = useState<ModelCapability>("image");
-  const [showAddChannel, setShowAddChannel] = useState(false);
-  const [editChannelId, setEditChannelId] = useState<string | null>(null);
+  const [showAddProvider, setShowAddProvider] = useState(false);
+  const [editProviderId, setEditProviderId] = useState<string | null>(null);
   const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeyRevealed, setApiKeyRevealed] = useState(false);
@@ -113,49 +113,49 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const [fetchingKey, setFetchingKey] = useState(false);
   const [newModelName, setNewModelName] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [deleteChannelId, setDeleteChannelId] = useState<string | null>(null);
+  const [deleteProviderId, setDeleteProviderId] = useState<string | null>(null);
   const [searchModel, setSearchModel] = useState("");
 
-  const channel = channels.find((c) => c.id === channelId);
+  const provider = providers.find((c) => c.id === providerId);
 
-  // Pick the first channel when the modal opens without a selection.
+  // Pick the first provider when the modal opens without a selection.
   // Adjusted during render (not in an effect) to avoid cascading renders.
-  // Pick the first channel when the modal opens without a selection.
+  // Pick the first provider when the modal opens without a selection.
   // Adjusted during render (matching the "store previous render" pattern).
-  const [prevNeedChannel, setPrevNeedChannel] = useState(false);
-  const needChannel = !!(open && channels.length > 0 && !channelId);
-  if (needChannel !== prevNeedChannel) {
-    setPrevNeedChannel(needChannel);
-    if (needChannel) setChannelId(channels[0].id);
+  const [prevNeedProvider, setPrevNeedProvider] = useState(false);
+  const needProvider = !!(open && providers.length > 0 && !providerId);
+  if (needProvider !== prevNeedProvider) {
+    setPrevNeedProvider(needProvider);
+    if (needProvider) setProviderId(providers[0].id);
   }
 
   const resetChForm = () => {
     setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
-    setEditChannelId(null);
-    setShowAddChannel(false);
+    setEditProviderId(null);
+    setShowAddProvider(false);
     setApiKeyVisible(false);
     setApiKeyRevealed(false);
     setApiKeyMasked("");
     setKeyDirty(false);
   };
 
-  const handleSaveChannel = () => {
+  const handleSaveProvider = () => {
     if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
-    if (editChannelId) {
-      updateChannel(editChannelId, {
+    if (editProviderId) {
+      updateProvider(editProviderId, {
         name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
         apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
       });
-      message.success(t("modelConfig.channelUpdated"));
+      message.success(t("modelConfig.providerUpdated"));
     } else {
-      addChannel(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
-      message.success(t("modelConfig.channelAdded"));
+      addProvider(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
+      message.success(t("modelConfig.providerAdded"));
     }
     resetChForm();
   };
 
-  const handleEditChannel = (id: string) => {
-    const ch = channels.find((c) => c.id === id);
+  const handleEditProvider = (id: string) => {
+    const ch = providers.find((c) => c.id === id);
     if (!ch) return;
     // 预填掩码 apiKey：用户可见掩码值，点击小眼睛拉取明文
     setApiKeyMasked(ch.apiKey);
@@ -166,17 +166,17 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       name: ch.name, baseUrl: ch.baseUrl, apiKey: ch.apiKey,
       protocol: ch.protocol || "openai",
     });
-    setEditChannelId(id);
-    setShowAddChannel(true);
+    setEditProviderId(id);
+    setShowAddProvider(true);
   };
 
   // 点击小眼睛：首次揭示时从后端拉取明文密钥
   const handleApiKeyVisibleChange = async (visible: boolean) => {
     setApiKeyVisible(visible);
-    if (visible && editChannelId && !apiKeyRevealed && !keyDirty) {
+    if (visible && editProviderId && !apiKeyRevealed && !keyDirty) {
       setFetchingKey(true);
       try {
-        const plain = await fetchChannelApiKey(editChannelId);
+        const plain = await fetchProviderApiKey(editProviderId);
         setChForm((f) => ({ ...f, apiKey: plain }));
         setApiKeyRevealed(true);
       } catch {
@@ -189,12 +189,12 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   // 复制按钮：按需拉取明文后复制到剪贴板
   const handleCopyApiKey = async () => {
-    if (!editChannelId) return;
+    if (!editProviderId) return;
     let textToCopy = chForm.apiKey;
     if (!apiKeyRevealed && !keyDirty) {
       setFetchingKey(true);
       try {
-        textToCopy = await fetchChannelApiKey(editChannelId);
+        textToCopy = await fetchProviderApiKey(editProviderId);
         setChForm((f) => ({ ...f, apiKey: textToCopy }));
         setApiKeyRevealed(true);
         setApiKeyVisible(true);
@@ -214,10 +214,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   };
 
   const handleFetch = async () => {
-    if (!channelId) return;
-    console.log("[UI] handleFetch called with channelId:", channelId);
+    if (!providerId) return;
+    console.log("[UI] handleFetch called with providerId:", providerId);
     setFetching(true);
-    const result = await fetchModels(channelId);
+    const result = await fetchModels(providerId);
     if (result.success) {
       message.success("Models fetched");
     } else {
@@ -227,14 +227,14 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   };
 
   const handleAddModel = () => {
-    if (!newModelName.trim() || !channelId) return;
-    addModel(channelId, newModelName.trim());
+    if (!newModelName.trim() || !providerId) return;
+    addModel(providerId, newModelName.trim());
     setNewModelName("");
   };
 
   // Models filtered by current capability tab
-  const capModels = channel?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
-  const otherModels = channel?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
+  const capModels = provider?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
+  const otherModels = provider?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
 
   // 搜索过滤（不区分大小写，空串 = 全部）
   const searchLower = searchModel.trim().toLowerCase();
@@ -246,13 +246,13 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   // 批量勾选：本地算好全量 capabilities，一次 set_models 提交
   const batchApply = async (nextCapsForVisible: (m: ModelInfo) => ModelCapability[]) => {
-    if (!channel || visibleModels.length === 0) return;
+    if (!provider || visibleModels.length === 0) return;
     const visibleIds = new Set(visibleModels.map((m) => m.id));
-    const merged = channel.models.map((m) => ({
+    const merged = provider.models.map((m) => ({
       name: m.name,
       capabilities: visibleIds.has(m.id) ? nextCapsForVisible(m) : (m.capabilities || []),
     }));
-    await setChannelModels(channel.id, merged);
+    await setProviderModels(provider.id, merged);
   };
   const batchSelectAll = () => batchApply((m) => Array.from(new Set([...(m.capabilities || []), activeCap])));
   const batchInvert = () => batchApply((m) => {
@@ -262,7 +262,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
 
   // 切换单行能力；交给 React Compiler 自动 memo，移除手写 useCallback 以让其优化。
-  const onToggleCap = (id: string) => toggleModelCapability(channel?.id ?? "", id, activeCap);
+  const onToggleCap = (id: string) => toggleModelCapability(provider?.id ?? "", id, activeCap);
 
   // 合并为「已启用 / 可用」两段、带分组标题的扁平数组，交给虚拟列表渲染
   type Row =
@@ -321,32 +321,32 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         .model-config-wrap .ant-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
         .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
-      {/* ===== Channel selector ===== */}
+      {/* ===== Provider selector ===== */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.channels")}:</span>
+        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.providers")}:</span>
         <Select
           size="small"
-          value={channelId}
-          onChange={(v) => { setChannelId(v); setActiveCap("image"); }}
-          disabled={showAddChannel}
+          value={providerId}
+          onChange={(v) => { setProviderId(v); setActiveCap("image"); }}
+          disabled={showAddProvider}
           style={{ width: 150, height: 32 }}
-          options={channels.map((c) => ({ label: c.name, value: c.id }))}
-          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.noChannels")}</span>}
+          options={providers.map((c) => ({ label: c.name, value: c.id }))}
+          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.noProviders")}</span>}
         />
         <div className="flex items-center gap-1 ml-auto">
-          <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddChannel(true); }} className="model-btn">
-            {t("modelConfig.addChannel")}
+          <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddProvider(true); }} className="model-btn">
+            {t("modelConfig.addProvider")}
           </Button>
-          {channel && (
+          {provider && (
             <>
               <div className="w-px h-4 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
               <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
-                {channel.models.length > 0 ? `${t("modelConfig.fetchModels")} (${channel.models.length})` : t("modelConfig.fetchModels")}
+                {provider.models.length > 0 ? `${t("modelConfig.fetchModels")} (${provider.models.length})` : t("modelConfig.fetchModels")}
               </Button>
-              <Button size="small" icon={<EditOutlined />} onClick={() => handleEditChannel(channel.id)} className="model-btn">
+              <Button size="small" icon={<EditOutlined />} onClick={() => handleEditProvider(provider.id)} className="model-btn">
                 {t("common.edit")}
               </Button>
-              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteChannelId(channel.id)}>
+              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteProviderId(provider.id)}>
                 {t("common.delete")}
               </Button>
             </>
@@ -354,8 +354,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         </div>
       </div>
 
-      {/* ===== Add/Edit channel form ===== */}
-      {showAddChannel && (
+      {/* ===== Add/Edit provider form ===== */}
+      {showAddProvider && (
         <div className="px-4 py-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--canvas-border)" }}>
           <div className="flex gap-1">
             <div className="flex flex-col gap-2" style={{ flex: 1 }}>
@@ -406,7 +406,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.apiKey")}</span>
                 <div className="flex gap-1">
                   <Input.Password
-                    placeholder={editChannelId ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
+                    placeholder={editProviderId ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
                     value={chForm.apiKey}
                     onChange={(e) => {
                       setChForm((f) => ({ ...f, apiKey: e.target.value }));
@@ -416,7 +416,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                     visibilityToggle={{ visible: apiKeyVisible, onVisibleChange: handleApiKeyVisibleChange }}
                     iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
                   />
-                  {editChannelId && (
+                  {editProviderId && (
                     <Button
                       size="small"
                       icon={<CopyOutlined />}
@@ -432,8 +432,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           </div>
           <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("common.cancel")}</Button>
-            <Button size="small" onClick={handleSaveChannel} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
-              {editChannelId ? t("auth.saveChanges") : t("modelConfig.addChannel")}
+            <Button size="small" onClick={handleSaveProvider} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
+              {editProviderId ? t("auth.saveChanges") : t("modelConfig.addProvider")}
             </Button>
           </div>
         </div>
@@ -442,7 +442,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       {/* ===== Capability tabs ===== */}
       <div className="flex border-b" style={{ borderColor: "var(--canvas-border)" }}>
         {CAPABILITY_TABS.map((tab) => {
-          const count = channel?.models.filter((m) => m.capabilities?.includes(tab.key)).length || 0;
+          const count = provider?.models.filter((m) => m.capabilities?.includes(tab.key)).length || 0;
           return (
             <button
               key={tab.key}
@@ -464,12 +464,12 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
       {/* ===== Model list ===== */}
       <div className="p-5 flex-1 flex flex-col min-h-[300px] overflow-hidden" style={{ scrollbarGutter: "stable" }}>
-        {!channel ? (
+        {!provider ? (
           <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
             <ApiOutlined className="text-3xl mb-2 block" />
-            {t("modelConfig.noChannelsDesc")}
+            {t("modelConfig.noProvidersDesc")}
           </div>
-        ) : channel.models.length === 0 ? (
+        ) : provider.models.length === 0 ? (
           <div className="text-center py-8" style={{ color: "var(--canvas-text-muted)" }}>
             <div className="text-sm mb-1">{t("modelConfig.noModels")}</div>
             <div className="text-xs mb-3">{t("modelConfig.noModelsDesc")}</div>
@@ -540,11 +540,11 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     </div>
     </Drawer>
       <ConfirmModal
-        open={!!deleteChannelId}
-        title={t("modelConfig.deleteChannel")}
-        content={channels.find(c => c.id === deleteChannelId)?.name || ""}
-        onOk={() => { if (deleteChannelId) deleteChannel(deleteChannelId); setChannelId(null); setDeleteChannelId(null); }}
-        onCancel={() => setDeleteChannelId(null)}
+        open={!!deleteProviderId}
+        title={t("modelConfig.deleteProvider")}
+        content={providers.find(c => c.id === deleteProviderId)?.name || ""}
+        onOk={() => { if (deleteProviderId) deleteProvider(deleteProviderId); setProviderId(null); setDeleteProviderId(null); }}
+        onCancel={() => setDeleteProviderId(null)}
       />
     </>
   );
