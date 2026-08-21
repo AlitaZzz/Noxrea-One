@@ -7,7 +7,7 @@ import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
 import { createTask, getTask, cancelTask } from "@server/crud/task";
 import { getProvider } from "@server/crud/model-config";
-import { getAllowedFields, normalizeCapability, hostFromBaseUrl } from "@server/services/model-config";
+import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
@@ -67,6 +67,15 @@ router.post("/api/generate/task", async (c) => {
   }
   const providerProtocol = provider.protocol;
 
+  const resolvedHost = resolveMatchedHost(provider.baseUrl);
+  logEvent("http.generate", {
+    stage: "vendor-resolve",
+    providerId: provider.id,
+    protocol: providerProtocol,
+    baseUrl: provider.baseUrl,
+    resolvedHost,
+    matchedVendor: resolvedHost !== "_default",
+  });
   const allowedFields = getAllowedFields(hostFromBaseUrl(provider.baseUrl), model, capability);
 
   // config 白名单构建：内部字段固定注入，业务字段仅放行 allowedFields 内的键
