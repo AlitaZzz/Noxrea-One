@@ -156,10 +156,10 @@ class SaveManager {
 
   /**
    * 页面生命周期兜底保存（关闭/刷新/组件卸载），fire-and-forget。
-   * 与 save() 不同：
-   *  - 检查 dirty 但跳过 saving（避免与 save() 冲突）
-   *  - 不重试，不改变内部状态
-   *  - 始终使用 keepalive: true
+   * 走统一 save() 管线：清除 dirty、置 saving 并挂到 savePromise，
+   * 使随后项目列表页的 flushAndWait() 能等待本次落库完成后再拉取列表，
+   * 避免浏览器回退时「列表 GET 与保存 PUT 竞态」导致 updatedAt 排序不刷新。
+   * 保留空画布兜底：快照为空时不保存，防止误覆盖有效数据。
    */
   flushOnUnload(): void {
     if (!this.dirty) return;
@@ -168,13 +168,10 @@ class SaveManager {
       this.saveTimer = null;
     }
 
-    const pid = useProjectStore.getState().activeProjectId;
-    if (!pid) return;
-
     const snapshot = takeCanvasSnapshot();
     if (!snapshot.nodes.length && !snapshot.edges.length) return;
 
-    this.saveToApi(pid, snapshot, true).catch(() => {});
+    void this.save(true);
   }
 
   /** 查询保存状态，供 UI 显示 */
