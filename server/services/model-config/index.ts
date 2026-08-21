@@ -257,6 +257,17 @@ export function hostFromBaseUrl(baseUrl: string): string {
 }
 
 /**
+ * 解析某 baseUrl 在 model-ui.json 中命中的供应商条目 key。
+ * 命中 vendor 通配条目返回其 key（如 "*apimart*"）；未命中返回 "_default"。
+ * 用途：让供应商识别结果在日志中可见，避免静默回退导致的问题难以排查。
+ */
+export function resolveMatchedHost(baseUrl: string): string {
+  const host = hostFromBaseUrl(baseUrl);
+  const hit = matchHost(loadRaw(), host);
+  return hit ? hit[0] : "_default";
+}
+
+/**
  * 取某语义字段的映射规格（本上游本模型 mapping → undefined）。
  * 命中不到返回 undefined，由 build() 按白名单原样透传。
  */

@@ -8,8 +8,9 @@
  * 后端据模型 + 渠道自动转换，前端不感知上游字段。
  */
 
-import { getAllowedFields, resolveFieldMapSpec, hostFromBaseUrl } from "@server/services/model-config";
+import { getAllowedFields, resolveFieldMapSpec, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { resolveRefSlots, resolveByKind, applyTransform, setNested } from "./resolve";
+import { logEvent } from "@server/core/logger/utils";
 
 
 export interface BuildInput {
@@ -45,6 +46,14 @@ const REF_KEYS = new Set(["refImages"]);
 export function build(input: BuildInput): Record<string, unknown> {
   // 0. 能力字段白名单兜底：只放行该能力允许的业务字段 + 通用字段，其余丢弃
   const host = hostFromBaseUrl(input.baseUrl);
+  logEvent("request-builder", {
+    stage: "vendor-resolve",
+    taskId: input.taskId,
+    capability: input.capability,
+    protocol: input.protocol,
+    baseUrl: input.baseUrl,
+    resolvedHost: resolveMatchedHost(input.baseUrl),
+  });
   const allowedSet = new Set(getAllowedFields(host, input.modelName, input.capability));
 
   // 1. 解析参考槽位
