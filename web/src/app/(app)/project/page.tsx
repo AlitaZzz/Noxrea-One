@@ -7,7 +7,7 @@
 
 import { ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
 import { Popover } from "antd";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,7 +19,7 @@ import { ThemeLightIcon } from "@/components/ui/icons/theme/ThemeLightIcon";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { flushAndWait, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
 import type { CanvasProject } from "@/features/project/types";
 
@@ -41,10 +41,19 @@ export default function ProjectPage() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const refreshProjects = useProjectStore((s) => s.refreshProjects);
 
-  // 每次进入项目列表页时重新拉取，确保列表按 updatedAt 最新排序
+  const pathname = usePathname();
+
+  // 进入项目列表页时：先等待画布未落盘的保存完成，再拉取数据库。
+  // 浏览器回退按钮导航时，/canvas 卸载会触发兜底保存（异步 PUT），
+  // 若不等待直接拉列表，GET 会与保存 PUT 竞态，拿到旧的 updatedAt 排序。
   useEffect(() => {
-    refreshProjects();
-  }, [refreshProjects]);
+    if (pathname !== "/project") return;
+    let cancelled = false;
+    flushAndWait().finally(() => {
+      if (!cancelled) refreshProjects();
+    });
+    return () => { cancelled = true; };
+  }, [pathname, refreshProjects]);
 
   // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成。
 
