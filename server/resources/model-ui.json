@@ -1,5 +1,7 @@
 {
+  "_comment": "model-ui.json 仅描述『参数结构 + 上游路径』，不绑定任何协议、不绑定任何供应商。协议由 provider.protocol 单独决定（当前仅实现 openai）。供应商识别靠 baseUrl 解析出的 host 与顶层 key 通配匹配；匹配不到时一律回退 _default（通用兜底模板，非 OpenAI 专属）。",
   "_default": {
+    "_comment": "通用兜底模板：任何供应商/协议在下方匹配不到时，前端 UI 与后端构建参数统一使用此处定义。不绑定协议、不绑定供应商。",
     "image": {
       "allowedFields": ["quality", "resolution", "ratio", "n", "refImages"],
       "fields": [
@@ -32,6 +34,7 @@
   },
 
   "*apimart*": {
+    "_comment": "供应商 APIMart（OpenAI 协议体系内，已适配）。域名含 apimart 时命中，覆盖 _default 的 endpoints/mapping。",
     "_endpoints": {
       "image.edits": "/images/generations",
       "video.generations": "/videos/generations",
@@ -114,6 +117,7 @@
   },
 
   "*exellome*": {
+    "_comment": "供应商 Exellome（OpenAI 协议体系内，已适配）。",
     "_endpoints": {
       "image.edits": "/images/edits"
     },
@@ -134,6 +138,7 @@
   },
 
   "*fhl.mom*": {
+    "_comment": "供应商 FHL（OpenAI 协议体系内，已适配）。",
     "_endpoints": {
       "image.edits": "/images/edits"
     },
@@ -217,6 +222,7 @@
   },
 
   "*agnes*": {
+    "_comment": "供应商 Agnes（OpenAI 协议体系内，已适配）。",
     "_endpoints": {
       "image.edits": "/images/generations",
       "video.poll": "https://api.agnes-ai.cn/agnesapi?video_id={video_id}"
@@ -250,5 +256,12 @@
         }
       }
     }
+  },
+
+  "_todo_vendors": {
+    "_comment": "TODO(vendor)：以下供应商属 OpenAI 协议体系，但需 body 重组 / 响应包装（超出声明式 mapping 能力），本期不实现。待接入时在顶层新增对应 host 通配条目与 _endpoints/mapping。",
+    "kie": "需 body 重组（如 normalizeKIEVideoBody），未适配",
+    "mimo": "需响应包装（如 copyMiMoTTSResponse），未适配",
+    "note": "非 openai 协议（ark/gemini）的 provider 可落库，但发起生成时由 capabilities/*/service.ts 的 getProtocol 守卫抛出『Protocol X does not support Y generation』错误，不静默、不降级。"
   }
 }
