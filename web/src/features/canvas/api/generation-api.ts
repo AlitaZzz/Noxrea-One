@@ -10,11 +10,12 @@ export interface SubmitGenerationTaskBody {
   model: string;
   providerId: string;
   nodeId: string;
-  // image 业务字段
+  // image / video 业务字段（llm 无这些 UI 参数）
   quality?: string;
   resolution?: string;
   ratio?: string;
   n?: number;
+  // 任务级参考图：image 直接映射上游字段；llm 由 service 归一化注入 messages
   refImages?: string[];
   // video 业务字段
   seconds?: number;

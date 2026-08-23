@@ -220,25 +220,15 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     markDirtyImmediate();
 
     try {
-      // Build message content (multimodal if ref images exist)
-      // image_url 传原始 URL，由后端 resolve_refs 转 base64
-      const content =
-        refOrder.length > 0
-          ? [
-              { type: "text", text: finalPrompt },
-              ...refOrder.map((url) => ({ type: "image_url", image_url: { url } })),
-            ]
-          : finalPrompt;
-
-      const messages = [{ role: "user", content }];
-
+      // 与 image/video 链路完全同构：prompt 落任务级文本列、参考图落 ref_images 列。
+      // messages 的构造（含多模态组装与 base64 转换）由后端 llm service 归一化完成
       const res = await generationApi.submitGenerationTask({
         type: "llm",
         prompt: finalPrompt,
         model: entry.name,
         providerId: entry.providerId,
         nodeId,
-        messages,
+        refImages: refOrder.length > 0 ? refOrder : undefined,
       });
       const json = await res.json();
       if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);

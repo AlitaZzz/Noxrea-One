@@ -109,10 +109,11 @@ router.post("/api/generate/task", async (c) => {
     }
   }
 
-  if (typeof config.n === "number") {
+  // n 仅在前端显式传入且能力声明了该字段（model-ui.json allowedFields）时收窄；
+  // 默认值不在此硬编码--需要时由 model-ui.json 模型级 defaults 提供
+  // （executor 的 modelDefaults 通道，合并时用户参数优先）
+  if (allowedSet.has("n") && typeof config.n === "number") {
     config.n = Math.max(1, Math.min(4, config.n as number));
-  } else {
-    config.n = 1;
   }
 
   const prompt = data.prompt ?? (config.prompt as string) ?? "";
