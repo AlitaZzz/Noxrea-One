@@ -161,6 +161,7 @@
     "providerUpdated": "供应商已更新",
     "providerAdded": "供应商已添加",
     "fetchModels": "拉取模型",
+    "modelsFetched": "模型已拉取",
     "noProviders": "暂无供应商",
     "noModels": "暂无模型",
     "noProvidersDesc": "添加供应商以开始使用",
