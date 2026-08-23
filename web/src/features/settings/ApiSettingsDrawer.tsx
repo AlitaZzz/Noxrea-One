@@ -221,7 +221,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     if (result.success) {
       message.success(t("modelConfig.modelsFetched"));
     } else {
-      message.error(result.error ?? "Failed to fetch models");
+      message.error(result.error ?? t("modelConfig.fetchModelsFailed"));
     }
     setFetching(false);
   };

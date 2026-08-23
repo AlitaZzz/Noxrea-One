@@ -116,8 +116,8 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
     fd.append("file", blob, "avatar.png");
     try {
       const res = await apiUpload<{ url: string }>("/api/files/upload?category=avatars", fd);
-      if (res.code === 200) { onDone(res.data.url); message.success("Avatar saved"); }
-    } catch { message.error("Failed"); }
+      if (res.code === 200) { onDone(res.data.url); message.success(t("avatar.saved")); }
+    } catch { message.error(t("avatar.failed")); }
     setSaving(false);
   };
 

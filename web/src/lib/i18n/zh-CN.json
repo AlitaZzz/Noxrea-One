@@ -162,6 +162,7 @@
     "providerAdded": "供应商已添加",
     "fetchModels": "拉取模型",
     "modelsFetched": "模型已拉取",
+    "fetchModelsFailed": "拉取模型失败",
     "noProviders": "暂无供应商",
     "noModels": "暂无模型",
     "noProvidersDesc": "添加供应商以开始使用",
@@ -272,6 +273,7 @@
     "folderNamePlaceholder": "输入文件夹名称",
     "folderDuplicate": "同级已存在同名文件夹",
     "count": "项",
+    "batchSaveSummary": "{{saved}} 个文件将保存，{{failed}} 个文件失败",
     "delete": "删除资产",
     "foldersLabel": "个文件夹",
     "cat": {
@@ -440,5 +442,13 @@
       "first-last": "首尾帧",
       "full": "全能参考"
     }
+  },
+  "avatar": {
+    "saved": "头像已保存",
+    "failed": "头像保存失败"
+  },
+  "director": {
+    "sentToCanvas": "已发送到画布：{{name}}",
+    "sendToCanvasFailed": "发送到画布失败"
   }
 }
