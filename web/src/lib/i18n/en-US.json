@@ -161,6 +161,7 @@
     "providerUpdated": "Provider updated",
     "providerAdded": "Provider added",
     "fetchModels": "Fetch Models",
+    "modelsFetched": "Models fetched",
     "noProviders": "No providers",
     "noModels": "No models",
     "noProvidersDesc": "Add a provider to get started",
