@@ -15,6 +15,9 @@ const PENDING_STATUSES = new Set([
   "pending", "queued", "submitted", "processing", "running", "started", "in_progress",
 ]);
 
+/** URL 扫描跳过的键名：prompt 类字段是用户输入回显，其中的 URL 不是产物地址 */
+const URL_SCAN_SKIP_KEYS = new Set(["prompt", "prompts"]);
+
 /** 归一化上游状态到 pending/completed/failed */
 function normalizeStatus(raw: string): string {
   const s = raw.toLowerCase().trim();
@@ -85,8 +88,7 @@ export class OpenAiImageProtocol implements ProtocolService {
   }
 
   parseImageResponse(response: unknown): ProtocolResponse {
-    const raw = JSON.stringify(response);
-    const urls = this._scanUrls(raw);
+    const urls = this._scanUrls(response);
     // 兜底：扫描整串无法识别裸 base64（不含 data: 锚点），需按字段名定位后补前缀
     urls.push(...this._extractB64FromData(response, "data:image/png;base64,"));
     return { urls };
@@ -180,20 +182,43 @@ export class OpenAiImageProtocol implements ProtocolService {
     return { status: "pending", urls: [] };
   }
 
-  /** 提取图片 URL：扫描 JSON 中所有 https:// 和 data: 开头的资源 */
+  /** 提取图片 URL：扫描 JSON 中所有 https:// 和 data: 开头的资源（跳过 prompt 回显字段） */
   private _extractImageUrls(payload: Record<string, unknown>): string[] {
-    return this._scanUrls(JSON.stringify(payload));
+    return this._scanUrls(payload);
   }
 
-  /** 从字符串中提取所有 https:// 和 data: 开头的 URL */
-  private _scanUrls(raw: string): string[] {
+  /**
+   * 从 JSON 树中提取所有 https:// 和 data: 开头的 URL。
+   * 递归遍历字段值；键名为 prompt / prompts 的值不参与扫描，
+   * 避免请求参数回显中的 URL 被误判为产物地址。
+   */
+  private _scanUrls(root: unknown): string[] {
     const urls: string[] = [];
     const re = /(?:https?:\/\/|data:)[^\s"',;}\]<>]+/g;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(raw)) !== null) {
-      const u = match[0].replace(/[)\]}>.,;!?]+$/, "");
-      if (!urls.includes(u)) urls.push(u);
-    }
+    const scanString = (s: string) => {
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(s)) !== null) {
+        const u = match[0].replace(/[)\]}>.,;!?]+$/, "");
+        if (!urls.includes(u)) urls.push(u);
+      }
+    };
+    const visit = (n: unknown) => {
+      if (typeof n === "string") {
+        scanString(n);
+        return;
+      }
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) {
+        for (const item of n) visit(item);
+        return;
+      }
+      const obj = n as Record<string, unknown>;
+      for (const key of Object.keys(obj)) {
+        if (URL_SCAN_SKIP_KEYS.has(key)) continue;
+        visit(obj[key]);
+      }
+    };
+    visit(root);
     return urls;
   }
 
