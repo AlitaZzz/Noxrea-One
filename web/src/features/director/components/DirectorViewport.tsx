@@ -573,9 +573,9 @@ export default function DirectorViewport() {
             i.src = shot.url;
           });
           await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
-          notification.success({ title: `已发送到画布：${shot.name}`, placement: "bottomRight" });
+          notification.success({ title: t("director.sentToCanvas", { name: shot.name }), placement: "bottomRight" });
         } catch {
-          notification.error({ title: "发送到画布失败", placement: "bottomRight" });
+          notification.error({ title: t("director.sendToCanvasFailed"), placement: "bottomRight" });
         }
       },
       resetView: () => rig.resetView(),

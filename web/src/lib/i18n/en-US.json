@@ -162,6 +162,7 @@
     "providerAdded": "Provider added",
     "fetchModels": "Fetch Models",
     "modelsFetched": "Models fetched",
+    "fetchModelsFailed": "Failed to fetch models",
     "noProviders": "No providers",
     "noModels": "No models",
     "noProvidersDesc": "Add a provider to get started",
@@ -272,6 +273,7 @@
     "folderNamePlaceholder": "Enter folder name",
     "folderDuplicate": "A folder with this name already exists",
     "count": "items",
+    "batchSaveSummary": "{{saved}} files will be saved, {{failed}} files failed",
     "delete": "Delete Asset",
     "foldersLabel": "folders",
     "cat": {
@@ -440,5 +442,13 @@
       "first-last": "First+Last",
       "full": "Full Reference"
     }
+  },
+  "avatar": {
+    "saved": "Avatar saved",
+    "failed": "Avatar save failed"
+  },
+  "director": {
+    "sentToCanvas": "Sent to canvas: {{name}}",
+    "sendToCanvasFailed": "Failed to send to canvas"
   }
 }

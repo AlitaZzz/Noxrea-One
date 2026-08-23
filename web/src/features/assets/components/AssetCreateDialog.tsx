@@ -274,7 +274,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     });
 
     if (errCount > 0) {
-      message.warning(`${doneFiles.length} files will be saved, ${errCount} files failed`);
+      message.warning(t("assets.batchSaveSummary", { saved: doneFiles.length, failed: errCount }));
     }
 
     if (doneFiles.length === 0) {
