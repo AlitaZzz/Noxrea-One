@@ -41,6 +41,13 @@ router.post("/api/files/capture-frame", async (c) => {
 
   const videoPath = path.resolve(localStorage.baseDir, video_key);
 
+  // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
+  const baseDir = path.resolve(localStorage.baseDir);
+  const rel = path.relative(baseDir, videoPath);
+  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+    return fail(403, "Invalid path");
+  }
+
   try {
     await fs.access(videoPath);
   } catch {
