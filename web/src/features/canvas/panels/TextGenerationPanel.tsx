@@ -277,42 +277,26 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         className="nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
         style={{ background: "var(--canvas-bg, #262626)", border: "1px solid var(--canvas-border, #3a3a3a)", width: 580 }}
       >
-        <Button
-          size="small"
-          type="text"
-          className="flex items-center justify-center gap-1 rounded-lg text-xs text-white/60 hover:text-white transition-colors self-start"
-          style={{ width: 54, height: 26, background: "rgba(255,255,255,0.04)", border: "none", cursor: "pointer" }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)";
+        <div
+          className="flex gap-2 flex-wrap"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "move";
           }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
+          onDragLeave={() => setDragOverIdx(null)}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverIdx(null);
+            const dragged = e.dataTransfer.getData("text/plain");
+            if (!dragged) return;
+            setRefOrder((prev) => {
+              const list = prev.filter((u) => u !== dragged);
+              return [...list, dragged];
+            });
           }}
-          onClick={handleRefUpload}
         >
-          <PlusOutlined style={{ fontSize: 12 }} /> {t("common.reference")}
-        </Button>
-        {(refOrder.length > 0 || upstreamTexts.length > 0) && (
-          <div
-            className="flex gap-2 flex-wrap"
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.dataTransfer.dropEffect = "move";
-            }}
-            onDragLeave={() => setDragOverIdx(null)}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragOverIdx(null);
-              const dragged = e.dataTransfer.getData("text/plain");
-              if (!dragged) return;
-              setRefOrder((prev) => {
-                const list = prev.filter((u) => u !== dragged);
-                return [...list, dragged];
-              });
-            }}
-          >
             {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
             {upstreamTexts.map((txt) => (
               <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
@@ -362,18 +346,18 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 className="relative group"
               >
                 <img
-                  src={img.includes("/api/files/") ? `${img}?w=64` : img}
+                  src={img.includes("/api/files/") ? `${img}?w=128` : img}
                   alt={`Ref ${i + 1}`}
-                  className={`h-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? "ring-2 ring-white shadow-lg" : ""}`}
+                  className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? "ring-2 ring-white shadow-lg" : ""}`}
                   onMouseEnter={() => setHoverImg(img)}
                   onMouseLeave={() => setHoverImg(null)}
                 />
                 {hoverImg === img && (
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
                     <img
-                      src={img.includes("/api/files/") ? `${img}?w=320` : img}
-                      className="max-w-[320px] max-h-[280px] rounded-lg shadow-2xl"
-                      style={{ background: "var(--canvas-bg)", objectFit: "contain" }}
+                      src={img.includes("/api/files/") ? `${img}?w=640` : img}
+                      className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl"
+                      style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", objectFit: "contain" }}
                     />
                   </div>
                 )}
@@ -395,8 +379,18 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 </Button>
               </div>
             ))}
+            {/* 添加参考：方形加号占位，与参考缩略图同行 */}
+            <Tooltip title={t("common.reference")}>
+              <Button size="small" type="text"
+                className="flex items-center justify-center rounded transition-colors flex-shrink-0"
+                style={{ width: 64, height: 64, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
+                onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
+                onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
+                onClick={handleRefUpload}>
+                <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
+              </Button>
+            </Tooltip>
           </div>
-        )}
         <MentionPrompt
           references={references}
           value={prompt}
