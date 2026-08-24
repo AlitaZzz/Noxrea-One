@@ -136,14 +136,10 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       );
   }, [nodeId, canvasNodes, canvasEdges]);
 
-  // 构建 @ 提及的参考列表（图片基于 refOrder、音频基于 audioOrder，均保证编号稳定）。
+  // 构建 @ 提及的参考列表。顺序与参考区一致：音频 -> 视频 -> 图片；
+  // 各自编号基于对应 order（audioOrder / refVideoOrder / refOrder），排序后编号随之稳定。
   const references = useMemo<ReferenceItem[]>(() => {
-    const images: ReferenceItem[] = refOrder.map((src, i) => ({
-      src,
-      thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
-      index: i,
-      kind: "image",
-    }));
+    const videoLabelMap = new Map(upstreamVideos.map((v) => [v.src, v.label]));
     const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
       src,
       thumbnail: src,
@@ -151,8 +147,21 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       kind: "audio",
       label: audioSrcLabel.get(src) || "",
     }));
-    return [...images, ...audios];
-  }, [refOrder, audioOrder, audioSrcLabel]);
+    const videos: ReferenceItem[] = refVideoOrder.map((src, i) => ({
+      src,
+      thumbnail: src,
+      index: i,
+      kind: "video",
+      label: videoLabelMap.get(src) || "",
+    }));
+    const images: ReferenceItem[] = refOrder.map((src, i) => ({
+      src,
+      thumbnail: src.includes("/api/files/") ? `${src}?w=128` : src,
+      index: i,
+      kind: "image",
+    }));
+    return [...audios, ...videos, ...images];
+  }, [refOrder, audioOrder, refVideoOrder, audioSrcLabel, upstreamVideos]);
 
   // Button disabled state derived from persistent node.data.task_status。
   const isGenerating = useMemo(() => {
