@@ -95,18 +95,28 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
     : position.y + 4;
 
   return (
-    <div
-      ref={listRef}
-      className="fixed z-[9999] rounded-lg shadow-2xl overflow-hidden"
-      style={{
-        left: x,
-        top: y,
-        width: dropdownWidth,
-        maxHeight: 300,
-        background: "var(--canvas-bg, #262626)",
-        border: "1px solid var(--canvas-border, #3a3a3a)",
-      }}
-    >
+    <>
+      <style>{`
+        .mention-dropdown-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent; }
+        .mention-dropdown-scroll::-webkit-scrollbar { width: 6px; }
+        .mention-dropdown-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 3px;
+        }
+        .mention-dropdown-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+      `}</style>
+      <div
+        ref={listRef}
+        className="mention-dropdown-scroll fixed z-[9999] rounded-lg shadow-2xl overflow-x-hidden overflow-y-auto"
+        style={{
+          left: x,
+          top: y,
+          width: dropdownWidth,
+          maxHeight: 300,
+          background: "var(--canvas-bg, #262626)",
+          border: "1px solid var(--canvas-border, #3a3a3a)",
+        }}
+      >
       {items.map((item, i) => (
         <div
           key={`${item.kind}-${item.src}`}
@@ -146,7 +156,8 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
           </span>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 });
 
