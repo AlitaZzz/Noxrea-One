@@ -1,11 +1,12 @@
 ﻿/**
  * @ 引用候选下拉列表。
- * 展示可引用的图片 / 音频素材缩略项，支持键盘上下选择与外部点击关闭，
+ * 展示可引用的图片 / 音频 / 视频素材缩略项，支持键盘上下选择与外部点击关闭，
  * 并对外导出引用项类型 ReferenceItem。
  */
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
@@ -13,8 +14,29 @@ export interface ReferenceItem {
   src: string;
   thumbnail: string;
   index: number; // 0-based index within its kind list
-  kind: "image" | "audio";
-  label?: string; // audio label (filename), unused for images
+  kind: "image" | "audio" | "video";
+  label?: string; // audio/video label (filename), unused for images
+}
+
+/** 引用项 chip 标签：图片N / 音频N / 视频N（同时作为提示词存储格式） */
+export function refLabel(item: ReferenceItem): string {
+  const prefix = item.kind === "audio" ? "音频" : item.kind === "video" ? "视频" : "图片";
+  return `${prefix}${item.index + 1}`;
+}
+
+/** 引用项缩写：图N / 音N / 视N（旧提示词数据兼容匹配） */
+export function refShortLabel(item: ReferenceItem): string {
+  const prefix = item.kind === "audio" ? "音" : item.kind === "video" ? "视" : "图";
+  return `${prefix}${item.index + 1}`;
+}
+
+/** 引用项全称词条 key：图片N / 音频N / 视频N（与参考区缩略图标签一致） */
+export function refLabelKey(item: ReferenceItem): string {
+  return item.kind === "audio"
+    ? "common.refAudioLabel"
+    : item.kind === "video"
+      ? "common.refVideoLabel"
+      : "common.refImageLabel";
 }
 
 interface Props {
@@ -25,6 +47,7 @@ interface Props {
 }
 
 const MentionDropdown = memo(function MentionDropdown({ items, position, onSelect, onClose }: Props) {
+  const { t } = useTranslation();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -139,10 +162,19 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
             >
               <WaveIcon style={{ width: 22, height: 22 }} />
             </div>
+          ) : item.kind === "video" ? (
+            <video
+              src={`${item.thumbnail}#t=0.1`}
+              muted
+              preload="metadata"
+              playsInline
+              className="w-10 h-10 rounded object-cover flex-shrink-0"
+              style={{ border: "1px solid var(--canvas-border, #3a3a3a)", background: "var(--canvas-bg-hover, #3c3c3c)" }}
+            />
           ) : (
             <img
               src={item.thumbnail}
-              alt={`图${item.index + 1}`}
+              alt={refLabel(item)}
               className="w-10 h-10 rounded object-cover flex-shrink-0"
               style={{ border: "1px solid var(--canvas-border, #3a3a3a)" }}
             />
@@ -151,8 +183,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
             className="text-sm font-medium"
             style={{ color: "var(--canvas-text)" }}
           >
-            {item.kind === "audio" ? `音${item.index + 1}` : `图${item.index + 1}`}
-            {item.kind === "audio" && item.label ? ` · ${item.label}` : ""}
+            {t(refLabelKey(item), { index: item.index + 1 })}
           </span>
         </div>
       ))}

@@ -1,16 +1,17 @@
 /**
  * 支持 @ 引用的提示词输入框。
  * 基于 contentEditable 实现：输入 @ 唤起候选下拉，选中后插入不可拆分的 chip，
- * 对外始终以「图N / 音N」形式输出纯文本，被各生成面板与对话面板复用。
+ * 对外始终以「图N / 音N / 视N」形式输出纯文本，被各生成面板与对话面板复用。
  */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-import MentionDropdown, { type ReferenceItem } from "./MentionDropdown";
+import MentionDropdown, { refLabel as chipLabel, refLabelKey, refShortLabel, type ReferenceItem } from "./MentionDropdown";
 
 export type { ReferenceItem } from "./MentionDropdown";
 import { MentionIconSvg } from "@/components/ui/icons/agent/MentionIcon";
@@ -23,11 +24,6 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-/** chip 显示的标签：图片为 图N，音频为 音N */
-function chipLabel(r: ReferenceItem): string {
-  return `${r.kind === "audio" ? "音" : "图"}${r.index + 1}`;
-}
-
 /** Extract plain text from contentEditable: chips → "图N"/"音N", <br> → \n */
 function extractPlainText(root: HTMLElement): string {
   const parts: string[] = [];
@@ -38,8 +34,9 @@ function extractPlainText(root: HTMLElement): string {
       const el = node as HTMLElement;
       if (el.classList.contains("mention-chip")) {
         const idx = parseInt(el.getAttribute("data-ref-index") || "0", 10);
-        const kind = el.getAttribute("data-ref-kind") === "audio" ? "audio" : "image";
-        parts.push(`${kind === "audio" ? "音" : "图"}${idx + 1}`);
+        const kindAttr = el.getAttribute("data-ref-kind");
+        const prefix = kindAttr === "audio" ? "音频" : kindAttr === "video" ? "视频" : "图片";
+        parts.push(`${prefix}${idx + 1}`);
       } else if (el.tagName === "BR") {
         parts.push("\n");
       } else {
@@ -54,7 +51,10 @@ function extractPlainText(root: HTMLElement): string {
 /** Render plain text → contentEditable HTML with chip spans */
 function renderHtml(text: string, references: ReferenceItem[]): string {
   const lookup = new Map<string, ReferenceItem>();
-  references.forEach((r) => lookup.set(chipLabel(r), r));
+  references.forEach((r) => {
+    lookup.set(chipLabel(r), r); // 全称（新格式）
+    lookup.set(refShortLabel(r), r); // 缩写（旧数据兼容）
+  });
 
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -63,13 +63,19 @@ function renderHtml(text: string, references: ReferenceItem[]): string {
 
   let html = escaped.replace(/\n/g, "<br>");
 
-  html = html.replace(/[图音](\d+)/g, (match) => {
+  html = html.replace(/(图片|音频|视频|图|音|视)(\d+)/g, (match) => {
     const ref = lookup.get(match);
     if (!ref) return match;
-    const inner =
-      ref.kind === "audio"
-        ? `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;">${MentionIconSvg}</span>${match}`
-        : `<img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${match}`;
+    // 统一显示为全称（旧数据中的缩写也会被规范化）
+    const text = chipLabel(ref);
+    let inner: string;
+    if (ref.kind === "audio") {
+      inner = `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;">${MentionIconSvg}</span>${text}`;
+    } else if (ref.kind === "video") {
+      inner = `<video src="${escapeAttr(ref.thumbnail)}#t=0.1" muted preload="metadata" playsinline style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--canvas-bg-hover,#3c3c3c);">${text}`;
+    } else {
+      inner = `<img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${text}`;
+    }
     return `<span class="mention-chip" contenteditable="false" data-ref-src="${escapeAttr(ref.src)}" data-ref-index="${ref.index}" data-ref-kind="${ref.kind}" style="${escapeAttr(CHIP_STYLE)}">${inner}</span>`;
   });
 
@@ -158,7 +164,8 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     let changed = false;
     chips.forEach((chip) => {
       const src = chip.getAttribute("data-ref-src");
-      const kind = chip.getAttribute("data-ref-kind") === "audio" ? "audio" : "image";
+      const kindAttr = chip.getAttribute("data-ref-kind");
+      const kind = kindAttr === "audio" || kindAttr === "video" ? kindAttr : "image";
       const ref = references.find((r) => r.src === src && r.kind === kind);
       if (ref) {
         const oldIdx = chip.getAttribute("data-ref-index");
@@ -240,6 +247,14 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
           "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;";
         wave.innerHTML = MentionIconSvg;
         chip.appendChild(wave);
+      } else if (item.kind === "video") {
+        const vid = document.createElement("video");
+        vid.src = `${item.thumbnail}#t=0.1`;
+        vid.muted = true;
+        vid.preload = "metadata";
+        vid.setAttribute("playsinline", "");
+        vid.style.cssText = "width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--canvas-bg-hover,#3c3c3c);";
+        chip.appendChild(vid);
       } else {
         const img = document.createElement("img");
         img.src = item.thumbnail;
@@ -320,8 +335,14 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     [onChange],
   );
 
+  const { t } = useTranslation();
   const filteredRefs = mentionQuery
-    ? references.filter((r) => chipLabel(r).includes(mentionQuery))
+    ? references.filter(
+        (r) =>
+          chipLabel(r).includes(mentionQuery) ||
+          refShortLabel(r).includes(mentionQuery) ||
+          t(refLabelKey(r), { index: r.index + 1 }).includes(mentionQuery),
+      )
     : references;
   const showDropdown = mentionActive && filteredRefs.length > 0;
 
