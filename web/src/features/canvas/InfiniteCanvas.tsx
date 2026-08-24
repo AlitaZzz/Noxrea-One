@@ -845,20 +845,20 @@ export default function InfiniteCanvas() {
 
         {/* Generation panel — follows selected empty image node */}
         {genTargetId && (
-          <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12}>
+          <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <ImageGenerationPanel key={genTargetId} nodeId={genTargetId} />
           </RfNodeToolbar>
         )}
 
         {/* Generation panel — follows selected video node */}
         {genTargetVideoId && (
-          <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12}>
+          <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <VideoGenerationPanel key={genTargetVideoId} nodeId={genTargetVideoId} />
           </RfNodeToolbar>
         )}
 
         {textTarget && (
-          <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12}>
+          <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <TextGenerationPanel nodeId={textTarget.id} />
           </RfNodeToolbar>
         )}
