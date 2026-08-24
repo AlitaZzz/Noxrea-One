@@ -65,6 +65,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const [ratio, setRatio] = useState(saved.ratio);
   const [n, setN] = useState(saved.n);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
+  const [isRefDragging, setIsRefDragging] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
@@ -321,6 +322,10 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         onDragOver={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-audio')) {
+            e.dataTransfer.dropEffect = 'none'; // 排序仅限图片缩略图上，加号/空白一律禁止
+            return;
+          }
           e.dataTransfer.dropEffect = 'move';
         }}
         onDragLeave={() => setDragOverIdx(null)}
@@ -330,6 +335,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           setDragOverIdx(null);
           const dragged = e.dataTransfer.getData('text/plain');
           if (!dragged) return;
+          if (refOrder.includes(dragged)) return; // 排序拖拽仅限图片缩略图之间
+          if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-audio')) return; // 视频/音频不可加入图片参考
           setRefOrder((prev) => {
             const list = prev.filter((u) => u !== dragged);
             return [...list, dragged];
@@ -356,12 +363,19 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               key={img}
               draggable
               onDragStart={(e) => {
+                e.dataTransfer.setData('application/x-ref-image', img);
                 e.dataTransfer.setData('text/plain', img);
                 e.dataTransfer.effectAllowed = 'move';
+                setIsRefDragging(true);
               }}
+              onDragEnd={() => setIsRefDragging(false)}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (!e.dataTransfer.types.includes('application/x-ref-image')) {
+                  e.dataTransfer.dropEffect = 'none'; // 仅图片可放到图片位置
+                  return;
+                }
                 e.dataTransfer.dropEffect = 'move';
                 setDragOverIdx(i);
               }}
@@ -376,7 +390,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
                   const list = [...prev];
                   const fromIdx = list.indexOf(dragged);
                   const toIdx = list.indexOf(img);
-                  if (fromIdx === toIdx) return prev;
+                  if (fromIdx === -1 || fromIdx === toIdx) return prev;
                   const [moved] = list.splice(fromIdx, 1);
                   list.splice(toIdx, 0, moved);
                   return list;
@@ -385,8 +399,9 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               className="relative group"
             >
               <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
-                onMouseEnter={() => setHoverImg(img)} onMouseLeave={() => setHoverImg(null)} />
-              {hoverImg === img && (
+                onMouseEnter={() => setHoverImg(img)}               onMouseLeave={() => setHoverImg(null)} />
+              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refImageLabel", { index: i + 1 })}</span>
+            {hoverImg === img && !isRefDragging && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
                   <img src={img.includes('/api/files/') ? `${img}?w=640` : img} className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", objectFit: "contain" }} />
                 </div>
