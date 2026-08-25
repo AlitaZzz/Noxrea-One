@@ -433,7 +433,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           <div className="flex gap-1 justify-end">
             <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("common.cancel")}</Button>
             <Button size="small" onClick={handleSaveProvider} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
-              {editProviderId ? t("auth.saveChanges") : t("modelConfig.addProvider")}
+              {editProviderId ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
             </Button>
           </div>
         </div>
