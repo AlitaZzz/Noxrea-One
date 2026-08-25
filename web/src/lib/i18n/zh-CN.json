@@ -175,6 +175,7 @@
     "baseUrl": "基础 URL",
     "apiKey": "API 密钥",
     "apiKeyKeepBlank": "留空保持不变",
+    "saveChanges": "保存修改",
     "apiKeyFetchFailed": "获取密钥失败",
     "apiKeyCopied": "已复制到剪贴板",
     "apiKeyCopyFailed": "复制失败",
@@ -222,6 +223,11 @@
     "clickUpload": "点击上传",
     "cropAvatar": "裁剪头像",
     "sessionExpired": "登录已过期，请重新登录",
+    "keepBlank": "留空保持不变",
+    "nothingToSave": "无可保存内容",
+    "saveFailed": "保存失败",
+    "avatarSaved": "头像已保存",
+    "avatarFailed": "头像保存失败",
     "login": {
       "title": "登录",
       "subtitle": "欢迎回到 Noxrea Canvas",
@@ -431,10 +437,6 @@
     "unsupportedType": "不支持的文件类型，仅支持图片、视频和音频",
     "ignoredSome": "已忽略部分不支持的文件，仅支持图片、视频和音频"
   },
-  "save": {
-    "nothingToSave": "无可保存内容",
-    "failed": "保存失败"
-  },
   "agent": {
     "title": "Agent",
     "chat": "打开 Agent 对话"
@@ -446,10 +448,6 @@
       "first-last": "首尾帧",
       "full": "全能参考"
     }
-  },
-  "avatar": {
-    "saved": "头像已保存",
-    "failed": "头像保存失败"
   },
   "director": {
     "sentToCanvas": "已发送到画布：{{name}}",

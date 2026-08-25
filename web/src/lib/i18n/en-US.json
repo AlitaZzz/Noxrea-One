@@ -175,6 +175,7 @@
     "baseUrl": "Base URL",
     "apiKey": "API Key",
     "apiKeyKeepBlank": "Leave blank to keep unchanged",
+    "saveChanges": "Save Changes",
     "apiKeyFetchFailed": "Failed to fetch API key",
     "apiKeyCopied": "Copied to clipboard",
     "apiKeyCopyFailed": "Copy failed",
@@ -222,6 +223,11 @@
     "clickUpload": "Click to upload",
     "cropAvatar": "Crop Avatar",
     "sessionExpired": "Session expired, please log in again",
+    "keepBlank": "Leave blank to keep unchanged",
+    "nothingToSave": "Nothing to save",
+    "saveFailed": "Save failed",
+    "avatarSaved": "Avatar saved",
+    "avatarFailed": "Avatar save failed",
     "login": {
       "title": "Login",
       "subtitle": "Welcome back to Noxrea Canvas",
@@ -431,10 +437,6 @@
     "unsupportedType": "Unsupported file type. Only images, videos and audios are supported",
     "ignoredSome": "Some unsupported files were ignored. Only images, videos and audios are supported"
   },
-  "save": {
-    "nothingToSave": "Nothing to save",
-    "failed": "Save failed"
-  },
   "agent": {
     "title": "Agent",
     "chat": "Open Agent Chat"
@@ -446,10 +448,6 @@
       "first-last": "First+Last",
       "full": "Full Reference"
     }
-  },
-  "avatar": {
-    "saved": "Avatar saved",
-    "failed": "Avatar save failed"
   },
   "director": {
     "sentToCanvas": "Sent to canvas: {{name}}",

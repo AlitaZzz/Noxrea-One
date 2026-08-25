@@ -65,14 +65,14 @@ export default function SettingsModal({ open, onClose }: Props) {
         body.password = newPw;
         body.oldPassword = oldPw;
       }
-      if (Object.keys(body).length === 0) { message.info(t("save.nothingToSave")); setSaving(false); return; }
+      if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); setSaving(false); return; }
       const res = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
       if (res.code === 200 && res.data) {
         useAuthStore.setState({ user: res.data }); // immediate update, no refetch needed
       }
       message.success(t("common.saved"));
       onClose();
-    } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("save.failed")); }
+    } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }
     setSaving(false);
   };
 
@@ -125,7 +125,7 @@ export default function SettingsModal({ open, onClose }: Props) {
         {/* New Password */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.newPassword")}</div>
-          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("modelConfig.apiKeyKeepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
+          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
             iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
