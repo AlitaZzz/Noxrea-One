@@ -22,13 +22,9 @@
     "name": "Name",
     "generate": "Generate",
     "model": "Model",
-    "quality": "Quality",
     "size": "Size",
     "results": "Results",
     "frame": "Frame",
-    "ratio": "Ratio",
-    "count": "Count",
-    "clarity": "Clarity",
     "reference": "Reference",
     "refImageLabel": "Image {{index}}",
     "refVideoLabel": "Video {{index}}",
@@ -41,8 +37,35 @@
     "available": "Available (click to enable)",
     "saved": "Saved",
     "zoom": "Zoom",
-    "fit": "Fit to Screen",
-    "adaptive": "Auto"
+    "fit": "Fit to Screen"
+  },
+  "param": {
+    "quality": "Quality",
+    "ratio": "Ratio",
+    "n": "Count",
+    "clarity": "Clarity",
+    "duration": "Duration",
+    "numFrames": "Frames",
+    "frameRate": "Frame Rate",
+    "audio": "Generate Audio",
+    "on": "On",
+    "off": "Off",
+    "onShort": "Audio",
+    "offShort": "Muted",
+    "adaptive": "Auto",
+    "unit": {
+      "n": "img",
+      "seconds": "s",
+      "numFrames": "frames"
+    },
+    "options": {
+      "quality": {
+        "auto": "Auto",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      }
+    }
   },
   "theme": {
     "dark": "Dark Mode",
@@ -138,21 +161,8 @@
     "count": "Count",
     "countUnit": "img",
     "countUnitVideo": "vid",
-    "duration": "Duration",
-    "secondsUnit": "s",
-    "audio": "Generate Audio",
-    "audioOn": "On",
-    "audioOff": "Off",
-    "audioOnShort": "Audio",
-    "audioOffShort": "Muted",
     "askAi": "Ask AI...",
     "aspectRatio": "Aspect Ratio",
-    "quality": {
-      "auto": "Auto",
-      "high": "High",
-      "medium": "Medium",
-      "low": "Low"
-    },
     "promptPlaceholder": "Describe the image you want to generate...",
     "promptPlaceholderVideo": "Describe the video you want to generate...",
     "promptPlaceholderText": "Enter your prompt, AI will generate text..."
