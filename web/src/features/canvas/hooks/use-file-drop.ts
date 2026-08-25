@@ -19,6 +19,14 @@ import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib
 const GRID_COLS = 4;
 const GRID_GAP = 30;
 
+/** 参考区缩略图拖拽的自定义标记：携带此类标记的拖拽一律不视为文件上传 */
+const REF_DRAG_TYPES = ["application/x-ref-image", "application/x-ref-video", "application/x-ref-audio"];
+
+function isRefDrag(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  return REF_DRAG_TYPES.some((k) => dt.types.includes(k));
+}
+
 /**
  * 文件拖放 hook。
  *
@@ -73,6 +81,7 @@ export function useFileDrop(
   useEffect(() => {
     const onWindowDragOver = (e: globalThis.DragEvent) => {
       if (!draggingRef.current) return;
+      if (isRefDrag(e.dataTransfer)) return;
       if (!e.dataTransfer?.types.includes("Files")) return;
       if (shouldIgnore?.(e.target as HTMLElement)) return;
       if (!isInsideCanvas(e)) return;
@@ -114,14 +123,18 @@ export function useFileDrop(
 
   const handleDragOver = useCallback((e: DragEvent) => {
     if (shouldIgnore?.(e.target as HTMLElement)) return;
+    // 参考区缩略图排序拖拽（或任何非文件拖拽）不触发上传遮罩与放置行为
+    if (isRefDrag(e.dataTransfer) || !e.dataTransfer.types.includes("Files")) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
-    if (e.dataTransfer.types.includes("Files")) startWatcher();
+    startWatcher();
   }, [shouldIgnore, startWatcher]);
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
       if (shouldIgnore?.(e.target as HTMLElement)) return;
+      // 参考区缩略图排序拖拽落到画布：不作为文件上传处理
+      if (isRefDrag(e.dataTransfer)) return;
       e.preventDefault();
       // 释放后隐藏遮罩并停止心跳定时器
       stopWatcher();
