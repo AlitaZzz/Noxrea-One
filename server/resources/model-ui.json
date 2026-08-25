@@ -5,10 +5,10 @@
     "image": {
       "allowedFields": ["quality", "resolution", "ratio", "n", "refImages"],
       "fields": [
-        { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "9:16" },
-        { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+        { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+        { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+        { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "9:16" },
+        { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
       ],
       "mapping": {
         "refImages": { "field": "image_urls", "kind": "array" }
@@ -17,10 +17,10 @@
     "video": {
       "allowedFields": ["ratio", "resolution", "seconds", "generateAudio", "n", "refImages", "refAudios", "refVideos", "refMode"],
       "fields": [
-        { "name": "ratio", "type": "select", "label": "common.ratio", "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-        { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-        { "name": "seconds", "type": "slider", "label": "generation.duration", "order": 3, "min": 1, "max": 15, "step": 1, "default": 5, "unit": "generation.secondsUnit" },
-        { "name": "generateAudio", "type": "switch", "label": "generation.audio", "order": 4, "default": true, "trueLabel": "generation.audioOn", "falseLabel": "generation.audioOff", "trueShort": "generation.audioOnShort", "falseShort": "generation.audioOffShort" }
+        { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+        { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+        { "name": "seconds", "type": "slider", "label": "param.duration", "order": 3, "min": 1, "max": 15, "step": 1, "default": 5 },
+        { "name": "generateAudio", "type": "switch", "label": "param.audio", "order": 4, "default": true, "trueShort": "param.onShort", "falseShort": "param.offShort" }
       ]
     },
     "llm": {
@@ -44,10 +44,10 @@
     "*gpt-image*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
           "refImages": { "field": "image_urls", "kind": "array" },
@@ -62,10 +62,10 @@
           "generateAudio": { "default": false }
         },
         "fields": [
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 1, "ratio": true, "options": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"], "default": "16:9" },
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["480p", "720p", "1080p"], "default": "720p" },
-          { "name": "seconds", "type": "slider", "label": "generation.duration", "order": 3, "min": 4, "max": 30, "step": 1, "default": 5, "unit": "generation.secondsUnit" },
-          { "name": "generateAudio", "type": "switch", "label": "generation.audio", "order": 4, "default": false, "trueLabel": "generation.audioOn", "falseLabel": "generation.audioOff", "trueShort": "generation.audioOnShort", "falseShort": "generation.audioOffShort" }
+          { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"], "default": "16:9" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["480p", "720p", "1080p"], "default": "720p" },
+          { "name": "seconds", "type": "slider", "label": "param.duration", "order": 3, "min": 4, "max": 30, "step": 1, "default": 5 },
+          { "name": "generateAudio", "type": "switch", "label": "param.audio", "order": 4, "default": false, "trueShort": "param.onShort", "falseShort": "param.offShort" }
         ],
         "mapping": {
           "refImages": { "field": "image_urls", "kind": "array" },
@@ -81,25 +81,25 @@
     "*nano-banana-2*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ]
       }
     },
     "*gemini-3.1*": {
       "image": {
         "fields": [
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" }
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" }
         ]
       }
     },
     "*grok-imagine*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
         ],
         "mapping": {
           "ratio": { "field": "size", "kind": "single" }
@@ -109,8 +109,8 @@
     "*z-image*": {
       "image": {
         "fields": [
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1K", "2K"], "default": "1K" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K"], "default": "1K" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
         ]
       }
     }
@@ -124,10 +124,10 @@
     "*gpt-image*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
           "refImages": { "field": "image", "kind": "array" },
@@ -145,10 +145,10 @@
     "*gpt-image*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
           "refImages": { "field": "images", "kind": "array[].image_url" },
@@ -213,9 +213,9 @@
     "*nano-banana2*": {
       "image": {
         "fields": [
-          { "name": "quality", "type": "segmented", "label": "common.quality", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto", "optionI18nPrefix": "generation.quality" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ]
       }
     }
@@ -230,9 +230,9 @@
     "*agnes-image*": {
       "image": {
         "fields": [
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" },
-          { "name": "n", "type": "segmented", "label": "common.count", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "generation.countUnit" }
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"], "default": "16:9" },
+          { "name": "n", "type": "segmented", "order": 3, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
           "refImages": { "field": "extra_body.image", "kind": "array" },
@@ -244,10 +244,10 @@
     "*agnes-video*": {
       "video": {
         "fields": [
-          { "name": "ratio", "type": "select", "label": "common.ratio", "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-          { "name": "resolution", "type": "select", "label": "common.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "numFrames", "type": "number", "label": "generation.numFrames", "order": 3, "min": 1, "max": 441, "step": 8, "default": 121, "unit": "generation.framesUnit" },
-          { "name": "frameRate", "type": "select", "label": "generation.frameRate", "order": 4, "options": [24, 30], "default": 24 }
+          { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
+          { "name": "numFrames", "type": "number", "order": 3, "min": 1, "max": 441, "step": 8, "default": 121 },
+          { "name": "frameRate", "type": "select", "order": 4, "options": [24, 30], "default": 24 }
         ],
         "mapping": {
           "numFrames": { "field": "num_frames", "kind": "single" },
