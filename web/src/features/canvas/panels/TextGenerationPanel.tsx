@@ -328,6 +328,9 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                   e.dataTransfer.setData("text/plain", img);
                   e.dataTransfer.effectAllowed = "move";
                   setIsRefDragging(true);
+                  // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
+                  const el = (e.currentTarget as HTMLElement).querySelector("img");
+                  if (el) e.dataTransfer.setDragImage(el, 32, 32);
                 }}
                 onDragEnd={() => setIsRefDragging(false)}
                 onDragOver={(e) => {
@@ -361,6 +364,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               >
                 <img
                   src={img.includes("/api/files/") ? `${img}?w=128` : img}
+                  draggable={false}
                   alt={`Ref ${i + 1}`}
                   className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? "ring-2 ring-white shadow-lg" : ""}`}
                   onMouseEnter={() => setHoverImg(img)}
