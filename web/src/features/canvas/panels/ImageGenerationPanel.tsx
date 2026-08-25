@@ -367,6 +367,9 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
                 e.dataTransfer.setData('text/plain', img);
                 e.dataTransfer.effectAllowed = 'move';
                 setIsRefDragging(true);
+                // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
+                const el = (e.currentTarget as HTMLElement).querySelector('img');
+                if (el) e.dataTransfer.setDragImage(el, 32, 32);
               }}
               onDragEnd={() => setIsRefDragging(false)}
               onDragOver={(e) => {
@@ -398,7 +401,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               }}
               className="relative group"
             >
-              <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
+              <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} draggable={false} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
                 onMouseEnter={() => setHoverImg(img)}               onMouseLeave={() => setHoverImg(null)} />
               <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refImageLabel", { index: i + 1 })}</span>
             {hoverImg === img && !isRefDragging && (

@@ -388,6 +388,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 e.dataTransfer.setData('text/plain', vid);
                 e.dataTransfer.effectAllowed = 'move';
                 setIsRefDragging(true);
+                // 以首帧视频为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
+                const el = (e.currentTarget as HTMLElement).querySelector('video');
+                if (el) e.dataTransfer.setDragImage(el, 32, 32);
               }}
               onDragEnd={() => setIsRefDragging(false)}
               onDragOver={(e) => {
@@ -421,7 +424,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               onMouseEnter={() => setHoverVideo(vid)}
               onMouseLeave={() => setHoverVideo(null)}>
               {/* 第一帧缩略：#t=0.1 片段定位首帧，preload=metadata 避免预载全片 */}
-              <video src={`${vid}#t=0.1`} className="w-full h-full object-cover rounded pointer-events-none" muted preload="metadata" playsInline />
+              <video src={`${vid}#t=0.1`} className="w-full h-full object-cover rounded pointer-events-none" muted preload="metadata" playsInline draggable={false} />
               {hoverVideo === vid && !isRefDragging && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
                   <video src={vid} className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }} autoPlay muted loop playsInline />
@@ -442,6 +445,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 e.dataTransfer.setData('text/plain', img);
                 e.dataTransfer.effectAllowed = 'move';
                 setIsRefDragging(true);
+                // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
+                const el = (e.currentTarget as HTMLElement).querySelector('img');
+                if (el) e.dataTransfer.setDragImage(el, 32, 32);
               }}
               onDragEnd={() => setIsRefDragging(false)}
               onDragOver={(e) => {
@@ -474,7 +480,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               }}
               className="relative group"
             >
-              <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
+              <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} draggable={false} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
                 onMouseEnter={() => setHoverImg(img)}
                 onMouseLeave={() => setHoverImg(null)} />
               <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refImageLabel", { index: i + 1 })}</span>
@@ -674,6 +680,8 @@ function AudioRefCard({
           e.dataTransfer.setData('text/plain', audio.src);
           e.dataTransfer.effectAllowed = 'move';
           onDragStateChange(true);
+          // 锚定卡片中心，保证拖拽图像跟随鼠标
+          e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 32, 32);
         }}
         onDragEnd={() => onDragStateChange(false)}
         onDragOver={(e) => {
