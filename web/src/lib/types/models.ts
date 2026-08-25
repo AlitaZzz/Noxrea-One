@@ -15,16 +15,17 @@ export type ParamFieldType = "segmented" | "select" | "slider" | "switch" | "num
 export interface ParamField {
   name: string;
   type: ParamFieldType;
-  label: string;
+  /** 标签 i18n key；省略时渲染器按 param.<name> 推导 */
+  label?: string;
   order: number;
   options?: (string | number)[];
   default?: string | number | boolean;
   min?: number;
   max?: number;
   step?: number;
-  /** 渲染辅助：选项 i18n 前缀（如 generation.quality） */
+  /** 渲染辅助：选项 i18n 前缀（如 param.options.quality） */
   optionI18nPrefix?: string;
-  /** 渲染辅助：值后缀 i18n key（如 generation.countUnit） */
+  /** 渲染辅助：值后缀 i18n key（如 param.unit.n） */
   unit?: string;
   /** 渲染辅助：是否按比例格子渲染（ratio 专用） */
   ratio?: boolean;

@@ -31,6 +31,29 @@ export function hasField(fields: ParamField[], name: string): boolean {
   return fields.some((f) => f.name === name);
 }
 
+/** 标签 key：显式 label 优先，否则按字段 name 推导到 param.<name> */
+export function resolveLabel(f: ParamField): string {
+  return f.label ?? `param.${f.name}`;
+}
+
+/** 单位 key：显式 unit 优先；ratio 图形字段不显示单位；仅带量纲的 slider/number 按 name 推导到 param.unit.<name> */
+export function resolveUnit(f: ParamField): string | undefined {
+  if (f.ratio) return undefined;
+  if (f.unit) return f.unit;
+  if (f.type === "slider" || f.type === "number") return `param.unit.${f.name}`;
+  return undefined;
+}
+
+/** 选项翻译前缀：显式 optionI18nPrefix 优先；仅 segmented 且全文本选项才按 name 推导到 param.options.<name>，其余显示原值 */
+export function resolveOptionPrefix(f: ParamField, hasOptions: boolean): string | undefined {
+  if (f.ratio) return undefined;
+  if (f.optionI18nPrefix) return f.optionI18nPrefix;
+  if (!hasOptions || f.type !== "segmented") return undefined;
+  const options = (f.options ?? []) as unknown[];
+  if (!options.every((o) => typeof o === "string")) return undefined;
+  return `param.options.${f.name}`;
+}
+
 const ParamFields = memo(function ParamFields({ fields, values, onChange }: ParamFieldsProps) {
   const { t } = useTranslation();
   const sorted = [...fields].sort((a, b) => a.order - b.order);
@@ -40,7 +63,7 @@ const ParamFields = memo(function ParamFields({ fields, values, onChange }: Para
       {sorted.map((f) => (
         <div key={f.name}>
           <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>
-            {t(f.label)}
+            {t(resolveLabel(f))}
           </div>
           <FieldControl field={f} value={values[f.name]} onChange={(v) => onChange(f.name, v)} t={t} />
         </div>
@@ -69,7 +92,8 @@ function FieldControl({
       return field.ratio
         ? <RatioGrid field={field} value={value} onChange={onChange} t={t} />
         : <SelectGrid field={field} value={value} onChange={onChange} t={t} />;
-    case "slider":
+    case "slider": {
+      const unitKey = resolveUnit(field);
       return (
         <Slider
           min={field.min ?? 1}
@@ -78,15 +102,16 @@ function FieldControl({
           value={typeof value === "number" ? value : (field.default as number ?? 1)}
           onChange={(v) => onChange(v)}
           style={{ margin: "0 4px" }}
-          tooltip={{ formatter: (v) => `${v}${field.unit ? t(field.unit) : ""}` }}
+          tooltip={{ formatter: (v) => `${v}${unitKey ? t(unitKey) : ""}` }}
         />
       );
+    }
     case "switch":
       return (
         <div className="grid grid-cols-2 gap-1">
           {[true, false].map((v) => {
             const active = value === v;
-            const label = v ? t(field.trueLabel ?? "common.on") : t(field.falseLabel ?? "common.off");
+            const label = v ? t(field.trueLabel ?? "param.on") : t(field.falseLabel ?? "param.off");
             return (
               <Button size="small" type="text" key={String(v)} className="rounded-md text-[13px] transition-colors"
                 style={btnStyle(active as boolean)}
@@ -122,7 +147,9 @@ function SegmentedGrid({ field, value, onChange, t }: Ctx) {
     <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
       {options.map((v) => {
         const active = value === v;
-        const label = `${field.optionI18nPrefix ? t(`${field.optionI18nPrefix}.${v}`) : v}${field.unit && !field.optionI18nPrefix ? t(field.unit) : ""}`;
+        const optionPrefix = resolveOptionPrefix(field, options.length > 0);
+        const unitKey = resolveUnit(field);
+        const label = `${optionPrefix ? t(`${optionPrefix}.${v}`) : v}${unitKey && !optionPrefix ? t(unitKey) : ""}`;
         return (
           <Button size="small" type="text" key={String(v)} className="rounded-md text-[13px] transition-colors"
             style={btnStyle(active)}
@@ -168,7 +195,7 @@ function RatioGrid({ field, value, onChange, t }: Ctx & { t: (key: string) => st
         const boxW = Math.max(4, Math.round(maxDim * Math.min(1, w / Math.max(w, h))));
         const boxH = Math.max(4, Math.round(maxDim * Math.min(1, h / Math.max(w, h))));
         const active = value === v;
-        const label = v === "adaptive" ? t("common.adaptive") : v;
+        const label = v === "adaptive" ? t("param.adaptive") : v;
         return (
           <Button size="small" type="text" key={v} className="flex flex-col items-center justify-center rounded-md transition-colors"
             style={{ height: "auto", minHeight: 48, padding: "8px 2px", background: active ? "var(--canvas-bg-hover, #3c3c3c)" : "transparent", border: `1px solid ${active ? "var(--canvas-text)" : "#555"}`, cursor: "pointer" }}
@@ -209,13 +236,16 @@ export const ParamSummary = memo(function ParamSummary({
       const v = values[f.name];
       if (v === undefined || v === null || v === "") return null;
       if (f.type === "switch") {
-        return v ? t(f.trueShort ?? f.trueLabel ?? "common.on") : t(f.falseShort ?? f.falseLabel ?? "common.off");
+        return v ? t(f.trueShort ?? f.trueLabel ?? "param.on") : t(f.falseShort ?? f.falseLabel ?? "param.off");
       }
       if (f.type === "slider") {
-        return `${v}${f.unit ? t(f.unit) : ""}`;
+        const uk = resolveUnit(f);
+        return `${v}${uk ? t(uk) : ""}`;
       }
-      const label = f.optionI18nPrefix ? t(`${f.optionI18nPrefix}.${v}`) : (f.ratio && v === "adaptive" ? t("common.adaptive") : String(v));
-      return f.unit ? `${label}${f.ratio ? "" : t(f.unit)}` : label;
+      const optionPrefix = resolveOptionPrefix(f, (f.options?.length ?? 0) > 0);
+      const uk = resolveUnit(f);
+      const label = optionPrefix ? t(`${optionPrefix}.${v}`) : (f.ratio && v === "adaptive" ? t("param.adaptive") : String(v));
+      return uk && !f.ratio ? `${label}${t(uk)}` : label;
     })
     .filter(Boolean) as string[];
 

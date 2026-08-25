@@ -22,13 +22,9 @@
     "name": "名称",
     "generate": "生成",
     "model": "模型",
-    "quality": "质量",
     "size": "尺寸",
     "results": "结果",
     "frame": "帧",
-    "ratio": "比例",
-    "count": "数量",
-    "clarity": "清晰度",
     "reference": "参考",
     "refImageLabel": "图片{{index}}",
     "refVideoLabel": "视频{{index}}",
@@ -41,8 +37,35 @@
     "available": "可用（点击启用）",
     "saved": "已保存",
     "zoom": "缩放",
-    "fit": "适应屏幕",
-    "adaptive": "自适应"
+    "fit": "适应屏幕"
+  },
+  "param": {
+    "quality": "质量",
+    "ratio": "比例",
+    "n": "数量",
+    "clarity": "清晰度",
+    "duration": "时长",
+    "numFrames": "帧数",
+    "frameRate": "帧率",
+    "audio": "生成音频",
+    "on": "开启",
+    "off": "关闭",
+    "onShort": "音频",
+    "offShort": "无声",
+    "adaptive": "自适应",
+    "unit": {
+      "n": "张",
+      "seconds": "秒",
+      "numFrames": "帧"
+    },
+    "options": {
+      "quality": {
+        "auto": "自动",
+        "high": "高画质",
+        "medium": "中画质",
+        "low": "低画质"
+      }
+    }
   },
   "theme": {
     "dark": "深色模式",
@@ -136,23 +159,9 @@
     "videoFailed": "视频生成失败",
     "connectUpstream": "连接上游节点以收集生成输入",
     "count": "生成数量",
-    "countUnit": "张",
     "countUnitVideo": "个",
-    "duration": "时长",
-    "secondsUnit": "秒",
-    "audio": "生成音频",
-    "audioOn": "开启",
-    "audioOff": "关闭",
-    "audioOnShort": "音频",
-    "audioOffShort": "无声",
     "askAi": "询问 AI...",
     "aspectRatio": "宽高比",
-    "quality": {
-      "auto": "自动",
-      "high": "高画质",
-      "medium": "中画质",
-      "low": "低画质"
-    },
     "promptPlaceholder": "描述你想要生成的图片...",
     "promptPlaceholderVideo": "描述你想要生成的视频...",
     "promptPlaceholderText": "输入提示词，AI 将生成文本内容..."
