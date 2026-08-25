@@ -8,6 +8,7 @@
 
 import { App } from "antd";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
 import { NavSvg } from "@/components/ui/icons/director/NavSvg";
@@ -71,6 +72,7 @@ function setTransform(root: THREE.Object3D, pos: [number, number, number], rot: 
 const D2R = Math.PI / 180;
 
 export default function DirectorViewport() {
+  const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const { notification } = App.useApp();
