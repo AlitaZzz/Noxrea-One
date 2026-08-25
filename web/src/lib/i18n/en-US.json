@@ -79,7 +79,8 @@
       "out": "Zoom Out",
       "to50": "Zoom to 50%",
       "to100": "Zoom to 100%"
-    }
+    },
+    "fit": "Fit to Screen"
   },
   "node": {
     "add": "Add Node",
