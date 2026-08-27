@@ -453,7 +453,8 @@
   "video": {
     "refModeTitle": "视频生成模式",
     "refMode": {
-      "first": "图生视频",
+      "text": "文生视频",
+      "image": "图生视频",
       "first-last": "首尾帧",
       "full": "全能参考"
     }

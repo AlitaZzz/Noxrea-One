@@ -58,7 +58,7 @@
     "*seedance*": {
       "video": {
         "capabilities": {
-          "refMode": { "options": ["first", "first-last", "full"] },
+          "refMode": { "options": ["text", "image", "first-last", "full"] },
           "generateAudio": { "default": false }
         },
         "fields": [

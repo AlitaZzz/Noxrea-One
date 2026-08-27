@@ -454,7 +454,8 @@
   "video": {
     "refModeTitle": "Video Mode",
     "refMode": {
-      "first": "Image-to-Video",
+      "text": "Text-to-Video",
+      "image": "Image-to-Video",
       "first-last": "First+Last",
       "full": "Full Reference"
     }

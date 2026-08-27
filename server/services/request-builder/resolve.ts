@@ -20,8 +20,8 @@
 
 import type { FieldMapSpec, TransformSpec } from "@server/services/model-config";
 
-/** 参考模式（对齐原 refmode.ts） */
-export type RefMode = "none" | "first" | "first-last" | "full";
+/** 参考模式：text（文生）/ image（图生）/ first-last / full */
+export type RefMode = "text" | "image" | "first-last" | "full";
 
 /** 有序参考图派生出的语义槽位 */
 export interface RefSlots {
@@ -51,13 +51,13 @@ export function resolveRefSlots(
   }
 
   switch (refMode) {
-    case "first":
+    case "image":
       return { firstFrame: imgs[0] ?? null, lastFrame: null, refImages: imgs };
     case "first-last":
       return { firstFrame: imgs[0] ?? null, lastFrame: imgs[1] ?? null, refImages: imgs };
     case "full":
       return { firstFrame: null, lastFrame: null, refImages: imgs };
-    default: // none / undefined
+    default: // text / 其他 / undefined → 文生视频，不带参考
       return { firstFrame: null, lastFrame: null, refImages: [] };
   }
 }
