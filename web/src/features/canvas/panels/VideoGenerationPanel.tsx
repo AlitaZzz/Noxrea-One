@@ -36,12 +36,14 @@ import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 import { writeOrderPref } from "../shared/ref-order";
+import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
 
 const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
+  const reveal = useRevealCanvasNode();
   const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = providers.flatMap((c) =>
@@ -324,7 +326,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           {/* 上游 Text 节点 - 不可拖动，排在最前 */}
           {upstreamTexts.map((txt) => (
             <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
-              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
+                onDoubleClick={() => {
+                  const n = useCanvasStore.getState().nodes.find((x) => x.id === txt.id);
+                  if (n) reveal(n);
+                }}>
                 <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
                 <Button type="text" size="small"
                   className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
@@ -358,6 +364,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             <div key={`video-${vid}`} className={`relative group h-16 w-16 rounded transition-shadow cursor-grab active:cursor-grabbing ${videoDragOver === i ? 'ring-2 ring-white shadow-lg' : ''}`}
               style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
               draggable
+              onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, vid); if (n) reveal(n); }}
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/x-ref-video', vid);
                 e.dataTransfer.setData('text/plain', vid);
@@ -422,6 +429,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             <div
               key={img}
               draggable
+              onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, img); if (n) reveal(n); }}
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/x-ref-image', img);
                 e.dataTransfer.setData('text/plain', img);
@@ -632,6 +640,7 @@ function AudioRefCard({
   onDragStateChange: (dragging: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const reveal = useRevealCanvasNode();
   const [hovered, setHovered] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -663,6 +672,11 @@ function AudioRefCard({
         className={`relative group h-16 w-16 rounded flex items-center justify-center transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? 'ring-2 ring-white shadow-lg' : ''}`}
         style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
         draggable
+        onDoubleClick={() => {
+          const s = useCanvasStore.getState();
+          const n = s.nodes.find((x) => x.id === audio.id);
+          if (n) reveal(n);
+        }}
         onDragStart={(e) => {
           e.dataTransfer.setData('application/x-ref-audio', audio.src);
           e.dataTransfer.setData('text/plain', audio.src);
