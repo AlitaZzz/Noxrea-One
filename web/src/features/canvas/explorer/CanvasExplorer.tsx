@@ -19,7 +19,7 @@ import {
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { type Node,useReactFlow } from "@xyflow/react";
+import { type Node } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +35,7 @@ import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types"
 import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeMeta";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useCenterNode } from "@/features/canvas/shared/center-node";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
@@ -233,7 +234,7 @@ type ElementItemProps = { node: Node; selected: boolean };
 function ElementItemImpl(props: ElementItemProps) {
   const { node, selected } = props;
   const { t } = useTranslation();
-  const { setCenter } = useReactFlow();
+  const centerNode = useCenterNode();
   const nodeType = node.type || "";
   const typeLabel = nodeType && NODE_TYPE_I18N[nodeType] ? t(NODE_TYPE_I18N[nodeType]) : "";
   const rawLabel = (node.data as { label?: string })?.label;
@@ -244,10 +245,8 @@ function ElementItemImpl(props: ElementItemProps) {
   const sourceUrl = (node.data as { src?: string }).src;
 
   const handleClick = useCallback(() => {
-    const x = node.position.x + ((node.width as number) ?? 200) / 2;
-    const y = node.position.y + ((node.height as number) ?? 200) / 2;
-    setCenter(x, y, { zoom: 1.0, duration: 300 });
-  }, [node, setCenter]);
+    centerNode(node);
+  }, [node, centerNode]);
 
   return (
     <div
