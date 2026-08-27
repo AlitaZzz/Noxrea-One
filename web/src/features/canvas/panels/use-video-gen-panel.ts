@@ -1,8 +1,14 @@
 /**
  * 视频生成面板的派生数据与副作用逻辑。
- * 负责根据当前画布连接关系计算上游参考（图片 / 文本 / 音频）、最终 prompt、
+ * 负责根据当前画布连接关系计算上游参考（图片 / 文本 / 音频 / 视频）、最终 prompt、
  * 生成中状态，以及把面板参数持久化到节点数据与组件卸载时的清理计时。
  * 纯 UI 状态（prompt / 模型选择等）仍由面板组件持有，本 hook 仅消费这些输入。
+ *
+ * 参考排序架构（单一数据源 + 派生合并）：
+ * - 存在性：refImages / upstreamAudio / upstreamVideos 全部实时派生自 edges，不落本地状态；
+ * - 排序偏好：genSettings.refOrder / refAudioOrder / refVideoOrder 仅持久化用户排序，
+ *   唯一写者是拖拽排序事件（writeOrderPref），本 hook 只读不写、断线不触碰偏好；
+ * - 显示顺序：mergeOrder(偏好, 实时列表) 纯派生，任意时刻首帧即正确。
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,8 +16,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
-import { isGenerating as isGeneratingBinding,NODE_TYPE } from "@/lib/constants";
+import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 
+import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/MentionPrompt";
 
 export interface VideoGenPanelInput {
@@ -23,16 +30,18 @@ export interface VideoGenPanelInput {
   seconds: number;
   generateAudio: boolean;
   n: number;
-  refOrder: string[];
-  audioOrder: string[];
-  /** 参考视频顺序（上游 VIDEO 节点 src） */
-  refVideoOrder: string[];
   /** 参考方式：text（文生）/image（图生）/first-last/full，text = 文生视频 */
   refMode: string;
 }
 
 export interface VideoGenPanelDerived {
   refImages: string[];
+  /** 图片参考显示顺序（排序偏好 + 连线派生合并） */
+  refOrder: string[];
+  /** 音频参考显示顺序（排序偏好 + 连线派生合并） */
+  audioOrder: string[];
+  /** 视频参考显示顺序（排序偏好 + 连线派生合并） */
+  refVideoOrder: string[];
   upstreamTexts: { id: string; content: string }[];
   upstreamAudio: { id: string; src: string; label: string }[];
   /** 上游 VIDEO 节点引用（参考视频） */
@@ -47,13 +56,13 @@ export interface VideoGenPanelDerived {
   setError: React.Dispatch<React.SetStateAction<string>>;
   latestSettingsRef: React.MutableRefObject<{
     prompt: string; modelKey: string; resolution: string; ratio: string;
-    seconds: number; generateAudio: boolean; refOrder: string[]; refAudioOrder: string[]; refVideoOrder: string[]; refMode: string; n: number;
+    seconds: number; generateAudio: boolean; refMode: string; n: number;
   }>;
   timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
 export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerived {
-  const { nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refOrder, audioOrder, refVideoOrder, refMode } = input;
+  const { nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode } = input;
 
   const canvasNodes = useCanvasStore((s) => s.nodes);
   const canvasEdges = useCanvasStore((s) => s.edges);
@@ -136,6 +145,20 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       );
   }, [nodeId, canvasNodes, canvasEdges]);
 
+  // ── 参考排序：偏好（genSettings，响应式只读）+ 实时列表，纯派生合并 ──
+  const genSettings = useGenSettings(nodeId);
+  const prefs = genSettings as Partial<VideoGenSettings> | undefined;
+  const refOrderPref = prefs?.refOrder ?? EMPTY_ORDER;
+  const audioOrderPref = prefs?.refAudioOrder ?? EMPTY_ORDER;
+  const refVideoOrderPref = prefs?.refVideoOrder ?? EMPTY_ORDER;
+
+  const audioSrcs = useMemo(() => upstreamAudio.map((a) => a.src), [upstreamAudio]);
+  const videoSrcs = useMemo(() => upstreamVideos.map((v) => v.src), [upstreamVideos]);
+
+  const refOrder = useMemo(() => mergeOrder(refOrderPref, refImages), [refOrderPref, refImages]);
+  const audioOrder = useMemo(() => mergeOrder(audioOrderPref, audioSrcs), [audioOrderPref, audioSrcs]);
+  const refVideoOrder = useMemo(() => mergeOrder(refVideoOrderPref, videoSrcs), [refVideoOrderPref, videoSrcs]);
+
   // 构建 @ 提及的参考列表。顺序与参考区一致：音频 -> 视频 -> 图片；
   // 各自编号基于对应 order（audioOrder / refVideoOrder / refOrder），排序后编号随之稳定。
   const references = useMemo<ReferenceItem[]>(() => {
@@ -174,21 +197,28 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestSettingsRef = useRef({
-    kind: "video" as const, prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, refVideoOrder, refMode, n,
+    kind: "video" as const, prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n,
   });
   useEffect(() => {
-    latestSettingsRef.current = { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, refVideoOrder, refMode, n };
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, refVideoOrder, refMode, n]);
+    latestSettingsRef.current = { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n };
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n]);
 
   // Persist settings to node data on change (debounced)。
+  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
   useEffect(() => {
     const timer = setTimeout(() => {
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Partial<VideoGenSettings>;
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, refAudioOrder: audioOrder, refVideoOrder, refMode, n },
+        genSettings: {
+          kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio,
+          refOrder: cur.refOrder ?? [], refAudioOrder: cur.refAudioOrder ?? [], refVideoOrder: cur.refVideoOrder ?? [],
+          refMode, n,
+        },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refOrder, audioOrder, refVideoOrder, refMode, n, nodeId]);
+  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n, nodeId]);
 
   // Flush pending settings on component unmount (not on dep changes)。
   useEffect(() => {
@@ -200,12 +230,14 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
           saved.resolution === latest.resolution && saved.ratio === latest.ratio &&
           saved.seconds === latest.seconds && saved.generateAudio === latest.generateAudio &&
-          saved.n === latest.n &&
-          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder) &&
-          JSON.stringify(saved.refAudioOrder) === JSON.stringify(latest.refAudioOrder) &&
-          JSON.stringify(saved.refVideoOrder) === JSON.stringify(latest.refVideoOrder) &&
-          saved.refMode === latest.refMode) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
+          saved.refMode === latest.refMode && saved.n === latest.n) return;
+      const cur = saved ?? {};
+      useCanvasStore.getState().updateNodeData(nodeId, {
+        genSettings: {
+          ...latest,
+          refOrder: cur.refOrder ?? [], refAudioOrder: cur.refAudioOrder ?? [], refVideoOrder: cur.refVideoOrder ?? [],
+        },
+      }, undefined, { skipHistory: true });
       markDirtyImmediate();
     };
   }, []);
@@ -223,6 +255,9 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
 
   return {
     refImages,
+    refOrder,
+    audioOrder,
+    refVideoOrder,
     upstreamTexts,
     upstreamAudio,
     upstreamVideos,

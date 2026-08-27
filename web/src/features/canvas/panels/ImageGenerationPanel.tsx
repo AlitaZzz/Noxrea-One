@@ -28,6 +28,7 @@ import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 
 interface Props { nodeId: string; }
 
@@ -53,7 +54,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       quality: s.quality || (d.quality as string) || "auto",
       resolution: s.resolution || (d.resolution as string) || "1K",
       ratio: s.ratio || (d.ratio as string) || "1:1",
-      refOrder: s.refOrder || [],
       n: s.n || (d.n as number) || 1,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,20 +124,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
 
-  // User-controllable display order
-  const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
+  // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并
+  const genSettings = useGenSettings(nodeId);
+  const orderPref = (genSettings as Partial<ImageGenSettings> | undefined)?.refOrder ?? EMPTY_ORDER;
+  const refOrder = useMemo(() => mergeOrder(orderPref, refImages), [orderPref, refImages]);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  // Sync refOrder when upstream sources change, adjusted during render.
-  const [prevRefImages, setPrevRefImages] = useState(refImages);
-  if (refImages !== prevRefImages) {
-    setPrevRefImages(refImages);
-    setRefOrder((prev) => {
-      const alive = prev.filter((u) => refImages.includes(u));
-      const added = refImages.filter((u) => !prev.includes(u));
-      if (added.length === 0 && alive.length === prev.length) return prev;
-      return [...alive, ...added];
-    });
-  }
 
   // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）
   const references = useMemo<ReferenceItem[]>(() => {
@@ -156,19 +147,22 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, [canvasNodes, nodeId]);
 
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, provider: null });
-  const latestSettingsRef = useRef({ kind: "image" as const, prompt, modelKey, quality, resolution, ratio, refOrder, n });
+  const latestSettingsRef = useRef({ kind: "image" as const, prompt, modelKey, quality, resolution, ratio, n });
   useEffect(() => {
-    latestSettingsRef.current = { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder, n };
-  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n]);
-  // Persist settings to node data on change (debounced)
+    latestSettingsRef.current = { kind: "image", prompt, modelKey, quality, resolution, ratio, n };
+  }, [prompt, modelKey, quality, resolution, ratio, n]);
+  // Persist settings to node data on change (debounced)。
+  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
   useEffect(() => {
     const timer = setTimeout(() => {
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Partial<ImageGenSettings>;
       useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder, n },
+        genSettings: { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder: cur.refOrder ?? [], n },
       }, undefined, { skipHistory: true });
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, quality, resolution, ratio, refOrder, n, nodeId]);
+  }, [prompt, modelKey, quality, resolution, ratio, n, nodeId]);
 
   // Flush pending settings on component unmount (not on dep changes)
   useEffect(() => {
@@ -176,13 +170,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       const latest = latestSettingsRef.current;
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const saved = (node?.data as MediaGenFields)?.genSettings as Partial<ImageGenSettings> | undefined;
-      // 没有已保存值 或 任一字段变化 -> flush（refOrder 用 JSON.stringify 比较）
       if (saved &&
           saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
           saved.quality === latest.quality && saved.resolution === latest.resolution &&
-          saved.ratio === latest.ratio && saved.n === latest.n &&
-          JSON.stringify(saved.refOrder) === JSON.stringify(latest.refOrder)) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest } }, undefined, { skipHistory: true });
+          saved.ratio === latest.ratio && saved.n === latest.n) return;
+      const cur = saved ?? {};
+      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest, refOrder: cur.refOrder ?? [] } }, undefined, { skipHistory: true });
       markDirtyImmediate();
     };
   }, []);
@@ -333,14 +326,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           e.preventDefault();
           e.stopPropagation();
           setDragOverIdx(null);
-          const dragged = e.dataTransfer.getData('text/plain');
-          if (!dragged) return;
-          if (refOrder.includes(dragged)) return; // 排序拖拽仅限图片缩略图之间
-          if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-audio')) return; // 视频/音频不可加入图片参考
-          setRefOrder((prev) => {
-            const list = prev.filter((u) => u !== dragged);
-            return [...list, dragged];
-          });
         }}
       >
           {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
@@ -389,15 +374,13 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
                 setDragOverIdx(null);
                 const dragged = e.dataTransfer.getData('text/plain');
                 if (!dragged || dragged === img) return;
-                setRefOrder((prev) => {
-                  const list = [...prev];
-                  const fromIdx = list.indexOf(dragged);
-                  const toIdx = list.indexOf(img);
-                  if (fromIdx === -1 || fromIdx === toIdx) return prev;
-                  const [moved] = list.splice(fromIdx, 1);
-                  list.splice(toIdx, 0, moved);
-                  return list;
-                });
+                const list = [...refOrder];
+                const fromIdx = list.indexOf(dragged);
+                const toIdx = list.indexOf(img);
+                if (fromIdx === -1 || fromIdx === toIdx) return;
+                const [moved] = list.splice(fromIdx, 1);
+                list.splice(toIdx, 0, moved);
+                writeOrderPref(nodeId, { refOrder: list });
               }}
               className="relative group"
             >
