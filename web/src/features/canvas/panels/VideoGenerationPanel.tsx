@@ -124,16 +124,21 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [refVideoOrder, setRefVideoOrder] = useState<string[]>(saved.refVideoOrder || []);
   const [refMode, setRefMode] = useState<string>(saved.refMode || "full");
 
-  // 参考模式可用范围：上游有视频/音频 → 仅全能参考；上游仅有图片 → 禁用文生视频；无参考 → 全部可用
+  // 参考模式可用范围：
+  //   视频或音频 → 仅全能参考；1 张图 → 图生/全能；2 张图 → 首尾帧/全能；≥3 张图 → 仅全能参考；无图/视频/音频（仅文本或空）→ 只能文生视频
   const allowedRefModes = useMemo(() => {
     if (refVideoOrder.length > 0 || audioOrder.length > 0) return ["full"];
-    if (refOrder.length > 0) return ["image", "first-last", "full"];
-    return refModeOptions;
-  }, [refModeOptions, refOrder, audioOrder, refVideoOrder]);
+    if (refOrder.length === 1) return ["image", "full"]; // 1 张图：图生视频/全能参考
+    if (refOrder.length === 2) return ["first-last", "full"]; // 2 张图：首尾帧/全能参考
+    if (refOrder.length >= 3) return ["full"]; // ≥3 张图：仅全能参考
+    return ["text"]; // 无图片/视频/音频参考（含只有文本上游）→ 只能文生视频
+  }, [refVideoOrder, audioOrder, refOrder]);
 
-  // 当前模式不在可用范围时回退到全能参考
+  // 当前模式不在可用范围时按默认回退：能全引用用全能参考，否则只能文生视频
   useEffect(() => {
-    if (!allowedRefModes.includes(refMode)) setRefMode("full");
+    if (!allowedRefModes.includes(refMode)) {
+      setRefMode(allowedRefModes.includes("full") ? "full" : "text");
+    }
   }, [allowedRefModes, refMode]);
 
   // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
