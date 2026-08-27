@@ -35,6 +35,7 @@ import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import { writeOrderPref } from "../shared/ref-order";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -62,9 +63,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       ratio: s.ratio || (d.ratio as string) || "16:9",
       seconds: s.seconds ?? (d.seconds as number) ?? 5,
       generateAudio: s.generateAudio ?? (d.generateAudio as boolean) ?? true,
-      refOrder: s.refOrder || [],
-      refAudioOrder: s.refAudioOrder || [],
-      refVideoOrder: s.refVideoOrder || [],
       refMode: s.refMode || "full",
       n: s.n || (d.n as number) || 1,
     };
@@ -118,11 +116,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     setModelOpen(false);
   };
 
-  // User-controllable display order
-  const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
-  const [audioOrder, setAudioOrder] = useState<string[]>(saved.refAudioOrder || []);
-  const [refVideoOrder, setRefVideoOrder] = useState<string[]>(saved.refVideoOrder || []);
+  // 参考方式（text = 文生视频）。可用范围由 hook 派生的参考列表决定（见下）。
   const [refMode, setRefMode] = useState<string>(saved.refMode || "full");
+
+  // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
+  // 参考存在性与显示顺序均为纯派生：存在性来自连线，顺序 = 排序偏好(genSettings) + 连线合并，
+  // 无本地同步状态、首帧即正确；排序偏好由拖拽排序事件（writeOrderPref）即时持久化。
+  const {
+    refImages, refOrder, audioOrder, refVideoOrder,
+    upstreamTexts, upstreamAudio, upstreamVideos, audioSrcLabel, references, finalPrompt, isGenerating,
+    elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
+  } = useVideoGenPanel({
+    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode,
+  });
 
   // 参考模式可用范围：
   //   视频或音频 → 仅全能参考；1 张图 → 图生/全能；2 张图 → 首尾帧/全能；≥3 张图 → 仅全能参考；无图/视频/音频（仅文本或空）→ 只能文生视频
@@ -141,60 +147,18 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     }
   }, [allowedRefModes, refMode]);
 
-  // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
-  const {
-    refImages, upstreamTexts, upstreamAudio, upstreamVideos, audioSrcLabel, references, finalPrompt, isGenerating,
-    elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
-  } = useVideoGenPanel({
-    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refOrder, audioOrder, refVideoOrder, refMode,
-  });
-
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [prevRefImages, setPrevRefImages] = useState(refImages);
-  if (refImages !== prevRefImages) {
-    setPrevRefImages(refImages);
-    setRefOrder((prev) => {
-      const alive = prev.filter((u) => refImages.includes(u));
-      const added = refImages.filter((u) => !prev.includes(u));
-      if (added.length === 0 && alive.length === prev.length) return prev;
-      return [...alive, ...added];
-    });
-  }
-  const audioSrcSet = useMemo(() => new Set(upstreamAudio.map((a) => a.src)), [upstreamAudio]);
-  const [prevAudioSrcs, setPrevAudioSrcs] = useState(audioSrcSet);
-  if (audioSrcSet !== prevAudioSrcs) {
-    setPrevAudioSrcs(audioSrcSet);
-    setAudioOrder((prev) => {
-      const alive = prev.filter((u) => audioSrcSet.has(u));
-      const added = [...audioSrcSet].filter((u) => !prev.includes(u));
-      if (added.length === 0 && alive.length === prev.length) return prev;
-      return [...alive, ...added];
-    });
-  }
-  const videoSrcSet = useMemo(() => new Set(upstreamVideos.map((v) => v.src)), [upstreamVideos]);
-  const [prevVideoSrcs, setPrevVideoSrcs] = useState(videoSrcSet);
-  if (videoSrcSet !== prevVideoSrcs) {
-    setPrevVideoSrcs(videoSrcSet);
-    setRefVideoOrder((prev) => {
-      const alive = prev.filter((u) => videoSrcSet.has(u));
-      const added = [...videoSrcSet].filter((u) => !prev.includes(u));
-      if (added.length === 0 && alive.length === prev.length) return prev;
-      return [...alive, ...added];
-    });
-  }
 
-  // 音频拖拽排序（仅音频之间）
+  // 音频拖拽排序（仅音频之间）：事件驱动写入排序偏好并即时持久化
   const handleAudioReorder = useCallback((dragged: string, target: string) => {
-    setAudioOrder((prev) => {
-      const list = [...prev];
-      const fromIdx = list.indexOf(dragged);
-      const toIdx = list.indexOf(target);
-      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
-      const [moved] = list.splice(fromIdx, 1);
-      list.splice(toIdx, 0, moved);
-      return list;
-    });
-  }, []);
+    const list = [...audioOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refAudioOrder: list });
+  }, [audioOrder, nodeId]);
 
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, provider: null });
   const { notification } = App.useApp();
@@ -355,15 +319,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           e.preventDefault();
           e.stopPropagation();
           setDragOverIdx(null);
-          const dragged = e.dataTransfer.getData('text/plain');
-          if (!dragged) return;
-          if (refVideoOrder.includes(dragged)) return; // 视频 URL 不加入图片参考
-          if (audioOrder.includes(dragged)) return; // 音频 URL 不加入图片参考
-          if (refOrder.includes(dragged)) return; // 排序拖拽仅限同类缩略图之间
-          setRefOrder((prev) => {
-            const list = prev.filter((u) => u !== dragged);
-            return [...list, dragged];
-          });
         }}
       >
           {/* 上游 Text 节点 - 不可拖动，排在最前 */}
@@ -431,15 +386,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 const dragged = e.dataTransfer.getData('text/plain');
                 if (!dragged || dragged === vid) return;
                 if (!refVideoOrder.includes(dragged)) return; // 仅视频之间排序
-                setRefVideoOrder((prev) => {
-                  const list = [...prev];
-                  const fromIdx = list.indexOf(dragged);
-                  const toIdx = list.indexOf(vid);
-                  if (fromIdx === -1 || fromIdx === toIdx) return prev;
-                  const [moved] = list.splice(fromIdx, 1);
-                  list.splice(toIdx, 0, moved);
-                  return list;
-                });
+                const list = [...refVideoOrder];
+                const fromIdx = list.indexOf(dragged);
+                const toIdx = list.indexOf(vid);
+                if (fromIdx === -1 || fromIdx === toIdx) return;
+                const [moved] = list.splice(fromIdx, 1);
+                list.splice(toIdx, 0, moved);
+                writeOrderPref(nodeId, { refVideoOrder: list });
               }}
               onMouseEnter={() => setHoverVideo(vid)}
               onMouseLeave={() => setHoverVideo(null)}>
@@ -453,7 +406,16 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refVideoLabel", { index: i + 1 })}</span>
               <Button type="text" size="small"
                 className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                onClick={() => setRefVideoOrder((prev) => prev.filter((u) => u !== vid))}>✕</Button>
+                onClick={() => {
+                  // 删除参考 = 断开连线（与图片/音频参考一致），显示顺序随后自动派生
+                  const store = useCanvasStore.getState();
+                  const edge = store.edges.find((e) => {
+                    if (e.target !== nodeId) return false;
+                    const srcNode = store.nodes.find((n) => n.id === e.source);
+                    return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === vid;
+                  });
+                  if (edge) store.removeEdges([edge.id]);
+                }}>✕</Button>
             </div>
           ))}
           {refOrder.map((img, i) => (
@@ -488,15 +450,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 const dragged = e.dataTransfer.getData('text/plain');
                 if (!dragged || dragged === img) return;
                 if (refVideoOrder.includes(dragged)) return; // 视频不参与图片排序
-                setRefOrder((prev) => {
-                  const list = [...prev];
-                  const fromIdx = list.indexOf(dragged);
-                  const toIdx = list.indexOf(img);
-                  if (fromIdx === -1 || fromIdx === toIdx) return prev;
-                  const [moved] = list.splice(fromIdx, 1);
-                  list.splice(toIdx, 0, moved);
-                  return list;
-                });
+                const list = [...refOrder];
+                const fromIdx = list.indexOf(dragged);
+                const toIdx = list.indexOf(img);
+                if (fromIdx === -1 || fromIdx === toIdx) return;
+                const [moved] = list.splice(fromIdx, 1);
+                list.splice(toIdx, 0, moved);
+                writeOrderPref(nodeId, { refOrder: list });
               }}
               className="relative group"
             >

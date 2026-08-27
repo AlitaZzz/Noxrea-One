@@ -25,6 +25,7 @@ import { useModelStore } from "@/lib/model-store";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 
 interface Props {
   nodeId: string;
@@ -58,7 +59,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     return {
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
-      refOrder: s.refOrder || [],
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId]);
@@ -100,19 +100,11 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
 
-  // User-controllable display order
-  const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
+  // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并
+  const genSettings = useGenSettings(nodeId);
+  const orderPref = (genSettings as Partial<TextGenSettings> | undefined)?.refOrder ?? EMPTY_ORDER;
+  const refOrder = useMemo(() => mergeOrder(orderPref, refImages), [orderPref, refImages]);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [prevRefImages, setPrevRefImages] = useState(refImages);
-  if (refImages !== prevRefImages) {
-    setPrevRefImages(refImages);
-    setRefOrder((prev) => {
-      const alive = prev.filter((u) => refImages.includes(u));
-      const added = refImages.filter((u) => !prev.includes(u));
-      if (added.length === 0 && alive.length === prev.length) return prev;
-      return [...alive, ...added];
-    });
-  }
 
   // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）
   const references = useMemo<ReferenceItem[]>(() => {
@@ -124,23 +116,26 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     }));
   }, [refOrder]);
 
-  const latestSettingsRef = useRef({ prompt, modelKey, refOrder });
+  const latestSettingsRef = useRef({ prompt, modelKey });
   useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey, refOrder };
-  }, [prompt, modelKey, refOrder]);
+    latestSettingsRef.current = { prompt, modelKey };
+  }, [prompt, modelKey]);
 
-  // Persist settings to node data (debounced)
+  // Persist settings to node data (debounced)。
+  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
   useEffect(() => {
     const timer = setTimeout(() => {
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const cur = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { kind: "text", prompt, modelKey, refOrder } },
+        { genSettings: { kind: "text", prompt, modelKey, refOrder: cur.refOrder ?? [] } },
         undefined,
         { skipHistory: true },
       );
     }, 300);
     return () => clearTimeout(timer);
-  }, [prompt, modelKey, refOrder, nodeId]);
+  }, [prompt, modelKey, nodeId]);
 
   // Flush pending settings on unmount
   useEffect(() => {
@@ -151,13 +146,13 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       if (
         savedGen &&
         savedGen.prompt === latest.prompt &&
-        savedGen.modelKey === latest.modelKey &&
-        JSON.stringify(savedGen.refOrder) === JSON.stringify(latest.refOrder)
+        savedGen.modelKey === latest.modelKey
       )
         return;
+      const cur: Partial<TextGenSettings> = savedGen ?? {};
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { kind: "text", prompt: latest.prompt, modelKey: latest.modelKey, refOrder: latest.refOrder } },
+        { genSettings: { kind: "text", prompt: latest.prompt, modelKey: latest.modelKey, refOrder: cur.refOrder ?? [] } },
         undefined,
         { skipHistory: true },
       );
@@ -294,14 +289,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             e.preventDefault();
             e.stopPropagation();
             setDragOverIdx(null);
-            const dragged = e.dataTransfer.getData("text/plain");
-            if (!dragged) return;
-            if (refOrder.includes(dragged)) return; // 排序拖拽仅限图片缩略图之间
-            if (e.dataTransfer.types.includes("application/x-ref-video") || e.dataTransfer.types.includes("application/x-ref-audio")) return; // 视频/音频不可加入图片参考
-            setRefOrder((prev) => {
-              const list = prev.filter((u) => u !== dragged);
-              return [...list, dragged];
-            });
           }}
         >
             {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
@@ -350,15 +337,13 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                   setDragOverIdx(null);
                   const dragged = e.dataTransfer.getData("text/plain");
                   if (!dragged || dragged === img) return;
-                  setRefOrder((prev) => {
-                    const list = [...prev];
-                    const fromIdx = list.indexOf(dragged);
-                    const toIdx = list.indexOf(img);
-                    if (fromIdx === -1 || fromIdx === toIdx) return prev;
-                    const [moved] = list.splice(fromIdx, 1);
-                    list.splice(toIdx, 0, moved);
-                    return list;
-                  });
+                  const list = [...refOrder];
+                  const fromIdx = list.indexOf(dragged);
+                  const toIdx = list.indexOf(img);
+                  if (fromIdx === -1 || fromIdx === toIdx) return;
+                  const [moved] = list.splice(fromIdx, 1);
+                  list.splice(toIdx, 0, moved);
+                  writeOrderPref(nodeId, { refOrder: list });
                 }}
                 className="relative group"
               >
