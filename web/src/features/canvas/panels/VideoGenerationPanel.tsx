@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
 import { StopIcon } from "@/components/ui/icons/media/StopIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
 import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
 import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
 import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
@@ -121,7 +122,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [refOrder, setRefOrder] = useState<string[]>(saved.refOrder || []);
   const [audioOrder, setAudioOrder] = useState<string[]>(saved.refAudioOrder || []);
   const [refVideoOrder, setRefVideoOrder] = useState<string[]>(saved.refVideoOrder || []);
-  const [refMode, setRefMode] = useState<string>(saved.refMode || "");
+  const [refMode, setRefMode] = useState<string>(saved.refMode || "full");
+
+  // 参考模式可用范围：上游有视频/音频 → 仅全能参考；上游仅有图片 → 禁用文生视频；无参考 → 全部可用
+  const allowedRefModes = useMemo(() => {
+    if (refVideoOrder.length > 0 || audioOrder.length > 0) return ["full"];
+    if (refOrder.length > 0) return ["image", "first-last", "full"];
+    return refModeOptions;
+  }, [refModeOptions, refOrder, audioOrder, refVideoOrder]);
+
+  // 当前模式不在可用范围时回退到全能参考
+  useEffect(() => {
+    if (!allowedRefModes.includes(refMode)) setRefMode("full");
+  }, [allowedRefModes, refMode]);
 
   // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
   const {
@@ -277,7 +290,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: refOrder, refAudios: audioOrder, refVideos: refVideoOrder, refMode, n, entry, provider };
+    const isTextToVideo = refMode === "text";
+    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: isTextToVideo ? [] : refOrder, refAudios: isTextToVideo ? [] : audioOrder, refVideos: isTextToVideo ? [] : refVideoOrder, refMode, n, entry, provider };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     const errMsg = await submitTask();
@@ -319,6 +333,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         width: 640,
       }}
     >
+      {refMode !== "text" && (
       <div
         className="flex gap-2 flex-wrap"
         onDragOver={(e) => {
@@ -514,6 +529,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </Button>
           </Tooltip>
         </div>
+      )}
       <MentionPrompt
         references={references}
         value={prompt}
@@ -556,7 +572,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
                   {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
                   {refMode === "first-last" && <VideoFrameIcon style={{ fontSize: 14 }} />}
-                  {refMode === "first" && <VideoCameraIcon style={{ fontSize: 14 }} />}
+                  {refMode === "image" && <VideoCameraIcon style={{ fontSize: 14 }} />}
+                  {refMode === "text" && <TextToVideoIcon style={{ fontSize: 14 }} />}
                   {t(`video.refMode.${refMode}`)}
                 </span>
                 <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
@@ -566,8 +583,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               <>
                 <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
                 {refModeOptions.map((m: string) => (
-                  <MenuItem key={m} selected={refMode === m}
-                    onClick={() => { setRefMode(m); setRefModeOpen(false); }}>
+                  <MenuItem key={m} selected={refMode === m} dimmed={!allowedRefModes.includes(m)}
+                    onClick={() => { if (allowedRefModes.includes(m)) { setRefMode(m); setRefModeOpen(false); } }}>
                     {m === "full" && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <VideoRefIcon style={{ fontSize: 14 }} />
@@ -580,13 +597,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                         {t(`video.refMode.${m}`)}
                       </span>
                     )}
-                    {m === "first" && (
+                    {m === "image" && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <VideoCameraIcon style={{ fontSize: 14 }} />
                         {t(`video.refMode.${m}`)}
                       </span>
                     )}
-                    {m !== "full" && m !== "first-last" && m !== "first" && t(`video.refMode.${m}`)}
+                    {m === "text" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <TextToVideoIcon style={{ fontSize: 14 }} />
+                        {t(`video.refMode.${m}`)}
+                      </span>
+                    )}
+                    {m !== "full" && m !== "first-last" && m !== "image" && m !== "text" && t(`video.refMode.${m}`)}
                   </MenuItem>
                 ))}
               </>
