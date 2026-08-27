@@ -26,6 +26,7 @@ import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
+import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
 
 interface Props {
   nodeId: string;
@@ -41,6 +42,7 @@ interface ModelOption {
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
+  const reveal = useRevealCanvasNode();
   const providers = useModelStore((s) => s.providers);
   const { notification } = App.useApp();
 
@@ -294,7 +296,11 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
             {upstreamTexts.map((txt) => (
               <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
-                <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}>
+                <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
+                onDoubleClick={() => {
+                  const n = useCanvasStore.getState().nodes.find((x) => x.id === txt.id);
+                  if (n) reveal(n);
+                }}>
                   <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
                   <Button type="text" size="small"
                     className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
@@ -310,6 +316,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               <div
                 key={img}
                 draggable
+                onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, img); if (n) reveal(n); }}
                 onDragStart={(e) => {
                   e.dataTransfer.setData("application/x-ref-image", img);
                   e.dataTransfer.setData("text/plain", img);
