@@ -217,15 +217,45 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
     try {
       const res = await modelApi.fetchModelsList(providerId);
-      const json = await res.json();
-      if (json.code !== 200) {
-        const msg = json.msg || `HTTP ${res.status}`;
-        console.error("Fetch models failed:", msg);
+
+      // 先尝试解析响应体——网关异常时可能是 HTML 而非 JSON，需兜底
+      let json: Record<string, unknown> | null = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      // 服务端统一把错误描述放在 detail（fail / onError），msg 仅成功摘要里有
+      const detail = (json && (json.msg ?? json.detail)) as string | undefined;
+
+      // ① HTTP 非 2xx：先取 detail，拿不到再用状态码兜底
+      if (!res.ok) {
+        const msg = detail || `HTTP ${res.status} (${res.statusText})`;
+        console.error("Fetch models failed:", {
+          status: res.status,
+          statusText: res.statusText,
+          body: json,
+          msg,
+        });
         return { success: false, error: msg };
       }
-      const fetched: { name: string }[] = (json.data || []).map(
-        (m: RawModelEntry) => ({ name: (m.id || m.name) as string })
-      );
+
+      // ② 结构异常或业务码非 200
+      if (!json || json.code !== 200) {
+        const msg = detail ?? (json ? "Unknown server response" : "Empty response");
+        console.error("Fetch models failed:", {
+          status: res.status,
+          body: json,
+          msg,
+        });
+        return { success: false, error: msg };
+      }
+
+      const data = (json as { data?: unknown }).data;
+      const fetched: { name: string }[] = Array.isArray(data)
+        ? (data as RawModelEntry[]).map((m) => ({ name: (m.id || m.name) as string }))
+        : [];
       const fetchedSet = new Set(fetched.map((m) => m.name));
       const existing = ch.models;
       const merged: { name: string; capabilities: ModelCapability[] }[] = [];
