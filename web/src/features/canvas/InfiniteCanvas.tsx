@@ -72,6 +72,7 @@ import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveVie
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
+import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
@@ -359,6 +360,8 @@ export default function InfiniteCanvas() {
   const handleConnect = useCallback(
     (connection: Connection) => {
       setEdges([...useCanvasStore.getState().edges, createEdge(connection.source || "", connection.target || "")]);
+      // 「重连 = 重新入列」：参考边（重新）建立后，对应参考置尾（含 ✕ 后重连、断开重连）
+      bumpRefOrderToTail([{ source: connection.source || "", target: connection.target || "" }]);
       markDirtyImmediate();
     },
     [setEdges]

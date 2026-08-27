@@ -156,7 +156,9 @@ export function useCanvasKeyboard() {
         // 导致 SSE 结果落在过期节点上或白等后 scanAndConnect 复活僵尸任务
         if (hasGeneratingNode()) return;
         e.preventDefault();
-        // 先捕获现场快照（进 redoStack，供 redo 回到撤销前），再弹出恢复目标
+        // 先捕获现场快照（进 redoStack，供 redo 回到撤销前），再弹出恢复目标。
+        // 撤销/重做整体恢复快照（含 genSettings 排序偏好）：手动重连的置尾效果随快照回滚，
+        // 恢复的是被撤销操作前的精确状态——参考回到原来的位置。
         const prev = undoHistory(takeCanvasSnapshot());
         if (prev) {
           const s = useCanvasStore.getState();
@@ -176,7 +178,8 @@ export function useCanvasKeyboard() {
       if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         if (hasGeneratingNode()) return;
         e.preventDefault();
-        // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标
+        // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标。
+        // 重做同样整体恢复快照：精确回到撤销前的现场状态。
         const next = redoHistory(takeCanvasSnapshot());
         if (next) {
           const s = useCanvasStore.getState();
