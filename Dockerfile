@@ -25,7 +25,10 @@ COPY . .
 RUN printf 'SERVER_URL=%s\nAPP_NAME=%s\nNEXT_PUBLIC_APP_NAME=%s\n' "$SERVER_URL" "$APP_NAME" "$APP_NAME" > .env
 
 # 安装依赖（postinstall 自动执行 prisma generate）
-RUN npm ci
+# 注意：本地 Windows 生成的 package-lock.json 缺少 Linux 平台 optional deps 实体，
+# 直接 npm ci 会漏装 lightningcss 的 Linux 原生二进制（构建时报 Cannot find module）。
+# 先在 Linux 环境下补全 lockfile，再用 npm ci 精确安装。
+RUN npm install --package-lock-only --ignore-scripts && npm ci
 
 # 构建前端（产物在 web/.next）
 RUN npm run build
