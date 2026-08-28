@@ -19,7 +19,7 @@ export ALLOW_INSECURE_SECRETS="${ALLOW_INSECURE_SECRETS:-false}"
 # ------------------------------------------------------------
 if [ -z "$JWT_SECRET_KEY" ]; then
   echo "ERROR: 必须设置 JWT_SECRET_KEY。" >&2
-  echo "       在 docker-compose.yml 的 environment 或 docker run -e JWT_SECRET_KEY=... 传入。" >&2
+  echo "       在 docker-compose 同目录 .env 中设置（参考 .env.example），或 docker run -e JWT_SECRET_KEY=... 传入。" >&2
   echo "       生成方式：openssl rand -hex 32" >&2
   exit 1
 fi
