@@ -25,12 +25,19 @@ COPY . .
 RUN printf 'SERVER_URL=%s\nAPP_NAME=%s\nNEXT_PUBLIC_APP_NAME=%s\n' "$SERVER_URL" "$APP_NAME" "$APP_NAME" > .env
 
 # 安装依赖（postinstall 自动执行 prisma generate）
-# 注意：本地 Windows 生成的 package-lock.json 缺 lightningcss-linux-x64-gnu 实体，
-# npm ci 会漏装其 Linux 原生二进制，导致 Turbopack 构建失败。此处按已安装的
-# lightningcss 版本显式补齐对应的 Linux 平台包。
+# 注意：本地 Windows 生成的 package-lock.json 缺少以下 Linux 原生包的实体
+# （npm 生成 lockfile 时按当前平台 prune 了 optional deps），npm ci 后需按
+# 主包版本显式补齐：lightningcss / @tailwindcss/oxide / rollup / unrs-resolver
 RUN npm ci \
     && LIGHTCSS_VER=$(node -p "require('./node_modules/lightningcss/package.json').version") \
-    && npm install --no-save --ignore-scripts "lightningcss-linux-x64-gnu@${LIGHTCSS_VER}"
+    && OXIDE_VER=$(node -p "require('./node_modules/@tailwindcss/oxide/package.json').version") \
+    && ROLLUP_VER=$(node -p "require('./node_modules/rollup/package.json').version") \
+    && UNRS_VER=$(node -p "require('./node_modules/unrs-resolver/package.json').version") \
+    && npm install --no-save --ignore-scripts \
+        "lightningcss-linux-x64-gnu@${LIGHTCSS_VER}" \
+        "@tailwindcss/oxide-linux-x64-gnu@${OXIDE_VER}" \
+        "@rollup/rollup-linux-x64-gnu@${ROLLUP_VER}" \
+        "@unrs/resolver-binding-linux-x64-gnu@${UNRS_VER}"
 
 # 构建前端（产物在 web/.next）
 RUN npm run build
