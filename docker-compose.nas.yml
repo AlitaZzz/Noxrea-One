@@ -1,4 +1,6 @@
 # NAS 部署用：直接从 GitHub 容器仓库拉取现成镜像（无需在 NAS 上构建）
+# 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（SQLite 数据库 + 上传文件）
+# 容器加入已存在的 mihomo_shared_network 共享网络（需先确保该网络已创建）
 services:
   noxrea:
     image: ghcr.io/alitazzz/noxrea-one:latest
@@ -6,13 +8,17 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - noxrea-data:/data
+      - /share/Container/noxreaone:/data
     environment:
       JWT_SECRET_KEY: "9f3c1a7e5b2d4f0e8a6c3b9d1e5f7a2c4b8d0e6f1a3c5e7b9d2f4a6c8e0b1d"
       APP_NAME: "Noxrea One"
       LOG_LEVEL: "INFO"
       ALLOW_REGISTRATION: "true"
     restart: unless-stopped
+    networks:
+      - mihomo_shared_network
 
-volumes:
-  noxrea-data:
+# 创建自定义网络，让所有使用自定义网络的容器之间可以通信
+networks:
+  mihomo_shared_network:
+    external: true
