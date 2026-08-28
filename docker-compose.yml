@@ -9,15 +9,9 @@ services:
       - "3000:3000"
     volumes:
       - noxrea-data:/data
-    environment:
-      JWT_SECRET_KEY: "9f3c1a7e5b2d4f0e8a6c3b9d1e5f7a2c4b8d0e6f1a3c5e7b9d2f4a6c8e0b1d"
-      # 以下可选，默认值已内置在镜像里
-      APP_NAME: "Noxrea One"
-      LOG_LEVEL: "INFO"
-      ALLOW_REGISTRATION: "true"
-      # DATABASE_URL: "file:/data/noxrea.db"
-      # UPLOAD_DIR: "/data/uploads"
-      # FFMPEG_PATH: "/usr/bin"
+    # 环境变量统一从根目录 .env 读取（模板见 .env.example）
+    env_file:
+      - .env
     restart: unless-stopped
 
 volumes:
