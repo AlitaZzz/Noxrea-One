@@ -148,8 +148,8 @@ router.get("/api/generate/task/:id", async (c) => {
   return c.json(ok(task));
 });
 
-// POST /api/generate/task/:id/cancel
-router.post("/api/generate/task/:id/cancel", async (c) => {
+// POST|DELETE /api/generate/task/:id/cancel
+router.on(["POST", "DELETE"], "/api/generate/task/:id/cancel", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
