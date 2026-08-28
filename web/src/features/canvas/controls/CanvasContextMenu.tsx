@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { Popover } from "antd";
 import { useTranslation } from "react-i18next";
 
@@ -20,6 +20,9 @@ interface Props {
   onAddVideo: () => void;
   onAddAudio: () => void;
   onAddDirector: () => void;
+  onTidy: () => void;
+  /** 节点少于 2 个时整理无意义，置灰 */
+  tidyDisabled: boolean;
   onResetView: () => void;
 }
 
@@ -47,6 +50,7 @@ export default function CanvasContextMenu(props: Props) {
             <MenuDivider />
             <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("node.director")}</MenuItem>
             <MenuDivider />
+            <MenuItem dimmed={props.tidyDisabled} onClick={() => { props.onTidy(); hide(); }}><AppstoreOutlined /> {t("canvas.tidy")}</MenuItem>
             <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
           </div>
         }

@@ -19,7 +19,6 @@ import {
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { type Node } from "@xyflow/react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -34,8 +33,8 @@ import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAsset
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeMeta";
-import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
+import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
@@ -229,7 +228,7 @@ function CanvasElementsView() {
   );
 }
 
-type ElementItemProps = { node: Node; selected: boolean };
+type ElementItemProps = { node: AnyNode; selected: boolean };
 
 function ElementItemImpl(props: ElementItemProps) {
   const { node, selected } = props;
@@ -238,7 +237,9 @@ function ElementItemImpl(props: ElementItemProps) {
   const nodeType = node.type || "";
   const typeLabel = nodeType && NODE_TYPE_I18N[nodeType] ? t(NODE_TYPE_I18N[nodeType]) : "";
   const rawLabel = (node.data as { label?: string })?.label;
-  const label = rawLabel || typeLabel || nodeType;
+  // 显式标注 string：nodeType 是字面量联合（全非空），不标注会让 TS 判定
+  // 下方 `label || ...` 的右支永不可达，从而把 node 收窄成 never
+  const label: string = rawLabel || typeLabel || nodeType;
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
   const { thumb, loading } = useVideoThumbnail(node.type === NODE_TYPE.VIDEO ? (node.data as { src?: string }).src : undefined);
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
