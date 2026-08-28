@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # GHCR 镜像名必须全小写：ghcr.io/<小写用户名>/<小写仓库名>
   IMAGE_NAME: ghcr.io/alitazzz/noxrea-one
 
 jobs:
@@ -50,7 +49,6 @@ jobs:
         with:
           context: .
           push: true
-          # 先只构建 amd64：arm64 需 QEMU 模拟，Turbopack 在模拟环境下会崩溃
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
