@@ -69,7 +69,7 @@ async function _doResumePoll(
       ? resolveProviderEndpoints(hostFromBaseUrl(baseUrl), model, task.type)
       : undefined;
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
-    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type);
+    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type, model);
   } catch (err: unknown) {
     await _failTask(taskId, `Failed to resume polling: ${(err as Error).message}`);
     return;

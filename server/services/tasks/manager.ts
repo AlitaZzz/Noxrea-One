@@ -112,6 +112,10 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   const req = input.buildRequest();
   let data: unknown;
 
+  // 从请求体提取 model，供轮询 URL 的 {model} 占位符使用
+  const reqModel = (req.body as Record<string, unknown> | undefined)?.model;
+  const model = typeof reqModel === "string" ? reqModel : undefined;
+
   // 开始发送请求（同步阻塞前打印，便于在等待期间观察出参）
   logEvent("taskmgr", {
     banner: true,
@@ -152,6 +156,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
           taskId, protocol, capability, baseUrl, apiKey,
           upstreamTaskId: extractedId,
           channelConfig,
+          model,
           pollInterval, maxPollAttempts, initialDelay,
         });
       }
@@ -196,12 +201,20 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   const upstreamTaskId = protocol.extractTaskId?.(data, channelConfig, capability);
   if (upstreamTaskId) {
     logEvent("taskmgr", {
+      stage: "upstream_response",
+      taskId,
+      body: data,
+      maxLen: Infinity,
+    });
+    const pollUrlPreview = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
+      ?? `${baseUrl}/tasks/${upstreamTaskId}`;
+    logEvent("taskmgr", {
       banner: true,
       bannerTitle: "已获取任务 ID，开始轮询",
       stage: "polling",
       taskId,
       upstreamTaskId,
-      pollUrl: `${baseUrl}/tasks/${upstreamTaskId}`,
+      pollUrl: pollUrlPreview,
     });
     if (await _checkCancelled(taskId)) {
       return { status: "failed", urls: [], error: "Cancelled" };
@@ -210,6 +223,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       taskId, protocol, capability, baseUrl, apiKey,
       upstreamTaskId,
       channelConfig,
+      model,
       pollInterval, maxPollAttempts, initialDelay,
     });
   }
@@ -234,6 +248,7 @@ interface PollInput {
   apiKey: string;
   upstreamTaskId: string;
   channelConfig?: Record<string, unknown>;
+  model?: string;
   pollInterval: number;
   maxPollAttempts: number;
   initialDelay: number;
@@ -242,7 +257,7 @@ interface PollInput {
 async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   const {
     taskId, protocol, capability, baseUrl, apiKey,
-    upstreamTaskId, channelConfig, pollInterval, maxPollAttempts, initialDelay,
+    upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay,
   } = input;
 
   // 若协议完全不支持轮询，直接失败，避免无限 pending
@@ -260,7 +275,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     };
   }
 
-  const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability)
+  const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
     ?? `${baseUrl}/tasks/${upstreamTaskId}`;
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };

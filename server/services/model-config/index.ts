@@ -64,11 +64,13 @@ export interface Capability {
 
 /** 值换算规则（声明式，写 JSON） */
 export interface TransformSpec {
-  type: "lookup" | "map" | "ratio";
+  type: "lookup" | "map" | "ratio" | "stringify" | "wrap";
   /** lookup 专用：参与组合的字段列表，如 ["ratio", "resolution"] */
   composite?: string[];
   /** lookup / map 专用：查表 */
   table?: Record<string, string | string[]>;
+  /** wrap 专用：包装键名，默认 "url" */
+  key?: string;
 }
 
 /** 单个语义字段的映射规格 */
@@ -81,6 +83,18 @@ export interface FieldMapSpec {
   transform?: TransformSpec;
   /** 可选：按参考模式（refMode）分派映射规格，命中则覆盖 field/kind/transform */
   byRefMode?: Record<string, FieldMapSpec>;
+  /** 可选：首尾帧成对输出 slots.firstFrame → pair[0]、slots.lastFrame → pair[1] */
+  pair?: [string, string];
+}
+
+/** 派生字段：由另一个参数（如 refMode）查表派生上游字段 */
+export interface DerivedFieldSpec {
+  /** 派生来源参数名（如 refMode） */
+  source: string;
+  /** 来源值 → 上游值 查表 */
+  table: Record<string, string>;
+  /** 未命中时默认值 */
+  default?: string;
 }
 
 /** 某上游下某模型某能力的参数配置 */
@@ -101,6 +115,11 @@ export interface ModelParamConfig {
    * 不返回给前端。
    */
   mapping?: Record<string, FieldMapSpec>;
+  /**
+   * 派生字段：由另一参数（如 refMode）查表派生出的上游字段，
+   * 后端 build() 在字段循环前优先应用（如 Agnes 的 mode 由 refMode 派生）。
+   */
+  derivedFields?: Record<string, DerivedFieldSpec>;
 }
 
 /** model-ui.json 顶层：host通配 → 模型名 → capability → 配置 */
@@ -169,6 +188,7 @@ function parseConfig(raw: unknown): ModelParamConfig {
     capabilities: (obj.capabilities as Record<string, Capability>) ?? undefined,
     allowedFields: (obj.allowedFields as string[]) ?? undefined,
     mapping: (obj.mapping as Record<string, FieldMapSpec>) ?? undefined,
+    derivedFields: (obj.derivedFields as Record<string, DerivedFieldSpec>) ?? undefined,
   };
 }
 
@@ -214,6 +234,7 @@ function mergeConfig(specific: ModelParamConfig, defaultCfg: ModelParamConfig | 
     capabilities: specific.capabilities ?? defaultCfg.capabilities,
     allowedFields: specific.allowedFields ?? defaultCfg.allowedFields,
     mapping: specific.mapping ?? defaultCfg.mapping,
+    derivedFields: specific.derivedFields ?? defaultCfg.derivedFields,
   };
 }
 
@@ -281,6 +302,20 @@ export function resolveFieldMapSpec(
   const config = getModelParams(host, modelName, capability);
   if (!config) return undefined;
   return config.mapping?.[key];
+}
+
+/**
+ * 取某上游某模型某能力的派生字段表（如 Agnes 的 mode 由 refMode 派生）。
+ * 未命中返回 undefined。
+ */
+export function resolveDerivedFields(
+  host: string,
+  modelName: string,
+  capability: string
+): Record<string, DerivedFieldSpec> | undefined {
+  const config = getModelParams(host, modelName, capability);
+  if (!config) return undefined;
+  return config.derivedFields;
 }
 
 /**
