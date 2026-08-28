@@ -1,0 +1,52 @@
+# 依赖与构建产物
+node_modules
+web/node_modules
+web/.next
+web/out
+*.tsbuildinfo
+
+# 版本控制 / IDE
+.git
+.github
+.codebuddy
+.vscode
+.idea
+
+# 环境变量（构建期由 Dockerfile 生成）
+.env
+.env.*
+!.env.example
+
+# 本地数据库（容器内用 /data 卷，不打进镜像）
+prisma/prisma
+prisma/backups
+*.db
+*.db-shm
+*.db-wal
+
+# 上传 / 生成产物
+uploads
+storage
+output
+outputs
+
+# FFmpeg 本地二进制目录
+bin
+
+# 日志 / 临时文件
+*.log
+logs
+tmp
+temp
+
+# 模型文件
+models
+*.gguf
+*.safetensors
+*.ckpt
+*.pth
+
+# 镜像自身的编排文件（不打进镜像）
+Dockerfile
+docker-compose.yml
+.dockerignore
