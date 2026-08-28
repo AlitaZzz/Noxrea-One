@@ -25,10 +25,12 @@ COPY . .
 RUN printf 'SERVER_URL=%s\nAPP_NAME=%s\nNEXT_PUBLIC_APP_NAME=%s\n' "$SERVER_URL" "$APP_NAME" "$APP_NAME" > .env
 
 # 安装依赖（postinstall 自动执行 prisma generate）
-# 注意：本地 Windows 生成的 package-lock.json 缺少 Linux 平台 optional deps 实体，
-# npm ci 按 lockfile 原样安装会漏装 lightningcss 的 Linux 原生二进制，导致构建失败。
-# 改用 npm install，按当前 Linux 平台重新解析 optional deps，正确装上原生二进制。
-RUN npm install
+# 注意：本地 Windows 生成的 package-lock.json 缺 lightningcss-linux-x64-gnu 实体，
+# npm ci 会漏装其 Linux 原生二进制，导致 Turbopack 构建失败。此处按已安装的
+# lightningcss 版本显式补齐对应的 Linux 平台包。
+RUN npm ci \
+    && LIGHTCSS_VER=$(node -p "require('./node_modules/lightningcss/package.json').version") \
+    && npm install --no-save --ignore-scripts "lightningcss-linux-x64-gnu@${LIGHTCSS_VER}"
 
 # 构建前端（产物在 web/.next）
 RUN npm run build
