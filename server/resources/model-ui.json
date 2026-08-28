@@ -78,6 +78,37 @@
         }
       }
     },
+    "MiniMax-H3": {
+      "video": {
+        "capabilities": {
+          "refMode": { "options": ["image", "first-last", "full"] },
+          "refVideos": { "default": false },
+          "refAudios": { "default": false }
+        },
+        "allowedFields": ["ratio", "resolution", "seconds", "refImages", "refVideos", "refAudios", "refMode"],
+        "fields": [
+          { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], "default": "16:9" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["2K", "768P"], "default": "2K" },
+          { "name": "seconds", "type": "slider", "label": "param.duration", "order": 3, "min": 4, "max": 15, "step": 1, "default": 5 }
+        ],
+        "mapping": {
+          "ratio": { "field": "aspect_ratio", "kind": "single" },
+          "resolution": { "field": "resolution", "kind": "single" },
+          "seconds": { "field": "duration", "kind": "single" },
+          "refImages": {
+            "field": "image_urls",
+            "kind": "array",
+            "byRefMode": {
+              "image": { "field": "first_frame_image", "kind": "slot:first" },
+              "first-last": { "field": "image_with_roles", "kind": "role:first-last" },
+              "full": { "field": "image_urls", "kind": "array" }
+            }
+          },
+          "refVideos": { "field": "video_urls" },
+          "refAudios": { "field": "audio_urls" }
+        }
+      }
+    },
     "*nano-banana-2*": {
       "image": {
         "fields": [
@@ -225,7 +256,8 @@
     "_comment": "供应商 Agnes（OpenAI 协议体系内，已适配）。",
     "_endpoints": {
       "image.edits": "/images/generations",
-      "video.poll": "https://api.agnes-ai.cn/agnesapi?video_id={video_id}"
+      "video.generations": "/videos",
+      "video.poll": "https://api.agnes-ai.cn/agnesapi?video_id={video_id}&model_name={model}"
     },
     "*agnes-image*": {
       "image": {
@@ -243,16 +275,39 @@
     },
     "*agnes-video*": {
       "video": {
+        "capabilities": {
+          "refMode": { "options": ["image", "first-last", "full"] },
+          "refVideos": { "default": false },
+          "refAudios": { "default": false }
+        },
+        "allowedFields": ["ratio", "resolution", "seconds", "refImages", "refVideos", "refAudios", "refMode"],
         "fields": [
-          { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
-          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "numFrames", "type": "number", "order": 3, "min": 1, "max": 441, "step": 8, "default": 121 },
-          { "name": "frameRate", "type": "select", "order": 4, "options": [24, 30], "default": 24 }
+          { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], "default": "16:9" },
+          { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["720P", "960P", "2K"], "default": "720P" },
+          { "name": "seconds", "type": "slider", "label": "param.duration", "order": 3, "min": 4, "max": 12, "step": 1, "default": 5 }
         ],
+        "derivedFields": {
+          "mode": {
+            "source": "refMode",
+            "table": { "text": "text", "image": "keyframe", "first-last": "keyframe", "full": "reference" },
+            "default": "text"
+          }
+        },
         "mapping": {
-          "numFrames": { "field": "num_frames", "kind": "single" },
-          "frameRate": { "field": "frame_rate", "kind": "single" },
-          "mode": { "field": "extra_body.mode", "kind": "single" }
+          "ratio": { "field": "aspect_ratio", "kind": "single" },
+          "resolution": { "field": "size", "kind": "single" },
+          "seconds": { "field": "seconds", "kind": "single", "transform": { "type": "stringify" } },
+          "refImages": {
+            "field": "images",
+            "kind": "array",
+            "byRefMode": {
+              "image": { "field": "first_frame", "kind": "slot:first" },
+              "first-last": { "pair": ["first_frame", "last_frame"] },
+              "full": { "field": "images", "kind": "array" }
+            }
+          },
+          "refVideos": { "field": "videos", "transform": { "type": "wrap", "key": "url" } },
+          "refAudios": { "field": "audios" }
         }
       }
     }

@@ -50,26 +50,29 @@ export function logEvent(
     bannerTitle?: string;
     bannerAtEnd?: boolean;
     level?: "info" | "debug" | "warn" | "error";
+    /** 字符串/对象字段的最大输出长度，Infinity 表示不截断（默认字符串 200、对象 300） */
+    maxLen?: number;
     [key: string]: unknown;
   }
 ): void {
   const level = fields.level ?? "info";
+  const maxLen = fields.maxLen;
   const parts: string[] = [];
 
   if (fields.taskId) parts.push(`task=${fields.taskId}`);
   if (fields.stage) parts.push(`stage=${fields.stage}`);
 
   for (const [k, v] of Object.entries(fields)) {
-    if (k === "taskId" || k === "stage" || k === "banner" || k === "bannerTitle" || k === "bannerAtEnd" || k === "level") continue;
+    if (k === "taskId" || k === "stage" || k === "banner" || k === "bannerTitle" || k === "bannerAtEnd" || k === "level" || k === "maxLen") continue;
     if (v === null || v === undefined) continue;
     if (typeof v === "boolean") {
       parts.push(`${k}=${v ? "true" : "false"}`);
     } else if (typeof v === "string") {
-      parts.push(`${k}=${sanitizeString(v)}`);
+      parts.push(`${k}=${sanitizeString(v, maxLen ?? 200)}`);
     } else {
       // 对象/数组 → JSON.stringify 后再脱敏 base64
       const raw = JSON.stringify(v);
-      parts.push(`${k}=${sanitizeString(raw, 300)}`);
+      parts.push(`${k}=${sanitizeString(raw, maxLen ?? 300)}`);
     }
   }
 

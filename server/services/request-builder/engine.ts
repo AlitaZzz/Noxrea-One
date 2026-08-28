@@ -8,7 +8,7 @@
  * 后端据模型 + 渠道自动转换，前端不感知上游字段。
  */
 
-import { getAllowedFields, resolveFieldMapSpec, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
+import { getAllowedFields, resolveFieldMapSpec, resolveDerivedFields, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { resolveRefSlots, resolveByKind, applyTransform, setNested } from "./resolve";
 import { logEvent } from "@server/core/logger/utils";
 
@@ -65,6 +65,14 @@ export function build(input: BuildInput): Record<string, unknown> {
   // 2. 逐个字段转换
   const result: Record<string, unknown> = {};
 
+  // 2.1 派生字段优先应用（如 Agnes 的 mode 由 refMode 查表派生）
+  const derived = resolveDerivedFields(host, input.modelName, input.capability);
+  for (const [field, dspec] of Object.entries(derived ?? {})) {
+    const src = String(input.params[dspec.source] ?? "");
+    const mapped = dspec.table?.[src] ?? dspec.default;
+    if (mapped !== undefined) setNested(result, field, mapped);
+  }
+
   for (const [key, rawValue] of Object.entries(input.params)) {
     // 内部字段清除
     if (INTERNAL_FIELDS.has(key)) continue;
@@ -79,8 +87,14 @@ export function build(input: BuildInput): Record<string, unknown> {
       // 按参考模式分派映射规格（如 seedance 首帧用 image_urls，首尾帧用 image_with_roles）
       const effectiveSpec = (refMode ? spec.byRefMode?.[refMode] : undefined) ?? spec;
       if (REF_KEYS.has(key)) {
-        const [field, value] = resolveByKind(effectiveSpec, slots);
-        if (value !== undefined) setNested(result, field, value);
+        if (effectiveSpec.pair) {
+          // 首尾帧成对输出：firstFrame → pair[0]、lastFrame → pair[1]
+          if (slots.firstFrame) setNested(result, effectiveSpec.pair[0], slots.firstFrame);
+          if (slots.lastFrame) setNested(result, effectiveSpec.pair[1], slots.lastFrame);
+        } else {
+          const [field, value] = resolveByKind(effectiveSpec, slots);
+          if (value !== undefined) setNested(result, field, value);
+        }
       } else {
         const value = applyTransform(effectiveSpec.transform, rawValue, input.params);
         if (value !== undefined && value !== null) setNested(result, effectiveSpec.field, value);

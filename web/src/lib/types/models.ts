@@ -38,7 +38,7 @@ export interface ParamField {
 
 /** 能力开关声明：模型支持哪些参考/附加能力 + 约束 */
 export interface Capability {
-  /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
+  /** refMode 专用：可选参考方式（text/image/first-last/full），未声明则该模型不支持参考 */
   options?: string[];
   /** 默认值 */
   default?: boolean | string | number;

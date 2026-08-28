@@ -16,6 +16,8 @@
  *   - "lookup"        多字段组合查表（composite + table）
  *   - "map"           单字段查表（table）
  *   - "ratio"         像素尺寸反推比例（如 1024x1024 → 1:1）
+ *   - "stringify"     转字符串（如 number 5 → "5"）
+ *   - "wrap"          数组元素包装为对象（如 ["u1"] → [{ url: "u1" }]，键名由 key 指定）
  */
 
 import type { FieldMapSpec, TransformSpec } from "@server/services/model-config";
@@ -145,6 +147,14 @@ export function applyTransform(
     }
     case "ratio": {
       return ratioFromSize(String(value));
+    }
+    case "stringify": {
+      return value === undefined || value === null ? value : String(value);
+    }
+    case "wrap": {
+      if (!Array.isArray(value)) return value;
+      const k = transform.key ?? "url";
+      return value.map((v) => ({ [k]: v }));
     }
     default:
       return value;

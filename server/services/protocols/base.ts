@@ -89,7 +89,7 @@ export interface ProtocolService {
   extractTaskId?(data: unknown, channelConfig?: Record<string, unknown>, capability?: string): string | null;
 
   /** 构造轮询 URL */
-  buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string): string;
+  buildPollUrl?(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string, model?: string): string;
 
   /** 解析轮询响应 */
   parsePollResponse?(data: unknown): PollResult;

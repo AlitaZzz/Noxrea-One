@@ -38,8 +38,10 @@ function getPollFieldName(
   const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
   const pollPath = (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
   if (!pollPath) return null;
-  const match = pollPath.match(/\{([^}]+)\}/);
-  return match ? match[1] : null;
+  // 跳过 {model} 占位符，取第一个真正的任务 ID 字段占位符（如 {video_id} / {task_id}）
+  const matches = pollPath.match(/\{([^}]+)\}/g);
+  const field = matches?.map((m) => m.slice(1, -1)).find((name) => name !== "model");
+  return field ?? null;
 }
 
 /**
@@ -139,16 +141,19 @@ export class OpenAiImageProtocol implements ProtocolService {
     return null;
   }
 
-  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string): string {
+  buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string, model?: string): string {
     const customPath = getPollPath(channelConfig, capability);
+    // 替换占位符：{model} 走请求模型名，其余（如 {video_id} / {task_id}）走任务 ID
+    const fill = (path: string) =>
+      path.replace(/\{([^}]+)\}/g, (_, name: string) => (name === "model" ? (model ?? "") : upstreamTaskId));
     if (customPath) {
       // 如果已是完整 URL（含协议头），直接替换占位符返回
       if (/^https?:\/\//.test(customPath)) {
-        return customPath.replace(/\{[^}]+\}/, upstreamTaskId);
+        return fill(customPath);
       }
       // 如果包含 {xxx} 占位符，拼接 baseUrl 后替换
       if (/\{[^}]+\}/.test(customPath)) {
-        return `${baseUrl}${customPath.replace(/\{[^}]+\}/, upstreamTaskId)}`;
+        return `${baseUrl}${fill(customPath)}`;
       }
       // 无占位符：追加到路径末尾
       return `${baseUrl}${customPath}/${upstreamTaskId}`;
