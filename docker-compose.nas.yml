@@ -1,5 +1,6 @@
 # NAS 部署用：直接从 GitHub 容器仓库拉取现成镜像（无需在 NAS 上构建）
 # 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（SQLite 数据库 + 上传文件）
+# 配置文件：把 .env 放到 /share/Container/noxreaone/.env，容器内由 entrypoint 从 /data/.env 读取
 # 容器加入已存在的 mihomo_shared_network 共享网络（需先确保该网络已创建）
 services:
   noxrea:
@@ -9,9 +10,6 @@ services:
       - "3000:3000"
     volumes:
       - /share/Container/noxreaone:/data
-    # 环境变量统一从同目录 .env 文件读取（模板见 .env.example）
-    env_file:
-      - .env
     restart: unless-stopped
     networks:
       - mihomo_shared_network
