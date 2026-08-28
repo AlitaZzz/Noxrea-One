@@ -57,6 +57,7 @@ import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/u
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
+import { isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
 import DirectorNode from "@/features/canvas/nodes/DirectorNode";
@@ -68,16 +69,17 @@ import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
+import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
+import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
-import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect,LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
+import { canConnect,LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 
@@ -107,6 +109,19 @@ export default function InfiniteCanvas() {
     () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
     [nodes]
   );
+
+  // 整理需要至少 2 个顶层块（组连同成员算一个块），否则菜单置灰
+  const tidyDisabled = useMemo(() => {
+    const groupIds = new Set(
+      nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
+    );
+    const topLevel = nodes.filter((n) => {
+      if (n.type === NODE_TYPE.GROUP) return true;
+      const gid = (n.data as { groupId?: string } | undefined)?.groupId;
+      return !gid || !groupIds.has(gid);
+    });
+    return topLevel.length < 2;
+  }, [nodes]);
 
 
 
@@ -200,6 +215,9 @@ export default function InfiniteCanvas() {
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
+  // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
+  const { animateTo, cancel: cancelTidy } = useTidyAnimation();
+
   // ---- Change handlers ----
 
   const handleNodesChange = useCallback(
@@ -214,6 +232,12 @@ export default function InfiniteCanvas() {
           c.type === "position" && c.dragging === true,
       );
       const draggedNodeIds = new Set(positionChanges.map((c) => c.id));
+
+      // 整理动画播放期间用户开始拖拽：立即取消动画，
+      // 否则动画每帧写入的位置会与 React Flow 的拖拽状态互相覆盖
+      if (isTidyAnimating() && positionChanges.length > 0) {
+        cancelTidy();
+      }
 
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
@@ -347,7 +371,7 @@ export default function InfiniteCanvas() {
         markDirty();
       }
     },
-    [setNodes, snapToGrid, snapGridSize, snapThreshold],
+    [cancelTidy, setNodes, snapToGrid, snapGridSize, snapThreshold],
   );
 
   const handleEdgesChange = useCallback(
@@ -615,6 +639,45 @@ export default function InfiniteCanvas() {
     s.resetViewport();
     fitView({ duration: 300 });
   }, []);
+
+  /**
+   * 整理画布：把所有节点重排为整齐网格，分组连同成员作为整体块平移。
+   * 排序依据自动选择 —— 有连线走拓扑序（上游在前），否则走读序。
+   */
+  const handleTidyCanvas = useCallback(() => {
+    const store = useCanvasStore.getState();
+    if (store.nodes.length < 2) return;
+
+    const result = computeTidyLayout(store.nodes, store.edges, {
+      mode: "auto",
+      snapSize: store.snapToGrid ? store.snapGridSize : 0,
+    });
+    if (result.movedCount === 0) return;
+
+    // setNodes 不自动压栈，整理前显式压一次，保证整块布局可一步撤销
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+
+    // 节点过多时直接落位，避免每帧 setNodes 掉帧
+    if (result.movedCount > TIDY_MAX_ANIMATED_NODES) {
+      setNodes(
+        store.nodes.map((n) => {
+          const p = result.positions.get(n.id);
+          return p ? { ...n, position: p } : n;
+        }),
+      );
+      markDirtyImmediate();
+      fitView({ duration: 300 });
+      return;
+    }
+
+    animateTo(result.positions, {
+      duration: TIDY_ANIMATION_DURATION,
+      onDone: () => {
+        markDirtyImmediate();
+        fitView({ duration: 300 });
+      },
+    });
+  }, [animateTo, fitView, setNodes]);
 
   // ---- File drop on canvas → create image node ----
 
@@ -898,6 +961,8 @@ export default function InfiniteCanvas() {
         onAddVideo={handleAddVideo}
         onAddAudio={handleAddAudio}
         onAddDirector={handleAddDirector}
+        onTidy={handleTidyCanvas}
+        tidyDisabled={tidyDisabled}
         onResetView={handleResetView}
       />
 

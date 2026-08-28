@@ -103,7 +103,8 @@
       "to50": "Zoom to 50%",
       "to100": "Zoom to 100%"
     },
-    "fit": "Fit to Screen"
+    "fit": "Fit to Screen",
+    "tidy": "Tidy Canvas"
   },
   "node": {
     "add": "Add Node",

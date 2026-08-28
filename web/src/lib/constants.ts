@@ -53,6 +53,14 @@ export const GROUP_NODE_MIN_HEIGHT = 120;
 // 布局节点间距 & 磁吸边对边间距
 export const LAYOUT_GAP = 24;
 
+// 画布整理（tidy）
+/** 单行目标宽度（px），超出即换行 */
+export const TIDY_MAX_ROW_WIDTH = 1600;
+/** 整理位移动画时长（ms） */
+export const TIDY_ANIMATION_DURATION = 300;
+/** 超过该节点数直接落位不播动画，避免每帧 setNodes 掉帧 */
+export const TIDY_MAX_ANIMATED_NODES = 80;
+
 // Audio node (fixed size, ~0.7x of image default, no resize)
 export const AUDIO_NODE_WIDTH = 420;
 export const AUDIO_NODE_HEIGHT = 237;
