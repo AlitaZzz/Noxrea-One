@@ -325,6 +325,13 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       logEvent("taskmgr", { level: "debug", stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
 
       if (!pollResp.ok) {
+        // 永久性 4xx（除 408/425/429 外）：重试无意义，直接失败
+        const permanent = pollResp.status >= 400 && pollResp.status < 500 &&
+          ![408, 425, 429].includes(pollResp.status);
+        if (permanent) {
+          logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll permanent error");
+          return { status: "failed", urls: [], error: `轮询失败（HTTP ${pollResp.status}），upstream_task_id=${upstreamTaskId}` };
+        }
         logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll bad status");
         continue;
       }
