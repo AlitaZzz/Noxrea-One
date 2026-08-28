@@ -4,6 +4,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Docker 构建环境（node:20-slim）无 openssl 二进制，native 会被误检测为
+  // debian-openssl-1.1.x；显式补上运行容器（Debian 12）所需的 3.0.x 引擎
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
