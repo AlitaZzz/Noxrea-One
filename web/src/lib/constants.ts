@@ -51,7 +51,7 @@ export const GROUP_NODE_MIN_WIDTH = 200;
 export const GROUP_NODE_MIN_HEIGHT = 120;
 
 // 布局节点间距 & 磁吸边对边间距
-export const LAYOUT_GAP = 24;
+export const LAYOUT_GAP = 60;
 
 // 画布整理（tidy）
 /** 单行目标宽度（px），超出即换行 */
