@@ -30,6 +30,7 @@ import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
+import { applyRatioToNode } from "../shared/ratio-size";
 
 interface Props { nodeId: string; }
 
@@ -83,7 +84,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const setField = (name: string, value: unknown) => {
     if (name === "quality") setQuality(value as string);
     else if (name === "resolution") setResolution(value as string);
-    else if (name === "ratio") setRatio(value as string);
+    else if (name === "ratio") {
+      setRatio(value as string);
+      // 空节点占位框跟随所选比例（已有内容 / adaptive 跳过）
+      applyRatioToNode(nodeId, value as string);
+    }
     else if (name === "n") setN(value as number);
   };
 
@@ -213,7 +218,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
       if (!isGeneratingBinding(curBinding)) return null;
       // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
     } catch (e: unknown) {
@@ -271,7 +276,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     if (!provider) return;
 
     // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
-    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     retryRef.current = { count: 0, prompt: finalPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, provider };
 

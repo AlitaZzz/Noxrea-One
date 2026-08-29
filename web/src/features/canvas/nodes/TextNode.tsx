@@ -167,7 +167,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
             }
           }}
         />
-        {generating && <GeneratingOverlay absolute rounded />}
+        {generating && <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />}
       </div>
 
       {selected && (

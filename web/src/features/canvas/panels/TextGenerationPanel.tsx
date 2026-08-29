@@ -214,7 +214,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     if (!entry) return;
 
     // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
-    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
     markDirtyImmediate();
 
     try {
@@ -240,7 +240,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       if (!isGeneratingBinding(curBinding)) return;
 
       // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { skipHistory: true });
       await flushAndWait();
     } catch (err: unknown) {
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });

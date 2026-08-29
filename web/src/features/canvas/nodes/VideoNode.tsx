@@ -348,7 +348,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
-          <GeneratingOverlay absolute={false} />
+          <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasVideo ? (
           <div className="w-full h-full relative">
             <video
