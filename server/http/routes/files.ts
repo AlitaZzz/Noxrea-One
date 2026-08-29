@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { getResizedWebP, validateUserFile } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
-import { fail } from "@server/core/response";
+import { failCode } from "@server/core/response";
 import path from "path";
 import { createReadStream } from "fs";
 import { Readable } from "node:stream";
@@ -22,7 +22,7 @@ router.get("/api/files/*", async (c) => {
   // 路径穿越防护
   const pathSegments = filePath.split("/");
   if (pathSegments.some((seg) => seg.includes(".."))) {
-    return fail(403, "Invalid path");
+    return failCode(403, "files.invalid_path");
   }
 
   let resolvedPath = filePath;
@@ -44,7 +44,7 @@ router.get("/api/files/*", async (c) => {
 
   // 路径穿越校验
   if (!validateUserFile(fullPath, localStorage.baseDir)) {
-    return fail(403, "Access denied");
+    return failCode(403, "files.access_denied");
   }
 
   let stat: { size: number; mtimeMs: number } | null;
@@ -54,7 +54,7 @@ router.get("/api/files/*", async (c) => {
     stat = null;
   }
 
-  if (!stat) return fail(404, "File not found");
+  if (!stat) return failCode(404, "files.file_not_found");
 
   // Content-Type
   const ext = path.extname(resolvedPath).toLowerCase();

@@ -9,7 +9,7 @@ import { getUserByUsername, getUserById, updateUser, createUser } from "@server/
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getConfig } from "@server/core/config";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 
 const router = new Hono();
 
@@ -19,7 +19,7 @@ router.post("/api/auth/login", async (c) => {
   // 限流
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   if (!getLoginRateLimiter().check(`login:${ip}`)) {
-    return fail(429, "登录尝试过于频繁，请稍后再试。");
+    return failCode(429, "auth.login_rate_limited");
   }
 
   // 解析
@@ -27,12 +27,12 @@ router.post("/api/auth/login", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = loginRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const { username, password } = parsed.data;
@@ -40,13 +40,13 @@ router.post("/api/auth/login", async (c) => {
   // 查用户
   const user = await getUserByUsername(username);
   if (!user || !user.isActive) {
-    return fail(401, "用户名或密码错误");
+    return failCode(401, "auth.invalid_credentials");
   }
 
   // 验密码
   const valid = await verifyPassword(password, user.hashedPassword);
   if (!valid) {
-    return fail(401, "用户名或密码错误");
+    return failCode(401, "auth.invalid_credentials");
   }
 
   // 签发 JWT
@@ -62,13 +62,13 @@ router.post("/api/auth/register", async (c) => {
   // 注册开关
   const cfg = getConfig();
   if (!cfg.ALLOW_REGISTRATION) {
-    return fail(403, "Registration is disabled");
+    return failCode(403, "auth.registration_disabled");
   }
 
   // 限流
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   if (!getRegisterRateLimiter().check(`register:${ip}`)) {
-    return fail(429, "注册尝试过于频繁，请稍后再试。");
+    return failCode(429, "auth.register_rate_limited");
   }
 
   // 解析
@@ -76,12 +76,12 @@ router.post("/api/auth/register", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = registerRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const { username, password, email } = parsed.data;
@@ -89,7 +89,7 @@ router.post("/api/auth/register", async (c) => {
   // 查重
   const existing = await getUserByUsername(username);
   if (existing) {
-    return fail(409, "用户名已存在");
+    return failCode(409, "auth.username_taken");
   }
 
   // 哈希密码
@@ -111,7 +111,7 @@ router.get("/api/auth/me", async (c) => {
   if ("error" in auth) return auth.error;
 
   const user = await getUserById(auth.user.id);
-  if (!user) return fail(404, "User not found");
+  if (!user) return failCode(404, "auth.user_not_found");
 
   return c.json(ok(user));
 });
@@ -126,12 +126,12 @@ router.put("/api/auth/me", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = updateMeSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const updates: Record<string, unknown> = {};
@@ -143,12 +143,12 @@ router.put("/api/auth/me", async (c) => {
 
   if (parsed.data.password !== undefined) {
     const user = await getUserById(auth.user.id);
-    if (!user) return fail(404, "User not found");
+    if (!user) return failCode(404, "auth.user_not_found");
 
     const oldPassword = parsed.data.oldPassword ?? parsed.data.password;
     const valid = await verifyPassword(oldPassword, user.hashedPassword);
     if (!valid) {
-      return fail(400, "Current password is incorrect");
+      return failCode(400, "auth.current_password_incorrect");
     }
   }
 

@@ -4,6 +4,7 @@
  */
 import { prisma } from "@server/core/database/client";
 import { decodeAccessToken } from "@server/core/auth/jwt";
+import { failCode } from "@server/core/response";
 import type { User } from "@prisma/client";
 
 export interface AuthUser {
@@ -30,51 +31,31 @@ function toAuthUser(user: User): AuthUser {
 
 /**
  * 从 Request 中解析 Bearer token 并注入当前用户。
- * 失败返回 401 + { detail }。
+ * 失败返回 401 + 结构化错误码（前端按码取本地化文案）。
  */
 export async function authenticateRequest(
   request: Request
 ): Promise<{ user: AuthUser } | { error: Response }> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return {
-      error: Response.json(
-        { detail: "未登录" },
-        { status: 401 }
-      ),
-    };
+    return { error: failCode(401, "auth.not_authenticated") };
   }
 
   const token = authHeader.slice(7);
   const payload = await decodeAccessToken(token);
 
   if (!payload) {
-    return {
-      error: Response.json(
-        { detail: "Invalid or expired token" },
-        { status: 401 }
-      ),
-    };
+    return { error: failCode(401, "auth.token_invalid") };
   }
 
   const userId = parseInt(payload.sub, 10);
   if (isNaN(userId)) {
-    return {
-      error: Response.json(
-        { detail: "无效的令牌" },
-        { status: 401 }
-      ),
-    };
+    return { error: failCode(401, "auth.token_invalid") };
   }
 
   const dbUser = await prisma.user.findUnique({ where: { id: userId } });
   if (!dbUser || !dbUser.isActive) {
-    return {
-      error: Response.json(
-        { detail: "用户不存在" },
-        { status: 401 }
-      ),
-    };
+    return { error: failCode(401, "auth.user_inactive") };
   }
 
   return { user: toAuthUser(dbUser) };

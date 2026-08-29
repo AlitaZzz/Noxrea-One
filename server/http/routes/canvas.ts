@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
 import { getProjects, createProject, getProject, updateProject, deleteProject } from "@server/crud/canvas";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
 import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
 import { loadJson } from "@server/services/json-loader";
@@ -26,11 +26,11 @@ router.get("/api/canvas/prompt-template", async (c) => {
   if ("error" in auth) return auth.error;
 
   const type = c.req.query("type");
-  if (!type) return fail(400, "Missing 'type' query parameter");
+  if (!type) return failCode(400, "canvas.missing_type_param");
 
   const templates = loadPromptTemplates();
   const template = templates[type];
-  if (template === undefined) return fail(404, `Prompt template '${type}' not found`);
+  if (template === undefined) return failCode(404, "canvas.template_not_found", { type });
 
   return c.json(ok({ type, template }));
 });
@@ -54,12 +54,12 @@ router.post("/api/canvas/projects", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = canvasCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const project = await createProject(auth.user.id, {
@@ -77,10 +77,10 @@ router.get("/api/canvas/projects/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid project ID");
+  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
 
   const project = await getProject(id, auth.user.id);
-  if (!project) return fail(404, "Project not found");
+  if (!project) return failCode(404, "canvas.project_not_found");
 
   return c.json(ok(project));
 });
@@ -92,29 +92,29 @@ router.put("/api/canvas/projects/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid project ID");
+  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
 
   const existing = await getProject(id, auth.user.id);
-  if (!existing) return fail(404, "Project not found");
+  if (!existing) return failCode(404, "canvas.project_not_found");
 
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = canvasUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const project = await updateProject(id, auth.user.id, {
     name: parsed.data.name,
     canvasData: parsed.data.canvasData,
   });
-  if (!project) return fail(404, "Project not found");
+  if (!project) return failCode(404, "canvas.project_not_found");
 
   // 文件引用重算（diff 增减）
   if (parsed.data.needRefRecalc && parsed.data.canvasData) {
@@ -133,14 +133,14 @@ router.delete("/api/canvas/projects/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid project ID");
+  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
 
   const existing = await getProject(id, auth.user.id);
-  if (!existing) return fail(404, "Project not found");
+  if (!existing) return failCode(404, "canvas.project_not_found");
 
 
   const result = await deleteProject(id, auth.user.id);
-  if (result.count === 0) return fail(404, "Project not found");
+  if (result.count === 0) return failCode(404, "canvas.project_not_found");
 
   const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
   await cleanCanvasRefs(auth.user.id, oldHashes);

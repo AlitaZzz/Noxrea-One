@@ -9,30 +9,33 @@ import { ok } from "@server/core/response";
 
 const router = new Hono();
 
-/** 剥离后端内部字段（字段映射、渠道端点与 endpoint 路由不暴露给前端） */
-function stripInternal(raw: Record<string, Record<string, unknown>>): Record<string, Record<string, unknown>> {
-  const out: Record<string, Record<string, unknown>> = {};
-  for (const [hostKey, models] of Object.entries(raw)) {
-    const modelsOut: Record<string, unknown> = {};
-    for (const [modelKey, caps] of Object.entries(models)) {
-      // 跳过 host 条目顶层的 _endpoints 路由
-      if (modelKey === "_endpoints") continue;
-      const capsOut: Record<string, unknown> = {};
-      for (const [capKey, capVal] of Object.entries(caps as Record<string, unknown>)) {
-        if (!capVal || typeof capVal !== "object") {
-          capsOut[capKey] = capVal;
-          continue;
-        }
-        const rest = Object.fromEntries(
-          Object.entries(capVal).filter(([key]) => key !== "mapping" && key !== "channels"),
-        );
-        capsOut[capKey] = rest;
-      }
-      modelsOut[modelKey] = capsOut;
-    }
-    out[hostKey] = modelsOut;
+/** 后端内部字段名：剥离映射规则、渠道端点与 endpoint 路由，不暴露给前端 */
+const INTERNAL_KEYS = new Set(["mapping", "channels", "_endpoints"]);
+
+/**
+ * 递归剥离后端内部字段。
+ * 递归遍历整棵配置树：对象按 key 过滤，数组逐元素处理。
+ * 相比原来「只剥一层」的写法，无论敏感字段出现在哪一层都会被剥离；
+ * 同时数组保持数组形态（原实现会把数组经 Object.fromEntries 转成索引对象）。
+ */
+export function strip(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(strip);
   }
-  return out;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(record)) {
+      if (INTERNAL_KEYS.has(key)) continue;
+      out[key] = strip(val);
+    }
+    return out;
+  }
+  return value;
+}
+
+function stripInternal(raw: Record<string, Record<string, unknown>>): Record<string, Record<string, unknown>> {
+  return strip(raw) as Record<string, Record<string, unknown>>;
 }
 
 router.get("/api/model-params", (c) => {

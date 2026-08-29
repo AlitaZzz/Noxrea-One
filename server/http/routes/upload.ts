@@ -9,7 +9,8 @@ import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/sto
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
 import { localStorage } from "@server/services/storage/backends/local";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
+import { logger } from "@server/core/logger";
 
 const router = new Hono();
 
@@ -25,15 +26,15 @@ router.post("/api/files/upload", async (c) => {
   try {
     formData = await c.req.formData();
   } catch {
-    return fail(400, "Invalid form data");
+    return failCode(400, "upload.invalid_form_data");
   }
 
   const file = formData.get("file") as File | null;
-  if (!file) return fail(400, "No file provided");
+  if (!file) return failCode(400, "upload.no_file");
 
   // 体积限制
   if (file.size > maxSize) {
-    return fail(413, `File size exceeds limit of ${cfg.MAX_UPLOAD_SIZE_MB}MB`);
+    return failCode(413, "upload.file_too_large", { limit: cfg.MAX_UPLOAD_SIZE_MB });
   }
 
   // 类型限制
@@ -43,7 +44,7 @@ router.post("/api/files/upload", async (c) => {
     "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4", "audio/x-m4a",
   ];
   if (file.type && !allowedTypes.includes(file.type)) {
-    return fail(415, `Unsupported file type: ${file.type}`);
+    return failCode(415, "upload.unsupported_type", { type: file.type });
   }
 
   try {
@@ -81,7 +82,9 @@ router.post("/api/files/upload", async (c) => {
       })
     );
   } catch (err: unknown) {
-    return fail(500, (err as Error).message ?? "Upload failed");
+    // 落盘/持久化的底层异常只进日志，不随响应下发
+    logger.error({ err }, "Upload failed");
+    return failCode(500, "upload.upload_failed");
   }
 });
 
