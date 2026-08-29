@@ -464,5 +464,118 @@
   "director": {
     "sentToCanvas": "Sent to canvas: {{name}}",
     "sendToCanvasFailed": "Failed to send to canvas"
+  },
+  "error": {
+    "unknown": "Unknown error",
+    "network_unreachable": "Cannot connect to the server, please make sure the backend is running",
+    "network_error": "Network error",
+    "parse_failed": "Failed to parse the response",
+    "session_expired": "Session expired",
+    "session_expired_desc": "Please sign in again",
+    "withRequestId": "{{message}} (Error ID: {{id}})",
+    "withStatus": "{{message}} (HTTP {{status}})",
+    "common": {
+      "invalid_json": "Request body is not valid JSON",
+      "invalid_request": "Invalid request parameters, please check and try again",
+      "not_found": "The requested resource does not exist",
+      "internal_error": "Internal server error, please try again later",
+      "empty_response": "Empty response from server",
+      "unexpected_response": "Unexpected response format from server"
+    },
+    "auth": {
+      "not_authenticated": "Not signed in",
+      "token_invalid": "Invalid or expired credentials",
+      "user_inactive": "User not found or disabled",
+      "invalid_credentials": "Incorrect username or password",
+      "registration_disabled": "Registration is currently disabled",
+      "username_taken": "Username is already taken",
+      "login_rate_limited": "Too many login attempts, please try again later",
+      "register_rate_limited": "Too many sign-up attempts, please try again later",
+      "current_password_incorrect": "Current password is incorrect",
+      "user_not_found": "User not found",
+      "login_failed": "Login failed",
+      "register_failed": "Registration failed",
+      "register_missing_credentials": "Account created but no credentials were returned",
+      "username_required": "Please enter your username",
+      "password_required": "Please enter your password",
+      "username_length": "Username must be 3-50 characters",
+      "password_length": "Password must be at least 6 characters"
+    },
+    "model_config": {
+      "invalid_provider_id": "Invalid provider ID",
+      "provider_not_found": "Provider not found",
+      "invalid_model_id": "Invalid model ID",
+      "model_not_found": "Model not found",
+      "api_key_fetch_failed": "Failed to fetch the API key"
+    },
+    "upload": {
+      "invalid_form_data": "Failed to parse the form data",
+      "no_file": "No file selected",
+      "file_too_large": "File size exceeds the {{limit}}MB limit",
+      "unsupported_type": "Unsupported file type: {{type}}",
+      "upload_failed": "Upload failed, please try again later"
+    },
+    "files": {
+      "invalid_path": "Invalid file path",
+      "access_denied": "Access to this file is denied",
+      "file_not_found": "File not found"
+    },
+    "capture_frame": {
+      "video_not_found": "Source video not found",
+      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
+      "capture_failed": "Frame capture failed, please try again later"
+    },
+    "generate": {
+      "body_too_large": "Request body too large",
+      "provider_id_required": "providerId is required",
+      "provider_not_found": "Provider not found",
+      "provider_protocol_missing": "Provider has no protocol configured",
+      "task_not_found": "Task not found",
+      "task_already_finished": "Task already finished",
+      "submit_failed": "Failed to submit the generation task",
+      "no_task_id": "The server did not return a task ID"
+    },
+    "generation": {
+      "timeout": "The provider request timed out, please try again later",
+      "network_error": "Cannot reach the provider, please check your connection",
+      "upstream_http_error": "Provider returned an error, please try again later",
+      "cancelled": "Task cancelled",
+      "missing_provider_id": "The task is missing provider configuration",
+      "provider_not_found": "Provider not found or has been removed",
+      "ssrf_blocked": "The provider address is blocked by security policy",
+      "unknown_capability": "Unknown generation capability"
+    },
+    "agent": {
+      "session_not_found": "Session not found",
+      "session_id_required": "sessionId is required",
+      "upstream_failed": "Model call failed, please try again later",
+      "request_failed": "Request failed"
+    },
+    "canvas": {
+      "missing_type_param": "Missing 'type' query parameter",
+      "template_not_found": "Prompt template {{type}} not found",
+      "invalid_project_id": "Invalid project ID",
+      "project_not_found": "Project not found"
+    },
+    "assets": {
+      "invalid_folder_id": "Invalid folder ID",
+      "folder_not_found": "Folder not found",
+      "invalid_asset_id": "Invalid asset ID",
+      "asset_not_found": "Asset not found"
+    },
+    "models": {
+      "fetch_failed": "Failed to fetch models",
+      "provider_not_found": "Provider not found",
+      "provider_not_found_in_store": "Provider not found in local store",
+      "provider_no_base_url": "This provider has no base URL configured, please update it first",
+      "provider_id_or_base_url_required": "providerId or baseUrl is required",
+      "upstream_unauthorized": "Upstream rejected the credentials ({{host}}), please check the API key",
+      "upstream_forbidden": "Upstream denied access ({{host}}), please check the key permissions",
+      "upstream_not_found": "Upstream models endpoint not found ({{host}}), please check the base URL",
+      "upstream_rate_limited": "Upstream rate limit reached ({{host}}), please retry later",
+      "upstream_server_error": "Upstream service error ({{host}}, HTTP {{status}})",
+      "upstream_fetch_failed": "Upstream returned an error ({{host}}, HTTP {{status}})",
+      "upstream_unreachable": "Cannot reach upstream {{host}}, please check the network or the address"
+    }
   }
 }
