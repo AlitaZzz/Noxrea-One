@@ -273,7 +273,7 @@ export interface DerivedGridLayout {
  * 计算派生节点网格布局。
  *
  * 基准点 = 源节点右侧 + 60px；水平步进 = 单格显示宽度 + 间隙；
- * 垂直步进 = 单格显示高度 + 标题栏(TITLE_H) + 间隙，避免下一行压住 title。
+ * 垂直步进 = 单格显示高度 + 标题栏(NODE_TITLE_HEIGHT) + 间隙，避免下一行压住 title。
  * 宫格切分、全景多视角截图等批量派生节点统一通过此函数计算位置，
  * 保证在画布上排列紧凑整齐且各处逻辑一致。
  *
@@ -294,7 +294,7 @@ export function computeDerivedGrid(
     baseY: sourceNode?.position.y || 0,
     stepX: displayW + DERIVED_CELL_GAP,
     // 纵向需计入标题栏高度，避免下一行节点压住上一行的 title
-    stepY: displayH + TITLE_H + DERIVED_CELL_GAP,
+    stepY: displayH + NODE_TITLE_HEIGHT + DERIVED_CELL_GAP,
     cols,
     displayW,
     displayH,
