@@ -36,6 +36,8 @@ export interface TaskBinding {
   status: TaskStatus;
   /** 异步任务的语义动作 */
   pendingAction?: string;
+  /** 任务开始时间戳（ms），用于生成中遮罩显示实时耗时 */
+  startedAt?: number;
 }
 
 // ============================================================

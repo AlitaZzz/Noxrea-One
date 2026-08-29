@@ -563,7 +563,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             </div>
           </div>
         ) : isGenerating(data.taskBinding) ? (
-          <GeneratingOverlay absolute rounded />
+          <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />
         ) : isMulti && hasImage ? (
             expanded ? (
               // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）

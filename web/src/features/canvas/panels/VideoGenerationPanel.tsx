@@ -37,6 +37,7 @@ import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
 import { writeOrderPref } from "../shared/ref-order";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
+import { applyRatioToNode } from "../shared/ratio-size";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -99,7 +100,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const fieldValues: Record<string, unknown> = { resolution, ratio, seconds, generateAudio, n };
   const setField = (name: string, value: unknown) => {
     if (name === "resolution") setResolution(value as string);
-    else if (name === "ratio") setRatio(value as string);
+    else if (name === "ratio") {
+      setRatio(value as string);
+      // 空节点占位框跟随所选比例（已有内容 / adaptive 跳过）
+      applyRatioToNode(nodeId, value as string);
+    }
     else if (name === "seconds") setSeconds(value as number);
     else if (name === "generateAudio") setGenerateAudio(value as boolean);
     else if (name === "n") setN(value as number);
@@ -201,7 +206,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
       if (!isGeneratingBinding(curBinding)) return null;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending" } }, undefined, { skipHistory: true });
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { skipHistory: true });
       await flushAndWait();
       return null;
     } catch (e: unknown) {
@@ -258,7 +263,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     if (!provider) return;
 
     setError("");
-    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing" } }, undefined, { forceHistory: true });
+    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
     markDirtyImmediate();
     setElapsed(0);
     const isTextToVideo = refMode === "text";
