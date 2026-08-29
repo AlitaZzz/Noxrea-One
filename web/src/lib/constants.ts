@@ -26,18 +26,25 @@ export const MAX_ZOOM = 5;
 export const HISTORY_MAX_SIZE = 50;
 
 // Node sizing
+/** 媒体节点默认宽度（px），同时是 16:9 内容区口径的基准长边 */
 export const DEFAULT_NODE_WIDTH = 600;
-export const DEFAULT_NODE_HEIGHT = 338; // 16:9
-
+/** 媒体节点默认内容区高度（px）：16:9（600 × 9/16 ≈ 338），不含标题栏。
+ *  仅作媒体自然尺寸的兜底值（元数据加载失败时），不直接用作节点框高度 */
+export const DEFAULT_NODE_CONTENT_HEIGHT = Math.round((DEFAULT_NODE_WIDTH * 9) / 16);
 // 节点标题栏统一高度（px），所有节点共用，避免内联写死
 export const NODE_TITLE_HEIGHT = 28;
+/** 媒体节点默认整体高度（px）：内容区 + 标题栏，与 computeNodeSize 口径一致。
+ *  创建空节点 / 清空回退 / 面板选比例 / 生成落地四处统一，避免节点尺寸跳变 */
+export const DEFAULT_NODE_HEIGHT = DEFAULT_NODE_CONTENT_HEIGHT + NODE_TITLE_HEIGHT;
 // 输入/输出连接点垂直原点：去掉标题栏高度后内容区正中
 // 内容区中心相对节点顶部 = 总高/2 + 标题栏/2，故 top = 50% + NODE_TITLE_HEIGHT/2
 export const NODE_HANDLE_TOP = `calc(50% + ${NODE_TITLE_HEIGHT / 2}px)`;
+
+// 文本节点：无媒体内容区压缩问题，保持 16:9 内容区口径（不含标题栏补偿），不跟随媒体节点
 export const TEXT_NODE_DEFAULT_WIDTH = DEFAULT_NODE_WIDTH;
-export const TEXT_NODE_DEFAULT_HEIGHT = DEFAULT_NODE_HEIGHT;
+export const TEXT_NODE_DEFAULT_HEIGHT = DEFAULT_NODE_CONTENT_HEIGHT;
 export const TEXT_NODE_MIN_WIDTH = DEFAULT_NODE_WIDTH;
-export const TEXT_NODE_MIN_HEIGHT = DEFAULT_NODE_HEIGHT;
+export const TEXT_NODE_MIN_HEIGHT = DEFAULT_NODE_CONTENT_HEIGHT;
 
 export const DIRECTOR_NODE_DEFAULT_WIDTH = 350;
 export const DIRECTOR_NODE_DEFAULT_HEIGHT = 400;

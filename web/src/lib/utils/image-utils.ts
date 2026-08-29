@@ -9,7 +9,7 @@ import { createEdge,createImageNode } from "@/features/canvas/node-defaults";
 import type { AnyEdge } from "@/features/canvas/types";
 import type { AnyNode, ImageNode } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
-import { NODE_DISPLAY_MAX } from "@/lib/constants";
+import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -35,9 +35,6 @@ export function computeThumbScale(
   };
 }
 
-/** 节点头部标题栏高度（px），需与 ImageNode title bar 的实际高度一致 */
-const TITLE_H = 28;
-
 // ── 派生节点位置常量 ──
 // 从已有节点加工派生出的新节点（裁剪/标注/截图/宫格切分/全景多视角等）
 // 统一放在源节点右侧，共用以下基准间隙与相邻间隙，保证各处逻辑一致。
@@ -55,7 +52,7 @@ const DERIVED_CELL_GAP = 12;
  */
 export function computeNodeSize(naturalW: number, naturalH: number): { width: number; height: number } {
   const { displayW, displayH } = computeThumbScale(naturalW, naturalH);
-  return { width: displayW, height: displayH + TITLE_H };
+  return { width: displayW, height: displayH + NODE_TITLE_HEIGHT };
 }
 
 /**

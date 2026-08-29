@@ -8,7 +8,7 @@
 import type { AssetItem } from "@/features/assets/types";
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import type { AnyNode } from "@/features/canvas/types";
-import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { DEFAULT_NODE_CONTENT_HEIGHT, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
 /** 位置计算函数签名（由调用方从 store 注入；center 为锚点中心点，必填） */
@@ -29,7 +29,7 @@ export function createAssetNode(
   findFreePosition: FindFreePosition,
 ): AnyNode | null {
   const nw = asset.width || DEFAULT_NODE_WIDTH;
-  const nh = asset.height || DEFAULT_NODE_HEIGHT;
+  const nh = asset.height || DEFAULT_NODE_CONTENT_HEIGHT;
   const { width: dw, height: dh } = computeNodeSize(nw, nh);
   const pos = findFreePosition({ width: dw, height: dh }, center);
 
