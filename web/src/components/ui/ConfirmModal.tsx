@@ -17,9 +17,11 @@ interface Props {
   cancelText?: string;
   onOk: () => void;
   onCancel: () => void;
+  /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传更高值（如 1050）。 */
+  zIndex?: number;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, onOk, onCancel }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, onOk, onCancel, zIndex }: Props) {
   const { i18n } = useTranslation();
   const lang = i18n.language;
 
@@ -28,6 +30,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       title={title}
       open={open}
       onCancel={onCancel}
+      zIndex={zIndex}
       width={380}
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "none" },

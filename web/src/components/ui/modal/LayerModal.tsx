@@ -10,7 +10,11 @@ import { type ComponentProps } from "react";
 
 import { LayerContext, useLayerParent } from "./layer-context";
 
-type LayerModalProps = Omit<ComponentProps<typeof Modal>, "zIndex" | "getContainer">;
+type LayerModalProps = Omit<ComponentProps<typeof Modal>, "getContainer" | "zIndex"> & {
+  /** 显式指定 zIndex（默认由 depth 推导）。用于 Drawer 等不参与 layer 系统的容器内，
+   *  需要压过容器自身 z-index 的场景（如 Drawer 默认 1000，确认框传 1050）。 */
+  zIndex?: number;
+};
 
 /**
  * Drop-in replacement for antd Modal that participates in the layer system.

@@ -541,6 +541,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     </Drawer>
       <ConfirmModal
         open={!!deleteProviderId}
+        zIndex={1050}
         title={t("modelConfig.deleteProvider")}
         content={providers.find(c => c.id === deleteProviderId)?.name || ""}
         onOk={() => { if (deleteProviderId) deleteProvider(deleteProviderId); setProviderId(null); setDeleteProviderId(null); }}
