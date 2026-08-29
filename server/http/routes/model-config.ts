@@ -11,7 +11,7 @@ import {
   addModel, batchSetModels, deleteModel, updateModelCapability,
 } from "@server/crud/model-config";
 import { loadPresets } from "@server/services/model-config";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 
 const router = new Hono();
 
@@ -41,12 +41,12 @@ router.post("/api/model-config/providers", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = providerCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const provider = await createProvider({
@@ -74,10 +74,10 @@ router.get("/api/model-config/providers/:id", async (c) => {
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid provider ID");
+  if (isNaN(id)) return failCode(400, "model_config.invalid_provider_id");
 
   const provider = await getProvider(id, auth.user.id);
-  if (!provider) return fail(404, "Provider not found");
+  if (!provider) return failCode(404, "model_config.provider_not_found");
 
   return c.json(
     ok({
@@ -96,10 +96,10 @@ router.get("/api/model-config/providers/:id/apikey", async (c) => {
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid provider ID");
+  if (isNaN(id)) return failCode(400, "model_config.invalid_provider_id");
 
   const provider = await getProvider(id, auth.user.id);
-  if (!provider) return fail(404, "Provider not found");
+  if (!provider) return failCode(404, "model_config.provider_not_found");
 
   return c.json(ok({ apiKey: provider.apiKey }));
 });
@@ -112,21 +112,21 @@ router.put("/api/model-config/providers/:id", async (c) => {
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid provider ID");
+  if (isNaN(id)) return failCode(400, "model_config.invalid_provider_id");
 
   const existing = await getProvider(id, auth.user.id);
-  if (!existing) return fail(404, "Provider not found");
+  if (!existing) return failCode(404, "model_config.provider_not_found");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = providerUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const provider = await updateProvider(id, auth.user.id, {
@@ -135,7 +135,7 @@ router.put("/api/model-config/providers/:id", async (c) => {
     apiKey: parsed.data.apiKey,
     protocol: parsed.data.protocol,
   });
-  if (!provider) return fail(404, "Provider not found");
+  if (!provider) return failCode(404, "model_config.provider_not_found");
 
   return c.json(
     ok({
@@ -154,10 +154,10 @@ router.delete("/api/model-config/providers/:id", async (c) => {
 
   const rawId = c.req.param("id");
   const id = parseInt(rawId, 10);
-  if (isNaN(id)) return fail(400, "Invalid provider ID");
+  if (isNaN(id)) return failCode(400, "model_config.invalid_provider_id");
 
   const result = await deleteProvider(id, auth.user.id);
-  if (result.count === 0) return fail(404, "Provider not found");
+  if (result.count === 0) return failCode(404, "model_config.provider_not_found");
   return c.json(ok(null, "Provider deleted"));
 });
 
@@ -174,25 +174,25 @@ router.post("/api/model-config/providers/:id/models", async (c) => {
   if ("error" in auth) return auth.error;
 
   const providerId = parseInt(c.req.param("id"), 10);
-  if (isNaN(providerId)) return fail(400, "Invalid provider ID");
+  if (isNaN(providerId)) return failCode(400, "model_config.invalid_provider_id");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = modelInfoCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const model = await addModel(providerId, auth.user.id, {
     name: parsed.data.name,
     capabilities: parsed.data.capabilities,
   });
-  if (!model) return fail(404, "Provider not found");
+  if (!model) return failCode(404, "model_config.provider_not_found");
 
   return c.json(ok(model));
 });
@@ -204,22 +204,22 @@ router.post("/api/model-config/providers/:id/models/set", async (c) => {
   if ("error" in auth) return auth.error;
 
   const providerId = parseInt(c.req.param("id"), 10);
-  if (isNaN(providerId)) return fail(400, "Invalid provider ID");
+  if (isNaN(providerId)) return failCode(400, "model_config.invalid_provider_id");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = batchSetModelsSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, `Schema validation failed: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+    return failCode(422, "common.invalid_request");
   }
 
   const models = await batchSetModels(providerId, auth.user.id, parsed.data.models);
-  if (!models) return fail(404, "Provider not found");
+  if (!models) return failCode(404, "model_config.provider_not_found");
   return c.json(ok(models));
 });
 
@@ -230,10 +230,10 @@ router.delete("/api/model-config/providers/:id/models/:mid", async (c) => {
   if ("error" in auth) return auth.error;
 
   const modelId = parseInt(c.req.param("mid"), 10);
-  if (isNaN(modelId)) return fail(400, "Invalid model ID");
+  if (isNaN(modelId)) return failCode(400, "model_config.invalid_model_id");
 
   const result = await deleteModel(modelId, auth.user.id);
-  if (result.count === 0) return fail(404, "Model not found");
+  if (result.count === 0) return failCode(404, "model_config.model_not_found");
   return c.json(ok(null, "Model deleted"));
 });
 
@@ -244,22 +244,22 @@ router.put("/api/model-config/providers/:id/models/:mid/capability", async (c) =
   if ("error" in auth) return auth.error;
 
   const modelId = parseInt(c.req.param("mid"), 10);
-  if (isNaN(modelId)) return fail(400, "Invalid model ID");
+  if (isNaN(modelId)) return failCode(400, "model_config.invalid_model_id");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = updateCapabilitySchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const model = await updateModelCapability(modelId, auth.user.id, parsed.data.capabilities);
-  if (!model) return fail(404, "Model not found");
+  if (!model) return failCode(404, "model_config.model_not_found");
   return c.json(ok(model));
 });
 

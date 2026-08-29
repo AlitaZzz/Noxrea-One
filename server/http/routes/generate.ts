@@ -11,7 +11,7 @@ import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedH
 import { taskWatcher } from "@server/core/events/task-watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 import { buildFileUrl } from "@server/services/storage/service";
 
 const router = new Hono();
@@ -25,19 +25,19 @@ router.post("/api/generate/task", async (c) => {
   const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
   const maxBodySize = 1024 * 1024; // 1MB
   if (contentLength > maxBodySize) {
-    return fail(413, "Request body too large");
+    return failCode(413, "generate.body_too_large");
   }
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = taskCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const data = parsed.data;
@@ -56,14 +56,14 @@ router.post("/api/generate/task", async (c) => {
   const model = data.model ?? "";
 
   if (!data.providerId) {
-    return fail(400, "providerId is required");
+    return failCode(400, "generate.provider_id_required");
   }
   const provider = await getProvider(data.providerId, auth.user.id);
   if (!provider) {
-    return fail(400, "Provider not found");
+    return failCode(400, "generate.provider_not_found");
   }
   if (!provider.protocol) {
-    return fail(400, "Provider 未配置 protocol");
+    return failCode(400, "generate.provider_protocol_missing");
   }
   const providerProtocol = provider.protocol;
 
@@ -142,8 +142,8 @@ router.get("/api/generate/task/:id", async (c) => {
 
   const taskId = c.req.param("id");
   const task = await getTask(taskId);
-  if (!task) return fail(404, "Task not found");
-  if (task.userId !== auth.user.id) return fail(403, "Access denied");
+  if (!task) return failCode(404, "generate.task_not_found");
+  if (task.userId !== auth.user.id) return failCode(403, "common.forbidden");
 
   return c.json(ok(task));
 });
@@ -157,11 +157,11 @@ router.on(["POST", "DELETE"], "/api/generate/task/:id/cancel", async (c) => {
   const taskId = c.req.param("id");
 
   const task = await getTask(taskId);
-  if (!task) return fail(404, "Task not found");
-  if (task.userId !== auth.user.id) return fail(403, "Access denied");
+  if (!task) return failCode(404, "generate.task_not_found");
+  if (task.userId !== auth.user.id) return failCode(403, "common.forbidden");
 
   if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-    return fail(400, "Task already finished");
+    return failCode(400, "generate.task_already_finished");
   }
 
   await cancelTask(taskId);
@@ -178,8 +178,8 @@ router.get("/api/generate/task/:id/stream", async (c) => {
 
   // 校验任务存在且归属
   const task = await getTask(taskId);
-  if (!task) return fail(404, "Task not found");
-  if (task.userId !== auth.user.id) return fail(403, "Access denied");
+  if (!task) return failCode(404, "generate.task_not_found");
+  if (task.userId !== auth.user.id) return failCode(403, "common.forbidden");
 
   // 如果已经是终态，直接返回
   if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
@@ -192,6 +192,7 @@ router.get("/api/generate/task/:id/stream", async (c) => {
       resultUrls: resultUrls?.map(buildFileUrl),
       resultText: task.resultText,
       error: task.error,
+      errorCode: task.errorCode,
       prompt: task.prompt,
       config: task.config || undefined,
     });
@@ -256,6 +257,7 @@ router.get("/api/generate/task/:id/stream", async (c) => {
               resultUrls: rawUrls?.map(buildFileUrl),
               resultText: result.data.resultText,
               error: result.data.error,
+              errorCode: result.data.errorCode,
               prompt: result.data.prompt,
               config: result.data.config,
             };

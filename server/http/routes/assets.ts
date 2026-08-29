@@ -26,7 +26,7 @@ import {
   updateAssetsBatch,
   listSourceUrls,
 } from "@server/crud/asset";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 import {
   addAssetRef,
   removeAssetRef,
@@ -58,12 +58,12 @@ router.post("/api/assets/folders", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = folderCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const folder = await createFolder(auth.user.id, {
@@ -82,10 +82,10 @@ router.get("/api/assets/folders/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid folder ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_folder_id");
 
   const folder = await getFolder(id);
-  if (!folder) return fail(404, "Folder not found");
+  if (!folder) return failCode(404, "assets.folder_not_found");
 
   return c.json(ok(folder));
 });
@@ -97,18 +97,18 @@ router.put("/api/assets/folders/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid folder ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_folder_id");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = folderUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const folder = await updateFolder(id, parsed.data.name);
@@ -122,7 +122,7 @@ router.delete("/api/assets/folders/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid folder ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_folder_id");
 
   await deleteFolder(id);
   return c.json(ok(null, "Folder deleted"));
@@ -176,12 +176,12 @@ router.post("/api/assets/items", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = assetCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const item = await createAsset({
@@ -212,10 +212,10 @@ router.get("/api/assets/items/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid asset ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_asset_id");
 
   const item = await getAsset(id);
-  if (!item) return fail(404, "Asset not found");
+  if (!item) return failCode(404, "assets.asset_not_found");
 
   return c.json(ok(item));
 });
@@ -231,12 +231,12 @@ router.put("/api/assets/items/batch", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = assetBatchUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const result = await updateAssetsBatch(parsed.data.ids, parsed.data.updates);
@@ -250,13 +250,13 @@ router.put("/api/assets/items/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid asset ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_asset_id");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const item = await updateAsset(id, body as Record<string, unknown>);
@@ -270,11 +270,11 @@ router.delete("/api/assets/items/:id", async (c) => {
   if ("error" in auth) return auth.error;
 
   const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return fail(400, "Invalid asset ID");
+  if (isNaN(id)) return failCode(400, "assets.invalid_asset_id");
 
   // 查询资产，提取 hash
   const item = await getAsset(id);
-  if (!item) return fail(404, "Asset not found");
+  if (!item) return failCode(404, "assets.asset_not_found");
 
   const hash = item.extraData
     ? extractHashFromAsset(item.extraData as Record<string, unknown>)
@@ -302,12 +302,12 @@ router.post("/api/assets/items/batch", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = assetBatchCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
 
   const items = parsed.data.map((item) => ({

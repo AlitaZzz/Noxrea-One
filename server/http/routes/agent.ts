@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { fail } from "@server/core/response";
+import { failCode } from "@server/core/response";
 import { createSseResponse } from "@server/http/sse";
 import { listSkills, getSkill } from "@server/services/agent/skills/loader";
 import { agentToolRegistry } from "@server/services/agent/tools/registry";
@@ -48,7 +48,7 @@ router.post("/api/agent/sessions", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = createSessionSchema.parse(body);
   const session = await createSession({
@@ -77,7 +77,7 @@ router.get("/api/agent/sessions/:id", async (c) => {
 
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
   return c.json(session);
 });
 
@@ -93,7 +93,7 @@ router.patch("/api/agent/sessions/:id", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = renameSchema.parse(body);
   await renameSession(id, userId, parsed.title);
@@ -117,7 +117,7 @@ router.get("/api/agent/sessions/:id/messages", async (c) => {
 
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
   const messages = await listMessages(id);
   return c.json(messages);
 });
@@ -133,13 +133,13 @@ router.post("/api/agent/sessions/:id/skill", async (c) => {
 
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = setSkillSchema.parse(body);
   await setSkill(id, userId, parsed.skillName);
@@ -153,7 +153,7 @@ router.delete("/api/agent/sessions/:id/skill", async (c) => {
 
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
 
   await clearSkill(id, userId);
   return c.json({ ok: true });
@@ -181,13 +181,13 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
 
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = sendMessageSchema.parse(body);
   const history: HistoryMessage[] = await listMessages(id);
@@ -213,7 +213,11 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
     model: model ?? undefined,
     userId,
   });
-  if (!reply.ok) return fail(502, reply.error);
+  if (!reply.ok) {
+    // 上游模型返回的原始错误只进日志，不随响应下发
+    logEvent("agent.reply", { level: "warn", stage: "failed", sessionId: id, error: reply.error });
+    return failCode(502, "agent.upstream_failed");
+  }
 
   await createMessage({ sessionId: id, role: "user", content: parsed.content, refImages: parsed.refImages });
   const assistant = await createMessage({ sessionId: id, role: "assistant", content: reply.text });
@@ -236,10 +240,10 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   const userId = auth.user.id;
 
   const sessionId = Number(c.req.param("id"));
-  if (!sessionId || Number.isNaN(sessionId)) return fail(400, "sessionId required");
+  if (!sessionId || Number.isNaN(sessionId)) return failCode(400, "agent.session_id_required");
 
   const session = await getSession(sessionId, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
 
   const providerId = c.req.query("providerId");
   const model = c.req.query("model");
@@ -248,7 +252,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   try {
     payload = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = streamSchema.parse(payload);
 
@@ -407,16 +411,16 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   const userId = auth.user.id;
 
   const sessionId = Number(c.req.param("id"));
-  if (!sessionId || Number.isNaN(sessionId)) return fail(400, "sessionId required");
+  if (!sessionId || Number.isNaN(sessionId)) return failCode(400, "agent.session_id_required");
 
   const session = await getSession(sessionId, userId);
-  if (!session) return fail(404, "session not found");
+  if (!session) return failCode(404, "agent.session_not_found");
 
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
   const parsed = toolResultSchema.parse(body);
 

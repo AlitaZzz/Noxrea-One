@@ -10,7 +10,8 @@ import { localStorage } from "@server/services/storage/backends/local";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
-import { ok, fail } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
+import { logger } from "@server/core/logger";
 import path from "path";
 import fs from "fs/promises";
 
@@ -30,12 +31,12 @@ router.post("/api/files/capture-frame", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const parsed = captureFrameSchema.safeParse(body);
   if (!parsed.success) {
-    return fail(422, parsed.error.issues.map((i) => i.message).join("; "));
+    return failCode(422, "common.invalid_request");
   }
   const { video_key, time } = parsed.data;
 
@@ -45,13 +46,13 @@ router.post("/api/files/capture-frame", async (c) => {
   const baseDir = path.resolve(localStorage.baseDir);
   const rel = path.relative(baseDir, videoPath);
   if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
-    return fail(403, "Invalid path");
+    return failCode(403, "files.invalid_path");
   }
 
   try {
     await fs.access(videoPath);
   } catch {
-    return fail(404, "Video file not found");
+    return failCode(404, "capture_frame.video_not_found");
   }
 
   const tmpFramePath = path.resolve(localStorage.baseDir, `_tmp_frame_${Date.now()}.jpg`);
@@ -87,10 +88,12 @@ router.post("/api/files/capture-frame", async (c) => {
     const code = typeof err === "object" && err !== null && "code" in err
       ? err.code
       : undefined;
+    // ffmpeg 缺失或抽帧失败的底层信息只进日志，运维细节不下发给客户端
+    logger.error({ err, videoKey: video_key }, "Frame capture failed");
     if (code === "ENOENT" || message.includes("ENOENT")) {
-      return fail(500, "ffmpeg not found - please install ffmpeg and set FFMPEG_PATH in .env");
+      return failCode(500, "capture_frame.ffmpeg_missing");
     }
-    return fail(500, message);
+    return failCode(500, "capture_frame.capture_failed");
   } finally {
     // 清理临时文件
     await fs.unlink(tmpFramePath).catch(() => undefined);

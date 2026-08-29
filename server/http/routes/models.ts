@@ -7,9 +7,45 @@ import { authenticateRequest } from "@server/core/auth/middleware";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { getProvider } from "@server/crud/model-config";
-import { ok, fail } from "@server/core/response";
+import { logger } from "@server/core/logger";
+import { ok, failCode } from "@server/core/response";
+import type { ErrorCode } from "@server/core/errors/codes";
 
 const router = new Hono();
+
+/**
+ * 将上游失败归一化为机器可读错误码。
+ * 只回传错误码与插值参数，不把英文原始错误串下发前端。
+ */
+function classifyUpstreamFailure(params: {
+  status?: number;
+  host?: string;
+}): { error: ErrorCode; ctx: Record<string, string | number> } {
+  const { status, host } = params;
+  const ctx: Record<string, string | number> = {};
+  if (host) ctx.host = host;
+
+  // 无 HTTP 状态码即请求未抵达上游（DNS 失败、连接被拒、超时、TLS 错误等）
+  if (status === undefined) {
+    return { error: "models.upstream_unreachable", ctx };
+  }
+
+  ctx.status = status;
+  switch (status) {
+    case 401:
+      return { error: "models.upstream_unauthorized", ctx };
+    case 403:
+      return { error: "models.upstream_forbidden", ctx };
+    case 404:
+      return { error: "models.upstream_not_found", ctx };
+    case 429:
+      return { error: "models.upstream_rate_limited", ctx };
+  }
+  if (status >= 500) {
+    return { error: "models.upstream_server_error", ctx };
+  }
+  return { error: "models.upstream_fetch_failed", ctx };
+}
 
 /** 去掉末尾斜杠 */
 function stripTrailingSlash(url: string): string {
@@ -44,7 +80,7 @@ router.post("/api/models/list", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return fail(400, "Invalid JSON body");
+    return failCode(400, "common.invalid_json");
   }
 
   const { providerId, baseUrl: rawBaseUrl, apiKey: rawApiKey } = body as {
@@ -59,7 +95,7 @@ router.post("/api/models/list", async (c) => {
 
   if (providerId) {
     const provider = await getProvider(Number(providerId), auth.user.id);
-    if (!provider) return fail(404, "Provider not found");
+    if (!provider) return failCode(404, "models.provider_not_found");
     baseUrl = provider.baseUrl;
     apiKey = provider.apiKey || undefined;
     protocol = provider.protocol;
@@ -67,7 +103,7 @@ router.post("/api/models/list", async (c) => {
     baseUrl = rawBaseUrl;
     apiKey = rawApiKey;
   } else {
-    return fail(400, "providerId or baseUrl is required");
+    return failCode(400, "models.provider_id_or_base_url_required");
   }
 
   const { baseUrl: normalizedBase, paths } = getModelPaths(protocol, baseUrl);
@@ -81,12 +117,11 @@ router.post("/api/models/list", async (c) => {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const tried: string[] = [];
-    let lastError: string | null = null;
+    let lastStatus: number | undefined;
+    let lastUpstreamError: string | null = null;
 
     for (const p of paths) {
       const fullUrl = normalizedBase + p;
-      tried.push(fullUrl);
       try {
         const response = await fetchWithTimeout(fullUrl, {
           method: "GET",
@@ -103,16 +138,29 @@ router.post("/api/models/list", async (c) => {
           return c.json(ok(models));
         }
         const errBody = await response.text().catch(() => "");
-        lastError = `${response.status}: ${errBody}`;
+        lastStatus = response.status;
+        // 截断上游响应体：仅用于日志，避免网关 HTML 错误页刷屏
+        lastUpstreamError = `${response.status}: ${errBody.slice(0, 500)}`;
       } catch (err: unknown) {
-        lastError = err instanceof Error ? err.message : "Request failed";
+        lastStatus = undefined;
+        lastUpstreamError = err instanceof Error ? err.message : String(err);
       }
     }
 
-    return fail(502, `Failed to fetch models from upstream. Tried: ${tried.join(", ")}. Last error: ${lastError}`);
+    // 上游原始错误只落服务端日志，不随响应下发
+    logger.warn(
+      { host: hostname, baseUrl: normalizedBase, status: lastStatus, upstreamError: lastUpstreamError },
+      "Failed to fetch models from upstream"
+    );
+
+    const { error, ctx } = classifyUpstreamFailure({
+      status: lastStatus,
+      host: hostname,
+    });
+    return failCode(502, error, ctx);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return fail(500, `Failed to fetch models: ${message}`);
+    logger.warn({ err, baseUrl: normalizedBase, providerId }, "Failed to fetch models");
+    return failCode(500, "models.fetch_failed");
   }
 });
 
