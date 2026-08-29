@@ -9,6 +9,7 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { getConfig } from "../../../core/config";
 import { resolveFromRoot } from "../../../core/paths";
 
 export interface SkillMeta {
@@ -31,7 +32,7 @@ export interface Skill {
   content: string;
 }
 
-const SKILLS_DIR = resolveFromRoot("server/resources/skills");
+const SKILLS_DIR = resolveFromRoot(path.join(getConfig().RESOURCES_DIR, "skills"));
 
 let cache: Skill[] | null = null;
 

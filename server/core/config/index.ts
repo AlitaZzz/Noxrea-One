@@ -49,6 +49,8 @@ const configSchema = z.object({
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(30),
   // 上传文件根目录（相对项目根，或绝对路径）
   UPLOAD_DIR: z.string().default("uploads"),
+  /** 资源目录（JSON 配置与技能文件根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
+  RESOURCES_DIR: z.string().default("server/resources"),
 
   // HTTP timeouts - scene-based（单位：秒）
   HTTP_TIMEOUT_DL: z.coerce.number().positive().default(45),

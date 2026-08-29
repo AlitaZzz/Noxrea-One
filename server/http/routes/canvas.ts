@@ -15,7 +15,7 @@ const router = new Hono();
 
 // 提示词模板库（按 type 分桶，位于 server/resources/prompt-template.json），支持热更新
 function loadPromptTemplates(): Record<string, string> {
-  return loadJson<Record<string, string>>("server/resources/prompt-template.json");
+  return loadJson<Record<string, string>>("prompt-template.json");
 }
 
 // GET /api/canvas/prompt-template?type=reverse
