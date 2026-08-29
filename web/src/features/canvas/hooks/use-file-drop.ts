@@ -10,14 +10,13 @@ import { type DragEvent, useCallback, useEffect, useRef, useState } from "react"
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, LAYOUT_GAP } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
 
 const GRID_COLS = 4;
-const GRID_GAP = 30;
 
 /** 参考区缩略图拖拽的自定义标记：携带此类标记的拖拽一律不视为文件上传 */
 const REF_DRAG_TYPES = ["application/x-ref-image", "application/x-ref-video", "application/x-ref-audio"];
@@ -146,7 +145,12 @@ export function useFileDrop(
       // 1) 先从本地 blob URL 预加载图片/视频尺寸，再按正确尺寸创建节点
       const placeholders: { node: AudioNode | ImageNode | VideoNode; file: File; idx: number }[] = [];
       let ignoredCount = 0; // 不被支持的文件数量，用于后续提示
-      let mediaIdx = 0;
+      // 网格落点游标：按每个文件的实际显示尺寸逐行累加（行满 GRID_COLS 换行），
+      // 任意比例混合拖入时间距恒为 LAYOUT_GAP 且互不遮挡
+      let cursorX = pos.x;
+      let cursorY = pos.y;
+      let rowMaxH = 0;
+      let colInRow = 0;
       for (let idx = 0; idx < files.length; idx++) {
         const file = files[idx];
         const isImage = file.type.startsWith("image/");
@@ -157,27 +161,45 @@ export function useFileDrop(
           continue;
         }
 
-        const col = mediaIdx % GRID_COLS;
-        const row = Math.floor(mediaIdx / GRID_COLS);
-        const px = pos.x + col * (DEFAULT_NODE_WIDTH + GRID_GAP);
-        const py = pos.y + row * (DEFAULT_NODE_HEIGHT + 24 + GRID_GAP);
-        mediaIdx++;
-
+        // 1) 先取真实分辨率并算出节点显示尺寸（音频用固定默认尺寸）
+        let sized: { previewUrl: string; naturalW: number; naturalH: number; width: number; height: number } | null = null;
+        let nodeW = DEFAULT_NODE_WIDTH;
+        let nodeH = AUDIO_NODE_HEIGHT;
         if (isImage || isVideo) {
           const previewUrl = URL.createObjectURL(file);
           const dims = await loadMediaDimensions(previewUrl, isVideo);
           const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
           const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
           const { width, height } = computeNodeSize(nw, nh);
+          sized = { previewUrl, naturalW: nw, naturalH: nh, width, height };
+          nodeW = width;
+          nodeH = height;
+        }
 
+        // 2) 行满换行：y 前进一行（行高 = 该行最大节点高度 + 间距）
+        if (colInRow >= GRID_COLS) {
+          cursorX = pos.x;
+          cursorY += rowMaxH + LAYOUT_GAP;
+          rowMaxH = 0;
+          colInRow = 0;
+        }
+
+        // 3) 落点 = 当前游标；游标按实际尺寸前进
+        const px = cursorX;
+        const py = cursorY;
+        cursorX += nodeW + LAYOUT_GAP;
+        rowMaxH = Math.max(rowMaxH, nodeH);
+        colInRow++;
+
+        if (sized) {
           const node = isImage ? createImageNode({ x: px, y: py }, "") : createVideoNode({ x: px, y: py }, "");
           node.data.label = file.name;
           node.data.alt = file.name;
-          node.data.naturalWidth = nw;
-          node.data.naturalHeight = nh;
+          node.data.naturalWidth = sized.naturalW;
+          node.data.naturalHeight = sized.naturalH;
           node.data.source = "upload";
-          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl };
-          node.style = { width, height };
+          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: sized.previewUrl };
+          node.style = { width: sized.width, height: sized.height };
           placeholders.push({ node, file, idx });
         } else {
           const node = createAudioNode({ x: px, y: py }, "");
