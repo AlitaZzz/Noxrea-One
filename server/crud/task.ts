@@ -102,6 +102,8 @@ export async function updateTaskStatus(
     resultUrls?: string[];
     resultText?: string;
     error?: string;
+    /** 机器可读的失败分类，与 error（人类可读原文）并存 */
+    errorCode?: string;
     upstreamTaskId?: string;
     retryCount?: number;
     startedAt?: Date | null;
@@ -122,6 +124,9 @@ export async function updateTaskStatus(
   }
   if (data.error !== undefined) {
     updateData.error = data.error;
+  }
+  if (data.errorCode !== undefined) {
+    updateData.errorCode = data.errorCode;
   }
   if (data.upstreamTaskId !== undefined) {
     updateData.upstreamTaskId = data.upstreamTaskId;

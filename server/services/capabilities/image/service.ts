@@ -13,6 +13,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
+import { GenerationFailureError } from "@server/core/errors/task-failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 class ImageCapabilityService implements CapabilityService {
@@ -69,7 +70,10 @@ class ImageCapabilityService implements CapabilityService {
     });
 
     if (result.status === "failed") {
-      throw new Error(result.error ?? "Image generation failed");
+      throw new GenerationFailureError(
+        result.error ?? "Image generation failed",
+        result.errorCode
+      );
     }
 
     return { urls: result.urls, text: result.text };

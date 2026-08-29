@@ -30,6 +30,7 @@ CREATE TABLE "generation_tasks" (
     "result_text" TEXT,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "error" TEXT,
+    "error_code" TEXT,
     "retry_count" INTEGER NOT NULL DEFAULT 0,
     "upstream_task_id" TEXT,
     "started_at" DATETIME,

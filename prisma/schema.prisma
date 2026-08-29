@@ -64,6 +64,9 @@ model GenerationTask {
 
   status         String    @default("pending") @map("status")
   error          String?   @map("error")
+  // 机器可读的失败分类（前端据此查 i18n，也可按此统计失败分布）；
+  // 上游返回的原因不在此列，原样留在 error 中供用户查看
+  errorCode      String?   @map("error_code")
   retryCount     Int       @default(0) @map("retry_count")
   upstreamTaskId String?   @map("upstream_task_id")
   startedAt      DateTime? @map("started_at")

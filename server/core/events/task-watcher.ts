@@ -11,6 +11,8 @@ export interface TerminalTaskState {
   resultUrls?: string[];
   resultText?: string;
   error?: string;
+  /** 机器可读的失败分类，前端据此取本地化文案 */
+  errorCode?: string;
   prompt?: string;
   config?: unknown;
 }
@@ -130,6 +132,7 @@ export class TaskWatcher {
           resultUrls: task.resultUrls ?? undefined,
           resultText: task.resultText ?? undefined,
           error: task.error ?? undefined,
+          errorCode: task.errorCode ?? undefined,
           prompt: task.prompt || undefined,
         };
 

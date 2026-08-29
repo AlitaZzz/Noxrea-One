@@ -10,6 +10,10 @@ import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
+import {
+  GenerationFailureError,
+  extractFailureCode,
+} from "@server/core/errors/task-failure";
 import { buildContext } from "./context";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
@@ -36,10 +40,20 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
   try {
     // 1. 获取供应商配置
     const providerId = ctx.config.providerId as number | undefined;
-    if (!providerId) throw new Error("providerId not found in task config");
+    if (!providerId) {
+      throw new GenerationFailureError(
+        "providerId not found in task config",
+        "generation.missing_provider_id"
+      );
+    }
 
     const provider = await getProvider(providerId, task.userId);
-    if (!provider) throw new Error(`Provider ${providerId} not found`);
+    if (!provider) {
+      throw new GenerationFailureError(
+        `Provider ${providerId} not found`,
+        "generation.provider_not_found"
+      );
+    }
 
     // 2. 解析参考图
     const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
@@ -89,7 +103,10 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       const hostname = new URL(baseUrl).hostname;
       await resolveAndValidate(hostname);
     } catch (err: unknown) {
-      throw new Error(`SSRF validation failed for baseUrl: ${(err as Error).message}`);
+      throw new GenerationFailureError(
+        `SSRF validation failed for baseUrl: ${(err as Error).message}`,
+        "generation.ssrf_blocked"
+      );
     }
 
     // 调用 CapabilityService（同步/异步由内部 TaskManager 自动判定）
@@ -154,17 +171,22 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
   } catch (err: unknown) {
     const errorMsg = (err as Error)?.message ?? "Unknown error";
     const [errorClass, retryable] = classifyError(errorMsg);
+    const { code } = extractFailureCode(err);
 
     logEvent("executor", {
       stage: retryable ? "failed_retryable" : "failed",
       taskId: task.id,
       errorClass,
       error: errorMsg,
+      errorCode: code,
     });
 
     await updateTaskStatus(task.id, {
       status: "failed",
-      error: errorMsg + (retryable ? " [retryable]" : ""),
+      // 可重试标记仅体现在日志 stage 中，不再拼进展示给用户的错误文案
+      error: errorMsg,
+      // 失败分类落库：供前端本地化展示，也便于按错误码统计失败分布
+      errorCode: code,
       completedAt: new Date(),
     });
   }
