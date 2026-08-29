@@ -25,6 +25,7 @@ import {
 import {
   AUDIO_NODE_HEIGHT,
   AUDIO_NODE_WIDTH,
+  DEFAULT_NODE_CONTENT_HEIGHT,
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
   DIRECTOR_NODE_DEFAULT_HEIGHT,
@@ -75,7 +76,7 @@ export function createImageNode(
       src: src || "",
       lockAspectRatio: true,
       naturalWidth: DEFAULT_NODE_WIDTH,
-      naturalHeight: DEFAULT_NODE_HEIGHT,
+      naturalHeight: DEFAULT_NODE_CONTENT_HEIGHT,
       alt: "",
       genSettings: { kind: "image", prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refOrder: [], n: 1 } satisfies ImageGenSettings,
     } as ImageNodeData,

@@ -10,7 +10,7 @@ import { type DragEvent, useCallback, useEffect, useRef, useState } from "react"
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, LAYOUT_GAP } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_CONTENT_HEIGHT, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, LAYOUT_GAP } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -169,7 +169,7 @@ export function useFileDrop(
           const previewUrl = URL.createObjectURL(file);
           const dims = await loadMediaDimensions(previewUrl, isVideo);
           const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
-          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
+          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
           const { width, height } = computeNodeSize(nw, nh);
           sized = { previewUrl, naturalW: nw, naturalH: nh, width, height };
           nodeW = width;
@@ -258,7 +258,7 @@ export function useFileDrop(
 
             const dims = await loadMediaDimensions(result.url, isVideo);
             const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
-            const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_HEIGHT);
+            const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
 
             const { width, height } = computeNodeSize(nw, nh);
             updateNodeData(node.id, {
