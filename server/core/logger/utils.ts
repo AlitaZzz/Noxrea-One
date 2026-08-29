@@ -3,6 +3,7 @@
  * 在统一日志之上提供事件记录与 base64 内容脱敏等辅助能力。
  */
 import { logger } from "./index";
+import { getRequestContext } from "./context";
 
 /**
  * base64 data URL 匹配模式：data:...;base64,...
@@ -58,6 +59,10 @@ export function logEvent(
   const level = fields.level ?? "info";
   const maxLen = fields.maxLen;
   const parts: string[] = [];
+
+  // 请求 ID 置于首位，便于用同一标识串联一次请求内的全部日志
+  const requestId = getRequestContext()?.requestId;
+  if (requestId) parts.push(`req=${requestId}`);
 
   if (fields.taskId) parts.push(`task=${fields.taskId}`);
   if (fields.stage) parts.push(`stage=${fields.stage}`);
