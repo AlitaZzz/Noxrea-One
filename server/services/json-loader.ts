@@ -7,6 +7,8 @@
  */
 
 import fs from "fs";
+import path from "path";
+import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
 
 interface CacheEntry {
@@ -17,13 +19,16 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 
 /**
- * 加载并缓存 JSON（相对项目根路径）。
+ * 加载并缓存 JSON（相对资源目录 RESOURCES_DIR 的路径）。
+ *
+ * 路径解析：RESOURCES_DIR（默认 server/resources，Docker 指向 /data/resources）+ relPath。
+ * 改文件即生效（mtime 缓存），无需重启。
  *
  * 用法：
- *   const data = loadJson<Record<string, unknown>>("server/resources/model-ui.json");
+ *   const data = loadJson<Record<string, unknown>>("model-ui.json");
  */
 export function loadJson<T>(relPath: string): T {
-  const abs = resolveFromRoot(relPath);
+  const abs = resolveFromRoot(path.join(getConfig().RESOURCES_DIR, relPath));
 
   let mtime = 0;
   try {
@@ -43,5 +48,5 @@ export function loadJson<T>(relPath: string): T {
 
 /** 主动清除某文件缓存，强制下次调用重新读取（极少需要） */
 export function invalidateJson(relPath: string): void {
-  cache.delete(resolveFromRoot(relPath));
+  cache.delete(resolveFromRoot(path.join(getConfig().RESOURCES_DIR, relPath)));
 }

@@ -24,7 +24,7 @@ import { loadJson } from "@server/services/json-loader";
 
 /** 加载预设配置（供前端 API 使用），支持热更新 */
 export function loadPresets(): Record<string, unknown> {
-  return loadJson<Record<string, unknown>>("server/resources/provider-presets.json");
+  return loadJson<Record<string, unknown>>("provider-presets.json");
 }
 
 // 模型参数
@@ -126,7 +126,7 @@ export interface ModelParamConfig {
 type HostMap = Record<string, Record<string, Record<string, unknown>>>;
 
 function loadRaw(): HostMap {
-  return loadJson<HostMap>("server/resources/model-ui.json");
+  return loadJson<HostMap>("model-ui.json");
 }
 
 /** 返回完整 JSON（供前端 API 使用） */

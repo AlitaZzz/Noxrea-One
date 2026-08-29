@@ -41,6 +41,11 @@ UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
 # ---------- FFmpeg ----------
 FFMPEG_PATH="${FFMPEG_PATH:-/usr/bin}"
 
+# ---------- 资源目录 ----------
+# JSON 配置与技能文件根目录（首次启动已播种出厂配置到 /data/resources）
+# 支持热更新：改文件即生效，无需重启
+RESOURCES_DIR="${RESOURCES_DIR:-/data/resources}"
+
 # ---------- 安全 ----------
 ALLOW_INSECURE_SECRETS="${ALLOW_INSECURE_SECRETS:-false}"
 
@@ -116,6 +121,16 @@ fi
 # 数据目录
 # ------------------------------------------------------------
 mkdir -p /data/uploads
+
+# ------------------------------------------------------------
+# 资源目录播种：把镜像内置的出厂配置复制到 /data/resources
+# cp -n 不覆盖已有文件：用户修改安全，镜像升级新增文件自动补齐
+# JSON 支持热更新（mtime 缓存），在数据卷里改文件即生效，无需重启
+# ------------------------------------------------------------
+if [ -d /data ]; then
+  mkdir -p /data/resources
+  cp -rn /app/server/resources/. /data/resources/ 2>/dev/null || true
+fi
 
 # ------------------------------------------------------------
 # 数据库迁移（首次运行建表，之后幂等）
