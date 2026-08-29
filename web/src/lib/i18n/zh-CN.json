@@ -463,5 +463,118 @@
   "director": {
     "sentToCanvas": "已发送到画布：{{name}}",
     "sendToCanvasFailed": "发送到画布失败"
+  },
+  "error": {
+    "unknown": "未知错误",
+    "network_unreachable": "无法连接服务器，请确认后端服务已启动",
+    "network_error": "网络错误",
+    "parse_failed": "响应解析失败",
+    "session_expired": "登录已过期",
+    "session_expired_desc": "请重新登录",
+    "withRequestId": "{{message}}（错误 ID：{{id}}）",
+    "withStatus": "{{message}}（HTTP {{status}}）",
+    "common": {
+      "invalid_json": "请求体不是合法的 JSON",
+      "invalid_request": "请求参数不合法，请检查后重试",
+      "not_found": "请求的资源不存在",
+      "internal_error": "服务内部错误，请稍后重试",
+      "empty_response": "服务端返回内容为空",
+      "unexpected_response": "服务端响应格式异常"
+    },
+    "auth": {
+      "not_authenticated": "未登录",
+      "token_invalid": "登录凭证无效或已过期",
+      "user_inactive": "用户不存在或已被停用",
+      "invalid_credentials": "用户名或密码错误",
+      "registration_disabled": "注册功能已关闭",
+      "username_taken": "用户名已被占用",
+      "login_rate_limited": "登录尝试过于频繁，请稍后再试",
+      "register_rate_limited": "注册尝试过于频繁，请稍后再试",
+      "current_password_incorrect": "当前密码不正确",
+      "user_not_found": "用户不存在",
+      "login_failed": "登录失败",
+      "register_failed": "注册失败",
+      "register_missing_credentials": "注册成功但未返回登录凭证",
+      "username_required": "请输入用户名",
+      "password_required": "请输入密码",
+      "username_length": "用户名需为 3-50 个字符",
+      "password_length": "密码至少 6 位"
+    },
+    "model_config": {
+      "invalid_provider_id": "供应商 ID 非法",
+      "provider_not_found": "供应商不存在",
+      "invalid_model_id": "模型 ID 非法",
+      "model_not_found": "模型不存在",
+      "api_key_fetch_failed": "获取 API Key 失败"
+    },
+    "upload": {
+      "invalid_form_data": "表单数据解析失败",
+      "no_file": "未选择文件",
+      "file_too_large": "文件体积超过 {{limit}}MB 上限",
+      "unsupported_type": "不支持的文件类型：{{type}}",
+      "upload_failed": "上传失败，请稍后重试"
+    },
+    "files": {
+      "invalid_path": "文件路径非法",
+      "access_denied": "无权访问该文件",
+      "file_not_found": "文件不存在"
+    },
+    "capture_frame": {
+      "video_not_found": "源视频不存在",
+      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
+      "capture_failed": "抽帧失败，请稍后重试"
+    },
+    "generate": {
+      "body_too_large": "请求体过大",
+      "provider_id_required": "缺少 providerId",
+      "provider_not_found": "供应商不存在",
+      "provider_protocol_missing": "供应商未配置协议",
+      "task_not_found": "任务不存在",
+      "task_already_finished": "任务已结束",
+      "submit_failed": "提交生成任务失败",
+      "no_task_id": "服务端未返回任务 ID"
+    },
+    "generation": {
+      "timeout": "调用服务商超时，请稍后重试",
+      "network_error": "无法连接服务商，请检查网络后重试",
+      "upstream_http_error": "服务商返回错误，请稍后重试",
+      "cancelled": "任务已取消",
+      "missing_provider_id": "任务缺少供应商配置",
+      "provider_not_found": "供应商不存在或已被删除",
+      "ssrf_blocked": "供应商地址被安全策略拦截",
+      "unknown_capability": "未知的 generation 生成类型"
+    },
+    "agent": {
+      "session_not_found": "会话不存在",
+      "session_id_required": "缺少 sessionId",
+      "upstream_failed": "模型调用失败，请稍后重试",
+      "request_failed": "请求失败"
+    },
+    "canvas": {
+      "missing_type_param": "缺少 type 查询参数",
+      "template_not_found": "提示词模板 {{type}} 不存在",
+      "invalid_project_id": "项目 ID 非法",
+      "project_not_found": "项目不存在"
+    },
+    "assets": {
+      "invalid_folder_id": "分类 ID 非法",
+      "folder_not_found": "分类不存在",
+      "invalid_asset_id": "素材 ID 非法",
+      "asset_not_found": "素材不存在"
+    },
+    "models": {
+      "fetch_failed": "拉取模型列表失败",
+      "provider_not_found": "供应商不存在",
+      "provider_not_found_in_store": "本地未找到该供应商",
+      "provider_no_base_url": "该供应商未配置基础 URL，请先补全地址",
+      "provider_id_or_base_url_required": "缺少 providerId 或 baseUrl",
+      "upstream_unauthorized": "上游接口鉴权失败（{{host}}），请检查 API 密钥",
+      "upstream_forbidden": "上游接口拒绝访问（{{host}}），请检查密钥权限",
+      "upstream_not_found": "上游模型接口不存在（{{host}}），请检查基础 URL",
+      "upstream_rate_limited": "上游接口触发限流（{{host}}），请稍后重试",
+      "upstream_server_error": "上游服务异常（{{host}}，HTTP {{status}}）",
+      "upstream_fetch_failed": "上游返回错误（{{host}}，HTTP {{status}}）",
+      "upstream_unreachable": "无法连接上游服务 {{host}}，请检查网络或地址是否正确"
+    }
   }
 }
