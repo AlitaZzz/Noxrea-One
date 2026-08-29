@@ -17,6 +17,10 @@ import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/sto
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
 import { localStorage } from "@server/services/storage/backends/local";
+import {
+  GenerationFailureError,
+  extractUpstreamMessage,
+} from "@server/core/errors/task-failure";
 import type { GenerationResult } from "@server/schemas/result";
 import path from "path";
 import fs from "fs/promises";
@@ -64,7 +68,18 @@ class AudioCapabilityService implements CapabilityService {
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => "");
-      throw new Error(`Audio generation failed: ${response.status} ${errBody}`);
+      // 原始响应体只进日志；对外优先用上游自带的可读文案，取不到则回退错误码
+      logEvent("audio", {
+        level: "warn",
+        stage: "upstream_error",
+        status: response.status,
+        body: errBody.slice(0, 500),
+      });
+      const upstreamMsg = extractUpstreamMessage(errBody);
+      throw new GenerationFailureError(
+        upstreamMsg || `HTTP ${response.status}`,
+        upstreamMsg ? undefined : "generation.upstream_http_error"
+      );
     }
 
     // TTS 可能返回二进制数据 — 直接落盘为本地文件

@@ -165,7 +165,8 @@ export class OpenAiVideoProtocol implements ProtocolService {
         typeof err === "object"
           ? String((err as Record<string, unknown>).message ?? "Unknown error")
           : String(err);
-      return { status: "failed", urls: [], error: errMsg };
+      // 限长：上游文案会直接展示给用户，避免超长内容撑破提示框
+      return { status: "failed", urls: [], error: errMsg.slice(0, 200) };
     }
 
     // 终极兜底：只要能扫描到视频 URL 就视为完成，URL 正则穿透任意层级

@@ -14,6 +14,10 @@ import { build } from "@server/services/request-builder/engine";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
 import { logEvent } from "@server/core/logger/utils";
+import {
+  GenerationFailureError,
+  extractUpstreamMessage,
+} from "@server/core/errors/task-failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 /**
@@ -158,7 +162,18 @@ class LlmCapabilityService implements CapabilityService {
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => "");
-      throw new Error(`LLM generation failed: ${response.status} ${errBody}`);
+      // 原始响应体只进日志；对外优先用上游自带的可读文案，取不到则回退错误码
+      logEvent("llm", {
+        level: "warn",
+        stage: "upstream_error",
+        status: response.status,
+        body: errBody.slice(0, 500),
+      });
+      const upstreamMsg = extractUpstreamMessage(errBody);
+      throw new GenerationFailureError(
+        upstreamMsg || `HTTP ${response.status}`,
+        upstreamMsg ? undefined : "generation.upstream_http_error"
+      );
     }
 
     const data = await response.json();

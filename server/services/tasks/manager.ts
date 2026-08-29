@@ -7,6 +7,7 @@ import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
+import { extractUpstreamMessage } from "@server/core/errors/task-failure";
 import { updateTaskStatus, isTaskCancelled, getTaskStatus } from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
 
@@ -15,6 +16,11 @@ export interface SubmitAndWaitResult {
   urls: string[];
   text?: string;
   error?: string;
+  /**
+   * 失败分类：仅在我们自己能判定原因时给出（超时 / 网络 / 上游 HTTP 等），
+   * 上游自带文案的场景留空，由前端原样展示原文。
+   */
+  errorCode?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -150,7 +156,12 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       if (extractedId) {
         // 检查是否已被取消
         if (await _checkCancelled(taskId)) {
-          return { status: "failed", urls: [], error: "Cancelled" };
+          return {
+            status: "failed",
+            urls: [],
+            error: "Cancelled",
+            errorCode: "generation.cancelled",
+          };
         }
         return await _poll({
           taskId, protocol, capability, baseUrl, apiKey,
@@ -161,11 +172,22 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
         });
       }
 
-      const detail = typeof errData === "object" ? JSON.stringify(errData).slice(0, 300) : String(errData).slice(0, 300);
+      // 原始响应体只进日志；对外只回传上游自带的可读文案，取不到时退化为状态码
+      logEvent("taskmgr", {
+        level: "warn",
+        stage: "upstream_http_error",
+        taskId,
+        status: response.status,
+        body: JSON.stringify(errData).slice(0, 500),
+      });
+      const upstreamMsg = extractUpstreamMessage(errData);
       return {
         status: "failed",
         urls: [],
-        error: `Upstream returned HTTP ${response.status} — ${detail}`,
+        // 上游给出可读文案时原样展示；否则回退错误码，由前端本地化
+        // （状态码已包含在 error 文案中，供用户报障时查看）
+        error: upstreamMsg || `HTTP ${response.status}`,
+        errorCode: upstreamMsg ? undefined : "generation.upstream_http_error",
       };
     }
 
@@ -174,13 +196,24 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   } catch (err: unknown) {
     const e = err as Error & { code?: string; cause?: { code?: string; message?: string } };
     if (e.name === "TimeoutError" || e.code === "UND_ERR_HEADERS_TIMEOUT") {
-      return { status: "failed", urls: [], error: "API call timed out" };
+      return {
+        status: "failed",
+        urls: [],
+        error: "API call timed out",
+        errorCode: "generation.timeout",
+      };
     }
     const cause = e.cause;
     const detail = cause
       ? `${e.message} [cause: ${cause.code ?? cause.message}]`
       : (e.message ?? "Unknown error");
-    return { status: "failed", urls: [], error: detail.slice(0, 500) };
+    logEvent("taskmgr", { level: "warn", stage: "upstream_network_error", taskId, error: detail });
+    return {
+      status: "failed",
+      urls: [],
+      error: detail.slice(0, 200),
+      errorCode: "generation.network_error",
+    };
   }
 
   // 2. 尝试同步提取结果

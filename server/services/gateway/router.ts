@@ -5,6 +5,7 @@
  */
 
 import { getCapability } from "@server/services/capabilities/base";
+import { GenerationFailureError } from "@server/core/errors/task-failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 export interface RouteContext {
@@ -29,7 +30,10 @@ export interface RouteContext {
 export async function routeGenerate(ctx: RouteContext): Promise<GenerationResult> {
   const capService = getCapability(ctx.capability);
   if (!capService) {
-    throw new Error(`Unknown capability: ${ctx.capability}`);
+    throw new GenerationFailureError(
+      `Unknown capability: ${ctx.capability}`,
+      "generation.unknown_capability"
+    );
   }
 
   return capService.generate(
