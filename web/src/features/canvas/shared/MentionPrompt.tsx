@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-import MentionDropdown, { refLabel as chipLabel, refLabelKey, refShortLabel, type ReferenceItem } from "./MentionDropdown";
+import MentionDropdown, { type ReferenceItem,refLabel as chipLabel, refLabelKey, refShortLabel } from "./MentionDropdown";
 
 export type { ReferenceItem } from "./MentionDropdown";
 import { MentionIconSvg } from "@/components/ui/icons/agent/MentionIcon";

@@ -7,6 +7,8 @@ import { create } from "zustand";
 
 import { authApi } from "@/features/auth/api";
 import { setToken } from "@/lib/api/client";
+import { type ApiErrorBody,resolveApiError } from "@/lib/api/error-message";
+import i18n from "@/lib/i18n/config";
 
 export interface UserInfo {
   id: number;
@@ -58,8 +60,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setToken(res.data.access_token);
       set({ user: res.data.user });
     } else {
-      const detail = (res as unknown as { detail?: string }).detail;
-      throw new Error(res.msg || detail || "登录失败");
+      throw new Error(
+        resolveApiError(res as unknown as ApiErrorBody, undefined, "auth.login_failed")
+      );
     }
   },
 
@@ -72,10 +75,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: res.data.user });
     } else if (res.code === 200) {
       // 兜底：某些实现可能只返回 user，未带 token
-      throw new Error("注册成功但未返回登录凭证");
+      throw new Error(i18n.t("error.auth.register_missing_credentials"));
     } else {
-      const detail = (res as unknown as { detail?: string }).detail;
-      throw new Error(res.msg || detail || "注册失败");
+      throw new Error(
+        resolveApiError(res as unknown as ApiErrorBody, undefined, "auth.register_failed")
+      );
     }
   },
 

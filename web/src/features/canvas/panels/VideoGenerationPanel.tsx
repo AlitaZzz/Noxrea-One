@@ -27,7 +27,9 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/can
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { apiRaw, apiUpload } from "@/lib/api/client";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
@@ -35,9 +37,9 @@ import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import { applyRatioToNode } from "../shared/ratio-size";
 import { writeOrderPref } from "../shared/ref-order";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
-import { applyRatioToNode } from "../shared/ratio-size";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -196,12 +198,12 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         nodeId,
       });
       if (!res2.ok) {
-        const err = await res2.json().catch(() => ({}));
-        return err.error || `HTTP ${res2.status}`;
+        const body = parseErrorBody(await res2.json().catch(() => null));
+        return resolveApiError(body, res2.status, "generate.submit_failed");
       }
       const json = await res2.json();
       const taskId = json.data?.id;
-      if (!taskId) return "No task_id returned";
+      if (!taskId) return i18n.t("error.generate.no_task_id");
 
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;

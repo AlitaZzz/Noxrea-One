@@ -19,7 +19,9 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/can
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
@@ -229,10 +231,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         refImages: refOrder.length > 0 ? refOrder : undefined,
       });
       const json = await res.json();
-      if (json.code !== 200) throw new Error(json.msg || `HTTP ${res.status}`);
+      if (json.code !== 200) {
+        throw new Error(
+          resolveApiError(parseErrorBody(json), res.status, "generate.submit_failed")
+        );
+      }
 
       const taskId: string | undefined = json.data?.id;
-      if (!taskId) throw new Error("No taskId returned");
+      if (!taskId) throw new Error(i18n.t("error.generate.no_task_id"));
 
       // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
       const cur = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);

@@ -12,6 +12,30 @@ import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, computeThumbScale, loadMediaDimensions } from "@/lib/utils/image-utils";
 
+/** 失败通知描述的最大展示长度 */
+const MAX_ERROR_LEN = 120;
+
+/**
+ * 截断错误文案。
+ * 上游返回的失败原因长度不可控，通知区仅展示摘要，避免撑破提示框。
+ */
+function truncateError(text: string): string {
+  return text.length > MAX_ERROR_LEN ? `${text.slice(0, MAX_ERROR_LEN - 1)}…` : text;
+}
+
+/**
+ * 生成任务失败通知的描述文案。
+ * 服务端对自身可判定的失败（超时、网络不可达、任务取消等）会附带错误码，据此取本地化文案；
+ * 上游返回的原因无法翻译，截断后原样展示。
+ */
+function resolveTaskError(evt: { error?: string; errorCode?: string }): string {
+  if (evt.errorCode) {
+    const key = `error.${evt.errorCode}`;
+    if (i18n.exists(key)) return i18n.t(key);
+  }
+  return truncateError(evt.error ?? "");
+}
+
 /**
  * SSE 任务监控 hook。
  *
@@ -148,7 +172,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = i18n.t;
-                        notifRef.current.error({ title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"), description: evt.error || "", placement: "bottomRight", duration: 15 });
+                        notifRef.current.error({ title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"), description: resolveTaskError(evt), placement: "bottomRight", duration: 15 });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;
