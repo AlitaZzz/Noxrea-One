@@ -14,6 +14,7 @@ import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
 import { useAuthStore } from "@/features/auth/store";
 import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
 
@@ -270,8 +271,16 @@ export default function LoginPage() {
 
       // 自定义校验，替代浏览器原生「请填写此字段」气泡
       const nextErrors: { username?: string; password?: string } = {};
-      if (!username.trim()) nextErrors.username = "请输入用户名";
-      if (!password) nextErrors.password = "请输入密码";
+      if (!username.trim()) {
+        nextErrors.username = i18n.t("error.auth.username_required");
+      } else if (mode === "signup" && (username.trim().length < 3 || username.trim().length > 50)) {
+        nextErrors.username = i18n.t("error.auth.username_length");
+      }
+      if (!password) {
+        nextErrors.password = i18n.t("error.auth.password_required");
+      } else if (mode === "signup" && password.length < 6) {
+        nextErrors.password = i18n.t("error.auth.password_length");
+      }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors);
         return;
@@ -291,7 +300,7 @@ export default function LoginPage() {
           setTimeout(() => router.push("/"), 600);
         }
       } catch (err: unknown) {
-        showGlobalMessage().error((err as Error).message || "操作失败");
+        showGlobalMessage().error((err as Error).message || i18n.t("error.unknown"));
       } finally {
         setLoading(false);
       }

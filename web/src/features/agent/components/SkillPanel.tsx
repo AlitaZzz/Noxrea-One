@@ -9,6 +9,7 @@ import { Empty, Popover, Spin, Tooltip } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import { agentApi } from "@/features/agent/api";
+import { resolveResponseError } from "@/lib/api/error-message";
 
 interface SkillMeta {
   name: string;
@@ -33,7 +34,7 @@ export default function SkillPanel({ onSelect }: Props) {
     setLoading(true);
     try {
       const res = await agentApi.listSkills();
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
       const data = (await res.json()) as SkillMeta[];
       setSkills(Array.isArray(data) ? data : []);
     } catch {

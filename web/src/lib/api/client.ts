@@ -6,6 +6,7 @@
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
 import { showGlobalNotification } from "@/lib/global-notification";
+import i18n from "@/lib/i18n/config";
 
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
 export const BASE = "";
@@ -60,8 +61,8 @@ function handleUnauthorized() {
   // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不弹提示，避免重复提示
   if (window.location.pathname !== "/login") {
     showGlobalNotification().error({
-      title: "登录已过期",
-      description: "请重新登录",
+      title: i18n.t("error.session_expired"),
+      description: i18n.t("error.session_expired_desc"),
       placement: "bottomRight",
       duration: 5,
     });
@@ -103,7 +104,7 @@ export async function api<T = unknown>(
     return await res.json();
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
-    return { code: 0, data: null as T, msg: "Unable to connect to server. Please check if the backend is running." };
+    return { code: 0, data: null as T, msg: i18n.t("error.network_unreachable") };
   }
 }
 
@@ -122,7 +123,7 @@ export async function apiUpload<T = unknown>(
     return await res.json();
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
-    return { code: 0, data: null as T, msg: "Unable to connect to server. Please check if the backend is running." };
+    return { code: 0, data: null as T, msg: i18n.t("error.network_unreachable") };
   }
 }
 
@@ -144,9 +145,9 @@ export function apiUploadWithProgress<T = unknown>(
     xhr.onload = () => {
       if (checkUnauthorized(xhr.status)) { reject(new UnauthorizedError()); return; }
       try { resolve(JSON.parse(xhr.responseText)); }
-      catch { reject(new Error("Parse failed")); }
+      catch { reject(new Error(i18n.t("error.parse_failed"))); }
     };
-    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.onerror = () => reject(new Error(i18n.t("error.network_error")));
     xhr.send(formData);
   });
 }

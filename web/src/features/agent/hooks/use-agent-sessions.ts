@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { agentApi } from "@/features/agent/api";
 import type { ChatMessage, ChatRole, SessionListItem } from "@/features/agent/types";
+import { resolveResponseError } from "@/lib/api/error-message";
 import { showGlobalMessage } from "@/lib/global-message";
 
 let _seq = 0;
@@ -55,7 +56,7 @@ export function useAgentSessions(opts: {
       if (chatId) return chatId;
       try {
         const res = await agentApi.createSession(initialTitle, opts.projectId);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         const data = (await res.json()) as { id: string; title?: string };
         setChatId(data.id);
         if (data.title) setChatTitle(data.title);
@@ -76,7 +77,7 @@ export function useAgentSessions(opts: {
           agentApi.getSessionMessages(sessionId),
           agentApi.getSession(sessionId),
         ]);
-        if (!msgRes.ok) throw new Error(`HTTP ${msgRes.status}`);
+        if (!msgRes.ok) throw new Error(await resolveResponseError(msgRes, "agent.request_failed"));
         const data = (await msgRes.json()) as Array<{
           role: string;
           content: string;
@@ -119,7 +120,7 @@ export function useAgentSessions(opts: {
   const loadSessions = useCallback(async () => {
     try {
       const res = await agentApi.listSessions(opts.projectId);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
       const data = (await res.json()) as SessionListItem[];
       setSessions(data ?? []);
     } catch {
@@ -132,7 +133,7 @@ export function useAgentSessions(opts: {
     async (sessionId: string) => {
       try {
         const res = await agentApi.deleteSession(sessionId);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         if (sessionId === chatId) newChat();
         showGlobalMessage().success("已删除会话");
@@ -149,7 +150,7 @@ export function useAgentSessions(opts: {
       if (!chatId) return;
       try {
         const res = await agentApi.renameSession(chatId, title);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         setChatTitle(title);
       } catch {
         showGlobalMessage().error("重命名失败");
@@ -164,7 +165,7 @@ export function useAgentSessions(opts: {
       if (!chatId) return;
       try {
         const res = await agentApi.setSkill(chatId, skillName);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         setActiveSkill(skillName);
         setSkillStatus("active");
       } catch {
@@ -180,7 +181,7 @@ export function useAgentSessions(opts: {
       if (!chatId) return;
       try {
         const res = await agentApi.clearSkill(chatId);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         setActiveSkill(null);
         setSkillStatus("idle");
       } catch {

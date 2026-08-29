@@ -20,7 +20,9 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/can
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
@@ -28,9 +30,9 @@ import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
-import { applyRatioToNode } from "../shared/ratio-size";
 
 interface Props { nodeId: string; }
 
@@ -79,7 +81,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
   // fields 为唯一数据源：渲染控件 + 默认值
-  const fields = modelParams?.fields ?? [];
+  const fields = Array.isArray(modelParams?.fields) ? modelParams.fields : [];
   const fieldValues: Record<string, unknown> = { quality, resolution, ratio, n };
   const setField = (name: string, value: unknown) => {
     if (name === "quality") setQuality(value as string);
@@ -94,7 +96,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   // 模型切换时：重置不在新模型 options 中的参数
   useEffect(() => {
-    if (!modelParams) return;
+    if (!Array.isArray(modelParams?.fields)) return;
     for (const f of modelParams.fields) {
       const cur = fieldValues[f.name] as string | number | undefined;
       if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
@@ -206,12 +208,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         nodeId,
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return err.error || `HTTP ${res.status}`;
+        const body = parseErrorBody(await res.json().catch(() => null));
+        return resolveApiError(body, res.status, "generate.submit_failed");
       }
       const json = await res.json();
       const taskId = json.data?.id;
-      if (!taskId) return "No task_id returned";
+      if (!taskId) return i18n.t("error.generate.no_task_id");
 
       // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);

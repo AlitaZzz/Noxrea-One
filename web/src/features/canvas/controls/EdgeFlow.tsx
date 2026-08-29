@@ -2,9 +2,8 @@
  * 连线流光（流动光点）相关常量与组件。
  * 选中节点时连线、拖拽连接预览线均复用此处，保证视觉一致。
  */
-import { useId } from "react";
-
 import { getBezierPath } from "@xyflow/react";
+import { useId } from "react";
 
 export const DOT_COLOR = "#1D9E75";
 export const DURATION = 1.6;

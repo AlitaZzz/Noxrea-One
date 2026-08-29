@@ -3,6 +3,8 @@
  * 供画布拖入上传（use-file-drop）与资产管理上传（AssetCreateDialog）共用。
  */
 import { apiUploadWithProgress, UnauthorizedError } from "@/lib/api/client";
+import { type ApiErrorBody,resolveApiError } from "@/lib/api/error-message";
+import i18n from "@/lib/i18n/config";
 
 /** 上传默认并发数 */
 export const UPLOAD_CONCURRENCY = 3;
@@ -84,8 +86,10 @@ export async function uploadWithRetry(
       );
 
       if (res.code !== 200 || !res.data?.url) {
-        // 服务端返回错误（非网络问题），不重试
-        throw new UploadBusinessError((res as unknown as { detail?: string }).detail ?? res.msg);
+        // 服务端返回错误（非网络问题），不重试；文案按错误码本地化
+        throw new UploadBusinessError(
+          resolveApiError(res as unknown as ApiErrorBody, undefined, "upload.upload_failed")
+        );
       }
 
       return res.data;
@@ -103,7 +107,7 @@ export async function uploadWithRetry(
   }
 
   // 所有重试用尽
-  throw lastErr instanceof Error ? lastErr : new Error("Upload failed after retries");
+  throw lastErr instanceof Error ? lastErr : new Error(i18n.t("error.upload.upload_failed"));
 }
 
 /**

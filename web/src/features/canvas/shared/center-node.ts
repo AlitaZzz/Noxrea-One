@@ -9,8 +9,8 @@
  */
 "use client";
 
-import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
+import { useCallback } from "react";
 
 import type { AnyNode } from "@/features/canvas/types";
 

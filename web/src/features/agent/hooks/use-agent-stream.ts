@@ -13,6 +13,7 @@ import { useAgentSessions } from "@/features/agent/hooks/use-agent-sessions";
 import { type AgentToolCall, type AgentToolResult, executeAgentTools } from "@/features/agent/tools/agent-tools";
 import type { ChatMessage, ChatRole, ToolCallView } from "@/features/agent/types";
 import { findFreePosition, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { resolveResponseError } from "@/lib/api/error-message";
 import { showGlobalMessage } from "@/lib/global-message";
 
 /** 发给后端的工具调用形态（args 必须为对象，后端会 JSON.stringify 后透传上游） */
@@ -110,7 +111,7 @@ export function useAgentStream(modelId: string, projectId?: number) {
       res: Response,
       placeholderId?: string
     ): Promise<{ hasTool: boolean; toolCalls: ToolCallView[]; assistantId: string; text: string; skillCompleted: boolean }> => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
       if (!res.body) throw new Error("no stream body");
 
       const reader = res.body.getReader();

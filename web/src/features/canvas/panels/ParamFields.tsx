@@ -20,6 +20,8 @@ interface ParamFieldsProps {
 /** 提取 fields 的默认值映射（name -> default），供初始状态使用 */
 export function fieldDefaults(fields: ParamField[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  // 防御：模型参数配置可能缺 fields（结构不符预期时），避免渲染期整体崩溃
+  if (!Array.isArray(fields)) return out;
   for (const f of fields) {
     if (f.default !== undefined) out[f.name] = f.default;
   }
@@ -28,6 +30,7 @@ export function fieldDefaults(fields: ParamField[]): Record<string, unknown> {
 
 /** 判断某字段是否在 fields 中声明（用于提交时决定是否上报） */
 export function hasField(fields: ParamField[], name: string): boolean {
+  if (!Array.isArray(fields)) return false;
   return fields.some((f) => f.name === name);
 }
 
@@ -56,7 +59,8 @@ export function resolveOptionPrefix(f: ParamField, hasOptions: boolean): string 
 
 const ParamFields = memo(function ParamFields({ fields, values, onChange }: ParamFieldsProps) {
   const { t } = useTranslation();
-  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  // 防御：配置缺失或结构不符时按空参数处理，避免渲染期整体崩溃
+  const sorted = Array.isArray(fields) ? [...fields].sort((a, b) => a.order - b.order) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -230,7 +234,8 @@ export const ParamSummary = memo(function ParamSummary({
   values: Record<string, unknown>;
 }) {
   const { t } = useTranslation();
-  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  // 防御：配置缺失或结构不符时按空参数处理，避免渲染期整体崩溃
+  const sorted = Array.isArray(fields) ? [...fields].sort((a, b) => a.order - b.order) : [];
   const rendered = sorted
     .map((f) => {
       const v = values[f.name];

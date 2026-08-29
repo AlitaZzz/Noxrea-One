@@ -6,7 +6,14 @@
 import { create } from "zustand";
 
 import { modelApi } from "@/features/settings/api";
-import type { ModelCapability, ModelProvider, ModelParamConfig,ProviderPreset } from "@/lib/types/models";
+import {
+  type ApiErrorBody,
+  isRecord,
+  parseErrorBody,
+  resolveApiError,
+} from "@/lib/api/error-message";
+import i18n from "@/lib/i18n/config";
+import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";
 
 /** 从 baseUrl 解析 host（供上游通配匹配用） */
 function hostFromBaseUrl(baseUrl: string): string {
@@ -90,16 +97,18 @@ export const useModelStore = create<ModelState>((set, get) => ({
         const hostRegex = new RegExp("^" + hostPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
         if (hostRegex.test(host)) {
           const modelMap = models as Record<string, Record<string, ModelParamConfig>>;
-          // 模型名精确优先
+          // 模型名精确优先。
+          // 仅接受结构完整的配置（含 fields）：部分条目只覆写 mapping / endpoints，
+          // 直接返回会让下游渲染器拿到 undefined 的 fields。
           const exact = modelMap[modelName]?.[capability];
-          if (exact) return exact;
+          if (Array.isArray(exact?.fields)) return exact;
           for (const [mPattern, caps] of Object.entries(modelMap)) {
             if (mPattern === "_endpoints") continue;
             if (mPattern.includes("*") || mPattern.includes("?")) {
               const mRegex = new RegExp("^" + mPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
               if (mRegex.test(modelName)) {
                 const match = caps[capability];
-                if (match) return match;
+                if (Array.isArray(match?.fields)) return match;
               }
             }
           }
@@ -110,7 +119,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     // 2. _default 兜底（纯透传）
     const defCaps = cache["_default"] as Record<string, ModelParamConfig> | undefined;
     const def = defCaps?.[capability];
-    return def || null;
+    return Array.isArray(def?.fields) ? def : null;
   },
 
   fetchPresets: async () => {
@@ -158,7 +167,13 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (res.code === 200 && res.data) {
       return res.data.apiKey;
     }
-    throw new Error("Failed to fetch API key");
+    throw new Error(
+      resolveApiError(
+        res as unknown as ApiErrorBody,
+        undefined,
+        "model_config.api_key_fetch_failed"
+      )
+    );
   },
 
   deleteProvider: async (id) => {
@@ -208,30 +223,31 @@ export const useModelStore = create<ModelState>((set, get) => ({
   fetchModels: async (providerId) => {
       const ch = get().providers.find((c) => c.id === providerId);
     if (!ch) {
-      console.error("Provider not found in store");
-      return { success: false, error: "Provider not found in store" };
+      console.error("Provider not found in store", providerId);
+      return { success: false, error: i18n.t("error.models.provider_not_found_in_store") };
     }
     if (!ch.baseUrl) {
-      console.error("Provider has no baseUrl configured");
-      return { success: false, error: "Provider has no baseUrl configured. Please update the provider URL." };
+      console.error("Provider has no baseUrl configured", providerId);
+      return { success: false, error: i18n.t("error.models.provider_no_base_url") };
     }
     try {
       const res = await modelApi.fetchModelsList(providerId);
 
       // 先尝试解析响应体——网关异常时可能是 HTML 而非 JSON，需兜底
-      let json: Record<string, unknown> | null = null;
+      let json: unknown = null;
       try {
         json = await res.json();
       } catch {
         json = null;
       }
+      const errorBody = parseErrorBody(json);
 
-      // 服务端统一把错误描述放在 detail（fail / onError），msg 仅成功摘要里有
-      const detail = (json && (json.msg ?? json.detail)) as string | undefined;
-
-      // ① HTTP 非 2xx：先取 detail，拿不到再用状态码兜底
+      // ① HTTP 非 2xx：按服务端错误码取本地化文案，拿不到再退回状态码
       if (!res.ok) {
-        const msg = detail || `HTTP ${res.status} (${res.statusText})`;
+        // 弹窗展示，附带请求 ID 便于报障时定位服务端日志
+        const msg = resolveApiError(errorBody, res.status, "models.fetch_failed", {
+          withRequestId: true,
+        });
         console.error("Fetch models failed:", {
           status: res.status,
           statusText: res.statusText,
@@ -241,14 +257,17 @@ export const useModelStore = create<ModelState>((set, get) => ({
         return { success: false, error: msg };
       }
 
-      // ② 结构异常或业务码非 200
-      if (!json || json.code !== 200) {
-        const msg = detail ?? (json ? "Unknown server response" : "Empty response");
-        console.error("Fetch models failed:", {
-          status: res.status,
-          body: json,
-          msg,
-        });
+      // ② 空响应
+      if (json === null) {
+        const msg = i18n.t("error.common.empty_response");
+        console.error("Fetch models failed:", { status: res.status, body: json, msg });
+        return { success: false, error: msg };
+      }
+
+      // ③ 结构异常或业务码非 200
+      if (!isRecord(json) || (json as { code?: number }).code !== 200) {
+        const msg = resolveApiError(errorBody, undefined, "common.unexpected_response");
+        console.error("Fetch models failed:", { status: res.status, body: json, msg });
         return { success: false, error: msg };
       }
 
@@ -273,7 +292,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
       return { success: true };
     } catch (e: unknown) {
       console.error("Fetch models failed:", e);
-      return { success: false, error: e instanceof Error ? e.message : "Unknown error" };
+      return {
+        success: false,
+        error: e instanceof Error ? e.message : i18n.t("error.unknown"),
+      };
     }
   },
 }));
