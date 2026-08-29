@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # 纯文档 / 仓库配置类变更不影响镜像产物，跳过构建；
+    # web / server / prisma / package.json / Dockerfile 等均会触发
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+      - ".codebuddy/**"
+      - ".gitignore"
+      - "LICENSE"
   workflow_dispatch:
 
 env:
