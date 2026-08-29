@@ -87,12 +87,12 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [modelOpen, setModelOpen] = useState(false);
   const [refModeOpen, setRefModeOpen] = useState(false);
 
-  // 查找当前模型的参数配置
+  // 查找当前模型的参数配置（订阅 modelParamsCache：缓存晚于挂载到达时能触发重算）
+  const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
     return entry ? findModelParams(entry.providerId, entry.name, "video") : null;
-   
-  }, [modelKey, allModels, findModelParams]);
+  }, [modelKey, allModels, findModelParams, modelParamsCache]);
 
   // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
   const refModeOptions = modelParams?.capabilities?.refMode?.options ?? [];
@@ -111,6 +111,20 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     else if (name === "generateAudio") setGenerateAudio(value as boolean);
     else if (name === "n") setN(value as number);
   };
+
+  // 模型切换 / fields 异步到达时：重置不在当前模型 options 中的参数
+  // （modelParamsCache 晚于组件挂载到达时，初始值可能来自 _default 兜底或硬编码回退，
+  //   如 "1K" 不在 agnes-video 的 ["720P","960P","2K"] 中，需回退到字段默认值）
+  useEffect(() => {
+    if (!Array.isArray(modelParams?.fields)) return;
+    for (const f of modelParams.fields) {
+      const cur = fieldValues[f.name] as string | number | undefined;
+      if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
+        setField(f.name, f.default);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelParams]);
 
   const selectModel = (value: string) => {
     const entry = allModels.find((model) => model.value === value);
