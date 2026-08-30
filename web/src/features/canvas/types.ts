@@ -127,7 +127,8 @@ export interface GroupableData {
 
 export type TextNodeData = GroupableData & {
   label: string;
-  content: string;
+  content: string; // 富文本 HTML，仅供编辑器渲染
+  plainText: string; // 纯文本，仅供下游消费
   genSettings?: TextGenSettings;
   taskBinding?: TaskBinding;
 };

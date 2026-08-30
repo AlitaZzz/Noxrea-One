@@ -121,6 +121,9 @@ interface CanvasState {
   setAnnotatingNodeId: (id: string | null) => void;
   croppingNodeId: string | null;
   setCroppingNodeId: (id: string | null) => void;
+  // Text node rich-text editing mode (hides node toolbar while editing)
+  editingTextNodeId: string | null;
+  setEditingTextNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -239,6 +242,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setAnnotatingNodeId: (id) => set({ annotatingNodeId: id }),
   croppingNodeId: null,
   setCroppingNodeId: (id) => set({ croppingNodeId: id }),
+  editingTextNodeId: null,
+  setEditingTextNodeId: (id) => set({ editingTextNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),

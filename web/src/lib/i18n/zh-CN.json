@@ -396,6 +396,22 @@
       "9_16": "9:16"
     }
   },
+  "richText": {
+    "bold": "加粗",
+    "italic": "斜体",
+    "underline": "下划线",
+    "heading": "标题",
+    "paragraph": "正文",
+    "heading1": "一级标题",
+    "heading2": "二级标题",
+    "heading3": "三级标题",
+    "bulletList": "无序列表",
+    "orderedList": "有序列表",
+    "blockquote": "引用",
+    "horizontalRule": "横线",
+    "undo": "撤销",
+    "redo": "重做"
+  },
   "shortcuts": {
     "title": "快捷键",
     "zoom": "缩放",

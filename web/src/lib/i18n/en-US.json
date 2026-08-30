@@ -397,6 +397,22 @@
       "9_16": "9:16"
     }
   },
+  "richText": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "heading": "Heading",
+    "paragraph": "Paragraph",
+    "heading1": "Heading 1",
+    "heading2": "Heading 2",
+    "heading3": "Heading 3",
+    "bulletList": "Bullet List",
+    "orderedList": "Ordered List",
+    "blockquote": "Blockquote",
+    "horizontalRule": "Horizontal Rule",
+    "undo": "Undo",
+    "redo": "Redo"
+  },
   "shortcuts": {
     "title": "Shortcuts",
     "zoom": "Zoom",

@@ -2,19 +2,26 @@
  * 文本节点（text-node）渲染组件。
  * 展示 / 就地编辑文本内容与节点标题，支持清空、生成中状态展示、
  * 四角缩放与上下连接桩；内容变更通过自定义事件回传画布层统一落库。
+ * 内容采用 Tiptap 富文本编辑：content 存 HTML 供编辑器渲染，
+ * plainText 存纯文本供下游节点消费。
  */
 "use client";
 
+import Placeholder from "@tiptap/extension-placeholder";
+import { Markdown } from "@tiptap/markdown";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import RichTextToolbar from "@/features/canvas/editing/RichTextToolbar";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
-import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 
 import GeneratingOverlay from "./GeneratingOverlay";
 import ResizeHandle from "./ResizeHandle";
@@ -22,39 +29,88 @@ import ResizeHandle from "./ResizeHandle";
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const { t } = useTranslation();
   const content = data.content || "";
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [editingContent, setEditingContent] = useState(false);
+  const plainText = data.plainText || "";
+  // 编辑态由 store 全局驱动（与裁剪/标注模式一致），进入编辑时隐藏节点工具条
+  const editingContent = useCanvasStore((s) => s.editingTextNodeId) === id;
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.label || t("node.text"));
 
-  const exitEditing = useCallback(() => {
-    const el = textareaRef.current;
-    if (el) {
-      const len = el.value.length;
-      el.setSelectionRange(len, len);
-      el.blur();
-    }
-    window.getSelection()?.removeAllRanges();
-    setEditingContent(false);
-  }, []);
+  const editorRef = useRef<Editor | null>(null);
 
-  const handleChange = useCallback(
-    (value: string) => {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ undoRedo: false }),
+      Markdown,
+      Placeholder.configure({ placeholder: t("node.textPlaceholder"), showOnlyWhenEditable: false }),
+    ],
+    content,
+    editable: false,
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "text-sm leading-relaxed text-white/80 outline-none",
+        "data-text-editor": "",
+      },
+      // 粘贴纯文本时按 Markdown 解析；富文本粘贴（含 HTML）仍走默认解析
+      handlePaste: (view, event) => {
+        const editorInstance = editorRef.current;
+        if (!editorInstance) return false;
+        if (event.clipboardData?.getData("text/html")) return false;
+        const text = event.clipboardData?.getData("text/plain") ?? "";
+        if (!text) return false;
+        editorInstance.commands.insertContent(text, { contentType: "markdown" });
+        return true;
+      },
+    },
+    onUpdate: ({ editor }) => {
+      // 空文档（仅剩一个空段落 <p></p>）时存空串，避免把无意义的空段落写进数据
+      const html = editor.isEmpty ? "" : editor.getHTML();
       window.dispatchEvent(
         new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-          detail: { nodeId: id, data: { content: value } },
+          detail: {
+            nodeId: id,
+            data: { content: html, plainText: editor.getText({ blockSeparator: "\n" }) },
+          },
         })
       );
     },
-    [id]
-  );
+  });
+
+  // 同步 editor 实例到 ref，供 handlePaste 等编辑器外回调使用
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  // 外部修改 content（如 AI 生成回填）时同步到编辑器，否则编辑器不会自动刷新
+  useEffect(() => {
+    if (!editor || editingContent) return;
+    const html = content || "";
+    const current = editor.isEmpty ? "" : editor.getHTML();
+    if (html !== current) editor.commands.setContent(html);
+  }, [editor, content, editingContent]);
+
+  // 编辑态切换：setEditable + 聚焦到末尾
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(editingContent);
+    if (editingContent) {
+      requestAnimationFrame(() => editor.commands.focus("end"));
+    }
+  }, [editor, editingContent]);
+
+  const exitEditing = useCallback(() => {
+    useCanvasStore.getState().setEditingTextNodeId(null);
+    window.getSelection()?.removeAllRanges();
+  }, []);
 
   const handleClear = useCallback(() => {
-    useCanvasStore.getState().updateNodeData(id, { content: "" });
+    useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
     markDirtyImmediate();
-    setEditingContent(true);
-  }, [id]);
+    editor?.commands.setContent("");
+    useCanvasStore.getState().setEditingTextNodeId(id);
+    requestAnimationFrame(() => editor?.commands.focus("end"));
+  }, [id, editor]);
 
   // Listen for node action events from NodeToolbar
   const actionRefs = useRef({ handleClear });
@@ -75,7 +131,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
   // 编辑状态下阻止 wheel / mousedown 冒泡到 React Flow 画布
   useEffect(() => {
-    const el = textareaRef.current;
+    const el = editor?.view.dom;
     if (!el || !editingContent) return;
     const stopWheel = (e: WheelEvent) => e.stopPropagation();
     const stopMouse = (e: MouseEvent) => e.stopPropagation();
@@ -85,15 +141,15 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       el.removeEventListener("wheel", stopWheel);
       el.removeEventListener("mousedown", stopMouse);
     };
-  }, [editingContent]);
+  }, [editor, editingContent]);
 
   const generating = isGenerating(data.taskBinding);
-  const charCount = content.length;
+  const charCount = plainText.length;
 
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title tab */}
-      <div className="flex items-center px-3 py-1 text-[13px] font-medium text-white/80 z-10" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
+      <div className="flex items-center px-4 py-1 text-[13px] font-medium text-white/80 z-10" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
         {editingTitle ? (
           <span className="flex items-center gap-1 flex-1 min-w-0">
             <TextIcon className="shrink-0" />
@@ -133,42 +189,31 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         style={{ background: "var(--canvas-bg, #262626)" }}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          setEditingContent(true);
-          requestAnimationFrame(() => {
-            textareaRef.current?.focus();
-            // 触发一次 mousemove 让浏览器刷新 cursor
-            const rect = textareaRef.current?.getBoundingClientRect();
-            if (rect) {
-              const evt = new MouseEvent("mousemove", { clientX: rect.left + 1, clientY: rect.top + 1 });
-              window.dispatchEvent(evt);
-            }
-          });
+          useCanvasStore.getState().setEditingTextNodeId(id);
         }}
       >
-        <style>{`
-          [data-text-node] { cursor: auto; }
-          [data-text-node]::-webkit-scrollbar { cursor: default; }
-          [data-text-node]::-webkit-scrollbar-thumb { cursor: default; }
-        `}</style>
-        <textarea
-          ref={textareaRef}
-          data-text-node
-          className={`flex-1 w-full resize-none border-none outline-none p-3 text-sm text-white/80 placeholder:text-white/20 ${editingContent ? "nodrag" : ""}`}
-          style={{ background: "transparent", pointerEvents: editingContent ? "auto" : "none", cursor: "auto" }}
-          placeholder={t("node.textPlaceholder")}
-          value={content}
-          onChange={(e) => handleChange(e.target.value)}
-          readOnly={!editingContent}
+        <div
+          className={`flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}
+          style={{ pointerEvents: editingContent ? "auto" : "none" }}
           onBlur={exitEditing}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              textareaRef.current?.blur();
+              editor?.commands.blur();
             }
           }}
-        />
+        >
+          <EditorContent editor={editor} />
+        </div>
         {generating && <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />}
       </div>
+
+      {/* 富文本编辑工具条：定位在节点上方，counter-scale 保持视觉大小恒定 */}
+      {editingContent && editor && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          <RichTextToolbar editor={editor} />
+        </div>
+      )}
 
       {selected && (
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />

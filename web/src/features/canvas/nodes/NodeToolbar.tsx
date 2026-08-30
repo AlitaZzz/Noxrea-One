@@ -177,7 +177,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const nodes = useCanvasStore((s) => s.nodes);
   const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
-  const textContent = (nodes.find(n => n.id === nodeId)?.data as { content?: string })?.content;
+  const textContent = (nodes.find(n => n.id === nodeId)?.data as { plainText?: string })?.plainText;
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const [creationOpen, setCreationOpen] = useState(false);
