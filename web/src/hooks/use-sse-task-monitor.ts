@@ -37,6 +37,24 @@ function resolveTaskError(evt: { error?: string; errorCode?: string }): string {
 }
 
 /**
+ * 将 LLM 返回的纯文本转成文本节点编辑器可渲染的 HTML。
+ * 按空行分段为 <p>，段内换行转 <br/>，并转义 HTML 特殊字符，避免被当作标签解析。
+ */
+function textToHtml(text: string): string {
+  const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  return text
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.replace(/\n+$/, "");
+      if (!trimmed.trim()) return "";
+      const lines = trimmed.split("\n").map((line) => escapeHtml(line)).join("<br/>");
+      return `<p>${lines}</p>`;
+    })
+    .join("");
+}
+
+/**
  * SSE 任务监控 hook。
  *
  * 扫描画布中有 pendingAction/task_id 标记的节点，建立 SSE 流
@@ -103,7 +121,8 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
                       if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
                       useCanvasStore.getState().updateNodeData(nodeId, {
-                        content: evt.resultText,
+                        content: textToHtml(evt.resultText),
+                        plainText: evt.resultText,
                         taskBinding: undefined,
                       }, undefined, { skipHistory: true });
                       markDirtyImmediate();

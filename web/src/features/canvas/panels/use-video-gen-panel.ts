@@ -83,7 +83,7 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       .filter((e) => e.target === nodeId)
       .map((e) => canvasNodes.find((node) => node.id === e.source))
       .filter((node): node is NonNullable<typeof node> => !!node && node.type === NODE_TYPE.TEXT)
-      .map((node) => ({ id: node.id, content: ((node.data as { content?: string }).content || "").trim() }))
+      .map((node) => ({ id: node.id, content: ((node.data as { plainText?: string }).plainText || "").trim() }))
       .filter((txt) => txt.content !== "" && !seen.has(txt.id) && seen.add(txt.id));
   }, [nodeId, canvasNodes, canvasEdges]);
 
