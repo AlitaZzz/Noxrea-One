@@ -15,7 +15,10 @@
       }
     },
     "video": {
-      "allowedFields": ["ratio", "resolution", "seconds", "generateAudio", "n", "refImages", "refAudios", "refVideos", "refMode"],
+      "allowedFields": ["ratio", "resolution", "seconds", "generateAudio", "refImages", "refAudios", "refVideos", "refMode"],
+      "capabilities": {
+        "refMode": { "options": ["text", "image", "first-last", "full"] }
+      },
       "fields": [
         { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
         { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
@@ -58,8 +61,7 @@
     "*seedance*": {
       "video": {
         "capabilities": {
-          "refMode": { "options": ["text", "image", "first-last", "full"] },
-          "generateAudio": { "default": false }
+          "refMode": { "options": ["text", "image", "first-last", "full"] }
         },
         "fields": [
           { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"], "default": "16:9" },
@@ -81,9 +83,7 @@
     "MiniMax-H3": {
       "video": {
         "capabilities": {
-          "refMode": { "options": ["image", "first-last", "full"] },
-          "refVideos": { "default": false },
-          "refAudios": { "default": false }
+          "refMode": { "options": ["image", "first-last", "full"] }
         },
         "allowedFields": ["ratio", "resolution", "seconds", "refImages", "refVideos", "refAudios", "refMode"],
         "fields": [
@@ -276,9 +276,7 @@
     "*agnes-video*": {
       "video": {
         "capabilities": {
-          "refMode": { "options": ["image", "first-last", "full"] },
-          "refVideos": { "default": false },
-          "refAudios": { "default": false }
+          "refMode": { "options": ["text","image", "first-last", "full"] }
         },
         "allowedFields": ["ratio", "resolution", "seconds", "refImages", "refVideos", "refAudios", "refMode"],
         "fields": [

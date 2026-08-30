@@ -36,17 +36,15 @@ export interface ParamField {
   falseShort?: string;
 }
 
-/** 能力开关声明：模型支持哪些参考/附加能力 + 约束 */
+/** 能力声明：模型支持的参考方式约束（当前仅 refMode 被消费） */
 export interface Capability {
   /** refMode 专用：可选参考方式（text/image/first-last/full），未声明则该模型不支持参考 */
   options?: string[];
-  /** 默认值 */
-  default?: boolean | string | number;
 }
 
 export interface ModelParamConfig {
   fields: ParamField[];
-  /** 能力开关声明：前端据此动态渲染开关（refMode/generateAudio/refVideos/refAudios） */
+  /** 能力声明：当前仅 refMode.options 被消费（渲染参考方式下拉） */
   capabilities?: Record<string, Capability>;
   /**
    * 该能力允许接收的业务字段白名单（后端入参校验与 build() 兜底过滤的权威来源）。
