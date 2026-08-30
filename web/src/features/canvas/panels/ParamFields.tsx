@@ -98,16 +98,43 @@ function FieldControl({
         : <SelectGrid field={field} value={value} onChange={onChange} t={t} />;
     case "slider": {
       const unitKey = resolveUnit(field);
+      const num = typeof value === "number" ? value : (field.default as number ?? 1);
+      const min = field.min ?? 1;
+      const max = field.max ?? 15;
+      const step = field.step ?? 1;
       return (
-        <Slider
-          min={field.min ?? 1}
-          max={field.max ?? 15}
-          step={field.step ?? 1}
-          value={typeof value === "number" ? value : (field.default as number ?? 1)}
-          onChange={(v) => onChange(v)}
-          style={{ margin: "0 4px" }}
-          tooltip={{ formatter: (v) => `${v}${unitKey ? t(unitKey) : ""}` }}
-        />
+        <div className="flex items-center gap-3">
+          <Slider
+            min={min}
+            max={max}
+            step={step}
+            value={num}
+            onChange={(v) => onChange(v)}
+            style={{ flex: 1 }}
+            tooltip={{ formatter: (v) => `${v}${unitKey ? t(unitKey) : ""}` }}
+          />
+          <div className="flex items-center rounded-md" style={{
+            background: "var(--canvas-bg-active, #33333a)",
+            padding: "2px 6px",
+            minWidth: 48,
+          }}>
+            <InputNumber
+              className="param-num-input"
+              size="small"
+              min={min}
+              max={max}
+              step={step}
+              value={num}
+              onChange={(v) => v !== null && onChange(v)}
+              variant="borderless"
+              controls={false}
+              style={{ width: 36, color: "var(--canvas-text)", fontSize: 13 }}
+            />
+            <span className="text-xs ml-0.5" style={{ color: "var(--canvas-text)" }}>
+              {unitKey ? t(unitKey) : ""}
+            </span>
+          </div>
+        </div>
       );
     }
     case "switch":
