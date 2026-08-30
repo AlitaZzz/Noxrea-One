@@ -120,7 +120,7 @@
     "directorDesc": "3D空间搭建场景并进行多视角截图",
     "directorOpen": "打开导演台",
     "setAsMain": "设为主图",
-    "textPlaceholder": "在此输入提示词或笔记...",
+    "textPlaceholder": "双击开始编辑...",
     "crop": "裁剪",
     "transform": "旋转 / 翻转",
     "rotate90": "旋转90°",
