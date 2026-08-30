@@ -5,14 +5,16 @@ import { computeNodeSize } from "@/lib/utils/image-utils";
 /**
  * 面板比例选择 -> 空节点占位框跟随。
  *
- * 设计约定（与生成完成后的尺寸逻辑保持一致）：
+ * 设计约定：
  * - 仅当节点无内容（src 为空）时生效：面板的 ratio 语义是"下一次生成"的参数，
  *   节点已有内容时改比例会破坏现有图片的显示，故跳过；
  * - "adaptive" 表示自适应、无确定比例，跳过；
  * - 尺寸换算：比例长边归一到 NODE_DISPLAY_MAX 后走 computeNodeSize。
  *   computeNodeSize 只缩不放，虚拟自然尺寸必须先放大到长边 600，
  *   否则 1:1 / 2:3 / 4:3 等会落在原始小尺寸上（只有 16:9 / 9:16 正常）。
- *   这样所有比例的占位框长边统一 600，与生成结果落地尺寸规则一致。
+ *   这样所有比例的占位框长边统一 600。
+ *   注意：占位框仅用于生成前的临时显示，生成完成后节点尺寸由真实分辨率
+ *   （computeNodeSize(真实宽高)）决定，与上传路径一致。
  *
  * 切换动画：临时给节点 style 加 width/height transition，动画结束后移除，
  * 避免影响拖拽调整大小；连续切换时重置计时器保证动画连续。
@@ -23,17 +25,31 @@ import { computeNodeSize } from "@/lib/utils/image-utils";
 const ANIM_MS = 200;
 const transitionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export function applyRatioToNode(nodeId: string, ratio: string) {
-  if (!ratio || ratio === "adaptive") return;
+/**
+ * 比例字符串 -> 节点显示尺寸（长边归一到 NODE_DISPLAY_MAX 后补标题栏高度）。
+ *
+ * 仅用于生成前占位框：节点大小只由所选比例决定，不由真实分辨率决定
+ * （computeNodeSize 内部只缩不放、长边归一到 600）。
+ * 生成完成后节点尺寸由真实分辨率决定（见 use-sse-task-monitor），不再经过此函数。
+ * 解析失败或 "adaptive"（无确定比例）返回 null。
+ */
+export function ratioToNodeSize(ratio: string): { width: number; height: number } | null {
+  if (!ratio || ratio === "adaptive") return null;
   const [w, h] = ratio.split(":").map(Number);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  // 长边归一到 NODE_DISPLAY_MAX，再走 computeNodeSize（补标题栏高度）
+  const scale = NODE_DISPLAY_MAX / Math.max(w, h);
+  return computeNodeSize(w * scale, h * scale);
+}
+
+export function applyRatioToNode(nodeId: string, ratio: string) {
+  const size = ratioToNodeSize(ratio);
+  if (!size) return;
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   if (!node) return;
   if ((node.data as { src?: string }).src) return; // 已有内容不跟随
 
-  // 长边归一到 NODE_DISPLAY_MAX，再走 computeNodeSize（补标题栏高度）
-  const scale = NODE_DISPLAY_MAX / Math.max(w, h);
-  const { width, height } = computeNodeSize(w * scale, h * scale);
+  const { width, height } = size;
 
   // 连续切换时重置上一个动画的清理计时器
   const prev = transitionTimers.get(nodeId);
