@@ -20,37 +20,36 @@ import {
   Quote,
   Type,
 } from "lucide-react";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import WheelGuard from "@/components/ui/WheelGuard";
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 
 interface Props {
   editor: Editor;
 }
 
-const HEADING_LEVELS = [1, 2, 3] as const;
+/** 标题级别按纽：级别 + 对应图标，直接平铺在工具条上 */
+const HEADING_BUTTONS = [
+  { level: 1, Icon: Heading1 },
+  { level: 2, Icon: Heading2 },
+  { level: 3, Icon: Heading3 },
+] as const;
 
 export default function RichTextToolbar({ editor }: Props) {
   const { t } = useTranslation();
   const { zoom } = useViewport();
-  const [headingOpen, setHeadingOpen] = useState(false);
-
   // 订阅编辑器事务，光标位置 / 格式状态变化时刷新激活态
   const active = useEditorState({
     editor,
     selector: ({ editor: ed }) => ({
       bold: ed.isActive("bold"),
       italic: ed.isActive("italic"),
-      headingLevel: HEADING_LEVELS.find((level) => ed.isActive("heading", { level })) ?? null,
+      headingLevel: HEADING_BUTTONS.find(({ level }) => ed.isActive("heading", { level }))?.level ?? null,
       bulletList: ed.isActive("bulletList"),
       orderedList: ed.isActive("orderedList"),
       blockquote: ed.isActive("blockquote"),
     }),
   });
-
-  const headingLabel = active.headingLevel ? `H${active.headingLevel}` : t("richText.paragraph");
 
   const btnStyle = (on: boolean) => ({
     padding: 8,
@@ -94,45 +93,30 @@ export default function RichTextToolbar({ editor }: Props) {
       </Tooltip>
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-      {/* 块级格式 */}
-      <MenuPopover
-        open={headingOpen}
-        onOpenChange={setHeadingOpen}
-        placement="bottom"
-        trigger={
-          <Tooltip title={t("richText.heading")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: "4px 8px", fontSize: 12, minWidth: 44, ...(active.headingLevel ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            >
-              {headingLabel}
-            </Button>
-          </Tooltip>
-        }
-        content={
-          // 阻止菜单项 mousedown 抢走编辑器焦点，避免触发失焦退出编辑态
-          <div onMouseDown={(e) => e.preventDefault()}>
-            <MenuItem selected={!active.headingLevel} onClick={() => editor.chain().focus().setParagraph().run()}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Type size={16} /> {t("richText.paragraph")}
-              </span>
-            </MenuItem>
-            {HEADING_LEVELS.map((level) => (
-              <MenuItem
-                key={level}
-                selected={active.headingLevel === level}
-                onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
-              >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  {level === 1 ? <Heading1 size={16} /> : level === 2 ? <Heading2 size={16} /> : <Heading3 size={16} />}
-                  {t(`richText.heading${level}`)}
-                </span>
-              </MenuItem>
-            ))}
-          </div>
-        }
-      />
+      {/* 段落类型 — 平铺，无需二级菜单 */}
+      <Tooltip title={t("richText.paragraph")}>
+        <Button
+          type="text"
+          size="middle"
+          style={btnStyle(!active.headingLevel)}
+          icon={<Type size={16} />}
+          onClick={() => editor.chain().focus().setParagraph().run()}
+        />
+      </Tooltip>
+      {HEADING_BUTTONS.map(({ level, Icon }) => (
+        <Tooltip key={level} title={t(`richText.heading${level}`)}>
+          <Button
+            type="text"
+            size="middle"
+            style={btnStyle(active.headingLevel === level)}
+            icon={<Icon size={16} />}
+            onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
+          />
+        </Tooltip>
+      ))}
+      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
+      {/* 块级结构 */}
       <Tooltip title={t("richText.bulletList")}>
         <Button
           type="text"
