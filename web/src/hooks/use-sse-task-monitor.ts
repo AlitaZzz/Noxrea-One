@@ -95,7 +95,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                   if (!line.startsWith("data: ")) continue;
                   try {
                     const evt = JSON.parse(line.slice(6));
-                    const completedUrls: string[] = evt.resultUrls || [];
+                    let completedUrls: string[] = evt.resultUrls || [];
 
                     // LLM 文本结果：从 resultText 更新 content
                     if (evt.status === "completed" && evt.resultText) {
@@ -124,6 +124,16 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
                       const label = prompt.slice(0, 20);
                       const isVideoNode = cur.type === "video-node";
+                      // 多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
+                      // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
+                      // 追加 ?mock=n 区分，避免 URL 完全相同被堆叠卡片 filter(u !== src) 过滤掉导致背景卡不显示。
+                      const expectedCount = Number((evt.config as { n?: number } | undefined)?.n) || 0;
+                      if (!isVideoNode && expectedCount > 1 && completedUrls.length === 1) {
+                        const first = completedUrls[0];
+                        const sep = first.includes("?") ? "&" : "?";
+                        completedUrls = Array.from({ length: expectedCount }, (_, i) =>
+                          i === 0 ? first : `${first}${sep}mock=${i}`);
+                      }
                       const firstUrl = completedUrls[0];
                       // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
                       // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
