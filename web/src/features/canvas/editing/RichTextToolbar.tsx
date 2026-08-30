@@ -19,7 +19,6 @@ import {
   Minus,
   Quote,
   Type,
-  Underline,
 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,7 +43,6 @@ export default function RichTextToolbar({ editor }: Props) {
     selector: ({ editor: ed }) => ({
       bold: ed.isActive("bold"),
       italic: ed.isActive("italic"),
-      underline: ed.isActive("underline"),
       headingLevel: HEADING_LEVELS.find((level) => ed.isActive("heading", { level })) ?? null,
       bulletList: ed.isActive("bulletList"),
       orderedList: ed.isActive("orderedList"),
@@ -94,16 +92,6 @@ export default function RichTextToolbar({ editor }: Props) {
           onClick={() => editor.chain().focus().toggleItalic().run()}
         />
       </Tooltip>
-      <Tooltip title={t("richText.underline")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.underline)}
-          icon={<Underline size={16} />}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-        />
-      </Tooltip>
-
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 块级格式 */}
