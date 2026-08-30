@@ -1,9 +1,9 @@
 /**
  * 文本节点（text-node）渲染组件。
- * 展示 / 就地编辑文本内容与节点标题，支持清空、生成中状态展示、
+ * 展示 / 就地编辑文本内容与节点标题，支持清空、复制、下载、生成中状态展示、
  * 四角缩放与上下连接桩；内容变更通过自定义事件回传画布层统一落库。
  * 内容采用 Tiptap 富文本编辑：content 存 HTML 供编辑器渲染，
- * plainText 存纯文本供下游节点消费。
+ * plainText 存纯文本供下游节点消费，复制 / 下载时序列化为 Markdown。
  */
 "use client";
 
@@ -22,6 +22,8 @@ import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
+import { copyText, downloadTextFile, sanitizeFileName } from "@/lib/utils/text-export";
 
 import GeneratingOverlay from "./GeneratingOverlay";
 import ResizeHandle from "./ResizeHandle";
@@ -116,21 +118,39 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
     markDirtyImmediate();
     editor?.commands.setContent("");
-    useCanvasStore.getState().setEditingTextNodeId(id);
-    requestAnimationFrame(() => editor?.commands.focus("end"));
   }, [id, editor]);
 
+  // 导出为 Markdown：保留标题、列表、加粗等富文本结构，供复制 / 下载复用
+  const getMarkdown = useCallback(() => editor?.getMarkdown() ?? "", [editor]);
+
+  const handleCopy = useCallback(async () => {
+    const md = getMarkdown();
+    if (!md) return;
+    const ok = await copyText(md);
+    showGlobalMessage().success(ok ? t("common.copied") : t("common.copyFailed"));
+  }, [getMarkdown, t]);
+
+  const handleDownload = useCallback(() => {
+    const md = getMarkdown();
+    if (!md) return;
+    // 文件名取节点标题，空标题回退到默认名；清理非法字符避免保存失败
+    const name = sanitizeFileName((data.label || "").trim()) || t("node.text");
+    downloadTextFile(`${name}.md`, md);
+  }, [getMarkdown, data.label, t]);
+
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleClear });
+  const actionRefs = useRef({ handleClear, handleCopy, handleDownload });
   useEffect(() => {
-    actionRefs.current = { handleClear };
-  }, [handleClear]);
+    actionRefs.current = { handleClear, handleCopy, handleDownload };
+  }, [handleClear, handleCopy, handleDownload]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const ce = e as CustomEvent;
       if (ce.detail?.nodeId !== id) return;
       switch (ce.detail?.action) {
         case "clear": actionRefs.current.handleClear(); break;
+        case "copy": void actionRefs.current.handleCopy(); break;
+        case "download": actionRefs.current.handleDownload(); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
