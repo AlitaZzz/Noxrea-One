@@ -43,7 +43,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ undoRedo: false }),
+      StarterKit.configure({ undoRedo: false, underline: false }),
       Markdown,
       Placeholder.configure({ placeholder: t("node.textPlaceholder"), showOnlyWhenEditable: false }),
     ],
