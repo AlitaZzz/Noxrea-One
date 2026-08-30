@@ -37,6 +37,8 @@ SERVER_URL="${SERVER_URL:-http://localhost:4000}"
 # ---------- 上传 ----------
 MAX_UPLOAD_SIZE_MB="${MAX_UPLOAD_SIZE_MB:-30}"
 UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
+# 对外可访问的服务根地址（配置后参考素材以 URL 发给上游，留空则发 base64）
+PUBLIC_URL="${PUBLIC_URL:-}"
 
 # ---------- FFmpeg ----------
 FFMPEG_PATH="${FFMPEG_PATH:-/usr/bin}"

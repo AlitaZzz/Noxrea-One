@@ -4,6 +4,7 @@
  */
 
 import { logEvent } from "@server/core/logger/utils";
+import { getConfig } from "@server/core/config";
 import fs from "fs/promises";
 import path from "path";
 import { localStorage } from "@server/services/storage/backends/local";
@@ -64,7 +65,7 @@ async function readSelfFile(relPath: string): Promise<string | null> {
 /**
  * 参考素材通用解析（对齐 Python resolve_refs 三档策略）：
  * 1) data: URL → 直接透传
- * 2) 同源 URL（/api/files/ 或纯存储路径） → 读本机磁盘转 base64 data URL
+ * 2) 同源 URL（/api/files/ 或纯存储路径） → 配置 PUBLIC_URL 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
  * 3) 外链 URL → 透传原串
  * 失败时透传原 URL。
  */
@@ -85,9 +86,15 @@ async function resolveRefList(
         continue;
       }
 
-      // 同源 URL（/api/files/ 或纯存储路径）→ 提取相对路径 → 转 base64
+      // 同源 URL（/api/files/ 或纯存储路径）：
+      // 配置了 PUBLIC_URL → 拼公网 URL 透传（上游按 URL 拉取）；未配置 → 回退读盘转 base64
       if (url.startsWith("/api/files/") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
         const relPath = url.startsWith("/api/files/") ? url.replace(/^\/api\/files\//, "") : url;
+        const publicUrl = getConfig().PUBLIC_URL.replace(/\/+$/, "");
+        if (publicUrl) {
+          resolved.push(`${publicUrl}/api/files/${relPath}`);
+          continue;
+        }
         const dataUrl = await readSelfFile(relPath);
         resolved.push(dataUrl ?? url);
         continue;

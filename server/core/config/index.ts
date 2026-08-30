@@ -49,6 +49,8 @@ const configSchema = z.object({
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(30),
   // 上传文件根目录（相对项目根，或绝对路径）
   UPLOAD_DIR: z.string().default("uploads"),
+  /** 对外可访问的服务根地址（如 https://canvas.example.com）。配置后参考素材以 URL 发给上游，留空则回退 base64。 */
+  PUBLIC_URL: z.string().default(""),
   /** 资源目录（JSON 配置与技能文件根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
   RESOURCES_DIR: z.string().default("server/resources"),
 
