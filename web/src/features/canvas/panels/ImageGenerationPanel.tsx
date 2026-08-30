@@ -29,9 +29,10 @@ import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
-import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
+import type { ReferenceItem } from "../shared/reference";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
 
 interface Props { nodeId: string; }
