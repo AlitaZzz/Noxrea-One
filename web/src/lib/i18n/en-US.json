@@ -120,7 +120,7 @@
     "directorDesc": "Build 3D scenes and multi-angle capture",
     "directorOpen": "Open Director",
     "setAsMain": "Set as Main",
-    "textPlaceholder": "Write your prompt or notes here...",
+    "textPlaceholder": "Double-click to edit...",
     "crop": "Crop",
     "transform": "Rotate / Flip",
     "rotate90": "Rotate 90°",
