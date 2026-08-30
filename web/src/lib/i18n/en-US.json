@@ -1,6 +1,8 @@
 {
   "common": {
     "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Copy failed",
     "info": "Info",
     "delete": "Delete",
     "edit": "Edit",
