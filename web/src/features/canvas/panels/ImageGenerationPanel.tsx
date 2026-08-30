@@ -124,7 +124,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       .filter((e) => e.target === nodeId)
       .map((e) => canvasNodes.find((n) => n.id === e.source))
       .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
-      .map((n) => ({ id: n.id, content: ((n.data as { content?: string }).content || "").trim() }))
+      .map((n) => ({ id: n.id, content: ((n.data as { plainText?: string }).plainText || "").trim() }))
       .filter((t) => t.content !== "" && !seen.has(t.id) && seen.add(t.id));
   }, [nodeId, canvasNodes, canvasEdges]);
 
