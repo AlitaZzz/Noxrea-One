@@ -1251,3 +1251,9 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   box-shadow: none !important;
   outline: none !important;
 }
+/* 焦点指示：以上把描边与光晕都清掉了，会让键盘用户失去可见焦点，
+   故改用背景提亮来指示，既保持无边框观感又不引入主色。
+   注：文本 input 即使用鼠标点击也匹配 :focus-visible，无法只针对键盘显示。 */
+.param-num-input:focus-within {
+  background: var(--canvas-border-light, #3a3a40);
+}
