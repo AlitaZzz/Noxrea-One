@@ -37,6 +37,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     useEditableTitle(id, data.label || t("node.text"));
 
   const editorRef = useRef<Editor | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -137,6 +138,15 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     return () => el.removeEventListener("mousedown", stopMouse);
   }, [editor, editingContent]);
 
+  // 编辑态或选中态下消费滚轮：仅作用于节点内滚动，不冒泡到画布缩放/平移
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || (!editingContent && !selected)) return;
+    const stopWheel = (e: WheelEvent) => e.stopPropagation();
+    el.addEventListener("wheel", stopWheel);
+    return () => el.removeEventListener("wheel", stopWheel);
+  }, [editingContent, selected]);
+
   const generating = isGenerating(data.taskBinding);
   const charCount = plainText.length;
 
@@ -187,8 +197,9 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         }}
       >
         <div
+          ref={scrollRef}
           className={`flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}
-          style={{ pointerEvents: editingContent ? "auto" : "none" }}
+          style={{ pointerEvents: editingContent || selected ? "auto" : "none" }}
           onBlur={exitEditing}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
