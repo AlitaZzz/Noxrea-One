@@ -26,8 +26,9 @@ import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
-import MentionPrompt, { type ReferenceItem } from "../shared/MentionPrompt";
+import MentionPrompt from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
+import type { ReferenceItem } from "../shared/reference";
 import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
 
 interface Props {

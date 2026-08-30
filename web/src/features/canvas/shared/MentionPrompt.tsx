@@ -1,20 +1,29 @@
 /**
  * 支持 @ 引用的提示词输入框。
- * 基于 contentEditable 实现：输入 @ 唤起候选下拉，选中后插入不可拆分的 chip，
- * 对外始终以「图N / 音N / 视N」形式输出纯文本，被各生成面板与对话面板复用。
+ * 基于 Tiptap 实现（与画布文本节点同一套编辑器）：@ 唤起候选下拉，选中后插入
+ * mention 原子节点并渲染为 chip；对外始终以「图片N / 音频N / 视频N」形式输出纯文本，
+ * 被各生成面板与对话面板复用。
+ *
+ * 编辑器扩展配置在渲染期创建，回调内不得访问 ref 或 hook 返回值。
+ * 因此运行时状态收敛在 bridge（模块级 WeakMap，以编辑器 DOM 为键）中，
+ * 由 React state 同步渲染快照。
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { JSONContent } from "@tiptap/core";
+import { Mention } from "@tiptap/extension-mention";
+import Placeholder from "@tiptap/extension-placeholder";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import type { SuggestionProps } from "@tiptap/suggestion";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-
-import MentionDropdown, { type ReferenceItem,refLabel as chipLabel, refLabelKey, refShortLabel } from "./MentionDropdown";
-
-export type { ReferenceItem } from "./MentionDropdown";
-import { MentionIconSvg } from "@/components/ui/icons/agent/MentionIcon";
+import MentionChip from "./MentionChip";
+import MentionDropdown from "./MentionDropdown";
+import { type ReferenceItem, refLabel, refLabelKey } from "./reference";
 
 interface Props {
   references: ReferenceItem[];
@@ -24,382 +33,320 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-/** Extract plain text from contentEditable: chips → "图N"/"音N", <br> → \n */
-function extractPlainText(root: HTMLElement): string {
-  const parts: string[] = [];
-  function walk(node: Node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      parts.push(node.textContent || "");
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      if (el.classList.contains("mention-chip")) {
-        const idx = parseInt(el.getAttribute("data-ref-index") || "0", 10);
-        const kindAttr = el.getAttribute("data-ref-kind");
-        const prefix = kindAttr === "audio" ? "音频" : kindAttr === "video" ? "视频" : "图片";
-        parts.push(`${prefix}${idx + 1}`);
-      } else if (el.tagName === "BR") {
-        parts.push("\n");
-      } else {
-        el.childNodes.forEach(walk);
-      }
-    }
-  }
-  root.childNodes.forEach(walk);
-  return parts.join("");
+interface MentionState {
+  items: ReferenceItem[];
+  position: { x: number; y: number };
 }
 
-/** Render plain text → contentEditable HTML with chip spans */
-function renderHtml(text: string, references: ReferenceItem[]): string {
-  const lookup = new Map<string, ReferenceItem>();
-  references.forEach((r) => {
-    lookup.set(chipLabel(r), r); // 全称（新格式）
-    lookup.set(refShortLabel(r), r); // 缩写（旧数据兼容）
+/** 编辑器回调与 React 之间的桥接数据 */
+interface SuggestionBridge {
+  references: ReferenceItem[];
+  onChange: (text: string) => void;
+  translate: (key: string, options?: Record<string, unknown>) => string;
+  mention: MentionState | null;
+  selectedIndex: number;
+  command: ((item: ReferenceItem) => void) | null;
+}
+
+/**
+ * 编辑器 DOM → bridge。
+ * suggestion 的 onKeyDown 回调只提供 view（不含 editor），故统一以编辑器 DOM 为键关联。
+ */
+const bridges = new WeakMap<object, SuggestionBridge>();
+
+/** chip 在纯文本中的存储形式：图片N / 音频N / 视频N */
+const MENTION_PATTERN = /(图片|音频|视频)(\d+)/g;
+
+/** 纯文本 → 文档：chip 文本还原为 mention 节点，换行切分为段落 */
+function textToDoc(text: string, references: ReferenceItem[]): JSONContent {
+  const lookup = new Map(references.map((r) => [refLabel(r), r]));
+
+  const content = text.split("\n").map((line) => {
+    const inline: JSONContent[] = [];
+    let last = 0;
+    MENTION_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = MENTION_PATTERN.exec(line)) !== null) {
+      if (match.index > last) inline.push({ type: "text", text: line.slice(last, match.index) });
+      const ref = lookup.get(match[0]);
+      inline.push(
+        ref
+          ? { type: "mention", attrs: { src: ref.src, thumbnail: ref.thumbnail, index: ref.index, kind: ref.kind } }
+          : { type: "text", text: match[0] },
+      );
+      last = match.index + match[0].length;
+    }
+    if (last < line.length) inline.push({ type: "text", text: line.slice(last) });
+
+    return { type: "paragraph", ...(inline.length ? { content: inline } : {}) };
   });
 
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return { type: "doc", content };
+}
 
-  let html = escaped.replace(/\n/g, "<br>");
+function filterItems(bridge: SuggestionBridge | undefined, query: string): ReferenceItem[] {
+  if (!bridge) return [];
+  const refs = bridge.references;
+  if (!query) return refs;
+  return refs.filter(
+    (r) => refLabel(r).includes(query) || bridge.translate(refLabelKey(r), { index: r.index + 1 }).includes(query),
+  );
+}
 
-  html = html.replace(/(图片|音频|视频|图|音|视)(\d+)/g, (match) => {
-    const ref = lookup.get(match);
-    if (!ref) return match;
-    // 统一显示为全称（旧数据中的缩写也会被规范化）
-    const text = chipLabel(ref);
-    let inner: string;
-    if (ref.kind === "audio") {
-      inner = `<span class="mention-wave" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;">${MentionIconSvg}</span>${text}`;
-    } else if (ref.kind === "video") {
-      inner = `<video src="${escapeAttr(ref.thumbnail)}#t=0.1" muted preload="metadata" playsinline style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--canvas-bg-hover,#3c3c3c);">${text}`;
-    } else {
-      inner = `<img src="${escapeAttr(ref.thumbnail)}" style="width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;">${text}`;
+function syncMention(
+  props: SuggestionProps<ReferenceItem>,
+  bridge: SuggestionBridge,
+  setMention: (state: MentionState | null) => void,
+  setSelectedIndex: (index: number) => void,
+) {
+  bridge.command = (item) => props.command(item);
+  const rect = props.clientRect?.();
+  const next: MentionState = { items: props.items, position: rect ? { x: rect.left, y: rect.bottom } : { x: 0, y: 0 } };
+
+  bridge.mention = next;
+  bridge.selectedIndex = 0;
+  setMention(next);
+  setSelectedIndex(0);
+}
+
+/**
+ * 下拉键盘导航。返回 true 表示按键已被消费，
+ * 阻止 ProseMirror 继续处理（避免 Enter 同时插入换行）。
+ */
+function handleSuggestionKeyDown(
+  event: KeyboardEvent,
+  bridge: SuggestionBridge,
+  setMention: (state: MentionState | null) => void,
+  setSelectedIndex: (index: number) => void,
+): boolean {
+  const current = bridge.mention;
+  if (!current) return false;
+  const items = current.items;
+
+  switch (event.key) {
+    case "ArrowDown": {
+      const next = Math.min(bridge.selectedIndex + 1, items.length - 1);
+      bridge.selectedIndex = next;
+      setSelectedIndex(next);
+      return true;
     }
-    return `<span class="mention-chip" contenteditable="false" data-ref-src="${escapeAttr(ref.src)}" data-ref-index="${ref.index}" data-ref-kind="${ref.kind}" style="${escapeAttr(CHIP_STYLE)}">${inner}</span>`;
-  });
-
-  return html;
-}
-
-function escapeAttr(s: string) {
-  return s.replace(/"/g, "&quot;").replace(/&/g, "&amp;");
-}
-
-/** Normalize text for comparison: strip trailing newlines browser may inject */
-function norm(s: string): string {
-  return s.replace(/\n+$/, "");
-}
-
-function getCursorScreenPos(editable: HTMLElement): { x: number; y: number } | null {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0).cloneRange();
-  range.collapse(true);
-
-  const marker = document.createTextNode("\u200B");
-  range.insertNode(marker);
-  const rect = range.getBoundingClientRect();
-  marker.remove();
-
-  if (rect.width === 0 && rect.height === 0 && rect.left === 0 && rect.top === 0) return null;
-  return { x: rect.left, y: rect.bottom };
-}
-
-function findAtPosition(editable: HTMLElement): { node: Text; atOffset: number; query: string } | null {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-
-  let node: Node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) {
-    if (node === editable && editable.childNodes.length > 0) {
-      const child = editable.childNodes[range.startOffset - 1];
-      if (child && child.nodeType === Node.TEXT_NODE) {
-        node = child;
-      } else if (child && child.nodeType === Node.ELEMENT_NODE && (child as HTMLElement).classList.contains("mention-chip")) {
-        return null;
-      }
+    case "ArrowUp": {
+      const next = Math.max(bridge.selectedIndex - 1, 0);
+      bridge.selectedIndex = next;
+      setSelectedIndex(next);
+      return true;
     }
-    if (node.nodeType !== Node.TEXT_NODE) return null;
+    case "Enter": {
+      const item = items[bridge.selectedIndex];
+      if (item) bridge.command?.(item);
+      return true;
+    }
+    case "Escape":
+      bridge.mention = null;
+      setMention(null);
+      return true;
+    default:
+      return false;
   }
-
-  const textNode = node as Text;
-  const offset = range.startOffset;
-  const text = textNode.textContent || "";
-  const before = text.slice(0, offset);
-  const atMatch = before.match(/@([^\s@]*)$/);
-  if (!atMatch) return null;
-
-  return { node: textNode, atOffset: offset - atMatch[0].length, query: atMatch[1] };
 }
 
-const CHIP_STYLE =
-  "display:inline-flex;align-items:center;gap:4px;padding:2px 6px 2px 3px;margin:0 2px;border-radius:5px;font-size:13px;line-height:1;background:transparent;border:1px solid var(--canvas-border,#3a3a3a);white-space:nowrap;cursor:default;user-select:none;vertical-align:middle;color:var(--canvas-text)";
+function closeMention(bridge: SuggestionBridge, setMention: (state: MentionState | null) => void) {
+  bridge.mention = null;
+  bridge.command = null;
+  setMention(null);
+}
 
 const MentionPrompt = ({ references, value, onChange, placeholder, style }: Props) => {
-  const editableRef = useRef<HTMLDivElement>(null);
-  const [mentionActive, setMentionActive] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState("");
-  const [mentionPos, setMentionPos] = useState({ x: 0, y: 0 });
-  const referencesRef = useRef(references);
-  useEffect(() => {
-    referencesRef.current = references;
-  }, [references]);
+  const { t } = useTranslation();
 
-  // Sync DOM ← value when value/references change externally
-  useEffect(() => {
-    if (!editableRef.current) return;
-    const current = norm(extractPlainText(editableRef.current));
-    const target = norm(value);
-    if (current !== target) {
-      editableRef.current.innerHTML = renderHtml(value, references);
-    }
-  }, [value, references]);
+  const [mention, setMention] = useState<MentionState | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Update chip labels when refOrder changes
+  const editor = useEditor({
+    extensions: [
+      // prompt 保持纯文本语义：仅保留文档 / 段落 / 文本 / 撤销重做，关闭全部富文本格式
+      StarterKit.configure({
+        blockquote: false,
+        bold: false,
+        bulletList: false,
+        code: false,
+        codeBlock: false,
+        dropcursor: false,
+        gapcursor: false,
+        hardBreak: false,
+        heading: false,
+        horizontalRule: false,
+        italic: false,
+        link: false,
+        listItem: false,
+        listKeymap: false,
+        orderedList: false,
+        strike: false,
+        trailingNode: false,
+        underline: false,
+      }),
+      Mention.extend({
+        // 扩展默认属性，承载引用素材信息（供 chip 渲染与纯文本序列化）
+        addAttributes() {
+          return {
+            src: { default: "" },
+            thumbnail: { default: "" },
+            index: { default: 0 },
+            kind: { default: "image" },
+          };
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(MentionChip);
+        },
+      }).configure({
+        HTMLAttributes: { class: "mention-chip" },
+        // 纯文本化：chip 输出为「图片N / 音频N / 视频N」
+        renderText: ({ node }) => refLabel(node.attrs as unknown as ReferenceItem),
+        renderHTML: ({ options, node }) => ["span", options.HTMLAttributes, refLabel(node.attrs as unknown as ReferenceItem)],
+        // 退格直接整体删除 @ 触发符与 chip
+        deleteTriggerWithBackspace: true,
+        suggestion: {
+          char: "@",
+          // 不限制 @ 前的字符（默认仅允许空格前缀），输入即唤起候选
+          allowedPrefixes: null,
+          items: ({ editor, query }) => filterItems(bridges.get(editor.view.dom), query),
+          render: () => ({
+            onStart: (props) => {
+              const bridge = bridges.get(props.editor.view.dom);
+              if (bridge) syncMention(props, bridge, setMention, setSelectedIndex);
+            },
+            onUpdate: (props) => {
+              const bridge = bridges.get(props.editor.view.dom);
+              if (bridge) syncMention(props, bridge, setMention, setSelectedIndex);
+            },
+            onKeyDown: ({ view, event }) => {
+              const bridge = bridges.get(view.dom);
+              return bridge ? handleSuggestionKeyDown(event, bridge, setMention, setSelectedIndex) : false;
+            },
+            onExit: ({ editor }) => {
+              const bridge = bridges.get(editor.view.dom);
+              if (bridge) closeMention(bridge, setMention);
+            },
+          }),
+        },
+      }),
+      Placeholder.configure({ placeholder }),
+    ],
+    content: textToDoc(value, references),
+    onUpdate: ({ editor }) => {
+      const bridge = bridges.get(editor.view.dom);
+      bridge?.onChange(editor.getText({ blockSeparator: "\n" }));
+    },
+    editorProps: {
+      attributes: { class: "mention-editable nodrag" },
+    },
+    immediatelyRender: false,
+  });
+
+  // 建立 / 刷新桥接数据（保留 mention 等交互态，避免重建下拉）
   useEffect(() => {
-    if (!editableRef.current) return;
-    const chips = editableRef.current.querySelectorAll<HTMLElement>(".mention-chip");
+    if (!editor) return;
+    const bridge: SuggestionBridge = bridges.get(editor.view.dom) ?? {
+      references,
+      onChange,
+      translate: t as SuggestionBridge["translate"],
+      mention: null,
+      selectedIndex: 0,
+      command: null,
+    };
+    bridge.references = references;
+    bridge.onChange = onChange;
+    bridge.translate = t as SuggestionBridge["translate"];
+    bridges.set(editor.view.dom, bridge);
+  }, [editor, references, onChange, t]);
+
+  // 外部变更 value（切换节点 / AI 回填）时同步进编辑器；序列化结果一致则跳过，避免循环
+  useEffect(() => {
+    if (!editor) return;
+    if (editor.getText({ blockSeparator: "\n" }) === value) return;
+    editor.commands.setContent(textToDoc(value, references), { emitUpdate: false });
+  }, [value, references, editor]);
+
+  // 引用变化：同步 chip 序号（图片1 ↔ 图片2），并移除已从参考区删除的引用
+  useEffect(() => {
+    if (!editor) return;
+    const { state } = editor;
+    const tr = state.tr;
+
+    // 先收集全部 mention，再从后往前处理——删除节点会改变文档结构，倒序可避免位置偏移
+    const entries: Array<{ pos: number; node: PMNode; ref: ReferenceItem | undefined }> = [];
+    state.doc.descendants((node, pos) => {
+      if (node.type.name !== "mention") return;
+      entries.push({
+        pos,
+        node,
+        ref: references.find((r) => r.src === node.attrs.src && r.kind === node.attrs.kind),
+      });
+    });
+
     let changed = false;
-    chips.forEach((chip) => {
-      const src = chip.getAttribute("data-ref-src");
-      const kindAttr = chip.getAttribute("data-ref-kind");
-      const kind = kindAttr === "audio" || kindAttr === "video" ? kindAttr : "image";
-      const ref = references.find((r) => r.src === src && r.kind === kind);
-      if (ref) {
-        const oldIdx = chip.getAttribute("data-ref-index");
-        if (oldIdx !== String(ref.index)) {
-          chip.setAttribute("data-ref-index", String(ref.index));
-          const labelText = chipLabel(ref);
-          const textNode = Array.from(chip.childNodes).find(
-            (n) => n.nodeType === Node.TEXT_NODE,
-          );
-          if (textNode) textNode.textContent = labelText;
-          else chip.appendChild(document.createTextNode(labelText));
-          changed = true;
-        }
-      } else {
-        const text = chip.textContent || "";
-        chip.replaceWith(document.createTextNode(text));
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const { pos, node, ref } = entries[i];
+
+      if (!ref) {
+        // 引用已被移除：连同 chip 一起删除，并吃掉紧邻的一个空格，避免留下双空格
+        let from = pos;
+        let to = pos + node.nodeSize;
+        const before = tr.doc.textBetween(Math.max(0, pos - 1), pos);
+        const after = to < tr.doc.content.size ? tr.doc.textBetween(to, to + 1) : "";
+
+        if (before === " ") from -= 1;
+        else if (after === " ") to += 1;
+
+        tr.delete(from, to);
+        changed = true;
+      } else if (ref.index !== node.attrs.index) {
+        tr.setNodeMarkup(pos, undefined, { ...node.attrs, index: ref.index });
         changed = true;
       }
-    });
-    if (changed) {
-      const newText = extractPlainText(editableRef.current);
-      onChange(newText);
     }
-  }, [references]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const checkMention = useCallback(() => {
-    if (!editableRef.current) return;
-    const refs = referencesRef.current;
-    if (refs.length === 0) {
-      setMentionActive(false);
-      return;
-    }
-    const atInfo = findAtPosition(editableRef.current);
-    if (atInfo) {
-      setMentionQuery(atInfo.query);
-      const pos = getCursorScreenPos(editableRef.current);
-      if (pos) setMentionPos(pos);
-      setMentionActive(true);
-    } else {
-      setMentionActive(false);
-    }
-  }, []);
-
-  const syncAndCheck = useCallback(() => {
-    if (!editableRef.current) return;
-    const text = extractPlainText(editableRef.current);
-    onChange(text);
-    checkMention();
-  }, [onChange, checkMention]);
-
-  const handleSelectMention = useCallback(
-    (item: ReferenceItem) => {
-      if (!editableRef.current) return;
-      const atInfo = findAtPosition(editableRef.current);
-      if (!atInfo) { setMentionActive(false); return; }
-
-      const { node: textNode, atOffset } = atInfo;
-      const sel = window.getSelection();
-      if (!sel) return;
-
-      const range = document.createRange();
-      const endOffset = sel.getRangeAt(0).startContainer === textNode
-        ? sel.getRangeAt(0).startOffset : textNode.length;
-      range.setStart(textNode, atOffset);
-      range.setEnd(textNode, endOffset);
-      range.deleteContents();
-
-      const chip = document.createElement("span");
-      chip.className = "mention-chip";
-      chip.contentEditable = "false";
-      chip.setAttribute("data-ref-src", item.src);
-      chip.setAttribute("data-ref-index", String(item.index));
-      chip.setAttribute("data-ref-kind", item.kind);
-      chip.setAttribute("style", CHIP_STYLE);
-
-      if (item.kind === "audio") {
-        const wave = document.createElement("span");
-        wave.style.cssText =
-          "display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;color:#1d9e75;";
-        wave.innerHTML = MentionIconSvg;
-        chip.appendChild(wave);
-      } else if (item.kind === "video") {
-        const vid = document.createElement("video");
-        vid.src = `${item.thumbnail}#t=0.1`;
-        vid.muted = true;
-        vid.preload = "metadata";
-        vid.setAttribute("playsinline", "");
-        vid.style.cssText = "width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--canvas-bg-hover,#3c3c3c);";
-        chip.appendChild(vid);
-      } else {
-        const img = document.createElement("img");
-        img.src = item.thumbnail;
-        img.style.cssText = "width:20px;height:20px;border-radius:3px;object-fit:cover;flex-shrink:0;";
-        chip.appendChild(img);
-      }
-      chip.appendChild(document.createTextNode(chipLabel(item)));
-
-      range.insertNode(chip);
-
-      const newRange = document.createRange();
-      newRange.setStartAfter(chip);
-      newRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-
-      setMentionActive(false);
-      onChange(extractPlainText(editableRef.current));
-    },
-    [onChange],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (mentionActive) {
-        if (["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) {
-          if (e.key === "Escape") { e.preventDefault(); setMentionActive(false); }
-          return;
-        }
-      }
-
-      if (e.key === "Backspace" && editableRef.current) {
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const range = sel.getRangeAt(0);
-        if (!range.collapsed) return;
-
-        const node = range.startContainer;
-        const offset = range.startOffset;
-
-        const delChip = (el: ChildNode) => {
-          if (el && el.nodeType === Node.ELEMENT_NODE && (el as HTMLElement).classList.contains("mention-chip")) {
-            e.preventDefault();
-            el.remove();
-            onChange(extractPlainText(editableRef.current!));
-            return true;
-          }
-          return false;
-        };
-
-        if (node.nodeType === Node.TEXT_NODE && offset === 0) {
-          if (delChip(node.previousSibling!)) return;
-        }
-        if (node === editableRef.current) {
-          if (delChip(editableRef.current.childNodes[offset - 1])) return;
-        }
-      }
-
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        if (editableRef.current) {
-          document.execCommand("insertLineBreak");
-          onChange(extractPlainText(editableRef.current));
-        }
-      }
-    },
-    [mentionActive, onChange],
-  );
-
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      e.preventDefault();
-      document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
-      if (editableRef.current) {
-        onChange(extractPlainText(editableRef.current));
-      }
-    },
-    [onChange],
-  );
-
-  const { t } = useTranslation();
-  const filteredRefs = mentionQuery
-    ? references.filter(
-        (r) =>
-          chipLabel(r).includes(mentionQuery) ||
-          refShortLabel(r).includes(mentionQuery) ||
-          t(refLabelKey(r), { index: r.index + 1 }).includes(mentionQuery),
-      )
-    : references;
-  const showDropdown = mentionActive && filteredRefs.length > 0;
+    if (!changed) return;
+    tr.setMeta("addToHistory", false);
+    editor.view.dispatch(tr);
+    bridges.get(editor.view.dom)?.onChange(editor.getText({ blockSeparator: "\n" }));
+  }, [references, editor]);
 
   return (
     <div style={{ position: "relative" }}>
-      <style>{`
-        .mention-editable:focus {
-          outline: none !important;
-          box-shadow: none !important;
-          border-color: transparent !important;
-        }
-        .mention-editable:empty::before {
-          content: attr(data-placeholder);
-          color: var(--canvas-text-muted, #888);
-          pointer-events: none;
-        }
-        .mention-scroll::-webkit-scrollbar { width: 6px; }
-        .mention-scroll::-webkit-scrollbar-thumb {
-          background: var(--canvas-border, #3a3a3a);
-          border-radius: 3px;
-        }
-      `}</style>
       <div
         className="mention-scroll"
         style={{
-          width: "100%", minHeight: 100, maxHeight: 240,
-          overflowY: "auto", padding: 0,
-          borderRadius: 6, background: "transparent", border: "none",
+          width: "100%",
+          minHeight: 100,
+          maxHeight: 240,
+          overflowY: "auto",
+          padding: 0,
+          borderRadius: 6,
+          background: "transparent",
+          border: "none",
           ...style,
         }}
       >
-        <div
-          ref={editableRef}
-          className="mention-editable nodrag"
-          contentEditable
-          suppressContentEditableWarning
-          data-placeholder={placeholder}
-          onInput={syncAndCheck}
-          onKeyUp={syncAndCheck}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onBlur={() => { setTimeout(() => setMentionActive(false), 200); }}
-          style={{
-            width: "100%", minHeight: 100, padding: "8px 0",
-            fontSize: 13, lineHeight: 1.6, color: "var(--canvas-text)",
-            background: "transparent", border: "none",
-            wordBreak: "break-word", whiteSpace: "pre-wrap", outline: "none",
-          }}
-        />
+        <EditorContent editor={editor} />
       </div>
-      {showDropdown &&
+      {mention && mention.items.length > 0 &&
         createPortal(
           <MentionDropdown
-            items={filteredRefs}
-            position={mentionPos}
-            onSelect={handleSelectMention}
-            onClose={() => setMentionActive(false)}
+            items={mention.items}
+            position={mention.position}
+            selectedIndex={selectedIndex}
+            onHover={(index) => {
+              const target = editor ? bridges.get(editor.view.dom) : undefined;
+              if (!target) return;
+              target.selectedIndex = index;
+              setSelectedIndex(index);
+            }}
+            onSelect={(item) => {
+              const target = editor ? bridges.get(editor.view.dom) : undefined;
+              target?.command?.(item);
+            }}
           />,
           document.body,
         )}

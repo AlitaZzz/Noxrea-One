@@ -18,8 +18,8 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 
-import type { ReferenceItem } from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
+import type { ReferenceItem } from "../shared/reference";
 
 export interface VideoGenPanelInput {
   nodeId: string;

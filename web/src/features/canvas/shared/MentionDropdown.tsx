@@ -1,111 +1,34 @@
 ﻿/**
  * @ 引用候选下拉列表。
- * 展示可引用的图片 / 音频 / 视频素材缩略项，支持键盘上下选择与外部点击关闭，
- * 并对外导出引用项类型 ReferenceItem。
+ * 展示可引用的图片 / 音频 / 视频素材缩略项。
+ * 纯受控组件：选中项由外部（编辑器 suggestion）驱动，键盘事件由 suggestion 的 onKeyDown 统一处理。
  */
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-export interface ReferenceItem {
-  src: string;
-  thumbnail: string;
-  index: number; // 0-based index within its kind list
-  kind: "image" | "audio" | "video";
-  label?: string; // audio/video label (filename), unused for images
-}
-
-/** 引用项 chip 标签：图片N / 音频N / 视频N（同时作为提示词存储格式） */
-export function refLabel(item: ReferenceItem): string {
-  const prefix = item.kind === "audio" ? "音频" : item.kind === "video" ? "视频" : "图片";
-  return `${prefix}${item.index + 1}`;
-}
-
-/** 引用项缩写：图N / 音N / 视N（旧提示词数据兼容匹配） */
-export function refShortLabel(item: ReferenceItem): string {
-  const prefix = item.kind === "audio" ? "音" : item.kind === "video" ? "视" : "图";
-  return `${prefix}${item.index + 1}`;
-}
-
-/** 引用项全称词条 key：图片N / 音频N / 视频N（与参考区缩略图标签一致） */
-export function refLabelKey(item: ReferenceItem): string {
-  return item.kind === "audio"
-    ? "common.refAudioLabel"
-    : item.kind === "video"
-      ? "common.refVideoLabel"
-      : "common.refImageLabel";
-}
+import { type ReferenceItem, refLabel, refLabelKey } from "./reference";
 
 interface Props {
   items: ReferenceItem[];
   position: { x: number; y: number };
+  selectedIndex: number;
+  onHover: (index: number) => void;
   onSelect: (item: ReferenceItem) => void;
-  onClose: () => void;
 }
 
-const MentionDropdown = memo(function MentionDropdown({ items, position, onSelect, onClose }: Props) {
+const MentionDropdown = memo(function MentionDropdown({ items, position, selectedIndex, onHover, onSelect }: Props) {
   const { t } = useTranslation();
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  // 键盘导航时让选中项保持可见
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (listRef.current && !listRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const timer = setTimeout(() => document.addEventListener("mousedown", handler), 100);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", handler);
-    };
-  }, [onClose]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, items.length - 1));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (items[selectedIndex]) {
-            onSelect(items[selectedIndex]);
-          }
-          return;
-        case "Escape":
-          e.preventDefault();
-          onClose();
-          return;
-        default:
-          return;
-      }
-      // Scroll selected into view
-      const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
-      el?.scrollIntoView({ block: "nearest" });
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [items, selectedIndex, onSelect, onClose]);
-
-  // Reset selection when items change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [items]);
-
-  const handleMouseEnter = useCallback((i: number) => {
-    setSelectedIndex(i);
-  }, []);
+    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
 
   if (items.length === 0) return null;
 
@@ -149,8 +72,9 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, onSelec
               ? "var(--canvas-bg-hover, #3c3c3c)"
               : "transparent",
           }}
-          onMouseEnter={() => handleMouseEnter(i)}
+          onMouseEnter={() => onHover(i)}
           onMouseDown={(e) => {
+            // 阻止默认行为，避免抢走编辑器焦点导致 suggestion 提前退出
             e.preventDefault();
             onSelect(item);
           }}
