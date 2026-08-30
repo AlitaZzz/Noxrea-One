@@ -103,6 +103,7 @@ export default function InfiniteCanvas() {
   const snapThreshold = useCanvasStore((s) => s.snapThreshold);
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
+  const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -585,6 +586,7 @@ export default function InfiniteCanvas() {
     // Exit annotation and crop mode when clicking the canvas pane
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
+    useCanvasStore.getState().setEditingTextNodeId(null);
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
@@ -603,6 +605,10 @@ export default function InfiniteCanvas() {
       const currentCropping = useCanvasStore.getState().croppingNodeId;
       if (currentCropping && currentCropping !== nodeId) {
         useCanvasStore.getState().setCroppingNodeId(null);
+      }
+      const currentEditing = useCanvasStore.getState().editingTextNodeId;
+      if (currentEditing && currentEditing !== nodeId) {
+        useCanvasStore.getState().setEditingTextNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -934,7 +940,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}

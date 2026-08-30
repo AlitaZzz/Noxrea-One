@@ -52,6 +52,7 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
     data: {
       label: "",
       content: "",
+      plainText: "",
       genSettings: { kind: "text", prompt: "", modelKey: "", refOrder: [] } satisfies TextGenSettings,
     } as TextNodeData,
     style: {
