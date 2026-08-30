@@ -13,7 +13,7 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
-import { memo, useCallback, useEffect, useRef } from "react";
+import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
@@ -103,6 +103,14 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     useCanvasStore.getState().setEditingTextNodeId(null);
     window.getSelection()?.removeAllRanges();
   }, []);
+
+  // 焦点仍在编辑态 UI 内（编辑器自身 / 富文本工具条）时保持编辑态，
+  // 兜底键盘 Tab 等焦点确实转移的场景，避免误退出
+  const handleEditorBlur = useCallback((e: FocusEvent<HTMLDivElement>) => {
+    const next = e.relatedTarget as HTMLElement | null;
+    if (next && (e.currentTarget.contains(next) || next.closest("[data-rich-text-toolbar]"))) return;
+    exitEditing();
+  }, [exitEditing]);
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
@@ -200,7 +208,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           ref={scrollRef}
           className={`flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}
           style={{ pointerEvents: editingContent || selected ? "auto" : "none" }}
-          onBlur={exitEditing}
+          onBlur={handleEditorBlur}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();

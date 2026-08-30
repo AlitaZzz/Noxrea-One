@@ -61,6 +61,10 @@ export default function RichTextToolbar({ editor }: Props) {
 
   return (
     <WheelGuard
+      data-rich-text-toolbar=""
+      // 统一阻止 mousedown 默认行为：点击工具条任意位置（含按钮间隙/背景）都不抢走编辑器焦点，
+      // 否则编辑器失焦会触发退出编辑态。焦点不转移，光标位置也得以保留。
+      onMouseDown={(e) => e.preventDefault()}
       className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
       style={{
         height: 50,
@@ -78,7 +82,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.bold)}
           icon={<Bold size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleBold().run()}
         />
       </Tooltip>
@@ -88,7 +91,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.italic)}
           icon={<Italic size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleItalic().run()}
         />
       </Tooltip>
@@ -98,7 +100,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.underline)}
           icon={<Underline size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         />
       </Tooltip>
@@ -116,7 +117,6 @@ export default function RichTextToolbar({ editor }: Props) {
               type="text"
               size="middle"
               style={{ padding: "4px 8px", fontSize: 12, minWidth: 44, ...(active.headingLevel ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-              onMouseDown={(e) => e.preventDefault()}
             >
               {headingLabel}
             </Button>
@@ -151,7 +151,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.bulletList)}
           icon={<List size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         />
       </Tooltip>
@@ -161,7 +160,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.orderedList)}
           icon={<ListOrdered size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         />
       </Tooltip>
@@ -171,7 +169,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(active.blockquote)}
           icon={<Quote size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
         />
       </Tooltip>
@@ -181,7 +178,6 @@ export default function RichTextToolbar({ editor }: Props) {
           size="middle"
           style={btnStyle(false)}
           icon={<Minus size={16} />}
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
         />
       </Tooltip>
