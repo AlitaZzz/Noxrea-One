@@ -54,12 +54,10 @@ export interface ParamField {
   falseShort?: string;
 }
 
-/** 能力开关声明：模型支持哪些参考/附加能力 + 约束 */
+/** 能力声明：模型支持的参考方式约束（当前仅 refMode 被消费） */
 export interface Capability {
-  /** refMode 专用：可选参考方式（first/first-last/full），未声明则该模型不支持参考 */
+  /** refMode 专用：可选参考方式（text/image/first-last/full），未声明则该模型不支持参考 */
   options?: string[];
-  /** 默认值 */
-  default?: boolean | string | number;
 }
 
 /** 值换算规则（声明式，写 JSON） */
@@ -101,8 +99,9 @@ export interface DerivedFieldSpec {
 export interface ModelParamConfig {
   fields: ParamField[];
   /**
-   * 能力开关声明：前端据此动态渲染开关（refMode / generateAudio / refVideos / refAudios）。
-   * 模型未声明的能力，前端不显示对应开关。
+   * 能力声明：当前仅 refMode.options 被前端消费，用于渲染参考方式下拉；
+   * 未声明 refMode 的模型，前端不显示参考方式（视为不支持参考）。
+   * 参考素材（refImages/refVideos/refAudios）是否支持由 allowedFields + mapping 决定。
    */
   capabilities?: Record<string, Capability>;
   /**
