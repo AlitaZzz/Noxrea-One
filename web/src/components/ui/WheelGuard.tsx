@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { type ReactNode,useEffect, useRef } from "react";
+import { type ComponentPropsWithoutRef, useEffect, useRef } from "react";
 
 /**
  * 包裹需要阻止 wheel 事件冒泡到 React Flow 的 UI 区域。
@@ -14,11 +14,7 @@ import { type ReactNode,useEffect, useRef } from "react";
  * WheelGuard 用原生 addEventListener 在目标元素拦截 wheel 事件，
  * 阻止其到达 React Flow 的 zoom 处理器。
  */
-export default function WheelGuard({ children, className, style }: {
-  children: ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
+export default function WheelGuard({ children, ...rest }: ComponentPropsWithoutRef<"div">) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,5 +25,5 @@ export default function WheelGuard({ children, className, style }: {
     return () => el.removeEventListener("wheel", handler);
   }, []);
 
-  return <div ref={ref} className={className} style={style}>{children}</div>;
+  return <div ref={ref} {...rest}>{children}</div>;
 }
