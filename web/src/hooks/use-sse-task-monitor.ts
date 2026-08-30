@@ -124,8 +124,9 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
                       const label = prompt.slice(0, 20);
                       const isVideoNode = cur.type === "video-node";
-                      // 多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
+                      // 【测试用 TODO】多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
                       // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
+                      // 上游正式支持多图后，删除这段 mock 补齐逻辑。
                       // 追加 ?mock=n 区分，避免 URL 完全相同被堆叠卡片 filter(u !== src) 过滤掉导致背景卡不显示。
                       const expectedCount = Number((evt.config as { n?: number } | undefined)?.n) || 0;
                       if (!isVideoNode && expectedCount > 1 && completedUrls.length === 1) {

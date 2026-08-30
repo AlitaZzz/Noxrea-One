@@ -134,6 +134,7 @@ export class TaskWatcher {
           error: task.error ?? undefined,
           errorCode: task.errorCode ?? undefined,
           prompt: task.prompt || undefined,
+          config: task.config,
         };
 
         for (const sub of subs) {
