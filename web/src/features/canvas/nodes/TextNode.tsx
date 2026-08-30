@@ -49,7 +49,6 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: "text-sm leading-relaxed text-white/80 outline-none",
         "data-text-editor": "",
       },
       // 粘贴纯文本时按 Markdown 解析；富文本粘贴（含 HTML）仍走默认解析
@@ -129,18 +128,13 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id]);
 
-  // 编辑状态下阻止 wheel / mousedown 冒泡到 React Flow 画布
+  // 编辑状态下阻止 mousedown 冒泡到 React Flow 画布，避免拖动节点/触发框选
   useEffect(() => {
     const el = editor?.view.dom;
     if (!el || !editingContent) return;
-    const stopWheel = (e: WheelEvent) => e.stopPropagation();
     const stopMouse = (e: MouseEvent) => e.stopPropagation();
-    el.addEventListener("wheel", stopWheel, { passive: false });
     el.addEventListener("mousedown", stopMouse);
-    return () => {
-      el.removeEventListener("wheel", stopWheel);
-      el.removeEventListener("mousedown", stopMouse);
-    };
+    return () => el.removeEventListener("mousedown", stopMouse);
   }, [editor, editingContent]);
 
   const generating = isGenerating(data.taskBinding);

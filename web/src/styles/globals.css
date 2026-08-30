@@ -177,7 +177,13 @@
 }
 
 /* Text node rich text editor — 局部排版：补回 preflight 抹掉的块级默认样式 */
-[data-text-editor] { cursor: text; }
+[data-text-editor] {
+  cursor: text;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--canvas-text);
+  outline: none;
+}
 [data-text-editor][contenteditable="false"] { cursor: default; }
 [data-text-editor] p.is-editor-empty:first-child::before,
 [data-text-editor] p.is-empty:first-child::before {
