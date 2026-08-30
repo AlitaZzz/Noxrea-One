@@ -132,7 +132,7 @@
     "gridLayout": "宫格布局",
     "verticalLayout": "垂直布局",
     "horizontalLayout": "水平布局",
-    "saveToAssets": "保存到素材",
+    "saveToAssets": "保存到素材库",
     "alreadySaved": "已在素材库",
     "connectCreateInput": "添加上下文",
     "connectCreateOutput": "引用该节点",
