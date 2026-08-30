@@ -1237,3 +1237,17 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   padding: 4px 8px;
 }
 .cortex-markdown img { max-width: 100%; border-radius: 6px; }
+
+/* Slider 旁紧凑数值框：任何状态都不显示边框/聚焦圈。
+   antd 的 borderless 变体虽 border:none，但 :focus-visible 会以 activeBorderColor(主色) 画一圈 outline，
+   而文本 input 即便用鼠标点击也会匹配 :focus-visible，故需显式清除（详见 ParamFields.tsx）。 */
+.param-num-input,
+.param-num-input:hover,
+.param-num-input:focus,
+.param-num-input:focus-within,
+.param-num-input:focus-visible,
+.param-num-input:has(input:focus-visible) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}

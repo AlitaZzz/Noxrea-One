@@ -46,10 +46,15 @@ export function directorTheme(isDark: boolean) {
         ? {
             trackBg: "#fff",
             trackHoverBg: "#fff",
-            railBg: "#1a1a1e",
-            railHoverBg: "#1a1a1e",
+            railBg: "#3a3a40",
+            railHoverBg: "#4a4a52",
             handleColor: "#fff",
             handleActiveColor: "#fff",
+            // 以下两个 antd 默认均由 colorPrimary(#3b82f6) 推导，不覆盖就会变蓝：
+            // 1) 手柄自身 hover/聚焦时的 6px 外圈光晕
+            handleActiveOutlineColor: "transparent",
+            // 2) 鼠标进入 slider 区域（含背景轨道）时重绘手柄描边
+            colorPrimaryBorderHover: "#fff",
             dotActiveBorderColor: "#fff",
             handleSizeHover: 10,
             handleSize: 10,
