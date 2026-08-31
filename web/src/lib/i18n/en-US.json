@@ -198,6 +198,7 @@
     "addModelPlaceholder": "Add model name manually...",
     "protocolLabel": "Protocol",
     "deleteProvider": "Delete Provider",
+    "deleteProviderConfirm": "Deleting \"{{name}}\" will also delete its {{count}} model(s), and this cannot be undone. Continue?",
     "protocol": {
       "openai": "OpenAI",
       "gemini": "Gemini",

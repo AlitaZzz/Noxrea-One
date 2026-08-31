@@ -117,6 +117,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const [searchModel, setSearchModel] = useState("");
 
   const provider = providers.find((c) => c.id === providerId);
+  const deletingProvider = providers.find((c) => c.id === deleteProviderId);
 
   // Pick the first provider when the modal opens without a selection.
   // Adjusted during render (not in an effect) to avoid cascading renders.
@@ -543,7 +544,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         open={!!deleteProviderId}
         zIndex={1050}
         title={t("modelConfig.deleteProvider")}
-        content={providers.find(c => c.id === deleteProviderId)?.name || ""}
+        content={t("modelConfig.deleteProviderConfirm", { name: deletingProvider?.name ?? "", count: deletingProvider?.models.length ?? 0 })}
+        okText={t("common.delete")}
+        cancelText={t("common.cancel")}
         onOk={() => { if (deleteProviderId) deleteProvider(deleteProviderId); setProviderId(null); setDeleteProviderId(null); }}
         onCancel={() => setDeleteProviderId(null)}
       />

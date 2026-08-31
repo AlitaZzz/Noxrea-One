@@ -34,7 +34,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       width={380}
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "none" },
-        body: { background: "var(--canvas-bg)", padding: "20px 24px" },
+        body: { background: "var(--canvas-bg)", padding: "0 20px 16px" },
       }}
       footer={
         <div className="flex justify-end gap-2">
@@ -43,7 +43,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
         </div>
       }
     >
-      <p style={{ color: "var(--canvas-text)", margin: 0, marginBottom: 16 }}>{content}</p>
+      <p style={{ color: "var(--canvas-text)", margin: 0 }}>{content}</p>
     </AppModal>
   );
 }
