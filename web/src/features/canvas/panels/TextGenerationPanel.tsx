@@ -302,7 +302,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         >
             {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
             {upstreamTexts.map((txt) => (
-              <Tooltip key={`text-${txt.id}`} title={txt.content.length > 50 ? txt.content.slice(0, 50) + "..." : txt.content}>
+              <Tooltip
+                key={`text-${txt.id}`}
+                title={
+                  <div style={{ maxWidth: 320, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {txt.content}
+                  </div>
+                }
+              >
                 <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
                 onDoubleClick={() => {
                   const n = useCanvasStore.getState().nodes.find((x) => x.id === txt.id);
