@@ -1,14 +1,15 @@
 /**
- * 画布页面（/canvas）。
- * 拉取并恢复当前激活项目到画布状态，装配 ReactFlowProvider、AppShell 与画布主体，
- * 并挂载两个页面级浮层：快捷键说明弹窗、Director 全屏编辑器。
- * 无激活项目时回退到 /project。
+ * 画布页面（/canvas/[projectId]）。
+ * 以 URL 上的项目 ID 作为项目身份的唯一真相源：拉取该项目并恢复到画布状态，
+ * 装配 ReactFlowProvider、AppShell 与画布主体，并挂载两个页面级浮层：
+ * 快捷键说明弹窗、Director 全屏编辑器。
+ * ID 缺失、或项目不存在 / 不属于当前用户时回退到 /project。
  */
 "use client";
 
 import { ReactFlowProvider } from "@xyflow/react";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
@@ -28,9 +29,13 @@ function CanvasWithKeyboard() {
   return <InfiniteCanvas />;
 }
 
-export default function HomePage() {
+export default function CanvasPage({
+  params,
+}: {
+  params: Promise<{ projectId: string }>;
+}) {
+  const { projectId } = use(params);
   const { t } = useTranslation();
-  const activeProject = useProjectStore((s) => s.activeProject);
   const shortcutsVisible = useCanvasStore((s) => s.shortcutsVisible);
   const setShortcutsVisible = useCanvasStore((s) => s.setShortcutsVisible);
   const directorOverlayOpen = useCanvasStore((s) => s.directorOverlayOpen);
@@ -38,16 +43,17 @@ export default function HomePage() {
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const [initialized, setInitialized] = useState(false);
 
-  // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成，
-  // 此处从服务器拉取最新项目数据后再恢复到画布状态，
-  // 避免多浏览器/多 Tab 场景下本地缓存过期导致数据不一致。
+  // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
+  // URL 是项目身份的真相源：先同步进 store（save-manager 按 activeProjectId 存盘），
+  // 再从服务器拉取最新项目数据恢复到画布，
+  // 避免多浏览器 / 多 Tab 场景下本地缓存过期导致数据不一致。
   useEffect(() => {
-    const activeId = useProjectStore.getState().activeProjectId;
-    if (!activeId) {
+    if (!projectId) {
       window.location.href = "/project";
       return;
     }
-    useProjectStore.getState().refreshProject(activeId).then((project) => {
+    useProjectStore.getState().setActiveProject(projectId);
+    useProjectStore.getState().refreshProject(projectId).then((project) => {
       if (!project) {
         window.location.href = "/project";
         return;
@@ -55,7 +61,7 @@ export default function HomePage() {
       useCanvasStore.getState().restoreFromProject(project);
       setInitialized(true);
     });
-  }, []);
+  }, [projectId]);
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
   useEffect(() => {

@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: `${maxUploadMB + 5}mb`,
   },
+  // 画布以 URL 上的项目 ID 为唯一身份标识：/canvas 不带 ID 时直接回项目列表。
+  // 不回落至 localStorage 的激活项目——否则同一 URL 在不同设备 / 不同用户下会指向
+  // 不同画布，违背 URL 可寻址性，多用户共用浏览器时还会串到别人的画布。
+  async redirects() {
+    return [
+      { source: "/canvas", destination: "/project", permanent: false },
+    ];
+  },
   // 透明代理：所有 /api/* 请求转发到后端 Hono 服务（目标由 SERVER_URL 指定）
   async rewrites() {
     // SERVER_URL 默认 http://localhost:4000（同机）；分开部署时改为远程 Hono 地址
