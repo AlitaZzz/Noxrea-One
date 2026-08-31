@@ -316,16 +316,84 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .react-flow__node-video-node { overflow: visible !important; }
 .react-flow__node-text-node { overflow: visible !important; }
 
-/* 节点连接点（Handle）：默认放大，hover 时进一步放大 */
+/* 节点连接点（Handle）：圆形「+」按钮，默认隐藏，显示由下方规则与交互状态决定；
+   背景镂空（画布底色），类型色用于圆圈边框与「+」图标（节点组件经 --handle-color 传入）。
+   尺寸与间隙取自画布容器注入的 CSS 变量（InfiniteCanvas 注入 HANDLE_SIZE / HANDLE_GAP），
+   几何参数的唯一真相源是 constants.ts——调尺寸只改那两个常量即可同步 CSS 与连线端点 */
 .react-flow__handle {
-  width: 12px !important;
-  height: 12px !important;
-  transition: width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
+  width: var(--handle-size, 24px) !important;
+  height: var(--handle-size, 24px) !important;
+  border-radius: 50% !important;
+  border: 1.5px solid var(--handle-color, rgba(255, 255, 255, 0.35)) !important;
+  background: var(--canvas-bg) !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
 }
+/* 完全悬浮于节点外侧（与节点边缘留出间隙），统一覆盖默认定位与各节点内联 transform */
+.react-flow__handle-left {
+  left: 0 !important;
+  transform: translate(calc(-100% - var(--handle-gap, 6px)), -50%) !important;
+}
+.react-flow__handle-right {
+  right: 0 !important;
+  transform: translate(calc(100% + var(--handle-gap, 6px)), -50%) !important;
+}
+/* 「+」图标用横竖两条线几何绘制，保证绝对居中，颜色跟随节点类型色 */
+.react-flow__handle::before,
+.react-flow__handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: var(--handle-color, #fff);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.react-flow__handle::before {
+  width: 10px;
+  height: 1.5px;
+  transform: translate(-50%, -50%);
+}
+.react-flow__handle::after {
+  width: 1.5px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+}
+
+/* ── Handle 显示规则 ──
+   唯一开关是画布容器的 data-interaction（由 use-canvas-interaction 状态机驱动）：
+   1) hover 节点 → 无条件显示（即时反馈：框选后仍可直接拖线）
+   2) 空闲 / 点击选中态（idle）→ 选中节点的 handle 常驻显示
+   3) 框选 / 拖动节点 / 拖线状态 → 选中不触发显示，仅 hover 生效
+       （框选与拖动是容器级判定，无需关心组内成员是否被标记 .dragging）
+   4) 拖线中源 handle 按住（:active）保持显示 */
+.react-flow__node:hover .react-flow__handle,
+.react-flow[data-interaction="idle"] .react-flow__node.selected .react-flow__handle,
+.react-flow__handle:active {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 悬停 handle 本体时进一步放大 */
 .react-flow__handle:hover {
-  width: 16px !important;
-  height: 16px !important;
+  width: calc(var(--handle-size, 24px) + 4px) !important;
+  height: calc(var(--handle-size, 24px) + 4px) !important;
   box-shadow: 0 0 0 4px rgba(29, 158, 117, 0.25);
+}
+
+/* ── 光标 ──
+   拖线进行中：整块画布保持十字准星，表达「正在连线」而非「可拖动画布」 */
+.react-flow[data-interaction="connecting"] .react-flow__pane,
+.react-flow[data-interaction="connecting"] .react-flow__node {
+  cursor: crosshair;
+}
+
+/* 无 hover 能力（触屏）的设备：选中即显示 handle，不依赖悬停 */
+@media (hover: none) {
+  .react-flow__node.selected .react-flow__handle {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .ant-btn-sm { font-size: 13px; }
 

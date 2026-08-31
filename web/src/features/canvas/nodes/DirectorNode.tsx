@@ -8,7 +8,7 @@
 import { PartitionOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input } from "antd";
-import { memo } from "react";
+import { type CSSProperties, memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
@@ -73,7 +73,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.DIRECTOR], top: NODE_HANDLE_TOP, transform: "translate(50%, -50%)", zIndex: 10 }} />
+      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.DIRECTOR], top: NODE_HANDLE_TOP, zIndex: 10 } as CSSProperties} />
     </div>
   );
 }

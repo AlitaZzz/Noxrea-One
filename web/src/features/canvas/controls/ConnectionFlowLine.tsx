@@ -6,6 +6,8 @@
 
 import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } from "@xyflow/react";
 
+import { insetHandleCenter } from "@/lib/constants";
+
 import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
 
 export default function ConnectionFlowLine({
@@ -15,13 +17,20 @@ export default function ConnectionFlowLine({
   toY,
   fromPosition,
   toPosition,
+  connectionStatus,
 }: ConnectionLineComponentProps) {
+  // 起点为源 handle 中心，收回节点边缘；
+  // 终点：吸附到目标 handle 时（connectionStatus === 'valid'）toX/toY 为 handle 中心，同样收回贴到节点边缘；
+  // 否则是鼠标实时位置，保持不动
+  const source = insetHandleCenter(fromPosition, fromX, fromY);
+  const target = connectionStatus === "valid" ? insetHandleCenter(toPosition ?? undefined, toX, toY) : { x: toX, y: toY };
+
   const [edgePath] = getBezierPath({
-    sourceX: fromX,
-    sourceY: fromY,
+    sourceX: source.x,
+    sourceY: source.y,
     sourcePosition: fromPosition,
-    targetX: toX,
-    targetY: toY,
+    targetX: target.x,
+    targetY: target.y,
     targetPosition: toPosition ?? (fromPosition === Position.Right ? Position.Left : Position.Right),
   });
 

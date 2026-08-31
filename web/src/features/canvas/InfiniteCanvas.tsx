@@ -30,7 +30,7 @@ import {
 } from "@xyflow/react";
 import { App, Tooltip } from "antd";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -55,6 +55,7 @@ import { type AddNodeType,useAddNode } from "@/features/canvas/hooks/use-add-nod
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
+import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
@@ -79,7 +80,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect,LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 
@@ -111,9 +112,10 @@ export default function InfiniteCanvas() {
     [nodes]
   );
 
-  // 框选（Shift 拖拽）产生的选中只做高亮，不渲染节点工具栏/生成面板；
-  // 仅单击选中才显示。onSelectionStart 置 true，下次单击节点/空白时复位。
-  const [suppressNodeToolbar, setSuppressNodeToolbar] = useState(false);
+  // 画布交互状态机：空闲 / 框选 / 拖动节点 / 拖线，四种状态互斥且由事件驱动。
+  // handle、节点工具栏、生成面板的可见性与光标全部由此派生，不再各自维护布尔量。
+  // 整体引用稳定（hook 内已记忆化），可直接作为依赖使用。
+  const canvasInteraction = useCanvasInteraction();
 
   // 整理需要至少 2 个顶层块（组连同成员算一个块），否则菜单置灰
   const tidyDisabled = useMemo(() => {
@@ -183,33 +185,33 @@ export default function InfiniteCanvas() {
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
-    if (suppressNodeToolbar) return null;
+    if (!canvasInteraction.showSelectionChrome) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.IMAGE) return null;
     const src = (sel[0].data as ImageNodeData).source;
     if (src === "upload" || src === "derived") return null;
     return sel[0].id;
-  }, [nodes, suppressNodeToolbar]);
+  }, [nodes, canvasInteraction.showSelectionChrome]);
 
   // Check if a single video node is selected
   const genTargetVideoId = useMemo(() => {
-    if (suppressNodeToolbar) return null;
+    if (!canvasInteraction.showSelectionChrome) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.VIDEO) return null;
     if ((sel[0].data as VideoNodeData).source === "upload") return null;
     return sel[0].id;
-  }, [nodes, suppressNodeToolbar]);
+  }, [nodes, canvasInteraction.showSelectionChrome]);
 
   // Check if a single TextNode is selected
   const textTarget = useMemo(() => {
-    if (suppressNodeToolbar) return null;
+    if (!canvasInteraction.showSelectionChrome) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.TEXT) return null;
     return { id: sel[0].id };
-  }, [nodes, suppressNodeToolbar]);
+  }, [nodes, canvasInteraction.showSelectionChrome]);
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
@@ -422,12 +424,15 @@ export default function InfiniteCanvas() {
   const handleConnectStart = useCallback(
     (_: unknown, params: { handleType: "source" | "target" | null }) => {
       connectStartHandleTypeRef.current = params.handleType ?? null;
+      canvasInteraction.onConnectStart();
     },
-    []
+    [canvasInteraction]
   );
 
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      // 连接结束（成功或取消）复位交互状态
+      canvasInteraction.onConnectEnd();
       // 仅在连接未落到目标节点（空白画布）上时弹出菜单
       const toNode = "toNode" in connectionState ? connectionState.toNode : null;
       if (toNode) return;
@@ -473,7 +478,7 @@ export default function InfiniteCanvas() {
         sourceAnchor,
       });
     },
-    [screenToFlowPosition]
+    [screenToFlowPosition, canvasInteraction]
   );
 
   const handleCreateConnectedNode = useCallback(
@@ -520,10 +525,12 @@ export default function InfiniteCanvas() {
 
   const handleNodeDragStart = useCallback(() => {
     pushHistory(takeCanvasSnapshot());
-  }, [pushHistory]);
+    canvasInteraction.onNodeDragStart();
+  }, [pushHistory, canvasInteraction]);
 
   const handleNodeDragStop = useCallback(
     (_: unknown, draggedNode: AnyNode) => {
+      canvasInteraction.onNodeDragStop();
       markDirtyImmediate();
       setAlignmentGuides([]);
 
@@ -586,12 +593,12 @@ export default function InfiniteCanvas() {
         }
       }
     },
-    [markDirtyImmediate, setAlignmentGuides, setNodes, pushHistory]
+    [canvasInteraction, markDirtyImmediate, setAlignmentGuides, setNodes, pushHistory]
   );
 
   const handlePaneClick = useCallback(() => {
-    // 点击空白处复位：下次单击节点重新显示工具栏
-    setSuppressNodeToolbar(false);
+    // 点击空白：视为「点击选中」语义，恢复选中态 UI
+    canvasInteraction.onClick();
     // Exit annotation and crop mode when clicking the canvas pane
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
@@ -599,15 +606,15 @@ export default function InfiniteCanvas() {
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
-  }, [setNodes, setEdges]);
+  }, [canvasInteraction, setNodes, setEdges]);
 
   // Explicitly handle node selection — React Flow's internal click detection
   // may miss clicks that land on interactive child elements (inputs, selects, etc.)
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Record<string, unknown>) => {
       const nodeId = node.id as string;
-      // 单击节点（含修饰键点击）属于点击选择，恢复工具栏显示
-      setSuppressNodeToolbar(false);
+      // 单击节点（含修饰键点击）属于点击选择，恢复选中态 UI
+      canvasInteraction.onClick();
       // Exit annotation and crop mode when clicking a different node
       const currentAnnotating = useCanvasStore.getState().annotatingNodeId;
       if (currentAnnotating && currentAnnotating !== nodeId) {
@@ -631,15 +638,15 @@ export default function InfiniteCanvas() {
         }))
       );
     },
-    [setNodes]
+    [canvasInteraction, setNodes]
   );
 
   // 框选开始：标记本次选择来自框选，抑制工具栏/面板渲染（直到下次单击节点/空白）。
   // 注意用 onSelectionStart 而非 onSelectionDragStart：后者依赖“已选中的节点集合”，
   // 框选前若无选中节点则不会触发，导致“框选恰好一个节点”仍弹出工具栏/面板。
   const handleSelectionStart = useCallback(() => {
-    setSuppressNodeToolbar(true);
-  }, []);
+    canvasInteraction.onSelectionStart();
+  }, [canvasInteraction]);
 
   useGroupOperations();
   useCanvasEvents();
@@ -742,6 +749,8 @@ export default function InfiniteCanvas() {
       <AlignmentGuides guides={alignmentGuides} />
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <ReactFlow
+        data-interaction={canvasInteraction.mode}
+        style={{ "--handle-size": `${HANDLE_SIZE}px`, "--handle-gap": `${HANDLE_GAP}px` } as CSSProperties}
         nodes={nodes}
         edges={edges}
         nodeTypes={rfNodeTypes}
@@ -956,8 +965,8 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
-        {/* Node toolbars — 仅单击选中时显示，框选产生的选择不渲染 */}
-        {!suppressNodeToolbar && Array.from(selectedNodeIds).map((nid) => {
+        {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
+        {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
