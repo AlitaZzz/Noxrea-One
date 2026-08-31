@@ -59,14 +59,14 @@ export default function ProjectPage() {
 
   const handleOpen = (p: CanvasProject) => {
     setActiveProject(p.id);
-    router.push("/canvas");
+    router.push(`/canvas/${p.id}`);
   };
 
 
   const handleCreate = async () => {
     const p = await createProject();
     setActiveProject(p.id);
-    router.push("/canvas");
+    router.push(`/canvas/${p.id}`);
   };
 
   const formatDate = (ts: number) => {

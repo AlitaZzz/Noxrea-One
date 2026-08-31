@@ -824,6 +824,8 @@ export default function InfiniteCanvas() {
                         const proj = await useProjectStore.getState().createProject();
                         useProjectStore.getState().setActiveProject(proj.id);
                         useCanvasStore.getState().restoreFromProject(proj);
+                        // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）
+                        router.replace(`/canvas/${proj.id}`);
                         setTimeout(() => fitView({ duration: 300 }), 50);
                       }}>{t("project.new")}</MenuItem>
                     <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
