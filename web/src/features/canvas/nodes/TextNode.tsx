@@ -13,7 +13,7 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";
-import { type CSSProperties, type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
+import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
@@ -21,7 +21,7 @@ import RichTextToolbar from "@/features/canvas/editing/RichTextToolbar";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
-import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { copyText, downloadTextFile, sanitizeFileName } from "@/lib/utils/text-export";
 
@@ -252,8 +252,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
       )}
 
-      <Handle type="target" position={Position.Left} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP } as CSSProperties} />
-      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.TEXT], top: NODE_HANDLE_TOP } as CSSProperties} />
+      <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />
+      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import {
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Tooltip } from "antd";
-import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -40,8 +40,8 @@ import {
 import { apiUploadWithProgress } from "@/lib/api/client";
 import {
 DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE_COLOR } from "@/lib/constants";
-import { isGenerating, NODE_TYPE } from "@/lib/constants";
+  DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { isGenerating } from "@/lib/constants";
 import { canvasToBlob, computeNodeSize, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
@@ -711,8 +711,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 } as CSSProperties} />}
-      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 } as CSSProperties} />
+      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />}
+      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,

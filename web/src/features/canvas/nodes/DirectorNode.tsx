@@ -8,14 +8,14 @@
 import { PartitionOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input } from "antd";
-import { type CSSProperties, memo } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
 import { useDirectorStore } from "@/features/director/director-store";
-import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, NODE_TYPE,NODE_TYPE_COLOR } from "@/lib/constants";
+import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   const { t } = useTranslation();
@@ -73,7 +73,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.DIRECTOR], top: NODE_HANDLE_TOP, zIndex: 10 } as CSSProperties} />
+      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
     </div>
   );
 }
