@@ -46,7 +46,7 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       destroyOnHidden
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "none" },
-        body: { background: "var(--canvas-bg)", padding: "20px 24px" },
+        body: { background: "var(--canvas-bg)", padding: "0 20px 16px" },
       }}
       footer={
         <div className="flex justify-end gap-2">

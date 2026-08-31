@@ -197,6 +197,7 @@
     "addModelPlaceholder": "手动添加模型名称...",
     "protocolLabel": "协议",
     "deleteProvider": "删除供应商",
+    "deleteProviderConfirm": "删除「{{name}}」将同时删除该供应商下的 {{count}} 个模型，且不可恢复。确定要删除吗？",
     "protocol": {
       "openai": "OpenAI",
       "gemini": "Gemini",
