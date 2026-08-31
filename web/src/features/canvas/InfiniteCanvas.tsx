@@ -996,7 +996,7 @@ export default function InfiniteCanvas() {
       <ConfirmModal
         open={deleteConfirmOpen}
         title={t("project.delete")}
-        content={projectName ? `${t("project.deleteConfirm")} "${projectName}"?` : t("project.deleteConfirm")}
+        content={t("project.deleteConfirm", { name: projectName })}
         okText={t("common.delete")}
         cancelText={t("common.cancel")}
         onOk={async () => {

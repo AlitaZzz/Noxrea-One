@@ -43,7 +43,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
         </div>
       }
     >
-      <p style={{ color: "var(--canvas-text)", margin: 0 }}>{content}</p>
+      <p style={{ color: "var(--canvas-text)", margin: 0, marginBottom: 16 }}>{content}</p>
     </AppModal>
   );
 }
