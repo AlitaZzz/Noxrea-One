@@ -317,14 +317,15 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .react-flow__node-text-node { overflow: visible !important; }
 
 /* 节点连接点（Handle）：圆形「+」按钮，默认隐藏，显示由下方规则与交互状态决定；
-   背景镂空（画布底色），类型色用于圆圈边框与「+」图标（节点组件经 --handle-color 传入）。
+   背景镂空（画布底色），统一中性色（不随节点类型变化，类型区分交给标题图标与连线色）。
    尺寸与间隙取自画布容器注入的 CSS 变量（InfiniteCanvas 注入 HANDLE_SIZE / HANDLE_GAP），
    几何参数的唯一真相源是 constants.ts——调尺寸只改那两个常量即可同步 CSS 与连线端点 */
 .react-flow__handle {
+  --handle-color: rgba(255, 255, 255, 0.55);
   width: var(--handle-size, 24px) !important;
   height: var(--handle-size, 24px) !important;
   border-radius: 50% !important;
-  border: 1.5px solid var(--handle-color, rgba(255, 255, 255, 0.35)) !important;
+  border: 1.5px solid var(--handle-color) !important;
   background: var(--canvas-bg) !important;
   opacity: 0;
   pointer-events: none;
@@ -339,14 +340,14 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   right: 0 !important;
   transform: translate(calc(100% + var(--handle-gap, 6px)), -50%) !important;
 }
-/* 「+」图标用横竖两条线几何绘制，保证绝对居中，颜色跟随节点类型色 */
+/* 「+」图标用横竖两条线几何绘制，保证绝对居中，颜色为统一中性色 */
 .react-flow__handle::before,
 .react-flow__handle::after {
   content: "";
   position: absolute;
   left: 50%;
   top: 50%;
-  background: var(--handle-color, #fff);
+  background: var(--handle-color);
   border-radius: 1px;
   pointer-events: none;
 }
@@ -374,11 +375,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   opacity: 1;
   pointer-events: auto;
 }
-/* 悬停 handle 本体时进一步放大 */
+/* 悬停 handle 本体时进一步放大（尺寸变化即反馈，不再叠加彩色光晕） */
 .react-flow__handle:hover {
   width: calc(var(--handle-size, 24px) + 4px) !important;
   height: calc(var(--handle-size, 24px) + 4px) !important;
-  box-shadow: 0 0 0 4px rgba(29, 158, 117, 0.25);
 }
 
 /* ── 光标 ──

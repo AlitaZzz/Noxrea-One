@@ -16,7 +16,7 @@ import {
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Popover,Tooltip } from "antd";
-import { type CSSProperties, memo, useCallback, useEffect,useRef, useState } from "react";
+import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -27,7 +27,7 @@ import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
 import { apiUploadWithProgress } from "@/lib/api/client";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT,NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, createNodeFromUrl, loadMediaDimensions } from "@/lib/utils/image-utils";
 
@@ -458,8 +458,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         )}
       </div>
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP } as CSSProperties} />}
-      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.VIDEO], top: NODE_HANDLE_TOP } as CSSProperties} />
+      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />}
+      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />
 
       {previewOpen && src && createPortal(
         <VideoPreviewOverlay src={src} onClose={() => setPreviewOpen(false)} />,
