@@ -35,7 +35,7 @@ const router = new Hono();
 // ── 会话 CRUD ──
 
 const createSessionSchema = z.object({
-  projectId: z.number().int().nullable().optional(),
+  projectId: z.string().nullable().optional(),
   title: z.string().optional(),
 });
 
@@ -65,7 +65,9 @@ router.get("/api/agent/sessions", async (c) => {
   const userId = auth.user.id;
 
   const projectId = c.req.query("projectId");
-  const pid = projectId === undefined ? undefined : Number(projectId) || null;
+  // projectId 现为字符串短 ID，不能再走 Number()——否则非数字 ID 会被
+  // 静默转成 NaN 再回落为 null，导致会话丢失项目归属
+  const pid = projectId || undefined;
   const sessions = await listSessions(userId, pid);
   return c.json(sessions);
 });

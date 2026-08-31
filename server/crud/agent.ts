@@ -13,7 +13,7 @@ export type AgentRole = "user" | "assistant" | "tool";
 
 export async function createSession(data: {
   userId: number;
-  projectId?: number | null;
+  projectId?: string | null;
   title?: string;
 }) {
   const session = await prisma.agentSession.create({
@@ -26,7 +26,7 @@ export async function createSession(data: {
   return deserializeSession(session);
 }
 
-export async function listSessions(userId: number, projectId?: number | null) {
+export async function listSessions(userId: number, projectId?: string | null) {
   const sessions = await prisma.agentSession.findMany({
     where: { userId, projectId: projectId ?? null },
     orderBy: { updatedAt: "desc" },

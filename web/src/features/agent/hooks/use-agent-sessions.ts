@@ -30,7 +30,7 @@ export function useAgentSessions(opts: {
   /** 加载历史消息到 UI（切换会话时调用） */
   onLoadMessages: (messages: ChatMessage[]) => void;
   /** 当前项目 ID，切换项目时自动重置对话 */
-  projectId?: number;
+  projectId?: string;
 }) {
   const [chatId, setChatId] = useState<string | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);

@@ -50,7 +50,7 @@ import { useModelStore } from "@/lib/model-store";
 interface Props {
   open: boolean;
   onClose: () => void;
-  projectId?: number;
+  projectId?: string;
 }
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */

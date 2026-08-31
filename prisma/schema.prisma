@@ -87,7 +87,8 @@ model GenerationTask {
 // 3. CanvasProject
 // ──────────────────────────────────────────
 model CanvasProject {
-  id         Int      @id @default(autoincrement())
+  // 14 字符时间有序短 ID，应用层生成（见 server/utils/id.ts）
+  id         String   @id @map("id")
   userId     Int      @map("user_id")
   name       String   @default("Untitled") @map("name")
   canvasData String   @default("{}") @map("canvas_data") // JSON TEXT
@@ -213,7 +214,8 @@ model FileObject {
 model AgentSession {
   id          Int      @id @default(autoincrement())
   userId      Int      @map("user_id")
-  projectId   Int?     @map("project_id")
+  // 关联画布项目的短 ID（与 CanvasProject.id 同为字符串）
+  projectId   String?  @map("project_id")
   title       String   @default("New Chat") @map("title")
   activeSkill String?  @map("active_skill")
   skillStatus String   @default("idle") @map("skill_status")

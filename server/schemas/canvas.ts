@@ -16,7 +16,7 @@ export const canvasUpdateSchema = z.object({
 });
 
 export const canvasOutSchema = z.object({
-  id: z.number(),
+  id: z.string(),
   userId: z.number(),
   name: z.string(),
   canvasData: z.record(z.unknown()),

@@ -9,6 +9,7 @@ import { getProjects, createProject, getProject, updateProject, deleteProject } 
 import { ok, failCode } from "@server/core/response";
 import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
 import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
+import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
 
 const router = new Hono();
@@ -76,8 +77,8 @@ router.get("/api/canvas/projects/:id", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
+  const id = c.req.param("id");
+  if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
 
   const project = await getProject(id, auth.user.id);
   if (!project) return failCode(404, "canvas.project_not_found");
@@ -91,8 +92,8 @@ router.put("/api/canvas/projects/:id", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
+  const id = c.req.param("id");
+  if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
 
   const existing = await getProject(id, auth.user.id);
   if (!existing) return failCode(404, "canvas.project_not_found");
@@ -132,8 +133,8 @@ router.delete("/api/canvas/projects/:id", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const id = parseInt(c.req.param("id"), 10);
-  if (isNaN(id)) return failCode(400, "canvas.invalid_project_id");
+  const id = c.req.param("id");
+  if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
 
   const existing = await getProject(id, auth.user.id);
   if (!existing) return failCode(404, "canvas.project_not_found");

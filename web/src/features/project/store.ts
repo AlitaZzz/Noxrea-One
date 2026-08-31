@@ -38,7 +38,7 @@ interface CanvasData {
 }
 
 interface ServerProject {
-  id: number;
+  id: string;
   name: string;
   canvasData?: CanvasData;
   updatedAt: string;
@@ -46,7 +46,7 @@ interface ServerProject {
 
 function mapServerProject(p: ServerProject): CanvasProject {
   return {
-    id: String(p.id),
+    id: p.id,
     name: p.name,
     createdAt: Date.now(),
     updatedAt: new Date(p.updatedAt).getTime(),
@@ -73,9 +73,7 @@ async function fetchProjects(): Promise<CanvasProject[]> {
 
 async function fetchProjectById(id: string): Promise<CanvasProject | null> {
   try {
-    const numericId = parseInt(id, 10);
-    if (isNaN(numericId)) return null;
-    const res = await projectApi.getProject<ServerProject>(numericId);
+    const res = await projectApi.getProject<ServerProject>(id);
     if (res.code === 200 && res.data) {
       return mapServerProject(res.data);
     }
@@ -105,9 +103,7 @@ async function apiCreateProject(name: string): Promise<CanvasProject | null> {
 
 async function apiDeleteProject(projectId: string) {
   try {
-    const id = parseInt(projectId, 10);
-    if (isNaN(id)) return;
-    await projectApi.deleteProject(id);
+    await projectApi.deleteProject(projectId);
   } catch { /* */ }
 }
 
@@ -162,10 +158,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => p.id === id ? { ...p, name, updatedAt: Date.now() } : p),
     }));
-    const nid = parseInt(id, 10);
-    if (!isNaN(nid)) {
-      projectApi.updateProject(nid, { name }).catch(() => {});
-    }
+    projectApi.updateProject(id, { name }).catch(() => {});
   },
 
   deleteProject: (id) => {
