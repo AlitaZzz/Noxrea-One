@@ -235,9 +235,6 @@ class SaveManager {
     snapshot: ReturnType<typeof takeCanvasSnapshot>,
     keepalive: boolean,
   ): Promise<void> {
-    const id = parseInt(projectId, 10);
-    if (isNaN(id)) return;
-
     const clean = stripRuntimeFields(snapshot);
 
     // 计算当前 fingerprint，判断文件引用是否变化
@@ -263,7 +260,7 @@ class SaveManager {
 
     const body = JSON.stringify(payload);
 
-    const res = await projectApi.saveProjectRaw(id, body, keepalive);
+    const res = await projectApi.saveProjectRaw(projectId, body, keepalive);
 
     if (!keepalive && res.status === 401) return;
 

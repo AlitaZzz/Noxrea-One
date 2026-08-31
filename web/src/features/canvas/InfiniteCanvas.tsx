@@ -1036,7 +1036,7 @@ export default function InfiniteCanvas() {
       <AgentDrawer
         open={chatOpen}
         onClose={() => setChatOpen(false)}
-        projectId={activeProjectId ? Number(activeProjectId) : undefined}
+        projectId={activeProjectId ?? undefined}
       />
 
       {/* 拖入文件时的全屏模糊遮罩 + 释放提示 */}
