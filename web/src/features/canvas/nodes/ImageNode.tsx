@@ -17,7 +17,7 @@ import {
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { Input, Tooltip } from "antd";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -711,8 +711,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 }} />}
-      <Handle type="source" position={Position.Right} style={{ background: NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 }} />
+      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 } as CSSProperties} />}
+      <Handle type="source" position={Position.Right} style={{ "--handle-color": NODE_TYPE_COLOR[NODE_TYPE.IMAGE], top: NODE_HANDLE_TOP, zIndex: 999 } as CSSProperties} />
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,

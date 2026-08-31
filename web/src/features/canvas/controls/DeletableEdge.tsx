@@ -7,6 +7,7 @@
 import { BaseEdge, type EdgeProps,getBezierPath } from "@xyflow/react";
 
 import { useHighlightedEdges } from "@/providers/edge-highlight-context";
+import { insetEdgeAnchor } from "@/lib/constants";
 
 import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
 
@@ -22,8 +23,14 @@ export default function DeletableEdge({
   style = {},
   markerEnd,
 }: EdgeProps) {
+  // handle 按钮悬浮在节点外侧，连线端点取 handle 中心会悬空；
+  // 把两端端点收回节点边缘，使线从节点到节点连接
+  const source = insetEdgeAnchor(sourcePosition, sourceX, sourceY);
+  const target = insetEdgeAnchor(targetPosition, targetX, targetY);
+
   const [edgePath] = getBezierPath({
-    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+    sourceX: source.x, sourceY: source.y, sourcePosition,
+    targetX: target.x, targetY: target.y, targetPosition,
   });
 
   const highlightedEdgeIds = useHighlightedEdges();

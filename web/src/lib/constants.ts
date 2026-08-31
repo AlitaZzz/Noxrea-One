@@ -129,6 +129,46 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
   [NODE_TYPE.DIRECTOR]: "#722ed1",
 };
 
+// ── Handle 悬浮按钮与连线端点 ──
+// handle 按钮悬浮于节点外侧（见 globals.css：直径 24px + 间隙 6px），
+// 而 React Flow 的连线端点落在 handle 上而非节点边缘，需要按 handle 方位把端点
+// 向节点方向收回，线才会从节点边缘出发/抵达。
+// 注意：不同端点语义下 xyflow 给出的坐标基准不同，收回距离也不同：
+//   - 已建立连线：getHandlePosition(center=false) → handle 外侧边缘 → 收回 直径+间隙
+//   - 拖拽预览线：getHandlePosition(center=true)  → handle 中心    → 收回 半径+间隙
+// 调整 handle 尺寸或间隙时需同步 HANDLE_SIZE / HANDLE_GAP。
+export const HANDLE_SIZE = 24;
+export const HANDLE_GAP = 6;
+
+function insetBy(
+  position: string | undefined,
+  x: number,
+  y: number,
+  outerOffset: number,
+  innerOffset = outerOffset
+): { x: number; y: number } {
+  switch (position) {
+    case "left":
+      return { x: x + outerOffset, y };
+    case "top":
+      return { x, y: y + outerOffset };
+    case "right":
+      return { x: x - innerOffset, y };
+    case "bottom":
+      return { x, y: y - innerOffset };
+    default:
+      return { x, y };
+  }
+}
+
+/** 已建立连线（Edge）的端点：基准为 handle 外侧边缘，收回 直径 + 间隙 */
+export const insetEdgeAnchor = (position: string | undefined, x: number, y: number) =>
+  insetBy(position, x, y, HANDLE_SIZE + HANDLE_GAP);
+
+/** 拖拽预览线的端点：基准为 handle 中心，收回 半径 + 间隙 */
+export const insetHandleCenter = (position: string | undefined, x: number, y: number) =>
+  insetBy(position, x, y, HANDLE_SIZE / 2 + HANDLE_GAP);
+
 export const DEFAULT_NODE_COLOR = "#1677ff";
 
 // ── 节点连接规则 ──
