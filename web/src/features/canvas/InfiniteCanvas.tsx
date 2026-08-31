@@ -111,6 +111,10 @@ export default function InfiniteCanvas() {
     [nodes]
   );
 
+  // 框选（Shift 拖拽）产生的选中只做高亮，不渲染节点工具栏/生成面板；
+  // 仅单击选中才显示。onSelectionStart 置 true，下次单击节点/空白时复位。
+  const [suppressNodeToolbar, setSuppressNodeToolbar] = useState(false);
+
   // 整理需要至少 2 个顶层块（组连同成员算一个块），否则菜单置灰
   const tidyDisabled = useMemo(() => {
     const groupIds = new Set(
@@ -179,30 +183,33 @@ export default function InfiniteCanvas() {
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
+    if (suppressNodeToolbar) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.IMAGE) return null;
     const src = (sel[0].data as ImageNodeData).source;
     if (src === "upload" || src === "derived") return null;
     return sel[0].id;
-  }, [nodes]);
+  }, [nodes, suppressNodeToolbar]);
 
   // Check if a single video node is selected
   const genTargetVideoId = useMemo(() => {
+    if (suppressNodeToolbar) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.VIDEO) return null;
     if ((sel[0].data as VideoNodeData).source === "upload") return null;
     return sel[0].id;
-  }, [nodes]);
+  }, [nodes, suppressNodeToolbar]);
 
   // Check if a single TextNode is selected
   const textTarget = useMemo(() => {
+    if (suppressNodeToolbar) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.TEXT) return null;
     return { id: sel[0].id };
-  }, [nodes]);
+  }, [nodes, suppressNodeToolbar]);
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
@@ -583,6 +590,8 @@ export default function InfiniteCanvas() {
   );
 
   const handlePaneClick = useCallback(() => {
+    // 点击空白处复位：下次单击节点重新显示工具栏
+    setSuppressNodeToolbar(false);
     // Exit annotation and crop mode when clicking the canvas pane
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
@@ -597,6 +606,8 @@ export default function InfiniteCanvas() {
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Record<string, unknown>) => {
       const nodeId = node.id as string;
+      // 单击节点（含修饰键点击）属于点击选择，恢复工具栏显示
+      setSuppressNodeToolbar(false);
       // Exit annotation and crop mode when clicking a different node
       const currentAnnotating = useCanvasStore.getState().annotatingNodeId;
       if (currentAnnotating && currentAnnotating !== nodeId) {
@@ -622,6 +633,13 @@ export default function InfiniteCanvas() {
     },
     [setNodes]
   );
+
+  // 框选开始：标记本次选择来自框选，抑制工具栏/面板渲染（直到下次单击节点/空白）。
+  // 注意用 onSelectionStart 而非 onSelectionDragStart：后者依赖“已选中的节点集合”，
+  // 框选前若无选中节点则不会触发，导致“框选恰好一个节点”仍弹出工具栏/面板。
+  const handleSelectionStart = useCallback(() => {
+    setSuppressNodeToolbar(true);
+  }, []);
 
   useGroupOperations();
   useCanvasEvents();
@@ -739,6 +757,7 @@ export default function InfiniteCanvas() {
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
         onNodeClick={handleNodeClick}
+        onSelectionStart={handleSelectionStart}
         defaultViewport={defaultViewport}
         selectionMode={SelectionMode.Partial}
         nodeDragThreshold={2}
@@ -937,8 +956,8 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
-        {/* Node toolbars */}
-        {Array.from(selectedNodeIds).map((nid) => {
+        {/* Node toolbars — 仅单击选中时显示，框选产生的选择不渲染 */}
+        {!suppressNodeToolbar && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
