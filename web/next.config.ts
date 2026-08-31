@@ -30,15 +30,15 @@ const maxUploadMB = Number(rootEnv.MAX_UPLOAD_SIZE_MB) || 30;
 
 const nextConfig: NextConfig = {
   reactStrictMode: false,
-  turbopack: {
-    root: path.join(__dirname, ".."),
-  },
   env: publicEnv,
   transpilePackages: ["antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
   outputFileTracingRoot: path.join(__dirname, ".."),
   serverExternalPackages: ["sharp", "pino"],
   experimental: {
     proxyClientMaxBodySize: `${maxUploadMB + 5}mb`,
+    // 禁用 Turbopack dev 文件系统缓存：Next 16.1+ 默认把编译结果累积进内存，
+    // 打开画布等大模块图页面时会持续吃掉堆内存（见 GitHub issue #92246）。
+    turbopackFileSystemCacheForDev: false,
   },
   // 画布以 URL 上的项目 ID 为唯一身份标识：/canvas 不带 ID 时直接回项目列表。
   // 不回落至 localStorage 的激活项目——否则同一 URL 在不同设备 / 不同用户下会指向
