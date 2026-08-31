@@ -221,8 +221,8 @@
     "none": "No projects yet",
     "home": "Home",
     "rename": "Rename",
-    "deleteConfirm": "Delete this project?",
-    "deleteBatch": "Delete selected projects?"
+    "deleteConfirm": "Deleting \"{{name}}\" means you will no longer be able to access this project, and all generated content in it will be permanently deleted. This cannot be undone. Continue?",
+    "deleteBatch": "Deleting {{count}} selected projects will remove access permanently, and all generated content in them will be permanently deleted. This cannot be undone. Continue?"
   },
   "auth": {
     "logout": "Logout",

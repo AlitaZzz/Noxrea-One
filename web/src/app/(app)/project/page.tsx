@@ -230,7 +230,7 @@ export default function ProjectPage() {
       <ConfirmModal
         open={!!deleteTarget}
         title={t("project.delete")}
-        content={`${t("project.deleteConfirm")} "${deleteTarget?.name}"?`}
+        content={t("project.deleteConfirm", { name: deleteTarget?.name ?? "" })}
         okText={t("common.delete")}
         cancelText={t("common.cancel")}
         onOk={() => { if (deleteTarget) deleteProject(deleteTarget.id); setDeleteTarget(null); }}
