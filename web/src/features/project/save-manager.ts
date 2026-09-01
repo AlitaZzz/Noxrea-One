@@ -5,7 +5,8 @@
  *  - dirty 状态管理
  *  - trailing save queue（只保存最终最新状态）
  *  - save: PUT /api/canvas/projects/{id}
- *  - flushSave / flushOnUnload（页面卸载/组件卸载时紧急保存，keepalive: true）
+ *  - flushSave / flushOnHide：页面存活场景的紧急保存（普通请求，无 64KB 限制）
+ *  - flushOnUnload：页面真正卸载前的兜底（keepalive，受 64KB 请求体上限约束）
  *  - 错误处理与重试
  *
  * 不依赖 React component 生命周期。
@@ -142,14 +143,14 @@ class SaveManager {
     this.resetTimer(delay);
   }
 
-  /** 立即保存最新状态（页面隐藏等，fire-and-forget） */
+  /** 立即保存最新状态（fire-and-forget；页面存活，故无需 keepalive） */
   flushSave(): void {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     if (this.saving) return;
-    void this.save(true);
+    void this.save(false);
   }
 
   /**
@@ -169,19 +170,35 @@ class SaveManager {
       }
       if (this.dirty) {
         retries--;
-        await this.save(true);
+        // 项目切换场景需要读取响应确认落库，故用普通请求（keepalive 无法读响应体）
+        await this.save(false);
       }
     }
   }
 
   /**
-   * 页面生命周期兜底保存（关闭/刷新/组件卸载），fire-and-forget。
-   * 走统一 save() 管线：清除 dirty、置 saving 并挂到 savePromise，
-   * 使随后项目列表页的 flushAndWait() 能等待本次落库完成后再拉取列表，
-   * 避免浏览器回退时「列表 GET 与保存 PUT 竞态」导致 updatedAt 排序不刷新。
-   * 保留空画布兜底：快照为空时不保存，防止误覆盖有效数据。
+   * 页面进入后台时的保存（切换标签页、最小化、关闭前的 visibilitychange）。
+   *
+   * 此刻页面仍然存活，普通请求完全可以正常收发，因此**不走 keepalive**：
+   * keepalive 有约 64KB 请求体上限，画布稍大就会抛 TypeError: Failed to fetch，
+   * 导致保存静默丢失。放在这里保存，绝大多数关闭场景都能可靠落库。
+   */
+  flushOnHide(): void {
+    this.flush({ keepalive: false, skipUnauthorized: true });
+  }
+
+  /**
+   * 页面真正卸载前的兜底保存（pagehide / beforeunload）。
+   *
+   * 只有这时才需要 keepalive 让请求活过页面销毁；超过浏览器上限的会失败，
+   * 属预期行为——dirty 标记会被保留，下次进入继续保存。
    */
   flushOnUnload(): void {
+    this.flush({ keepalive: true, skipUnauthorized: true });
+  }
+
+  /** 兜底保存的公共实现；保留空画布保护，防止误覆盖有效数据 */
+  private flush(opts: { keepalive: boolean; skipUnauthorized: boolean }): void {
     if (!this.dirty) return;
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
@@ -191,7 +208,7 @@ class SaveManager {
     const snapshot = takeCanvasSnapshot();
     if (!snapshot.nodes.length && !snapshot.edges.length) return;
 
-    void this.save(true);
+    void this.save(opts.keepalive, opts.skipUnauthorized);
   }
 
   /** 查询保存状态，供 UI 显示 */
@@ -216,7 +233,7 @@ class SaveManager {
     }, delay);
   }
 
-  private async save(keepalive: boolean): Promise<void> {
+  private async save(keepalive: boolean, skipUnauthorized = false): Promise<void> {
     if (!this.dirty) return;
     this.dirty = false;
     this.saving = true;
@@ -237,7 +254,7 @@ class SaveManager {
       );
 
       const snapshot = takeCanvasSnapshot();
-      await this.saveToApi(activeId, snapshot, keepalive);
+      await this.saveToApi(activeId, snapshot, { keepalive, skipUnauthorized });
     } catch (e) {
       console.error("[SaveManager] save failed:", e);
       this.dirty = true;
@@ -255,7 +272,7 @@ class SaveManager {
   private async saveToApi(
     projectId: string,
     snapshot: ReturnType<typeof takeCanvasSnapshot>,
-    keepalive: boolean,
+    opts: { keepalive: boolean; skipUnauthorized: boolean },
   ): Promise<void> {
     const clean = stripRuntimeFields(snapshot);
 
@@ -282,9 +299,15 @@ class SaveManager {
 
     const body = JSON.stringify(payload);
 
-    const res = await projectApi.saveProjectRaw(projectId, body, keepalive);
+    const res = await projectApi.saveProjectRaw(
+      projectId,
+      body,
+      opts.keepalive,
+      opts.skipUnauthorized,
+    );
 
-    if (!keepalive && res.status === 401) return;
+    // 401 一律跳过 fingerprint 更新：本次并未落库，下次保存需重新计算引用
+    if (res.status === 401) return;
 
     fingerprintMap.set(projectId, currentFp);
   }
@@ -298,12 +321,13 @@ class SaveManager {
     // 校正初始在线状态（SSR / 首屏时 navigator 可能尚未就绪）
     this.offline = typeof navigator !== "undefined" && navigator.onLine === false;
 
-    const onUnload = () => this.flushOnUnload();
+    // 切标签页 / 关闭前会先触发 visibilitychange(hidden)，此时页面仍存活，
+    // 用普通请求保存可以承载大画布；pagehide/beforeunload 才是真正的卸载兜底
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") onUnload();
+      if (document.visibilityState === "hidden") this.flushOnHide();
     });
-    window.addEventListener("pagehide", onUnload);
-    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", () => this.flushOnUnload());
+    window.addEventListener("beforeunload", () => this.flushOnUnload());
 
     // 离线暂停自动保存：清掉已排的定时器，避免离线瞬间再触发一次必失败的请求
     window.addEventListener("offline", () => {

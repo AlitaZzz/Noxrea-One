@@ -31,13 +31,22 @@ export const projectApi = {
 
   /**
    * 保存项目数据（原始 Response）。
-   * keepalive 用于页面卸载时保活请求，此时无法读取响应体且跳过 401 处理。
+   *
+   * keepalive 仅在页面真正卸载时使用：它让请求活过页面销毁，
+   * 但浏览器对 keepalive 请求体有约 64KB 的硬上限，超出会直接抛
+   * TypeError: Failed to fetch。因此页面仍存活的场景（切标签页等）
+   * 必须用普通请求，避免大画布保存静默失败。
    */
-  saveProjectRaw: (id: string | number, body: string, keepalive = false): Promise<Response> =>
+  saveProjectRaw: (
+    id: string | number,
+    body: string,
+    keepalive = false,
+    skipUnauthorized = false,
+  ): Promise<Response> =>
     apiRaw(`/api/canvas/projects/${id}`, {
       method: "PUT",
       body,
       keepalive,
-      skipUnauthorized: keepalive,
+      skipUnauthorized: keepalive || skipUnauthorized,
     }),
 };
