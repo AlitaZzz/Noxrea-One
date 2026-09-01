@@ -41,6 +41,7 @@ import { isGenerating } from "@/lib/constants";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
+import UploadFailedOverlay from "./UploadFailedOverlay";
 
 /**
  * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
@@ -451,6 +452,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               <span className="text-sm text-white/60">{t("common.uploading")}</span>
             </div>
           </div>
+        ) : data.upload?.error ? (
+          <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
         ) : isGenerating(data.taskBinding) ? (
           <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />
         ) : isMulti && hasImage ? (

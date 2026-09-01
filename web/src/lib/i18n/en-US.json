@@ -462,6 +462,9 @@
   "file": {
     "uploadFailed": "Upload failed",
     "uploadFailedAll": "All files failed to upload",
+    "uploadRetry": "Retry",
+    "uploadDiscard": "Remove",
+    "uploadRetryHint": "You can retry from the node",
     "dropToAdd": "Drop to add files",
     "unsupportedType": "Unsupported file type. Only images, videos and audios are supported",
     "ignoredSome": "Some unsupported files were ignored. Only images, videos and audios are supported"
@@ -531,7 +534,12 @@
       "no_file": "No file selected",
       "file_too_large": "File size exceeds the {{limit}}MB limit",
       "unsupported_type": "Unsupported file type: {{type}}",
-      "upload_failed": "Upload failed, please try again later"
+      "upload_failed": "Upload failed, please try again later",
+      "timeout": "Upload timed out, please check your connection and retry",
+      "server_error": "Service temporarily unavailable (HTTP {{status}}), please try again later",
+      "http_error": "Upload rejected (HTTP {{status}})",
+      "aborted": "Upload cancelled",
+      "offline": "You are offline, please restore the connection and retry"
     },
     "files": {
       "invalid_path": "Invalid file path",

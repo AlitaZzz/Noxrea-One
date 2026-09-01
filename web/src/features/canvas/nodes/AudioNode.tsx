@@ -19,6 +19,7 @@ import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HAN
 import { formatTime } from "@/lib/utils/format";
 
 import AudioWaveform from "./AudioWaveform";
+import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
@@ -155,6 +156,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             )}
             <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
           </div>
+        ) : data.upload?.error ? (
+          <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
         ) : isGenerating(data.taskBinding) ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />

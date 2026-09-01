@@ -31,6 +31,7 @@ import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HAN
 import { formatTime } from "@/lib/utils/format";
 
 import GeneratingOverlay from "./GeneratingOverlay";
+import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
@@ -247,6 +248,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               <span className="text-sm text-white/70 font-medium">{t("common.uploading")}</span>
             </div>
           </div>
+        ) : data.upload?.error ? (
+          <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
         ) : isGenerating(data.taskBinding) ? (
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasVideo ? (

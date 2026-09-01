@@ -543,7 +543,8 @@ export default function DirectorViewport() {
 
           // 上传（统一管道 raw sink：只拿远程地址，不碰画布）
           const blob = await (await fetch(dataURL)).blob();
-          uploadOne(blob, `shot_${Date.now()}.png`, "derived").then((result) => {
+          // notify：截图失败不再静默，交由管道统一提示
+          uploadOne(blob, `shot_${Date.now()}.png`, "derived", { notify: true }).then((result) => {
             const url = result?.url;
             if (!url) { console.error("[captureShot] uploadOne returned null"); resolve(null); return; }
             const n = (runtime._shotSeq = runtime._shotSeq || {});

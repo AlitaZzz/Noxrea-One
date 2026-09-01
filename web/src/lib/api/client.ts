@@ -127,6 +127,47 @@ export async function apiUpload<T = unknown>(
   }
 }
 
+/**
+ * 上传超时常量。
+ * XHR 无法区分「慢」与「死」，因此按「空闲时长」判定：只要还有字节在推进，
+ * 多大的文件都不会被误杀；一旦连接挂起（既不成功也不失败）则主动中止并报错。
+ */
+/** 请求体传输阶段：连续这么久没有任何字节推进即判定连接挂起 */
+export const UPLOAD_IDLE_TIMEOUT_MS = 30_000;
+/** 请求体发完后等待服务端响应的上限（写盘 / 后处理不应让前端无限等待） */
+export const UPLOAD_RESPONSE_TIMEOUT_MS = 120_000;
+/** 空闲检测轮询间隔 */
+const UPLOAD_WATCH_INTERVAL_MS = 1_000;
+
+/** 上传传输层失败类别 */
+export type UploadErrorKind = "network" | "timeout" | "http" | "abort";
+
+/** 可重试的 HTTP 状态：请求超时、限流与服务端错误 */
+function isRetryableStatus(status?: number): boolean {
+  if (!status) return false;
+  return status === 408 || status === 429 || status >= 500;
+}
+
+/**
+ * 上传传输层错误：网络中断、超时、HTTP 非 2xx、请求被中止。
+ * retryable 供重试层判定——网络 / 超时 / 5xx 可重试，4xx 直接失败。
+ */
+export class UploadTransportError extends Error {
+  readonly kind: UploadErrorKind;
+  readonly retryable: boolean;
+  /** HTTP 状态码（仅 kind === "http" 时有值） */
+  readonly status?: number;
+
+  constructor(kind: UploadErrorKind, message: string, status?: number) {
+    super(message);
+    this.name = "UploadTransportError";
+    this.kind = kind;
+    this.status = status;
+    this.retryable = kind === "network" || kind === "timeout" || (kind === "http" && isRetryableStatus(status));
+    Object.setPrototypeOf(this, UploadTransportError.prototype);
+  }
+}
+
 export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
@@ -137,17 +178,56 @@ export function apiUploadWithProgress<T = unknown>(
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    if (onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
-      };
-    }
-    xhr.onload = () => {
-      if (checkUnauthorized(xhr.status)) { reject(new UnauthorizedError()); return; }
-      try { resolve(JSON.parse(xhr.responseText)); }
-      catch { reject(new Error(i18n.t("error.parse_failed"))); }
+
+    // 挂起检测：传输阶段看字节是否推进，等待响应阶段看服务端是否回应
+    let lastActiveAt = Date.now();
+    let bodySent = false;
+    let settled = false;
+    const watcher = setInterval(() => {
+      if (settled) return;
+      const idle = Date.now() - lastActiveAt;
+      if (idle <= (bodySent ? UPLOAD_RESPONSE_TIMEOUT_MS : UPLOAD_IDLE_TIMEOUT_MS)) return;
+      settled = true;
+      clearInterval(watcher);
+      xhr.abort();
+      reject(new UploadTransportError("timeout", i18n.t("error.upload.timeout")));
+    }, UPLOAD_WATCH_INTERVAL_MS);
+    const touch = () => { lastActiveAt = Date.now(); };
+    /** 统一收口：定时器只清理一次，且每个分支只会 resolve / reject 一次 */
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(watcher);
+      fn();
     };
-    xhr.onerror = () => reject(new Error(i18n.t("error.network_error")));
+
+    xhr.upload.onprogress = (e) => {
+      touch();
+      if (e.lengthComputable) {
+        if (e.loaded >= e.total) bodySent = true;
+        onProgress?.(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    // 请求体发完（无论是否带进度回调）→ 切换到「等待响应」超时档位
+    xhr.upload.onload = () => { touch(); bodySent = true; };
+
+    xhr.onload = () => {
+      settle(() => {
+        if (checkUnauthorized(xhr.status)) { reject(new UnauthorizedError()); return; }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          // 网关错误页、413 等在此收口，不再被误判成网络错误而无效重试
+          const message = xhr.status >= 500
+            ? i18n.t("error.upload.server_error", { status: xhr.status })
+            : i18n.t("error.upload.http_error", { status: xhr.status });
+          reject(new UploadTransportError("http", message, xhr.status));
+          return;
+        }
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new UploadTransportError("http", i18n.t("error.parse_failed"), xhr.status)); }
+      });
+    };
+    xhr.onerror = () => settle(() => reject(new UploadTransportError("network", i18n.t("error.network_error"))));
+    xhr.onabort = () => settle(() => reject(new UploadTransportError("abort", i18n.t("error.upload.aborted"))));
     xhr.send(formData);
   });
 }
