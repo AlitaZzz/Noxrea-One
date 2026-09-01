@@ -8,6 +8,7 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import type { NODE_TYPE } from "@/lib/constants";
+import type { UploadErrorInfo } from "@/lib/utils/upload";
 
 // ============================================================
 // Canvas 基础类型（画布状态、节点类型枚举）
@@ -52,6 +53,11 @@ export interface UploadState {
   version: number;
   /** 上传期间的本地预览 URL（blob:或 data:），用于模糊背景渲染 */
   previewUrl?: string;
+  /**
+   * 失败态信息：存在且 uploading 为 false 时，节点渲染失败遮罩与重试 / 移除入口。
+   * 失败节点会留在画布上（不自动删除），避免裁剪 / 标注等加工产物白做。
+   */
+  error?: UploadErrorInfo;
 }
 
 // ============================================================

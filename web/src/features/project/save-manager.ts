@@ -66,22 +66,40 @@ function _collectCanvasHashes(nodes: ReadonlyArray<{ data?: Record<string, unkno
 /** 按 projectId 区分指纹，项目切换时自动隔离 */
 const fingerprintMap = new Map<string, string>();
 
+/**
+ * 上传失败且尚未落库的占位节点：留在画布上供用户重试，但没有有效 src。
+ * 落库会留下空节点，且刷新后重试上下文失效会变成无法处理的僵尸节点，故保存时剔除。
+ */
+function isUnresolvedUploadNode(node: unknown): boolean {
+  const data = (node as { data?: Record<string, unknown> } | undefined)?.data;
+  const upload = data?.upload as { error?: unknown } | undefined;
+  return Boolean(upload?.error) && !data?.src;
+}
+
 /** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
 function stripRuntimeFields(snapshot: CanvasSnapshot) {
+  // 悬空边（任一端指向被剔除的失败节点）一并剔除，避免存下指向空节点的连线
+  const removed = new Set(
+    snapshot.nodes.filter(isUnresolvedUploadNode).map((n) => (n as { id: string }).id),
+  );
   return {
     ...snapshot,
-    nodes: snapshot.nodes.map((n) => {
-      const rest = { ...(n as Record<string, unknown>) };
-      delete rest.selected;
-      delete rest.dragging;
-      delete rest.positionAbsolute;
-      return rest;
-    }),
-    edges: snapshot.edges.map((e) => {
-      const rest = { ...(e as Record<string, unknown>) };
-      delete rest.selected;
-      return rest;
-    }),
+    nodes: snapshot.nodes
+      .filter((n) => !isUnresolvedUploadNode(n))
+      .map((n) => {
+        const rest = { ...(n as Record<string, unknown>) };
+        delete rest.selected;
+        delete rest.dragging;
+        delete rest.positionAbsolute;
+        return rest;
+      }),
+    edges: snapshot.edges
+      .filter((e) => !removed.has(e.source) && !removed.has(e.target))
+      .map((e) => {
+        const rest = { ...(e as Record<string, unknown>) };
+        delete rest.selected;
+        return rest;
+      }),
   };
 }
 

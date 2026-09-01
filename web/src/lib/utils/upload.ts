@@ -2,7 +2,12 @@
  * 文件上传公共工具：并发限制 + 失败重试。
  * 供画布拖入上传（use-file-drop）与资产管理上传（AssetCreateDialog）共用。
  */
-import { apiUploadWithProgress, UnauthorizedError } from "@/lib/api/client";
+import {
+  apiUploadWithProgress,
+  UnauthorizedError,
+  type UploadErrorKind,
+  UploadTransportError,
+} from "@/lib/api/client";
 import { type ApiErrorBody,resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 
@@ -55,6 +60,48 @@ class UploadBusinessError extends Error {
   }
 }
 
+/** 上传失败类别：决定 UI 是否提供「重试」入口 */
+export type UploadErrorCategory = UploadErrorKind | "business" | "unknown";
+
+/** 结构化失败信息：节点失败态与全局提示共用 */
+export interface UploadErrorInfo {
+  category: UploadErrorCategory;
+  /** 已本地化的失败原因 */
+  message: string;
+  /** 是否值得重试：类型不支持 / 体积超限等业务错误重试无意义 */
+  retryable: boolean;
+}
+
+/** 浏览器已明确报告离线（此时网络请求必然失败，重试只是浪费一次往返） */
+export function isOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+/**
+ * 把任意上传异常归一为结构化失败信息。
+ * 业务错误（code !== 200）不可重试；传输错误按其类别判定；其余按可重试处理。
+ */
+export function classifyUploadError(err: unknown): UploadErrorInfo {
+  if (err instanceof UploadBusinessError) {
+    return {
+      category: "business",
+      message: err.detail ?? i18n.t("error.upload.upload_failed"),
+      retryable: false,
+    };
+  }
+  if (err instanceof UploadTransportError) {
+    return { category: err.kind, message: err.message, retryable: err.retryable };
+  }
+  if (err instanceof UnauthorizedError) {
+    return { category: "unknown", message: i18n.t("error.session_expired"), retryable: false };
+  }
+  return {
+    category: "unknown",
+    message: err instanceof Error ? err.message : i18n.t("error.unknown"),
+    retryable: true,
+  };
+}
+
 /**
  * 上传单个文件，网络错误自动重试。
  * - 网络错误 -> 重试，重试前通过 onProgress(0) 通知调用方重置进度
@@ -100,6 +147,14 @@ export async function uploadWithRetry(
       // 业务错误和鉴权错误不重试，直接抛出
       if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) {
         throw err;
+      }
+      // 传输错误按类别判定：网络 / 超时 / 5xx 重试，4xx 直接失败
+      if (err instanceof UploadTransportError && !err.retryable) {
+        throw err;
+      }
+      // 已确认离线：重试只是多一次无谓往返，直接以「离线」语义失败
+      if (isOffline()) {
+        throw new UploadTransportError("network", i18n.t("error.upload.offline"));
       }
       // 网络错误，准备重试
       lastErr = err;

@@ -34,16 +34,17 @@ import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
-  getUploadErrorDetail,
+  classifyUploadError,
   runWithConcurrency,
   UPLOAD_CONCURRENCY,
   UPLOAD_MAX_RETRIES,
-  uploadWithRetry,
+  type UploadErrorInfo,
   type UploadResult,
+  uploadWithRetry,
 } from "@/lib/utils/upload";
 
 import { resolveDerivedLabel, resolveDerivedPosition } from "./derived-node";
-import type { MediaKind, UploadAnchor, UploadHandle, UploadItem, UploadPlan, UploadSummary } from "./types";
+import type { MediaKind, UploadHandle, UploadItem, UploadPlan, UploadSummary } from "./types";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "mkv", "m4v"];
@@ -155,6 +156,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
   const sink = plan.sink;
   const source = plan.source ?? (sink.kind === "derived-node" ? "derived" : "upload");
   const store = useCanvasStore.getState();
+  gcRetryStore();
 
   // ── replace sink 前置校验：目标节点必须存在 ──
   let replaceTarget: AnyNode | undefined;
@@ -332,6 +334,67 @@ function resolvePosition(
   return { x: 0, y: 0 };
 }
 
+/** 失败节点的可重试上下文：保留原始待上传数据，供节点上的「重试」复用 */
+interface RetryContext {
+  item: UploadItem;
+  kind: MediaKind;
+  label: string;
+  nw: number;
+  nh: number;
+  source: "upload" | "derived";
+  previewUrl?: string;
+}
+
+/**
+ * nodeId → 失败待重试上下文。
+ * 仅在节点仍留在画布上时存在；重试成功或节点被移除时清理，并释放其本地预览。
+ */
+const retryStore = new Map<string, RetryContext>();
+
+/**
+ * 惰性回收重试上下文：节点被删除 / 撤销后其上下文不再可达，
+ * 在下一次上传（开始上传、登记失败）时统一清理，避免 File 与预览 URL 常驻内存。
+ * retryStore 通常为空，此时直接返回。
+ */
+function gcRetryStore() {
+  if (retryStore.size === 0) return;
+  const nodes = useCanvasStore.getState().getNodes();
+  for (const nodeId of [...retryStore.keys()]) {
+    if (!nodes.some((n) => n.id === nodeId)) releaseRetryContext(nodeId);
+  }
+}
+
+function retryContextOf(p: Prepared, source: "upload" | "derived"): RetryContext {
+  return { item: p.item, kind: p.kind, label: p.label, nw: p.nw, nh: p.nh, source, previewUrl: p.previewUrl };
+}
+
+/** 把节点标记为上传失败：保留本地预览，UI 依此渲染失败遮罩与重试入口 */
+function markUploadFailed(nodeId: string, version: number, error: UploadErrorInfo, previewUrl?: string) {
+  useCanvasStore.getState().updateNodeData(
+    nodeId,
+    { upload: { uploading: false, progress: 0, version, previewUrl, error } },
+    undefined,
+    { skipHistory: true },
+  );
+}
+
+/** 上传成功落库：写入远端地址并清除上传态，同时释放本地预览 */
+function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryContext) {
+  const data: Record<string, unknown> = {
+    src: result.url,
+    label: ctx.label,
+    alt: ctx.label,
+    upload: undefined,
+    source: ctx.source,
+  };
+  if (ctx.kind !== "audio") {
+    data.naturalWidth = ctx.nw;
+    data.naturalHeight = ctx.nh;
+  }
+  useCanvasStore.getState().updateNodeData(nodeId, data, undefined, { skipHistory: true });
+  if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
+}
+
 async function runUploads(
   plan: UploadPlan,
   prepared: Prepared[],
@@ -365,23 +428,26 @@ async function runUploads(
   let succeeded = 0;
   let failed = 0;
   let reason: string | undefined;
-  const failedNodeIds: string[] = [];
+  /** 失败后仍留在画布上、可重试的节点数 */
+  let retained = 0;
 
   results.forEach((r, i) => {
     const p = prepared[i];
-    // 上传结束即释放预览 URL：成功已换服务端 URL，失败节点被移除 / 回滚
-    if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+    // 预览 URL 释放时机：成功 / 回滚 / 节点已消失时立即释放；失败且占位节点保留时
+    // 交给节点持有（失败遮罩与重试都要用它），由重试成功或「移除」时释放
+    const releasePreview = () => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); };
 
     const targetId = p.node?.id ?? p.replaceId;
     if (!targetId) {
       // 无落库目标（raw sink）：只记录结果
+      releasePreview();
       if (r.status === "fulfilled") {
         succeeded++;
         summaryResults[p.itemIndex] = r.value;
       } else {
         failed++;
         summaryResults[p.itemIndex] = null;
-        reason = reason ?? getUploadErrorDetail(r.reason);
+        reason = reason ?? classifyUploadError(r.reason).message;
       }
       return;
     }
@@ -389,14 +455,14 @@ async function runUploads(
     const node = findNode(targetId);
     if (!isCurrentUpload(node, p.version)) {
       // 节点已被撤销 / 删除，放弃写入（结果仍计入成功，文件已上云）
+      releasePreview();
       if (r.status === "fulfilled") {
         succeeded++;
         summaryResults[p.itemIndex] = r.value;
       } else {
         failed++;
         summaryResults[p.itemIndex] = null;
-        reason = reason ?? getUploadErrorDetail(r.reason);
-        if (p.node) failedNodeIds.push(p.node.id);
+        reason = reason ?? classifyUploadError(r.reason).message;
       }
       return;
     }
@@ -405,18 +471,7 @@ async function runUploads(
       succeeded++;
       summaryResults[p.itemIndex] = r.value;
       if (p.node) {
-        const data: Record<string, unknown> = {
-          src: r.value.url,
-          label: p.label,
-          alt: p.label,
-          upload: undefined,
-          source,
-        };
-        if (p.kind !== "audio") {
-          data.naturalWidth = p.nw;
-          data.naturalHeight = p.nh;
-        }
-        useCanvasStore.getState().updateNodeData(targetId, data, undefined, { skipHistory: true });
+        applyUploadResult(p.node.id, r.value, retryContextOf(p, source));
       } else {
         // 原地替换：走事件通道 + immediate，保持「上传完成立即落盘」语义
         const clear: Record<string, undefined> = {};
@@ -448,16 +503,22 @@ async function runUploads(
             },
           }),
         );
+        releasePreview();
       }
       return;
     }
 
     failed++;
     summaryResults[p.itemIndex] = null;
-    reason = reason ?? getUploadErrorDetail(r.reason);
+    const info = classifyUploadError(r.reason);
+    reason = reason ?? info.message;
     if (p.node) {
-      failedNodeIds.push(p.node.id);
-    } else if (p.snapshot) {
+      // 保留占位节点并转入失败态：裁剪 / 标注等加工产物不随失败销毁，可在节点上重试
+      gcRetryStore();
+      retryStore.set(p.node.id, retryContextOf(p, source));
+      markUploadFailed(p.node.id, p.version, info, p.previewUrl);
+      retained++;
+    } else if (p.replaceId && p.snapshot) {
       // 替换失败：回滚到上传前的 data / style，避免节点尺寸停留在待上传文件的值
       useCanvasStore.getState().updateNodeData(
         targetId,
@@ -465,25 +526,27 @@ async function runUploads(
         p.snapshot.style,
         { skipHistory: true },
       );
+      releasePreview();
+    } else {
+      releasePreview();
     }
   });
-
-  // 失败清理：removeNodes 会级联删除其关联边
-  if (failedNodeIds.length > 0) {
-    useCanvasStore.getState().removeNodes(failedNodeIds, { skipHistory: true });
-  }
 
   markDirtyImmediate();
 
   if (!plan.silent && failed > 0) {
     const t = i18n.t;
+    // 有失败节点留在画布时补一句可重试提示，避免用户以为只能重做一遍
+    const hint = retained > 0 ? ` · ${t("file.uploadRetryHint")}` : "";
+    // 单文件失败直接展示原因（"全部文件上传失败"对一次只传一个的场景不适用）
+    const summary = prepared.length === 1
+      ? reason ?? t("file.uploadFailed")
+      : succeeded === 0
+        ? reason ?? t("file.uploadFailedAll")
+        : `${failed}/${prepared.length}${reason ? ` - ${reason}` : ""}`;
     showGlobalNotification().error({
       title: t("file.uploadFailed"),
-      description: succeeded === 0
-        ? reason ?? t("file.uploadFailedAll")
-        : reason
-          ? `${failed}/${prepared.length} - ${reason}`
-          : `${failed}/${prepared.length}`,
+      description: `${summary}${hint}`,
       duration: 4,
     });
   }
@@ -494,18 +557,98 @@ async function runUploads(
 /**
  * 上传单个 Blob 并只取结果（不碰画布）。
  * 供头像裁剪、导演视图截图等「只需要一个远程地址」的场景使用。
+ *
+ * @param options.notify 为 true 时失败也会弹全局提示（默认静默，由调用方自行提示）
  */
 export async function uploadOne(
   blob: Blob,
   filename: string,
   source?: "upload" | "derived",
+  options?: { notify?: boolean },
 ): Promise<UploadResult | null> {
   const { settled } = await runMediaUpload({
     items: [{ blob, filename }],
     sink: { kind: "raw" },
     source,
-    silent: true,
+    silent: !options?.notify,
   });
   const { results } = await settled;
   return results[0] ?? null;
+}
+
+/**
+ * 重试失败节点的上传。
+ * 复用失败时保留的原始数据与本地预览，用户无需重新裁剪 / 重新拖入。
+ *
+ * @returns 是否重试成功
+ */
+export async function retryNodeUpload(nodeId: string): Promise<boolean> {
+  const ctx = retryStore.get(nodeId);
+  if (!ctx) return false;
+  if (!findNode(nodeId)) {
+    releaseRetryContext(nodeId);
+    return false;
+  }
+
+  const version = nextVersion();
+  useCanvasStore.getState().updateNodeData(
+    nodeId,
+    { upload: { uploading: true, progress: 0, version, previewUrl: ctx.previewUrl } },
+    undefined,
+    { skipHistory: true },
+  );
+
+  try {
+    const result = await uploadWithRetry(
+      toFile(ctx.item),
+      (pct) => {
+        if (!isCurrentUpload(findNode(nodeId), version)) return;
+        useCanvasStore.getState().updateNodeData(
+          nodeId,
+          { upload: { uploading: true, progress: pct, version, previewUrl: ctx.previewUrl } },
+          undefined,
+          { skipHistory: true },
+        );
+      },
+      UPLOAD_MAX_RETRIES,
+      ctx.source,
+    );
+    if (isCurrentUpload(findNode(nodeId), version)) {
+      applyUploadResult(nodeId, result, ctx);
+    } else if (ctx.previewUrl) {
+      // 节点在上传期间被撤销：预览无人接管，直接释放
+      URL.revokeObjectURL(ctx.previewUrl);
+    }
+    retryStore.delete(nodeId);
+    markDirtyImmediate();
+    return true;
+  } catch (err) {
+    if (isCurrentUpload(findNode(nodeId), version)) {
+      // 重试仍失败：回到失败态，继续保留预览供下次重试
+      markUploadFailed(nodeId, version, classifyUploadError(err), ctx.previewUrl);
+    } else {
+      releaseRetryContext(nodeId);
+    }
+    return false;
+  }
+}
+
+/** 移除失败的上传节点：释放本地预览并删除节点（级联删除其关联边） */
+export function discardNodeUpload(nodeId: string): void {
+  const ctx = retryStore.get(nodeId);
+  const nodePreview = (findNode(nodeId)?.data as { upload?: UploadState } | undefined)?.upload?.previewUrl;
+  if (ctx?.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
+  if (nodePreview && nodePreview !== ctx?.previewUrl) URL.revokeObjectURL(nodePreview);
+  retryStore.delete(nodeId);
+  if (findNode(nodeId)) {
+    useCanvasStore.getState().removeNodes([nodeId], { skipHistory: true });
+    markDirtyImmediate();
+  }
+}
+
+/** 清理重试上下文并释放其持有的预览 URL */
+function releaseRetryContext(nodeId: string): void {
+  const ctx = retryStore.get(nodeId);
+  if (ctx?.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
+  retryStore.delete(nodeId);
 }
