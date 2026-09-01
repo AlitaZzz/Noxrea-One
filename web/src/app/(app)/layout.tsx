@@ -7,7 +7,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import OfflineBanner from "@/components/layout/OfflineBanner";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
@@ -65,10 +64,5 @@ export default function AppLayout({
     );
   }
 
-  return (
-    <>
-      <OfflineBanner />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

@@ -459,7 +459,8 @@
     "lastFrame": "捕获末帧"
   },
   "offline": {
-    "banner": "网络已断开，上传与保存功能暂不可用"
+    "label": "网络异常，离线待保存",
+    "tooltip": "网络异常，请检查网络连接后重试"
   },
   "file": {
     "uploadFailed": "上传失败",
