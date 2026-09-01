@@ -30,7 +30,6 @@ import {
   EventNames,
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
-import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
@@ -542,21 +541,17 @@ async function runUploads(
 
   markDirtyImmediate();
 
-  if (!plan.silent && failed > 0) {
+  // 画布上已有失败节点（自带失败遮罩与重试入口）时不再弹全局汇总，避免重复打扰；
+  // 仅当画布上没有留下任何失败痕迹（节点替换回滚、raw 截图等）才统一提示一次
+  if (!plan.silent && failed > 0 && retained === 0) {
     const t = i18n.t;
-    // 有失败节点留在画布时补一句可重试提示，避免用户以为只能重做一遍
-    const hint = retained > 0 ? ` · ${t("file.uploadRetryHint")}` : "";
     // 单文件失败直接展示原因（"全部文件上传失败"对一次只传一个的场景不适用）
     const summary = prepared.length === 1
       ? reason ?? t("file.uploadFailed")
       : succeeded === 0
         ? reason ?? t("file.uploadFailedAll")
         : `${failed}/${prepared.length}${reason ? ` - ${reason}` : ""}`;
-    showGlobalNotification().error({
-      title: t("file.uploadFailed"),
-      description: `${summary}${hint}`,
-      duration: 4,
-    });
+    showGlobalMessage().error(`${t("file.uploadFailed")} - ${summary}`);
   }
 
   return { succeeded, failed, reason, results: summaryResults };
