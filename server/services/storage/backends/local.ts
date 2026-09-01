@@ -17,7 +17,7 @@ import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
 import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
-import { withRetry } from "@server/services/storage/fs-utils";
+import { isTransientFileError, withRetry } from "@server/services/storage/fs-utils";
 import type { StorageBackend } from "@server/services/storage/backend";
 
 /** 上传文件根目录（由 UPLOAD_DIR 配置项解析，相对路径按项目根锚定） */
@@ -49,11 +49,33 @@ export class LocalStorageBackend implements StorageBackend {
 
   /**
    * 保存文件：先写同目录临时文件，再原子替换就位。
-   * 任一步失败都会清理临时文件，不会在 uploads 里留下 .tmp 垃圾或半截文件。
+   *
+   * 内容寻址（key 即内容 hash）语义：目标已存在且大小一致 ⇒ 内容必然一致，
+   * 跳过写盘直接视为成功（幂等 PUT）。任一步失败都会清理临时文件，
+   * 不会在 uploads 里留下 .tmp 垃圾或半截文件。
    */
   async save(key: string, source: string | Buffer | ReadableStream): Promise<void> {
     const filePath = this.resolveKey(key);
     await this.ensureDir(path.dirname(filePath));
+
+    // 本次内容的期望大小：Buffer 直接取长度，string 路径取源文件大小；
+    // ReadableStream 大小未知，去重/幂等降级时只以「目标存在」为准。
+    let expectedSize: number | undefined;
+    if (Buffer.isBuffer(source)) {
+      expectedSize = source.length;
+    } else if (typeof source === "string") {
+      try {
+        expectedSize = (await fs.stat(source)).size;
+      } catch {
+        expectedSize = undefined; // 源路径不可读时交给后续 copyFile 报错
+      }
+    }
+
+    // 去重短路：目标已存在且大小一致 ⇒ 内容一致，直接返回。
+    const existing = await this.stat(key);
+    if (existing && (expectedSize === undefined || existing.size === expectedSize)) {
+      return;
+    }
 
     // 与最终文件同目录，确保 rename 落在同一分区（跨分区 rename 不具备原子性）
     const tmpPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
@@ -71,9 +93,21 @@ export class LocalStorageBackend implements StorageBackend {
         );
       }
 
-      await withRetry(() => fs.rename(tmpPath, filePath), {
-        retries: REPLACE_RETRIES,
-      });
+      try {
+        await withRetry(() => fs.rename(tmpPath, filePath), {
+          retries: REPLACE_RETRIES,
+        });
+      } catch (renameErr) {
+        // rename 覆盖失败：目标可能正被并发写入方的读取/缩略图句柄占用
+        // （Windows 上对打开中的文件覆盖报 EPERM）。CAS 下目标存在即内容一致，
+        // 若目标已就位且大小一致，按幂等成功处理；否则向上抛。
+        if (!isTransientFileError(renameErr)) throw renameErr;
+        const after = await this.stat(key);
+        if (after && (expectedSize === undefined || after.size === expectedSize)) {
+          return;
+        }
+        throw renameErr;
+      }
     } catch (err) {
       await fs.rm(tmpPath, { force: true }).catch(() => undefined);
       throw err;
