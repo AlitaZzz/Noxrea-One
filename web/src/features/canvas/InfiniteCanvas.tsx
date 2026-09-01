@@ -33,6 +33,7 @@ import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import OfflineIndicator from "@/components/layout/OfflineIndicator";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
@@ -934,16 +935,19 @@ export default function InfiniteCanvas() {
 
         {/* Top-right panel: agent entry */}
         <Panel position="top-right" style={{ margin: 0, padding: 0, paddingRight: 30, paddingTop: 30 }}>
-          <Tooltip title={t("agent.title")}>
-            <button
-              type="button"
-              onClick={() => setChatOpen(true)}
-              className="canvas-agent-btn"
-            >
-              <AgentIcon style={{ width: 18, height: 18 }} />
-              <span className="text-sm font-medium">{t("agent.title")}</span>
-            </button>
-          </Tooltip>
+          <div className="flex items-center gap-2">
+            <OfflineIndicator />
+            <Tooltip title={t("agent.title")}>
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                className="canvas-agent-btn"
+              >
+                <AgentIcon style={{ width: 18, height: 18 }} />
+                <span className="text-sm font-medium">{t("agent.title")}</span>
+              </button>
+            </Tooltip>
+          </div>
         </Panel>
 
         {/* Generation panel — follows selected empty image node */}

@@ -460,7 +460,8 @@
     "lastFrame": "Capture last frame"
   },
   "offline": {
-    "banner": "You are offline — upload and save are temporarily unavailable"
+    "label": "Offline — pending save",
+    "tooltip": "Offline, please check your network connection and try again"
   },
   "file": {
     "uploadFailed": "Upload failed",
