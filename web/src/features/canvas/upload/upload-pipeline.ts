@@ -34,6 +34,7 @@ import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
   classifyUploadError,
+  isOffline,
   runWithConcurrency,
   UPLOAD_CONCURRENCY,
   UPLOAD_MAX_RETRIES,
@@ -152,6 +153,12 @@ function isCurrentUpload(node: AnyNode | undefined, version: number): node is An
  * @returns 占位节点 ID（准备阶段结束即就绪，用于乐观 UI）与全部结束后的汇总 Promise
  */
 export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
+  // 已离线：不发请求、不建占位，直接以「离线」语义返回空结果（统一覆盖所有上传入口）
+  if (isOffline()) {
+    showGlobalMessage().error(i18n.t("error.upload.offline"));
+    return emptyHandle();
+  }
+
   const sink = plan.sink;
   const source = plan.source ?? (sink.kind === "derived-node" ? "derived" : "upload");
   const store = useCanvasStore.getState();

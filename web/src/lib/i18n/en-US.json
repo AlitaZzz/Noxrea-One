@@ -459,6 +459,9 @@
     "firstFrame": "Capture first frame",
     "lastFrame": "Capture last frame"
   },
+  "offline": {
+    "banner": "You are offline — upload and save are temporarily unavailable"
+  },
   "file": {
     "uploadFailed": "Upload failed",
     "uploadFailedAll": "All files failed to upload",
