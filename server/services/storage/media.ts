@@ -6,10 +6,20 @@
 import path from "path";
 import fs from "fs/promises";
 import { spawn } from "child_process";
+import { createReadStream, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
+import { randomUUID } from "crypto";
 import { localStorage } from "./backends/local";
 import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
+import { withRetry } from "./fs-utils";
+
+/** 缩放宽度上限：避免 w 被传成极大值，导致 sharp 长时间占用内存与源文件句柄 */
+const MAX_RESIZE_WIDTH = 2048;
+
+/** ffmpeg 抽帧超时：子进程若挂起会持续持有视频文件句柄，必须兜底杀掉 */
+const FFMPEG_TIMEOUT_MS = 30_000;
 
 /** 解析 ffmpeg 可执行文件路径：FFMPEG_PATH 为目录，根据 OS 拼接 ffmpeg / ffmpeg.exe */
 function resolveFfmpegPath(configDir: string): string {
@@ -26,13 +36,17 @@ function resolveFfmpegPath(configDir: string): string {
  */
 export async function getResizedWebP(
   storageKey: string,
-  width: number
+  width: number,
+  signal?: AbortSignal
 ): Promise<string | null> {
-  const cacheKey = `_cache/${width}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
+  // 收敛到合法区间：非数字 / 负值 / 超大值都不应放大成一次重型缩放任务
+  const safeWidth = Math.min(Math.max(1, Math.floor(width) || 1), MAX_RESIZE_WIDTH);
+  const cacheKey = `_cache/${safeWidth}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
 
-  // 检查缓存
+  // 缓存命中：0 字节视为未命中——那是上次生成被打断留下的残骸，必须重新生成
   const cached = await localStorage.stat(cacheKey);
-  if (cached) return cacheKey;
+  if (cached && cached.size > 0) return cacheKey;
+  if (cached) await localStorage.delete(cacheKey).catch(() => undefined);
 
   try {
     const sharp = (await import("sharp")).default;
@@ -43,18 +57,34 @@ export async function getResizedWebP(
 
     await fs.mkdir(path.dirname(cachePath), { recursive: true });
 
-    await sharp(sourcePath)
-      .resize(width, undefined, { fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 75 })
-      .toFile(cachePath);
+    // 先写临时文件再原子替换，避免并发请求读到尚未写完的 webp
+    const tmpPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
 
-    logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width });
+    try {
+      // 源文件句柄交给 Node 的 createReadStream 持有，而不是让 sharp 自行按路径打开：
+      // sharp/libvips 的 native 句柄不受 Node 流体系管辖，中断时无法及时释放，
+      // 会把源文件锁住，导致同 hash 文件再次上传时 writeFile/rename 失败。
+      // 传入 signal 后，客户端断开会立即销毁流并释放句柄。
+      await pipeline(
+        createReadStream(sourcePath, signal ? { signal } : undefined),
+        sharp()
+          .resize(safeWidth, undefined, { fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 75 }),
+        createWriteStream(tmpPath),
+      );
+
+      await withRetry(() => fs.rename(tmpPath, cachePath), { retries: 4 });
+    } finally {
+      await fs.rm(tmpPath, { force: true }).catch(() => undefined);
+    }
+
+    logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width: safeWidth });
 
     return cacheKey;
   } catch (err: unknown) {
-    // 如果 sharp 不可用或转换失败，静默返回 null
+    // sharp 不可用或转换失败时静默返回 null（含客户端中断导致的 AbortError）
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT") {
+    if (code !== "ENOENT" && (err as Error).name !== "AbortError") {
       logEvent("media", { stage: "resize_failed", key: storageKey, error: (err as Error).message });
     }
     return null;
@@ -84,6 +114,33 @@ export async function captureVideoFrame(
     ]);
 
     let stderr = "";
+    let settled = false;
+
+    /**
+     * 超时兜底：ffmpeg 遇到损坏或特殊编码的视频可能永久挂起。
+     * 未结束的子进程会一直持有视频文件句柄，Windows 上直接导致
+     * 该视频后续无法被覆盖写入，且只有重启 Node 进程才能释放。
+     */
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      ffmpeg.kill("SIGKILL");
+      logEvent("media", {
+        stage: "capture_frame_timeout",
+        video: path.basename(videoPath),
+        timeoutMs: FFMPEG_TIMEOUT_MS,
+      });
+      reject(new Error(`ffmpeg timed out after ${FFMPEG_TIMEOUT_MS}ms`));
+    }, FFMPEG_TIMEOUT_MS);
+
+    /** 统一收口：只结算一次，并清理定时器 */
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
@@ -94,7 +151,7 @@ export async function captureVideoFrame(
           stage: "capture_frame",
           video: path.basename(videoPath),
         });
-        resolve();
+        settle(resolve);
       } else {
         const errMsg = `ffmpeg exited with code ${code}: ${stderr.slice(-200)}`;
         logEvent("media", {
@@ -103,7 +160,7 @@ export async function captureVideoFrame(
           exitCode: code,
           stderr: stderr.slice(-200),
         });
-        reject(new Error(errMsg));
+        settle(() => reject(new Error(errMsg)));
       }
     });
 
@@ -114,7 +171,7 @@ export async function captureVideoFrame(
         error: err.message,
         ffmpegBin,
       });
-      reject(err);
+      settle(() => reject(err));
     });
   });
 }

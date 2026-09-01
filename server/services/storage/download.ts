@@ -8,12 +8,10 @@ import { fetchWithTimeout } from "@server/core/http-client";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
-import { resolveFromRoot } from "@server/core/paths";
 import { buildStorageKey } from "./service";
 import { computeBufferHash, sniffMime, normalizeExt } from "./hash";
 import { persistFileObject } from "./persist";
-import fs from "fs/promises";
-import path from "path";
+import { localStorage } from "./backends/local";
 
 /**
  * 下载 + 落盘 + 去重（对齐 Python download_and_save）。
@@ -139,25 +137,11 @@ export async function downloadAndSave(
 
     // 构建存储路径：{userId}/{hash[:2]}/{hash}{ext}
     const storageKey = buildStorageKey(userId, fileHash, fileExt);
-    const uploadsRoot = resolveFromRoot(cfg.UPLOAD_DIR);
-    const uploadsDir = path.resolve(uploadsRoot, path.dirname(storageKey));
-    await fs.mkdir(uploadsDir, { recursive: true });
-    const targetPath = path.resolve(uploadsRoot, storageKey);
 
-    // 同内容同路径覆盖无影响
-    try {
-      await fs.writeFile(targetPath, buffer);
-    } catch (err: unknown) {
-      // Windows：文件被锁但内容相同，跳过
-      const code = typeof err === "object" && err !== null && "code" in err
-        ? err.code
-        : undefined;
-      if (code === "EPERM") {
-        logger.warn({ taskId, path: targetPath }, "File locked, skipping write");
-      } else {
-        throw err;
-      }
-    }
+    // 落盘统一交给存储后端：临时文件 + 原子 rename，目标被外部句柄短暂占用时自动退避重试。
+    // 旧实现直接 writeFile 最终路径，且只按 EPERM 判定「文件被锁」——
+    // 而 Windows 的共享冲突实际以 code=UNKNOWN（errno -4094）抛出，那个兜底从未生效过。
+    await localStorage.save(storageKey, buffer);
 
     // 去重 + DB 记录
     await persistFileObject({

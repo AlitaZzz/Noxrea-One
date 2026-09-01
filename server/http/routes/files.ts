@@ -33,7 +33,8 @@ router.get("/api/files/*", async (c) => {
   if (w && !isVideoExt) {
     const width = parseInt(w, 10);
     if (!isNaN(width) && width > 0) {
-      const cached = await getResizedWebP(filePath, width);
+      // 透传 signal：客户端断开时中止缩放任务，及时释放 sharp 持有的源文件句柄
+      const cached = await getResizedWebP(filePath, width, request.signal);
       if (cached) {
         resolvedPath = cached;
       }
@@ -109,7 +110,11 @@ router.get("/api/files/*", async (c) => {
       const actualEnd = Math.min(end, stat.size - 1);
       const chunkSize = actualEnd - start + 1;
 
-      const stream = Readable.toWeb(createReadStream(fullPath, { start, end: actualEnd }));
+      // 带上 signal：视频 seek 会频繁取消 Range 请求，
+      // 没有它的话流可能不被销毁，句柄悬挂，Windows 上表现为文件被锁
+      const stream = Readable.toWeb(
+        createReadStream(fullPath, { start, end: actualEnd, signal: request.signal }),
+      );
 
       headers.set("Content-Length", String(chunkSize));
       headers.set("Content-Range", `bytes ${start}-${actualEnd}/${stat.size}`);
@@ -118,8 +123,8 @@ router.get("/api/files/*", async (c) => {
     }
   }
 
-  // 流式返回（禁止整文件读入内存）
-  const stream = Readable.toWeb(createReadStream(fullPath));
+  // 流式返回（禁止整文件读入内存）；signal 保证客户端断开时句柄被立即释放
+  const stream = Readable.toWeb(createReadStream(fullPath, { signal: request.signal }));
 
   return new Response(stream, { headers });
 });

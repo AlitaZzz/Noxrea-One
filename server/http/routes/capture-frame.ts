@@ -14,6 +14,7 @@ import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
 import path from "path";
 import fs from "fs/promises";
+import { randomUUID } from "crypto";
 
 const captureFrameSchema = z.object({
   video_key: z.string().min(1),
@@ -55,7 +56,12 @@ router.post("/api/files/capture-frame", async (c) => {
     return failCode(404, "capture_frame.video_not_found");
   }
 
-  const tmpFramePath = path.resolve(localStorage.baseDir, `_tmp_frame_${Date.now()}.jpg`);
+  // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错，
+  // 且 unlink 因句柄占用失败时会在 uploads 根目录静默留下垃圾文件
+  const tmpFramePath = path.resolve(
+    localStorage.baseDir,
+    `_tmp/frame_${process.pid}_${randomUUID()}.jpg`,
+  );
 
   try {
     await captureVideoFrame(videoPath, tmpFramePath, time ?? 1);
@@ -95,8 +101,10 @@ router.post("/api/files/capture-frame", async (c) => {
     }
     return failCode(500, "capture_frame.capture_failed");
   } finally {
-    // 清理临时文件
-    await fs.unlink(tmpFramePath).catch(() => undefined);
+    // 清理临时文件；失败通常意味着 ffmpeg 仍持有句柄，必须留痕以便排查
+    await fs.unlink(tmpFramePath).catch((err: unknown) => {
+      logger.warn({ err, tmpFramePath }, "Failed to remove temp frame file");
+    });
   }
 });
 
