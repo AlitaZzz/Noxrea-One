@@ -160,6 +160,7 @@
     "textSuccess": "Text generated",
     "imageFailed": "Image generation failed",
     "videoFailed": "Video generation failed",
+    "showDetail": "Details",
     "connectUpstream": "Connect upstream nodes to collect inputs for generation",
     "count": "Count",
     "countUnit": "img",
@@ -560,7 +561,8 @@
       "missing_provider_id": "The task is missing provider configuration",
       "provider_not_found": "Provider not found or has been removed",
       "ssrf_blocked": "The provider address is blocked by security policy",
-      "unknown_capability": "Unknown generation capability"
+      "unknown_capability": "Unknown generation capability",
+      "upstream_no_result": "The provider returned neither a result nor a task ID"
     },
     "agent": {
       "session_not_found": "Session not found",

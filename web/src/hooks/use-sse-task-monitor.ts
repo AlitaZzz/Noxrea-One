@@ -5,19 +5,21 @@
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { createElement, useEffect, useRef } from "react";
 
+import TaskErrorDetail from "@/features/canvas/shared/task-error-detail";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
-/** 失败通知描述的最大展示长度 */
-const MAX_ERROR_LEN = 120;
+/** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
+const MAX_ERROR_LEN = 1000;
 
 /**
  * 截断错误文案。
- * 上游返回的失败原因长度不可控，通知区仅展示摘要，避免撑破提示框。
+ * 常规失败原因由 TaskErrorDetail 折叠为两行摘要并可展开全文，
+ * 这里只兜底超长内容，避免通知区被撑破。
  */
 function truncateError(text: string): string {
   return text.length > MAX_ERROR_LEN ? `${text.slice(0, MAX_ERROR_LEN - 1)}…` : text;
@@ -207,7 +209,13 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       if (!notifiedTasksRef.current.has(taskId)) {
                         notifiedTasksRef.current.add(taskId);
                         const t = i18n.t;
-                        notifRef.current.error({ title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"), description: resolveTaskError(evt), placement: "bottomRight", duration: 15 });
+                        notifRef.current.error({
+                          title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"),
+                          // 详情区可展开完整失败原因，避免长文案被截断后用户拿不到原文
+                          description: createElement(TaskErrorDetail, { message: resolveTaskError(evt) }),
+                          placement: "bottomRight",
+                          duration: 15,
+                        });
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

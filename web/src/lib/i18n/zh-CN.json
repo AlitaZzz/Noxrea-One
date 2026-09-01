@@ -160,6 +160,7 @@
     "textSuccess": "文本生成完成",
     "imageFailed": "图片生成失败",
     "videoFailed": "视频生成失败",
+    "showDetail": "详情",
     "connectUpstream": "连接上游节点以收集生成输入",
     "count": "生成数量",
     "countUnitVideo": "个",
@@ -559,7 +560,8 @@
       "missing_provider_id": "任务缺少供应商配置",
       "provider_not_found": "供应商不存在或已被删除",
       "ssrf_blocked": "供应商地址被安全策略拦截",
-      "unknown_capability": "未知的 generation 生成类型"
+      "unknown_capability": "未知的 generation 生成类型",
+      "upstream_no_result": "服务商未返回结果，也未返回任务 ID"
     },
     "agent": {
       "session_not_found": "会话不存在",
