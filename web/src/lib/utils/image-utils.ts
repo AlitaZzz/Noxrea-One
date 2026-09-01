@@ -10,6 +10,7 @@ import type { AnyEdge } from "@/features/canvas/types";
 import type { AnyNode, ImageNode } from "@/features/canvas/types";
 import { apiUpload } from "@/lib/api/client";
 import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { getUploadErrorDetail, runWithConcurrency, UPLOAD_CONCURRENCY, UPLOAD_MAX_RETRIES, uploadWithRetry } from "@/lib/utils/upload";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -164,6 +165,37 @@ export interface CanvasStoreApi {
 }
 
 /**
+ * 派生节点 label：默认「原图名 + 后缀」并保留扩展名，labelOverride 优先。
+ */
+function resolveDerivedLabel(
+  origNode: AnyNode | undefined,
+  labelSuffix: string,
+  labelOverride?: string,
+): string {
+  if (labelOverride !== undefined) return labelOverride;
+  const origData = origNode?.data as { alt?: string; label?: string } | undefined;
+  const origName = origData?.alt || origData?.label || "image";
+  const dotIdx = origName.lastIndexOf(".");
+  const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
+  const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
+  return `${base}${labelSuffix}${ext}`;
+}
+
+/**
+ * 派生节点位置：默认放在源节点右侧，positionOverride 优先。
+ */
+function resolveDerivedPosition(
+  origNode: AnyNode | undefined,
+  positionOverride?: { x: number; y: number },
+): { x: number; y: number } {
+  if (positionOverride) return positionOverride;
+  return {
+    x: (origNode?.position.x || 0) + ((origNode?.style?.width as number) || 600) + DERIVED_BASE_GAP_X,
+    y: origNode?.position.y || 0,
+  };
+}
+
+/**
  * 从已有 URL 创建 ImageNode -> 写入 store -> 连线到源节点。
  * 适合：宫格切分、截图发送到画布等。
  *
@@ -182,24 +214,8 @@ export async function createNodeFromUrl(
 ): Promise<AnyNode | null> {
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
 
-  // Position
-  let x: number;
-  let y: number;
-  if (positionOverride) {
-    x = positionOverride.x;
-    y = positionOverride.y;
-  } else {
-    x = (origNode?.position.x || 0) + ((origNode?.style?.width as number) || 600) + DERIVED_BASE_GAP_X;
-    y = origNode?.position.y || 0;
-  }
-
-  // Label: insert suffix before extension
-  const origData = origNode?.data as { alt?: string; label?: string } | undefined;
-  const origName = origData?.alt || origData?.label || "image";
-  const dotIdx = origName.lastIndexOf(".");
-  const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
-  const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
-  const label = labelOverride ?? `${base}${labelSuffix}${ext}`;
+  const { x, y } = resolveDerivedPosition(origNode, positionOverride);
+  const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
 
   const newNode = createImageNode({ x, y }, url);
   applyThumbnailSettings(newNode, naturalW, naturalH, label);
@@ -253,6 +269,174 @@ export async function uploadAndAddNode(
     positionOverride,
     labelOverride,
   );
+}
+
+// ── 乐观派生节点上传 ──
+// 裁剪 / 标注 / 宫格切分等「本地加工产物」的统一落库链路。
+// 与拖放素材上传（use-file-drop）共用同一套 data.upload 协议：先建占位节点
+// （本地 blob 预览）让画布立刻有反馈，再并发上传，成功原地替换 src、失败移除节点。
+// 节点层无需区分来源，ImageNode 的上传态 UI（模糊预览 + 进度条）自动生效。
+
+/** 乐观上传派生节点所需的 store 能力（CanvasStoreApi 的超集） */
+export interface DerivedUploadStoreApi extends CanvasStoreApi {
+  updateNodeData: (
+    nodeId: string,
+    data: Record<string, unknown>,
+    style?: Record<string, unknown>,
+    options?: { skipHistory?: boolean },
+  ) => void;
+  removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
+  /** 取最新节点列表：异步上传回调需重新读取，用于校验节点是否仍存在（未被撤销 / 删除） */
+  getNodes: () => AnyNode[];
+}
+
+/** 单个待上传的派生节点产物 */
+export interface DerivedNodeInput {
+  /** 本地加工得到的图片数据 */
+  blob: Blob;
+  naturalWidth: number;
+  naturalHeight: number;
+  filename?: string;
+  labelSuffix?: string;
+  labelOverride?: string;
+  position?: { x: number; y: number };
+}
+
+/** 乐观上传句柄：nodeIds 立即返回，settled 在所有上传结束后 resolve */
+export interface OptimisticDerivedHandle {
+  nodeIds: string[];
+  settled: Promise<{ failed: number; reason?: string }>;
+}
+
+/**
+ * 乐观创建派生节点：先批量建占位节点与连线，再并发上传。
+ *
+ * 与 uploadAndAddNode 的区别：
+ * - uploadAndAddNode：等上传完成后才出现节点，失败则静默无节点；
+ * - 本函数：节点立即上画布（显示本地预览与进度），上传失败再移除并回传失败原因。
+ *
+ * 历史栈：占位节点与连线同批写入，只产生一条历史记录；后续进度回写、
+ * 结果替换、失败移除全部 skipHistory，避免一次操作留下多条撤销记录。
+ *
+ * @param sourceId  源节点 ID（新节点连线到它）
+ * @param items     待创建的产物列表
+ * @param storeApi  由调用方注入的 store 操作接口
+ * @param options.extraNodeData  额外写入 node.data 的字段
+ * @param options.concurrency    上传并发数，默认 UPLOAD_CONCURRENCY
+ * @param options.source         文件归属标记，默认 "derived"
+ */
+export function createOptimisticDerivedNodes(
+  sourceId: string,
+  items: DerivedNodeInput[],
+  storeApi: DerivedUploadStoreApi,
+  options?: {
+    extraNodeData?: Record<string, unknown>;
+    concurrency?: number;
+    source?: "upload" | "derived";
+  },
+): OptimisticDerivedHandle {
+  const origNode = storeApi.nodes.find((n) => n.id === sourceId);
+  const extraNodeData = options?.extraNodeData;
+  const source = options?.source ?? "derived";
+  const concurrency = options?.concurrency ?? UPLOAD_CONCURRENCY;
+
+  const newNodes: AnyNode[] = [];
+  const newEdges: AnyEdge[] = [];
+  const pending: { nodeId: string; version: number; previewUrl: string; blob: Blob; filename: string }[] = [];
+
+  for (const item of items) {
+    const label = resolveDerivedLabel(origNode, item.labelSuffix ?? "", item.labelOverride);
+    const position = resolveDerivedPosition(origNode, item.position);
+
+    const node = createImageNode(position, "");
+    applyThumbnailSettings(node, item.naturalWidth, item.naturalHeight, label);
+    if (extraNodeData) Object.assign(node.data, extraNodeData);
+
+    // 版本号用于异步回调时校验：节点被撤销 / 重置后 version 不匹配则放弃写入
+    const version = Date.now();
+    const previewUrl = URL.createObjectURL(item.blob);
+    Object.assign(node.data, {
+      upload: { uploading: true, progress: 0, version, previewUrl },
+      source,
+    });
+
+    newNodes.push(node);
+    newEdges.push(createEdge(sourceId, node.id));
+    pending.push({
+      nodeId: node.id,
+      version,
+      previewUrl,
+      blob: item.blob,
+      filename: item.filename ?? `derived_${version}.png`,
+    });
+  }
+
+  if (newNodes.length > 0) {
+    storeApi.addNodes(newNodes);
+    storeApi.setEdges([...storeApi.edges, ...newEdges]);
+  }
+
+  const nodeIds = pending.map((p) => p.nodeId);
+
+  const settled = (async (): Promise<{ failed: number; reason?: string }> => {
+    if (pending.length === 0) return { failed: 0 };
+
+    const results = await runWithConcurrency(
+      pending.map((p) => async () => {
+        const file = new File([p.blob], p.filename, { type: p.blob.type || "image/png" });
+        return uploadWithRetry(
+          file,
+          "images",
+          (pct) => {
+            // 进度回写前校验：节点可能已被撤销 / 删除
+            const cur = storeApi.getNodes().find((n) => n.id === p.nodeId);
+            if (!cur) return;
+            const upload = (cur.data as { upload?: { version?: number } }).upload;
+            if (upload?.version !== p.version) return;
+            storeApi.updateNodeData(
+              p.nodeId,
+              { upload: { uploading: true, progress: pct, version: p.version, previewUrl: p.previewUrl } },
+              undefined,
+              { skipHistory: true },
+            );
+          },
+          UPLOAD_MAX_RETRIES,
+          source,
+        );
+      }),
+      concurrency,
+    );
+
+    let failed = 0;
+    let reason: string | undefined;
+    const failedIds: string[] = [];
+
+    results.forEach((r, i) => {
+      const p = pending[i];
+      // 上传结束即释放预览 URL：成功则已换服务端 URL，失败则节点被移除
+      URL.revokeObjectURL(p.previewUrl);
+
+      if (r.status === "fulfilled") {
+        const cur = storeApi.getNodes().find((n) => n.id === p.nodeId);
+        const upload = (cur?.data as { upload?: { version?: number } } | undefined)?.upload;
+        if (!cur || upload?.version !== p.version) return; // 已被撤销 / 删除，放弃写入
+        storeApi.updateNodeData(p.nodeId, { src: r.value.url, upload: undefined }, undefined, { skipHistory: true });
+      } else {
+        failed++;
+        failedIds.push(p.nodeId);
+        reason = reason ?? getUploadErrorDetail(r.reason);
+      }
+    });
+
+    // 失败清理：removeNodes 会级联删除其关联边
+    if (failedIds.length > 0) {
+      storeApi.removeNodes(failedIds, { skipHistory: true });
+    }
+
+    return { failed, reason };
+  })();
+
+  return { nodeIds, settled };
 }
 
 // ── 派生节点网格布局 ──

@@ -86,6 +86,8 @@ interface CanvasState {
   nodes: AnyNode[];
   edges: Edge[];
   setNodes: (nodes: AnyNode[]) => void;
+  /** 读取当前最新节点列表。异步回调中应通过它取数，避免持有过期快照 */
+  getNodes: () => AnyNode[];
   setEdges: (edges: Edge[], options?: { skipHistory?: boolean }) => void;
   addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
   updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean; forceHistory?: boolean }) => void;
@@ -144,7 +146,7 @@ interface CanvasState {
   restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
 }
 
-export const useCanvasStore = create<CanvasState>((set) => ({
+export const useCanvasStore = create<CanvasState>((set, get) => ({
   viewport: DEFAULT_VIEWPORT,
   setViewport: (viewport) => {
     _liveViewport = viewport;
@@ -157,6 +159,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setNodes: (nodes) => {
     set({ nodes });
   },
+  getNodes: () => get().nodes,
   setEdges: (edges, options) => {
     maybePushHistory(options);
     set({ edges });
