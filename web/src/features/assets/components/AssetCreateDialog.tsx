@@ -7,7 +7,7 @@
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
-import { type ReactNode,useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode,useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
@@ -15,7 +15,8 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { captureFrame } from "@/features/canvas/api/file-api";
-import { type UploadResult, uploadWithRetry } from "@/lib/utils/upload";
+import { runMediaUpload } from "@/features/canvas/upload";
+import { isOffline } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
   { value: "character", labelKey: "asset.cat.character" },
@@ -33,7 +34,7 @@ interface UploadFile {
   url: string | null;
   coverUrl?: string;
   uploadProgress: number;
-  status: "ready" | "processing" | "uploading" | "done" | "error";
+  status: "ready" | "uploading" | "done" | "error";
   width: number;
   height: number;
 }
@@ -84,22 +85,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...partial } : f)));
   }, []);
 
-  // ---- 统一上传队列（全局并发 MAX_CONCURRENCY）----
-  const queueRef = useRef<UploadFile[]>([]);
-  const activeRef = useRef(0);
+  // ---- 上传：统一走画布上传管道（raw sink，复用并发 / 重试 / 离线判定 / 错误分类）----
+  const pendingRef = useRef(0);
   const resolveAllRef = useRef<() => void>(() => {});
-  const allDonePromiseRef = useRef<Promise<void>>(Promise.resolve());
-  const scheduleNextRef = useRef<() => void>(() => {});
+  const allDoneRef = useRef<Promise<void>>(Promise.resolve());
 
-  // 声明在 scheduleNext 之前，避免互相递归的「声明前访问」。
-  const processEntry = useCallback(async (
-    entry: UploadFile,
-    onUpdate: (id: string, partial: Partial<UploadFile>) => void,
-  ) => {
-    const { id, file } = entry;
-    onUpdate(id, { status: "processing" });
-
-    // 获取图片/视频尺寸（用 Promise.race 包装，超时 5s 不阻塞上传）
+  /** 获取图片/视频自然尺寸（Promise.race 包 5s 超时，不阻塞上传） */
+  const measureDims = useCallback((file: File): Promise<{ w: number; h: number }> => {
     const dimPromise = (async () => {
       try {
         if (isImage(file)) {
@@ -126,78 +118,11 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     const timeoutPromise = new Promise<{ w: number; h: number }>((resolve) =>
       setTimeout(() => resolve({ w: 0, h: 0 }), 5000),
     );
-
-    const [, uploadResult] = await Promise.all([
-      // Task 1: 获取尺寸（5s 超时，不阻塞上传）
-      Promise.race([dimPromise, timeoutPromise]).then((dims) => {
-        if (dims.w > 0) onUpdate(id, { width: dims.w, height: dims.h });
-      }),
-
-      // Task 2: 上传原文件
-      new Promise<UploadResult>(async (resolve) => {
-        try {
-          onUpdate(id, { status: "uploading" });
-          const result = await uploadWithRetry(file, (pct: number) => {
-            onUpdate(id, { uploadProgress: pct });
-          });
-          resolve(result);
-        } catch {
-          resolve({ url: "", key: "" });
-        }
-      }),
-    ]);
-
-    if (uploadResult.url) {
-      onUpdate(id, { url: uploadResult.url, status: "done", uploadProgress: 100 });
-
-      // For video, capture a frame as cover thumbnail
-      if (isVideo(file) && uploadResult.key) {
-        (async () => {
-          try {
-            const res = await captureFrame(uploadResult.key, 0.1);
-            if (res.ok) {
-              const json = await res.json();
-              if (json.data?.url) onUpdate(id, { coverUrl: json.data.url });
-            }
-          } catch { /* frame capture failure is non-fatal */ }
-        })();
-      }
-    } else {
-      onUpdate(id, { status: "error" });
-    }
+    return Promise.race([dimPromise, timeoutPromise]);
   }, []);
-
-  const scheduleNext = useCallback(() => {
-    while (activeRef.current < MAX_CONCURRENCY && queueRef.current.length > 0) {
-      const entry = queueRef.current.shift()!;
-      activeRef.current++;
-      processEntry(entry, updateFile).finally(() => {
-        activeRef.current--;
-        scheduleNextRef.current();
-        if (activeRef.current === 0) {
-          resolveAllRef.current();
-        }
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    scheduleNextRef.current = scheduleNext;
-  }, [scheduleNext]);
-
-  const enqueueUpload = useCallback((entry: UploadFile) => {
-    const wasIdle = activeRef.current === 0;
-    if (wasIdle) {
-      allDonePromiseRef.current = new Promise(r => { resolveAllRef.current = r; });
-    }
-    queueRef.current.push(entry);
-    scheduleNext();
-  }, [scheduleNext]);
 
   const waitAllDone = useCallback((): Promise<void> => {
-    if (activeRef.current > 0 || queueRef.current.length > 0) {
-      return allDonePromiseRef.current;
-    }
+    if (pendingRef.current > 0) return allDoneRef.current;
     return Promise.resolve();
   }, []);
 
@@ -215,7 +140,14 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   };
 
   const addFiles = useCallback(async (newFiles: FileList | File[]) => {
-    const entries: UploadFile[] = Array.from(newFiles).map((file) => ({
+    const list = Array.from(newFiles);
+    if (list.length === 0) return;
+    if (isOffline()) {
+      message.warning(t("error.upload.offline"));
+      return;
+    }
+
+    const entries: UploadFile[] = list.map((file) => ({
       id: uid(),
       file,
       previewUrl: URL.createObjectURL(file),
@@ -229,11 +161,74 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     // 立即渲染卡片
     setFiles((prev) => [...prev, ...entries]);
 
-    // 加入统一队列（共享并发池，不等待）
-    for (const entry of entries) {
-      enqueueUpload(entry);
+    // 不支持的类型直接标红，不送管道（整批不支持时管道会弹全局提示，语义不符）
+    const uploadable = entries.filter((e) => isImage(e.file) || isVideo(e.file) || isAudio(e.file));
+    const supported = new Set(uploadable);
+    for (const e of entries) {
+      if (!supported.has(e)) updateFile(e.id, { status: "error" });
     }
-  }, [enqueueUpload]);
+    if (uploadable.length === 0) return;
+
+    // 记录本批上传，供 waitAllDone 等待
+    const wasIdle = pendingRef.current === 0;
+    if (wasIdle) {
+      allDoneRef.current = new Promise((r) => { resolveAllRef.current = r; });
+    }
+    pendingRef.current += 1;
+
+    // 尺寸探测与上传并行：尺寸只更新 width/height，不阻塞上传
+    const dims = uploadable.map((e) => measureDims(e.file));
+    dims.forEach((d, i) => {
+      d.then(({ w, h }) => {
+        if (w > 0) updateFile(uploadable[i].id, { width: w, height: h });
+      });
+    });
+
+    // 上传交给管道（raw sink：只上传拿 URL，不碰画布；silent 由本组件自行标红/标失败）
+    const { settled } = await runMediaUpload({
+      items: uploadable.map((e) => ({ blob: e.file, filename: e.file.name })),
+      sink: { kind: "raw" },
+      source: "upload",
+      concurrency: MAX_CONCURRENCY,
+      silent: true,
+      onProgress: (index, pct) => {
+        updateFile(uploadable[index].id, { status: "uploading", uploadProgress: pct });
+      },
+    });
+
+    settled
+      .then(async ({ results }) => {
+        for (let i = 0; i < uploadable.length; i++) {
+          const entry = uploadable[i];
+          const result = results[i];
+          if (!result?.url) {
+            updateFile(entry.id, { status: "error" });
+            continue;
+          }
+          // 等尺寸收尾（≤5s），保证保存时 width/height 已就绪
+          const { w, h } = await dims[i];
+          if (w > 0) updateFile(entry.id, { width: w, height: h });
+          updateFile(entry.id, { url: result.url, status: "done", uploadProgress: 100 });
+
+          // 视频提取封面（失败不影响上传结果）
+          if (isVideo(entry.file) && result.key) {
+            void (async () => {
+              try {
+                const res = await captureFrame(result.key, 0.1);
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json.data?.url) updateFile(entry.id, { coverUrl: json.data.url });
+                }
+              } catch { /* frame capture failure is non-fatal */ }
+            })();
+          }
+        }
+      })
+      .finally(() => {
+        pendingRef.current -= 1;
+        if (pendingRef.current === 0) resolveAllRef.current();
+      });
+  }, [measureDims, updateFile, message, t]);
 
   const removeFile = useCallback((id: string) => {
     const target = files.find((f) => f.id === id);
@@ -299,7 +294,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     onClose();
   }, [category, saveFolderId, onCreate, onClose, waitAllDone]);
 
-  const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "processing" || f.status === "uploading");
+  const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "uploading");
   const saveDisabled = files.length === 0 || hasActiveWork;
 
   return (
@@ -393,7 +388,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                 )}
 
                 {/* 上传进行中 → 进度圈 */}
-                {(f.status === "uploading" || (f.status === "processing" && f.uploadProgress > 0 && f.uploadProgress < 100)) && (
+                {f.status === "uploading" && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <Progress
                       type="circle"
@@ -402,15 +397,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                       strokeColor="#fff"
                       railColor="rgba(255,255,255,0.2)"
                     />
-                  </div>
-                )}
-                {/* 上传完成但元数据未完成 → 处理中标识 */}
-                {f.status === "processing" && f.uploadProgress === 100 && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-5 h-5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-white/50 text-[10px]">Processing...</span>
-                    </div>
                   </div>
                 )}
 

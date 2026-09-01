@@ -458,6 +458,9 @@
     "firstFrame": "捕获首帧",
     "lastFrame": "捕获末帧"
   },
+  "offline": {
+    "banner": "网络已断开，上传与保存功能暂不可用"
+  },
   "file": {
     "uploadFailed": "上传失败",
     "uploadFailedAll": "全部文件上传失败",

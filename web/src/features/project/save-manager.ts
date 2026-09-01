@@ -106,6 +106,8 @@ function stripRuntimeFields(snapshot: CanvasSnapshot) {
 class SaveManager {
   private dirty = false;
   private saving = false;
+  /** 是否离线：离线时暂停自动保存，恢复在线后立即补存 */
+  private offline = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
@@ -202,6 +204,8 @@ class SaveManager {
   private resetTimer(delay: number = SAVE_DELAY): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    // 离线暂停自动保存：不排定时器，保持 dirty 等待 online 事件触发补存
+    if (this.offline) return;
     if (this.saving) {
       this.pendingDelay = Math.min(this.pendingDelay, delay);
       return;
@@ -285,11 +289,14 @@ class SaveManager {
     fingerprintMap.set(projectId, currentFp);
   }
 
-  /** 全局只注册一次页面生命周期监听 */
+  /** 全局只注册一次页面生命周期与网络状态监听 */
   private registerFlushOnce(): void {
     if (this.registered) return;
     this.registered = true;
     if (typeof window === "undefined") return;
+
+    // 校正初始在线状态（SSR / 首屏时 navigator 可能尚未就绪）
+    this.offline = typeof navigator !== "undefined" && navigator.onLine === false;
 
     const onUnload = () => this.flushOnUnload();
     document.addEventListener("visibilitychange", () => {
@@ -297,6 +304,23 @@ class SaveManager {
     });
     window.addEventListener("pagehide", onUnload);
     window.addEventListener("beforeunload", onUnload);
+
+    // 离线暂停自动保存：清掉已排的定时器，避免离线瞬间再触发一次必失败的请求
+    window.addEventListener("offline", () => {
+      this.offline = true;
+      if (this.saveTimer) {
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
+      }
+    });
+
+    // 恢复在线立即补存：dirty 且未在保存中则直接保存
+    window.addEventListener("online", () => {
+      this.offline = false;
+      if (this.dirty && !this.saving) {
+        void this.save(false);
+      }
+    });
   }
 }
 
