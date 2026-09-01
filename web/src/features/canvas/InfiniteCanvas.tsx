@@ -84,6 +84,21 @@ import { canConnect, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NOD
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 
+// nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
+// 组件内的 useMemo 在热更新等「重挂载」场景下仍会重新求值，产生新对象。
+const RF_NODE_TYPES = {
+  [NODE_TYPE.TEXT]: TextNode,
+  [NODE_TYPE.IMAGE]: ImageNode,
+  [NODE_TYPE.VIDEO]: VideoNode,
+  [NODE_TYPE.AUDIO]: AudioNode,
+  [NODE_TYPE.GROUP]: GroupNode,
+  [NODE_TYPE.DIRECTOR]: DirectorNode,
+};
+
+const RF_EDGE_TYPES = {
+  deletable: DeletableEdge,
+};
+
 export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
@@ -724,20 +739,6 @@ export default function InfiniteCanvas() {
     return () => { flushOnUnload(); };
   }, []);
 
-  // Memoize nodeTypes/edgeTypes to avoid stale references (React Flow #002 warning)
-  const rfNodeTypes = useMemo(() => ({
-    [NODE_TYPE.TEXT]: TextNode,
-    [NODE_TYPE.IMAGE]: ImageNode,
-    [NODE_TYPE.VIDEO]: VideoNode,
-    [NODE_TYPE.AUDIO]: AudioNode,
-    [NODE_TYPE.GROUP]: GroupNode,
-    [NODE_TYPE.DIRECTOR]: DirectorNode,
-  }), []);
-
-  const rfEdgeTypes = useMemo(() => ({
-    deletable: DeletableEdge,
-  }), []);
-
   return (
     <div
       ref={canvasContainerRef}
@@ -753,8 +754,8 @@ export default function InfiniteCanvas() {
         style={{ "--handle-size": `${HANDLE_SIZE}px`, "--handle-gap": `${HANDLE_GAP}px` } as CSSProperties}
         nodes={nodes}
         edges={edges}
-        nodeTypes={rfNodeTypes}
-        edgeTypes={rfEdgeTypes}
+        nodeTypes={RF_NODE_TYPES}
+        edgeTypes={RF_EDGE_TYPES}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
