@@ -14,7 +14,9 @@ import { useTranslation } from "react-i18next";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
+import { canvasToBlob, createOptimisticDerivedNodes, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -209,8 +211,19 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       });
 
-      await uploadAndAddNode(sourceId, blob, " (cropped)", useCanvasStore.getState(), { naturalWidth: sw, naturalHeight: sh, source: "derived" }, undefined, "derived", "裁剪");
+      // 乐观落库：先建占位节点（本地预览）并立即关闭面板，上传在后台进行
+      const { settled } = createOptimisticDerivedNodes(
+        sourceId,
+        [{ blob, naturalWidth: sw, naturalHeight: sh, labelOverride: "裁剪" }],
+        useCanvasStore.getState(),
+        { source: "derived" },
+      );
+      setLoading(false);
       onClose();
+      // 上传失败时节点会被移除，此处补一次提示，避免用户误以为已保存成功
+      void settled.then(({ failed, reason }) => {
+        if (failed > 0) showGlobalMessage().error(reason ?? i18n.t("file.uploadFailed"));
+      });
     } catch (e) {
       console.error("Crop failed:", e);
     } finally {

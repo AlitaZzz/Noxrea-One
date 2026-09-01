@@ -17,7 +17,9 @@ import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { canvasToBlob, loadMediaDimensions, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
+import { canvasToBlob, createOptimisticDerivedNodes, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -455,8 +457,19 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
         }
       });
 
-      await uploadAndAddNode(sourceId, blob, " (标注)", useCanvasStore.getState(), { naturalWidth: nw, naturalHeight: nh, source: "derived" }, undefined, "derived", "标注");
+      // 乐观落库：先建占位节点（本地预览）并立即关闭面板，上传在后台进行
+      const { settled } = createOptimisticDerivedNodes(
+        sourceId,
+        [{ blob, naturalWidth: nw, naturalHeight: nh, labelOverride: "标注" }],
+        useCanvasStore.getState(),
+        { source: "derived" },
+      );
+      setLoading(false);
       onClose();
+      // 上传失败时节点会被移除，此处补一次提示，避免用户误以为已保存成功
+      void settled.then(({ failed, reason }) => {
+        if (failed > 0) showGlobalMessage().error(reason ?? i18n.t("file.uploadFailed"));
+      });
     } catch (e) {
       console.error("Annotation save failed:", e);
     } finally {

@@ -65,6 +65,7 @@ class UploadBusinessError extends Error {
  * @param category   上传分类（images / videos / audios / assets）
  * @param onProgress 进度回调
  * @param maxRetries 最大重试次数（默认 1）
+ * @param source     文件归属标记（upload=原始上传 / derived=画布加工派生），写入 file_object.source
  * @returns UploadResult 包含 url 和 key
  */
 export async function uploadWithRetry(
@@ -72,15 +73,17 @@ export async function uploadWithRetry(
   category: string,
   onProgress?: (pct: number) => void,
   maxRetries: number = UPLOAD_MAX_RETRIES,
+  source?: "upload" | "derived",
 ): Promise<UploadResult> {
   let lastErr: unknown;
+  const sourceQuery = source ? `&source=${source}` : "";
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const formData = new FormData();
       formData.append("file", file);
       const res = await apiUploadWithProgress<UploadResult>(
-        `/api/files/upload?category=${category}`,
+        `/api/files/upload?category=${category}${sourceQuery}`,
         formData,
         onProgress,
       );
