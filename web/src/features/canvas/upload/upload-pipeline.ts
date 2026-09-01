@@ -400,29 +400,6 @@ async function runUploads(
   prepared: Prepared[],
   source: "upload" | "derived",
 ): Promise<UploadSummary> {
-  const results = await runWithConcurrency(
-    prepared.map((p) => async () =>
-      uploadWithRetry(
-        p.file,
-        (pct) => {
-          plan.onProgress?.(p.itemIndex, pct);
-          const targetId = p.node?.id ?? p.replaceId;
-          if (!targetId) return;
-          if (!isCurrentUpload(findNode(targetId), p.version)) return;
-          useCanvasStore.getState().updateNodeData(
-            targetId,
-            { upload: { uploading: true, progress: pct, version: p.version, previewUrl: p.previewUrl } },
-            undefined,
-            { skipHistory: true },
-          );
-        },
-        UPLOAD_MAX_RETRIES,
-        source,
-      ),
-    ),
-    plan.concurrency ?? UPLOAD_CONCURRENCY,
-  );
-
   const sink = plan.sink;
   const summaryResults: Array<UploadResult | null | undefined> = new Array(plan.items.length);
   let succeeded = 0;
@@ -431,8 +408,9 @@ async function runUploads(
   /** 失败后仍留在画布上、可重试的节点数 */
   let retained = 0;
 
-  results.forEach((r, i) => {
-    const p = prepared[i];
+  // 单个任务结束即落库 / 标记失败：完成一个处理一个。
+  // 若等整批跑完再统一写入，慢的那个会拖住所有节点，表现为「进度条走完却迟迟不出图」。
+  const settleOne = (p: Prepared, r: PromiseSettledResult<UploadResult>) => {
     // 预览 URL 释放时机：成功 / 回滚 / 节点已消失时立即释放；失败且占位节点保留时
     // 交给节点持有（失败遮罩与重试都要用它），由重试成功或「移除」时释放
     const releasePreview = () => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); };
@@ -530,7 +508,37 @@ async function runUploads(
     } else {
       releasePreview();
     }
-  });
+  };
+
+  await runWithConcurrency(
+    prepared.map((p) => async () => {
+      try {
+        const value = await uploadWithRetry(
+          p.file,
+          (pct) => {
+            plan.onProgress?.(p.itemIndex, pct);
+            const targetId = p.node?.id ?? p.replaceId;
+            if (!targetId) return;
+            if (!isCurrentUpload(findNode(targetId), p.version)) return;
+            useCanvasStore.getState().updateNodeData(
+              targetId,
+              { upload: { uploading: true, progress: pct, version: p.version, previewUrl: p.previewUrl } },
+              undefined,
+              { skipHistory: true },
+            );
+          },
+          UPLOAD_MAX_RETRIES,
+          source,
+        );
+        settleOne(p, { status: "fulfilled", value });
+        return value;
+      } catch (err) {
+        settleOne(p, { status: "rejected", reason: err });
+        throw err;
+      }
+    }),
+    plan.concurrency ?? UPLOAD_CONCURRENCY,
+  );
 
   markDirtyImmediate();
 
