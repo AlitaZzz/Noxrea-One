@@ -262,11 +262,22 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   }
 
   // 4. 两者都无 → 失败
+  // 与 HTTP 错误分支保持一致：优先回传上游自带的可读文案（如 {"error":{"message":"..."}} 中的 message），
+  // 取不到时回退错误码由前端本地化。整段响应体只进日志与 metadata，
+  // 不再拼进 error——否则用户看到的是被截断的 JSON 碎片而非真正的失败原因。
   const sample = JSON.stringify(data).slice(0, 500);
+  logEvent("taskmgr", {
+    level: "warn",
+    stage: "upstream_no_result",
+    taskId,
+    body: sample,
+  });
+  const upstreamMsg = extractUpstreamMessage(data);
   return {
     status: "failed",
     urls: [],
-    error: `Upstream returned neither result nor task_id; response=${sample}`,
+    error: upstreamMsg || "Upstream returned neither result nor task_id",
+    errorCode: upstreamMsg ? undefined : "generation.upstream_no_result",
     metadata: { raw_sample: sample },
   };
 }

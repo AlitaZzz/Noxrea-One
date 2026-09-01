@@ -102,6 +102,8 @@ export const ERROR_CODES = [
   "generation.network_error",
   /** 上游返回 HTTP 错误且未给出可读说明 */
   "generation.upstream_http_error",
+  /** 上游既未返回结果也未返回任务 ID，且未给出可读说明 */
+  "generation.upstream_no_result",
   /** 任务已被取消 */
   "generation.cancelled",
   /** 任务缺少供应商配置 */
