@@ -32,17 +32,13 @@ import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import {
-  type ImageNode as ImageNodeType,
-  type ImageNodeData,
-  type TextNodeData,
-} from "@/features/canvas/types";
-import { apiUploadWithProgress } from "@/lib/api/client";
+import type { ImageNode as ImageNodeType, ImageNodeData, TextNodeData } from "@/features/canvas/types";
+import { runMediaUpload, useNodeUpload } from "@/features/canvas/upload";
 import {
 DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { isGenerating } from "@/lib/constants";
-import { canvasToBlob, computeNodeSize, createNodeFromUrl, loadMediaDimensions, uploadBlob } from "@/lib/utils/image-utils";
+import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
 
@@ -139,98 +135,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     [expanded, isMulti, data.multiResultUrls, src]
   );
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("image/")) return;
-
-      // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
-      // 撤销时整个 node.data 被快照替换，版本号自动失效。
-      const uploadVersion = Date.now();
-      const previewUrl = URL.createObjectURL(file);
-
-      // 先从本地 blob URL 获取尺寸，再进入 uploading 状态（一次性设置正确大小）
-      const dims = await loadMediaDimensions(previewUrl, false);
-      const nw = dims.w || 600;
-      const nh = dims.h || 338;
-      const { width, height } = computeNodeSize(nw, nh);
-
-      const store = useCanvasStore.getState();
-      const nodeBefore = store.nodes.find((n) => n.id === id);
-      if (nodeBefore) {
-        store.updateNodeData(
-          id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl }, naturalWidth: nw, naturalHeight: nh, source: "upload" },
-          { width, height },
-          { skipHistory: true }
-        );
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await apiUploadWithProgress<{ url: string }>(
-          "/api/files/upload?category=images",
-          formData,
-          (pct) => {
-            // 上传进度回传，更新进度条（保留 previewUrl）
-            useCanvasStore.getState().updateNodeData(
-              id,
-              { upload: { uploading: true, progress: pct, version: uploadVersion, previewUrl } },
-              undefined,
-              { skipHistory: true }
-            );
-          }
-        );
-        if (res.code === 200 && res.data?.url) {
-          const imgUrl = res.data.url;
-          const img = new window.Image();
-          img.onload = () => {
-            // 异步回调时校验：节点存在且版本号匹配（未被撤销/重置）
-            const s = useCanvasStore.getState();
-            const currentNode = s.nodes.find((n) => n.id === id);
-            if (!currentNode) return;
-            if ((currentNode.data as ImageNodeData).upload?.version !== uploadVersion) return;
-
-            const nw = img.naturalWidth, nh = img.naturalHeight;
-            const { width, height } = computeNodeSize(nw, nh);
-            URL.revokeObjectURL(previewUrl);
-            const latestData = currentNode.data as ImageNodeData;
-            // 上传完成：清空 upload（进度条消失），写回图片主信息；
-            // 同时清掉可能残留的 multiResultUrls，避免旧多图层叠在新主图后。
-            window.dispatchEvent(
-              new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-                detail: {
-                  nodeId: id,
-                  data: { ...latestData, src: imgUrl, label: file.name, alt: file.name, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined, source: "upload" },
-                  style: { width, height },
-                  immediate: true,
-                },
-              })
-            );
-          };
-          img.src = imgUrl;
-        } else {
-          // 后端返回非 200：清除 uploading 状态，避免卡在"上传中"
-          const s = useCanvasStore.getState();
-          const currentNode = s.nodes.find((n) => n.id === id);
-          if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
-            s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-          }
-          URL.revokeObjectURL(previewUrl);
-        }
-      } catch (e) {
-        console.error("Image upload failed:", e);
-        // 失败时清除 uploading 状态（进度条消失），避免卡在"上传中"
-        const s = useCanvasStore.getState();
-        const currentNode = s.nodes.find((n) => n.id === id);
-        if (currentNode && (currentNode.data as ImageNodeData).upload?.version === uploadVersion) {
-          s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-        }
-        URL.revokeObjectURL(previewUrl);
-      }
-    },
-    [id]
-  );
+  /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
+  const handleUpload = useNodeUpload(id, {
+    accept: "image/*",
+    clearFields: ["multiResultUrls", "multiResultTotalCount"],
+  });
 
   const handleDownload = useCallback(() => {
     if (!src) return;
@@ -333,23 +242,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         if (op === "flipV") ctx.scale(1, -1);
         ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       });
-      const url = await uploadBlob(blob, `transform_${Date.now()}.png`, "derived");
-      if (!url) throw new Error("Upload failed");
-
-      // 3. 创建派生新节点（与九宫格逻辑一致）
-      const suffix = op === "rot90" ? " (旋转)" : op === "flipH" ? " (水平翻转)" : " (垂直翻转)";
+      // 3. 创建派生新节点（与宫格切分、裁剪同一条链路）
       const derivedLabel = op === "rot90" ? "旋转" : op === "flipH" ? "水平翻转" : "垂直翻转";
-      await createNodeFromUrl(
-        id,
-        url,
-        cw,
-        ch,
-        suffix,
-        useCanvasStore.getState(),
-        { source: "derived" },
-        undefined,
-        derivedLabel,
-      );
+      await runMediaUpload({
+        items: [{ blob, filename: "transform.png", naturalWidth: cw, naturalHeight: ch, label: derivedLabel }],
+        sink: { kind: "derived-node", sourceId: id },
+      });
       markDirtyImmediate();
     } catch (e) {
       store.updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
@@ -528,16 +426,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             <Tooltip title={t("common.replace")}>
               <button
                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
-                onClick={() => {
-                  const input = document.createElement("input");
-                  input.type = "file";
-                  input.accept = "image/*";
-                  input.onchange = (e) => {
-                    const file = (e.target as HTMLInputElement).files?.[0];
-                    if (file) handleFile(file);
-                  };
-                  input.click();
-                }}
+                onClick={handleUpload}
               >
                 <UploadOutlined style={{ fontSize: 12 }} />
               </button>
@@ -674,16 +563,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             <PictureOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.upload")}</span>
             <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={() => {
-                const input = document.createElement("input");
-                input.type = "file";
-                input.accept = "image/*";
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) handleFile(file);
-                };
-                input.click();
-              }}>
+              onClick={handleUpload}>
               <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>

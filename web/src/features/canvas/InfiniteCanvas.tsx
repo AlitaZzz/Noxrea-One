@@ -732,7 +732,7 @@ export default function InfiniteCanvas() {
   }, []);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const { handleDragOver, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, notif, shouldIgnoreFileDrop, canvasContainerRef);
+  const { handleDragOver, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef);
 
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {

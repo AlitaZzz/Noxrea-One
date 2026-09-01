@@ -15,7 +15,8 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { computeDerivedGrid, gridPositionAt, uploadAndAddNode } from "@/lib/utils/image-utils";
+import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
+import { computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -175,16 +176,11 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       restore();
       restoreRef.current = null;
 
-      await uploadAndAddNode(
-        sourceId,
-        blob,
-        " (screenshot)",
-        useCanvasStore.getState(),
-        { naturalWidth: targetW, naturalHeight: targetH, source: "derived" },
-        undefined,
-        "derived",
-        "全景截图",
-      );
+      // 走统一上传管道：先建占位节点再后台上传
+      await runMediaUpload({
+        items: [{ blob, filename: "panorama.png", naturalWidth: targetW, naturalHeight: targetH, label: "全景截图" }],
+        sink: { kind: "derived-node", sourceId },
+      });
       // 截图成功后保持全景模式，不退出
     } catch (e) {
       console.error("Panorama screenshot failed:", e);
@@ -265,6 +261,8 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       const COLS = COUNT <= 4 ? 2 : 4;
       const layout = computeDerivedGrid(origNode, frameW, frameH, COLS);
 
+      // 1) 先逐帧截图（共用同一个 viewer，只能串行），收集产物
+      const items: UploadItem[] = [];
       const currentPitch = viewer.getPosition().pitch;
       for (let i = 0; i < VIEWS.length; i++) {
         const view = VIEWS[i];
@@ -282,19 +280,23 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
         );
 
-        await uploadAndAddNode(
-          sourceId,
+        items.push({
           blob,
-          ` (${view.label})`,
-          useCanvasStore.getState(),
-          { naturalWidth: frameW, naturalHeight: frameH, source: "derived" },
-          gridPositionAt(layout, i),
-          "derived",
-          `全景截图 (${view.label})`,
-        );
+          filename: `panorama_${i + 1}.png`,
+          naturalWidth: frameW,
+          naturalHeight: frameH,
+          label: `全景截图 (${view.label})`,
+          position: gridPositionAt(layout, i),
+        });
       }
 
+      // 2) 截图完成立刻恢复视角，再交给统一上传管道并发上传
       restore();
+
+      await runMediaUpload({
+        items,
+        sink: { kind: "derived-node", sourceId },
+      });
       restoreRef.current = null;
       // 全部节点生成后保持全景模式，不退出
     } catch (e) {

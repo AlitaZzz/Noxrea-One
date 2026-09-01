@@ -25,11 +25,10 @@ import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
 import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { type VideoNode as VideoNodeType,type VideoNodeData } from "@/features/canvas/types";
-import { apiUploadWithProgress } from "@/lib/api/client";
+import type { VideoNode as VideoNodeType } from "@/features/canvas/types";
+import { createNodeFromUrl, useNodeUpload } from "@/features/canvas/upload";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
-import { computeNodeSize, createNodeFromUrl, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
 
@@ -126,98 +125,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     } catch (e) { console.error("Frame capture failed:", e); }
   }, [src, data.alt, id]);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("video/")) return;
-
-      // 生成本次上传的版本标记。版本号存储在 node.data.upload.version 中，
-      // 撤销/清除时整个 node.data 被替换，版本号自动失效，从而丢弃过期回调。
-      const uploadVersion = Date.now();
-      const previewUrl = URL.createObjectURL(file);
-
-      // 先从本地 blob URL 获取尺寸，再进入 uploading 状态（一次性设置正确大小）
-      const dims = await loadMediaDimensions(previewUrl, true);
-      const nw = dims.w || 1280;
-      const nh = dims.h || 720;
-      const { width, height } = computeNodeSize(nw, nh);
-
-      const store = useCanvasStore.getState();
-      const nodeBefore = store.nodes.find((n) => n.id === id);
-      if (nodeBefore) {
-        store.updateNodeData(
-          id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion, previewUrl }, naturalWidth: nw, naturalHeight: nh, source: "upload" },
-          { width, height },
-          { skipHistory: true }
-        );
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const json = await apiUploadWithProgress<{ url: string }>(
-          "/api/files/upload?category=videos",
-          formData,
-          (pct) => {
-            useCanvasStore.getState().updateNodeData(
-              id,
-              { upload: { uploading: true, progress: pct, version: uploadVersion, previewUrl } },
-              undefined,
-              { skipHistory: true }
-            );
-          }
-        );
-        if (json.code === 200 && json.data?.url) {
-          const url = json.data.url;
-          const s = useCanvasStore.getState();
-          const currentNode = s.nodes.find((n) => n.id === id);
-          if (!currentNode) return;
-          if ((currentNode.data as VideoNodeData).upload?.version !== uploadVersion) return;
-
-          const dims = await new Promise<{ w: number; h: number }>((resolve) => {
-            const v = document.createElement("video");
-            v.preload = "metadata";
-            v.onloadedmetadata = () => resolve({ w: v.videoWidth, h: v.videoHeight });
-            v.onerror = () => resolve({ w: 0, h: 0 });
-            v.src = url;
-          });
-          const nw = dims.w || 1280;
-          const nh = dims.h || 720;
-          const { width, height } = computeNodeSize(nw, nh);
-          URL.revokeObjectURL(previewUrl);
-          const latestData = currentNode.data as VideoNodeData;
-          // 上传完成：清空 upload（进度条消失），写回视频主信息
-          window.dispatchEvent(
-            new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-              detail: {
-                nodeId: id,
-                data: { ...latestData, src: url, label: file.name, alt: file.name, naturalWidth: nw, naturalHeight: nh, upload: undefined, source: "upload" },
-                style: { width, height },
-                immediate: true,
-              },
-            })
-          );
-        } else {
-          // 后端返回非 200：清除 uploading 状态，避免卡在"上传中"
-          const s = useCanvasStore.getState();
-          const currentNode = s.nodes.find((n) => n.id === id);
-          if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
-            s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-          }
-          URL.revokeObjectURL(previewUrl);
-        }
-      } catch (e) {
-        console.error("Video upload failed:", e);
-        const s = useCanvasStore.getState();
-        const currentNode = s.nodes.find((n) => n.id === id);
-        if (currentNode && (currentNode.data as VideoNodeData).upload?.version === uploadVersion) {
-          s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-        }
-        URL.revokeObjectURL(previewUrl);
-      }
-    },
-    [id]
-  );
+  /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
+  const handleUpload = useNodeUpload(id, { accept: "video/*" });
 
   const handleDownload = useCallback(() => {
     if (!src) return;
@@ -313,16 +222,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <Tooltip title={t("common.replace")}>
               <button
                 className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
-                onClick={() => {
-                  const input = document.createElement("input");
-                  input.type = "file";
-                  input.accept = "video/*";
-                  input.onchange = (e) => {
-                    const file = (e.target as HTMLInputElement).files?.[0];
-                    if (file) handleFile(file);
-                  };
-                  input.click();
-                }}
+                onClick={handleUpload}
               >
                 <UploadOutlined style={{ fontSize: 12 }} />
               </button>
@@ -442,16 +342,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <VideoCameraOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.video")}</span>
             <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={() => {
-                const input = document.createElement("input");
-                input.type = "file";
-                input.accept = "video/*";
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) handleFile(file);
-                };
-                input.click();
-              }}>
+              onClick={handleUpload}>
               <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>

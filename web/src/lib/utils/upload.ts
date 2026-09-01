@@ -61,8 +61,9 @@ class UploadBusinessError extends Error {
  * - 业务错误（code !== 200）-> 不重试，直接抛出 UploadBusinessError
  * - 鉴权错误（401）-> 不重试，直接抛出 UnauthorizedError（由全局处理器跳转登录）
  *
+ * 注：服务端只按 source 区分文件归属，不按 category 分目录，故不再传 category。
+ *
  * @param file       要上传的文件
- * @param category   上传分类（images / videos / audios / assets）
  * @param onProgress 进度回调
  * @param maxRetries 最大重试次数（默认 1）
  * @param source     文件归属标记（upload=原始上传 / derived=画布加工派生），写入 file_object.source
@@ -70,20 +71,19 @@ class UploadBusinessError extends Error {
  */
 export async function uploadWithRetry(
   file: File,
-  category: string,
   onProgress?: (pct: number) => void,
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
 ): Promise<UploadResult> {
   let lastErr: unknown;
-  const sourceQuery = source ? `&source=${source}` : "";
+  const sourceQuery = source ? `?source=${source}` : "";
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const formData = new FormData();
       formData.append("file", file);
       const res = await apiUploadWithProgress<UploadResult>(
-        `/api/files/upload?category=${category}${sourceQuery}`,
+        `/api/files/upload${sourceQuery}`,
         formData,
         onProgress,
       );
