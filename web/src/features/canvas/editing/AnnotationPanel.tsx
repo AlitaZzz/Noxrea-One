@@ -15,11 +15,10 @@ import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
+import { runMediaUpload } from "@/features/canvas/upload";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
-import i18n from "@/lib/i18n/config";
-import { canvasToBlob, createOptimisticDerivedNodes, loadMediaDimensions } from "@/lib/utils/image-utils";
+import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -457,19 +456,14 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
         }
       });
 
-      // 乐观落库：先建占位节点（本地预览）并立即关闭面板，上传在后台进行
-      const { settled } = createOptimisticDerivedNodes(
-        sourceId,
-        [{ blob, naturalWidth: nw, naturalHeight: nh, labelOverride: "标注" }],
-        useCanvasStore.getState(),
-        { source: "derived" },
-      );
+      // 走统一上传管道：先建占位节点（本地预览），上传在后台进行；
+      // 失败时管道会移除占位节点并提示，无需调用方兜底
+      await runMediaUpload({
+        items: [{ blob, filename: "annotated.png", naturalWidth: nw, naturalHeight: nh, label: "标注" }],
+        sink: { kind: "derived-node", sourceId },
+      });
       setLoading(false);
       onClose();
-      // 上传失败时节点会被移除，此处补一次提示，避免用户误以为已保存成功
-      void settled.then(({ failed, reason }) => {
-        if (failed > 0) showGlobalMessage().error(reason ?? i18n.t("file.uploadFailed"));
-      });
     } catch (e) {
       console.error("Annotation save failed:", e);
     } finally {

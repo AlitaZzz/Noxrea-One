@@ -28,7 +28,7 @@ import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
-import { createNodeFromUrl,uploadBlob } from "@/lib/utils/image-utils";
+import { createNodeFromUrl, uploadOne } from "@/features/canvas/upload";
 
 type _SceneSnapshot = {
   scale?: number;
@@ -541,10 +541,11 @@ export default function DirectorViewport() {
             runtime._endCleanRender();
           }
 
-          // 上传
+          // 上传（统一管道 raw sink：只拿远程地址，不碰画布）
           const blob = await (await fetch(dataURL)).blob();
-          uploadBlob(blob, `shot_${Date.now()}.png`).then((url) => {
-            if (!url) { console.error("[captureShot] uploadBlob returned null"); resolve(null); return; }
+          uploadOne(blob, `shot_${Date.now()}.png`, "derived").then((result) => {
+            const url = result?.url;
+            if (!url) { console.error("[captureShot] uploadOne returned null"); resolve(null); return; }
             const n = (runtime._shotSeq = runtime._shotSeq || {});
             n[camEnt.id] = (n[camEnt.id] || 0) + 1;
             resolve({
@@ -553,7 +554,7 @@ export default function DirectorViewport() {
               cameraId: camEnt.id,
             });
           }).catch((err: unknown) => {
-            console.error("[captureShot] uploadBlob error:", err);
+            console.error("[captureShot] uploadOne error:", err);
             resolve(null);
           });
         });

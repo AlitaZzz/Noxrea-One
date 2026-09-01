@@ -10,7 +10,7 @@ import { useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LayerModal } from "@/components/ui/modal/LayerModal";
-import { apiUpload } from "@/lib/api/client";
+import { uploadOne } from "@/features/canvas/upload";
 import { canvasToBlob } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -112,11 +112,11 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
     const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
       ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
     });
-    const fd = new FormData();
-    fd.append("file", blob, "avatar.png");
     try {
-      const res = await apiUpload<{ url: string }>("/api/files/upload?category=avatars", fd);
-      if (res.code === 200) { onDone(res.data.url); message.success(t("auth.avatarSaved")); }
+      // 统一上传管道 raw sink：只取远程地址，不碰画布
+      const result = await uploadOne(blob, "avatar.png", "derived");
+      if (result?.url) { onDone(result.url); message.success(t("auth.avatarSaved")); }
+      else message.error(t("auth.avatarFailed"));
     } catch { message.error(t("auth.avatarFailed")); }
     setSaving(false);
   };

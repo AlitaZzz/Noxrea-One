@@ -21,12 +21,12 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
 import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
-import { apiRaw, apiUpload } from "@/lib/api/client";
+import { useRefUpload } from "@/features/canvas/upload";
+import { apiRaw } from "@/lib/api/client";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
@@ -34,7 +34,6 @@ import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
-import { applyThumbnailSettings } from "@/lib/utils/image-utils";
 
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
@@ -231,46 +230,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     }
   };
 
-  /** Upload image -> create ImageNode + auto-connect to the selected node */
-  const handleRefUpload = () => {
-    const input = document.createElement("input");
-    input.type = "file"; input.accept = "image/*";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await apiUpload<{ url: string }>("/api/files/upload?category=images", formData);
-      if (res.code !== 200 || !res.data?.url) return;
-      const imgUrl = res.data.url;
-
-      const store = useCanvasStore.getState();
-      const targetNode = store.nodes.find((n) => n.id === nodeId);
-      if (!targetNode) return;
-
-      const img = new window.Image();
-      img.onload = () => {
-        const nw = img.naturalWidth, nh = img.naturalHeight;
-        const tw = (targetNode.style?.width as number) || 400;
-
-        const newNode = createImageNode(
-          { x: targetNode.position.x - 50, y: targetNode.position.y + (tw) / 2 },
-          imgUrl,
-        );
-        applyThumbnailSettings(newNode, nw, nh, file.name);
-        const dw = newNode.style?.width as number || nw;
-        const dh = newNode.style?.height as number || nh;
-        newNode.position.x = targetNode.position.x - dw - 50;
-        newNode.position.y = targetNode.position.y + (tw - dh) / 2;
-        store.addNodes([newNode]);
-
-        store.setEdges([...store.edges, createEdge(newNode.id, nodeId)]);
-        markDirtyImmediate();
-      };
-      img.src = imgUrl;
-    };
-    input.click();
-  };
+  /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
+  const handleRefUpload = useRefUpload(nodeId);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !modelKey) return;

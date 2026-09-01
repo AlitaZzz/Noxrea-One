@@ -137,7 +137,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       new Promise<UploadResult>(async (resolve) => {
         try {
           onUpdate(id, { status: "uploading" });
-          const result = await uploadWithRetry(file, "assets", (pct: number) => {
+          const result = await uploadWithRetry(file, (pct: number) => {
             onUpdate(id, { uploadProgress: pct });
           });
           resolve(result);

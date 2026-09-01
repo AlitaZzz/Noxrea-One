@@ -1,20 +1,21 @@
 /**
  * 文件拖入画布 hook。
  * 拖放时先创建占位节点再异步上传，成功后原地替换内容、失败则移除占位；
- * 多文件按网格排布。
+ * 多文件按网格排布。上传与落库统一走 features/canvas/upload 的上传管道。
  */
 "use client";
 
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { AudioNode, ImageNode, VideoNode } from "@/features/canvas/types";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, DEFAULT_NODE_CONTENT_HEIGHT, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, LAYOUT_GAP } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
-import i18n from "@/lib/i18n/config";
+import { detectMediaKind, runMediaUpload, type UploadItem } from "@/features/canvas/upload";
+import {
+  AUDIO_NODE_HEIGHT,
+  AUDIO_NODE_WIDTH,
+  DEFAULT_NODE_CONTENT_HEIGHT,
+  DEFAULT_NODE_WIDTH,
+  LAYOUT_GAP,
+} from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
-import { getUploadErrorDetail, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
 
 const GRID_COLS = 4;
 
@@ -33,19 +34,13 @@ function isRefDrag(dt: DataTransfer | null): boolean {
  * 上传成功后用 updateNodeData 原地替换为真实内容；失败则删除占位节点。
  *
  * @param screenToFlowPosition  React Flow 的屏幕坐标→画布坐标转换函数
- * @param notif  antd App.useApp() 返回的 notification 实例（可选）
- * @returns { handleDragOver, handleDrop } 供 JSX 绑定
+ * @returns { handleDragOver, handleDrop, isFileDragging } 供 JSX 绑定
  */
 export function useFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
-  notif?: { error: Function; warning?: Function; info?: Function },
   shouldIgnore?: (target: HTMLElement) => boolean,
   containerRef?: React.RefObject<HTMLElement | null>,
 ) {
-  const addNodes = useCanvasStore((s) => s.addNodes);
-  const removeNodes = useCanvasStore((s) => s.removeNodes);
-  const updateNodeData = useCanvasStore((s) => s.updateNodeData);
-
   // 组件卸载时清理心跳定时器
   useEffect(() => {
     return () => {
@@ -142,36 +137,35 @@ export function useFileDrop(
 
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
-      // 1) 先从本地 blob URL 预加载图片/视频尺寸，再按正确尺寸创建节点
-      const placeholders: { node: AudioNode | ImageNode | VideoNode; file: File; idx: number }[] = [];
-      let ignoredCount = 0; // 不被支持的文件数量，用于后续提示
+      // 1) 先从本地 blob URL 预加载图片/视频尺寸，再按正确尺寸计算网格落点
+      const items: UploadItem[] = [];
       // 网格落点游标：按每个文件的实际显示尺寸逐行累加（行满 GRID_COLS 换行），
       // 任意比例混合拖入时间距恒为 LAYOUT_GAP 且互不遮挡
       let cursorX = pos.x;
       let cursorY = pos.y;
       let rowMaxH = 0;
       let colInRow = 0;
-      for (let idx = 0; idx < files.length; idx++) {
-        const file = files[idx];
-        const isImage = file.type.startsWith("image/");
-        const isVideo = file.type.startsWith("video/");
-        const isAudio = file.type.startsWith("audio/");
-        if (!isImage && !isVideo && !isAudio) {
-          ignoredCount++;
+
+      for (const file of files) {
+        const kind = detectMediaKind(file, file.name);
+        // 不支持的类型原样交给管道，由它统一计数并提示
+        if (!kind) {
+          items.push({ blob: file, filename: file.name });
           continue;
         }
 
-        // 1) 先取真实分辨率并算出节点显示尺寸（音频用固定默认尺寸）
-        let sized: { previewUrl: string; naturalW: number; naturalH: number; width: number; height: number } | null = null;
-        let nodeW = DEFAULT_NODE_WIDTH;
+        let previewUrl: string | undefined;
+        let nw = 0;
+        let nh = 0;
+        let nodeW = AUDIO_NODE_WIDTH;
         let nodeH = AUDIO_NODE_HEIGHT;
-        if (isImage || isVideo) {
-          const previewUrl = URL.createObjectURL(file);
-          const dims = await loadMediaDimensions(previewUrl, isVideo);
-          const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
-          const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
+
+        if (kind !== "audio") {
+          previewUrl = URL.createObjectURL(file);
+          const dims = await loadMediaDimensions(previewUrl, kind === "video");
+          nw = dims.w || (kind === "video" ? 1280 : DEFAULT_NODE_WIDTH);
+          nh = dims.h || (kind === "video" ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
           const { width, height } = computeNodeSize(nw, nh);
-          sized = { previewUrl, naturalW: nw, naturalH: nh, width, height };
           nodeW = width;
           nodeH = height;
         }
@@ -185,126 +179,25 @@ export function useFileDrop(
         }
 
         // 3) 落点 = 当前游标；游标按实际尺寸前进
-        const px = cursorX;
-        const py = cursorY;
+        items.push({
+          blob: file,
+          filename: file.name,
+          nodeType: kind,
+          naturalWidth: nw,
+          naturalHeight: nh,
+          previewUrl,
+          position: { x: cursorX, y: cursorY },
+        });
+
         cursorX += nodeW + LAYOUT_GAP;
         rowMaxH = Math.max(rowMaxH, nodeH);
         colInRow++;
-
-        if (sized) {
-          const node = isImage ? createImageNode({ x: px, y: py }, "") : createVideoNode({ x: px, y: py }, "");
-          node.data.label = file.name;
-          node.data.alt = file.name;
-          node.data.naturalWidth = sized.naturalW;
-          node.data.naturalHeight = sized.naturalH;
-          node.data.source = "upload";
-          node.data.upload = { uploading: true, progress: 0, version: 0, previewUrl: sized.previewUrl };
-          node.style = { width: sized.width, height: sized.height };
-          placeholders.push({ node, file, idx });
-        } else {
-          const node = createAudioNode({ x: px, y: py }, "");
-          node.data.label = file.name;
-          node.data.alt = file.name;
-          node.data.source = "upload";
-          node.data.upload = { uploading: true, progress: 0, version: 0 };
-          placeholders.push({ node, file, idx });
-        }
       }
 
-      if (placeholders.length === 0) {
-        // 全部为不支持的文件类型：用顶部居中的轻提示（message），
-        // 与「保存/配置校验」等用户操作反馈保持一致，而非右下角系统级通知
-        showGlobalMessage().error(i18n.t("file.unsupportedType"));
-        return;
-      }
-
-      // 混合拖放：支持的已照常上传，被忽略的不支持文件提示一次（不列具体文件名）
-      if (ignoredCount > 0) {
-        showGlobalMessage().error(i18n.t("file.ignoredSome"));
-      }
-      const placeholderNodes = placeholders.map((p) => p.node);
-      addNodes(placeholderNodes);
-
-      // 2) 异步上传，限制并发数避免 dev 代理层 ETIMEDOUT
-      const failed: { id: string; reason?: string }[] = [];
-      await runWithConcurrency(
-        placeholders.map(({ node, file }) => async () => {
-          const isVideo = file.type.startsWith("video/");
-          const isAudio = file.type.startsWith("audio/");
-          const category = isVideo ? "videos" : isAudio ? "audios" : "images";
-
-          try {
-            const result = await uploadWithRetry(file, category, (pct) => {
-              const cur = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
-              const previewUrl = (cur?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
-              updateNodeData(node.id, { upload: { uploading: true, progress: pct, version: 0, previewUrl } }, undefined, { skipHistory: true });
-            });
-
-            // 释放预览 blob URL
-            const curNode = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
-            const oldPreview = (curNode?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
-            if (oldPreview?.startsWith("blob:")) URL.revokeObjectURL(oldPreview);
-
-            if (isAudio) {
-              // 音频无固定宽高，使用固定节点尺寸；duration 由节点 onLoadedMetadata 回填
-              updateNodeData(node.id, {
-                src: result.url,
-                label: file.name,
-                alt: file.name,
-                upload: undefined,
-              }, { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }, { skipHistory: true });
-              return;
-            }
-
-            const dims = await loadMediaDimensions(result.url, isVideo);
-            const nw = dims.w || (isVideo ? 1280 : DEFAULT_NODE_WIDTH);
-            const nh = dims.h || (isVideo ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
-
-            const { width, height } = computeNodeSize(nw, nh);
-            updateNodeData(node.id, {
-              src: result.url,
-              naturalWidth: nw,
-              naturalHeight: nh,
-              upload: undefined,
-              source: "upload",
-            }, { width, height }, { skipHistory: true });
-          } catch (err) {
-            // 释放预览 blob URL
-            const curNode = useCanvasStore.getState().nodes.find((n) => n.id === node.id);
-            const oldPreview = (curNode?.data as { upload?: { previewUrl?: string } })?.upload?.previewUrl;
-            if (oldPreview?.startsWith("blob:")) URL.revokeObjectURL(oldPreview);
-            failed.push({ id: node.id, reason: getUploadErrorDetail(err) });
-          }
-        }),
-      );
-
-      // 3) 删除上传失败的占位节点
-      if (failed.length > 0) {
-        removeNodes(failed.map((f) => f.id), { skipHistory: true });
-      }
-      const successCount = placeholderNodes.length - failed.length;
-      if (successCount === 0 && notif) {
-        const t = i18n.t;
-        // 全部失败时，优先显示服务端返回的具体原因
-        const reason = failed.find((f) => f.reason)?.reason;
-        notif.error({
-          title: t("file.uploadFailed"),
-          description: reason ?? t("file.uploadFailedAll"),
-          placement: "bottomRight",
-          duration: 4,
-        });
-      } else if (failed.length > 0 && notif) {
-        const t = i18n.t;
-        const reason = failed.find((f) => f.reason)?.reason;
-        notif.error({
-          title: t("file.uploadFailed"),
-          description: reason ? `${failed.length}/${files.length} - ${reason}` : `${failed.length}/${files.length}`,
-          placement: "bottomRight",
-          duration: 4,
-        });
-      }
+      // 2) 交给统一上传管道：建占位 → 并发上传 → 成功落库 / 失败移除并提示
+      await runMediaUpload({ items, sink: { kind: "create-node" } });
     },
-    [addNodes, removeNodes, updateNodeData, screenToFlowPosition, shouldIgnore],
+    [screenToFlowPosition, shouldIgnore, stopWatcher],
   );
 
   return { handleDragOver, handleDrop, isFileDragging };

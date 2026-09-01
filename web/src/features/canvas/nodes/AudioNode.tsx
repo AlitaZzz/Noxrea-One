@@ -14,7 +14,7 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
-import { apiUploadWithProgress } from "@/lib/api/client";
+import { useNodeUpload } from "@/features/canvas/upload";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
@@ -47,81 +47,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     );
   }, [id]);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("audio/")) return;
-
-      // 生成本次上传的版本标记，防止异步回调竞态（与 VideoNode 一致）
-      const uploadVersion = Date.now();
-      const store = useCanvasStore.getState();
-      const nodeBefore = store.nodes.find((n) => n.id === id);
-      if (nodeBefore) {
-        store.updateNodeData(
-          id,
-          { upload: { uploading: true, progress: 0, version: uploadVersion } },
-          undefined,
-          { skipHistory: true }
-        );
-      }
-
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const json = await apiUploadWithProgress<{ url: string }>(
-          "/api/files/upload?category=audios",
-          formData,
-          (pct) => {
-            useCanvasStore.getState().updateNodeData(
-              id,
-              { upload: { uploading: true, progress: pct, version: uploadVersion } },
-              undefined,
-              { skipHistory: true }
-            );
-          }
-        );
-        if (json.code === 200 && json.data?.url) {
-          const url = json.data.url;
-          const s = useCanvasStore.getState();
-          const currentNode = s.nodes.find((n) => n.id === id);
-          if (!currentNode) return;
-          if ((currentNode.data as AudioNodeData).upload?.version !== uploadVersion) return;
-
-          const latestData = currentNode.data as AudioNodeData;
-          // 上传完成：清空 upload 状态，写回 src/label/alt
-          window.dispatchEvent(
-            new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-              detail: {
-                nodeId: id,
-                data: {
-                  ...latestData,
-                  src: url,
-                  label: file.name,
-                  alt: file.name,
-                  upload: undefined,
-                },
-                style: { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT },
-                immediate: true,
-              },
-            })
-          );
-        } else {
-          const s = useCanvasStore.getState();
-          const currentNode = s.nodes.find((n) => n.id === id);
-          if (currentNode && (currentNode.data as AudioNodeData).upload?.version === uploadVersion) {
-            s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-          }
-        }
-      } catch (e) {
-        console.error("Audio upload failed:", e);
-        const s = useCanvasStore.getState();
-        const currentNode = s.nodes.find((n) => n.id === id);
-        if (currentNode && (currentNode.data as AudioNodeData).upload?.version === uploadVersion) {
-          s.updateNodeData(id, { upload: undefined }, undefined, { skipHistory: true });
-        }
-      }
-    },
-    [id]
-  );
+  /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
+  const handleUpload = useNodeUpload(id, { accept: "audio/*" });
 
   const handleDownload = useCallback(() => {
     if (!src) return;
@@ -174,7 +101,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     useEditableTitle(id, data.alt || data.label || t("node.audio"), { syncAlt: true });
 
   const hasAudio = src && src.length > 0;
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="group relative w-full h-full flex flex-col" style={{ width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }}>
@@ -248,26 +174,13 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             <span className="text-base text-center">{t("drop.upload")}</span>
             <button
               className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+              onClick={(e) => { e.stopPropagation(); void handleUpload(); }}
             >
               <UploadOutlined className="text-lg" /> {t("common.upload")}
             </button>
           </div>
         )}
       </div>
-
-      {/* 隐藏的文件选择输入，由工具栏"上传"按钮触发 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-          e.target.value = "";
-        }}
-      />
     </div>
   );
 }
