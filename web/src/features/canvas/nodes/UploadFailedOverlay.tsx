@@ -7,6 +7,7 @@
 "use client";
 
 import { CloseOutlined, ExclamationCircleOutlined, RedoOutlined } from "@ant-design/icons";
+import { Tooltip } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,6 +20,10 @@ interface Props {
   /** 本地预览（blob:）：失败期间仍可展示，让用户知道失败的是哪个文件 */
   previewUrl?: string;
 }
+
+/** 失败态上唯一的圆形图标按钮 */
+const CIRCLE_BTN =
+  "nodrag flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer";
 
 export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props) {
   const { t } = useTranslation();
@@ -67,23 +72,21 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
         >
           {error.message}
         </span>
-        <div className="flex items-center gap-2 mt-1">
-          {error.retryable && (
-            <button
-              className="nodrag flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-500/90 hover:bg-blue-500 text-white text-xs cursor-pointer"
-              onClick={() => void handleRetry()}
-            >
-              <RedoOutlined style={{ fontSize: 11 }} />
-              {t("file.uploadRetry")}
-            </button>
+        <div className="mt-1">
+          {error.retryable ? (
+            <Tooltip title={t("file.uploadRetry")}>
+              <button className={CIRCLE_BTN} onClick={() => void handleRetry()}>
+                <RedoOutlined style={{ fontSize: 14 }} />
+              </button>
+            </Tooltip>
+          ) : (
+            // 业务错误（体积超限 / 类型不支持）重试无意义，只留一个移除入口
+            <Tooltip title={t("file.uploadDiscard")}>
+              <button className={CIRCLE_BTN} onClick={() => discardNodeUpload(nodeId)}>
+                <CloseOutlined style={{ fontSize: 14 }} />
+              </button>
+            </Tooltip>
           )}
-          <button
-            className="nodrag flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/80 text-xs cursor-pointer"
-            onClick={() => discardNodeUpload(nodeId)}
-          >
-            <CloseOutlined style={{ fontSize: 11 }} />
-            {t("file.uploadDiscard")}
-          </button>
         </div>
       </div>
     </div>

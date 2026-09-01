@@ -135,7 +135,7 @@ export async function apiUpload<T = unknown>(
 /** 请求体传输阶段：连续这么久没有任何字节推进即判定连接挂起 */
 export const UPLOAD_IDLE_TIMEOUT_MS = 30_000;
 /** 请求体发完后等待服务端响应的上限（写盘 / 后处理不应让前端无限等待） */
-export const UPLOAD_RESPONSE_TIMEOUT_MS = 120_000;
+export const UPLOAD_RESPONSE_TIMEOUT_MS = 60_000;
 /** 空闲检测轮询间隔 */
 const UPLOAD_WATCH_INTERVAL_MS = 1_000;
 
@@ -198,8 +198,20 @@ export function apiUploadWithProgress<T = unknown>(
       if (settled) return;
       settled = true;
       clearInterval(watcher);
+      window.removeEventListener("offline", onOffline);
       fn();
     };
+    /**
+     * 断网立即止损：浏览器不会为「已发出但尚未响应」的 XHR 报错，
+     * 只靠超时兜底的话，用户会长时间停在「进度条走完却没有图」的状态。
+     */
+    const onOffline = () => {
+      settle(() => {
+        try { xhr.abort(); } catch { /* 请求已结束时 abort 可能抛错，忽略 */ }
+        reject(new UploadTransportError("network", i18n.t("error.upload.offline")));
+      });
+    };
+    window.addEventListener("offline", onOffline);
 
     xhr.upload.onprogress = (e) => {
       touch();
