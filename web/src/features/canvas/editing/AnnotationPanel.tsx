@@ -119,7 +119,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     canvas.width = nw;
     canvas.height = nh;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (ctx) {
       undoStackRef.current = [ctx.getImageData(0, 0, nw, nh)];
       setUndoCount(1);
@@ -290,7 +290,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
     if (mode === "brush") {
@@ -308,7 +308,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     if (!drawingRef.current || !imgLoaded) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
     const pt = getCanvasPoint(e);
@@ -359,7 +359,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
     previewSnapshotRef.current = null;
 
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
     if (!canvas || !ctx) return;
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -387,7 +387,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
     // Then undo canvas drawings
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
     if (!canvas || !ctx) return;
 
     if (undoStackRef.current.length <= 1) return;
@@ -414,7 +414,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
     // Then redo canvas drawings
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
     if (!canvas || !ctx) return;
 
     const next = redoStackRef.current.pop();
