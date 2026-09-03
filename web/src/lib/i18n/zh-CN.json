@@ -459,10 +459,10 @@
   "capture": {
     "currentFrame": "捕获当前帧",
     "firstFrame": "捕获首帧",
-    "lastFrame": "捕获末帧"
+    "lastFrame": "捕获末帧",
+    "processing": "正在捕获帧..."
   },
   "detach": {
-    "success": "已分离为音频与静音视频",
     "failed": "音轨分离失败，请稍后重试",
     "processing": "正在分离音频...",
     "audioSuffix": " (音频)",

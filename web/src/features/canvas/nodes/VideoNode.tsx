@@ -44,9 +44,10 @@ import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
-  const { notification, message: toast } = App.useApp();
+  const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
   const [detaching, setDetaching] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
@@ -200,31 +201,51 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const captureFrame = useCallback(async (time: number | null) => {
     const v = videoRef.current;
-    if (!v || !src) return;
+    if (!v || !src || capturing) return;
+    setCapturing(true);
     try {
       const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
       const videoKey = src.replace(/^\/api\/files\//, "").split("?")[0];
       const res = await captureFrameApi(videoKey, seekTime);
-      if (!res.ok) return;
+      if (!res.ok) {
+        // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案
+        const errJson = await res.json().catch(() => null);
+        const code = errJson?.error as string | undefined;
+        notification.error({
+          message: code
+            ? t(`error.${code}`, { defaultValue: t("error.capture_frame.capture_failed") })
+            : t("error.capture_frame.capture_failed"),
+          placement: "bottomRight",
+        });
+        return;
+      }
       const json = await res.json();
       const imgUrl = json.data?.url;
-      if (!imgUrl) return;
+      if (!imgUrl) {
+        notification.error({ message: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+        return;
+      }
 
       const nw = v.videoWidth, nh = v.videoHeight;
       const label = `${data.alt || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
       await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
-    } catch (e) { console.error("Frame capture failed:", e); }
-  }, [src, data.alt, id]);
+    } catch (e) {
+      console.error("Frame capture failed:", e);
+      notification.error({ message: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+    } finally {
+      setCapturing(false);
+    }
+  }, [src, data.alt, id, t, notification, capturing]);
 
   /**
    * 分离音频：服务端无损拆出音轨与静音视频。
    *
-   * 连线策略：把原源节点上的所有入/出边迁移到新生成的「静音视频」节点，
-   * 音频节点挂在静音视频节点下方。这样下游链路自动接续，源节点本身保留
-   * （用户没要求删除原视频）但不再承袭旧边。
+   * 连线策略：两个产物节点都直接连回原视频（原视频 → 静音视频、原视频 → 音频），
+   * 与宫格切分一致，不做链式挂接、也不迁移源节点的旧边。
    *
-   * 历史栈：两个新节点先用 skipHistory 写进 store，最后一次性 setEdges 把
-   * 「迁移 + 新增 muted→audio」合并为单条历史点，撤销一次即可回到分离前。
+   * 历史栈：先用 write:false 仅构建两个节点，再一次 addNodes + setEdges 同批
+   * 写入——addNodes 压一条「分离前」快照，setEdges 被节流不重复压栈，
+   * 撤销一次即整体删除两个派生节点及其连线。
    */
   const handleDetachAudio = useCallback(async () => {
     if (!src || detaching) return;
@@ -253,7 +274,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const nh = v?.videoHeight || data.naturalHeight || 0;
       const store = useCanvasStore.getState();
 
-      // 1. 写两个新节点：均不连 source，也不进撤销栈（由最后一步统一提交）
+      // 1. 仅构建两个节点（write:false 不写 store），随后同批写入
       const mutedNode = createVideoNodeFromUrl(
         id,
         video.url,
@@ -264,11 +285,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         { source: "derived" },
         undefined,
         undefined,
-        { connectToSource: false, skipHistory: true },
+        { write: false },
       );
       // 音频节点排在静音视频正下方，避免同批产物重叠
       const audioNode = createAudioNodeFromUrl(
-        mutedNode.id,
+        id,
         audio.url,
         t("detach.audioSuffix"),
         store,
@@ -281,24 +302,20 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             DERIVED_BASE_GAP_Y,
         },
         undefined,
-        { connectToSource: false, skipHistory: true },
+        { write: false },
       );
 
-      // 2. 迁移源节点的边到 muted + 新增 muted → audio
-      const latestEdges = useCanvasStore.getState().edges;
-      const remapped = latestEdges.map((e) => {
-        if (e.source === id) return { ...e, source: mutedNode.id };
-        if (e.target === id) return { ...e, target: mutedNode.id };
-        return e;
-      });
-      remapped.push(createEdge(mutedNode.id, audioNode.id));
-
-      // 3. 整体提交：本次 push 一次历史，涵盖两个新节点 + 所有边变更
-      store.setEdges(remapped);
+      // 2. 两个产物节点都直接连回原视频，节点与边同批写入
+      //    addNodes 压一条「分离前」快照，setEdges 被节流，撤销一次即整体删除
+      store.addNodes([mutedNode, audioNode]);
+      store.setEdges([
+        ...store.edges,
+        createEdge(id, mutedNode.id),
+        createEdge(id, audioNode.id),
+      ]);
 
       commitHasAudio(true);
       markDirtyImmediate();
-      toast.success(t("detach.success"));
     } catch (e) {
       console.error("Audio detach failed:", e);
       notification.error({ message: t("detach.failed"), placement: "bottomRight" });
@@ -314,7 +331,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     data.naturalHeight,
     id,
     notification,
-    toast,
   ]);
 
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
@@ -576,14 +592,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         )}
 
-        {/* 分离音频处理中：同步请求可能持续数秒，必须给出明确反馈 */}
-        {detaching && (
+        {/* 分离音频 / 捕获帧处理中：同步请求可能持续数秒，必须给出明确反馈 */}
+        {(detaching || capturing) && (
           <div
             className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-lg"
             style={{ background: "rgba(0,0,0,0.45)" }}
           >
             <span className="w-7 h-7 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
-            <span className="text-xs text-white/80">{t("detach.processing")}</span>
+            <span className="text-xs text-white/80">{detaching ? t("detach.processing") : t("capture.processing")}</span>
           </div>
         )}
       </div>
