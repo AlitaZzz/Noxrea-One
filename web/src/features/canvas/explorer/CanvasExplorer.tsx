@@ -9,6 +9,7 @@
 import {
   AppstoreOutlined,
   CloseOutlined,
+  DownOutlined,
   FilterOutlined,
   FolderOpenOutlined,
   FolderOutlined,
@@ -16,6 +17,7 @@ import {
   PauseCircleFilled,
   PlayCircleFilled,
   PlusOutlined,
+  RightOutlined,
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
@@ -165,56 +167,123 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
 }
 
 // ── 元素视图 ──
+
+/** 按 NODE_TYPE_ORDER 对节点按类型分组（未分组节点使用） */
+function groupNodesByType(nodes: AnyNode[]): { type: string; nodes: AnyNode[] }[] {
+  const groups: { type: string; nodes: AnyNode[] }[] = [];
+  const byType = new Map<string, AnyNode[]>();
+  for (const n of nodes) {
+    const list = byType.get(n.type || "");
+    if (list) list.push(n);
+    else byType.set(n.type || "", [n]);
+  }
+  for (const type of NODE_TYPE_ORDER) {
+    const list = byType.get(type);
+    if (list && list.length > 0) groups.push({ type, nodes: list.reverse() });
+    byType.delete(type);
+  }
+  // Remaining types (uncategorized)
+  for (const [type, list] of byType) {
+    if (list.length > 0) groups.push({ type, nodes: list.reverse() });
+  }
+  return groups;
+}
+
+/** 组内成员按类型稳定排序（同类型聚合，不打散原相对顺序） */
+function sortMembersByType(nodes: AnyNode[]): AnyNode[] {
+  const order = new Map(NODE_TYPE_ORDER.map((type, i) => [type, i]));
+  const rank = (n: AnyNode) => order.get(n.type || "") ?? NODE_TYPE_ORDER.length;
+  return [...nodes].sort((a, b) => rank(a) - rank(b));
+}
+
 function CanvasElementsView() {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const selectedNodeIds = useMemo(
     () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
     [nodes],
   );
 
-  // Group nodes by type in defined order
-  const grouped = useMemo(() => {
-    const groups: { type: string; nodes: AnyNode[] }[] = [];
-    const byType = new Map<string, AnyNode[]>();
+  // 构建大纲树：组节点作为可折叠容器，成员嵌套在内；未分组节点按类型分组。
+  const { groupNodes, membersByGroup, ungroupedGroups } = useMemo(() => {
+    const groupNodes: AnyNode[] = [];
+    const membersByGroup = new Map<string, AnyNode[]>();
+    const ungrouped: AnyNode[] = [];
+    const groupIds = new Set<string>();
+
     for (const n of nodes) {
-      const list = byType.get(n.type || "");
-      if (list) list.push(n);
-      else byType.set(n.type || "", [n]);
+      if (n.type === NODE_TYPE.GROUP) {
+        groupNodes.push(n);
+        groupIds.add(n.id);
+      }
     }
-    for (const type of NODE_TYPE_ORDER) {
-      const list = byType.get(type);
-      if (list && list.length > 0) groups.push({ type, nodes: list.reverse() });
-      byType.delete(type);
+    for (const n of nodes) {
+      if (n.type === NODE_TYPE.GROUP) continue;
+      const gid = (n.data as { groupId?: string })?.groupId;
+      if (gid && groupIds.has(gid)) {
+        const list = membersByGroup.get(gid);
+        if (list) list.push(n);
+        else membersByGroup.set(gid, [n]);
+      } else {
+        // 孤儿节点（groupId 指向不存在的组）按未分组兜底
+        ungrouped.push(n);
+      }
     }
-    // Remaining types (uncategorized)
-    for (const [type, list] of byType) {
-      if (list.length > 0) groups.push({ type, nodes: list.reverse() });
-    }
-    return groups;
+
+    return {
+      groupNodes,
+      membersByGroup,
+      ungroupedGroups: groupNodesByType(ungrouped),
+    };
   }, [nodes]);
+
+  const toggleGroup = useCallback((id: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "12px 16px", scrollbarGutter: "stable" }}>
-        {grouped.length === 0 ? (
+        {nodes.length === 0 ? (
           <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
         ) : (
-          grouped.map((group) => (
-            <div key={group.type} className="mb-3">
-              <div className="text-xs mb-1 px-2" style={{ color: "var(--canvas-text-muted)" }}>
-                {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
+          <>
+            {/* 组：可折叠容器，成员嵌套在其下 */}
+            {groupNodes.map((group) => (
+              <GroupItem
+                key={group.id}
+                group={group}
+                members={sortMembersByType(membersByGroup.get(group.id) ?? [])}
+                selected={selectedNodeIds.has(group.id)}
+                collapsed={collapsedGroups.has(group.id)}
+                onToggle={() => toggleGroup(group.id)}
+                selectedNodeIds={selectedNodeIds}
+              />
+            ))}
+
+            {/* 未分组节点：按类型分组 */}
+            {ungroupedGroups.map((group) => (
+              <div key={group.type} className="mb-3">
+                <div className="text-xs mb-1 px-2" style={{ color: "var(--canvas-text-muted)" }}>
+                  {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
+                </div>
+                {group.nodes.map((node) => (
+                  <ElementItem
+                    key={node.id}
+                    node={node}
+                    selected={selectedNodeIds.has(node.id)}
+                  />
+                ))}
               </div>
-              {group.nodes.map((node) => (
-                <ElementItem
-                  key={node.id}
-                  node={node}
-                  selected={selectedNodeIds.has(node.id)}
-                />
-              ))}
-            </div>
-          ))
+            ))}
+          </>
         )}
       </div>
       <div
@@ -228,10 +297,63 @@ function CanvasElementsView() {
   );
 }
 
-type ElementItemProps = { node: AnyNode; selected: boolean };
+/** 组条目：点击定位组，点击箭头折叠/展开，成员缩进渲染 */
+function GroupItem({ group, members, selected, collapsed, onToggle, selectedNodeIds }: {
+  group: AnyNode;
+  members: AnyNode[];
+  selected: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+  selectedNodeIds: Set<string>;
+}) {
+  const { t } = useTranslation();
+  const centerNode = useCenterNode();
+  const rawLabel = (group.data as { label?: string })?.label;
+  const label = rawLabel || t("node.groupWithCount", { count: members.length });
+
+  return (
+    <div className="mb-1">
+      <div
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
+        style={{
+          background: selected ? "var(--canvas-bg-hover)" : "transparent",
+          color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
+        }}
+        onClick={() => centerNode(group)}
+      >
+        <button
+          className="shrink-0 w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
+          style={{ color: "var(--canvas-text-muted)" }}
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          title={collapsed ? t("common.expand") : t("common.collapse")}
+        >
+          {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
+        </button>
+        <div
+          className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
+          style={{ background: `${getNodeTypeColor(NODE_TYPE.GROUP)}18` }}
+        >
+          {getNodeTypeIcon(NODE_TYPE.GROUP)}
+        </div>
+        <span className="flex-1 truncate text-xs">{label}</span>
+        <span
+          className="shrink-0 text-[10px] px-1.5 rounded-full"
+          style={{ background: "var(--canvas-bg-elevated)", color: "var(--canvas-text-muted)" }}
+        >
+          {members.length}
+        </span>
+      </div>
+      {!collapsed && members.map((m) => (
+        <ElementItem key={m.id} node={m} selected={selectedNodeIds.has(m.id)} depth={1} />
+      ))}
+    </div>
+  );
+}
+
+type ElementItemProps = { node: AnyNode; selected: boolean; depth?: number };
 
 function ElementItemImpl(props: ElementItemProps) {
-  const { node, selected } = props;
+  const { node, selected, depth = 0 } = props;
   const { t } = useTranslation();
   const centerNode = useCenterNode();
   const nodeType = node.type || "";
@@ -256,6 +378,7 @@ function ElementItemImpl(props: ElementItemProps) {
       style={{
         background: selected ? "var(--canvas-bg-hover)" : "transparent",
         color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
+        paddingLeft: 8 + depth * 18,
       }}
       onMouseEnter={(e) => {
         if (!selected) { (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-elevated)"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text)"; }
