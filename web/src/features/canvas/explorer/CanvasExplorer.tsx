@@ -616,7 +616,6 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
   const { t } = useTranslation();
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
-  const coverUrl = asset.metadata?.coverUrl as string | undefined;
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
   const [imgError, setImgError] = useState(false);
@@ -624,11 +623,7 @@ function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () =>
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const imgSrc = (() => {
-    if (isVideo) {
-      const u = coverUrl || sourceUrl;
-      return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
-    }
-    if (isAudio) return coverUrl || sourceUrl || "";
+    if (isAudio) return "";
     const u = sourceUrl;
     return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
   })();

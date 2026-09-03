@@ -95,20 +95,16 @@ export function AssetHoverPreview({
   if (!visible || !asset) return null;
 
   const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
-  const coverUrl = asset.metadata?.coverUrl as string | undefined;
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
 
   // 音频无可视缩略图，不展示大图预览
   if (isAudio) return null;
 
-  const bigUrl = isVideo
-    ? coverUrl
-      ? coverUrl.includes("/api/files/") ? `${coverUrl}?w=400` : coverUrl
-      : null
-    : sourceUrl
-      ? sourceUrl.includes("/api/files/") ? `${sourceUrl}?w=400` : sourceUrl
-      : null;
+  // 视频与图片统一按 sourceUrl?w= 惰性生成缩略图（视频由后端 ffmpeg 抽帧）
+  const bigUrl = sourceUrl
+    ? sourceUrl.includes("/api/files/") ? `${sourceUrl}?w=400` : sourceUrl
+    : null;
 
   if (!isVideo && !bigUrl) return null;
 

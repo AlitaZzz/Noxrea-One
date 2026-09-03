@@ -7,6 +7,7 @@
 
 import {
   BgColorsOutlined,
+  CameraOutlined,
   CheckOutlined,
   CopyOutlined,
   DownloadOutlined,
@@ -185,6 +186,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const handleInfo = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -358,17 +360,53 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
       {nodeType === NODE_ACTIONS.VIDEO && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <MenuPopover
+            open={captureOpen}
+            onOpenChange={setCaptureOpen}
+            placement="bottom"
+            trigger={
+              <Tooltip title={t("node.captureFrame")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<CameraOutlined />} disabled={!assetSrc} />
+              </Tooltip>
+            }
+            content={
+              <>
+                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: null }); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: 0 }); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.firstFrame")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: -1 }); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.lastFrame")}
+                  </span>
+                </MenuItem>
+              </>
+            }
+          />
+          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={isInAssets ? t("node.alreadySaved") : t("node.saveToAssets")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}
+              icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
+              onClick={() => { if (!isInAssets) dispatchNodeAction(nodeId, "save-asset"); }} />
+          </Tooltip>
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
-          <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
-              onClick={() => dispatchNodeAction(nodeId, "clear")} />
-          </Tooltip>
           <Tooltip title={t("node.previewFullscreen")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
+          </Tooltip>
+          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={t("common.clear")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
+              onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
       )}
