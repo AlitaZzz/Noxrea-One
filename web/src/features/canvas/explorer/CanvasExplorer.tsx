@@ -52,6 +52,9 @@ const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
 
 export const DRAWER_WIDTH = 360;
 
+/** 元素树每层缩进宽度，同时用作组折叠箭头槽位宽度，保证各组/节点图标垂直对齐 */
+const ROW_INDENT = 18;
+
 interface CanvasExplorerProps {
   open: boolean;
   onClose: () => void;
@@ -314,21 +317,26 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
   return (
     <div className="mb-1">
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
+        className="flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
         style={{
+          paddingLeft: 8,
+          paddingRight: 8,
           background: selected ? "var(--canvas-bg-hover)" : "transparent",
           color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
         }}
         onClick={() => centerNode(group)}
       >
-        <button
-          className="shrink-0 w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
-          style={{ color: "var(--canvas-text-muted)" }}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          title={collapsed ? t("common.expand") : t("common.collapse")}
-        >
-          {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
-        </button>
+        {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
+        <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
+          <button
+            className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
+            style={{ color: "var(--canvas-text-muted)" }}
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            title={collapsed ? t("common.expand") : t("common.collapse")}
+          >
+            {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
+          </button>
+        </span>
         <div
           className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
           style={{ background: `${getNodeTypeColor(NODE_TYPE.GROUP)}18` }}
@@ -374,11 +382,12 @@ function ElementItemImpl(props: ElementItemProps) {
   return (
     <div
       onClick={handleClick}
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
+      className="flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
       style={{
         background: selected ? "var(--canvas-bg-hover)" : "transparent",
         color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-        paddingLeft: 8 + depth * 18,
+        paddingLeft: 8 + depth * ROW_INDENT,
+        paddingRight: 8,
       }}
       onMouseEnter={(e) => {
         if (!selected) { (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-elevated)"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text)"; }
@@ -389,6 +398,8 @@ function ElementItemImpl(props: ElementItemProps) {
         preview.onLeave();
       }}
     >
+      {/* 空槽位：与组行折叠箭头同宽，保证图标与组图标垂直对齐 */}
+      <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
       {/* 缩略图/图标 */}
       <div
         className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
