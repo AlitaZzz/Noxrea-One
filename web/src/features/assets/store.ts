@@ -160,7 +160,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     };
     // No items array in store anymore — callers handle their own lists
     assetApi.createAsset({
-      name: input.name, type: input.type,
+      name: input.name, type: input.type, mediaType: input.mediaType,
       width: input.width, height: input.height,
       description: input.description, tags: input.tags,
       extraData: input.metadata, folderId: toIntId(input.folderId || ""), spaceKey: input.spaceKey || "personal",

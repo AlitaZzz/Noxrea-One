@@ -6,7 +6,6 @@
 "use client";
 
 import {
-  CameraOutlined,
   CaretRightOutlined,
   CloseOutlined,
   DownloadOutlined,
@@ -15,13 +14,14 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { Input, Popover,Tooltip } from "antd";
+import { Input, Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
+import { useAssetsStore } from "@/features/assets/store";
 import { captureFrame as captureFrameApi } from "@/features/canvas/api/file-api";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -129,6 +129,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
   const handleUpload = useNodeUpload(id, { accept: "video/*" });
 
+  const addAsset = useAssetsStore((s) => s.addAsset);
+
   const handleDownload = useCallback(() => {
     if (!src) return;
     const a = document.createElement("a");
@@ -140,6 +142,25 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     a.click();
     document.body.removeChild(a);
   }, [src, data.alt]);
+
+  const handleSaveToAssets = useCallback(() => {
+    if (!src) return;
+    const node = useCanvasStore.getState().nodes.find(n => n.id === id);
+    const d = node?.data as VideoNodeType | undefined;
+    // 缩略图不再在保存时生成：素材库读取时通过 sourceUrl?w= 由后端按需抽帧
+    addAsset({
+      name: data.alt || data.label || t("node.video"),
+      type: "other",
+      mediaType: "video",
+      width: d?.naturalWidth || 0,
+      height: d?.naturalHeight || 0,
+      description: "",
+      metadata: {
+        sourceUrl: src,
+        source: d?.source,
+      },
+    });
+  }, [src, data.alt, data.label, id, addAsset, t]);
 
   const handleClear = useCallback(() => {
     setSrc("");
@@ -157,6 +178,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (detail.nodeId !== id) return;
       switch (detail.action) {
         case "download": handleDownload(); break;
+        case "save-asset": handleSaveToAssets(); break;
         case "preview-fullscreen": if (src) setPreviewOpen(true); break;
         case "clear": handleClear(); break;
         case "capture-frame": {
@@ -172,7 +194,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleClear, captureFrame]);
+  }, [id, handleDownload, handleSaveToAssets, handleClear, captureFrame]);
 
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.alt || data.label || t("node.video"), { syncAlt: true });
@@ -310,36 +332,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                   <VolumeUpIcon style={{ color: "#fff", width: 24, height: 24 }} />
                 )}
               </button>
-              <Popover trigger="hover" placement="top"
-                content={
-                  <div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 170 }}>
-                    <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
-                      style={{ color: "var(--canvas-text)" }}
-                      onClick={() => captureFrame(videoRef.current?.currentTime ?? null)}>
-                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.currentFrame")}
-                    </div>
-                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
-                      style={{ color: "var(--canvas-text)" }}
-                      onClick={() => captureFrame(0)}>
-                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.firstFrame")}
-                    </div>
-                    <div className="menu-popover-item flex items-center gap-1.5 px-3 py-1.5 rounded cursor-pointer text-sm whitespace-nowrap"
-                      style={{ color: "var(--canvas-text)" }}
-                      onClick={() => captureFrame(videoRef.current?.duration ? videoRef.current.duration - 0.1 : 10)}>
-                      <CameraOutlined style={{ fontSize: 14 }} />{t("capture.lastFrame")}
-                    </div>
-                  </div>
-                }
-              >
-                <button
-                  className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); captureFrame(videoRef.current?.currentTime ?? null); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
-                >
-                  <CameraOutlined style={{ fontSize: 22 }} />
-                </button>
-              </Popover>
             </div>
 
           </div>

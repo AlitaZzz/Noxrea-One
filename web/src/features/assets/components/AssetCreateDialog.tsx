@@ -14,7 +14,6 @@ import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { captureFrame } from "@/features/canvas/api/file-api";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { isOffline } from "@/lib/utils/upload";
 
@@ -32,7 +31,6 @@ interface UploadFile {
   file: File;
   previewUrl: string;
   url: string | null;
-  coverUrl?: string;
   uploadProgress: number;
   status: "ready" | "uploading" | "done" | "error";
   width: number;
@@ -209,19 +207,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
           const { w, h } = await dims[i];
           if (w > 0) updateFile(entry.id, { width: w, height: h });
           updateFile(entry.id, { url: result.url, status: "done", uploadProgress: 100 });
-
-          // 视频提取封面（失败不影响上传结果）
-          if (isVideo(entry.file) && result.key) {
-            void (async () => {
-              try {
-                const res = await captureFrame(result.key, 0.1);
-                if (res.ok) {
-                  const json = await res.json();
-                  if (json.data?.url) updateFile(entry.id, { coverUrl: json.data.url });
-                }
-              } catch { /* frame capture failure is non-fatal */ }
-            })();
-          }
         }
       })
       .finally(() => {
@@ -284,9 +269,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       width: f.width,
       height: f.height,
       description: "",
-      metadata: isVideo(f.file)
-        ? { sourceUrl: f.url, coverUrl: f.coverUrl }
-        : isAudio(f.file) ? { sourceUrl: f.url } : { sourceUrl: f.url },
+      metadata: { sourceUrl: f.url },
       folderId: saveFolderId,
     }));
     await onCreate(inputs);
@@ -376,8 +359,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                   <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" className="w-full h-full object-cover" />
                 ) : isVideo(f.file) ? (
                   <div className="w-full h-full relative flex items-center justify-center bg-black/50">
-                    {f.coverUrl ? (
-                      <img src={`${f.coverUrl}?w=200`} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    {f.url ? (
+                      <img
+                        src={`${f.url}?w=200`}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
                     ) : null}
                     <PlayCircleOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.7)", position: "relative", zIndex: 1 }} />
                   </div>

@@ -151,7 +151,8 @@
     "previewPrev": "Previous",
     "previewNext": "Next",
     "previewDownload": "Download Current",
-    "panorama": "Panorama"
+    "panorama": "Panorama",
+    "captureFrame": "Capture Frame"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",

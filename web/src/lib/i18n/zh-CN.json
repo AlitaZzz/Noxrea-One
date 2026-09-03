@@ -151,7 +151,8 @@
     "previewPrev": "上一张",
     "previewNext": "下一张",
     "previewDownload": "下载当前图片",
-    "panorama": "全景"
+    "panorama": "全景",
+    "captureFrame": "捕获帧"
   },
   "generation": {
     "failed": "生成失败，请检查模型配置和网络连接",

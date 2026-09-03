@@ -3,7 +3,7 @@
  * 提供文件下载、Range 请求、WebP 缩放与流式响应等接口。
  */
 import { Hono } from "hono";
-import { getResizedWebP, validateUserFile } from "@server/services/storage/media";
+import { getResizedWebP, getVideoPosterWebP, validateUserFile } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
 import { failCode } from "@server/core/response";
 import path from "path";
@@ -27,16 +27,22 @@ router.get("/api/files/*", async (c) => {
 
   let resolvedPath = filePath;
 
-  // w 缩放参数 -> WebP 缓存（仅对图片生效，视频不应走 sharp 缩放）
+  // w 缩放参数 -> WebP 缓存：
+  // 图片走 sharp 缩放；视频走 ffmpeg 抽帧缩放（首帧），按需惰性生成并缓存。
   const w = c.req.query("w");
   const isVideoExt = /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(filePath);
-  if (w && !isVideoExt) {
+  if (w) {
     const width = parseInt(w, 10);
     if (!isNaN(width) && width > 0) {
-      // 透传 signal：客户端断开时中止缩放任务，及时释放 sharp 持有的源文件句柄
-      const cached = await getResizedWebP(filePath, width, request.signal);
+      // 透传 signal：客户端断开时中止缩放任务，及时释放源文件句柄
+      const cached = isVideoExt
+        ? await getVideoPosterWebP(filePath, width, request.signal)
+        : await getResizedWebP(filePath, width, request.signal);
       if (cached) {
         resolvedPath = cached;
+      } else if (isVideoExt) {
+        // 视频缩略图生成失败：不回退原视频（否则 <img> 解码失败），返回 404 由前端兜底
+        return failCode(404, "files.file_not_found");
       }
     }
   }

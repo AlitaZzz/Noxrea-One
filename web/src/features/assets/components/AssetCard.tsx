@@ -139,19 +139,22 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
         {(() => {
           const meta = asset.metadata as Record<string, unknown> | undefined;
           const sourceUrl = meta?.sourceUrl as string | undefined;
-          const coverUrl = meta?.coverUrl as string | undefined;
           const isVideo = asset.mediaType === "video";
           const isAudio = asset.mediaType === "audio";
 
-          // Video: show coverUrl thumbnail with play icon on top-left
+          // Video: 按 sourceUrl?w= 惰性生成缩略图（后端 ffmpeg 抽帧），失败时回退黑底
           if (isVideo) {
-            const thumbUrl = coverUrl?.includes('/api/files/') ? `${coverUrl}?w=200` : '';
+            const thumbUrl = sourceUrl?.includes('/api/files/') ? `${sourceUrl}?w=200` : '';
             return (
-              <div className="w-full h-full relative">
-                {thumbUrl ? (
-                  <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-black/40" />
+              <div className="w-full h-full relative bg-black/40">
+                {thumbUrl && (
+                  <img
+                    src={thumbUrl}
+                    alt={asset.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
                 )}
                 <div className="absolute top-1 left-1 flex items-center justify-center w-6 h-6 rounded bg-black/50">
                   <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
