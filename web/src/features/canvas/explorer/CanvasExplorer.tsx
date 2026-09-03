@@ -8,6 +8,7 @@
 
 import {
   AppstoreOutlined,
+  CaretRightOutlined,
   CloseOutlined,
   DownOutlined,
   FilterOutlined,
@@ -343,7 +344,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
         >
           {getNodeTypeIcon(NODE_TYPE.GROUP)}
         </div>
-        <span className="flex-1 truncate text-xs">{label}</span>
+        <span className="flex-1 truncate text-[13px]">{label}</span>
         <span
           className="shrink-0 text-[10px] px-1.5 rounded-full"
           style={{ background: "var(--canvas-bg-elevated)", color: "var(--canvas-text-muted)" }}
@@ -402,25 +403,40 @@ function ElementItemImpl(props: ElementItemProps) {
       <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
       {/* 缩略图/图标 */}
       <div
-        className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
+        className="relative w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
         style={{
           minWidth: 32,
           background: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
             ? "var(--canvas-bg-elevated)"
             : `${getNodeTypeColor(nodeType)}18`,
+          border: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
+            ? "1px solid var(--canvas-border)"
+            : undefined,
         }}
       >
         {nodeType === NODE_TYPE.IMAGE && src ? (
           <img src={src + "?w=64"} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
         ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
-          <img src={thumb} alt={label} className="w-full h-full object-cover" />
+          <>
+            <img src={thumb} alt={label} className="w-full h-full object-cover" />
+            {/* 视频播放角标：居中三角 + 投影，无圆底更轻，亮暗画面均清晰 */}
+            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <CaretRightOutlined
+                style={{
+                  fontSize: 14,
+                  color: "rgba(255,255,255,0.96)",
+                  filter: "drop-shadow(0 0 1px rgba(0,0,0,0.85)) drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
+                }}
+              />
+            </span>
+          </>
         ) : nodeType === NODE_TYPE.VIDEO && loading ? (
           <LoadingOutlined style={{ fontSize: 14, color: "var(--canvas-text-dim)" }} />
         ) : (
           getNodeTypeIcon(nodeType)
         )}
       </div>
-      <span className="flex-1 truncate text-xs">{label || `Node ${node.id}`}</span>
+      <span className="flex-1 truncate text-[13px]">{label || `Node ${node.id}`}</span>
       <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
     </div>
   );
