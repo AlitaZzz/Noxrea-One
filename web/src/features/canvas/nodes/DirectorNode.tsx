@@ -32,7 +32,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
             <Input
               size="small"
               variant="borderless"
-              className="text-[13px] font-medium text-white/80"
+              className="nodrag text-[13px] font-medium text-white/80"
               value={titleDraft}
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={handleTitleSave}
@@ -42,9 +42,9 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
             />
           </span>
         ) : (
-          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-            <PartitionOutlined className="mr-1" />
-            {data.label || t("node.director")}
+          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
+            <PartitionOutlined className="shrink-0" />
+            <span className="truncate">{data.label || t("node.director")}</span>
           </span>
         )}
 

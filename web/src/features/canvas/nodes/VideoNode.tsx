@@ -210,7 +210,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <Input
               size="small"
               variant="borderless"
-              className="text-[13px] font-medium text-white/80"
+              className="nodrag text-[13px] font-medium text-white/80"
               value={titleDraft}
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={handleTitleSave}
@@ -220,9 +220,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             />
           </span>
         ) : (
-          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-            <VideoCameraOutlined className="mr-1" />
-            {data.label || data.alt || t("node.video")}
+          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
+            <VideoCameraOutlined className="shrink-0" />
+            <span className="truncate">{data.label || data.alt || t("node.video")}</span>
           </span>
         )}
         {hasVideo && data.naturalWidth > 0 && (

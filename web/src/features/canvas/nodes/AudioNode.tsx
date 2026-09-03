@@ -125,9 +125,9 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             />
           </span>
         ) : (
-          <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-            <WaveIcon className="mr-1" />
-            {data.label || data.alt || t("node.audio")}
+          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
+            <WaveIcon className="shrink-0" />
+            <span className="truncate">{data.label || data.alt || t("node.audio")}</span>
           </span>
         )}
         {hasAudio && duration > 0 && (
