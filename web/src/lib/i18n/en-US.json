@@ -460,10 +460,10 @@
   "capture": {
     "currentFrame": "Capture current frame",
     "firstFrame": "Capture first frame",
-    "lastFrame": "Capture last frame"
+    "lastFrame": "Capture last frame",
+    "processing": "Capturing frame..."
   },
   "detach": {
-    "success": "Split into audio and muted video",
     "failed": "Audio detach failed, please try again later",
     "processing": "Detaching audio...",
     "audioSuffix": " (audio)",

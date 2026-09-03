@@ -110,6 +110,12 @@ export interface CreateNodeOptions {
   connectToSource?: boolean;
   /** 不写入撤销栈。批量创建（如音轨分离需多次派生）时使用 */
   skipHistory?: boolean;
+  /**
+   * 仅构建节点对象并返回，不写入 store。
+   * 调用方拿到多个节点后自行一次性 addNodes + setEdges，
+   * 保证同批派生只产生一条撤销记录（与宫格切分一致）。默认 false。
+   */
+  write?: boolean;
 }
 
 /**
@@ -130,6 +136,7 @@ export function createAudioNodeFromUrl(
 ): AnyNode {
   const connectToSource = options?.connectToSource !== false;
   const skipHistory = options?.skipHistory === true;
+  const write = options?.write !== false;
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
   const position = resolveDerivedPosition(origNode, positionOverride);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
@@ -139,9 +146,11 @@ export function createAudioNodeFromUrl(
   node.data.alt = label;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
 
-  storeApi.addNodes([node], { skipHistory });
-  if (connectToSource) {
-    storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)], { skipHistory });
+  if (write) {
+    storeApi.addNodes([node], { skipHistory });
+    if (connectToSource) {
+      storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)], { skipHistory });
+    }
   }
 
   return node;
@@ -166,6 +175,7 @@ export function createVideoNodeFromUrl(
 ): AnyNode {
   const connectToSource = options?.connectToSource !== false;
   const skipHistory = options?.skipHistory === true;
+  const write = options?.write !== false;
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
   const position = resolveDerivedPosition(origNode, positionOverride);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
@@ -179,9 +189,11 @@ export function createVideoNodeFromUrl(
   // 零尺寸保护：degenerate 输入（0 宽/高）按 300 兜底，避免节点塌缩为 0
   node.style = computeNodeSize(naturalW > 0 ? naturalW : 300, naturalH > 0 ? naturalH : 300);
 
-  storeApi.addNodes([node], { skipHistory });
-  if (connectToSource) {
-    storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)], { skipHistory });
+  if (write) {
+    storeApi.addNodes([node], { skipHistory });
+    if (connectToSource) {
+      storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)], { skipHistory });
+    }
   }
 
   return node;
