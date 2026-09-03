@@ -35,7 +35,7 @@ function stripRuntimeFields(snapshot: HistorySnapshot): HistorySnapshot {
       return rest;
     }),
     edges: snapshot.edges.map((e) => {
-      const { selected, ...rest } = e;
+      const { selected, markerEnd, ...rest } = e;
       return rest;
     }),
   };
@@ -111,13 +111,32 @@ describe("stripRuntimeFields", () => {
     expect(cleaned.edges[0].type).toBe("deletable");
   });
 
+  it("主动剔除已废弃的 markerEnd 箭头字段", () => {
+    const snapshot: HistorySnapshot = {
+      nodes: [],
+      edges: [
+        { id: "e1", source: "n1", target: "n2", type: "deletable", markerEnd: { type: "arrowclosed", color: "#888" } },
+      ],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      background: "dots",
+      theme: "dark",
+      minimapVisible: true,
+      snapToGrid: false,
+    };
+
+    const cleaned = stripRuntimeFields(snapshot);
+    expect(cleaned.edges[0].id).toBe("e1");
+    expect(cleaned.edges[0].type).toBe("deletable");
+    expect(cleaned.edges[0]).not.toHaveProperty("markerEnd");
+  });
+
   it("保留非运行时字段", () => {
     const snapshot: HistorySnapshot = {
       nodes: [
         { id: "n1", position: { x: 100, y: 200 }, data: { label: "test" }, style: { width: 600 }, type: "text-node", selected: true },
       ],
       edges: [
-        { id: "e1", source: "n1", target: "n2", sourceHandle: "a", targetHandle: "b", selected: false, markerEnd: { type: "arrowclosed" } },
+        { id: "e1", source: "n1", target: "n2", sourceHandle: "a", targetHandle: "b", selected: false },
       ],
       viewport: { x: 50, y: 100, zoom: 1.5 },
       background: "grid",
@@ -139,7 +158,6 @@ describe("stripRuntimeFields", () => {
     expect(edge.target).toBe("n2");
     expect(edge.sourceHandle).toBe("a");
     expect(edge.targetHandle).toBe("b");
-    expect(edge.markerEnd).toEqual({ type: "arrowclosed" });
   });
 
   it("快照顶层字段保持不变", () => {
@@ -326,7 +344,6 @@ describe("takeCanvasSnapshot", () => {
       }],
       edges: [{
         id: "e1", source: "n1", target: "n2", type: "deletable",
-        markerEnd: { type: "arrowclosed", color: "#888" },
         style: { stroke: "#666" },
       }],
       viewport: { x: 0, y: 0, zoom: 1 },
@@ -338,7 +355,7 @@ describe("takeCanvasSnapshot", () => {
 
     const snap = takeCanvasSnapshot(state);
     expect(snap.nodes[0].style).toEqual({ width: 480, height: 360 });
-    expect(snap.edges[0].markerEnd).toEqual({ type: "arrowclosed", color: "#888" });
+    expect(snap.edges[0].style).toEqual({ stroke: "#666" });
   });
 });
 

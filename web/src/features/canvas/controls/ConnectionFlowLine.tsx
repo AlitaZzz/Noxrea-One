@@ -1,14 +1,14 @@
 /**
  * 拖拽连接时的自定义预览线组件。
- * 渲染一条绿色贝塞尔预览线，并叠加与「选中节点时连线」一致的绿色流动光点动画。
+ * 渲染一条绿色贝塞尔预览线，并叠加与「选中节点时连线」一致的绿色管道流光动画。
  */
 "use client";
 
 import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } from "@xyflow/react";
 
-import { insetHandleCenter } from "@/lib/constants";
+import { EDGE_BASE_COLOR, insetHandleCenter } from "@/lib/constants";
 
-import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
+import { DOT_COLOR, FlowLines } from "./EdgeFlow";
 
 export default function ConnectionFlowLine({
   fromX,
@@ -36,8 +36,8 @@ export default function ConnectionFlowLine({
 
   return (
     <>
-      <BaseEdge path={edgePath} style={{ stroke: DOT_COLOR, strokeWidth: 2 }} />
-      <FlowingDots path={edgePath} color={DOT_COLOR} />
+      <BaseEdge path={edgePath} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
+      <FlowLines path={edgePath} color={DOT_COLOR} />
     </>
   );
 }

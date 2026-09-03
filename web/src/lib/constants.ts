@@ -171,6 +171,15 @@ export const insetHandleCenter = (position: string | undefined, x: number, y: nu
 
 export const DEFAULT_NODE_COLOR = "#1677ff";
 
+/**
+ * 连线（管道）本体色：中性灰，用 CSS 变量以跟随明暗主题。
+ * 与流光色 DOT_COLOR 分离是刻意的——底线若与流光同色，
+ * 流光的水滴形状会被淹没看不出来。
+ * 连线不画箭头：方向由流光水滴的朝向表达（未选中时无流光，靠节点布局与句柄方位判断）。
+ * 新建连线（createEdge）与 defaultEdgeOptions 都引用此处，避免硬编码散落。
+ */
+export const EDGE_BASE_COLOR = "var(--canvas-text-muted)";
+
 // ── 节点连接规则 ──
 // 连接规则区分「输入」与「输出」两个方向：
 //   • 输出规则：从某节点右侧 source Handle 拖出时，可创建的目标节点类型。

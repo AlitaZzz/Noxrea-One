@@ -99,6 +99,8 @@ function stripRuntimeFields(snapshot: CanvasSnapshot) {
       .map((e) => {
         const rest = { ...(e as Record<string, unknown>) };
         delete rest.selected;
+        // 已废弃的箭头字段：新版连线不渲染箭头，保存时主动剔除旧数据残留
+        delete rest.markerEnd;
         return rest;
       }),
   };
