@@ -314,6 +314,211 @@ export async function captureVideoFrame(
   });
 }
 
+/** 音视频分离超时：即便 copy 也要完整读一遍长视频，抽帧的 30s 兜不住 */
+const FFMPEG_AUDIO_TIMEOUT_MS = 120_000;
+
+/**
+ * 音轨输出格式。
+ * copy = 原编码原样封装进 MP4 容器（不解码，比特级无损）；
+ * wav  = 源编码装不进 MP4 容器时的回退路径（PCM 重编码，仍无损，但体积大）。
+ */
+const AUDIO_OUTPUT_FORMATS = {
+  copy: { ext: ".m4a", mime: "audio/mp4" },
+  wav: { ext: ".wav", mime: "audio/wav" },
+} as const;
+
+/** 无音轨：源视频不含任何音频流。调用方据此给出明确提示，而非笼统的「处理失败」 */
+export class NoAudioTrackError extends Error {
+  constructor(message = "Source video contains no audio stream") {
+    super(message);
+    this.name = "NoAudioTrackError";
+  }
+}
+
+export type AudioExtractFormat = keyof typeof AUDIO_OUTPUT_FORMATS;
+
+export interface ExtractedAudio {
+  /** 产物临时路径（扩展名随最终采用的格式而变） */
+  path: string;
+  format: AudioExtractFormat;
+  ext: string;
+  mime: string;
+}
+
+/** ffmpeg stderr 中「指定流不存在」的标志性输出 */
+function isMissingStream(stderr: string): boolean {
+  return (
+    stderr.includes("matches no streams") ||
+    stderr.includes("does not contain any stream")
+  );
+}
+
+/**
+ * ffmpeg 子进程通用执行器。
+ * 统一处理超时兜底与客户端中断（signal）回收，并保证只结算一次。
+ */
+function runFfmpeg(
+  args: string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{ code: number; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
+    const ffmpeg = spawn(ffmpegBin, args);
+    let stderr = "";
+    let settled = false;
+
+    /**
+     * 超时兜底：必须 SIGKILL。残留子进程会一直持有视频文件句柄，
+     * Windows 上表现为该文件后续无法被覆盖写入。
+     */
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      ffmpeg.kill("SIGKILL");
+      logEvent("media", { stage: "ffmpeg_timeout", timeoutMs });
+      reject(new Error(`ffmpeg timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    /** 统一收口：只结算一次，并清理定时器与信号监听 */
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      fn();
+    };
+
+    const onAbort = () => {
+      ffmpeg.kill("SIGKILL");
+      settle(() => reject(new DOMException("Aborted", "AbortError")));
+    };
+    if (signal) {
+      if (signal.aborted) { onAbort(); return; }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("close", (code) => settle(() => resolve({ code: code ?? -1, stderr })));
+
+    ffmpeg.on("error", (err) => {
+      logEvent("media", {
+        stage: "ffmpeg_spawn_failed",
+        error: err.message,
+        ffmpegBin,
+      });
+      settle(() => reject(err));
+    });
+  });
+}
+
+/**
+ * 从视频中分离音轨（无损优先）。
+ *
+ * 阶段一 `-acodec copy`：只换容器不解码。绝大多数视频音轨是 AAC，
+ * 可直接封装进 MP4 容器，比特级无损且耗时近乎为零。
+ * 阶段二（回退）：源编码装不进 MP4 容器时（Opus / Vorbis / PCM）重编码为 PCM wav。
+ *
+ * 源视频不含音频流时抛 NoAudioTrackError。
+ */
+export async function extractAudioTrack(
+  videoPath: string,
+  outputDir: string,
+  baseName: string,
+  signal?: AbortSignal,
+): Promise<ExtractedAudio> {
+  await fs.mkdir(outputDir, { recursive: true });
+
+  const copyPath = path.join(outputDir, `${baseName}${AUDIO_OUTPUT_FORMATS.copy.ext}`);
+  const wavPath = path.join(outputDir, `${baseName}${AUDIO_OUTPUT_FORMATS.wav.ext}`);
+
+  const copy = await runFfmpeg(
+    ["-i", videoPath, "-vn", "-map", "a:0", "-acodec", "copy", "-f", "mp4", "-y", copyPath],
+    FFMPEG_AUDIO_TIMEOUT_MS,
+    signal,
+  );
+
+  if (copy.code === 0) {
+    // copy 偶发产出 0 字节：视为无有效音轨，交给回退阶段再判定一次
+    const stat = await fs.stat(copyPath).catch(() => null);
+    if (stat && stat.size > 0) {
+      logEvent("media", {
+        stage: "audio_extract_copy",
+        video: path.basename(videoPath),
+      });
+      return { path: copyPath, format: "copy", ...AUDIO_OUTPUT_FORMATS.copy };
+    }
+  } else if (isMissingStream(copy.stderr)) {
+    throw new NoAudioTrackError();
+  }
+  await fs.rm(copyPath, { force: true }).catch(() => undefined);
+
+  const wav = await runFfmpeg(
+    [
+      "-i", videoPath, "-vn", "-map", "a:0",
+      "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+      "-f", "wav", "-y", wavPath,
+    ],
+    FFMPEG_AUDIO_TIMEOUT_MS,
+    signal,
+  );
+
+  if (wav.code !== 0) {
+    if (isMissingStream(wav.stderr)) throw new NoAudioTrackError();
+    logEvent("media", {
+      stage: "audio_extract_failed",
+      video: path.basename(videoPath),
+      exitCode: wav.code,
+      stderr: wav.stderr.slice(-200),
+    });
+    throw new Error(`ffmpeg exited with code ${wav.code}: ${wav.stderr.slice(-200)}`);
+  }
+
+  logEvent("media", {
+    stage: "audio_extract_wav",
+    video: path.basename(videoPath),
+  });
+  return { path: wavPath, format: "wav", ...AUDIO_OUTPUT_FORMATS.wav };
+}
+
+/**
+ * 抽离静音视频：视频流原样拷贝并丢弃音轨，不重新编码。
+ * 输出容器沿用源扩展名；MP4 系追加 faststart 把 moov 前置，
+ * 避免 <video> 必须等整个文件下载完才能起播。
+ */
+export async function extractMutedVideo(
+  videoPath: string,
+  outputPath: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const args = ["-i", videoPath, "-map", "0:v:0", "-c:v", "copy", "-an"];
+  if (/^\.(mp4|mov|m4v)$/i.test(path.extname(outputPath))) {
+    args.push("-movflags", "+faststart");
+  }
+  args.push("-y", outputPath);
+
+  const run = await runFfmpeg(args, FFMPEG_AUDIO_TIMEOUT_MS, signal);
+  if (run.code !== 0) {
+    logEvent("media", {
+      stage: "muted_video_extract_failed",
+      video: path.basename(videoPath),
+      exitCode: run.code,
+      stderr: run.stderr.slice(-200),
+    });
+    throw new Error(`ffmpeg exited with code ${run.code}: ${run.stderr.slice(-200)}`);
+  }
+
+  logEvent("media", {
+    stage: "muted_video_extract",
+    video: path.basename(videoPath),
+  });
+}
+
 /**
  * 路径穿越防护：校验用户文件访问
  * 校验用户文件合法性

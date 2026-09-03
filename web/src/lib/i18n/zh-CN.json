@@ -134,7 +134,7 @@
     "gridLayout": "宫格布局",
     "verticalLayout": "垂直布局",
     "horizontalLayout": "水平布局",
-    "saveToAssets": "保存到素材库",
+    "saveToAssets": "保存到资产",
     "alreadySaved": "已在素材库",
     "connectCreateInput": "添加上下文",
     "connectCreateOutput": "引用该节点",
@@ -152,7 +152,9 @@
     "previewNext": "下一张",
     "previewDownload": "下载当前图片",
     "panorama": "全景",
-    "captureFrame": "捕获帧"
+    "captureFrame": "捕获帧",
+    "detachAudio": "分离音频",
+    "detachAudioNoTrack": "该视频无音轨"
   },
   "generation": {
     "failed": "生成失败，请检查模型配置和网络连接",
@@ -459,6 +461,13 @@
     "firstFrame": "捕获首帧",
     "lastFrame": "捕获末帧"
   },
+  "detach": {
+    "success": "已分离为音频与静音视频",
+    "failed": "音轨分离失败，请稍后重试",
+    "processing": "正在分离音频...",
+    "audioSuffix": " (音频)",
+    "mutedSuffix": " (静音)"
+  },
   "offline": {
     "label": "网络异常，离线待保存",
     "tooltip": "网络异常，请检查网络连接后重试"
@@ -554,6 +563,13 @@
       "video_not_found": "源视频不存在",
       "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "capture_failed": "抽帧失败，请稍后重试"
+    },
+    "detach_audio": {
+      "video_not_found": "源视频不存在",
+      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
+      "no_audio_track": "该视频没有音轨",
+      "extract_failed": "音轨分离失败，请稍后重试",
+      "cancelled": "处理已取消"
     },
     "generate": {
       "body_too_large": "请求体过大",

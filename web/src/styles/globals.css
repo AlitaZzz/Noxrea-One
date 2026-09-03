@@ -15,9 +15,10 @@
   animation: shortcutFadeIn 0.18s ease-out;
 }
 
-/* 视频节点：底部渐变遮罩，保证纯白/浅色视频下控件可见 */
+/* 视频节点：底部渐变遮罩，保证纯白/浅色视频下控件可见。
+   行业通用 scrim：底部最黑（约 0.7），向上过渡到透明，覆盖控件区域。 */
 .video-controls-scrim {
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.15) 55%, transparent);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.25) 60%, transparent);
 }
 /* 控件图标描边/投影：双保险，即便渐变未完全覆盖也能看清 */
 .video-control-btn svg {

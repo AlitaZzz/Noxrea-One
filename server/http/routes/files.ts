@@ -72,11 +72,17 @@ router.get("/api/files/*", async (c) => {
     ".gif": "image/gif",
     ".webp": "image/webp",
     ".mp4": "video/mp4",
+    ".m4v": "video/x-m4v",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
     ".webm": "video/webm",
     ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".ogg": "audio/ogg",
-  ".flac": "audio/flac",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    // 音轨分离产物：AAC 音轨原样封装进 MP4 容器，扩展名用 m4a
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
   };
   const contentType = mimeMap[ext] ?? "application/octet-stream";
 

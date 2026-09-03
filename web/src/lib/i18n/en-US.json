@@ -152,7 +152,9 @@
     "previewNext": "Next",
     "previewDownload": "Download Current",
     "panorama": "Panorama",
-    "captureFrame": "Capture Frame"
+    "captureFrame": "Capture Frame",
+    "detachAudio": "Detach Audio",
+    "detachAudioNoTrack": "This video has no audio track"
   },
   "generation": {
     "failed": "Generation failed. Check model config and network connection.",
@@ -460,6 +462,13 @@
     "firstFrame": "Capture first frame",
     "lastFrame": "Capture last frame"
   },
+  "detach": {
+    "success": "Split into audio and muted video",
+    "failed": "Audio detach failed, please try again later",
+    "processing": "Detaching audio...",
+    "audioSuffix": " (audio)",
+    "mutedSuffix": " (muted)"
+  },
   "offline": {
     "label": "Offline — pending save",
     "tooltip": "Offline, please check your network connection and try again"
@@ -555,6 +564,13 @@
       "video_not_found": "Source video not found",
       "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "capture_failed": "Frame capture failed, please try again later"
+    },
+    "detach_audio": {
+      "video_not_found": "Source video not found",
+      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
+      "no_audio_track": "This video has no audio track",
+      "extract_failed": "Audio detach failed, please try again later",
+      "cancelled": "Processing cancelled"
     },
     "generate": {
       "body_too_large": "Request body too large",

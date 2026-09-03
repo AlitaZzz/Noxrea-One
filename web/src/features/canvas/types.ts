@@ -178,6 +178,11 @@ export type VideoNodeData = GroupableData & {
   genSettings?: VideoGenSettings;
   /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成，derived = 从已有资源派生 */
   source?: "upload" | "generate" | "derived";
+  /**
+   * 是否含音轨。由节点探测后回填（skipHistory，不进撤销栈）：
+   * true = 有音轨；false = 确定无音轨（工具栏禁用分离）；undefined = 尚未探测出结论。
+   */
+  hasAudio?: boolean;
 };
 
 export type AudioNodeData = GroupableData & {
