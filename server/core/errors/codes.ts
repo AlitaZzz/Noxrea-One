@@ -157,6 +157,18 @@ export const ERROR_CODES = [
   /** 抽帧处理失败 */
   "capture_frame.capture_failed",
 
+  // ── 音视频分离 ──
+  /** 源视频不存在 */
+  "detach_audio.video_not_found",
+  /** 未安装 ffmpeg */
+  "detach_audio.ffmpeg_missing",
+  /** 源视频不含音轨，无法分离 */
+  "detach_audio.no_audio_track",
+  /** 分离处理失败 */
+  "detach_audio.extract_failed",
+  /** 客户端提前断开，处理已中止 */
+  "detach_audio.cancelled",
+
   // ── 认证 ──
   /** 未携带登录凭证 */
   "auth.not_authenticated",

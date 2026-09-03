@@ -15,6 +15,7 @@ import { router as agentRouter } from "./routes/agent";
 import { router as modelsRouter } from "./routes/models";
 import { router as modelParamsRouter } from "./routes/model-params";
 import { router as captureFrameRouter } from "./routes/capture-frame";
+import { router as detachAudioRouter } from "./routes/detach-audio";
 import { router as uploadRouter } from "./routes/upload";
 import { router as filesRouter } from "./routes/files";
 
@@ -37,6 +38,7 @@ app.route("/", agentRouter);
 app.route("/", modelsRouter);
 app.route("/", modelParamsRouter);
 app.route("/", captureFrameRouter);
+app.route("/", detachAudioRouter);
 app.route("/", uploadRouter);
 app.route("/", filesRouter);
 

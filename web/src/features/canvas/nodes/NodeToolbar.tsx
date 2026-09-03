@@ -40,6 +40,7 @@ import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
+import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -179,6 +180,9 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
   const nodes = useCanvasStore((s) => s.nodes);
   const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
+  // 音轨探测结论：undefined = 尚未确定（按「可能有音轨」处理，真无音轨时由后端兜底）；
+  // false = 确定无音轨，禁用分离入口
+  const videoHasAudio = (nodes.find(n => n.id === nodeId)?.data as { hasAudio?: boolean })?.hasAudio;
   const textContent = (nodes.find(n => n.id === nodeId)?.data as { plainText?: string })?.plainText;
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
@@ -389,6 +393,16 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
               </>
             }
           />
+          <Tooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<WaveIcon />}
+              disabled={!assetSrc || videoHasAudio === false}
+              onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
+            />
+          </Tooltip>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={isInAssets ? t("node.alreadySaved") : t("node.saveToAssets")}>
             <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}
@@ -399,10 +413,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
-          <Tooltip title={t("node.previewFullscreen")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
-          </Tooltip>
+          {/* 全屏预览按钮已移除：节点底部播放器自带足够控件，全屏入口冗余 */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("common.clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
