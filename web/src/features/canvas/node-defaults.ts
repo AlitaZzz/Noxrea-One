@@ -3,8 +3,6 @@
  * 集中定义各类节点的默认数据、默认尺寸与 ID 生成规则，
  * 并提供节点再制（duplicate）与连线创建函数。
  */
-import { MarkerType } from "@xyflow/react";
-
 import {
   type AnyNode,
   type AudioNode,
@@ -30,6 +28,7 @@ import {
   DEFAULT_NODE_WIDTH,
   DIRECTOR_NODE_DEFAULT_HEIGHT,
   DIRECTOR_NODE_DEFAULT_WIDTH,
+  EDGE_BASE_COLOR,
   TEXT_NODE_DEFAULT_HEIGHT,
   TEXT_NODE_DEFAULT_WIDTH,
   TEXT_NODE_MIN_HEIGHT,
@@ -170,11 +169,11 @@ export function duplicateNode(
   };
 }
 
-/** 创建统一样式的连接线（deletable、静态、灰色箭头） */
+/** 创建统一样式的连接线（deletable、静态、中性灰；不画箭头，方向由流光表达） */
 export function createEdge(
   source: string,
   target: string,
-  options?: { id?: string; type?: string; style?: Record<string, unknown>; markerEnd?: Record<string, unknown> }
+  options?: { id?: string; type?: string; style?: Record<string, unknown> }
 ) {
   const edgeId = options?.id || `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   return {
@@ -183,7 +182,6 @@ export function createEdge(
     target,
     type: options?.type || "deletable",
     animated: false,
-    style: { stroke: "#666", strokeWidth: 2, ...(options?.style || {}) },
-    markerEnd: { type: MarkerType.ArrowClosed, color: "#666", ...(options?.markerEnd || {}) },
+    style: { stroke: EDGE_BASE_COLOR, strokeWidth: 2, ...(options?.style || {}) },
   };
 }

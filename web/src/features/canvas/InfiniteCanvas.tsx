@@ -18,7 +18,6 @@ import {
   type Edge,
   type EdgeChange,
   type FinalConnectionState,
-  MarkerType,
   MiniMap,
   type NodeChange,
   NodeToolbar as RfNodeToolbar,
@@ -81,7 +80,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
 
@@ -786,12 +785,15 @@ export default function InfiniteCanvas() {
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
+        // 连线吸附半径（画布坐标，默认 20 偏小）：Handle 直径 24px，20 只在 Handle 外
+        // 留约 8px 容错，且缩放变小时该半径会等比缩水、更难吸附。
+        // 放大是安全的——React Flow 在半径内取「最近」的 Handle，不会明显增加误吸附
+        connectionRadius={40}
         connectionLineComponent={ConnectionFlowLine}
         defaultEdgeOptions={{
           type: "deletable",
           animated: false,
-          style: { stroke: "#666", strokeWidth: 2 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: "#666" },
+          style: { stroke: EDGE_BASE_COLOR, strokeWidth: 2 },
         }}
       >
         <Background

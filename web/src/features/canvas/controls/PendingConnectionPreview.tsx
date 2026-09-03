@@ -2,14 +2,16 @@
  * 拖拽连接松手落在空白画布、弹出「创建连接节点」菜单期间，
  * 持续渲染的绿色流光预览线（模拟 tigerowo 的 ActiveConnectionPath）。
  * 起点为发起端 Handle 锚点，终点为菜单弹出位置（鼠标落点），
- * 复用与拖拽预览线、选中连线一致的 FlowingDot 流光动画，保证视觉统一。
+ * 复用与拖拽预览线、选中连线一致的 FlowLines 管道流光动画，保证视觉统一。
  * 必须置于 <ReactFlow> 内部（依赖 ViewportPortal 跟随视口变换）。
  */
 "use client";
 
 import { getBezierPath, Position, ViewportPortal } from "@xyflow/react";
 
-import { DOT_COLOR, FlowingDots } from "./EdgeFlow";
+import { EDGE_BASE_COLOR } from "@/lib/constants";
+
+import { DOT_COLOR, FlowLines } from "./EdgeFlow";
 
 interface Props {
   /** 发起端 Handle 锚点（画布坐标） */
@@ -38,9 +40,9 @@ export default function PendingConnectionPreview({ from, to, fromPosition }: Pro
         <path
           d={edgePath}
           fill="none"
-          style={{ stroke: DOT_COLOR, strokeWidth: 2 }}
+          style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }}
         />
-        <FlowingDots path={edgePath} color={DOT_COLOR} />
+        <FlowLines path={edgePath} color={DOT_COLOR} />
       </svg>
     </ViewportPortal>
   );
