@@ -23,7 +23,7 @@ function normalizeStatus(raw: string): string {
   const s = raw.toLowerCase().trim();
   if (PENDING_STATUSES.has(s)) return "pending";
   if (new Set(["success", "succeeded", "completed", "done", "ready", "finished"]).has(s)) return "completed";
-  if (new Set(["failed", "error", "cancelled", "canceled", "timeout", "aborted"]).has(s)) return "failed";
+  if (new Set(["failed", "error", "cancelled", "canceled", "timeout", "aborted", "invalid"]).has(s)) return "failed";
   return s;
 }
 
