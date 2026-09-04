@@ -144,6 +144,8 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         style={{
           background: "var(--canvas-bg, #262626)",
           border: "1px solid var(--canvas-border, #3a3a3a)",
+          // 外层 Panel 为 pointer-events: none，这里恢复自身（含内部浮层）的交互
+          pointerEvents: "auto",
         }}
       >
         {/* Canvas Explorer — 最左侧主面板开关（图标+文字） */}

@@ -811,11 +811,12 @@ export default function InfiniteCanvas() {
         />
 
         {/* Top-left panel: quick toolbar */}
-        <Panel position="top-left" style={{ margin: 0, padding: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
+        {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}
+        <Panel position="top-left" style={{ margin: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease", pointerEvents: "none" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
             <div
               className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
-              style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }}
+              style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", pointerEvents: "auto" }}
             >
               <MenuPopover
                 open={toolbarMenuOpen}
@@ -905,22 +906,21 @@ export default function InfiniteCanvas() {
         </Panel>
 
         {/* Bottom-left panel: minimap + controls */}
-        <Panel position="bottom-left" style={{ margin: 0, padding: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease" }}>
+        {/* pointer-events: none —— 小地图(180)比控制条窄，其右侧透明留白会拦截画布点击与框选 */}
+        <Panel position="bottom-left" style={{ margin: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease", pointerEvents: "none" }}>
           <div className="flex flex-col gap-2" style={{ paddingLeft: 30, paddingBottom: 30 }}>
             {minimapVisible && (
               <MiniMap
                 pannable
                 zoomable
                 style={{
+                  // Panel 默认 absolute + bottom/right 定位，改为 relative 才能排进下方的纵向 flex 流
                   position: "relative",
-                  left: 0,
-                  right: "auto",
-                  bottom: 0,
                   background: "var(--canvas-bg, #262626)",
                   border: "1px solid var(--canvas-border, #3a3a3a)",
-                  borderRadius: 8,
                   width: 180,
                   height: 120,
+                  pointerEvents: "auto",
                 }}
                 nodeColor={(n) => NODE_TYPE_COLOR[n.type ?? ""] ?? "#1677ff"}
                 maskColor="rgba(255,255,255,0.08)"
@@ -936,8 +936,8 @@ export default function InfiniteCanvas() {
         </Panel>
 
         {/* Top-right panel: agent entry */}
-        <Panel position="top-right" style={{ margin: 0, padding: 0, paddingRight: 30, paddingTop: 30 }}>
-          <div className="flex items-center gap-2">
+        <Panel position="top-right" style={{ margin: 0, paddingRight: 30, paddingTop: 30, pointerEvents: "none" }}>
+          <div className="flex items-center gap-2" style={{ pointerEvents: "auto" }}>
             <OfflineIndicator />
             <Tooltip title={t("agent.title")}>
               <button
