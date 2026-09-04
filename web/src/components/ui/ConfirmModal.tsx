@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
@@ -24,6 +25,12 @@ interface Props {
 export default function ConfirmModal({ open, title, content, okText, cancelText, onOk, onCancel, zIndex }: Props) {
   const { i18n } = useTranslation();
   const lang = i18n.language;
+  const okRef = useRef<HTMLButtonElement>(null);
+
+  // antd 打开动画结束默认聚焦关闭按钮，这里把焦点交回「确定」按钮
+  const handleAfterOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setTimeout(() => okRef.current?.focus(), 0);
+  };
 
   return (
     <AppModal
@@ -31,6 +38,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       open={open}
       onCancel={onCancel}
       zIndex={zIndex}
+      afterOpenChange={handleAfterOpenChange}
       width={380}
       styles={{
         header: { background: "var(--canvas-bg)", borderBottom: "none" },
@@ -39,7 +47,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       footer={
         <div className="flex justify-end gap-2">
           <ModalButton onClick={onCancel}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</ModalButton>
-          <ModalButton variant="primary" onClick={onOk}>{okText || (lang === "zh" ? "确定" : "OK")}</ModalButton>
+          <ModalButton variant="primary" onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</ModalButton>
         </div>
       }
     >

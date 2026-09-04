@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { type ReactNode,useState } from "react";
+import { forwardRef, type ReactNode,useState } from "react";
 
 interface Props {
   children: ReactNode;
@@ -12,6 +12,8 @@ interface Props {
   variant?: "default" | "primary" | "danger";
   disabled?: boolean;
   loading?: boolean;
+  /** 弹窗打开时让该按钮获得焦点（配合 Modal 的 autoFocusButton={null} 使用） */
+  autoFocus?: boolean;
 }
 
 const VARIANT_STYLES: Record<string, React.CSSProperties> = {
@@ -27,14 +29,19 @@ const HOVER_BG: Record<string, string> = {
 };
 
 /** 弹窗底部统一按钮 — 8px 圆角 36px 高度，主题色自适应。 */
-export default function ModalButton({ children, onClick, variant = "default", disabled, loading }: Props) {
+const ModalButton = forwardRef<HTMLButtonElement, Props>(function ModalButton(
+  { children, onClick, variant = "default", disabled, loading, autoFocus },
+  ref,
+) {
   const [hovered, setHovered] = useState(false);
   const base = VARIANT_STYLES[variant];
 
   return (
     <button
+      ref={ref}
       onClick={onClick}
       disabled={disabled || loading}
+      autoFocus={autoFocus}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -49,4 +56,6 @@ export default function ModalButton({ children, onClick, variant = "default", di
       {loading ? "处理中..." : children}
     </button>
   );
-}
+});
+
+export default ModalButton;

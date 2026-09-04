@@ -9,14 +9,16 @@
 
 import { ReactFlowProvider } from "@xyflow/react";
 import dynamic from "next/dynamic";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { clearDraft, loadDraft, type DraftRecord } from "@/features/project/draft-store";
 import { useProjectStore } from "@/features/project/store";
 
 const DirectorOverlay = dynamic(
@@ -42,6 +44,7 @@ export default function CanvasPage({
   const setDirectorOverlayOpen = useCanvasStore((s) => s.setDirectorOverlayOpen);
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const [initialized, setInitialized] = useState(false);
+  const [draftPrompt, setDraftPrompt] = useState<DraftRecord | null>(null);
 
   // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
   // URL 是项目身份的真相源：先同步进 store（save-manager 按 activeProjectId 存盘），
@@ -53,15 +56,37 @@ export default function CanvasPage({
       return;
     }
     useProjectStore.getState().setActiveProject(projectId);
-    useProjectStore.getState().refreshProject(projectId).then((project) => {
+    useProjectStore.getState().refreshProject(projectId).then(async (project) => {
       if (!project) {
         window.location.href = "/project";
         return;
       }
+      // 先用后端数据渲染画布，再检查是否有比后端更新的离线草稿（弹窗询问）
       useCanvasStore.getState().restoreFromProject(project);
       setInitialized(true);
+
+      const draft = await loadDraft(projectId);
+      if (draft && draft.updatedAt > project.updatedAt) {
+        setDraftPrompt(draft);
+      }
     });
   }, [projectId]);
+
+  /** 恢复离线草稿：用草稿覆盖画布并触发重新落库 */
+  const handleRestoreDraft = useCallback(() => {
+    if (!draftPrompt) return;
+    useCanvasStore.getState().restoreFromProject(draftPrompt.canvasData);
+    markDirtyImmediate();
+    void clearDraft(projectId);
+    setDraftPrompt(null);
+  }, [draftPrompt, projectId]);
+
+  /** 丢弃离线草稿：保留后端数据 */
+  const handleDiscardDraft = useCallback(() => {
+    if (!draftPrompt) return;
+    void clearDraft(projectId);
+    setDraftPrompt(null);
+  }, [draftPrompt, projectId]);
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
   useEffect(() => {
@@ -138,6 +163,17 @@ export default function CanvasPage({
       {directorOverlayOpen && (
         <DirectorOverlay onClose={() => setDirectorOverlayOpen(false)} />
       )}
+
+      {/* 离线草稿恢复确认 */}
+      <ConfirmModal
+        open={!!draftPrompt}
+        title={t("draft.title")}
+        content={t("draft.content")}
+        okText={t("draft.restore")}
+        cancelText={t("draft.discard")}
+        onOk={handleRestoreDraft}
+        onCancel={handleDiscardDraft}
+      />
     </ReactFlowProvider>
   );
 }

@@ -14,7 +14,9 @@
  */
 
 import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
+import { clearDraft, saveDraft } from "@/features/project/draft-store";
 import { useProjectStore } from "@/features/project/store";
 
 type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
@@ -27,6 +29,8 @@ const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
 /** undo/redo 专用延迟，比 immediate 稍长以合并连续撤销/重做 */
 const SAVE_DELAY_UNDO = 500;
+/** 离线草稿写入防抖（ms）：拖拽等高频操作不逐帧写 IndexedDB */
+const DRAFT_WRITE_DELAY = 500;
 
 // ── fingerprint：追踪画布文件引用变化 ──
 // 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
@@ -112,6 +116,8 @@ class SaveManager {
   /** 是否离线：离线时暂停自动保存，恢复在线后立即补存 */
   private offline = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 离线草稿写入的防抖定时器 */
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
   private resolveSave: (() => void) | null = null;
@@ -143,6 +149,33 @@ class SaveManager {
     }
     this.pendingDelay = Math.min(this.pendingDelay, delay);
     this.resetTimer(delay);
+    this.scheduleDraftWrite();
+  }
+
+  /** 防抖写离线草稿：markDirty 后延迟写入，避免拖拽逐帧写 IndexedDB */
+  private scheduleDraftWrite(): void {
+    if (this.draftTimer) clearTimeout(this.draftTimer);
+    this.draftTimer = setTimeout(() => {
+      this.draftTimer = null;
+      void this.writeDraft();
+    }, DRAFT_WRITE_DELAY);
+  }
+
+  private async writeDraft(): Promise<void> {
+    const activeId = useProjectStore.getState().activeProjectId;
+    if (!activeId) return;
+    const s = useCanvasStore.getState();
+    const clean = stripRuntimeFields(takeCanvasSnapshot());
+    await saveDraft(activeId, {
+      nodes: clean.nodes as AnyNode[],
+      edges: clean.edges as AnyEdge[],
+      viewport: clean.viewport,
+      background: clean.background,
+      theme: clean.theme,
+      minimapVisible: clean.minimapVisible,
+      snapToGrid: clean.snapToGrid,
+      agentModel: s.agentModel ?? undefined,
+    });
   }
 
   /** 立即保存最新状态（fire-and-forget；页面存活，故无需 keepalive） */
@@ -312,6 +345,9 @@ class SaveManager {
     if (res.status === 401) return;
 
     fingerprintMap.set(projectId, currentFp);
+
+    // 落库成功才清草稿；非 2xx（如 500）时保留草稿兜底
+    if (res.ok) void clearDraft(projectId);
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */

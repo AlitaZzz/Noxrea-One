@@ -24,19 +24,21 @@ interface AppModalProps {
   style?: React.CSSProperties;
   /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传入更高值。 */
   zIndex?: number;
+  /** 弹窗打开/关闭动画结束后的回调，用于自定义焦点管理 */
+  afterOpenChange?: (open: boolean) => void;
 }
 
 /** 通用弹窗 - 统一标题下边距 + 居中，所有功能弹窗都用这个。 */
 export default function AppModal({
   title, open, onCancel, width = 520, footer, children, styles,
-  className, destroyOnHidden, closeIcon, centered, style, zIndex,
+  className, destroyOnHidden, closeIcon, centered, style, zIndex, afterOpenChange,
 }: AppModalProps) {
   return (
     <LayerModal
       title={title} open={open} onCancel={onCancel}
       width={width} centered footer={footer} styles={styles}
       className={className} destroyOnHidden={destroyOnHidden} closeIcon={closeIcon}
-      style={style} zIndex={zIndex}
+      style={style} zIndex={zIndex} afterOpenChange={afterOpenChange}
     >
       <div className="pt-4">{children}</div>
     </LayerModal>
