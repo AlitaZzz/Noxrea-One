@@ -469,6 +469,12 @@
     "audioSuffix": " (audio)",
     "mutedSuffix": " (muted)"
   },
+  "draft": {
+    "title": "Unsaved offline edits found",
+    "content": "Detected unsaved changes from your last session. Restore the local draft?",
+    "restore": "Restore",
+    "discard": "Discard"
+  },
   "offline": {
     "label": "Offline — pending save",
     "tooltip": "Offline, please check your network connection and try again"

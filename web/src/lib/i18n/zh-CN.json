@@ -468,6 +468,12 @@
     "audioSuffix": " (音频)",
     "mutedSuffix": " (静音)"
   },
+  "draft": {
+    "title": "发现未保存的离线编辑",
+    "content": "检测到上次编辑后未能保存到服务器，是否恢复本地草稿？",
+    "restore": "恢复",
+    "discard": "丢弃"
+  },
   "offline": {
     "label": "网络异常，离线待保存",
     "tooltip": "网络异常，请检查网络连接后重试"
