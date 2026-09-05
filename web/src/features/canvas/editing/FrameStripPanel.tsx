@@ -15,9 +15,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useFrameThumbnails } from "@/features/canvas/hooks/use-frame-thumbnails";
-import { getVideoPlaybackTime, pauseVideo } from "@/features/canvas/shared/video-playback-registry";
+import { getVideoPlaybackTime, pauseVideo, seekVideo } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
+
+/** 播放头所在层左右各留 12px（与 inset-x-3 对齐），按内区换算才能跟手 */
+const PLAYHEAD_INSET = 12;
 
 interface FrameStripPanelProps {
   nodeId: string;
@@ -60,8 +63,9 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     const el = trackRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return null;
-    return clamp01((clientX - rect.left) / rect.width);
+    const inner = rect.width - PLAYHEAD_INSET * 2;
+    if (inner <= 0) return null;
+    return clamp01((clientX - rect.left - PLAYHEAD_INSET) / inner);
   }, []);
 
   const handleTrackDown = useCallback(
@@ -89,6 +93,14 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   const ready = frameCount > 0 && duration > 0;
   const currentTime = ready ? ratio * duration : 0;
 
+  // 拖动播放头时同步 seek 节点播放器，形成 scrubbing 预览；
+  // rAF 节流保证一帧最多 seek 一次，避免高频 seek 拖垮解码
+  useEffect(() => {
+    if (!ready) return;
+    const raf = requestAnimationFrame(() => seekVideo(nodeId, ratio * duration));
+    return () => cancelAnimationFrame(raf);
+  }, [ready, nodeId, ratio, duration]);
+
   const handleCapture = useCallback(() => {
     if (!ready) return;
     // 末帧留 0.05s 余量：贴着 duration 抽帧可能落到视频结尾之外
@@ -101,14 +113,15 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     onClose();
   }, [ready, currentTime, duration, nodeId, onClose]);
 
+  // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
-    <div className="nodrag nopan nowheel pointer-events-auto flex items-center gap-3">
+    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       <div
         ref={trackRef}
         className="relative h-14 w-250 cursor-ew-resize overflow-visible"
         onPointerDown={handleTrackDown}
       >
-        <div className="flex size-full overflow-hidden rounded-xl bg-black/80">
+        <div className="flex size-full overflow-hidden rounded-xl bg-black">
           {ready ? (
             frames.map((src, i) => (
               <button
@@ -123,10 +136,10 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
                     alt=""
                     draggable={false}
                     src={src}
-                    className="size-full select-none bg-black/80 object-contain object-center"
+                    className="size-full select-none bg-black object-contain object-center"
                   />
                 ) : (
-                  <span className="block size-full bg-white/5" />
+                  <span className="block size-full bg-white/10" />
                 )}
               </button>
             ))
@@ -139,7 +152,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
         {/* 抽帧进度：贴轨道上方，避免遮挡缩略图 */}
         {status === "extracting" && frameCount > 0 && (
-          <div className="pointer-events-none absolute -top-5 right-0 z-20 text-xs tabular-nums text-white/60">
+          <div className="pointer-events-none absolute -top-5 right-0 z-20 text-xs tabular-nums text-[var(--canvas-text-dim)]">
             {t("capture.extracting", { done: extracted, total: frameCount })}
           </div>
         )}
@@ -162,11 +175,11 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         )}
       </div>
 
-      <span className="text-sm tabular-nums text-white/70">{formatTime(currentTime)}</span>
+      <span className="text-sm tabular-nums text-[var(--canvas-text)]">{formatTime(currentTime)}</span>
 
       <button
         type="button"
-        className="h-9 w-15 rounded-full bg-white text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:opacity-60"
+        className="h-9 w-15 rounded-full bg-[var(--canvas-text)] text-sm font-medium text-[var(--canvas-bg)] transition-opacity hover:opacity-90 disabled:opacity-60"
         disabled={!ready}
         onClick={handleCapture}
       >
@@ -174,7 +187,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       </button>
       <button
         type="button"
-        className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/60 transition-colors hover:text-white"
+        className="flex size-9 items-center justify-center rounded-full border border-[var(--canvas-border-light)] text-[var(--canvas-text-dim)] transition-colors hover:bg-[var(--canvas-bg-hover)] hover:text-[var(--canvas-text)]"
         aria-label={t("capture.close")}
         onClick={onClose}
       >

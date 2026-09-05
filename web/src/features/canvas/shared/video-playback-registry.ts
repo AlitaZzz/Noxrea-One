@@ -28,3 +28,16 @@ export function pauseVideo(nodeId: string): void {
   const v = registry.get(nodeId);
   if (v && !v.paused) v.pause();
 }
+
+/**
+ * 让节点播放器跳到指定时间，用于拖动播放头时的 scrubbing 预览。
+ * 时间钳制在 [0, duration-0.05]，与面板截取时的取值保持一致。
+ */
+export function seekVideo(nodeId: string, time: number): void {
+  const v = registry.get(nodeId);
+  if (!v || !Number.isFinite(time)) return;
+  // scrubbing 时画面必须静止：拖动途中播放器若被 hover 重新唤起，不能继续走
+  if (!v.paused) v.pause();
+  const max = Number.isFinite(v.duration) ? Math.max(0, v.duration - 0.05) : time;
+  v.currentTime = Math.min(Math.max(0, time), max);
+}
