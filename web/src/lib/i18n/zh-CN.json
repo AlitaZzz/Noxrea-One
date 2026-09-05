@@ -460,7 +460,12 @@
     "currentFrame": "捕获当前帧",
     "firstFrame": "捕获首帧",
     "lastFrame": "捕获末帧",
-    "processing": "正在捕获帧..."
+    "processing": "正在捕获帧...",
+    "confirm": "截取",
+    "close": "关闭帧序列",
+    "loading": "正在读取视频...",
+    "extracting": "正在抽取帧序列 {{done}}/{{total}}",
+    "unavailable": "无法读取视频时长，请改用首帧或末帧"
   },
   "detach": {
     "failed": "音轨分离失败，请稍后重试",

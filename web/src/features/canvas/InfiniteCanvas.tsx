@@ -50,6 +50,7 @@ import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
+import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType,useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
@@ -230,6 +231,8 @@ export default function InfiniteCanvas() {
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
+  // 帧序列面板：由工具栏「捕获当前帧」打开，截取或关闭后清空
+  const [frameStripNodeId, setFrameStripNodeId] = useState<string | null>(null);
   const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -239,6 +242,14 @@ export default function InfiniteCanvas() {
   const [chatOpen, setChatOpen] = useState(false);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
+
+  // 帧序列面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
+  const frameStripNode = useMemo(() => {
+    if (!frameStripNodeId) return null;
+    const n = nodes.find((x) => x.id === frameStripNodeId);
+    if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
+    return n;
+  }, [frameStripNodeId, nodes]);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
   const { animateTo, cancel: cancelTidy } = useTidyAnimation();
@@ -972,6 +983,18 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
+        {/* 帧序列面板 — 跟随选中视频节点，不随画布缩放，轨道尺寸恒定 */}
+        {frameStripNode && (
+          <RfNodeToolbar nodeId={frameStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+            <FrameStripPanel
+              key={frameStripNode.id}
+              nodeId={frameStripNode.id}
+              videoSrc={(frameStripNode.data as { src?: string }).src ?? ""}
+              onClose={() => setFrameStripNodeId(null)}
+            />
+          </RfNodeToolbar>
+        )}
+
         {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
         {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
@@ -982,6 +1005,7 @@ export default function InfiniteCanvas() {
                 nodeId={nid}
                 nodeType={n?.type}
                 onShowInspector={(id) => setInspectedNodeId(id)}
+                onOpenFrameStrip={setFrameStripNodeId}
               />
             )}
           </RfNodeToolbar>
