@@ -26,6 +26,7 @@ import {
 } from "@/features/canvas/api/file-api";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge } from "@/features/canvas/node-defaults";
+import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
 import {
@@ -423,6 +424,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     useEditableTitle(id, data.alt || data.label || t("node.video"), { syncAlt: true });
 
   const hasVideo = src && src.length > 0;
+
+  // 把 video 元素登记进注册表：帧序列面板渲染在画布层，拿不到本组件的 videoRef，
+  // 需要通过它读取「打开面板时的播放位置」。走 store 会把播放进度写进撤销栈，故不用。
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !hasVideo) return;
+    return registerVideoElement(id, v);
+  }, [id, hasVideo]);
 
   return (
     <div className="group relative w-full h-full flex flex-col">

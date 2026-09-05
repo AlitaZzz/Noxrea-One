@@ -58,6 +58,8 @@ interface NodeToolbarProps {
   nodeId: string;
   nodeType?: string;
   onShowInspector: (nodeId: string) => void;
+  /** 打开帧序列面板（由画布层挂在节点下方，故需回抛给 InfiniteCanvas） */
+  onOpenFrameStrip: (nodeId: string) => void;
 }
 
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
@@ -175,7 +177,7 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
   );
 }
 
-function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
+function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
@@ -375,7 +377,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector }: NodeToolbarProps) {
             }
             content={
               <>
-                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: null }); }}>
+                <MenuItem onClick={() => { setCaptureOpen(false); onOpenFrameStrip(nodeId); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
                   </span>
