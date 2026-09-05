@@ -124,12 +124,13 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         <div className="flex size-full overflow-hidden rounded-xl bg-black">
           {ready ? (
             frames.map((src, i) => (
-              <button
+              // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
+              // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
+              // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
+              <div
                 key={i}
-                type="button"
                 className="relative h-full shrink-0 overflow-hidden"
                 style={{ width: frameWidth, marginLeft: i === 0 ? 0 : -1 }}
-                onClick={() => setRatio((i + 0.5) / frameCount)}
               >
                 {src ? (
                   <img
@@ -141,7 +142,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
                 ) : (
                   <span className="block size-full bg-white/10" />
                 )}
-              </button>
+              </div>
             ))
           ) : (
             <div className="flex size-full items-center justify-center px-4 text-xs text-white/60">
