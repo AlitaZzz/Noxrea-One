@@ -10,7 +10,8 @@
  */
 "use client";
 
-import { X } from "lucide-react";
+import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -178,22 +179,22 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
       <span className="text-sm tabular-nums text-[var(--canvas-text)]">{formatTime(currentTime)}</span>
 
-      <button
-        type="button"
-        className="h-9 w-15 rounded-full bg-[var(--canvas-text)] text-sm font-medium text-[var(--canvas-bg)] transition-opacity hover:opacity-90 disabled:opacity-60"
-        disabled={!ready}
-        onClick={handleCapture}
-      >
-        {t("capture.confirm")}
-      </button>
-      <button
-        type="button"
-        className="flex size-9 items-center justify-center rounded-full border border-[var(--canvas-border-light)] text-[var(--canvas-text-dim)] transition-colors hover:bg-[var(--canvas-bg-hover)] hover:text-[var(--canvas-text)]"
-        aria-label={t("capture.close")}
-        onClick={onClose}
-      >
-        <X className="size-4" />
-      </button>
+      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
+      {/* 取消 / 确认：与裁剪、标注编辑条使用同一套图标语义（X 取消、✓ 确认） */}
+      <Tooltip title={t("common.cancel")}>
+        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+      </Tooltip>
+      <Tooltip title={t("capture.confirm")}>
+        <Button
+          type="text"
+          size="middle"
+          style={{ padding: 8, color: ready ? "#1D9E75" : undefined }}
+          icon={<CheckOutlined />}
+          disabled={!ready}
+          onClick={handleCapture}
+        />
+      </Tooltip>
     </div>
   );
 }

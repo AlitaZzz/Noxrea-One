@@ -463,7 +463,6 @@
     "lastFrame": "Capture last frame",
     "processing": "Capturing frame...",
     "confirm": "Capture",
-    "close": "Close frame strip",
     "loading": "Reading video...",
     "extracting": "Extracting frames {{done}}/{{total}}",
     "unavailable": "Video duration unavailable, please use first or last frame"
