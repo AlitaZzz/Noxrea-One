@@ -121,6 +121,7 @@ export default function InfiniteCanvas() {
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
+  const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -199,26 +200,32 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId, setRfViewport]);
 
+  // 编辑态（标注 / 裁剪 / 选帧）激活的节点：生成面板必须让位，
+  // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId;
+
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
     if (!canvasInteraction.showSelectionChrome) return null;
+    if (editingNodeId) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.IMAGE) return null;
     const src = (sel[0].data as ImageNodeData).source;
     if (src === "upload" || src === "derived") return null;
     return sel[0].id;
-  }, [nodes, canvasInteraction.showSelectionChrome]);
+  }, [nodes, canvasInteraction.showSelectionChrome, editingNodeId]);
 
   // Check if a single video node is selected
   const genTargetVideoId = useMemo(() => {
     if (!canvasInteraction.showSelectionChrome) return null;
+    if (editingNodeId) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
     if (sel[0].type !== NODE_TYPE.VIDEO) return null;
     if ((sel[0].data as VideoNodeData).source === "upload") return null;
     return sel[0].id;
-  }, [nodes, canvasInteraction.showSelectionChrome]);
+  }, [nodes, canvasInteraction.showSelectionChrome, editingNodeId]);
 
   // Check if a single TextNode is selected
   const textTarget = useMemo(() => {
@@ -231,8 +238,6 @@ export default function InfiniteCanvas() {
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
-  // 帧序列面板：由工具栏「捕获当前帧」打开，截取或关闭后清空
-  const [frameStripNodeId, setFrameStripNodeId] = useState<string | null>(null);
   const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -245,11 +250,11 @@ export default function InfiniteCanvas() {
 
   // 帧序列面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
   const frameStripNode = useMemo(() => {
-    if (!frameStripNodeId) return null;
-    const n = nodes.find((x) => x.id === frameStripNodeId);
+    if (!frameCaptureNodeId) return null;
+    const n = nodes.find((x) => x.id === frameCaptureNodeId);
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
     return n;
-  }, [frameStripNodeId, nodes]);
+  }, [frameCaptureNodeId, nodes]);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
   const { animateTo, cancel: cancelTidy } = useTidyAnimation();
@@ -629,6 +634,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setAnnotatingNodeId(null);
     useCanvasStore.getState().setCroppingNodeId(null);
     useCanvasStore.getState().setEditingTextNodeId(null);
+    useCanvasStore.getState().setFrameCaptureNodeId(null);
     // Deselect all nodes and edges
     setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
     setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
@@ -653,6 +659,10 @@ export default function InfiniteCanvas() {
       const currentEditing = useCanvasStore.getState().editingTextNodeId;
       if (currentEditing && currentEditing !== nodeId) {
         useCanvasStore.getState().setEditingTextNodeId(null);
+      }
+      const currentFrameCapture = useCanvasStore.getState().frameCaptureNodeId;
+      if (currentFrameCapture && currentFrameCapture !== nodeId) {
+        useCanvasStore.getState().setFrameCaptureNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -990,7 +1000,7 @@ export default function InfiniteCanvas() {
               key={frameStripNode.id}
               nodeId={frameStripNode.id}
               videoSrc={(frameStripNode.data as { src?: string }).src ?? ""}
-              onClose={() => setFrameStripNodeId(null)}
+              onClose={() => useCanvasStore.getState().setFrameCaptureNodeId(null)}
             />
           </RfNodeToolbar>
         )}
@@ -1000,12 +1010,12 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
                 onShowInspector={(id) => setInspectedNodeId(id)}
-                onOpenFrameStrip={setFrameStripNodeId}
+                onOpenFrameStrip={(id) => useCanvasStore.getState().setFrameCaptureNodeId(id)}
               />
             )}
           </RfNodeToolbar>

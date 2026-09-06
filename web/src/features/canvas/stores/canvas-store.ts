@@ -132,6 +132,9 @@ interface CanvasState {
   // Text node rich-text editing mode (hides node toolbar while editing)
   editingTextNodeId: string | null;
   setEditingTextNodeId: (id: string | null) => void;
+  // 帧序列选帧模式（hides node toolbar for the capturing node，并让生成面板让位）
+  frameCaptureNodeId: string | null;
+  setFrameCaptureNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -253,6 +256,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setCroppingNodeId: (id) => set({ croppingNodeId: id }),
   editingTextNodeId: null,
   setEditingTextNodeId: (id) => set({ editingTextNodeId: id }),
+  frameCaptureNodeId: null,
+  setFrameCaptureNodeId: (id) => set({ frameCaptureNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
