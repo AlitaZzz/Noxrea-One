@@ -457,9 +457,9 @@
     "audio": "拖放音频或点击上传"
   },
   "capture": {
-    "currentFrame": "捕获当前帧",
-    "firstFrame": "捕获首帧",
-    "lastFrame": "捕获末帧",
+    "currentFrame": "选择帧截取",
+    "firstFrame": "截取首帧",
+    "lastFrame": "截取末帧",
     "processing": "正在捕获帧...",
     "confirm": "截取",
     "loading": "正在读取视频...",
@@ -573,6 +573,9 @@
       "video_not_found": "源视频不存在",
       "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "capture_failed": "抽帧失败，请稍后重试"
+    },
+    "video_proxy": {
+      "generation_failed": "预览视频生成失败"
     },
     "detach_audio": {
       "video_not_found": "源视频不存在",
