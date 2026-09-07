@@ -88,7 +88,7 @@ async function seekTo(video: HTMLVideoElement, time: number): Promise<void> {
  * 按给定 src 抽取整条轨道的缩略图。
  * 组件卸载或 src 变化时会中断未完成的抽帧并释放 video 资源。
  */
-export function useFrameThumbnails(src: string): FrameStripState {
+export function useFrameThumbnails(src: string | null): FrameStripState {
   const [state, setState] = useState<FrameStripState>(INITIAL);
 
   useEffect(() => {

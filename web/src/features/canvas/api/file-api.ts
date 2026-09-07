@@ -20,6 +20,17 @@ export interface DetachedMedia {
   size: number;
 }
 
+/**
+ * 获取（必要时生成）全 I 帧代理视频，用于帧序列抽帧加速。
+ * 代理让每次 seek 只解一帧，抽满一整条轨道快数倍；失败时调用方回退原视频即可。
+ */
+export async function fetchVideoProxy(videoKey: string): Promise<Response> {
+  return apiRaw("/api/files/video-proxy", {
+    method: "POST",
+    body: JSON.stringify({ video_key: videoKey }),
+  });
+}
+
 /** 音轨分离结果：独立音轨 + 静音视频 */
 export interface DetachAudioResult {
   /** 音轨产物。format 为 copy 时是原编码无损拷贝，wav 为不兼容时的回退重编码 */

@@ -1,7 +1,7 @@
 /**
  * 视频节点（video-node）渲染组件。
  * 内置轻量播放器（播放/暂停、静音、进度条拖拽），支持视频上传与拖入、
- * 生成中状态展示，以及「截取当前帧生成图片节点」操作。
+ * 生成中状态展示，以及「选帧截取生成图片节点」操作。
  */
 "use client";
 
@@ -115,20 +115,29 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /** 选帧面板打开期间：hover 播放会顶掉用户选中的那一帧，必须让位 */
+  const capturingFrame = useCallback(
+    () => useCanvasStore.getState().frameCaptureNodeId === id,
+    [id],
+  );
+
   const handleMouseEnter = useCallback(() => {
+    if (capturingFrame()) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     const v = videoRef.current;
     if (v && v.paused) {
       v.play().then(() => setPlaying(true)).catch(() => {});
     }
-  }, []);
+  }, [capturingFrame]);
   const handleMouseLeave = useCallback(() => {
     hoverTimerRef.current = setTimeout(() => {
+      // 延迟期间可能已经打开选帧面板：此时不能把画面拉回 0
+      if (capturingFrame()) { hoverTimerRef.current = null; return; }
       const v = videoRef.current;
       if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
       hoverTimerRef.current = null;
     }, 150);
-  }, []);
+  }, [capturingFrame]);
 
   /**
    * 回填音轨结论到节点数据。
@@ -163,6 +172,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const v = videoRef.current;
     if (!v) return;
     setProgress(v.currentTime);
+    // 选帧期间播放器用的是无音轨的代理视频，此时探测会把原视频误判成无音轨，
+    // 进而错误禁用「分离音频」入口，必须跳过
+    if (capturingFrame()) return;
 
     const detected = detectAudioTrack(v, true);
     if (detected === null) return;
@@ -170,12 +182,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     if (detected || v.currentTime > AUDIO_DECISION_MIN_TIME) {
       commitHasAudio(detected);
     }
-  }, [commitHasAudio]);
+  }, [commitHasAudio, capturingFrame]);
   const onLoadedMeta = useCallback(() => {
     const v = videoRef.current;
     if (v) setDuration(v.duration || 0);
+    // 同上：换源后的 metadata 属于代理视频，不能据此判定原视频的音轨
+    if (capturingFrame()) return;
     void resolveAudioTrack();
-  }, [resolveAudioTrack]);
+  }, [resolveAudioTrack, capturingFrame]);
 
   const seekTo = useCallback((clientX: number) => {
     const v = videoRef.current;
@@ -521,6 +535,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               preload="metadata"
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoadedMeta}
+              // 播放状态以 video 的真实事件为准：拖动轨道、换源等都会直接
+              // 调用 pause()，只改 DOM 的话按钮图标会停在过期的状态上
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
               onContextMenu={(e) => e.preventDefault()}
             />

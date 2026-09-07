@@ -458,7 +458,7 @@
     "audio": "Drop audio or click Upload"
   },
   "capture": {
-    "currentFrame": "Capture current frame",
+    "currentFrame": "Select frame",
     "firstFrame": "Capture first frame",
     "lastFrame": "Capture last frame",
     "processing": "Capturing frame...",
@@ -574,6 +574,9 @@
       "video_not_found": "Source video not found",
       "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "capture_failed": "Frame capture failed, please try again later"
+    },
+    "video_proxy": {
+      "generation_failed": "Preview video generation failed"
     },
     "detach_audio": {
       "video_not_found": "Source video not found",
