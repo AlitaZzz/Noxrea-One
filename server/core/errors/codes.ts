@@ -157,6 +157,10 @@ export const ERROR_CODES = [
   /** 抽帧处理失败 */
   "capture_frame.capture_failed",
 
+  // ── 全 I 帧代理视频 ──
+  /** 代理视频生成失败（转码异常或 ffmpeg 缺失），调用方回退原视频 */
+  "video_proxy.generation_failed",
+
   // ── 音视频分离 ──
   /** 源视频不存在 */
   "detach_audio.video_not_found",

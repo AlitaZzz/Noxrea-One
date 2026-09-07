@@ -314,6 +314,166 @@ export async function captureVideoFrame(
   });
 }
 
+/** 代理转码超时：整段重编码比抽一帧慢得多，给足时间但仍要兜底 */
+const FFMPEG_PROXY_TIMEOUT_MS = 60_000;
+
+/**
+ * 生成全 I 帧代理视频（spawn ffmpeg）。
+ *
+ * 原视频多为长 GOP（x264 默认 250 帧一个关键帧），seek 到任意时间点都要从
+ * GOP 起点解码过来，单次几十到几百毫秒；全 I 帧后每帧独立可解，seek 接近即时。
+ * 这是剪辑软件 proxy 工作流的轻量版——只用于预览与抽帧，成片仍走原视频。
+ *
+ * 缩放只给宽度、高度用 -2 保持比例并取整到偶数。这里刻意不写 min(width,iw)：
+ * filtergraph 里逗号是 filter 之间的分隔符，写成 min(720,iw) 会被拆成两个
+ * filter 而报错，转义写法又存在跨平台解析差异；分辨率低于 720 的源视频会被
+ * 轻微放大，对预览没有影响。
+ *
+ * 默认 720 宽是跟着节点默认宽度 600px 定的：低于它选帧时会明显发虚。
+ */
+export async function createAllIntraProxy(
+  videoPath: string,
+  outputPath: string,
+  width = 720,
+): Promise<void> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  return new Promise((resolve, reject) => {
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
+    const ffmpeg = spawn(ffmpegBin, [
+      "-i", videoPath,
+      // 保留音轨：选帧时常要点开播放「边听边找」（口型、台词、卡点）。
+      // 统一重编码为 aac——源编码未必能直接装进 mp4 容器，copy 有失败风险
+      "-c:a", "aac",
+      "-b:a", "96k",
+      "-vf", `scale=${width}:-2`,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "30",
+      "-g", "1",                          // 每帧都是关键帧
+      "-keyint_min", "1",
+      "-movflags", "+faststart",
+      "-y",
+      outputPath,
+    ]);
+
+    let stderr = "";
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      ffmpeg.kill("SIGKILL");
+      logEvent("media", {
+        stage: "video_proxy_timeout",
+        video: path.basename(videoPath),
+        timeoutMs: FFMPEG_PROXY_TIMEOUT_MS,
+      });
+      reject(new Error(`ffmpeg timed out after ${FFMPEG_PROXY_TIMEOUT_MS}ms`));
+    }, FFMPEG_PROXY_TIMEOUT_MS);
+
+    /** 统一收口：只结算一次，并清理定时器 */
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        logEvent("media", {
+          stage: "video_proxy",
+          video: path.basename(videoPath),
+        });
+        settle(resolve);
+      } else {
+        logEvent("media", {
+          stage: "video_proxy_failed",
+          video: path.basename(videoPath),
+          exitCode: code,
+          stderr: stderr.slice(-200),
+        });
+        settle(() => reject(new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`)));
+      }
+    });
+
+    ffmpeg.on("error", (err) => {
+      logEvent("media", {
+        stage: "video_proxy_spawn_failed",
+        video: path.basename(videoPath),
+        error: err.message,
+        ffmpegBin,
+      });
+      settle(() => reject(err));
+    });
+  });
+}
+
+/** 探测帧率的超时（ms）：只读取容器信息，正常应在百毫秒内返回 */
+const FFMPEG_PROBE_TIMEOUT_MS = 10_000;
+
+export interface VideoMeta {
+  /** 帧率，用于面板的一帧步进 */
+  fps: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * 探测视频帧率与分辨率（spawn ffmpeg 解析流信息）。
+ *
+ * 帧率供帧序列面板「一帧步进」使用——知道真实帧率才能按 1/fps 精确前后移动；
+ * 分辨率用于决定代理尺寸：源视频比代理目标小的时候不该被放大。
+ * 拿不到就返回 null，由调用方兜底。
+ */
+export function probeVideoMeta(videoPath: string): Promise<VideoMeta | null> {
+  return new Promise((resolve) => {
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
+    // 只给 -i 不给输出文件：ffmpeg 会带错误码退出，但流信息照常打到 stderr
+    const ffmpeg = spawn(ffmpegBin, ["-i", videoPath]);
+    let stderr = "";
+    let settled = false;
+
+    const parse = (): VideoMeta | null => {
+      const line = stderr
+        .split("\n")
+        .find((l) => /Stream #\d+:\d+/.test(l) && /Video:/.test(l));
+      if (!line) return null;
+      const size = line.match(/(\d{2,5})x(\d{2,5})/);
+      const fps = line.match(/,\s*([\d.]+)\s+fps,/);
+      const parsedFps = fps ? Number(fps[1]) : NaN;
+      return {
+        fps: Number.isFinite(parsedFps) && parsedFps > 0 ? parsedFps : null,
+        width: size ? Number(size[1]) : null,
+        height: size ? Number(size[2]) : null,
+      };
+    };
+
+    const settle = (value: VideoMeta | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+
+    const timer = setTimeout(() => {
+      ffmpeg.kill("SIGKILL");
+      settle(parse());
+    }, FFMPEG_PROBE_TIMEOUT_MS);
+
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    ffmpeg.on("close", () => settle(parse()));
+    ffmpeg.on("error", () => settle(null));
+  });
+}
+
 /** 音视频分离超时：即便 copy 也要完整读一遍长视频，抽帧的 30s 兜不住 */
 const FFMPEG_AUDIO_TIMEOUT_MS = 120_000;
 
