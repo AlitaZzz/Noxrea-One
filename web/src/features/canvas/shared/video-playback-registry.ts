@@ -8,9 +8,23 @@
  */
 const registry = new Map<string, HTMLVideoElement>();
 
+/**
+ * 未注册告警去重：seek 是逐帧调用的高频操作，未注册时不能每帧刷屏。
+ * 这类静默失败曾导致「拖动轨道画面不同步、刷新页面才恢复」长时间无法定位，必须留痕。
+ */
+const unregisteredWarned = new Set<string>();
+function warnUnregistered(nodeId: string, op: string): void {
+  if (unregisteredWarned.has(nodeId)) return;
+  unregisteredWarned.add(nodeId);
+  console.warn(
+    `[video-registry] ${op}: 节点 ${nodeId} 未注册 video 元素（多见于条件渲染分支切换导致漏注册）`,
+  );
+}
+
 /** 注册节点内 video 元素，返回注销函数（直接交给 useEffect 清理） */
 export function registerVideoElement(nodeId: string, el: HTMLVideoElement): () => void {
   registry.set(nodeId, el);
+  unregisteredWarned.delete(nodeId);
   return () => {
     // 仅在仍是同一元素时注销，避免新元素注册后被旧元素的清理误删
     if (registry.get(nodeId) === el) registry.delete(nodeId);
@@ -63,7 +77,11 @@ function captureCurrentFrame(v: HTMLVideoElement): string | null {
  */
 export function swapVideoSource(nodeId: string, proxySrc: string): () => void {
   const v = registry.get(nodeId);
-  if (!v) return () => {};
+  if (!v) {
+    // 空转会让播放器继续用原视频（长 GOP），拖轨道时画面与轨道不同步
+    warnUnregistered(nodeId, "swapVideoSource");
+    return () => {};
+  }
 
   const prevSrc = v.getAttribute("src") ?? "";
   let restored = false;
@@ -104,7 +122,11 @@ export function swapVideoSource(nodeId: string, proxySrc: string): () => void {
  */
 export function seekVideo(nodeId: string, time: number): void {
   const v = registry.get(nodeId);
-  if (!v || !Number.isFinite(time)) return;
+  if (!v) {
+    warnUnregistered(nodeId, "seekVideo");
+    return;
+  }
+  if (!Number.isFinite(time)) return;
   // scrubbing 时画面必须静止：拖动途中播放器若被 hover 重新唤起，不能继续走
   if (!v.paused) v.pause();
   const max = Number.isFinite(v.duration) ? Math.max(0, v.duration - 0.05) : time;

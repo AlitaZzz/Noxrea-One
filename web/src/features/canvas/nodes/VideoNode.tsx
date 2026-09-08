@@ -121,6 +121,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     [id],
   );
 
+
+
   const handleMouseEnter = useCallback(() => {
     if (capturingFrame()) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
@@ -172,8 +174,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const v = videoRef.current;
     if (!v) return;
     setProgress(v.currentTime);
-    // 选帧期间播放器用的是无音轨的代理视频，此时探测会把原视频误判成无音轨，
-    // 进而错误禁用「分离音频」入口，必须跳过
+    // 选帧期间播放器被临时切到代理视频（转码产物，音轨已重编码为 aac），
+    // 探测结论只代表代理、且换源期间元数据不稳定，不能据此给原视频下结论，
+    // 否则可能错误启用 / 禁用「分离音频」入口，必须跳过
     if (capturingFrame()) return;
 
     const detected = detectAudioTrack(v, true);
@@ -186,7 +189,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const onLoadedMeta = useCallback(() => {
     const v = videoRef.current;
     if (v) setDuration(v.duration || 0);
-    // 同上：换源后的 metadata 属于代理视频，不能据此判定原视频的音轨
+    // 同上：换源后的 metadata 来自代理（转码产物），不能据此判定原视频的音轨
     if (capturingFrame()) return;
     void resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame]);
@@ -441,11 +444,21 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   // 把 video 元素登记进注册表：帧序列面板渲染在画布层，拿不到本组件的 videoRef，
   // 需要通过它读取「打开面板时的播放位置」。走 store 会把播放进度写进撤销栈，故不用。
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !hasVideo) return;
-    return registerVideoElement(id, v);
-  }, [id, hasVideo]);
+  //
+  // 必须用 callback ref，不能用 useEffect + [id, hasVideo]：
+  // <video> 挂在条件渲染链的最后一环（上传中 / 生成中时压根不渲染它），而 hasVideo
+  // 只是「src 非空」的派生值。生成完成的节点若 hasVideo 变 true 那一刻元素尚未挂载，
+  // effect 会因 videoRef.current 为 null 直接 return，待元素真正挂载时 hasVideo 没变、
+  // effect 不再运行 → 永久漏注册 → swapVideoSource 静默空转，播放器一直用原视频
+  // （长 GOP），表现为拖动轨道时画面与轨道不同步，刷新页面才恢复。
+  // callback ref 在元素挂载 / 卸载的瞬间同步注册表，不依赖任何派生值。
+  const videoCleanupRef = useRef<(() => void) | null>(null);
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoCleanupRef.current?.();
+    videoCleanupRef.current = null;
+    videoRef.current = el;
+    if (el) videoCleanupRef.current = registerVideoElement(id, el);
+  }, [id]);
 
   return (
     <div className="group relative w-full h-full flex flex-col">
@@ -526,7 +539,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         ) : hasVideo ? (
           <div className="w-full h-full relative">
             <video
-              ref={videoRef}
+              ref={setVideoRef}
               src={src}
               className="absolute inset-0 w-full h-full rounded-lg"
               loop
