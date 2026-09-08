@@ -433,7 +433,7 @@
       "reset": "重置",
       "scroll": "缩放",
       "pan": "平移画布",
-      "temppan": "临时平移",
+      "selectRegion": "框选节点",
       "copy": "复制",
       "paste": "粘贴",
       "undo": "撤销",
@@ -451,6 +451,7 @@
       "scroll": "滚轮",
       "drag": "拖拽",
       "spaceDrag": "空格+拖拽",
+      "middleDrag": "中键拖拽",
       "shiftClick": "Shift+点击"
     }
   },

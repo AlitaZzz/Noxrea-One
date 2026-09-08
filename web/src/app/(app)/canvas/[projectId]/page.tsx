@@ -133,7 +133,8 @@ export default function CanvasPage({
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.zoom")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
                 {row("Scroll", t("shortcuts.desc.scroll"))}
-                {row("Drag", t("shortcuts.desc.pan"))}
+                {row(t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan"))}
+                {row(t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan"))}
                 {row("Ctrl+=", t("shortcuts.desc.zoomin"))}
                 {row("Ctrl+-", t("shortcuts.desc.zoomout"))}
                 {row("Ctrl+0", t("shortcuts.desc.reset"))}
@@ -141,6 +142,7 @@ export default function CanvasPage({
               </div>
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.edit")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
+                {row(t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion"))}
                 {row("Ctrl+A", t("shortcuts.desc.selectall"))}
                 {row(t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect"))}
                 {row("Ctrl+C", t("shortcuts.desc.copy"))}
@@ -158,7 +160,6 @@ export default function CanvasPage({
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.other")}</div>
               <div className="space-y-1 text-xs" style={{ color: "var(--canvas-text-muted)" }}>
                 <div>? — {t("shortcuts.desc.help")}</div>
-                <div>{t("shortcuts.desc.temppan")}</div>
                 <div>{t("drop.upload")}</div>
               </div>
             </div>

@@ -434,7 +434,7 @@
       "reset": "Reset",
       "scroll": "Zoom",
       "pan": "Pan Canvas",
-      "temppan": "Temp Pan",
+      "selectRegion": "Marquee Select",
       "copy": "Copy",
       "paste": "Paste",
       "undo": "Undo",
@@ -452,6 +452,7 @@
       "scroll": "Scroll",
       "drag": "Drag",
       "spaceDrag": "Space+Drag",
+      "middleDrag": "Middle Drag",
       "shiftClick": "Shift+Click"
     }
   },
