@@ -107,8 +107,14 @@ export function useFileDrop(
 
   const handleDragOver = useCallback((e: DragEvent) => {
     if (shouldIgnore?.(e.target as HTMLElement)) return;
-    // 参考区缩略图排序拖拽（或任何非文件拖拽）不触发上传遮罩与放置行为
-    if (isRefDrag(e.dataTransfer) || !e.dataTransfer.types.includes("Files")) return;
+    // 非文件拖拽（画布内元素 / 选中文本的原生拖拽）：不弹上传遮罩、也不建节点，
+    // 但仍必须 preventDefault —— 否则浏览器判定「此处不可放置」，光标变成禁止图标。
+    // dropEffect 置为 none，明确表示不接受放置（handleDrop 对这些类型同样放行）。
+    if (isRefDrag(e.dataTransfer) || !e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "none";
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     startWatcher();
@@ -132,5 +138,17 @@ export function useFileDrop(
     [screenToFlowPosition, shouldIgnore, stopWatcher],
   );
 
-  return { handleDragOver, handleDrop, isFileDragging };
+  /**
+   * 阻止画布内元素启动浏览器原生拖拽（图片 / 文本 / 链接）。
+   * 原生拖拽会抢走指针，使 React Flow 的框选无法启动；早期「左键拖空白」走 d3-zoom、
+   * 由它的 dragDisable 顺带兜底，改为「左键框选」后 d3-zoom 不再介入、这层保护消失，
+   * 因此需要自己补回来。项目自定义的参考图排序拖拽（REF_DRAG_TYPES）要放行。
+   */
+  const handleDragStart = useCallback((e: DragEvent) => {
+    if (shouldIgnore?.(e.target as HTMLElement)) return;
+    if (isRefDrag(e.dataTransfer)) return;
+    e.preventDefault();
+  }, [shouldIgnore]);
+
+  return { handleDragOver, handleDragStart, handleDrop, isFileDragging };
 }
