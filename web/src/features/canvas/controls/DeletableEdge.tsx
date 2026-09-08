@@ -6,8 +6,8 @@
 
 import { BaseEdge, type EdgeProps,getBezierPath } from "@xyflow/react";
 
-import { useHighlightedEdges } from "@/providers/edge-highlight-context";
 import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
+import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
 
 import { DOT_COLOR, FlowLines } from "./EdgeFlow";
 

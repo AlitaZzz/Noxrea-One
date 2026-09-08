@@ -2,6 +2,9 @@
 // 新版 GLTFLoader 对 `mixamorig:Head` 的处理不确定：可能保留冒号，也可能被清洗成
 // `mixamorigHead`。统一用 norm() 归一化后再查表，jointConfig 里写带冒号的骨名都能命中。
 
+// THREE 仅用于类型，避免被 tree-shake 误删
+import * as THREE from "three";
+
 /** 归一化：去掉所有非字母数字字符并转小写。mixamorig:Head / mixamorigHead -> mixamorighead */
 export function norm(s: string): string {
   return (s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -30,6 +33,3 @@ export function buildBoneMap(model: THREE.Object3D): Map<string, THREE.Bone> {
 export function findBone(boneMap: Map<string, THREE.Bone>, boneName: string): THREE.Bone | null {
   return boneMap.get(norm(boneName)) || null;
 }
-
-// THREE 仅用于类型，避免被 tree-shake 误删
-import * as THREE from "three";

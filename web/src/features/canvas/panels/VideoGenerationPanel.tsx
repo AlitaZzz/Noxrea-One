@@ -19,6 +19,7 @@ import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
 import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
+import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
@@ -26,11 +27,11 @@ import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/can
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import type { HistorySnapshot } from "@/features/project/types";
 import { apiRaw } from "@/lib/api/client";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
-import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
@@ -49,9 +50,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const reveal = useRevealCanvasNode();
   const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
-  const allModels = providers.flatMap((c) =>
+  const allModels = useMemo(() => providers.flatMap((c) =>
     c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
-  ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
+  ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
   // Read persisted settings from node data
   const saved = useMemo(() => {
@@ -71,10 +72,16 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       refMode: s.refMode || "full",
       n: s.n || (d.n as number) || 1,
     };
+  // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
+  // 「providers 为空」时算出的结果（modelKey 为空）。
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeId]);
+  }, [nodeId, allModels]);
   const [prompt, setPrompt] = useState(saved.prompt);
-  const [modelKey, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
+  // draft 是用户显式选择的模型；模型列表异步到达前它可能为空，
+  // 因此用派生值兜底（saved.modelKey 已含「持久化值 → 首个可用模型」回退），
+  // 而不是在 effect 里 setState 去补，避免级联渲染。
+  const [modelKeyDraft, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
+  const modelKey = modelKeyDraft || saved.modelKey;
   const [resolution, setResolution] = useState(saved.resolution);
   const [ratio, setRatio] = useState(saved.ratio);
   const [seconds, setSeconds] = useState(saved.seconds);
@@ -115,16 +122,21 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 模型切换 / fields 异步到达时：重置不在当前模型 options 中的参数
   // （modelParamsCache 晚于组件挂载到达时，初始值可能来自 _default 兜底或硬编码回退，
   //   如 "1K" 不在 agnes-video 的 ["720P","960P","2K"] 中，需回退到字段默认值）
-  useEffect(() => {
-    if (!Array.isArray(modelParams?.fields)) return;
-    for (const f of modelParams.fields) {
+  //
+  // 用「渲染期调整 state」替代 effect：effect 内 setState 会触发级联渲染。
+  // correctedFor 守卫保证同一份 fields 只纠偏一次，行为与原 effect([modelParams]) 一致，
+  // 也避免默认值本身不合法时陷入死循环。
+  const [correctedFor, setCorrectedFor] = useState<unknown>(null);
+  const currentFields = Array.isArray(modelParams?.fields) ? modelParams.fields : null;
+  if (currentFields && currentFields !== correctedFor) {
+    setCorrectedFor(currentFields);
+    for (const f of currentFields) {
       const cur = fieldValues[f.name] as string | number | undefined;
       if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
         setField(f.name, f.default);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelParams]);
+  }
 
   const selectModel = (value: string) => {
     const entry = allModels.find((model) => model.value === value);
@@ -163,12 +175,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return ["text"]; // 无图片/视频/音频参考（含只有文本上游）→ 只能文生视频
   }, [refVideoOrder, audioOrder, refOrder]);
 
-  // 当前模式不在可用范围时按默认回退：能全引用用全能参考，否则只能文生视频
-  useEffect(() => {
-    if (!allowedRefModes.includes(refMode)) {
-      setRefMode(allowedRefModes.includes("full") ? "full" : "text");
-    }
-  }, [allowedRefModes, refMode]);
+  // 当前模式不在可用范围时按默认回退：能全引用用全能参考，否则只能文生视频。
+  // 同上，用渲染期调整 state 替代 effect 内 setState。
+  // 回退值必属 allowedRefModes（含 full 取 full，否则 text 分支只在 allowedRefModes=["text"] 时命中），
+  // 因此条件会自行收敛，不会死循环。
+  if (!allowedRefModes.includes(refMode)) {
+    setRefMode(allowedRefModes.includes("full") ? "full" : "text");
+  }
 
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
@@ -233,6 +246,20 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId);
 
+  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
+  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
+
+  /**
+   * 回滚 handleGenerate 压入的预生成快照。
+   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，说明它已不是栈顶，
+   * 此时放弃弹出，避免误删无关快照导致撤销行为错乱。
+   */
+  const dropPendingHistory = useCallback(() => {
+    const pushed = pushedSnapshotRef.current;
+    pushedSnapshotRef.current = null;
+    if (pushed) useHistoryStore.getState().popIfTop(pushed);
+  }, []);
+
   const handleGenerate = async () => {
     if (!prompt.trim() || !modelKey) return;
     const entry = allModels.find((m) => m.value === modelKey);
@@ -241,7 +268,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     if (!provider) return;
 
     setError("");
+    // 记录被 forceHistory 压入的快照引用，失败 / 取消时按引用精确回滚（见 dropPendingHistory）
+    const depthBefore = useHistoryStore.getState().undoStack.length;
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
+    const stack = useHistoryStore.getState().undoStack;
+    pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
     markDirtyImmediate();
     setElapsed(0);
     const isTextToVideo = refMode === "text";
@@ -257,7 +288,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     } else {
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+      dropPendingHistory();
       setError(errMsg);
     }
   };
@@ -272,7 +303,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       taskBinding: undefined,
     }, undefined, { skipHistory: true });
     markDirtyImmediate();
-    useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+    dropPendingHistory();
     setError("");
   };
 

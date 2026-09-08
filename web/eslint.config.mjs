@@ -39,7 +39,7 @@ const eslintConfig = defineConfig([
           "src/**/*.test.ts": "KEBAB_CASE",
           "src/**/*.ts": "KEBAB_CASE",
           "src/app/**/*.tsx": "@(page|layout|loading|error|not-found|template|route|global-error|index)",
-          "src/!app/**/*.tsx": "PASCAL_CASE",
+          "src/!(app)/**/*.tsx": "PASCAL_CASE",
         },
         { ignoreMiddleExtensions: true },
       ],

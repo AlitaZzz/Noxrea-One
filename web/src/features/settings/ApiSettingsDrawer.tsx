@@ -26,9 +26,9 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { ModelIcon } from "@/components/ui/ModelIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo } from "@/lib/types/models";
 
@@ -216,7 +216,6 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   const handleFetch = async () => {
     if (!providerId) return;
-    console.log("[UI] handleFetch called with providerId:", providerId);
     setFetching(true);
     const result = await fetchModels(providerId);
     if (result.success) {

@@ -6,8 +6,8 @@
 import * as THREE from "three";
 import { type GLTF,GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+import { buildBoneMap } from "../util/bone";
 import { identifyBones } from "../util/bone-identify";
-import { buildBoneMap } from "../util/bone-util";
 import { worldBox } from "../util/measure";
 import type { AxisOverride,RigType } from "../util/rig-axis-table";
 import { Entity } from "./entity";

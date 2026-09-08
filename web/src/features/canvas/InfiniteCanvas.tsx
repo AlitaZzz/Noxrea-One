@@ -52,7 +52,7 @@ import PendingConnectionPreview from "@/features/canvas/controls/PendingConnecti
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
-import { type AddNodeType,useAddNode } from "@/features/canvas/hooks/use-add-node";
+import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
@@ -83,7 +83,7 @@ import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { canConnect, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
-import { EdgeHighlightContext } from "@/providers/edge-highlight-context";
+import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
 // nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
 // 组件内的 useMemo 在热更新等「重挂载」场景下仍会重新求值，产生新对象。
@@ -635,9 +635,16 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setCroppingNodeId(null);
     useCanvasStore.getState().setEditingTextNodeId(null);
     useCanvasStore.getState().setFrameCaptureNodeId(null);
-    // Deselect all nodes and edges
-    setNodes(useCanvasStore.getState().nodes.map((n) => ({ ...n, selected: false })));
-    setEdges(useCanvasStore.getState().edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
+    // Deselect all nodes and edges。
+    // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
+    // 触发下游 useMemo（如 highlightedEdgeIds）与 React Flow 的无谓重算。
+    const s = useCanvasStore.getState();
+    if (s.nodes.some((n) => n.selected)) {
+      setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
+    }
+    if (s.edges.some((e) => e.selected)) {
+      setEdges(s.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
+    }
   }, [canvasInteraction, setNodes, setEdges]);
 
   // Explicitly handle node selection — React Flow's internal click detection
@@ -705,7 +712,7 @@ export default function InfiniteCanvas() {
     const s = useCanvasStore.getState();
     s.resetViewport();
     fitView({ duration: 300 });
-  }, []);
+  }, [fitView]);
 
   /**
    * 整理画布：把所有节点重排为整齐网格，分组连同成员作为整体块平移。
@@ -1010,7 +1017,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n.data as ImageNodeData)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}

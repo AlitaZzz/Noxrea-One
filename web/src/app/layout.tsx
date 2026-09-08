@@ -7,7 +7,7 @@ import "@/styles/globals.css";
 
 import type { Metadata } from "next";
 
-import { AppProviders } from "@/providers/app-providers";
+import { AppProviders } from "@/providers/AppProviders";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
 

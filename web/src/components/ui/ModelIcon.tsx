@@ -1,6 +1,9 @@
+/**
+ * 模型品牌图标。
+ * 按模型名（支持 "provider/model" 整串）匹配品牌图标，未命中时回退到通用机器人图标。
+ */
 import { RobotOutlined } from "@ant-design/icons";
-import type { ComponentType } from "react";
-import type { CSSProperties } from "react";
+import type { ComponentType, CSSProperties } from "react";
 
 import { ClaudeIcon } from "@/components/ui/icons/models/ClaudeIcon";
 import { DeepSeekIcon } from "@/components/ui/icons/models/DeepSeekIcon";

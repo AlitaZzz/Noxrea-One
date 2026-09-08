@@ -7,7 +7,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 
-import { AlignmentGuidesOverlay } from "@/components/ui/icons/canvas/AlignmentGuidesOverlay";
+import { AlignmentGuidesOverlay } from "@/components/ui/AlignmentGuidesOverlay";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 
 interface Props {
