@@ -35,7 +35,8 @@ function GeneratingOverlay({
 
   useEffect(() => {
     if (!startedAt) return;
-    setNow(Date.now());
+    // 只在定时器回调里刷新：在 effect 体内同步 setState 会触发级联渲染。
+    // startedAt 变化后最多 1s（下一个 tick）即可刷新，计时精度本身也是秒级。
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [startedAt]);

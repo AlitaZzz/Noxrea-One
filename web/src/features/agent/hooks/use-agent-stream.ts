@@ -304,11 +304,8 @@ export function useAgentStream(modelId: string, projectId?: string) {
 
           result = await runStream(res2, placeholderId);
 
-          // 如果有多个 tool 结果，逐个回传（非首结果不再触发新流，仅落库）
-          for (let i = 1; i < results.length; i++) {
-            // 后端目前只支持单 tool 续轮，多 tool 结果仅展示在 UI
-            // 后续可扩展为并发续轮
-          }
+          // 后端目前只支持单 tool 续轮：results[1..] 仅已在 UI 上展示，不额外回传。
+          // 后续若支持并发续轮，在此处逐个 submitToolResult 即可。
         }
       } catch (err: unknown) {
         const isAbort = err instanceof Error && err.name === "AbortError";

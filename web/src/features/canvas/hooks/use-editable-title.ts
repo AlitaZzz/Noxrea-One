@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useCallback,useState } from "react";
+import { useCallback, useState } from "react";
 
 import { EventNames } from "@/lib/constants";
 

@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { NavSvg } from "@/components/ui/icons/director/NavSvg";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
+import { createNodeFromUrl, uploadOne } from "@/features/canvas/upload";
 import type { CameraPresetCtx } from "@/features/director/core/camera-presets";
 import { CAMERA_PRESETS } from "@/features/director/core/camera-presets";
 import { CameraRig } from "@/features/director/core/camera-rig";
@@ -28,7 +29,6 @@ import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
-import { createNodeFromUrl, uploadOne } from "@/features/canvas/upload";
 
 type _SceneSnapshot = {
   scale?: number;

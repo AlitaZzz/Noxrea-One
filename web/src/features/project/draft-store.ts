@@ -7,7 +7,7 @@
  * 仅存画布结构（nodes / edges / 视口等），不含 /api/files 的文件资源
  * （文件离线缓存属 PWA + Service Worker 范畴，另议）。
  */
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { type DBSchema, type IDBPDatabase,openDB } from "idb";
 
 import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";

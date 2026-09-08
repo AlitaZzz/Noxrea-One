@@ -5,10 +5,6 @@
 import { api, apiRaw } from "@/lib/api/client";
 
 export const projectApi = {
-  /** 读取项目（原始 Response，供 save-manager 解析）。 */
-  getProjectRaw: (id: string | number): Promise<Response> =>
-    apiRaw(`/api/canvas/projects/${id}`),
-
   /** 项目列表（JSON 包裹）。 */
   listProjects: <T = unknown>() =>
     api<T>(`/api/canvas/projects`),

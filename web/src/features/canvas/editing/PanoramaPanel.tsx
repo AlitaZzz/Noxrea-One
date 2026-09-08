@@ -14,8 +14,8 @@ import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
 
 interface Props {

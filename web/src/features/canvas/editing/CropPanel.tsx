@@ -12,8 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import WheelGuard from "@/components/ui/WheelGuard";
-import { runMediaUpload } from "@/features/canvas/upload";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { runMediaUpload } from "@/features/canvas/upload";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 
