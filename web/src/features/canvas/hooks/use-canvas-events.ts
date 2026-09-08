@@ -1,6 +1,6 @@
 /**
  * 画布自定义事件总线监听 hook。
- * 把节点组件派发的 window 级事件（更新数据、复制、删除节点 / 连线、右键菜单）
+ * 把节点组件派发的 window 级事件（更新数据、复制、删除节点 / 连线、双击唤起画布菜单）
  * 统一转成对画布 store 的操作。
  */
 "use client";
@@ -16,7 +16,7 @@ import { EventNames } from "@/lib/constants";
  * 画布自定义事件监听 hook。
  *
  * 注册 5 个 window-level 事件监听器，处理节点数据更新、复制、删除、
- * 边删除、右键菜单等操作。
+ * 边删除、双击唤起画布菜单等操作。
  */
 export function useCanvasEvents() {
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
@@ -76,7 +76,9 @@ export function useCanvasEvents() {
     return () => window.removeEventListener(EventNames.CANVAS_DELETE_EDGES, onDeleteEdges);
   }, [removeEdges]);
 
-  // 5) Right-click context menu (DOM events, not CustomEvent)
+  // 5) 画布菜单：由「左键双击空白处」唤起，非右键（DOM 事件，非 CustomEvent）。
+  //    右键（contextmenu）在画布内一律屏蔽，仅输入框 / 可编辑区域保留浏览器原生菜单，
+  //    因此这里的菜单虽然常被称作「右键菜单」，实际触发手势是双击。
   useEffect(() => {
     function onCanvasDblClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
