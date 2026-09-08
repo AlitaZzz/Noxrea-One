@@ -341,13 +341,14 @@ class SaveManager {
       opts.skipUnauthorized,
     );
 
-    // 401 一律跳过 fingerprint 更新：本次并未落库，下次保存需重新计算引用
-    if (res.status === 401) return;
+    // 只有真正落库成功（2xx）才更新 fingerprint 并清草稿。
+    // 401 / 5xx / 网络失败都意味着服务端并未持有本次数据：
+    // 若此时更新 fingerprint，下次保存会误判「文件引用未变化」而跳过 needRefRecalc，
+    // 造成服务端引用计数长期不一致。
+    if (!res.ok) return;
 
     fingerprintMap.set(projectId, currentFp);
-
-    // 落库成功才清草稿；非 2xx（如 500）时保留草稿兜底
-    if (res.ok) void clearDraft(projectId);
+    void clearDraft(projectId);
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */

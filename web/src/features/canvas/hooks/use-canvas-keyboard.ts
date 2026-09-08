@@ -9,7 +9,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
 import { duplicateNode } from "@/features/canvas/node-defaults";
-import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { MediaGenFields } from "@/features/canvas/types";
@@ -40,7 +40,7 @@ function getSelectedEdgeIds(): string[] {
  * Global keyboard shortcuts for the canvas.
  */
 export function useCanvasKeyboard() {
-  const { zoomIn, zoomOut, fitView, setNodes } = useReactFlow();
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const addNodes = useCanvasStore((s) => s.addNodes);
   const removeNodes = useCanvasStore((s) => s.removeNodes);
@@ -133,8 +133,11 @@ export function useCanvasKeyboard() {
       // ---- Escape: clear selection ----
       if (e.key === "Escape") {
         const s = useCanvasStore.getState();
-        setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
-        useCanvasStore.getState().setEdges(
+        // 必须写回 zustand store：画布是受控模式（nodes 由 store 提供），
+        // React Flow 的 setNodes() 只改它自己的内部 store、不触发 onNodesChange，
+        // 会导致 selectedNodeIds 不更新（工具栏不消失）且下次同步时选区“复活”。
+        s.setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
+        s.setEdges(
           s.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true }
         );
       }
@@ -209,5 +212,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, setNodes, resetViewport, undoHistory, redoHistory, addNodes, removeNodes, removeEdges]);
+  }, [zoomIn, zoomOut, fitView, resetViewport, undoHistory, redoHistory, addNodes, removeNodes, removeEdges]);
 }
