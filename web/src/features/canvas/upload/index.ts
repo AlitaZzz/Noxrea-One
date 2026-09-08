@@ -8,6 +8,7 @@ export {
   createVideoNodeFromUrl,
   DERIVED_BASE_GAP_Y,
 } from "./derived-node";
+export { createNodesFromFiles } from "./create-nodes-from-files";
 export { pickFiles } from "./pick-files";
 export type { MediaKind, UploadAnchor, UploadHandle, UploadItem, UploadPlan, UploadSink, UploadSummary } from "./types";
 export { detectMediaKind, discardNodeUpload, retryNodeUpload, runMediaUpload, uploadOne } from "./upload-pipeline";

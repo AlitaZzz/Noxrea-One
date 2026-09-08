@@ -647,6 +647,24 @@ export default function InfiniteCanvas() {
     }
   }, [canvasInteraction, setNodes, setEdges]);
 
+  // 右键空白处 → 画布级操作菜单（粘贴 / 全选 / 整理 / 重置视图）。
+  // 原生菜单由 use-canvas-events 的 preventCtx 统一屏蔽，这里只负责唤起自定义菜单。
+  const handlePaneContextMenu = useCallback((e: React.MouseEvent | MouseEvent) => {
+    e.preventDefault();
+    useContextMenuStore.getState().show(e.clientX, e.clientY, "canvas");
+  }, []);
+
+  // 右键节点 → 节点级操作菜单（复制 / 删除）。
+  // 标准行为：若该节点尚未选中，先单选它，让菜单明确作用在它身上。
+  const handleNodeContextMenu = useCallback((e: React.MouseEvent, node: AnyNode) => {
+    e.preventDefault();
+    const store = useCanvasStore.getState();
+    if (!node.selected) {
+      store.setNodes(store.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
+    }
+    useContextMenuStore.getState().show(e.clientX, e.clientY, "node", node.id);
+  }, []);
+
   // Explicitly handle node selection — React Flow's internal click detection
   // may miss clicks that land on interactive child elements (inputs, selects, etc.)
   const handleNodeClick = useCallback(
@@ -795,6 +813,8 @@ export default function InfiniteCanvas() {
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
         onNodeClick={handleNodeClick}
+        onPaneContextMenu={handlePaneContextMenu}
+        onNodeContextMenu={handleNodeContextMenu}
         onSelectionStart={handleSelectionStart}
         defaultViewport={defaultViewport}
         selectionMode={SelectionMode.Partial}
