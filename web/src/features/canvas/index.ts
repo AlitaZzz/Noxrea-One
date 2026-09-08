@@ -58,7 +58,7 @@ export {
   getNodeTypeIcon,
   NODE_TYPE_I18N,
   NODE_TYPE_ORDER,
-} from "./NodeTypeMeta";
+} from "./NodeTypeDisplayMeta";
 
 // ── Stores ──
 export {
@@ -78,7 +78,7 @@ export { useHistoryStore } from "./stores/history-store";
 export { useSelectionStore } from "./stores/selection-store";
 
 // ── Hooks ──
-export { type AddNodeType,useAddNode } from "./hooks/use-add-node";
+export { type AddNodeType, useAddNode } from "./hooks/use-add-node";
 export {
   type AlignmentGuide,
   type AlignmentResult,

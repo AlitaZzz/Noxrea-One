@@ -7,8 +7,8 @@
 
 import { createElement, useEffect, useRef } from "react";
 
-import TaskErrorDetail from "@/features/canvas/shared/task-error-detail";
-import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -216,6 +216,31 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                           placement: "bottomRight",
                           duration: 15,
                         });
+                      }
+                      sseCtrlsRef.current.delete(taskId);
+                      return;
+                    } else if (evt.status === "completed") {
+                      // 兜底：completed 但没有可消费的结果（上游未回传 resultText / resultUrls，
+                      // 或结果为空数组）。三个结果分支都不命中时必须清理 taskBinding，
+                      // 否则节点永久停留在「生成中」遮罩，且 hasGeneratingNode() 会
+                      // 全局禁用撤销 / 重做，用户只能刷新页面才能恢复。
+                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+                      if (cur && curBinding?.taskId === taskId) {
+                        useCanvasStore.getState().updateNodeData(nodeId, {
+                          taskBinding: undefined,
+                        }, undefined, { skipHistory: true });
+                        markDirtyImmediate();
+                        if (!notifiedTasksRef.current.has(taskId)) {
+                          notifiedTasksRef.current.add(taskId);
+                          const t = i18n.t;
+                          notifRef.current.error({
+                            title: t("generation.failed"),
+                            description: evt.error ? resolveTaskError(evt) : t("error.unknown"),
+                            placement: "bottomRight",
+                            duration: 15,
+                          });
+                        }
                       }
                       sseCtrlsRef.current.delete(taskId);
                       return;

@@ -2,7 +2,7 @@
  * 全局通知 API - 在 React 组件外也能调用 antd notification（右下角卡片）。
  *
  * 使用方式：
- * 1. App 初始化时将 App.useApp() 返回的 notification 实例注册进来（见 app-providers.tsx）
+ * 1. App 初始化时将 App.useApp() 返回的 notification 实例注册进来（见 AppProviders.tsx）
  * 2. 任意位置调 showGlobalNotification().error({ title, description })
  *
  * 若尚未注册（极早时机），fallback 到 antd 静态 notification。

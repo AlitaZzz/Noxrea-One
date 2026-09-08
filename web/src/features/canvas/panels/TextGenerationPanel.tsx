@@ -7,21 +7,22 @@
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
+import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import type { HistorySnapshot } from "@/features/project/types";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
-import { ModelIcon } from "@/lib/model-icon";
 import { useModelStore } from "@/lib/model-store";
 
 import MentionPrompt from "../shared/MentionPrompt";
@@ -47,13 +48,13 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   const providers = useModelStore((s) => s.providers);
   const { notification } = App.useApp();
 
-  const allModels = providers
+  const allModels = useMemo(() => providers
     .flatMap((c) =>
       c.models
         .filter((m) => m.capabilities?.includes("text"))
         .map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name })),
     )
-    .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
+    .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
   // Read persisted settings from node data
   const saved = useMemo(() => {
@@ -63,14 +64,23 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       prompt: s.prompt || "",
       modelKey: s.modelKey || allModels[0]?.value || "",
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeId]);
+  // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
+  // 「providers 为空」时算出的结果（modelKey 为空）。
+  }, [nodeId, allModels]);
 
   const [prompt, setPrompt] = useState(saved.prompt);
   const [modelKey, setModelKey] = useState(saved.modelKey);
   const [modelOpen, setModelOpen] = useState(false);
   const [hoverImg, setHoverImg] = useState<string | null>(null);
   const [isRefDragging, setIsRefDragging] = useState(false);
+
+  // 模型列表异步到达后用正确值补齐 modelKey（同 ImageGenerationPanel）：
+  // 否则首帧算出的空值会被防抖持久化写回节点，抹掉已保存的模型选择。
+  useEffect(() => {
+    if (modelKey) return;
+    const fallback = saved.modelKey || allModels[0]?.value;
+    if (fallback) setModelKey(fallback);
+  }, [allModels, modelKey, saved.modelKey]);
 
   // Upstream reference images - derived live from current edges
   const canvasNodes = useCanvasStore((s) => s.nodes);
@@ -127,6 +137,8 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // Persist settings to node data (debounced)。
   // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
   useEffect(() => {
+    // modelKey 为空说明模型列表尚未加载完成，此时写回会用空值覆盖节点上已持久化的模型
+    if (!modelKey) return;
     const timer = setTimeout(() => {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const cur = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
@@ -174,13 +186,31 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId);
 
+  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
+  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
+
+  /**
+   * 回滚 handleGenerate 压入的预生成快照。
+   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，说明它已不是栈顶，
+   * 此时放弃弹出，避免误删无关快照导致撤销行为错乱。
+   */
+  const dropPendingHistory = useCallback(() => {
+    const pushed = pushedSnapshotRef.current;
+    pushedSnapshotRef.current = null;
+    if (pushed) useHistoryStore.getState().popIfTop(pushed);
+  }, []);
+
   const handleGenerate = async () => {
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey || isGenerating) return;
     const entry: ModelOption | undefined = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
 
-    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记
+    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记。
+    // 记录被压入的快照引用，失败 / 取消时按引用精确回滚（见 dropPendingHistory）。
+    const depthBefore = useHistoryStore.getState().undoStack.length;
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
+    const stack = useHistoryStore.getState().undoStack;
+    pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
     markDirtyImmediate();
 
     try {
@@ -215,8 +245,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     } catch (err: unknown) {
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      // 生成失败：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
-      useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+      dropPendingHistory();
       notification.error({
         title: t("generation.failed"),
         description: err instanceof Error ? err.message : "",
@@ -234,8 +263,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     }
     useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
     markDirtyImmediate();
-    // 取消生成：pop 掉 forceHistory 压的那条预生成快照，不留死撤销
-    useHistoryStore.setState((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+    dropPendingHistory();
   };
 
   return (

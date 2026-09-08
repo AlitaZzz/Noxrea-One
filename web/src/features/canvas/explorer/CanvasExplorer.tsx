@@ -35,7 +35,7 @@ import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/compo
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
-import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeMeta";
+import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
