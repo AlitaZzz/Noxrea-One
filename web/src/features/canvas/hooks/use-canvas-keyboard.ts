@@ -8,12 +8,18 @@
 import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
-import { duplicateNode } from "@/features/canvas/node-defaults";
-import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import {
+  copySelection,
+  deleteSelection,
+  getSelectedEdgeIds,
+  getSelectedNodeIds,
+  pasteClipboard,
+  selectAllNodes,
+} from "@/features/canvas/shared/canvas-edit-actions";
+import { markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { MediaGenFields } from "@/features/canvas/types";
-import { EventNames, isGenerating,PASTE_OFFSET } from "@/lib/constants";
+import { EventNames, isGenerating } from "@/lib/constants";
 
 /** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点） */
 function hasGeneratingNode(): boolean {
@@ -22,29 +28,12 @@ function hasGeneratingNode(): boolean {
     .nodes.some((n) => isGenerating((n.data as MediaGenFields).taskBinding));
 }
 
-function getSelectedNodeIds(): string[] {
-  return useCanvasStore
-    .getState()
-    .nodes.filter((n) => n.selected)
-    .map((n) => n.id);
-}
-
-function getSelectedEdgeIds(): string[] {
-  return useCanvasStore
-    .getState()
-    .edges.filter((e) => e.selected)
-    .map((e) => e.id);
-}
-
 /**
  * Global keyboard shortcuts for the canvas.
  */
 export function useCanvasKeyboard() {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
-  const addNodes = useCanvasStore((s) => s.addNodes);
-  const removeNodes = useCanvasStore((s) => s.removeNodes);
-  const removeEdges = useCanvasStore((s) => s.removeEdges);
   const resetViewport = useCanvasStore((s) => s.resetViewport);
 
   const undoHistory = useHistoryStore((s) => s.undo);
@@ -79,8 +68,7 @@ export function useCanvasKeyboard() {
       // ---- Select All ----
       if (mod && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        const all = useCanvasStore.getState();
-        all.setNodes(all.nodes.map((n) => ({ ...n, selected: true })));
+        selectAllNodes();
       }
 
       // ---- Copy ----
@@ -90,43 +78,24 @@ export function useCanvasKeyboard() {
         const textSelection = window.getSelection()?.toString() ?? "";
         if (selIds.length > 0 && !textSelection) {
           e.preventDefault();
-          const allNodes = useCanvasStore.getState().nodes;
-          const selNodes = allNodes.filter((n) => selIds.includes(n.id));
-          useSelectionStore.getState().copySelected(selNodes);
+          copySelection();
         }
       }
 
       // ---- Paste ----
       if (mod && e.key.toLowerCase() === "v") {
-        const clip = useSelectionStore.getState().clipboard;
-        if (clip && clip.nodes.length > 0) {
-          e.preventDefault();
-          const newNodes = clip.nodes.map((n) =>
-            duplicateNode(n, PASTE_OFFSET)
-          );
-          addNodes(newNodes);
-          // Select pasted nodes
-          const s = useCanvasStore.getState();
-          s.setNodes(
-            s.nodes.map((n) => ({
-              ...n,
-              selected: newNodes.some((nn) => nn.id === n.id),
-            }))
-          );
-        }
+        // 输入框内已在本函数开头 return，此处只会是画布语境的「粘贴节点」
+        if (pasteClipboard()) e.preventDefault();
       }
 
       // ---- Delete selected nodes AND edges ----
       if (e.key === "Delete" || e.key === "Backspace") {
         const selNodeIds = getSelectedNodeIds();
         const selEdgeIds = getSelectedEdgeIds();
-        const hasNodeSelection = selNodeIds.length > 0;
-        const hasEdgeSelection = selEdgeIds.length > 0;
 
-        if (hasNodeSelection || hasEdgeSelection) {
+        if (selNodeIds.length > 0 || selEdgeIds.length > 0) {
           e.preventDefault();
-          if (hasNodeSelection) removeNodes(selNodeIds);
-          if (hasEdgeSelection) removeEdges(selEdgeIds);
+          deleteSelection();
         }
       }
 
@@ -212,5 +181,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, resetViewport, undoHistory, redoHistory, addNodes, removeNodes, removeEdges]);
+  }, [zoomIn, zoomOut, fitView, resetViewport, undoHistory, redoHistory]);
 }
