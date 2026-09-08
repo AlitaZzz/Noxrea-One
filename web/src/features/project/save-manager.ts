@@ -31,6 +31,12 @@ const SAVE_DELAY_IMMEDIATE = 100;
 const SAVE_DELAY_UNDO = 500;
 /** 离线草稿写入防抖（ms）：拖拽等高频操作不逐帧写 IndexedDB */
 const DRAFT_WRITE_DELAY = 500;
+/**
+ * 持续操作时的强制保存上限（ms）。
+ * 防抖定时器会被每次改动不断重置，若用户一直操作（长时间拖拽、连续摆放节点），
+ * 保存会被无限推迟、服务端数据长期落后。它保证距本轮首次改脏不超过该值必存一次。
+ */
+const MAX_SAVE_WAIT = 10000;
 
 // ── fingerprint：追踪画布文件引用变化 ──
 // 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
@@ -123,6 +129,8 @@ class SaveManager {
   private resolveSave: (() => void) | null = null;
   /** saving 期间被跳过的最紧急 delay，恢复时用此值而非默认值 */
   private pendingDelay: number = SAVE_DELAY;
+  /** 本轮 dirty 的起始时刻（ms），配合 MAX_SAVE_WAIT 限制保存延迟上限 */
+  private dirtySince: number | null = null;
 
   // ==================== 公开接口 ====================
 
@@ -145,6 +153,7 @@ class SaveManager {
     // NOTE: syncCanvasState 已移至 save() 中执行，避免拖动时每帧重建 projects 数组
     if (!this.dirty) {
       this.dirty = true;
+      this.dirtySince = Date.now();
       this.registerFlushOnce();
     }
     this.pendingDelay = Math.min(this.pendingDelay, delay);
@@ -162,6 +171,10 @@ class SaveManager {
   }
 
   private async writeDraft(): Promise<void> {
+    // 没有未落库的改动、也不在保存中 → 不需要草稿。
+    // 关键：保存成功后 dirty 与 saving 均为 false，此时若仍有排队的 draftTimer 触发，
+    // 会把「已落库的状态」重新写回本地，形成幽灵草稿，导致下次进入误报「有未保存编辑」。
+    if (!this.dirty && !this.saving) return;
     const activeId = useProjectStore.getState().activeProjectId;
     if (!activeId) return;
     const s = useCanvasStore.getState();
@@ -262,10 +275,16 @@ class SaveManager {
       this.pendingDelay = Math.min(this.pendingDelay, delay);
       return;
     }
+    // maxWait：用「距本轮首次改脏的剩余额度」压缩延迟，超过上限则立即保存
+    let wait = delay;
+    if (this.dirtySince !== null) {
+      const remain = MAX_SAVE_WAIT - (Date.now() - this.dirtySince);
+      wait = remain <= 0 ? 0 : Math.min(delay, remain);
+    }
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
       void this.save(false);
-    }, delay);
+    }, wait);
   }
 
   private async save(keepalive: boolean, skipUnauthorized = false): Promise<void> {
@@ -293,13 +312,19 @@ class SaveManager {
     } catch (e) {
       console.error("[SaveManager] save failed:", e);
       this.dirty = true;
+      // 失败后补写一次草稿：此刻服务端没有这份数据，本地兜底最有价值
+      this.scheduleDraftWrite();
     } finally {
       this.saving = false;
       this.resolveSave?.();
     }
 
     if (this.dirty) {
+      // 重新计时：不让过旧的 dirtySince 使下一次重试被 maxWait 压成 0（避免紧密重试）
+      this.dirtySince = Date.now();
       this.resetTimer(this.pendingDelay);
+    } else {
+      this.dirtySince = null;
     }
     this.pendingDelay = SAVE_DELAY;
   }
@@ -341,11 +366,15 @@ class SaveManager {
       opts.skipUnauthorized,
     );
 
-    // 只有真正落库成功（2xx）才更新 fingerprint 并清草稿。
-    // 401 / 5xx / 网络失败都意味着服务端并未持有本次数据：
-    // 若此时更新 fingerprint，下次保存会误判「文件引用未变化」而跳过 needRefRecalc，
-    // 造成服务端引用计数长期不一致。
-    if (!res.ok) return;
+    // 只有真正落库成功（2xx）才更新 fingerprint 并清草稿：失败时若也更新 fingerprint，
+    // 下次保存会误判「文件引用未变化」而跳过 needRefRecalc，造成引用计数长期不一致。
+    // 401：重试也无意义（需重新登录），保留草稿交给下次进入提示恢复。
+    // 其余失败（5xx 等）必须抛错 —— 否则 save() 开头的 dirty=false 不会被撤销、
+    // 也不重排定时器，改动静默丢失，草稿却还留着（刷新后误报且救不回来）。
+    if (!res.ok) {
+      if (res.status === 401) return;
+      throw new Error(`[SaveManager] save failed: HTTP ${res.status}`);
+    }
 
     fingerprintMap.set(projectId, currentFp);
     void clearDraft(projectId);
