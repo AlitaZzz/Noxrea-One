@@ -778,7 +778,7 @@ export default function InfiniteCanvas() {
   }, []);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const { handleDragOver, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef);
+  const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef);
 
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
@@ -821,6 +821,7 @@ export default function InfiniteCanvas() {
       className={hideSelectionRect ? "canvas-container hide-selection-rect" : "canvas-container"}
       style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
       onDragOver={handleDragOver}
+      onDragStart={handleDragStart}
       onDrop={handleDrop}
     >
       <AlignmentGuides guides={alignmentGuides} />
