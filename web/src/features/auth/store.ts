@@ -54,9 +54,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
-    const password = rawPassword.trim();
-    const res = await authApi.login<{ access_token: string; token_type: string; user: UserInfo }>(username, password);
-    if (res.code === 200) {
+    // 密码不做 trim：空格是合法密码字符，静默裁剪会让「注册时按裁剪值存储、
+    // 登录时按原值提交」产生不一致
+    const res = await authApi.login<{ access_token: string; token_type: string; user: UserInfo }>(username, rawPassword);
+    if (res.code === 200 && res.data?.access_token) {
       setToken(res.data.access_token);
       set({ user: res.data.user });
     } else {
@@ -68,8 +69,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
-    const password = rawPassword.trim();
-    const res = await authApi.register<{ access_token: string; token_type: string; user: UserInfo }>(username, password);
+    // 同 login：密码不裁剪
+    const res = await authApi.register<{ access_token: string; token_type: string; user: UserInfo }>(username, rawPassword);
     if (res.code === 200 && res.data.access_token && res.data.user) {
       setToken(res.data.access_token);
       set({ user: res.data.user });

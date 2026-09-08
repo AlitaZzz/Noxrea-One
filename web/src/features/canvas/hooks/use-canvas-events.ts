@@ -84,7 +84,12 @@ export function useCanvasEvents() {
         showCtx(e.clientX, e.clientY);
       }
     }
-    function preventCtx(e: Event) { e.preventDefault(); }
+    // 输入框 / 可编辑区域保留原生右键菜单（粘贴、拼写检查等），其余位置屏蔽画布默认菜单
+    function preventCtx(e: Event) {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true'], [contenteditable='']")) return;
+      e.preventDefault();
+    }
     document.addEventListener("dblclick", onCanvasDblClick, true);
     document.addEventListener("contextmenu", preventCtx, { capture: true });
     return () => {

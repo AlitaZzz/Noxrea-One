@@ -206,6 +206,8 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
   // Persist settings to node data on change (debounced)。
   // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
   useEffect(() => {
+    // modelKey 为空说明模型列表尚未加载完成，此时写回会用空值覆盖节点上已持久化的模型
+    if (!modelKey) return;
     const timer = setTimeout(() => {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Partial<VideoGenSettings>;

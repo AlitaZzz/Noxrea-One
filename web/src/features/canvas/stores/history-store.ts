@@ -25,6 +25,13 @@ interface HistoryState {
    * 无可重做时返回 null 且不改动任何栈。
    */
   redo: (current: HistorySnapshot) => HistorySnapshot | null;
+  /**
+   * 仅当 snapshot 仍位于 undoStack 栈顶时弹出，返回是否真的弹出了。
+   * 用于「补偿式回滚」场景（如生成失败 / 取消时撤销刚压入的预生成快照）：
+   * 期间若已有其他操作入栈，snapshot 不再是栈顶，此时放弃弹出，
+   * 避免误删无关快照导致撤销行为错乱。
+   */
+  popIfTop: (snapshot: HistorySnapshot) => boolean;
   canUndo: () => boolean;
   canRedo: () => boolean;
   clear: () => void;
@@ -61,6 +68,13 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       undoStack: [...s.undoStack, current],
     }));
     return target;
+  },
+
+  popIfTop: (snapshot) => {
+    const { undoStack } = get();
+    if (undoStack.length === 0 || undoStack[undoStack.length - 1] !== snapshot) return false;
+    set((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+    return true;
   },
 
   canUndo: () => get().undoStack.length > 0,

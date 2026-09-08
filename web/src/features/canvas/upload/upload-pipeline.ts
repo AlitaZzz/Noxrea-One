@@ -183,7 +183,9 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       continue;
     }
     if (replaceTarget && kind !== nodeKindOf(replaceTarget)) {
-      // 类型与当前节点不匹配（如往音频节点里塞图片）：整批拒绝并提示
+      // 类型与当前节点不匹配（如往音频节点里塞图片）：整批拒绝并提示。
+      // 早退前必须释放本批已创建的 blob 预览，否则这些 URL 无人接管而泄漏。
+      for (const p of prepared) if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
       showGlobalMessage().error(i18n.t("file.unsupportedType"));
       return emptyHandle();
     }
