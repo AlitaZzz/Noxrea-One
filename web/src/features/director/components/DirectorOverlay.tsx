@@ -42,7 +42,7 @@ export default function DirectorOverlay({ onClose }: Props) {
         style={{ height: 56, background: "var(--dir-panel)" }}>
         {/* Logo + info */}
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-[17px] tracking-wide">3D 导演台</span>
+          <span className="font-semibold text-[17px] tracking-wide">导演台</span>
           <span className="text-[13px] text-white/30">
             {entities.length} 项{selectedId ? ` · 选中: ${entityName}` : ""} {tfLabel && `· ${tfLabel}`}
           </span>
