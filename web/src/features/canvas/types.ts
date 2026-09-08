@@ -8,57 +8,25 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import type { NODE_TYPE } from "@/lib/constants";
-import type { UploadErrorInfo } from "@/lib/utils/upload";
+import type { TaskBinding, UploadState } from "@/lib/types/canvas";
+
+// 画布基础类型（背景 / 主题 / 视口 / 任务绑定 / 上传状态）下沉至 lib/types/canvas，
+// 使 lib/constants.ts 等底层模块可以引用而不反向依赖 feature 层。
+// 此处统一转出，保证上层 "@/features/canvas/types" 的既有导入路径不变。
+export type {
+  BackgroundType,
+  TaskBinding,
+  TaskStatus,
+  ThemeMode,
+  UploadState,
+  ViewportState,
+} from "@/lib/types/canvas";
 
 // ============================================================
 // Canvas 基础类型（画布状态、节点类型枚举）
 // ============================================================
 
 export type AnyEdge = Edge<Record<string, unknown>, string>;
-
-export type BackgroundType = "dots" | "grid" | "blank";
-export type ThemeMode = "light" | "dark";
-
-export interface ViewportState {
-  x: number;
-  y: number;
-  zoom: number;
-}
-
-// ============================================================
-// 任务绑定（生成 / 异步任务状态）
-// ============================================================
-
-export type TaskStatus = "pending" | "processing" | "completed" | "failed";
-
-export interface TaskBinding {
-  /** 后端任务 ID（本地处理如裁剪/变换时为空串） */
-  taskId: string;
-  status: TaskStatus;
-  /** 异步任务的语义动作 */
-  pendingAction?: string;
-  /** 任务开始时间戳（ms），用于生成中遮罩显示实时耗时 */
-  startedAt?: number;
-}
-
-// ============================================================
-// 上传状态
-// ============================================================
-
-export interface UploadState {
-  uploading: boolean;
-  /** 上传进度 0-100 */
-  progress?: number;
-  /** 防竞态版本号：每次重新上传自增，回调按版本号丢弃过期结果 */
-  version: number;
-  /** 上传期间的本地预览 URL（blob:或 data:），用于模糊背景渲染 */
-  previewUrl?: string;
-  /**
-   * 失败态信息：存在且 uploading 为 false 时，节点渲染失败遮罩与重试 / 移除入口。
-   * 失败节点会留在画布上（不自动删除），避免裁剪 / 标注等加工产物白做。
-   */
-  error?: UploadErrorInfo;
-}
 
 // ============================================================
 // 生成面板设置（持久化到节点）
