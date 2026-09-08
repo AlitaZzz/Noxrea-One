@@ -9,8 +9,8 @@
 
 import { useCallback } from "react";
 
-import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
 import { canvasToBlob, computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
 
 export function useGridSplit(sourceId: string, src: string | undefined) {

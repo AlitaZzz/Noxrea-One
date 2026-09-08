@@ -18,7 +18,7 @@ import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { clearDraft, loadDraft, type DraftRecord } from "@/features/project/draft-store";
+import { clearDraft, type DraftRecord,loadDraft } from "@/features/project/draft-store";
 import { useProjectStore } from "@/features/project/store";
 
 const DirectorOverlay = dynamic(
@@ -43,7 +43,10 @@ export default function CanvasPage({
   const directorOverlayOpen = useCanvasStore((s) => s.directorOverlayOpen);
   const setDirectorOverlayOpen = useCanvasStore((s) => s.setDirectorOverlayOpen);
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
-  const [initialized, setInitialized] = useState(false);
+  // 记录「已成功加载并恢复到画布」的项目 ID：
+  // 用它与 URL 上的 projectId 比较得到加载态，切换项目时会自动回到 Loading，
+  // 避免短暂渲染上一个项目的画布内容，也避免在 effect 体内同步 setState。
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [draftPrompt, setDraftPrompt] = useState<DraftRecord | null>(null);
 
   // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
@@ -63,12 +66,16 @@ export default function CanvasPage({
       }
       // 先用后端数据渲染画布，再检查是否有比后端更新的离线草稿（弹窗询问）
       useCanvasStore.getState().restoreFromProject(project);
-      setInitialized(true);
+      setLoadedProjectId(projectId);
 
       const draft = await loadDraft(projectId);
       if (draft && draft.updatedAt > project.updatedAt) {
         setDraftPrompt(draft);
       }
+    }).catch((err) => {
+      // 拉取 / 解析失败时不能停在 "Loading canvas..."，回到项目列表
+      console.error("[canvas] load project failed:", err);
+      window.location.href = "/project";
     });
   }, [projectId]);
 
@@ -96,7 +103,7 @@ export default function CanvasPage({
     }
   }, [directorOverlayOpen, setModalOpen]);
 
-  if (!initialized) {
+  if (loadedProjectId !== projectId) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-[#0d0d0d] text-white">
         <div className="text-lg">Loading canvas...</div>

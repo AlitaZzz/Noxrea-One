@@ -12,8 +12,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { type CanvasStoreApi,createNodeFromUrl } from "@/features/canvas/upload";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { createNodeFromUrl, type CanvasStoreApi } from "@/features/canvas/upload";
 
 // ── Mock @/lib/api/client（upload-pipeline 的传递依赖，防测试环境加载真实客户端）──
 vi.mock("@/lib/api/client", () => ({

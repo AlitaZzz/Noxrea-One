@@ -9,7 +9,7 @@
 
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { Input } from "antd";

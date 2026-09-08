@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 
 import { pickFiles } from "./pick-files";
 import { runMediaUpload } from "./upload-pipeline";
@@ -22,11 +22,11 @@ export interface NodeUploadOptions {
  * 返回一个打开系统文件选择器并完成替换上传的回调。
  */
 export function useNodeUpload(nodeId: string, options: NodeUploadOptions) {
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+  // 直接解构出原始值作为依赖，不在渲染期写 ref（ref 只应在事件 / effect 中读写）。
+  // 回调重建的开销可忽略（仅用于 onClick）。
+  const { accept, clearFields } = options;
 
   return useCallback(async () => {
-    const { accept, clearFields } = optionsRef.current;
     const files = await pickFiles({ accept });
     if (files.length === 0) return;
 
@@ -34,5 +34,5 @@ export function useNodeUpload(nodeId: string, options: NodeUploadOptions) {
       items: files.map((file) => ({ blob: file, filename: file.name })),
       sink: { kind: "replace-node", nodeId, clearFields },
     });
-  }, [nodeId]);
+  }, [nodeId, accept, clearFields]);
 }

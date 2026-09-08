@@ -15,8 +15,8 @@ import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
-import { runMediaUpload } from "@/features/canvas/upload";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { runMediaUpload } from "@/features/canvas/upload";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 

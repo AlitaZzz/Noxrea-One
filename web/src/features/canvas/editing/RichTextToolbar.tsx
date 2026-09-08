@@ -5,8 +5,8 @@
  */
 "use client";
 
+import { type Editor,useEditorState } from "@tiptap/react";
 import { useViewport } from "@xyflow/react";
-import { useEditorState, type Editor } from "@tiptap/react";
 import { Button, Tooltip } from "antd";
 import {
   Bold,

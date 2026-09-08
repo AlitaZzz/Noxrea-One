@@ -12,7 +12,7 @@ import type { BackgroundType, ThemeMode, ViewportState } from "@/features/canvas
 import type { AnyNode } from "@/features/canvas/types";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME,DEFAULT_VIEWPORT,NODE_TYPE } from "@/lib/constants";
+import { DEFAULT_BACKGROUND, DEFAULT_THEME, DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
 const HISTORY_THROTTLE = 300;

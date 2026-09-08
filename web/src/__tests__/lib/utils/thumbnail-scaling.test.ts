@@ -37,7 +37,7 @@ vi.mock("@/lib/api", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-import { createNodeFromUrl, type CanvasStoreApi } from "@/features/canvas/upload";
+import { type CanvasStoreApi,createNodeFromUrl } from "@/features/canvas/upload";
 import { computeThumbScale } from "@/lib/utils/image-utils";
 
 const D = NODE_DISPLAY_MAX; // 600

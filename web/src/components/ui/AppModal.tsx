@@ -4,7 +4,7 @@
  */
 "use client";
 
-import type { ComponentProps,ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { LayerModal } from "@/components/ui/modal/LayerModal";
 
