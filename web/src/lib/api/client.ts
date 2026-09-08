@@ -5,6 +5,7 @@
  * apiRaw（原始 Response）与 apiStream（流式）等底层能力。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 
@@ -101,7 +102,20 @@ export async function api<T = unknown>(
       },
     });
     if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
-    return await res.json();
+    // 响应体可能为空（204）或是网关返回的 HTML，解析失败按 null 处理，不要抛错
+    const body = (await res.json().catch(() => null)) as { code: number; data: T; msg: string } | null;
+    // 非 2xx 不能再当作正常结果透出：此前 code 为 undefined，调用方无法区分
+    // 「成功但无数据」与「请求失败」。这里统一按 HTTP 状态码 + 服务端错误码生成
+    // 本地化文案。仍然保持「api() 不 reject」的既有契约——大量调用方依赖这一点，
+    // 改为 throw 会产生未处理的 Promise rejection。
+    if (!res.ok) {
+      return {
+        code: res.status,
+        data: null as T,
+        msg: resolveApiError(parseErrorBody(body), res.status),
+      };
+    }
+    return body ?? { code: res.status, data: null as T, msg: "" };
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
     return { code: 0, data: null as T, msg: i18n.t("error.network_unreachable") };

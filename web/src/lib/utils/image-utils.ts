@@ -7,7 +7,6 @@
  */
 "use client";
 
-import type { ImageNode } from "@/features/canvas/types";
 import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 /**
@@ -46,36 +45,6 @@ export function computeNodeSize(naturalW: number, naturalH: number): { width: nu
 }
 
 /**
- * 对节点应用 NODE_DISPLAY_MAX 等比缩放，并预留 titleH(28px) 标题栏高度。
- *
- * @param node        已创建的 ImageNode（通常通过 createImageNode）
- * @param naturalW    图片自然宽度
- * @param naturalH    图片自然高度
- * @param label       可选，设置 label 和 alt
- * @returns 被修改后的 node（方便链式调用）
- */
-export function applyThumbnailSettings(
-  node: ImageNode,
-  naturalW: number,
-  naturalH: number,
-  label?: string,
-): ImageNode {
-  // 零尺寸保护：fallback 300
-  const nw = naturalW > 0 ? naturalW : 300;
-  const nh = naturalH > 0 ? naturalH : 300;
-  const { width, height } = computeNodeSize(nw, nh);
-
-  node.data.naturalWidth = naturalW;
-  node.data.naturalHeight = naturalH;
-  if (label !== undefined) {
-    node.data.label = label;
-    node.data.alt = label;
-  }
-  node.style = { width, height };
-  return node;
-}
-
-/**
  * 创建 Canvas -> 执行绘制 -> 导出 Blob。
  *
  * 提取的是 createElement("canvas") + getContext("2d") + toBlob 的公共管线，
@@ -99,7 +68,15 @@ export function canvasToBlob(
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   draw(ctx, canvas);
-  return new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), type || "image/png", quality));
+  // toBlob 在宽高为 0、画布超出浏览器上限或内存不足时回调 null；
+  // 此前用 b! 把 null 断言成 Blob 后 resolve，下游会拿到 null 继续上传空文件。
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvasToBlob: encode failed"))),
+      type || "image/png",
+      quality,
+    ),
+  );
 }
 
 /**

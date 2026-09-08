@@ -35,8 +35,12 @@ import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canv
 import type { ImageNode as ImageNodeType, ImageNodeData, TextNodeData } from "@/features/canvas/types";
 import { runMediaUpload, useNodeUpload } from "@/features/canvas/upload";
 import {
-DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH,EventNames,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
+  DEFAULT_NODE_HEIGHT,
+  DEFAULT_NODE_WIDTH,
+  EventNames,
+  NODE_HANDLE_TOP,
+  NODE_TITLE_HEIGHT,
+} from "@/lib/constants";
 import { isGenerating } from "@/lib/constants";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
@@ -97,11 +101,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id]);
   // 全景模式：由节点 data.panorama 布尔字段驱动（随节点落库，刷新后自动恢复），
   // 仅支持手动退出（工具栏关闭按钮）；每个节点独立判断，可多个节点同时开启
-  const [panoramaOpen, setPanoramaOpenInternal] = useState<boolean>(() => !!data.panorama);
+  // 完全派生自 data.panorama，不再用本地 state 镜像：
+  // 撤销 / 重做、切换项目、恢复离线草稿都会整体替换 data，本地镜像无法跟随，
+  // 会出现「撤销到开启状态后面板不重开 / 撤销到关闭状态后面板不关闭」的错乱。
+  const panoramaOpen = !!data.panorama;
   const setPanoramaOpen = useCallback(
     (open: boolean) => {
-      setPanoramaOpenInternal(open);
       useCanvasStore.getState().updateNodeData(id, { panorama: open });
+      markDirtyImmediate();
     },
     [id]
   );
@@ -221,7 +228,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
-    const store = useCanvasStore.getState();
     try {
       // 1. 加载原图
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -251,7 +257,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       });
       markDirtyImmediate();
     } catch (e) {
-      store.updateNodeData(id, { taskBinding: undefined }, undefined, { skipHistory: true });
+      // 本链路不占用 taskBinding，无需回滚生成态；仅记录日志
       console.error("transform failed:", e);
     }
   }, [id, src]);
@@ -631,11 +637,13 @@ function PreviewOverlay({
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
-  const current = list[Math.max(0, Math.min(index, list.length - 1))] || "";
   const count = list.length;
+  // index 可能与 list 不同步（多图结果被替换后列表变短等），统一 clamp 后再使用
+  const safeIndex = Math.max(0, Math.min(index, count - 1));
+  const current = list[safeIndex] || "";
   const go = (dir: number) => {
     if (count <= 1) return;
-    onIndexChange((index + dir + count) % count);
+    onIndexChange((safeIndex + dir + count) % count);
   };
   useEffect(() => {
     const r = requestAnimationFrame(() => setShown(true));
@@ -727,7 +735,7 @@ function PreviewOverlay({
           className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-sm text-white/90"
           onClick={(e) => e.stopPropagation()}
         >
-          {index + 1} / {count}
+          {safeIndex + 1} / {count}
         </div>
       )}
 
@@ -742,7 +750,7 @@ function PreviewOverlay({
               key={i}
               onClick={() => onIndexChange(i)}
               className={`h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-md transition ${
-                i === index ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
+                i === safeIndex ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
               }`}
             >
               <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />

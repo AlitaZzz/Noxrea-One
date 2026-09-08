@@ -16,6 +16,7 @@ import {
   LAYOUT_GAP,
 } from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
+import { isOffline } from "@/lib/utils/upload";
 
 const GRID_COLS = 4;
 
@@ -160,7 +161,9 @@ export function useFileDrop(
         let nodeW = AUDIO_NODE_WIDTH;
         let nodeH = AUDIO_NODE_HEIGHT;
 
-        if (kind !== "audio") {
+        // 离线时 runMediaUpload 会立即以「离线」语义返回，不会接管任何预览 URL，
+        // 因此这里也不创建，避免 blob URL 无人 revoke 而泄漏（此情况下尺寸探测也无意义）
+        if (kind !== "audio" && !isOffline()) {
           previewUrl = URL.createObjectURL(file);
           const dims = await loadMediaDimensions(previewUrl, kind === "video");
           nw = dims.w || (kind === "video" ? 1280 : DEFAULT_NODE_WIDTH);
