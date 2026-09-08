@@ -785,6 +785,36 @@ export default function InfiniteCanvas() {
     return () => { flushOnUnload(); };
   }, []);
 
+  // 中键拖拽同样能平移，但 React Flow 的 .draggable 只在 panOnDrag 含左键 0 时挂载，
+  // 中键按下不会自动变抓手。这里手动补光标，与按住空格的手感保持一致。
+  useEffect(() => {
+    const el = canvasContainerRef.current;
+    if (!el) return;
+
+    const onDown = (e: MouseEvent) => {
+      // 只在中键、且确实按在画布内时才切换光标
+      if (e.button !== 1 || !el.contains(e.target as Node)) return;
+      // d3-zoom 接管中键平移时没有 preventDefault，Windows/Chrome 会弹出中键自动滚动，
+      // 它的原生光标会盖住 CSS 抓手。这里在捕获阶段拦掉默认行为（不影响平移本身）。
+      e.preventDefault();
+      el.classList.add("middle-panning");
+    };
+    // 中键若在窗口外松开，mouseup 不会派发到 window，靠 blur 兜底复位
+    const onUp = () => el.classList.remove("middle-panning");
+
+    // 必须用捕获阶段：中键平移被 React Flow 底层的 d3-zoom 接管后，d3-zoom 会在目标元素上
+    // stopImmediatePropagation()，冒泡阶段挂到 window 的监听收不到该事件。
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("mouseup", onUp, true);
+    window.addEventListener("blur", onUp);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("mouseup", onUp, true);
+      window.removeEventListener("blur", onUp);
+      el.classList.remove("middle-panning");
+    };
+  }, []);
+
   return (
     <div
       ref={canvasContainerRef}
@@ -823,7 +853,11 @@ export default function InfiniteCanvas() {
         multiSelectionKeyCode={["Shift", "Control", "Meta"]}
         deleteKeyCode={[]}
         fitView={false}
-        panOnDrag={[0, 1]}
+        // 画布导航（Figma 约定）：左键拖空白 = 框选，空格+拖拽 或 中键 = 平移。
+        // panOnDrag 去掉左键 0、只留中键 1；按住空格时 React Flow 会把 panOnDrag 视为 true。
+        panOnDrag={[1]}
+        selectionOnDrag={true}
+        panActivationKeyCode="Space"
         panOnScroll={false}
         zoomOnScroll={true}
         zoomOnPinch={true}

@@ -133,8 +133,16 @@
 }
 
 /* React Flow overrides */
-.react-flow__pane { cursor: grab; }
-.react-flow__pane:active { cursor: grabbing; }
+/* 光标跟随「画布导航」语义：默认左键拖空白是框选，用普通指针；
+   按住空格时 React Flow 会给 pane 挂上 .draggable，此时才显示抓手。
+   .selection 是框选态，React Flow 默认给 pointer，改回 default 以免被误读成「可点击」 */
+.react-flow .react-flow__pane { cursor: default; }
+.react-flow .react-flow__pane.selection { cursor: default; }
+.react-flow .react-flow__pane.draggable { cursor: grab; }
+.react-flow .react-flow__pane.draggable:active { cursor: grabbing; }
+/* 中键拖拽平移：React Flow 只在左键可平移时给抓手，中键按下时手动补「抓紧」光标 */
+.canvas-container.middle-panning .react-flow__pane,
+.canvas-container.middle-panning .react-flow__node { cursor: grabbing !important; }
 .react-flow__node { font-family: inherit; }
 /* 选中节点提升至最上层，但组节点例外（组始终作为底层容器，避免盖住成员） */
 .react-flow__node.selected:not(.react-flow__node-group) {
