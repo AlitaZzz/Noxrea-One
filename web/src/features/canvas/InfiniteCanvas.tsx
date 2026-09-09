@@ -149,11 +149,13 @@ export default function InfiniteCanvas() {
 
 
 
-  // When all selected nodes are groups, hide the built-in selection rect
-  // (group nodes have their own border, the rect is redundant)
+  // 内置多选外框只在真正「多选」时才有意义：
+  // - 单选时它只是把节点再包一圈（还带 40px 外扩），与节点自身描边重复，反而干扰；
+  // - 选中的全是组节点时，组自己有边框，外框同样冗余。
   const hideSelectionRect = useMemo(() => {
     const selected = nodes.filter((n) => n.selected);
-    return selected.length > 0 && selected.every((n) => n.type === NODE_TYPE.GROUP);
+    if (selected.length < 2) return true;
+    return selected.every((n) => n.type === NODE_TYPE.GROUP);
   }, [nodes]);
 
   // 冻结 defaultViewport 引用——React Flow 仅在首次挂载时读取此值，

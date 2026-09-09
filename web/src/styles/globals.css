@@ -178,15 +178,15 @@
   border: 1px dashed var(--canvas-marquee-border) !important;
   border-radius: 6px;
 }
-/* 松手后的多选外框：已是「选中结果」，与节点选中描边同走 --canvas-select，
-   填充压到 8%——节点自身已有绿色描边，大框再高亮会过曝。 */
+/* 松手后的多选外框：与拖拽框同色（中性灰），但边框改回实线——
+   虚线读作「进行中」，实线读作「已成结果」，靠线型而非颜色区分两个阶段。
+   选中语义由节点自身的 --canvas-select 描边承担，大框不再用强调色。 */
 .react-flow__nodesselection-rect {
-  background: color-mix(in srgb, var(--canvas-select) 8%, transparent) !important;
-  border: 1px solid var(--canvas-select) !important;
+  background: var(--canvas-marquee-bg) !important;
+  border: 1px solid var(--canvas-marquee-border) !important;
   border-radius: 6px;
 }
-/* Hide selection rect when all selected nodes are groups
-   (group nodes have their own border, the rect is redundant) */
+/* 单选、或选中的全是组节点时隐藏外框：这两种情况下包一圈外框没有信息量 */
 .hide-selection-rect .react-flow__nodesselection-rect {
   display: none;
 }
