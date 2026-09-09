@@ -5,6 +5,24 @@
  * 资产库上传）都通过它打开系统文件选择器，避免各自手写 input 元素。
  */
 
+/**
+ * 通配类型的扩展名兜底。
+ * 系统文件选择器按注册表匹配 MIME，而 mkv / mov / avi 等容器在部分系统上
+ * 未注册为 video/*，只写 "video/*" 会让这些文件在对话框里选不到，故补上扩展名。
+ */
+const EXT_FALLBACK: Record<string, string> = {
+  "image/*": ".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.avif",
+  "video/*": ".mp4,.webm,.mov,.avi,.mkv,.m4v",
+  "audio/*": ".mp3,.wav,.ogg,.m4a,.aac,.flac",
+};
+
+/** 给 accept 中的通配类型补齐常见扩展名（已显式列出的保持不变） */
+export function expandAccept(accept: string): string {
+  const parts = accept.split(",").map((s) => s.trim()).filter(Boolean);
+  const extras = parts.map((p) => EXT_FALLBACK[p]).filter((v): v is string => Boolean(v));
+  return Array.from(new Set([...parts, ...extras])).join(",");
+}
+
 export interface PickFilesOptions {
   /** accept 属性，如 "image/*" */
   accept?: string;
@@ -19,7 +37,7 @@ export function pickFiles(options: PickFilesOptions = {}): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    if (options.accept) input.accept = options.accept;
+    if (options.accept) input.accept = expandAccept(options.accept);
     input.multiple = options.multiple ?? false;
     input.style.display = "none";
 

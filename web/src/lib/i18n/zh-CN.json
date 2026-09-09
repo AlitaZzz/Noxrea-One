@@ -559,11 +559,11 @@
       "invalid_form_data": "表单数据解析失败",
       "no_file": "未选择文件",
       "file_too_large": "文件体积超过 {{limit}}MB 上限",
-      "unsupported_type": "不支持的文件类型：{{type}}",
+      "unsupported_type": "暂不支持这种文件格式，换个常见格式（如 MP4 / MOV / PNG / MP3）再试试",
       "upload_failed": "上传失败，请稍后重试",
       "timeout": "上传超时，请检查网络后重试",
       "server_error": "服务暂时不可用（HTTP {{status}}），请稍后重试",
-      "http_error": "上传被拒绝（HTTP {{status}}）",
+      "http_error": "上传没成功（HTTP {{status}}），请重试或换个文件试试",
       "aborted": "上传已取消",
       "offline": "网络已断开，请恢复网络后重试"
     },

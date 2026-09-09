@@ -182,6 +182,11 @@ export class UploadTransportError extends Error {
   }
 }
 
+/** 安全解析 JSON：网关错误页 / 代理返回 HTML 时返回 null，供错误文案兜底判定 */
+function parseJsonSafe(text: string): unknown {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
@@ -241,10 +246,15 @@ export function apiUploadWithProgress<T = unknown>(
       settle(() => {
         if (checkUnauthorized(xhr.status)) { reject(new UnauthorizedError()); return; }
         if (xhr.status < 200 || xhr.status >= 300) {
-          // 网关错误页、413 等在此收口，不再被误判成网络错误而无效重试
-          const message = xhr.status >= 500
-            ? i18n.t("error.upload.server_error", { status: xhr.status })
-            : i18n.t("error.upload.http_error", { status: xhr.status });
+          // 网关错误页、413 等在此收口，不再被误判成网络错误而无效重试。
+          // 服务端错误响应带结构化错误码（{ error, ctx }），优先翻译成人话；
+          // 解析不出（网关 HTML / 代理错误页）才退回带状态码的兜底文案。
+          const body = parseErrorBody(parseJsonSafe(xhr.responseText));
+          const message = body?.error
+            ? resolveApiError(body, xhr.status, "upload.upload_failed")
+            : xhr.status >= 500
+              ? i18n.t("error.upload.server_error", { status: xhr.status })
+              : i18n.t("error.upload.http_error", { status: xhr.status });
           reject(new UploadTransportError("http", message, xhr.status));
           return;
         }
