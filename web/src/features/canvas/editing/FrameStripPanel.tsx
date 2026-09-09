@@ -298,7 +298,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         <Button
           type="text"
           size="middle"
-          style={{ padding: 8, color: ready ? "#1D9E75" : undefined }}
+          style={{ padding: 8, color: ready ? "var(--canvas-success)" : undefined }}
           icon={<CheckOutlined />}
           disabled={!ready}
           onClick={handleCapture}

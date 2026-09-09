@@ -112,11 +112,11 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
 
   return (
     <div
-      className={`relative group rounded-lg border transition-all cursor-pointer ${selected ? "border-blue-500" : "border-white/10 hover:border-white/30"}`}
+      className={`relative group rounded-lg border transition-all cursor-pointer ${selected ? "border-transparent" : "border-white/10 hover:border-white/30"}`}
       style={{
         background: "var(--canvas-bg-elevated)",
         aspectRatio: "1",
-        borderColor: selected ? "var(--canvas-accent)" : undefined,
+        borderColor: selected ? "var(--canvas-select)" : undefined,
         borderWidth: selected ? 2 : 1,
       }}
       onMouseLeave={handleCardLeave}
@@ -130,7 +130,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       {/* Selected checkmark */}
       {selected && (
         <div className="absolute top-2 left-2 z-10">
-          <CheckCircleFilled style={{ color: "var(--canvas-accent)", fontSize: 18 }} />
+          <CheckCircleFilled style={{ color: "var(--canvas-select)", fontSize: 18 }} />
         </div>
       )}
 

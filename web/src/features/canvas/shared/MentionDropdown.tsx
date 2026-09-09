@@ -82,7 +82,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           {item.kind === "audio" ? (
             <div
               className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--canvas-bg-hover, #3c3c3c)", border: "1px solid var(--canvas-border, #3a3a3a)", color: "#1d9e75" }}
+              style={{ background: "var(--canvas-bg-hover, #3c3c3c)", border: "1px solid var(--canvas-border, #3a3a3a)", color: "var(--canvas-success)" }}
             >
               <WaveIcon style={{ width: 22, height: 22 }} />
             </div>

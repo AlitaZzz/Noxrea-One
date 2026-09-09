@@ -105,7 +105,7 @@ function GridPicker({ nodeId }: { nodeId: string }) {
                   onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: row, cols: col })}
                   style={{
                     width: 14, height: 14,
-                    background: active ? "#1D9E75" : "var(--canvas-bg)",
+                    background: active ? "var(--canvas-success)" : "var(--canvas-bg)",
                     cursor: "pointer",
                   }}
                 />
