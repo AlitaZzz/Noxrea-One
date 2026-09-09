@@ -51,6 +51,9 @@
   --canvas-accent: #3b82f6;
   /* 节点/画布选中态描边 */
   --canvas-select: #c7f43d;
+  /* 拖拽中的框选矩形：中性灰，避免与「已选中」的品牌色抢语义 */
+  --canvas-marquee-bg: rgba(236, 236, 240, 0.06);
+  --canvas-marquee-border: rgba(236, 236, 240, 0.38);
   /* 进度 / 成功 / 就绪 / 媒体流反馈色（当前与选中色同值，可独立拆分） */
   --canvas-success: #c7f43d;
   --nav-active-bg: #232327;
@@ -85,6 +88,9 @@
   --canvas-accent: #1677ff;
   /* 浅色底上提纯白/亮柠檬绿都看不见，压暗为橄榄绿保证对比 */
   --canvas-select: #7d9b1e;
+  /* 框选矩形：浅色底改用暗灰，保证与白底有足够对比 */
+  --canvas-marquee-bg: rgba(26, 26, 26, 0.05);
+  --canvas-marquee-border: rgba(26, 26, 26, 0.32);
   --canvas-success: #7d9b1e;
   --nav-active-bg: #e8e8e8;
   --nav-hover-bg: #f0f0f0;
@@ -164,10 +170,18 @@
   padding: 40px;
   margin: -40px;
 }
-/* 多选外框 / 框选矩形：与节点选中描边同色，选中语义统一走 --canvas-select */
-.react-flow__nodesselection-rect,
+/* 拖拽中的框选矩形：中性灰 + 虚线。
+   它是几百毫秒的「工具反馈」，用强调色会让人误以为已经选中，也和选中态抢视觉；
+   虚线进一步把它和下面实线的持久外框区分开。 */
 .react-flow__selection {
-  background: color-mix(in srgb, var(--canvas-select) 12%, transparent) !important;
+  background: var(--canvas-marquee-bg) !important;
+  border: 1px dashed var(--canvas-marquee-border) !important;
+  border-radius: 6px;
+}
+/* 松手后的多选外框：已是「选中结果」，与节点选中描边同走 --canvas-select，
+   填充压到 8%——节点自身已有绿色描边，大框再高亮会过曝。 */
+.react-flow__nodesselection-rect {
+  background: color-mix(in srgb, var(--canvas-select) 8%, transparent) !important;
   border: 1px solid var(--canvas-select) !important;
   border-radius: 6px;
 }
