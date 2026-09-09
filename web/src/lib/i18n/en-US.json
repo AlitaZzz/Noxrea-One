@@ -604,6 +604,7 @@
     },
     "generation": {
       "timeout": "The provider request timed out, please try again later",
+      "poll_timeout": "Timed out waiting for the provider result, please try again later",
       "network_error": "Cannot reach the provider, please check your connection",
       "upstream_http_error": "Provider returned an error, please try again later",
       "cancelled": "Task cancelled",

@@ -8,7 +8,13 @@ import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { extractUpstreamMessage } from "@server/core/errors/task-failure";
-import { updateTaskStatus, isTaskCancelled, getTaskStatus } from "@server/crud/task";
+import {
+  updateTaskStatus,
+  isTaskCancelled,
+  getTaskStatus,
+  touchTaskHeartbeat,
+  TASK_HEARTBEAT_INTERVAL_MS,
+} from "@server/crud/task";
 import type { ProtocolService, PollResult } from "@server/services/protocols/base";
 
 export interface SubmitAndWaitResult {
@@ -347,7 +353,17 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
 
   let lastPollData: unknown;
 
+  let lastHeartbeatAt = Date.now();
+
   for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+    // 心跳：僵尸清理以 updatedAt 判定任务卡死，而视频生成的轮询常持续十几分钟。
+    // 不持续推进 updatedAt，长任务就会被误判为僵尸、重置重跑并再次提交到上游，
+    // 造成重复生成与重复计费
+    if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
+      lastHeartbeatAt = Date.now();
+      void touchTaskHeartbeat(taskId);
+    }
+
     // 每次轮询前都检查取消状态
     if (await _checkCancelled(taskId)) {
       logEvent("taskmgr", { stage: "poll_cancelled", taskId, attempt: attempt + 1 });
@@ -435,6 +451,8 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     status: "failed",
     urls: [],
     error: `异步轮询超时（upstream_task_id=${upstreamTaskId}）${lastInfo}`,
+    // 超时 ≠ 上游失败：上游可能仍在生成。给专门错误码，前端据此提示用户
+    errorCode: "generation.poll_timeout",
   };
 }
 

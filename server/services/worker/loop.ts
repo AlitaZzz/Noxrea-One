@@ -33,7 +33,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
   if (asyncTasks.length > 0) {
     logEvent("worker.loop", { stage: "resume_async_poll", count: asyncTasks.length });
     for (const task of asyncTasks) {
-      resumeAsyncPolling(task, stopSignal);
+      void resumeAsyncPolling(task, stopSignal);
     }
   }
 

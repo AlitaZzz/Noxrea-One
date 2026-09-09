@@ -227,6 +227,28 @@ export async function cleanupZombieTasks(
   return dead.count + retried.count;
 }
 
+/** 心跳间隔（ms）：轮询期间推进 updatedAt 的频率，须远小于 WORKER_STUCK_TIMEOUT */
+export const TASK_HEARTBEAT_INTERVAL_MS = 30_000;
+
+/**
+ * 轮询心跳：只推进 updatedAt，不触碰任何业务字段。
+ *
+ * 僵尸清理以 updatedAt 判定任务是否卡死，而异步轮询可能持续十几分钟（视频生成很
+ * 常见）。轮询期间不心跳的话，updatedAt 会一直停在「保存 upstreamTaskId」那一刻，
+ * 长任务必然被误判为僵尸并重置重跑——上游于是重复生成、重复计费，旧任务还沦为
+ * 无人接收的孤儿。
+ *
+ * 只在任务仍为 processing 时更新：已完成或已取消的任务不该被心跳改回活跃状态。
+ */
+export async function touchTaskHeartbeat(id: string): Promise<void> {
+  await prisma.generationTask
+    .updateMany({
+      where: { id, status: "processing" },
+      data: { updatedAt: new Date() },
+    })
+    .catch(() => undefined);
+}
+
 // 启动时恢复未完成的任务
 
 /**

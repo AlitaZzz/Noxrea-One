@@ -15,6 +15,7 @@ import {
   extractFailureCode,
 } from "@server/core/errors/task-failure";
 import { buildContext } from "./context";
+import { resumeAsyncPolling } from "./resume-polling";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
 import { logger } from "@server/core/logger";
@@ -28,6 +29,20 @@ import type { HydratedGenerationTask } from "@server/crud/task";
  * Executor 不再感知异步流程（对齐 Python 架构）。
  */
 export async function executeTask(task: HydratedGenerationTask): Promise<void> {
+  // 已有 upstreamTaskId 说明上游受理过（典型场景：被僵尸清理重置后重新认领）。
+  // 此时必须恢复轮询而不是再提交一次——否则上游会重复生成、重复计费，旧任务还会
+  // 变成无人接收的孤儿。首次执行时该字段为空，照常走提交流程。
+  if (task.upstreamTaskId) {
+    logEvent("executor", {
+      stage: "resume_poll",
+      taskId: task.id,
+      upstreamTaskId: task.upstreamTaskId,
+      retryCount: task.retryCount,
+    });
+    await resumeAsyncPolling(task);
+    return;
+  }
+
   const ctx = buildContext(task);
 
   logEvent("executor", {

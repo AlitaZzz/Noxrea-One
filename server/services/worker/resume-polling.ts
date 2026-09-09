@@ -12,7 +12,12 @@ import type { PollResult } from "@server/services/protocols/base";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http-client";
-import { updateTaskStatus, isTaskCancelled } from "@server/crud/task";
+import {
+  updateTaskStatus,
+  isTaskCancelled,
+  touchTaskHeartbeat,
+  TASK_HEARTBEAT_INTERVAL_MS,
+} from "@server/crud/task";
 import type { HydratedGenerationTask } from "@server/crud/task";
 import type { StopSignal } from "./loop";
 
@@ -20,7 +25,10 @@ import type { StopSignal } from "./loop";
  * 恢复异步任务轮询（Worker 重启时调用）。
  * 使用 undici.request 替代 fetch 确保代理和超时生效。
  */
-export function resumeAsyncPolling(task: HydratedGenerationTask, stopSignal: StopSignal): void {
+export function resumeAsyncPolling(
+  task: HydratedGenerationTask,
+  stopSignal: StopSignal = { stopped: false },
+): Promise<void> {
   const taskId = task.id;
   const upstreamTaskId = task.upstreamTaskId!;
 
@@ -31,8 +39,9 @@ export function resumeAsyncPolling(task: HydratedGenerationTask, stopSignal: Sto
     capability: task.type,
   });
 
-  // 异步执行，不阻塞主循环
-  _doResumePoll(task, stopSignal).catch((err) => {
+  // 返回 Promise 而非 void：启动时调用方 fire-and-forget，执行器里则 await 它，
+  // 让「恢复轮询」与「首次提交」一样受并发槽约束，避免恢复的任务绕过并发上限
+  return _doResumePoll(task, stopSignal).catch((err) => {
     logger.error({ err, taskId }, "Resume poll failed");
   });
 }
@@ -87,7 +96,16 @@ async function _doResumePoll(
     interval: pollInterval,
   });
 
+  let lastHeartbeatAt = Date.now();
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // 心跳：与 manager 的 _poll 同理——僵尸清理以 updatedAt 判定卡死，
+    // 恢复的长任务若不心跳，会再次被误判并重新提交到上游
+    if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
+      lastHeartbeatAt = Date.now();
+      void touchTaskHeartbeat(taskId);
+    }
+
     if (stopSignal.stopped) {
       logEvent("resume_poll", { stage: "stopped_by_signal", taskId, attempt });
       return;
@@ -165,19 +183,24 @@ async function _doResumePoll(
     }
   }
 
-  // 超时
-  await _failTask(taskId, `异步轮询超时（upstream_task_id=${upstreamTaskId}）`);
+  // 超时：与首次提交轮询超时同码，前端据此提示用户
+  await _failTask(
+    taskId,
+    `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,
+    "generation.poll_timeout",
+  );
 }
 
 async function _checkCancelled(taskId: string): Promise<boolean> {
   return isTaskCancelled(taskId);
 }
 
-async function _failTask(taskId: string, error: string): Promise<void> {
+async function _failTask(taskId: string, error: string, errorCode?: string): Promise<void> {
   try {
     await updateTaskStatus(taskId, {
       status: "failed",
       error,
+      errorCode,
       completedAt: new Date(),
     });
   } catch (err) {

@@ -98,6 +98,8 @@ export const ERROR_CODES = [
   // ── 生成任务执行（异步，错误码经 SSE 传给前端，不落库） ──
   /** 调用上游超时 */
   "generation.timeout",
+  /** 轮询上游任务超时 */
+  "generation.poll_timeout",
   /** 无法连接上游服务 */
   "generation.network_error",
   /** 上游返回 HTTP 错误且未给出可读说明 */
