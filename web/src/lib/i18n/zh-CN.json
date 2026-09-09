@@ -603,6 +603,7 @@
     },
     "generation": {
       "timeout": "调用服务商超时，请稍后重试",
+      "poll_timeout": "等待服务商返回结果超时，请稍后重试",
       "network_error": "无法连接服务商，请检查网络后重试",
       "upstream_http_error": "服务商返回错误，请稍后重试",
       "cancelled": "任务已取消",

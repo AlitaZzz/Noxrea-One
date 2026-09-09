@@ -31,7 +31,8 @@ const configSchema = z.object({
   WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(1),
   WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(10),
   WORKER_API_TIMEOUT: z.coerce.number().int().positive().default(240),
-  WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(5),
+  /** 僵尸判定阈值（分钟）：轮询期间有心跳持续推进 updatedAt，这里只需兜住「轮询线程真的挂了」，取 15 给长视频生成留余量 */
+  WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(15),
   WORKER_ZOMBIE_INTERVAL: z.coerce.number().int().positive().default(60),
   WORKER_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
   WORKER_DRAIN_TIMEOUT: z.coerce.number().int().positive().default(15),
