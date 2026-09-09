@@ -83,7 +83,7 @@
     "MiniMax-H3": {
       "video": {
         "capabilities": {
-          "refMode": { "options": ["image", "first-last", "full"] }
+          "refMode": { "options": ["text", "image", "first-last", "full"] }
         },
         "allowedFields": ["ratio", "resolution", "seconds", "refImages", "refVideos", "refAudios", "refMode"],
         "fields": [
@@ -104,8 +104,8 @@
               "full": { "field": "image_urls", "kind": "array" }
             }
           },
-          "refVideos": { "field": "video_urls" },
-          "refAudios": { "field": "audio_urls" }
+          "refVideos": { "field": "video_urls", "kind": "array" },
+          "refAudios": { "field": "audio_urls", "kind": "array" }
         }
       }
     },
