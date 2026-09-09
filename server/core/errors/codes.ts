@@ -157,9 +157,15 @@ export const ERROR_CODES = [
   /** 抽帧处理失败 */
   "capture_frame.capture_failed",
 
-  // ── 全 I 帧代理视频 ──
+  // ── 预览代理视频 ──
   /** 代理视频生成失败（转码异常或 ffmpeg 缺失），调用方回退原视频 */
   "video_proxy.generation_failed",
+
+  // ── 帧序列雪碧图 ──
+  /** 源视频时长不可用：无法把采样格映射到时间轴，只能放弃缩略图 */
+  "frame_sprite.duration_unavailable",
+  /** 雪碧图生成失败（转码异常或 ffmpeg 缺失），调用方退化为无缩略图的轨道 */
+  "frame_sprite.generation_failed",
 
   // ── 音视频分离 ──
   /** 源视频不存在 */

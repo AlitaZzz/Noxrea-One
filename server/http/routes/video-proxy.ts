@@ -1,16 +1,21 @@
 /**
- * 全 I 帧代理视频路由。
+ * 预览代理视频路由。
  *
- * 为前端帧序列面板提供「任意时间点都能立刻解出」的预览源：原视频多为长 GOP，
- * seek 要从 GOP 起点解码过来，抽满一整条轨道的缩略图会很慢；全 I 帧代理让
- * 每次 seek 只解一帧，抽帧快数倍。
+ * 为帧序列面板的拖动预览提供低分辨率副本：原视频多为长 GOP（x264 默认 250 帧
+ * 一个关键帧），直接拖动要从 GOP 起点一路解码过来，明显发涩。副本取 1 秒 GOP——
+ * 刻意不用全 I 帧：全 I 帧 seek 最快，但放弃帧间预测后同画质码率是长 GOP 的
+ * 3～5 倍，代理文件反而比原视频还大；1 秒 GOP 下 seek 最多解码 1 秒画面（几十
+ * 毫秒），拖动已经无感，体积则降到全 I 帧的三分之一左右。
+ *
+ * 轨道缩略图不走这里，改由 /api/files/frame-sprite 出雪碧图（几十 KB）：
+ * 缩略图与 scrub 代理是两套独立产物，这也是剪辑软件的通行做法。
  *
  * 代理按「源键 + 宽度」派生文件名，生成一次后长期复用；成片抽帧仍走原视频。
  */
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { createAllIntraProxy, probeVideoMeta, type VideoMeta } from "@server/services/storage/media";
+import { createScrubProxy, probeVideoMetaCached } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
@@ -26,8 +31,6 @@ const videoProxySchema = z.object({
 const PROXY_WIDTH = 720;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
 const PROXY_VERSION = 2;
-/** 探测结果缓存：代理命中缓存时不必再 spawn 一次 ffmpeg */
-const metaCache = new Map<string, VideoMeta | null>();
 /** 正在生成的代理：同一视频的并发请求共用一次转码 */
 const inflight = new Map<string, Promise<void>>();
 /** 清理扫描的最小间隔：避免每次请求都遍历目录 */
@@ -63,10 +66,11 @@ async function generateProxy(
   tmpPath: string,
   proxyPath: string,
   width: number,
+  fps: number | null,
 ): Promise<void> {
   let renamed = false;
   try {
-    await createAllIntraProxy(videoPath, tmpPath, width);
+    await createScrubProxy(videoPath, tmpPath, width, fps);
     await fs.mkdir(path.dirname(proxyPath), { recursive: true });
     await fs.rename(tmpPath, proxyPath);
     renamed = true;
@@ -117,12 +121,9 @@ router.post("/api/files/video-proxy", async (c) => {
   }
 
   // 帧率与分辨率：读取容器信息，开销可忽略。
-  // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成
-  let meta = metaCache.get(video_key);
-  if (meta === undefined) {
-    meta = await probeVideoMeta(videoPath);
-    metaCache.set(video_key, meta);
-  }
+  // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成；
+  // 帧率用来把关键帧间隔定成 1 秒——探测结果在雪碧图路由间共用，只跑一次
+  const meta = await probeVideoMetaCached(videoPath);
   const width = meta?.width && meta.width > 0
     ? Math.min(PROXY_WIDTH, meta.width)
     : PROXY_WIDTH;
@@ -156,7 +157,7 @@ router.post("/api/files/video-proxy", async (c) => {
   }
 
   const tmpPath = path.resolve(baseDir, `_tmp/proxy_${process.pid}_${randomUUID()}.mp4`);
-  const task = generateProxy(videoPath, tmpPath, proxyPath, width);
+  const task = generateProxy(videoPath, tmpPath, proxyPath, width, fps);
   inflight.set(proxyKey, task);
 
   try {
