@@ -466,9 +466,8 @@
     "lastFrame": "截取末帧",
     "processing": "正在捕获帧...",
     "confirm": "截取",
-    "loading": "正在读取视频...",
-    "extracting": "正在抽取帧序列 {{done}}/{{total}}",
-    "unavailable": "无法读取视频时长，请改用首帧或末帧"
+    "loading": "正在生成帧序列...",
+    "unavailable": "无法生成帧序列预览"
   },
   "detach": {
     "failed": "音轨分离失败，请稍后重试",
@@ -580,6 +579,10 @@
     },
     "video_proxy": {
       "generation_failed": "预览视频生成失败"
+    },
+    "frame_sprite": {
+      "duration_unavailable": "无法读取视频时长，请改用首帧或末帧",
+      "generation_failed": "帧序列生成失败"
     },
     "detach_audio": {
       "video_not_found": "源视频不存在",

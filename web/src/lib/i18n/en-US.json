@@ -467,9 +467,8 @@
     "lastFrame": "Capture last frame",
     "processing": "Capturing frame...",
     "confirm": "Capture",
-    "loading": "Reading video...",
-    "extracting": "Extracting frames {{done}}/{{total}}",
-    "unavailable": "Video duration unavailable, please use first or last frame"
+    "loading": "Generating frame strip...",
+    "unavailable": "Frame preview unavailable"
   },
   "detach": {
     "failed": "Audio detach failed, please try again later",
@@ -581,6 +580,10 @@
     },
     "video_proxy": {
       "generation_failed": "Preview video generation failed"
+    },
+    "frame_sprite": {
+      "duration_unavailable": "Video duration unavailable, please use first or last frame",
+      "generation_failed": "Failed to generate frame strip"
     },
     "detach_audio": {
       "video_not_found": "Source video not found",
