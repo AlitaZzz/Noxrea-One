@@ -1,9 +1,9 @@
 /**
  * 视频帧序列面板。
  *
- * 打开时抽取整条轨道的缩略图，用户拖动播放头（或点击某一格）定位到目标帧，
- * 点「截取」才真正抽帧——时间通过 canvas:node-action 事件交给 VideoNode，
- * 复用既有的后端抽帧与派生节点创建链路。
+ * 打开时加载整条轨道的缩略图（服务端一次解码生成的雪碧图），用户拖动播放头
+ * 定位到目标帧，点「截取」才真正抽帧——时间通过 canvas:node-action 事件交给
+ * VideoNode，复用既有的后端抽帧与派生节点创建链路。
  *
  * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放，轨道尺寸始终稳定。
@@ -16,15 +16,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { fetchVideoProxy } from "@/features/canvas/api/file-api";
-import { useFrameThumbnails } from "@/features/canvas/hooks/use-frame-thumbnails";
+import { FRAME_TRACK_HEIGHT,useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { getVideoPlaybackTime, isVideoPlaying, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
 /** 播放头所在层左右各留 12px（与 inset-x-3 对齐），按内区换算才能跟手 */
 const PLAYHEAD_INSET = 12;
-/** 等待代理视频的上限：720p 全 I 帧首次转码通常 1–3 秒，超时就先用原视频 */
-const PROXY_WAIT_MS = 3_000;
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
 
@@ -36,13 +34,20 @@ interface FrameStripPanelProps {
 
 function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   const { t } = useTranslation();
-  // 抽帧源：优先全 I 帧代理（seek 只解一帧，抽满整条轨道快数倍），拿不到就退回原视频
-  const [thumbSrc, setThumbSrc] = useState<string | null>(null);
+  // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道
+  const {
+    url: spriteUrl,
+    spriteWidth,
+    cellWidth,
+    cellHeight,
+    count,
+    frameWidth,
+    duration,
+    fps,
+    status,
+  } = useFrameSprite(videoSrc);
   // 代理地址单独留存：它同时也是拖动时节点播放器的临时播放源
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  // 真实帧率：供 ←/→ 一帧步进使用，拿不到时回退固定步进
-  const [fps, setFps] = useState<number | null>(null);
-  const { frames, frameWidth, duration, extracted, status } = useFrameThumbnails(thumbSrc);
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -60,30 +65,29 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     setRatio(next);
   }, []);
 
-  // 取代理视频：全 I 帧让每次 seek 只解一帧，抽满一整条轨道快数倍。
-  // 首次需要转码，超过上限就先用原视频；转完会落在服务端缓存，下次打开直接命中。
+  // 取预览代理：拖动播放头时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
+  //
+  // 这里刻意不做「超时就放弃」的竞速：转码通常 1–3 秒，一旦放弃，proxyUrl 就停在
+  // null，切换 effect 不会再触发——本次会话再也用不上代理，用户只能一直拿长 GOP
+  // 的原视频拖动，而后端其实还在转，转完也白白落到缓存里等下次打开才命中。
+  // 改成等请求自然完成：期间节点先用原视频 scrub，代理就绪后自动切过去，
+  // swapVideoSource 会把当前时间点写回，切换不跳位。
   useEffect(() => {
     let cancelled = false;
     const videoKey = videoSrc.replace(/^\/api\/files\//, "").split("?")[0];
-    const timeout = new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), PROXY_WAIT_MS);
-    });
-    // 拿不到源键（例如本地预览地址）时直接用原视频，不再请求代理
+    // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub
     const request = videoKey
       ? fetchVideoProxy(videoKey)
           .then(async (res) => {
             if (!res.ok) return null;
-            const json = (await res.json()) as { data?: { url?: string; fps?: number | null } };
-            return { url: json.data?.url ?? null, fps: json.data?.fps ?? null };
+            const json = (await res.json()) as { data?: { url?: string } };
+            return json.data?.url ?? null;
           })
           .catch(() => null)
-      : Promise.resolve(null);
-    void Promise.race([request, timeout]).then((data) => {
+      : Promise.resolve<string | null>(null);
+    void request.then((url) => {
       if (cancelled) return;
-      const url = data?.url ?? null;
       setProxyUrl(url);
-      setFps(data?.fps ?? null);
-      setThumbSrc(url || videoSrc);
     });
     return () => {
       cancelled = true;
@@ -95,7 +99,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     pauseVideo(nodeId);
   }, [nodeId]);
 
-  // 选帧期间把节点播放器切到全 I 帧代理：任意时间点只解一帧，seek 毫秒级完成，
+  // 选帧期间把节点播放器切到预览代理：短 GOP 下 seek 最多解码 1 秒画面，毫秒级完成，
   // 拖动时画面既能连续更新又能与播放头对齐；关闭面板自动恢复原视频并停在所选帧
   useEffect(() => {
     if (!proxyUrl) return;
@@ -168,9 +172,29 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     [ratioFromClientX, setRatioByUser],
   );
 
-  const frameCount = frames.length;
-  const ready = frameCount > 0 && duration > 0;
+  // 时长是唯一的前置条件：拿不到雪碧图也要能定位与截取，只是轨道上没有画面
+  const ready = duration > 0;
   const currentTime = ready ? ratio * duration : 0;
+
+  // 单格按 contain 规则缩放并居中，与之前 img + object-contain 的效果一致：
+  // 横屏时上下留边、竖屏时左右留边，不会为了铺满格子而裁掉画面。
+  //
+  // 内层 div 的尺寸正好等于单格内容，用它把连续的雪碧图裁出当前格。不能直接把
+  // 背景画满整格再做居中偏移——雪碧图里格子首尾相连，竖屏时内容窄于格宽，居中
+  // 让出的那几像素正好露出下一格的画面。
+  const scale = cellWidth > 0 && cellHeight > 0
+    ? Math.min(frameWidth / cellWidth, FRAME_TRACK_HEIGHT / cellHeight)
+    : 0;
+  const cellStyle = (index: number) => ({
+    left: (frameWidth - cellWidth * scale) / 2,
+    top: (FRAME_TRACK_HEIGHT - cellHeight * scale) / 2,
+    width: cellWidth * scale,
+    height: cellHeight * scale,
+    backgroundImage: `url(${spriteUrl})`,
+    backgroundSize: `${spriteWidth * scale}px ${cellHeight * scale}px`,
+    backgroundPosition: `${-index * cellWidth * scale}px 0`,
+    backgroundRepeat: "no-repeat" as const,
+  });
 
   // 节点播放时播放头跟随：复用节点控件栏的播放按钮，边听边看；
   // 暂停后播放头即停在当前帧，再用 ←/→ 微调
@@ -220,40 +244,29 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       >
         <div className="flex size-full overflow-hidden rounded-xl bg-black">
           {ready ? (
-            frames.map((src, i) => (
-              // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
-              // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
-              // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
-              <div
-                key={i}
-                className="relative h-full shrink-0 overflow-hidden"
-                style={{ width: frameWidth, marginLeft: i === 0 ? 0 : -1 }}
-              >
-                {src ? (
-                  <img
-                    alt=""
-                    draggable={false}
-                    src={src}
-                    className="size-full select-none bg-black object-contain object-center"
-                  />
-                ) : (
-                  <span className="block size-full bg-white/10" />
-                )}
-              </div>
-            ))
+            count > 0 && spriteUrl ? (
+              Array.from(Array(count).keys()).map((i) => (
+                // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
+                // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
+                // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
+                <div
+                  key={i}
+                  className="relative h-full shrink-0 overflow-hidden"
+                  style={{ width: frameWidth, marginLeft: i === 0 ? 0 : -1 }}
+                >
+                  <div className="absolute bg-black" style={cellStyle(i)} />
+                </div>
+              ))
+            ) : (
+              // 雪碧图不可用：退化为空轨道，播放头与时间码仍可定位与截取
+              <div className="size-full bg-white/10" />
+            )
           ) : (
             <div className="flex size-full items-center justify-center px-4 text-xs text-white/60">
               {status === "error" ? t("capture.unavailable") : t("capture.loading")}
             </div>
           )}
         </div>
-
-        {/* 抽帧进度：贴轨道上方，避免遮挡缩略图 */}
-        {status === "extracting" && frameCount > 0 && (
-          <div className="pointer-events-none absolute -top-5 right-0 z-20 text-xs tabular-nums text-[var(--canvas-text-dim)]">
-            {t("capture.extracting", { done: extracted, total: frameCount })}
-          </div>
-        )}
 
         {/* 播放头：白色圆点 + 竖线，与轨道内侧留 12px 边距 */}
         {ready && (
