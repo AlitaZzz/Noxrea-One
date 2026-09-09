@@ -560,11 +560,11 @@
       "invalid_form_data": "Failed to parse the form data",
       "no_file": "No file selected",
       "file_too_large": "File size exceeds the {{limit}}MB limit",
-      "unsupported_type": "Unsupported file type: {{type}}",
+      "unsupported_type": "This file format is not supported, please try a common one (MP4 / MOV / PNG / MP3)",
       "upload_failed": "Upload failed, please try again later",
       "timeout": "Upload timed out, please check your connection and retry",
       "server_error": "Service temporarily unavailable (HTTP {{status}}), please try again later",
-      "http_error": "Upload rejected (HTTP {{status}})",
+      "http_error": "Upload did not go through (HTTP {{status}}), please retry or try another file",
       "aborted": "Upload cancelled",
       "offline": "You are offline, please restore the connection and retry"
     },

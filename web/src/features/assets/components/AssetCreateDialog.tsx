@@ -15,6 +15,7 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { runMediaUpload } from "@/features/canvas/upload";
+import { expandAccept } from "@/features/canvas/upload/pick-files";
 import { isOffline } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
@@ -317,7 +318,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,video/*,audio/*"
+        accept={expandAccept("image/*,video/*,audio/*")}
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) addFiles(e.target.files);
