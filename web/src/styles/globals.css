@@ -632,7 +632,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .dir-slider:disabled { opacity: .5; }
 
 /* Director: 隐藏 number input 原生箭头 */
-.dir-num { -moz-appearance: textfield; }
+.dir-num { -moz-appearance: textfield; appearance: textfield; }
 .dir-num::-webkit-inner-spin-button,
 .dir-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
