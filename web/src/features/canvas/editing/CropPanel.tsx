@@ -235,7 +235,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
     width: 10,
     height: 10,
     background: "#fff",
-    border: "1.5px solid #1D9E75",
+    border: "1.5px solid var(--canvas-success)",
     borderRadius: 3,
     pointerEvents: "auto",
     cursor: "pointer",
@@ -290,7 +290,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
           <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
         </Tooltip>
         <Tooltip title={t("crop.confirm")}>
-          <Button type="text" size="middle" style={{ padding: 8, color: loading ? undefined : "#1D9E75" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleConfirm} loading={loading} />
+          <Button type="text" size="middle" style={{ padding: 8, color: loading ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleConfirm} loading={loading} />
         </Tooltip>
       </WheelGuard>
 
@@ -325,7 +325,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
             width: `${crop.w * 100}%`,
             height: `${crop.h * 100}%`,
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
-            border: "1.5px solid #1D9E75",
+            border: "1.5px solid var(--canvas-success)",
           }}
         >
           {/* Rule of thirds */}

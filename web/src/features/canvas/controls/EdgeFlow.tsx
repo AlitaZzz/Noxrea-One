@@ -12,7 +12,7 @@ import { getBezierPath } from "@xyflow/react";
 import { useId } from "react";
 
 /** 流光（管道里的流体）颜色；管道本体色见 constants.ts 的 EDGE_BASE_COLOR */
-export const DOT_COLOR = "#1D9E75";
+export const DOT_COLOR = "var(--canvas-success)";
 
 // ── 流光动画可调参数 ──
 // 调效果只动这一块：

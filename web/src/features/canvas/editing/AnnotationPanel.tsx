@@ -551,7 +551,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
         </Tooltip>
         <Tooltip title={t("annotation.save")}>
-          <Button type="text" size="middle" style={{ padding: 8, color: loading || !imgLoaded ? undefined : "#1D9E75" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleSave} loading={loading} />
+          <Button type="text" size="middle" style={{ padding: 8, color: loading || !imgLoaded ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleSave} loading={loading} />
         </Tooltip>
       </WheelGuard>
 
@@ -596,7 +596,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
               minWidth: 120,
               minHeight: 28,
               padding: "2px 4px",
-              border: "1px solid #1D9E75",
+              border: "1px solid var(--canvas-success)",
               background: "rgba(0,0,0,0.65)",
               color: color,
               fontSize: 14,

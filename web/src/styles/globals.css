@@ -49,6 +49,10 @@
   --canvas-text-muted: #6e6e76;
   --canvas-text-disabled: rgba(236, 236, 240, 0.3);
   --canvas-accent: #3b82f6;
+  /* 节点/画布选中态描边 */
+  --canvas-select: #c7f43d;
+  /* 进度 / 成功 / 就绪 / 媒体流反馈色（当前与选中色同值，可独立拆分） */
+  --canvas-success: #c7f43d;
   --nav-active-bg: #232327;
   --nav-hover-bg: #16161a;
   /* 工具栏 */
@@ -79,6 +83,9 @@
   --canvas-text-muted: #aaa;
   --canvas-text-disabled: rgba(26, 26, 26, 0.3);
   --canvas-accent: #1677ff;
+  /* 浅色底上提纯白/亮柠檬绿都看不见，压暗为橄榄绿保证对比 */
+  --canvas-select: #7d9b1e;
+  --canvas-success: #7d9b1e;
   --nav-active-bg: #e8e8e8;
   --nav-hover-bg: #f0f0f0;
   /* 工具栏 */
@@ -157,6 +164,13 @@
   padding: 40px;
   margin: -40px;
 }
+/* 多选外框 / 框选矩形：与节点选中描边同色，选中语义统一走 --canvas-select */
+.react-flow__nodesselection-rect,
+.react-flow__selection {
+  background: color-mix(in srgb, var(--canvas-select) 12%, transparent) !important;
+  border: 1px solid var(--canvas-select) !important;
+  border-radius: 6px;
+}
 /* Hide selection rect when all selected nodes are groups
    (group nodes have their own border, the rect is redundant) */
 .hide-selection-rect .react-flow__nodesselection-rect {
@@ -178,7 +192,7 @@
   outline: 1px solid rgba(255, 255, 255, 0.1);
 }
 .node-body.node-selected {
-  outline: 1px solid rgba(255, 255, 255, 1);
+  outline: 1px solid var(--canvas-select);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 .node-body.node-drag-over {
@@ -276,7 +290,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #1d9e75;
+  color: var(--canvas-success);
 }
 
 /* Prompt 输入区滚动条 */

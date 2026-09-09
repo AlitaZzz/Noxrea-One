@@ -62,7 +62,7 @@ function GeneratingOverlay({
       />
       <div
         className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
-        style={{ borderColor: "#1D9E75", borderTopColor: "transparent" }}
+        style={{ borderColor: "var(--canvas-success)", borderTopColor: "transparent" }}
       />
       <span className="text-sm text-white/50">
         {text ?? t("common.generating")}

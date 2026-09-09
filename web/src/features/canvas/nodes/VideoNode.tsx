@@ -519,11 +519,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
               {data.upload?.progress != null ? (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#1D9E75] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                  <div className="h-full bg-[var(--canvas-success)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
                 </div>
               ) : (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#1D9E75] rounded-full animate-pulse" style={{ width: "60%" }} />
+                  <div className="h-full bg-[var(--canvas-success)] rounded-full animate-pulse" style={{ width: "60%" }} />
                 </div>
               )}
               <span className="text-sm text-white/70 font-medium tabular-nums">
@@ -566,7 +566,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 onPointerDown={handleSeekDown}
               >
                 <div
-                  className="h-full bg-[#1D9E75] rounded-full relative transition-[width] duration-75"
+                  className="h-full bg-[var(--canvas-success)] rounded-full relative transition-[width] duration-75"
                   style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
                 >
                   <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
@@ -609,7 +609,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                       onPointerDown={handleVolumeDown}
                     >
                       <div
-                        className="h-full bg-[#1D9E75] rounded-full relative transition-[width] duration-75"
+                        className="h-full bg-[var(--canvas-success)] rounded-full relative transition-[width] duration-75"
                         style={{ width: `${volume * 100}%` }}
                       >
                         <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/volume:scale-100 transition-transform" />
