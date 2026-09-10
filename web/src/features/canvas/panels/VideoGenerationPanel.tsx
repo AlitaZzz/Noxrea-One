@@ -206,7 +206,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
     const { entry, provider, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
-    if (!entry || !provider) return "缺少模型配置";
+    if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
     try {
       const res2 = await generationApi.submitGenerationTask({
         type: "video",

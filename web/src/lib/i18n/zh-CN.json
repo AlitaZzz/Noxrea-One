@@ -511,7 +511,15 @@
   },
   "director": {
     "sentToCanvas": "已发送到画布：{{name}}",
-    "sendToCanvasFailed": "发送到画布失败"
+    "sendToCanvasFailed": "发送到画布失败",
+    "search": "搜索...",
+    "group": "打组",
+    "ungroup": "解组",
+    "toggleVisible": "显示 / 隐藏",
+    "duplicate": "创建副本",
+    "newGroup": "组",
+    "defaultCharacter": "角色A",
+    "copyName": "{{name}}副本"
   },
   "error": {
     "unknown": "未知错误",
@@ -547,14 +555,32 @@
       "username_required": "请输入用户名",
       "password_required": "请输入密码",
       "username_length": "用户名需为 3-50 个字符",
-      "password_length": "密码至少 6 位"
+      "password_length": "密码至少 6 位",
+      "preference_failed": "偏好设置保存失败"
     },
     "model_config": {
       "invalid_provider_id": "供应商 ID 非法",
       "provider_not_found": "供应商不存在",
       "invalid_model_id": "模型 ID 非法",
       "model_not_found": "模型不存在",
-      "api_key_fetch_failed": "获取 API Key 失败"
+      "api_key_fetch_failed": "获取 API Key 失败",
+      "provider_add_failed": "添加供应商失败",
+      "provider_update_failed": "更新供应商失败",
+      "provider_delete_failed": "删除供应商失败",
+      "provider_fetch_failed": "读取供应商列表失败",
+      "model_add_failed": "添加模型失败",
+      "model_capability_failed": "更新模型能力失败",
+      "models_set_failed": "批量更新模型失败"
+    },
+    "project": {
+      "rename_failed": "重命名项目失败",
+      "delete_failed": "删除项目失败"
+    },
+    "asset": {
+      "create_failed": "创建资产失败",
+      "update_failed": "更新资产失败",
+      "delete_failed": "删除资产失败",
+      "folder_delete_failed": "删除文件夹失败"
     },
     "upload": {
       "invalid_form_data": "表单数据解析失败",
@@ -600,7 +626,8 @@
       "task_not_found": "任务不存在",
       "task_already_finished": "任务已结束",
       "submit_failed": "提交生成任务失败",
-      "no_task_id": "服务端未返回任务 ID"
+      "no_task_id": "服务端未返回任务 ID",
+      "missing_model_config": "缺少模型配置"
     },
     "generation": {
       "timeout": "调用服务商超时，请稍后重试",
