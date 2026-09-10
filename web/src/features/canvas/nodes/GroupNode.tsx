@@ -21,6 +21,8 @@ import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
+  // 编辑的始终是「纯名字」：计数是派生信息，不能进输入框，
+  // 否则保存后计数被固化进 label，之后成员增减会出现重复计数
   const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
     useEditableTitle(id, data.label || t("node.group"));
 
@@ -80,7 +82,13 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
         ) : (
           <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
             <GroupOutlined className="shrink-0" style={{ color: "#ffffff" }} />
-            <span className="truncate">{data.label || t("node.groupWithCount", { count: memberCount })}</span>
+            {/* 计数必须独立于 label 之外追加：写成 label || 带计数的默认名，
+                用户一改名就永远走 label 分支，成员增减后计数不再更新 */}
+            <span className="truncate">
+              {data.label
+                ? t("node.groupNamedWithCount", { label: data.label, count: memberCount })
+                : t("node.groupWithCount", { count: memberCount })}
+            </span>
           </span>
         )}
       </div>

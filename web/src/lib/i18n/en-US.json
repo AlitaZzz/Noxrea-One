@@ -119,6 +119,7 @@
     "audio": "Audio",
     "group": "Group",
     "groupWithCount": "Group of {{count}} nodes",
+    "groupNamedWithCount": "{{label}} · {{count}} nodes",
     "groupColor": "Color",
     "groupColorDefault": "Default",
     "director": "Director",

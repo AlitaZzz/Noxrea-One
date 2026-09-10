@@ -119,6 +119,7 @@
     "audio": "音频",
     "group": "分组",
     "groupWithCount": "分组 {{count}}个节点",
+    "groupNamedWithCount": "{{label}} · {{count}}个节点",
     "groupColor": "颜色",
     "groupColorDefault": "默认",
     "director": "导演台",

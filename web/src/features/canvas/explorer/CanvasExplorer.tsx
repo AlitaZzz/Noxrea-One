@@ -313,7 +313,10 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
   const { t } = useTranslation();
   const centerNode = useCenterNode();
   const rawLabel = (group.data as { label?: string })?.label;
-  const label = rawLabel || t("node.groupWithCount", { count: members.length });
+  // 与节点标题一致：自定义名也要带成员数，否则用户一改名计数就不再更新
+  const label = rawLabel
+    ? t("node.groupNamedWithCount", { label: rawLabel, count: members.length })
+    : t("node.groupWithCount", { count: members.length });
 
   return (
     <div className="mb-1">
