@@ -28,16 +28,29 @@ export function useCanvasEvents() {
   // 1) node:update-data
   useEffect(() => {
     function onUpdateData(e: Event) {
-      const { nodeId, data, style, position, immediate } = (e as CustomEvent).detail;
+      const { nodeId, data, style, position, immediate, skipHistory } = (e as CustomEvent).detail;
+      const store = useCanvasStore.getState();
+      // 空 data 不展开：否则每次写入都会换掉 data 引用，白白击穿下游 memo
+      const hasData = !!data && typeof data === "object" && Object.keys(data).length > 0;
       if (position) {
-        useCanvasStore.getState().setNodes(
-          useCanvasStore.getState().nodes.map((n) =>
-            n.id === nodeId ? { ...n, position } : n
-          )
+        // 位置、尺寸、数据同批写入一次：分两次 set 会触发两轮全画布重渲染，
+        // 缩放这类逐帧操作下掉帧会直接表现为「框不跟手」
+        store.setNodes(
+          store.nodes.map((n) =>
+            n.id === nodeId
+              ? {
+                  ...n,
+                  position,
+                  ...(style ? { style: { ...n.style, ...style } } : {}),
+                  ...(hasData ? { data: { ...n.data, ...data } } : {}),
+                }
+              : n,
+          ),
         );
-        markDirty();
+      } else {
+        updateNodeData(nodeId, data ?? {}, style, { skipHistory });
       }
-      updateNodeData(nodeId, data ?? {}, style);
+      markDirty();
       if (immediate) markDirtyImmediate();
     }
     window.addEventListener(EventNames.NODE_UPDATE_DATA, onUpdateData);
