@@ -292,11 +292,11 @@ export default function LoginPage() {
       try {
         if (mode === "signin") {
           await authStore.login(username, password);
-          showGlobalMessage().success("欢迎回来！");
+          showGlobalMessage().success(i18n.t("auth.login.welcomeBack"));
           setTimeout(() => router.push("/"), 600);
         } else {
           await authStore.register(username, password);
-          showGlobalMessage().success("账号创建成功！");
+          showGlobalMessage().success(i18n.t("auth.login.accountCreated"));
           setTimeout(() => router.push("/"), 600);
         }
       } catch (err: unknown) {

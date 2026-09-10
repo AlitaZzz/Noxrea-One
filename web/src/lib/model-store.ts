@@ -11,9 +11,20 @@ import {
   isRecord,
   parseErrorBody,
   resolveApiError,
+  resolveResultError,
 } from "@/lib/api/error-message";
+import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";
+
+/** 写操作失败提示（store 层统一负责，UI 只处理成功分支） */
+function notifyFailure(res: { code: number; msg?: string }, fallbackKey: string) {
+  showGlobalNotification().error({
+    title: resolveResultError(res, fallbackKey),
+    placement: "bottomRight",
+    duration: 6,
+  });
+}
 
 /** 从 baseUrl 解析 host（供上游通配匹配用） */
 function hostFromBaseUrl(baseUrl: string): string {
@@ -44,14 +55,14 @@ interface ModelState {
   initialize: () => Promise<void>;
   findModelParams: (providerId: string, modelName: string, capability: string) => ModelParamConfig | null;
 
-  addProvider: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<void>;
-  updateProvider: (id: string, patch: Partial<Pick<ModelProvider, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<void>;
+  addProvider: (name: string, baseUrl: string, apiKey: string, protocol?: string) => Promise<boolean>;
+  updateProvider: (id: string, patch: Partial<Pick<ModelProvider, "name" | "baseUrl" | "apiKey" | "protocol">>) => Promise<boolean>;
   fetchProviderApiKey: (id: string) => Promise<string>;
-  deleteProvider: (id: string) => Promise<void>;
+  deleteProvider: (id: string) => Promise<boolean>;
 
-  addModel: (providerId: string, name: string) => Promise<void>;
-  toggleModelCapability: (providerId: string, modelId: string, cap: ModelCapability) => Promise<void>;
-  setProviderModels: (providerId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<void>;
+  addModel: (providerId: string, name: string) => Promise<boolean>;
+  toggleModelCapability: (providerId: string, modelId: string, cap: ModelCapability) => Promise<boolean>;
+  setProviderModels: (providerId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<boolean>;
   fetchModels: (providerId: string) => Promise<{ success: boolean; error?: string }>;
   fetchPresets: () => Promise<void>;
 }
@@ -139,7 +150,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const provider: ModelProvider = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
       if (protocol) provider.protocol = protocol;
       set((s) => ({ providers: [...s.providers, provider] }));
+      return true;
     }
+    notifyFailure(res, "model_config.provider_add_failed");
+    return false;
   },
 
   updateProvider: async (id, patch) => {
@@ -148,7 +162,12 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
     if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
-    await modelApi.updateProvider(id, body);
+    const res = await modelApi.updateProvider(id, body);
+    // 校验业务码：此前无论成败都合并本地状态，UI 还提示「已更新」
+    if (res.code !== 200) {
+      notifyFailure(res, "model_config.provider_update_failed");
+      return false;
+    }
     // 只合并非 undefined 的字段，避免 undefined 覆盖原有值
     set((s) => ({
       providers: s.providers.map((c) => {
@@ -160,6 +179,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         return merged;
       }),
     }));
+    return true;
   },
 
   fetchProviderApiKey: async (id) => {
@@ -177,8 +197,13 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   deleteProvider: async (id) => {
-    await modelApi.deleteProvider(id);
+    const res = await modelApi.deleteProvider(id);
+    if (res.code !== 200) {
+      notifyFailure(res, "model_config.provider_delete_failed");
+      return false;
+    }
     set((s) => ({ providers: s.providers.filter((c) => c.id !== id) }));
+    return true;
   },
 
   addModel: async (providerId, name) => {
@@ -189,19 +214,27 @@ export const useModelStore = create<ModelState>((set, get) => ({
           c.id === providerId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
         ),
       }));
+      return true;
     }
+    notifyFailure(res, "model_config.model_add_failed");
+    return false;
   },
 
   toggleModelCapability: async (providerId, modelId, cap) => {
     const providers = get().providers;
     const ch = providers.find((c) => c.id === providerId);
-    if (!ch) return;
+    if (!ch) return false;
     const model = ch.models.find((m) => m.id === modelId);
-    if (!model) return;
+    if (!model) return false;
     const has = model.capabilities?.includes(cap);
     const caps = has ? (model.capabilities || []).filter((x) => x !== cap) : [...(model.capabilities || []), cap];
 
-    await modelApi.setModelCapability(providerId, modelId, caps);
+    const res = await modelApi.setModelCapability(providerId, modelId, caps);
+    // 失败不动本地：此前先写后忘，勾选看起来生效、刷新就回滚
+    if (res.code !== 200) {
+      notifyFailure(res, "model_config.model_capability_failed");
+      return false;
+    }
     set((s) => ({
       providers: s.providers.map((c) =>
         c.id === providerId ? {
@@ -210,14 +243,37 @@ export const useModelStore = create<ModelState>((set, get) => ({
         } : c
       ),
     }));
+    return true;
   },
 
   setProviderModels: async (providerId, models) => {
-    await modelApi.setProviderModels(providerId, models);
+    const res = await modelApi.setProviderModels(providerId, models);
+    if (res.code !== 200) {
+      notifyFailure(res, "model_config.models_set_failed");
+      return false;
+    }
     const reload = await modelApi.fetchProviders<ModelProvider[]>();
     if (reload.code === 200 && reload.data) {
       set({ providers: reload.data });
+      return true;
     }
+    // 写入已成功，只是重新拉取列表失败：不能算写失败（那会让 UI 提示与事实相反），
+    // 改为按入参就地更新本地，保证勾选结果与服务端一致
+    set((s) => ({
+      providers: s.providers.map((c) => {
+        if (c.id !== providerId) return c;
+        const idByName = new Map(c.models.map((m) => [m.name, m.id]));
+        return {
+          ...c,
+          models: models.map((m) => ({
+            id: idByName.get(m.name) ?? m.name,
+            name: m.name,
+            capabilities: m.capabilities,
+          })),
+        };
+      }),
+    }));
+    return true;
   },
 
   fetchModels: async (providerId) => {
@@ -288,7 +344,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
           merged.push({ name: f.name, capabilities: [] });
         }
       }
-      await get().setProviderModels(providerId, merged);
+      const applied = await get().setProviderModels(providerId, merged);
+      // setProviderModels 内部已提示失败原因，这里只把结果透传给调用方
+      if (!applied) {
+        return { success: false, error: i18n.t("error.model_config.models_set_failed") };
+      }
       return { success: true };
     } catch (e: unknown) {
       console.error("Fetch models failed:", e);

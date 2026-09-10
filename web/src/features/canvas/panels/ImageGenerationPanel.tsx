@@ -220,7 +220,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
     const { entry, provider, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
-    if (!entry || !provider) return "缺少模型配置";
+    if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
     try {
       const res = await generationApi.submitGenerationTask({
         type: "image",

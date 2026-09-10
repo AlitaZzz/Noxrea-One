@@ -512,7 +512,15 @@
   },
   "director": {
     "sentToCanvas": "Sent to canvas: {{name}}",
-    "sendToCanvasFailed": "Failed to send to canvas"
+    "sendToCanvasFailed": "Failed to send to canvas",
+    "search": "Search...",
+    "group": "Group",
+    "ungroup": "Ungroup",
+    "toggleVisible": "Show / Hide",
+    "duplicate": "Duplicate",
+    "newGroup": "Group",
+    "defaultCharacter": "Character A",
+    "copyName": "{{name}} copy"
   },
   "error": {
     "unknown": "Unknown error",
@@ -548,14 +556,32 @@
       "username_required": "Please enter your username",
       "password_required": "Please enter your password",
       "username_length": "Username must be 3-50 characters",
-      "password_length": "Password must be at least 6 characters"
+      "password_length": "Password must be at least 6 characters",
+      "preference_failed": "Failed to save the preference"
     },
     "model_config": {
       "invalid_provider_id": "Invalid provider ID",
       "provider_not_found": "Provider not found",
       "invalid_model_id": "Invalid model ID",
       "model_not_found": "Model not found",
-      "api_key_fetch_failed": "Failed to fetch the API key"
+      "api_key_fetch_failed": "Failed to fetch the API key",
+      "provider_add_failed": "Failed to add the provider",
+      "provider_update_failed": "Failed to update the provider",
+      "provider_delete_failed": "Failed to delete the provider",
+      "provider_fetch_failed": "Failed to load the provider list",
+      "model_add_failed": "Failed to add the model",
+      "model_capability_failed": "Failed to update the model capability",
+      "models_set_failed": "Failed to update models in bulk"
+    },
+    "project": {
+      "rename_failed": "Failed to rename the project",
+      "delete_failed": "Failed to delete the project"
+    },
+    "asset": {
+      "create_failed": "Failed to create the asset",
+      "update_failed": "Failed to update the asset",
+      "delete_failed": "Failed to delete the asset",
+      "folder_delete_failed": "Failed to delete the folder"
     },
     "upload": {
       "invalid_form_data": "Failed to parse the form data",
@@ -601,7 +627,8 @@
       "task_not_found": "Task not found",
       "task_already_finished": "Task already finished",
       "submit_failed": "Failed to submit the generation task",
-      "no_task_id": "The server did not return a task ID"
+      "no_task_id": "The server did not return a task ID",
+      "missing_model_config": "No model configured"
     },
     "generation": {
       "timeout": "The provider request timed out, please try again later",

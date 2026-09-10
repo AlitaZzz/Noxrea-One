@@ -7,7 +7,8 @@ import { create } from "zustand";
 
 import { authApi } from "@/features/auth/api";
 import { setToken } from "@/lib/api/client";
-import { type ApiErrorBody,resolveApiError } from "@/lib/api/error-message";
+import { type ApiErrorBody,resolveApiError, resolveResultError } from "@/lib/api/error-message";
+import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 
 export interface UserInfo {
@@ -99,8 +100,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   savePreference: async (key, value) => {
     const user = get().user;
     if (!user) return;
+    const prev = user[key];
     set({ user: { ...user, [key]: value } });
-    // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
-    authApi.updateMe({ [key]: value }).catch(() => {});
+    try {
+      // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
+      const res = await authApi.updateMe({ [key]: value });
+      // 校验业务码：此前无论成败都保留本地值，刷新后偏好会静默回退
+      if (res.code !== 200) throw new Error(resolveResultError(res, "auth.preference_failed"));
+    } catch (e) {
+      const cur = get().user;
+      if (cur) set({ user: { ...cur, [key]: prev } });
+      showGlobalNotification().error({
+        title: e instanceof Error ? e.message : resolveResultError(null, "auth.preference_failed"),
+        placement: "bottomRight",
+        duration: 6,
+      });
+    }
   },
 }));

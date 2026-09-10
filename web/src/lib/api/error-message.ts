@@ -47,6 +47,33 @@ export async function resolveResponseError(
 }
 
 /**
+ * 从 api() 的统一响应中提取面向用户的失败文案。
+ *
+ * api() 的契约（见 lib/api/client.ts）：
+ *  - 网络层失败：code = 0，msg 已是本地化文案
+ *  - HTTP 非 2xx：code = HTTP 状态，msg 已按服务端错误码本地化
+ *  - HTTP 200 但业务码非 200：响应体可能带 { error, ctx }，需在此翻译
+ *
+ * @param res          api() 的返回值
+ * @param fallbackKey  没有可用错误码时的兜底 i18n key（相对 error 命名空间）
+ * @returns 失败文案；code === 200 时返回空串
+ */
+export function resolveResultError(
+  res: { code: number; msg?: string } | null | undefined,
+  fallbackKey: string,
+): string {
+  if (!res) return resolveApiError(null, undefined, fallbackKey);
+  if (res.code === 200) return "";
+  // 网络层 / HTTP 层失败：client 已生成文案，直接用，避免二次翻译丢失细节
+  if (res.code === 0 && res.msg) return res.msg;
+  return resolveApiError(
+    res as unknown as ApiErrorBody,
+    res.code >= 400 ? res.code : undefined,
+    fallbackKey,
+  );
+}
+
+/**
  * 将服务端错误响应解析为面向用户的本地化文案。
  * @param body 已解析的响应体，无法解析时传 null
  * @param status HTTP 状态码，仅用于兜底展示

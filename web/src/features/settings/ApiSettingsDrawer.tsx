@@ -140,19 +140,23 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     setKeyDirty(false);
   };
 
-  const handleSaveProvider = () => {
+  const handleSaveProvider = async () => {
     if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
-    if (editProviderId) {
-      updateProvider(editProviderId, {
-        name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
-        apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
-      });
-      message.success(t("modelConfig.providerUpdated"));
-    } else {
-      addProvider(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
-      message.success(t("modelConfig.providerAdded"));
+    try {
+      // 必须等待结果：此前无论成败都提示「已新增/已更新」并清空表单
+      const ok = editProviderId
+        ? await updateProvider(editProviderId, {
+          name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
+          apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
+        })
+        : await addProvider(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
+      // 失败保留表单内容，用户可直接改完重试（失败原因由 store 统一提示）
+      if (!ok) return;
+      message.success(editProviderId ? t("modelConfig.providerUpdated") : t("modelConfig.providerAdded"));
+      resetChForm();
+    } catch {
+      // 401 等异常由全局流程处理（清 token + 跳登录），这里只兜住 rejection
     }
-    resetChForm();
   };
 
   const handleEditProvider = (id: string) => {
@@ -226,10 +230,14 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     setFetching(false);
   };
 
-  const handleAddModel = () => {
+  const handleAddModel = async () => {
     if (!newModelName.trim() || !providerId) return;
-    addModel(providerId, newModelName.trim());
-    setNewModelName("");
+    try {
+      // 失败不清空输入框，避免用户刚填的模型名丢失
+      if (await addModel(providerId, newModelName.trim())) setNewModelName("");
+    } catch {
+      // 同 handleSaveProvider：异常已由全局流程处理
+    }
   };
 
   // Models filtered by current capability tab
@@ -252,7 +260,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       name: m.name,
       capabilities: visibleIds.has(m.id) ? nextCapsForVisible(m) : (m.capabilities || []),
     }));
-    await setProviderModels(provider.id, merged);
+    await setProviderModels(provider.id, merged).catch(() => {
+      // 失败原因由 store 提示；这里只需避免未处理的 rejection
+    });
   };
   const batchSelectAll = () => batchApply((m) => Array.from(new Set([...(m.capabilities || []), activeCap])));
   const batchInvert = () => batchApply((m) => {
@@ -262,7 +272,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
 
   // 切换单行能力；交给 React Compiler 自动 memo，移除手写 useCallback 以让其优化。
-  const onToggleCap = (id: string) => toggleModelCapability(provider?.id ?? "", id, activeCap);
+  const onToggleCap = (id: string) => {
+    // 失败时 store 会提示并回滚（本地不写入），这里兜住网络异常
+    toggleModelCapability(provider?.id ?? "", id, activeCap).catch(() => {});
+  };
 
   // 合并为「已启用 / 可用」两段、带分组标题的扁平数组，交给虚拟列表渲染
   type Row =
@@ -486,9 +499,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 onChange={(e) => setSearchModel(e.target.value)}
                 style={{ flex: 1 }}
               />
-              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll") || "全选"}</Button>
-              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert") || "反选"}</Button>
-              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap") || "清空"}</Button>
+              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll")}</Button>
+              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert")}</Button>
+              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap")}</Button>
             </div>
 
             {/* Add model manually */}
@@ -546,7 +559,18 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         content={t("modelConfig.deleteProviderConfirm", { name: deletingProvider?.name ?? "", count: deletingProvider?.models.length ?? 0 })}
         okText={t("common.delete")}
         cancelText={t("common.cancel")}
-        onOk={() => { if (deleteProviderId) deleteProvider(deleteProviderId); setProviderId(null); setDeleteProviderId(null); }}
+        onOk={async () => {
+          if (!deleteProviderId) return;
+          try {
+            // 删除失败时不关闭确认框、不重置选择，用户可重试
+            if (await deleteProvider(deleteProviderId)) {
+              setProviderId(null);
+              setDeleteProviderId(null);
+            }
+          } catch {
+            // 同 handleSaveProvider：异常已由全局流程处理
+          }
+        }}
         onCancel={() => setDeleteProviderId(null)}
       />
     </>
