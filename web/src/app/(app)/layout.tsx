@@ -1,6 +1,6 @@
 /**
  * (app) 路由组布局：统一鉴权守卫与全局初始化。
- * 未登录重定向到 /login，登录后预加载语言、主题与项目列表，就绪前不渲染子页面。
+ * 未登录重定向到 /login，登录后预加载语言与项目列表，就绪前不渲染子页面。
  */
 "use client";
 
@@ -39,8 +39,8 @@ export default function AppLayout({
         return;
       }
 
-      // 同步用户偏好（主题 / 语言）到全局 store
-      useCanvasStore.getState().setTheme(user.theme === "light" ? "light" : "dark");
+      // 前端固定使用深色主题；旧用户偏好不再影响界面。
+      useCanvasStore.getState().setTheme("dark");
       i18n.changeLanguage(user.language || "zh");
 
       await useProjectStore.getState().initialize();

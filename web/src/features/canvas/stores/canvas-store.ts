@@ -107,7 +107,6 @@ interface CanvasState {
   // Theme
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
-  toggleTheme: () => void;
 
   // Minimap visibility
   minimapVisible: boolean;
@@ -225,12 +224,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   theme: DEFAULT_THEME,
-  setTheme: (theme) => {
-    set({ theme });
-  },
-  toggleTheme: () => {
-    set((s) => ({ theme: s.theme === "light" ? "dark" : "light" }));
-    saveManager.markDirtyImmediate();
+  setTheme: () => {
+    // 兼容历史项目和撤销快照中的 theme 字段，但界面始终保持深色。
+    set({ theme: "dark" });
   },
 
   minimapVisible: true,
@@ -285,7 +281,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       edges: (project.edges || []) as Edge[],
       viewport: vp,
       background: project.background || DEFAULT_BACKGROUND,
-      theme: project.theme || DEFAULT_THEME,
+      theme: "dark",
       minimapVisible: project.minimapVisible !== false,
       snapToGrid: project.snapToGrid || false,
       agentModel: project.agentModel ?? null,

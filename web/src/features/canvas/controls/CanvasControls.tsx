@@ -1,6 +1,6 @@
 /**
  * 画布右下角控制条。
- * 提供缩放调节、适应视图、网格背景切换、吸附开关、主题与语言切换，
+ * 提供缩放调节、适应视图、网格背景切换、吸附开关与语言切换，
  * 以及资产库 / 渠道配置 / 侧边栏的打开入口；偏好项变更会同步保存到用户配置。
  */
 "use client";
@@ -13,8 +13,6 @@ import {
   MedicineBoxOutlined, // unused — kept for other components
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  MoonOutlined,
-  SunOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
 } from "@ant-design/icons";
@@ -69,8 +67,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
   const toggleSnapToGrid = useCanvasStore((s) => s.toggleSnapToGrid);
   const background = useCanvasStore((s) => s.background);
   const setBackground = useCanvasStore((s) => s.setBackground);
-  const theme = useCanvasStore((s) => s.theme);
-  const toggleTheme = useCanvasStore((s) => s.toggleTheme);
 
   const [zoomOpen, setZoomOpen] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
@@ -195,17 +191,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(`canvas.background.${bg}`)}</MenuItem>
         ))}
       />
-      {/* Theme toggle */}
-      <Tooltip title={theme === "dark" ? t("theme.light") : t("theme.dark")}>
-        <Button
-          size="small"
-          type="text"
-          className="canvas-ctrl-btn"
-          icon={theme === "dark" ? <SunOutlined /> : <MoonOutlined />}
-          onClick={() => { toggleTheme(); useAuthStore.getState().savePreference("theme", theme === "dark" ? "light" : "dark"); }}
-        />
-      </Tooltip>
-
       {/* Language toggle */}
       <LanguageToggle />
 

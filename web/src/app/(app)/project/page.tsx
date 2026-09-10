@@ -1,7 +1,7 @@
 /**
  * 项目列表页（/project）。
  * 展示当前用户的全部画布项目（新建卡片 + 项目网格），支持新建、打开、重命名、删除；
- * 顶部头像菜单提供账户设置入口与语言 / 主题偏好切换、退出登录。
+ * 顶部头像菜单提供账户设置入口与语言偏好切换、退出登录。
  */
 "use client";
 
@@ -14,8 +14,6 @@ import { useTranslation } from "react-i18next";
 import AppShell from "@/components/layout/AppShell";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { ThemeDarkIcon } from "@/components/ui/icons/theme/ThemeDarkIcon";
-import { ThemeLightIcon } from "@/components/ui/icons/theme/ThemeLightIcon";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
@@ -32,8 +30,6 @@ export default function ProjectPage() {
   const [editName, setEditName] = useState("");
   const renameProject = useProjectStore((s) => s.renameProject);
   const user = useAuthStore((s) => s.user);
-  const theme = useCanvasStore((s) => s.theme);
-  const toggleTheme = useCanvasStore((s) => s.toggleTheme);
   const { t, i18n } = useTranslation();
   const projects = useProjectStore((s) => s.projects);
   const createProject = useProjectStore((s) => s.createProject);
@@ -105,15 +101,6 @@ export default function ProjectPage() {
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
                 onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; i18n.changeLanguage(newLang); useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
 <span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
-              </button>
-              <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
-                style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
-                onClick={() => { const next = theme === "dark" ? "light" : "dark"; toggleTheme(); useAuthStore.getState().savePreference("theme", next); setAvatarOpen(false); }}>
-{theme === "dark" ? (
-                  <><span>{t("theme.dark")}</span><ThemeDarkIcon style={{ flexShrink: 0, marginLeft: "auto" }} /></>
-                ) : (
-                  <><span>{t("theme.light")}</span><ThemeLightIcon style={{ flexShrink: 0, marginLeft: "auto" }} /></>
-                )}
               </button>
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"

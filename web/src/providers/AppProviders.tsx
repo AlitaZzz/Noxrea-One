@@ -1,6 +1,6 @@
 /**
  * 全局 Provider 聚合层。
- * 统一装配 React Query 客户端、Ant Design 主题（明暗双套 token 与组件级覆写）、
+ * 统一装配 React Query 客户端、Ant Design 深色主题、
  * 全局 message/notification API 注册（供 React 树外代码调用）以及 <html lang> 语言同步。
  */
 "use client";
@@ -13,7 +13,6 @@ import { ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
 import { directorTheme } from "@/styles/theme";
@@ -35,13 +34,9 @@ function MessageApiRegistrar() {
 }
 
 function AntConfigProvider({ children }: { children: ReactNode }) {
-  const themeMode = useCanvasStore((s) => s.theme);
-
-  const isDark = themeMode === "dark";
-
   return (
     <ConfigProvider
-      theme={directorTheme(isDark)}
+      theme={directorTheme()}
       getPopupContainer={getLayerPopupContainer}
     >
       <AntApp>
