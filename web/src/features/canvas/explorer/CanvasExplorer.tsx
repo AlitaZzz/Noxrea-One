@@ -460,6 +460,7 @@ function AssetsView() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -473,6 +474,7 @@ function AssetsView() {
     setItems([]);
     setTotalCount(0);
     setLoading(true);
+    setLoadError(false);
     try {
       const result = await fetchAssetPage(
         { category: filters.category && filters.category.length ? filters.category : "all", search: filters.search, folderId: filters.folderId, spaceKey: "personal" },
@@ -481,7 +483,11 @@ function AssetsView() {
       if (v !== versionRef.current) return;
       setItems(result.items);
       setTotalCount(result.total);
-    } catch { /* ignore */ }
+    } catch {
+      if (v !== versionRef.current) return;
+      // 失败必须可见：此前只是静默结束加载，空白列表会被误读成「没有资产」
+      setLoadError(true);
+    }
     if (v === versionRef.current) setLoading(false);
   }, []);
 
@@ -490,6 +496,7 @@ function AssetsView() {
     if (activeFolderId === null && !search.trim() && typeFilter.length === 0) return;
     const v = ++versionRef.current;
     setLoadingMore(true);
+    setLoadError(false);
     try {
       const folderId = typeFilter.length > 0
         ? undefined
@@ -501,7 +508,10 @@ function AssetsView() {
       if (v !== versionRef.current) return;
       setItems((prev) => [...prev, ...result.items]);
       setTotalCount(result.total);
-    } catch { /* ignore */ }
+    } catch {
+      if (v !== versionRef.current) return;
+      setLoadError(true);
+    }
     if (v === versionRef.current) setLoadingMore(false);
   }, [search, activeFolderId, typeFilter, items.length]);
 
@@ -542,6 +552,14 @@ function AssetsView() {
   }, [activeFolderId]);
 
   const hasMore = items.length < totalCount;
+
+  /** 用当前筛选条件重新拉取（供错误态重试） */
+  const retryLoad = useCallback(() => {
+    const folderId = typeFilter.length > 0
+      ? undefined
+      : (activeFolderId === null ? undefined : (activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId));
+    fetchAndReplace({ search, folderId, category: typeFilter });
+  }, [fetchAndReplace, search, activeFolderId, typeFilter]);
 
   // 用 ref 持有最新 fetchNextPage，避免 items 增长时反复重建 observer
   const fetchNextPageRef = useRef(fetchNextPage);
@@ -711,6 +729,16 @@ function AssetsView() {
           <div className="flex items-center justify-center h-full min-h-[200px]">
             <LoadingOutlined style={{ fontSize: 18, color: "var(--canvas-text-dim)" }} />
           </div>
+        ) : loadError && items.length === 0 ? (
+          <div className="flex items-center justify-center h-full min-h-[200px]">
+            <button
+              onClick={retryLoad}
+              className="text-xs cursor-pointer bg-transparent border-0"
+              style={{ color: "var(--canvas-text-dim)" }}
+            >
+              {t("asset.retry")}
+            </button>
+          </div>
         ) : !hasContent ? (
           <div className="flex items-center justify-center h-full min-h-[200px]">
             <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>} />
@@ -738,6 +766,15 @@ function AssetsView() {
             </div>
             <div ref={sentinelRef} className="flex items-center justify-center py-3">
               {loadingMore && <LoadingOutlined style={{ color: "var(--canvas-text-dim)" }} />}
+              {!loadingMore && loadError && (
+                <button
+                  onClick={() => fetchNextPageRef.current()}
+                  className="text-xs cursor-pointer bg-transparent border-0"
+                  style={{ color: "var(--canvas-text-dim)" }}
+                >
+                  {t("asset.retry")}
+                </button>
+              )}
             </div>
           </>
         )}
