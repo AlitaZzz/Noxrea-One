@@ -87,6 +87,13 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         for (const id of notifiedTasksRef.current) {
           if (!activeTaskIds.has(id)) notifiedTasksRef.current.delete(id);
         }
+        // 任务已从画布消失（节点被删 / taskBinding 被清/换）：这些流已无人消费，
+        // 但服务端会一直推送心跳，必须主动断开，否则连接与内存都挂着。
+        for (const [id, ctrl] of sseCtrlsRef.current) {
+          if (activeTaskIds.has(id)) continue;
+          ctrl.abort();
+          sseCtrlsRef.current.delete(id);
+        }
         for (const node of allNodes) {
           const binding = (node.data as MediaGenFields).taskBinding;
           if (!binding?.taskId) continue;
@@ -97,11 +104,17 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
           const nodeId = node.id;
           const ctrl = new AbortController();
           sseCtrlsRef.current.set(taskId, ctrl);
+          /** 收尾：先摘表再中断连接。
+           *  只摘表不 abort 的话，未读完的流会一直挂着，且卸载时已无法找到它。 */
+          const finish = () => {
+            sseCtrlsRef.current.delete(taskId);
+            ctrl.abort();
+          };
 
           (async () => {
             try {
               const res = await generationApi.streamGenerationTask(taskId, ctrl.signal);
-              if (!res.ok || !res.body) { sseCtrlsRef.current.delete(taskId); return; }
+              if (!res.ok || !res.body) { finish(); return; }
               const reader = res.body.getReader();
               const decoder = new TextDecoder();
               let buffer = "";
@@ -121,7 +134,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                     if (evt.status === "completed" && evt.resultText) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
                       useCanvasStore.getState().updateNodeData(nodeId, {
                         content: textToHtml(evt.resultText),
                         plainText: evt.resultText,
@@ -133,14 +146,14 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         notifiedTasksRef.current.add(taskId);
                         notifRef.current.success({ title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
                       }
-                      sseCtrlsRef.current.delete(taskId);
+                      finish();
                       return;
                     }
 
                     if (evt.status === "completed" && completedUrls.length) {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
                       const prompt = evt.prompt || "";
 
                       const label = prompt.slice(0, 20);
@@ -179,7 +192,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                         notifiedTasksRef.current.add(taskId);
                         notifRef.current.success({ title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
                       }
-                      sseCtrlsRef.current.delete(taskId);
+                      finish();
 
                       // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
                       // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；
@@ -199,7 +212,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                     } else if (evt.status === "failed") {
                       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
                       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { sseCtrlsRef.current.delete(taskId); return; }
+                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
                       const isVideoNode = cur.type === "video-node";
                       const isTextNode = cur.type === "text-node";
                       useCanvasStore.getState().updateNodeData(nodeId, {
@@ -217,7 +230,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                           duration: 15,
                         });
                       }
-                      sseCtrlsRef.current.delete(taskId);
+                      finish();
                       return;
                     } else if (evt.status === "completed") {
                       // 兜底：completed 但没有可消费的结果（上游未回传 resultText / resultUrls，
@@ -242,14 +255,14 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                           });
                         }
                       }
-                      sseCtrlsRef.current.delete(taskId);
+                      finish();
                       return;
                     }
                   } catch {}
                 }
               }
             } catch { /* SSE disconnected */ }
-            sseCtrlsRef.current.delete(taskId);
+            finish();
           })();
         }
       };

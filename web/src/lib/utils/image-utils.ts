@@ -88,18 +88,32 @@ export function canvasToBlob(
  * @param isVideo  是否为视频（影响加载方式）
  * @returns { w, h } 宽高，失败时返回 0
  */
-export function loadMediaDimensions(url: string, isVideo: boolean): Promise<{ w: number; h: number }> {
+/**
+ * 同 loadMediaDimensions，额外带超时：
+ * 个别媒体的元数据可能既不触发 load 也不触发 error（编码异常、连接挂起），
+ * 没有超时会让上传 / 生成结果回填一直停在占位状态。
+ */
+export function loadMediaDimensions(url: string, isVideo: boolean, timeoutMs = 10000): Promise<{ w: number; h: number }> {
   return new Promise((resolve) => {
+    let settled = false;
+    const done = (value: { w: number; h: number }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => done({ w: 0, h: 0 }), timeoutMs);
+
     if (isVideo) {
       const v = document.createElement("video");
       v.preload = "metadata";
-      v.onloadedmetadata = () => resolve({ w: v.videoWidth || 1152, h: v.videoHeight || 768 });
-      v.onerror = () => resolve({ w: 0, h: 0 });
+      v.onloadedmetadata = () => done({ w: v.videoWidth || 1152, h: v.videoHeight || 768 });
+      v.onerror = () => done({ w: 0, h: 0 });
       v.src = url;
     } else {
       const img = new window.Image();
-      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      img.onerror = () => resolve({ w: 0, h: 0 });
+      img.onload = () => done({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => done({ w: 0, h: 0 });
       img.src = url;
     }
   });

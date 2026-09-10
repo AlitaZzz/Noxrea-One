@@ -18,8 +18,8 @@ import {
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { isOffline } from "@/lib/utils/upload";
 
-import { detectMediaKind, runMediaUpload } from "./upload-pipeline";
 import type { UploadItem } from "./types";
+import { detectMediaKind, runMediaUpload } from "./upload-pipeline";
 
 /** 网格列数：多文件拖入 / 上传时按此列数换行排布 */
 const GRID_COLS = 4;
