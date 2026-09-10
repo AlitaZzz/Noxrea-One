@@ -7,48 +7,26 @@
 
 import { PartitionOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { Input } from "antd";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
 import { useDirectorStore } from "@/features/director/director-store";
-import { NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { NODE_HANDLE_TOP } from "@/lib/constants";
+
+import NodeTitle from "./NodeTitle";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   const { t } = useTranslation();
-  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.label || t("node.director"), { syncAlt: false });
-
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        {editingTitle ? (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0">
-            <PartitionOutlined className="shrink-0" />
-            <Input
-              size="small"
-              variant="borderless"
-              className="nodrag text-[13px] font-medium text-white/80"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleTitleSave}
-              onPressEnter={handleTitleSave}
-              autoFocus
-              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
-            />
-          </span>
-        ) : (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
-            <PartitionOutlined className="shrink-0" />
-            <span className="truncate">{data.label || t("node.director")}</span>
-          </span>
-        )}
-
-      </div>
+      <NodeTitle
+        nodeId={id}
+        icon={<PartitionOutlined className="shrink-0" />}
+        title={data.label || t("node.director")}
+      />
 
       {/* Body */}
       <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body

@@ -12,20 +12,20 @@ import { Markdown } from "@tiptap/markdown";
 import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
-import { Input } from "antd";
 import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import RichTextToolbar from "@/features/canvas/editing/RichTextToolbar";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
-import { EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { EventNames, isGenerating, NODE_HANDLE_TOP, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
-import { copyText, downloadTextFile, sanitizeFileName } from "@/lib/utils/text-export";
+import { sanitizeFileName } from "@/lib/utils/file-name";
+import { copyText, downloadTextFile } from "@/lib/utils/text-export";
 
 import GeneratingOverlay from "./GeneratingOverlay";
+import NodeTitle from "./NodeTitle";
 import ResizeHandle from "./ResizeHandle";
 
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
@@ -34,9 +34,6 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const plainText = data.plainText || "";
   // 编辑态由 store 全局驱动（与裁剪/标注模式一致），进入编辑时隐藏节点工具条
   const editingContent = useCanvasStore((s) => s.editingTextNodeId) === id;
-
-  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.label || t("node.text"));
 
   const editorRef = useRef<Editor | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -181,39 +178,17 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title tab */}
-      <div className="flex items-center px-4 py-1 text-[13px] font-medium text-white/80 z-10" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        {editingTitle ? (
-          <span className="flex items-center gap-1 flex-1 min-w-0">
-            <TextIcon className="shrink-0" />
-            <Input
-              size="small"
-              variant="borderless"
-              className="nodrag"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleTitleSave}
-              onPressEnter={handleTitleSave}
-              autoFocus
-              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
-            />
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 flex-1 min-w-0">
-            <TextIcon className="shrink-0 mr-1" />
-            <span className="truncate cursor-default" onDoubleClick={handleTitleDblClick}>
-              {data.label || t("node.text")}
-            </span>
-          </span>
-        )}
-        {charCount > 0 && (
-          <span
-            className="text-xs whitespace-nowrap ml-2"
-            style={{ color: charCount > 500 ? "#faad14" : "rgba(255,255,255,0.3)" }}
-          >
-            {charCount}
-          </span>
-        )}
-      </div>
+      <NodeTitle
+        nodeId={id}
+        className="z-10"
+        icon={<TextIcon className="shrink-0" />}
+        title={data.label || t("node.text")}
+        trailing={
+          charCount > 0 ? (
+            <span style={charCount > 500 ? { color: "var(--canvas-warning, #faad14)" } : undefined}>{charCount}</span>
+          ) : null
+        }
+      />
 
       {/* Body */}
       <div

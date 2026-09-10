@@ -12,7 +12,7 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { App, Input, Tooltip } from "antd";
+import { App, Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -24,7 +24,6 @@ import {
   detachAudio as detachAudioApi,
   type DetachAudioResult,
 } from "@/features/canvas/api/file-api";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge } from "@/features/canvas/node-defaults";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -36,11 +35,13 @@ import {
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP } from "@/lib/constants";
+import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
+import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
 /** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串） */
@@ -256,7 +257,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       }
 
       const nw = v.videoWidth, nh = v.videoHeight;
-      const label = `${data.alt || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
+      const label = `${data.label || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
       await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
     } catch (e) {
       console.error("Frame capture failed:", e);
@@ -264,7 +265,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     } finally {
       setCapturing(false);
     }
-  }, [src, data.alt, id, t, notification, capturing]);
+  }, [src, data.label, id, t, notification, capturing]);
 
   /**
    * 分离音频：服务端无损拆出音轨与静音视频。
@@ -372,12 +373,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const a = document.createElement("a");
     const sep = src.includes("?") ? "&" : "?";
     const params = new URLSearchParams({ download: "true" });
-    if (data.alt) params.set("filename", data.alt);
+    const fileName = sanitizeFileName(data.label);
+    if (fileName) params.set("filename", fileName);
     a.href = `${src}${sep}${params.toString()}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [src, data.alt]);
+  }, [src, data.label]);
 
   const handleSaveToAssets = useCallback(() => {
     if (!src) return;
@@ -385,7 +387,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const d = node?.data as VideoNodeData | undefined;
     // 缩略图不再在保存时生成：素材库读取时通过 sourceUrl?w= 由后端按需抽帧
     addAsset({
-      name: data.alt || data.label || t("node.video"),
+      name: data.label || t("node.video"),
       type: "other",
       mediaType: "video",
       width: d?.naturalWidth || 0,
@@ -396,12 +398,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         source: d?.source,
       },
     });
-  }, [src, data.alt, data.label, id, addAsset, t]);
+  }, [src, data.label, id, addAsset, t]);
 
   const handleClear = useCallback(() => {
     setSrc("");
     useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
+      src: "", label: "", naturalWidth: 0, naturalHeight: 0,
       upload: undefined, source: undefined,
     }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
     markDirtyImmediate();
@@ -453,9 +455,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     );
   }, [id, src]);
 
-  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("node.video"), { syncAlt: true });
-
   const hasVideo = src && src.length > 0;
 
   // 把 video 元素登记进注册表：帧序列面板渲染在画布层，拿不到本组件的 videoRef，
@@ -478,32 +477,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   return (
     <div className="group relative w-full h-full flex flex-col">
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        {editingTitle ? (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0">
-            <VideoCameraOutlined className="shrink-0" />
-            <Input
-              size="small"
-              variant="borderless"
-              className="nodrag text-[13px] font-medium text-white/80"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleTitleSave}
-              onPressEnter={handleTitleSave}
-              autoFocus
-              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
-            />
-          </span>
-        ) : (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
-            <VideoCameraOutlined className="shrink-0" />
-            <span className="truncate">{data.label || data.alt || t("node.video")}</span>
-          </span>
-        )}
-        {hasVideo && data.naturalWidth > 0 && (
-          <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth}×{data.naturalHeight}</span>
-        )}
-      </div>
+      <NodeTitle
+        nodeId={id}
+        icon={<VideoCameraOutlined className="shrink-0" />}
+        title={data.label || t("node.video")}
+        trailing={hasVideo && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
+      />
 
       <div
         className={`
