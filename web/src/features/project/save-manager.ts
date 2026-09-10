@@ -37,6 +37,35 @@ const DRAFT_WRITE_DELAY = 500;
  * 保存会被无限推迟、服务端数据长期落后。它保证距本轮首次改脏不超过该值必存一次。
  */
 const MAX_SAVE_WAIT = 10000;
+/** flushAndWait 单次等待当前保存的上限（ms）：宁可超时放行，也不能让项目切换永久挂起 */
+const FLUSH_WAIT_TIMEOUT = 5000;
+
+/** 给等待加超时上限；超时后放行调用方并记录告警 */
+function withTimeout(p: Promise<void>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      console.warn("[SaveManager] flushAndWait timed out after", ms, "ms");
+      resolve();
+    }, ms);
+    p.then(
+      () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve();
+      },
+      () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve();
+      },
+    );
+  });
+}
 
 // ── fingerprint：追踪画布文件引用变化 ──
 // 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
@@ -127,6 +156,8 @@ class SaveManager {
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
   private resolveSave: (() => void) | null = null;
+  /** saving 期间收到的保存诉求：由当前保存收尾后补存，避免并发 save 互相覆盖 */
+  private pendingSave: { keepalive: boolean; skipUnauthorized: boolean } | null = null;
   /** saving 期间被跳过的最紧急 delay，恢复时用此值而非默认值 */
   private pendingDelay: number = SAVE_DELAY;
   /** 本轮 dirty 的起始时刻（ms），配合 MAX_SAVE_WAIT 限制保存延迟上限 */
@@ -204,22 +235,27 @@ class SaveManager {
   /**
    * 等待当前保存完成并确保最终状态已落盘。
    * 用于项目切换等需要保证数据完整性的场景。
-   * 最多重试 3 次，防止持久失败导致无限循环。
+   * 有整体截止时间兜底：持久失败或保存迟迟不结束时放行调用方，
+   * 避免项目切换流程被无限阻塞（未落库的改动仍保留 dirty，后续继续重试）。
    */
   async flushAndWait(): Promise<void> {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    let retries = 3;
-    while ((this.saving || this.dirty) && retries > 0) {
+    // 整体截止时间：等待中（saving）不消耗重试次数，若只按次数收敛，
+    // 保存迟迟不结束时会退化成「每 5s 重试一次」的无限循环。
+    const deadline = Date.now() + FLUSH_WAIT_TIMEOUT * 3;
+    while ((this.saving || this.dirty) && Date.now() < deadline) {
       if (this.saving) {
-        await this.savePromise;
+        // 加超时：savePromise 理论上必被 resolve，但任何意外都不该让项目切换卡死
+        await withTimeout(this.savePromise, FLUSH_WAIT_TIMEOUT);
       }
-      if (this.dirty) {
-        retries--;
+      if (this.dirty && Date.now() < deadline) {
         // 项目切换场景需要读取响应确认落库，故用普通请求（keepalive 无法读响应体）
-        await this.save(false);
+        // 同样要加超时：save() 在保存进行中会直接返回尚未完成的 savePromise，
+        // 裸 await 会退化成原来的无限期挂起
+        await withTimeout(this.save(false), FLUSH_WAIT_TIMEOUT);
       }
     }
   }
@@ -256,6 +292,27 @@ class SaveManager {
     const snapshot = takeCanvasSnapshot();
     if (!snapshot.nodes.length && !snapshot.edges.length) return;
 
+    if (this.saving) {
+      if (opts.keepalive) {
+        // 页面即将卸载：等不到当前保存结束，必须立即把最新快照发出去。
+        // 只发请求、不进 save()，因此不会覆盖 saving / savePromise（那是并发竞态的根源）。
+        const activeId = useProjectStore.getState().activeProjectId;
+        if (activeId) {
+          void this.saveToApi(activeId, snapshot, opts)
+            .then(() => { this.dirty = false; })
+            .catch(() => { /* 卸载兜底失败：保留 dirty，下次进入继续补存 */ });
+        }
+        return;
+      }
+      // 页面仍存活：记录诉求，由当前保存收尾后补存
+      this.pendingSave = {
+        keepalive: false,
+        skipUnauthorized: this.pendingSave?.skipUnauthorized || opts.skipUnauthorized,
+      };
+      this.dirty = true;
+      return;
+    }
+
     void this.save(opts.keepalive, opts.skipUnauthorized);
   }
 
@@ -288,6 +345,18 @@ class SaveManager {
   }
 
   private async save(keepalive: boolean, skipUnauthorized = false): Promise<void> {
+    if (this.saving) {
+      // 并发保护：保存进行中绝不启动第二次。
+      // 此前每次调用都重建 savePromise 并覆盖 resolveSave，先前的 flushAndWait()
+      // 会永远等不到 resolve；后来的 save 还会提前消费 dirty，让它空返回。
+      if (this.dirty) {
+        this.pendingSave = {
+          keepalive: this.pendingSave?.keepalive || keepalive,
+          skipUnauthorized: this.pendingSave?.skipUnauthorized || skipUnauthorized,
+        };
+      }
+      return this.savePromise;
+    }
     if (!this.dirty) return;
     this.dirty = false;
     this.saving = true;
@@ -317,6 +386,20 @@ class SaveManager {
     } finally {
       this.saving = false;
       this.resolveSave?.();
+    }
+
+    if (this.pendingSave) {
+      // 保存期间又有新改动：尽快补存（走防抖而非立即再发请求）。
+      // 直接 save 的话，持续改动画布时会退化成「一次保存结束立刻发起下一次」，
+      // 请求频率只受 RTT 限制；resetTimer 保留原来的合并窗口。
+      this.pendingSave = null;
+      this.dirty = true;
+      // 重新计时：不让过旧的 dirtySince 把这次补存压成 0 延迟
+      this.dirtySince = Date.now();
+      this.pendingDelay = SAVE_DELAY_IMMEDIATE;
+      this.resetTimer(this.pendingDelay);
+      this.pendingDelay = SAVE_DELAY;
+      return;
     }
 
     if (this.dirty) {
