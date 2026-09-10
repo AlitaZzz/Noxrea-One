@@ -56,6 +56,8 @@
   --canvas-marquee-border: rgba(236, 236, 240, 0.38);
   /* 进度 / 成功 / 就绪 / 媒体流反馈色（当前与选中色同值，可独立拆分） */
   --canvas-success: #c7f43d;
+  /* 警示 / 超限提示色（如文本节点字数超限） */
+  --canvas-warning: #faad14;
   --nav-active-bg: #232327;
   --nav-hover-bg: #16161a;
   /* 工具栏 */

@@ -11,14 +11,15 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { useNodeUpload } from "@/features/canvas/upload";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP } from "@/lib/constants";
+import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
 import AudioWaveform from "./AudioWaveform";
+import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
@@ -56,12 +57,13 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     const a = document.createElement("a");
     const sep = src.includes("?") ? "&" : "?";
     const params = new URLSearchParams({ download: "true" });
-    if (data.alt) params.set("filename", data.alt);
+    const fileName = sanitizeFileName(data.label);
+    if (fileName) params.set("filename", fileName);
     a.href = `${src}${sep}${params.toString()}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [src, data.alt]);
+  }, [src, data.label]);
 
   const handleClear = useCallback(() => {
     setSrc("");
@@ -71,7 +73,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       {
         src: "",
         label: "",
-        alt: "",
         duration: undefined,
         upload: undefined,
       } as Partial<AudioNodeData>,
@@ -98,9 +99,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id, handleDownload, handleClear]);
 
-  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("node.audio"), { syncAlt: true });
-
   const hasAudio = src && src.length > 0;
 
   return (
@@ -109,31 +107,12 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       <Handle id="in" type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
       <Handle id="out" type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
 
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        {editingTitle ? (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0">
-            <WaveIcon className="shrink-0" />
-            <input
-              className="nodrag flex-1 min-w-0 bg-transparent outline-none text-[13px] font-medium text-white/80"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleTitleSave();
-              }}
-              autoFocus
-            />
-          </span>
-        ) : (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
-            <WaveIcon className="shrink-0" />
-            <span className="truncate">{data.label || data.alt || t("node.audio")}</span>
-          </span>
-        )}
-        {hasAudio && duration > 0 && (
-          <span className="text-white/30 text-xs whitespace-nowrap ml-2">{formatTime(duration)}</span>
-        )}
-      </div>
+      <NodeTitle
+        nodeId={id}
+        icon={<WaveIcon className="shrink-0" />}
+        title={data.label || t("node.audio")}
+        trailing={hasAudio && duration > 0 ? formatTime(duration) : null}
+      />
 
       <div
         className={`

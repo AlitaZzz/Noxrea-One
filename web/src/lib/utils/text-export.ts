@@ -38,11 +38,6 @@ function legacyCopy(text: string): boolean {
   }
 }
 
-/** 清理文件名中的非法字符（Windows / macOS 通用），避免保存失败 */
-export function sanitizeFileName(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, "_").trim();
-}
-
 /**
  * 将文本下载为本地文件。
  * @param fileName 含扩展名的完整文件名

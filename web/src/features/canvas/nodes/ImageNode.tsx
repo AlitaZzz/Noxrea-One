@@ -16,7 +16,7 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
-import { Input, Tooltip } from "antd";
+import { Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -29,7 +29,6 @@ import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
-import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData, TextNodeData } from "@/features/canvas/types";
@@ -39,12 +38,13 @@ import {
   DEFAULT_NODE_WIDTH,
   EventNames,
   NODE_HANDLE_TOP,
-  NODE_TITLE_HEIGHT,
 } from "@/lib/constants";
 import { isGenerating } from "@/lib/constants";
+import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
+import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
 /**
@@ -154,13 +154,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const a = document.createElement("a");
     const sep = src.includes("?") ? "&" : "?";
     const params = new URLSearchParams({ download: "true" });
-    if (data.alt) params.set("filename", data.alt);
+    const fileName = sanitizeFileName(data.label);
+    if (fileName) params.set("filename", fileName);
     a.href = `${src}${sep}${params.toString()}`;
     a.download = "";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [src, data.alt]);
+  }, [src, data.label]);
 
   /** 多图模式：下载指定 URL 的结果图 */
   const handleDownloadUrl = useCallback((url: string) => {
@@ -168,13 +169,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const a = document.createElement("a");
     const sep = url.includes("?") ? "&" : "?";
     const params = new URLSearchParams({ download: "true" });
-    if (data.alt) params.set("filename", data.alt);
+    const fileName = sanitizeFileName(data.label);
+    if (fileName) params.set("filename", fileName);
     a.href = `${url}${sep}${params.toString()}`;
     a.download = "";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [data.alt]);
+  }, [data.label]);
 
   // 预览浮层：图片列表优先用多图结果，单图时退化为 [src]
   const previewList = useMemo(
@@ -267,7 +269,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
     addAsset({
-      name: data.alt || data.label || t("node.image"),
+      name: data.label || t("node.image"),
       type: "other",
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
@@ -278,7 +280,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         source: d?.source,
       },
     });
-  }, [src, data.alt, data.label, id, addAsset]);
+  }, [src, data.label, id, addAsset]);
 
   const handleGridSplit = useGridSplit(id, src);
 
@@ -324,7 +326,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: "", alt: "", naturalWidth: 0, naturalHeight: 0,
+      src: "", label: "", naturalWidth: 0, naturalHeight: 0,
       rotation: undefined, flipH: undefined, flipV: undefined,
       upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined,
       source: undefined,
@@ -368,9 +370,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id, src, setCroppingNodeId, setAnnotateOpen, handleApplyTemplate]);
 
-  const { editing: editingTitle, draft: titleDraft, setDraft: setTitleDraft, handleDblClick: handleTitleDblClick, handleSave: handleTitleSave } =
-    useEditableTitle(id, data.alt || data.label || t("node.image"), { syncAlt: true });
-
   const hasImage = src && src.length > 0;
 
   // 烘焙模式：图片本身就是旋转/翻转后的成品，无需 CSS transform
@@ -379,32 +378,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     <>
     <div ref={nodeRef} className="group relative w-full h-full flex flex-col">
       {/* Title */}
-      <div className="flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80" style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}>
-        {editingTitle ? (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0">
-            <PictureOutlined className="shrink-0" />
-            <Input
-              size="small"
-              variant="borderless"
-              className="nodrag text-[13px] font-medium text-white/80"
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleTitleSave}
-              onPressEnter={handleTitleSave}
-              autoFocus
-              style={{ padding: "1px 4px", height: 20, background: "var(--canvas-bg)", border: "1px solid #525252", borderRadius: 4, outline: "none", boxShadow: "none", width: "100%" }}
-            />
-          </span>
-        ) : (
-          <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleTitleDblClick}>
-            <PictureOutlined className="shrink-0" />
-            <span className="truncate">{data.label || data.alt || t("node.image")}</span>
-          </span>
-        )}
-        {hasImage && data.naturalWidth > 0 && (
-          <span className="text-white/30 text-xs whitespace-nowrap ml-2">{data.naturalWidth}×{data.naturalHeight}</span>
-        )}
-      </div>
+      <NodeTitle
+        nodeId={id}
+        icon={<PictureOutlined className="shrink-0" />}
+        title={data.label || t("node.image")}
+        trailing={hasImage && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
+      />
 
       {/* Body wrapper - relative container for body + overlay layer */}
       <div className="relative flex-1">
@@ -563,13 +542,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                     zIndex: 0,
                   }}
                 >
-                  <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
+                  <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full" draggable={false} />
                 </div>
               </div>
             )
           )
         : hasImage ? (
-          <img src={src} alt={data.alt || ""} className="absolute inset-0 w-full h-full" draggable={false} />
+          <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full" draggable={false} />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <PictureOutlined className="text-5xl" />
