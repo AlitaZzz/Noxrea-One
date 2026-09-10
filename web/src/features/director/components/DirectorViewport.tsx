@@ -680,8 +680,11 @@ export default function DirectorViewport() {
         crowd.members.forEach((m: Character) => { if (m.type === "character") { m.resetPose(); m.currentPreset = null; } });
       },
       groupCharacters: (ids: string[]) => {
+        // 只允许角色打组：Crowd 的成员契约是 Character（渲染循环逐帧 update、
+        // 姿态广播调 applyPosePreset / resetPose），相机与道具没有这些方法，
+        // 混进去会被强转后每帧抛错并跳过该帧剩余更新。
         const members = ids.map((id) => entities.find((e: DirectorEntity) => e.id === id))
-          .filter((e): e is DirectorEntity => !!e && (e.type === "character" || e.type === "camera" || e.type === "prop"));
+          .filter((e): e is Character => e instanceof Character);
         if (members.length < 2) return null;
         const centroid = new THREE.Vector3();
         for (const m of members) { m.root.updateMatrixWorld(true); centroid.add(m.root.getWorldPosition(new THREE.Vector3())); }
@@ -689,7 +692,7 @@ export default function DirectorViewport() {
         const group = new THREE.Group(); group.position.copy(centroid);
         stage.add(group); group.updateMatrixWorld(true);
         for (const m of members) group.attach(m.root);
-        const crowd = new Crowd("组" + (Math.random() * 100 | 0), group, members as Character[]);
+        const crowd = new Crowd(t("director.newGroup") + (Math.random() * 100 | 0), group, members);
         for (const m of members) m.root.userData.entityId = crowd.id;
         // Remove members from top-level, add crowd
         for (const m of members) {
@@ -708,7 +711,7 @@ export default function DirectorViewport() {
           if (ent instanceof Character) {
             if (!ent._srcUrl) continue;
             let c: Character;
-            try { c = await Character.load(ent.name + "副本", ent._srcUrl, ent._opts || {}); }
+            try { c = await Character.load(t("director.copyName", { name: ent.name }), ent._srcUrl, ent._opts || {}); }
             catch { continue; }
             if (_cancelled) { c.dispose(); return; }
             c._srcUrl = ent._srcUrl; c._opts = ent._opts;
@@ -722,7 +725,7 @@ export default function DirectorViewport() {
             c.applyPose();
             stage.add(c.root); _makeLabel(c); entities.push(c); last = c;
           } else if (ent instanceof Prop) {
-            const p = new Prop(ent.kind as "box"|"cylinder"|"sphere"|"mannequin", ent.name + "副本");
+            const p = new Prop(ent.kind as "box"|"cylinder"|"sphere"|"mannequin", t("director.copyName", { name: ent.name }));
             p.root.position.copy(ent.root.position).add(OFF);
             p.root.quaternion.copy(ent.root.quaternion);
             p.root.scale.copy(ent.root.scale);
@@ -730,7 +733,7 @@ export default function DirectorViewport() {
             stage.add(p.root); entities.push(p); last = p;
           } else if (ent instanceof CameraEntity) {
             const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-            const cam = new CameraEntity(ent.name + "副本", { fov: ent.fov, aspect: W / Math.max(1, H), scene: stage.scene });
+            const cam = new CameraEntity(t("director.copyName", { name: ent.name }), { fov: ent.fov, aspect: W / Math.max(1, H), scene: stage.scene });
             cam.root.position.copy(ent.root.position).add(OFF);
             cam.root.quaternion.copy(ent.root.quaternion);
             cam.lookTarget.copy(ent.lookTarget);
@@ -836,7 +839,14 @@ export default function DirectorViewport() {
       for (const ent of entities) {
         if (ent instanceof Character) ent.update(dt);
         else if (ent instanceof CameraEntity) ent.update();
-        else if (ent instanceof Crowd) ent.members.forEach((m: Character) => m.update(dt));
+        else if (ent instanceof Crowd) {
+          // 按实际类型分派：Crowd.members 声明为 Character[]，历史数据或异常路径
+          // 可能混入相机 / 道具，它们没有 update()，直接调用会每帧抛错
+          for (const m of ent.members as unknown as DirectorEntity[]) {
+            if (m instanceof Character) m.update(dt);
+            else if (m instanceof CameraEntity) m.update();
+          }
+        }
       }
       rig.update(); selection.update(); navGizmo?.update();
       _updateLabels();
@@ -851,7 +861,7 @@ export default function DirectorViewport() {
       })();
     } else {
       (async () => {
-        const c = await Character.load("角色A", XBOT, { height: 1.75, girth: 1.0 });
+        const c = await Character.load(t("director.defaultCharacter"), XBOT, { height: 1.75, girth: 1.0 });
         if (_cancelled) { c.dispose(); return; }
         c._srcUrl = XBOT; c._opts = { height: 1.75, girth: 1.0 };
         c.applyPosePreset("stand"); stage.add(c.root); entities.push(c); _registerEntity(c);
@@ -877,6 +887,10 @@ export default function DirectorViewport() {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
       for (const ent of entities) ent.dispose?.();
+      // 统一释放：变换手柄 / 拾取监听 / 轨道控制，以及 Stage 的地面与全景资源
+      gizmo.dispose();
+      selection.dispose();
+      rig.dispose();
       stage.dispose(); useDirectorStore.getState().setRuntime(null);
       // 重置模块级计数器，避免跨会话泄露
       _propCount = {}; _camCount = 0;

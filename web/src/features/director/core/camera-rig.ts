@@ -123,6 +123,11 @@ export class CameraRig {
     this.controls.update();
   }
 
+  /** 解绑 OrbitControls 的 pointer / wheel / contextmenu 监听 */
+  dispose() {
+    this.controls.dispose();
+  }
+
   /** 设取景比例。ratioStr ∈ 'free' | 任意 'w:h'（16:9 / 9:16 / 1:1 …） */
   setRatio(ratioStr: string) {
     if (ratioStr === "free" || ratioStr === "auto" || ratioStr == null) {

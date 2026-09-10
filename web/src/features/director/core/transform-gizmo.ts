@@ -81,4 +81,22 @@ export class TransformGizmo {
     this.control.enabled = v;
     this._setHelperVisible(v);
   }
+
+  /**
+   * 释放 GPU 资源。
+   * TransformControls 自建整棵 helper 子树（几何 / 材质）并绑定 DOM 事件，
+   * 只把它移出场景不会释放显存，反复开关导演会持续堆积。
+   */
+  dispose() {
+    this.detach();
+    if (this._helper.parent) this._helper.parent.remove(this._helper);
+    this._helper.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      mesh.geometry?.dispose?.();
+      const m = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(m)) m.forEach((x) => x?.dispose?.());
+      else m?.dispose?.();
+    });
+    this.control.dispose();
+  }
 }

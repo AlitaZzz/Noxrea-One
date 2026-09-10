@@ -259,9 +259,41 @@ export class Stage {
   dispose() {
     if (this._rafId) cancelAnimationFrame(this._rafId);
     window.removeEventListener("resize", this.onResize);
+
+    // 地面组（地面 / 网格 / 坐标轴）与全景球都是 Stage 自建资源，
+    // 只 dispose renderer 不会释放它们的几何 / 材质 / 纹理
+    this._disposeSubtree(this.groundGroup);
+    if (this.panoSphere) {
+      this._disposeSubtree(this.panoSphere);
+      this.panoSphere = null;
+    }
+    if (this._panoTex) {
+      this._panoTex.dispose();
+      this._panoTex = null;
+    }
+    this.scene.clear();
+
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
     }
+  }
+
+  /** 递归释放子树的几何 / 材质（含贴图）并从父节点摘除 */
+  private _disposeSubtree(root: THREE.Object3D) {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      mesh.geometry?.dispose?.();
+      const m = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      const disposeMat = (mat?: THREE.Material | null) => {
+        if (!mat) return;
+        // Material.dispose() 不释放贴图，全景 / 地面贴图需单独回收
+        (mat as THREE.Material & { map?: THREE.Texture | null }).map?.dispose();
+        mat.dispose();
+      };
+      if (Array.isArray(m)) m.forEach(disposeMat);
+      else disposeMat(m);
+    });
+    if (root.parent) root.parent.remove(root);
   }
 }
