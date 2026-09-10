@@ -287,12 +287,11 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
     }
 
     if (p.kind === "audio") {
-      Object.assign(node.data, { label: p.label, alt: p.label, source, upload, ...(p.item.extraData ?? {}) });
+      Object.assign(node.data, { label: p.label, source, upload, ...(p.item.extraData ?? {}) });
       node.style = { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT };
     } else {
       Object.assign(node.data, {
         label: p.label,
-        alt: p.label,
         source,
         upload,
         naturalWidth: p.nw,
@@ -391,7 +390,6 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
   const data: Record<string, unknown> = {
     src: result.url,
     label: ctx.label,
-    alt: ctx.label,
     upload: undefined,
     source: ctx.source,
   };
@@ -468,7 +466,6 @@ async function runUploads(
           ...(node.data as Record<string, unknown>),
           src: r.value.url,
           label: p.label,
-          alt: p.label,
           upload: undefined,
           source,
           ...clear,

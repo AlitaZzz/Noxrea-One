@@ -174,7 +174,7 @@ describe("撤销 ↔ 重做完整回环（不丢数据、不错位）", () => {
     const node = {
       id: "img1", type: "image-node",
       position: { x: 100, y: 200 },
-      data: { src: "old_url", label: "test", alt: "test" },
+      data: { src: "old_url", label: "test" },
       style: { width: 480, height: 360 },
     };
     useCanvasStore.setState({ nodes: [node as unknown as AnyNode] });
@@ -216,7 +216,7 @@ describe("异步上传竞态", () => {
     const cleanNode = {
       id: "img1", type: "image-node",
       position: { x: 100, y: 200 },
-      data: { src: "", label: "test", alt: "test" },
+      data: { src: "", label: "test" },
       style: { width: 480, height: 360 },
     };
     useCanvasStore.setState({ nodes: [cleanNode as unknown as AnyNode] });
@@ -238,7 +238,7 @@ describe("异步上传竞态", () => {
       if (!currentNode) return;                                       // 节点不存在则丢弃
       if ((currentNode.data as ImageNodeData).upload?.version !== uploadVersion) return;  // 版本不匹配则丢弃
       canvasStore.updateNodeData("img1",
-        { ...currentNode.data, src: imgUrl, label: "uploaded", alt: "uploaded" },
+        { ...currentNode.data, src: imgUrl, label: "uploaded" },
         { width: 300, height: 200 },
       );
     })();

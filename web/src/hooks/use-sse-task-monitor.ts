@@ -178,7 +178,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
                       // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
                       // 异步探测到真实分辨率后再统一回填真实尺寸。
                       useCanvasStore.getState().updateNodeData(nodeId, {
-                        src: firstUrl, label, alt: label,
+                        src: firstUrl, label,
                         naturalWidth: 0, naturalHeight: 0,
                         lockAspectRatio: true, taskBinding: undefined,
                         source: "generate",

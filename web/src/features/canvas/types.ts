@@ -100,6 +100,7 @@ export interface GroupableData {
 }
 
 export type TextNodeData = GroupableData & {
+  /** 展示标题。文本无资源文件名语义（导出文件名直接用 label），故不设 alt 字段 */
   label: string;
   content: string; // 富文本 HTML，仅供编辑器渲染
   plainText: string; // 纯文本，仅供下游消费
@@ -115,7 +116,6 @@ export type ImageNodeData = GroupableData & {
   lockAspectRatio: boolean;
   naturalWidth: number;
   naturalHeight: number;
-  alt: string;
   /** CSS 旋转度数（0/90/180/270），仅影响显示，不修改原图文件 */
   rotation?: number;
   /** CSS 水平翻转，仅影响显示，不修改原图文件 */
@@ -140,7 +140,6 @@ export type VideoNodeData = GroupableData & {
   src: string;
   naturalWidth: number;
   naturalHeight: number;
-  alt: string;
   taskBinding?: TaskBinding;
   upload?: UploadState;
   genSettings?: VideoGenSettings;
@@ -154,12 +153,10 @@ export type VideoNodeData = GroupableData & {
 };
 
 export type AudioNodeData = GroupableData & {
-  /** 展示标题（双写 alt，见 ImageNode 约定） */
+  /** 展示标题 */
   label: string;
   /** 音频资源地址（复用 src 字段名以继承 save-manager 哈希收集） */
   src: string;
-  /** 回退标题 */
-  alt: string;
   /** 音频时长（秒），加载元数据后回填 */
   duration?: number;
   taskBinding?: TaskBinding;

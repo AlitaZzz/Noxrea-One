@@ -40,12 +40,10 @@ export function createAssetNode(
   if (isAudio) {
     const node = createAudioNode(pos, sourceUrl);
     node.data.label = asset.name;
-    node.data.alt = asset.name;
     return node;
   } else if (isVideo) {
     const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
-    node.data.alt = asset.name;
     node.data.naturalWidth = nw || 320;
     node.data.naturalHeight = nh || 180;
     node.data.source = "upload";
@@ -58,7 +56,6 @@ export function createAssetNode(
     const imgSrc = asset.metadata?.sourceUrl as string;
     const node = createImageNode(pos, imgSrc);
     node.data.label = asset.name;
-    node.data.alt = asset.name;
     node.data.naturalWidth = nw;
     node.data.naturalHeight = nh;
     node.data.source = "upload";

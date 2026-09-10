@@ -77,7 +77,6 @@ export function createImageNode(
       lockAspectRatio: true,
       naturalWidth: DEFAULT_NODE_WIDTH,
       naturalHeight: DEFAULT_NODE_CONTENT_HEIGHT,
-      alt: "",
       genSettings: { kind: "image", prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refOrder: [], n: 1 } satisfies ImageGenSettings,
     } as ImageNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
@@ -97,7 +96,6 @@ export function createVideoNode(
       src: src || "",
       naturalWidth: 320,
       naturalHeight: 180,
-      alt: "",
       genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], refVideoOrder: [], n: 1 } satisfies VideoGenSettings,
     } as VideoNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
@@ -115,7 +113,6 @@ export function createAudioNode(
     data: {
       label: "",
       src: src || "",
-      alt: "",
     } as AudioNodeData,
     style: { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT },
   };

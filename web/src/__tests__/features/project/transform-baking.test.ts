@@ -25,13 +25,13 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 // ── Mock Zustand stores ────────────────────────────────────────
-const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { alt: string; label: string } }> = [
+const mockNodes: Array<{ id: string; type: string; position: { x: number; y: number }; style: { width: number; height: number }; data: { label: string } }> = [
   {
     id: "n1",
     type: "image-node",
     position: { x: 100, y: 200 },
     style: { width: 600, height: 324 },
-    data: { alt: "photo.jpg", label: "photo.jpg" },
+    data: { label: "photo.jpg" },
   },
 ];
 
