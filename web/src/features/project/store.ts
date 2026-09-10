@@ -9,7 +9,9 @@ import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/featur
 import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import type { CanvasProject } from "@/features/project/types";
+import { resolveResultError } from "@/lib/api/error-message";
 import { DEFAULT_BACKGROUND, DEFAULT_THEME, DEFAULT_VIEWPORT } from "@/lib/constants";
+import { showGlobalNotification } from "@/lib/global-notification";
 
 // ===== localStorage helpers (active project only) =====
 
@@ -61,14 +63,19 @@ function mapServerProject(p: ServerProject): CanvasProject {
   };
 }
 
-async function fetchProjects(): Promise<CanvasProject[]> {
+/**
+ * 拉取项目列表。
+ * 返回 null 表示「请求失败」（离线 / 5xx / 业务码非 200），与「成功但为空」区分开：
+ * 调用方据此保留本地数据，避免短暂断网被误判成「项目全部丢失」。
+ */
+async function fetchProjects(): Promise<CanvasProject[] | null> {
   try {
     const res = await projectApi.listProjects<ServerProject[]>();
     if (res.code === 200 && res.data) {
       return res.data.map(mapServerProject);
     }
   } catch { /* offline or error */ }
-  return [];
+  return null;
 }
 
 async function fetchProjectById(id: string): Promise<CanvasProject | null> {
@@ -101,10 +108,19 @@ async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   return null;
 }
 
-async function apiDeleteProject(projectId: string) {
+/** 删除项目；返回是否成功与失败文案（供调用方回滚与提示） */
+async function apiDeleteProject(projectId: string): Promise<{ ok: boolean; message?: string }> {
   try {
-    await projectApi.deleteProject(projectId);
-  } catch { /* */ }
+    const res = await projectApi.deleteProject(projectId);
+    if (res.code === 200) return { ok: true };
+    return { ok: false, message: resolveResultError(res, "project.delete_failed") };
+  } catch { /* offline or error */ }
+  return { ok: false, message: resolveResultError(null, "project.delete_failed") };
+}
+
+/** 失败提示（store 层统一负责，UI 无需各自处理） */
+function notifyError(message: string) {
+  showGlobalNotification().error({ title: message, placement: "bottomRight", duration: 6 });
 }
 
 // ===== Store =====
@@ -155,14 +171,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   renameProject: (id, name) => {
+    const prevName = get().projects.find((p) => p.id === id)?.name;
+    // 乐观更新，失败回滚：此前无论响应码如何都留在本地，刷新后名称又变回去
     set((s) => ({
       projects: s.projects.map((p) => p.id === id ? { ...p, name, updatedAt: Date.now() } : p),
     }));
-    projectApi.updateProject(id, { name }).catch(() => {});
+    void (async () => {
+      try {
+        const res = await projectApi.updateProject(id, { name });
+        if (res.code === 200) return;
+        throw new Error(resolveResultError(res, "project.rename_failed"));
+      } catch (e) {
+        if (prevName !== undefined) {
+          set((s) => ({
+            projects: s.projects.map((p) => (p.id === id ? { ...p, name: prevName } : p)),
+          }));
+        }
+        notifyError(e instanceof Error ? e.message : resolveResultError(null, "project.rename_failed"));
+      }
+    })();
   },
 
   deleteProject: (id) => {
-    apiDeleteProject(id).catch(() => {});
+    // 失败回滚用：删除是破坏性操作，不能「假删成功」
+    const snapshot = get().projects;
+    const snapshotActiveId = get().activeProjectId;
     set((s) => {
       const projects = s.projects.filter((p) => p.id !== id);
       let { activeProjectId } = s;
@@ -172,10 +205,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
       return { projects, activeProjectId };
     });
+    void (async () => {
+      const { ok, message } = await apiDeleteProject(id);
+      if (ok) return;
+      notifyError(message ?? resolveResultError(null, "project.delete_failed"));
+      set({ projects: snapshot, activeProjectId: snapshotActiveId });
+      saveLocalActiveId(snapshotActiveId);
+    })();
   },
 
   deleteProjects: (ids) => {
-    ids.forEach((id) => apiDeleteProject(id).catch(() => {}));
+    const snapshot = get().projects;
     const idSet = new Set(ids);
     set((s) => {
       const projects = s.projects.filter((p) => !idSet.has(p.id));
@@ -186,6 +226,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
       return { projects, activeProjectId };
     });
+    void (async () => {
+      const results = await Promise.all(ids.map((id) => apiDeleteProject(id)));
+      const failedIds = new Set(ids.filter((_, i) => !results[i].ok));
+      if (failedIds.size === 0) return;
+      notifyError(results.find((r) => !r.ok)?.message ?? resolveResultError(null, "project.delete_failed"));
+      // 只把删除失败的项放回列表：成功删除的在服务端已不存在，
+      // 整表回滚会让它们变成「刷新才消失」的幽灵项目
+      const restored = snapshot.filter((p) => failedIds.has(p.id));
+      set((s) => {
+        const keptIds = new Set(s.projects.map((p) => p.id));
+        const projects = [...s.projects, ...restored.filter((p) => !keptIds.has(p.id))];
+        let { activeProjectId } = s;
+        if ((!activeProjectId || !projects.some((p) => p.id === activeProjectId)) && projects.length > 0) {
+          activeProjectId = projects[0].id;
+          saveLocalActiveId(activeProjectId);
+        }
+        return { projects, activeProjectId };
+      });
+    })();
   },
 
   setActiveProject: (id) => {
@@ -203,6 +262,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   refreshProjects: async () => {
     const projects = await fetchProjects();
+    // 拉取失败：保留现有列表与激活项目，宁可展示过期数据也不能清空
+    // （空列表会让用户以为项目被删，且顺带重置 activeProjectId）
+    if (!projects) return;
     set((s) => {
       let { activeProjectId } = s;
       if (activeProjectId && !projects.find((p) => p.id === activeProjectId)) {
@@ -214,7 +276,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   initialize: async () => {
-    const projects = await fetchProjects();
+    // 同样区分失败与空列表：失败时沿用已有的本地数据
+    const projects = (await fetchProjects()) ?? get().projects;
     let activeId: string | null = loadLocalActiveId();
     if (projects.length > 0) {
       const validId = activeId && projects.find((p) => p.id === activeId) ? activeId : projects[0].id;
