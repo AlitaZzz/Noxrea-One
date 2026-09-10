@@ -39,8 +39,8 @@ export function resolveDerivedLabel(
   labelOverride?: string,
 ): string {
   if (labelOverride !== undefined) return labelOverride;
-  const origData = origNode?.data as { alt?: string; label?: string } | undefined;
-  const origName = origData?.alt || origData?.label || "image";
+  const origData = origNode?.data as { label?: string } | undefined;
+  const origName = origData?.label || "image";
   const dotIdx = origName.lastIndexOf(".");
   const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
   const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
@@ -91,7 +91,6 @@ export function createNodeFromUrl(
 
   const node = createImageNode(position, url);
   node.data.label = label;
-  node.data.alt = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
@@ -143,7 +142,6 @@ export function createAudioNodeFromUrl(
 
   const node = createAudioNode(position, url);
   node.data.label = label;
-  node.data.alt = label;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
 
   if (write) {
@@ -182,7 +180,6 @@ export function createVideoNodeFromUrl(
 
   const node = createVideoNode(position, url);
   node.data.label = label;
-  node.data.alt = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
