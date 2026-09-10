@@ -1274,3 +1274,11 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .param-num-input:focus-within {
   background: var(--canvas-border-light, #3a3a40);
 }
+
+/* 音频波形（wavesurfer）：波形层整体降透明度，进度层保持纯色不透明。
+   wavesurfer 的进度画布是「复制波形画布 + source-in 填 progressColor」，
+   若 waveColor 自带 alpha，进度色也会被同比例减淡，因此波形用不透明白色绘制，
+   再由 .canvases（shadow DOM part）统一调透明。 */
+.audio-waveform > div::part(canvases) {
+  opacity: 0.35;
+}

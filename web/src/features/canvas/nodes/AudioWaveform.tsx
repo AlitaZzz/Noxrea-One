@@ -27,7 +27,7 @@ interface AudioWaveformProps {
 
 /**
  * 基于 wavesurfer.js 的音频波形播放器，参考统一设计：
- * 波形区 + 红色进度光标 + 底部时间栏与圆形播放按钮 + 右上角重新上传。
+ * 波形区 + 进度光标 + 底部时间栏与圆形播放按钮 + 右上角重新上传。
  */
 export default function AudioWaveform({
   url,
@@ -61,9 +61,11 @@ export default function AudioWaveform({
     const ws = WaveSurfer.create({
       container: containerRef.current,
       height: 64,
-      waveColor: "rgba(255,255,255,0.35)",
-      progressColor: "rgb(29, 158, 117)",
-      cursorColor: "rgb(29, 158, 117)",
+      // 波形用不透明白色绘制，整体透明度交给 CSS（.canvases 层）控制：
+      // 进度层是 source-in 叠加，若 waveColor 自带 alpha 会把进度色一并变淡。
+      waveColor: "#ffffff",
+      progressColor: "#c7f43d",
+      cursorColor: "#c7f43d",
       cursorWidth: 0,
       barWidth: 2,
       barGap: 1,
@@ -103,7 +105,7 @@ export default function AudioWaveform({
     onToggle?.(!playing);
   }, [ready, failed, playing, onToggle]);
 
-  // 在波形区按下/拖动即可定位播放进度（红色光标）
+  // 在波形区按下/拖动即可定位播放进度（进度光标）
   const seekRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -151,44 +153,45 @@ export default function AudioWaveform({
       <div className="flex h-full flex-col p-2">
         {/* 波形区（点击不定位，可拖动节点；仅竖线可拖动定位） */}
         <div
-          ref={seekRef}
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
           style={{
             background: "rgb(54, 54, 54)",
             borderRadius: 8,
-            padding: "8px 0",
+            padding: "8px 12px",
           }}
         >
-          <div className="w-full px-2">
+          {/* 波形与竖线放在同一个容器里：竖线按百分比定位，
+              只有与波形等宽才能和波形时间轴对齐（原先的 px-2 包裹层会让两者错位） */}
+          <div ref={seekRef} className="relative w-full">
             <div
               ref={containerRef}
-              className="w-full"
+              className="audio-waveform w-full"
               style={{ opacity: failed ? 0 : 1, minHeight: 64 }}
             />
-          </div>
-          {/* 自定义进度竖线：仅在该竖线上切换指针样式并支持拖动 */}
-          {ready && !failed && (
-            <div
-              className="absolute top-0 bottom-0 nodrag"
-              style={{
-                left: `calc(${progress * 100}% )`,
-                width: 12,
-                transform: "translateX(-50%)",
-                cursor: "col-resize",
-                touchAction: "none",
-                zIndex: 5,
-              }}
-              onPointerDown={handleCursorDown}
-              onPointerMove={handleSeekMove}
-              onPointerUp={handleSeekUp}
-              onPointerCancel={handleSeekUp}
-            >
+            {/* 自定义进度竖线：仅在该竖线上切换指针样式并支持拖动 */}
+            {ready && !failed && (
               <div
-                className="absolute left-1/2 top-1 bottom-1 -translate-x-1/2"
-                style={{ width: 2, background: "rgb(29, 158, 117)", borderRadius: 1 }}
-              />
-            </div>
-          )}
+                className="absolute top-0 bottom-0 nodrag"
+                style={{
+                  left: `${progress * 100}%`,
+                  width: 12,
+                  transform: "translateX(-50%)",
+                  cursor: "col-resize",
+                  touchAction: "none",
+                  zIndex: 5,
+                }}
+                onPointerDown={handleCursorDown}
+                onPointerMove={handleSeekMove}
+                onPointerUp={handleSeekUp}
+                onPointerCancel={handleSeekUp}
+              >
+                <div
+                  className="absolute left-1/2 top-1 bottom-1 -translate-x-1/2"
+                  style={{ width: 2, background: "#c7f43d", borderRadius: 1 }}
+                />
+              </div>
+            )}
+          </div>
           {failed && (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-red-400">
               音频加载失败
