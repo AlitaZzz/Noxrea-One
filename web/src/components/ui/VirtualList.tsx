@@ -40,9 +40,22 @@ export function VirtualList<T>({
   }, []);
 
   const total = items.length * itemHeight;
-  const start = Math.max(0, Math.floor(scrollTop / itemHeight) - OVERSCAN);
+  // 数据骤减后旧的 scrollTop 可能越过内容底部：夹到有效范围，
+  // 否则 start 落在空档，可视区会出现一整片空白
+  const maxScroll = Math.max(0, total - viewport);
+  const start = Math.max(0, Math.floor(Math.min(scrollTop, maxScroll) / itemHeight) - OVERSCAN);
   const visibleCount = Math.ceil(viewport / itemHeight) + OVERSCAN * 2;
   const end = Math.min(items.length, start + visibleCount);
+  // 浏览器会自行 clamp scrollTop，但 state 不会随之更新；这里把它同步回有效值
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.scrollTop > maxScroll) {
+      el.scrollTop = maxScroll;
+      setScrollTop(maxScroll);
+    }
+  }, [maxScroll]);
+
   const slice = items.slice(start, end);
 
   return (

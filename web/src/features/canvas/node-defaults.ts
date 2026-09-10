@@ -161,8 +161,33 @@ export function duplicateNode(
   offset: { x: number; y: number }
 ): AnyNode {
   const prefix = NODE_ID_PREFIX[node.type] ?? node.type ?? "copy";
+  const cloned = JSON.parse(JSON.stringify(node)) as AnyNode & { data: Record<string, unknown> };
+  // 副本不继承「进行中」的瞬时状态：
+  // - taskBinding：生成任务归属原节点，副本没有对应任务，
+  //   保留会让副本永远停在「生成中」遮罩，并连带全局禁用撤销 / 重做。
+  // - upload：上传进度 / 失败原因与 previewUrl（blob: URL）同样属于原节点，
+  //   原节点上传结束后管道会 revoke 该 URL，副本会指向已回收的地址。
+  // 已完成的静态内容（src / content / genSettings 等）保持不变。
+  if (cloned.data) {
+    delete cloned.data.taskBinding;
+    const upload = cloned.data.upload as
+      | { uploading?: boolean; progress?: number; previewUrl?: string; error?: unknown }
+      | undefined;
+    if (upload) {
+      if (upload.error === undefined) {
+        // 上传中：进度与 blob 预览都属于原节点（结束后 previewUrl 会被 revoke），副本不能继承
+        delete cloned.data.upload;
+      } else {
+        // 上传失败：保留失败原因，副本仍显示「上传失败」提示；
+        // 但丢弃原节点的 blob 预览与进度（重试上下文已失效，预览也可能已被回收）
+        delete upload.previewUrl;
+        upload.uploading = false;
+        upload.progress = 0;
+      }
+    }
+  }
   return {
-    ...JSON.parse(JSON.stringify(node)),
+    ...cloned,
     id: uid(prefix),
     position: { x: node.position.x + offset.x, y: node.position.y + offset.y },
     selected: false,
