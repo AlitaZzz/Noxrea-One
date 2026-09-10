@@ -38,10 +38,15 @@ import {
 } from "@/features/canvas/upload";
 import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP,NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
-import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, probeAudioTrack } from "@/lib/utils/media-utils";
+import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
 
 import GeneratingOverlay from "./GeneratingOverlay";
 import UploadFailedOverlay from "./UploadFailedOverlay";
+
+/** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串） */
+function toFileKey(url: string): string {
+  return url.replace(/^\/api\/files\//, "").split("?")[0];
+}
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
@@ -158,17 +163,18 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     [data.hasAudio, id],
   );
 
-  /** 音轨探测：先读属性，无法确定时静默播放一小段再判定 */
-  const resolveAudioTrack = useCallback(async () => {
+  /**
+   * 浏览器能直接读出音轨时（Firefox 的 mozHasAudio、Safari 的 audioTracks）立即定论。
+   *
+   * 只采纳「有音轨」的确定结论：「无音轨」在 Chrome 上依赖播放后才可靠的解码计数，
+   * 误判会直接禁掉「分离音频」入口，因此等用户真正播放时由 onTimeUpdate 补判；
+   * 始终没播放的视频，最终由「分离音频」的后端结论兜底。
+   */
+  const resolveAudioTrack = useCallback(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (detectAudioTrack(v, v.currentTime > AUDIO_DECISION_MIN_TIME) === true) {
-      commitHasAudio(true);
-      return;
-    }
-    const probed = await probeAudioTrack(v);
-    if (probed !== null) commitHasAudio(probed);
-  }, [commitHasAudio]);
+    if (!v || data.hasAudio !== undefined) return;
+    if (detectAudioTrack(v) === true) commitHasAudio(true);
+  }, [commitHasAudio, data.hasAudio]);
 
   const onTimeUpdate = useCallback(() => {
     const v = videoRef.current;
@@ -181,17 +187,22 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
     const detected = detectAudioTrack(v, true);
     if (detected === null) return;
-    // 有音轨可立即定论；判定「无音轨」则要求已播够时长，避免解码未就绪时误判
-    if (detected || v.currentTime > AUDIO_DECISION_MIN_TIME) {
+    // 结论一旦确定就不再改：Chrome 的解码计数在播放初期可能还没涨上来，
+    // 反复覆盖会把先前正确的结论冲掉、误禁分离入口
+    if (data.hasAudio !== undefined) return;
+    // 有音轨可立即定论。判定「无音轨」必须确实在播放中：只拖进度条时视频仍是
+    // 暂停态，解码器还没解出音频，计数为 0 会被误判成无音轨，从而错误禁掉
+    // 「分离音频」入口
+    if (detected || (!v.paused && v.currentTime > AUDIO_DECISION_MIN_TIME)) {
       commitHasAudio(detected);
     }
-  }, [commitHasAudio, capturingFrame]);
+  }, [commitHasAudio, capturingFrame, data.hasAudio]);
   const onLoadedMeta = useCallback(() => {
     const v = videoRef.current;
     if (v) setDuration(v.duration || 0);
     // 同上：换源后的 metadata 来自代理（转码产物），不能据此判定原视频的音轨
     if (capturingFrame()) return;
-    void resolveAudioTrack();
+    resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame]);
 
   const seekTo = useCallback((clientX: number) => {
@@ -223,7 +234,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     setCapturing(true);
     try {
       const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
-      const videoKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+      const videoKey = toFileKey(src);
       const res = await captureFrameApi(videoKey, seekTime);
       if (!res.ok) {
         // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案
@@ -352,7 +363,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   ]);
 
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
-  const handleUpload = useNodeUpload(id, { accept: "video/*" });
+  const handleUpload = useNodeUpload(id, { accept: "video/*", clearFields: ["hasAudio"] });
 
   const addAsset = useAssetsStore((s) => s.addAsset);
 
@@ -423,8 +434,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
   }, [id, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio]);
 
-  // 换源后旧探测结论失效，清空以便重新判定
+  // 换源后旧探测结论失效，清空以便重新判定。
+  // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次
+  const prevSrcRef = useRef<string | null>(null);
   useEffect(() => {
+    const prev = prevSrcRef.current;
+    prevSrcRef.current = src;
+    if (prev === null || prev === src) return;
     const store = useCanvasStore.getState();
     const node = store.nodes.find((n) => n.id === id);
     if (!node) return;
