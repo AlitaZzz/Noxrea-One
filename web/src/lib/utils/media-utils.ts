@@ -48,38 +48,10 @@ export function detectAudioTrack(
  */
 export const AUDIO_DECISION_MIN_TIME = 0.2;
 
-/** 静默探测时长：需超过 AUDIO_DECISION_MIN_TIME，保证结论有效 */
-const AUDIO_PROBE_DURATION_MS = 300;
-
 /**
- * 静默探测音轨：播放极短一段驱动计数，随后立即复位。
+ * 音轨判定只发生在用户交互之后：浏览器属性直读（Firefox / Safari）、播放时补判
+ * （Chrome 的解码计数要播放后才可靠），或点「分离音频」时由后端给出确定结论。
  *
- * 仅在属性无法直接判定（Chrome 系、且尚未播放）时调用。
- * 全过程 mute，不会出声；若自动播放被浏览器策略拒绝，返回 null 交由后端兜底。
+ * 刻意不在加载时判定——为拿到 Chrome 的解码计数而播放一小段，会让刷新页面时
+ * 每个视频节点都先动一下再停回去。
  */
-export async function probeAudioTrack(
-  video: HTMLVideoElement | null,
-): Promise<boolean | null> {
-  if (!video) return null;
-  // 正在播放：无需探测，timeupdate 会自然得出计数
-  if (!video.paused) return null;
-  // 尚未加载到可播放状态
-  if (video.readyState < 2) return null;
-
-  const prevTime = video.currentTime;
-  const wasMuted = video.muted;
-  video.muted = true;
-
-  try {
-    await video.play();
-    await new Promise((resolve) => setTimeout(resolve, AUDIO_PROBE_DURATION_MS));
-    return detectAudioTrack(video, true);
-  } catch {
-    // 自动播放被拒：保持未知，由后端在无音轨时给出确定结论
-    return null;
-  } finally {
-    video.pause();
-    video.currentTime = prevTime;
-    video.muted = wasMuted;
-  }
-}
