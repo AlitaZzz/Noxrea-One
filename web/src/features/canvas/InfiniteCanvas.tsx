@@ -113,7 +113,6 @@ export default function InfiniteCanvas() {
   const setEdges = useCanvasStore((s) => s.setEdges);
   const addNodes = useCanvasStore((s) => s.addNodes);
   const background = useCanvasStore((s) => s.background);
-  const theme = useCanvasStore((s) => s.theme);
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const snapGridSize = useCanvasStore((s) => s.snapGridSize);
@@ -869,7 +868,7 @@ export default function InfiniteCanvas() {
         maxZoom={5}
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
-        colorMode={theme}
+        colorMode="dark"
         // 连线吸附半径（画布坐标，默认 20 偏小）：Handle 直径 24px，20 只在 Handle 外
         // 留约 8px 容错，且缩放变小时该半径会等比缩水、更难吸附。
         // 放大是安全的——React Flow 在半径内取「最近」的 Handle，不会明显增加误吸附

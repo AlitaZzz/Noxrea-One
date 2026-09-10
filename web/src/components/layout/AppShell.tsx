@@ -1,19 +1,16 @@
 /**
  * 应用页面外壳容器。
- * 提供满屏 flex 布局骨架，并把当前主题写入 <html data-theme>，驱动 CSS 变量换肤。
+ * 提供满屏 flex 布局骨架，并固定 <html data-theme> 为深色主题。
  */
 "use client";
 
 import { ReactNode, useEffect } from "react";
 
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const theme = useCanvasStore((s) => s.theme);
-
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-theme", "dark");
+  }, []);
 
   return (
     <div
