@@ -8,6 +8,7 @@ import { DeleteOutlined } from "@ant-design/icons";
 import { Button,Input } from "antd";
 import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 import { DirCameraIcon } from "@/components/ui/icons/director/DirCameraIcon";
 import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
@@ -36,6 +37,7 @@ const S = (name: string) => {
 };
 
 export default function Outliner() {
+  const { t } = useTranslation();
   const entities = useDirectorStore((s) => s.entities);
   const selectedId = useDirectorStore((s) => s.selectedId);
   const selectedIds = useDirectorStore((s) => s.selectedIds);
@@ -67,13 +69,14 @@ export default function Outliner() {
   const matches = (name: string) => !search || name.toLowerCase().includes(search.toLowerCase());
   const typeIcon = (type: string) => type === "character" ? "person" : type === "camera" ? "camera" : type === "crowd" ? "group" : "cube";
   const filtered = search ? entities.filter((e) => matches(e.name)) : entities;
-  const ctxGroupCount = ctxMenu?.ids.filter((id) => { const t = entities.find((x) => x.id === id)?.type; return t === "character" || t === "camera" || t === "prop"; }).length || 0;
+  // 与 groupCharacters 对齐：只有角色可打组，避免按钮可点但打组静默失败
+  const ctxGroupCount = ctxMenu?.ids.filter((id) => entities.find((x) => x.id === id)?.type === "character").length || 0;
 
   return (
     <div className="flex flex-col h-full">
       {/* 搜索框 */}
       <div className="mb-[14px]">
-        <Input allowClear size="small" placeholder="搜索..."
+        <Input allowClear size="small" placeholder={t("director.search")}
           className="searchbox-input"
           style={{ background: "var(--dir-panel2)", border: "1px solid transparent", borderRadius: 9, color: "var(--dir-txt)", fontSize: 13, padding: "9px 12px" }}
           value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -143,7 +146,7 @@ export default function Outliner() {
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }} title="解组">⊟</button>}
+                        onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }} title={t("director.ungroup")}>⊟</button>}
                       <Button type="text" size="small"
                         icon={<span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span>}
                         className="!p-0.5"
@@ -202,17 +205,17 @@ export default function Outliner() {
             onClick={() => { runtime?.groupCharacters(ctxMenu.ids); setCtxMenu(null); }}
             disabled={ctxGroupCount < 2} style={ctxGroupCount < 2 ? { color: "var(--dir-dim2)", cursor: "default", pointerEvents: "none" } : {}}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⊞</span>
-            <span className="flex-1">打组</span>
+            <span className="flex-1">{t("director.group")}</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { runtime?.toggleVisibleMany(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>{S("eye")}</span>
-            <span className="flex-1">显示 / 隐藏</span>
+            <span className="flex-1">{t("director.toggleVisible")}</span>
           </button>
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm text-white cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"
             onClick={() => { runtime?.duplicateMany(ctxMenu.ids); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>⧉</span>
-            <span className="flex-1">创建副本</span>
+            <span className="flex-1">{t("director.duplicate")}</span>
           </button>
           <div className="h-px my-1.5 mx-1.5" style={{ background: "var(--dir-line2)" }} />
           <button className="flex items-center gap-[13px] w-full text-left px-[13px] py-2.5 rounded-[10px] text-sm cursor-pointer hover:bg-[var(--menu-item-hover)] bg-transparent border-0"

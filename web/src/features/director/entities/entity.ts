@@ -5,6 +5,17 @@
  */
 import * as THREE from "three";
 
+/** 材质上常见的贴图槽位；dispose 材质前需逐个回收 */
+const TEXTURE_KEYS = [
+  "map",
+  "normalMap",
+  "roughnessMap",
+  "metalnessMap",
+  "aoMap",
+  "emissiveMap",
+  "alphaMap",
+] as const;
+
 // 实体基类（§7）：gizmo 与选择都作用于 root。
 export class Entity {
   id: string;
@@ -39,8 +50,16 @@ export class Entity {
       if (o instanceof THREE.Mesh) {
         o.geometry?.dispose?.();
         const m = o.material;
-        if (Array.isArray(m)) m.forEach((x) => x.dispose?.());
-        else m?.dispose?.();
+        // Material.dispose() 不会释放贴图：角色 GLB 的皮肤 / 法线贴图都挂在材质上，
+        // 不显式回收的话反复打开导演会持续占用显存
+        const disposeMat = (mat?: THREE.Material | null) => {
+          if (!mat) return;
+          const tex = mat as unknown as Record<string, THREE.Texture | null>;
+          for (const k of TEXTURE_KEYS) tex[k]?.dispose();
+          mat.dispose();
+        };
+        if (Array.isArray(m)) m.forEach(disposeMat);
+        else disposeMat(m);
       }
     });
   }

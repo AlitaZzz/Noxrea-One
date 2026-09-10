@@ -53,15 +53,8 @@ export class Selection {
     scene.add(this.ring);
 
     const dom = renderer.domElement;
-    dom.addEventListener("pointerdown", (e) => {
-      this._down.set(e.clientX, e.clientY);
-    });
-    dom.addEventListener("pointerup", (e) => {
-      const moved = Math.hypot(e.clientX - this._down.x, e.clientY - this._down.y);
-      if (moved > 4) return;
-      if (this._shouldSkip()) return;
-      this._pick(e);
-    });
+    dom.addEventListener("pointerdown", this._onPointerDown);
+    dom.addEventListener("pointerup", this._onPointerUp);
   }
 
   setSkipPredicate(fn: () => boolean) {
@@ -116,4 +109,27 @@ export class Selection {
     this.ring.position.x = p.x;
     this.ring.position.z = p.z;
   }
+
+  /** 解绑拾取监听并释放选中环；否则每次打开导演都会残留一套监听与环的几何 / 材质 */
+  dispose() {
+    const dom = this.renderer.domElement;
+    dom.removeEventListener("pointerdown", this._onPointerDown);
+    dom.removeEventListener("pointerup", this._onPointerUp);
+    this.selectedEntity = null;
+    if (this.ring.parent) this.ring.parent.remove(this.ring);
+    this.ring.geometry.dispose();
+    (this.ring.material as THREE.Material).dispose();
+  }
+
+  // 具名保存以便解绑（类字段在构造函数体之前完成初始化）
+  private _onPointerDown = (e: PointerEvent) => {
+    this._down.set(e.clientX, e.clientY);
+  };
+
+  private _onPointerUp = (e: PointerEvent) => {
+    const moved = Math.hypot(e.clientX - this._down.x, e.clientY - this._down.y);
+    if (moved > 4) return;
+    if (this._shouldSkip()) return;
+    this._pick(e);
+  };
 }
