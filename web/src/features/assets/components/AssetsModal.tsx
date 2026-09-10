@@ -176,22 +176,38 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", mediaType: "", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], metadata: {}, spaceKey: "personal" } as AssetItem);
   }, [selectedIds, t]);
 
-  const handleBatchDeleteConfirm = useCallback(() => {
-    for (const id of selectedIds) {
+  const handleBatchDeleteConfirm = useCallback(async () => {
+    const ids = [...selectedIds];
+    // 逐个等待结果：只有真正删除成功的才从列表移除（失败原因由 store 提示）
+    const results = await Promise.all(
+      ids.map((id) => {
+        const item = items.find((i) => i.id === id);
+        return removeAsset(id, item?.metadata?.sourceUrl as string | undefined);
+      }),
+    );
+    const removed = new Set(ids.filter((_, i) => results[i]));
+    for (const id of removed) {
       const item = items.find((i) => i.id === id);
       if (item?.folderId == null) bumpUncategorizedCount(-1);
       else if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
-      removeAsset(id, item?.metadata?.sourceUrl as string | undefined);
     }
-    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
-    setTotalCount((c) => Math.max(0, c - selectedIds.size));
-    setSelectedIds(new Set());
+    if (removed.size > 0) {
+      setItems((prev) => prev.filter((i) => !removed.has(i.id)));
+      setTotalCount((c) => Math.max(0, c - removed.size));
+    }
+    // 只保留删除失败的项，便于直接重试
+    setSelectedIds(new Set(ids.filter((_, i) => !results[i])));
     setDeleteAsset(null);
   }, [selectedIds, removeAsset, items, bumpUncategorizedCount]);
 
-  const handleBatchMove = useCallback((folderId: string) => {
+  const handleBatchMove = useCallback(async (folderId: string) => {
     const targetIsUncategorized = folderId === UNCATEGORIZED_FOLDER_ID;
     const realFolderId = targetIsUncategorized ? undefined : folderId || undefined;
+    // 先等批量接口返回再刷新：此前未 await 就拉取，可能重新拉到旧数据
+    const ok = await updateAssetsBatch([...selectedIds], { folderId: realFolderId });
+    // 失败保留选中，用户可直接重试
+    if (!ok) return;
+    setSelectedIds(new Set());
     for (const id of selectedIds) {
       const item = items.find((i) => i.id === id);
       if (!item) continue;
@@ -201,8 +217,6 @@ export default function AssetsModal({ open, onClose }: Props) {
       if (item.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
       if (folderId && !targetIsUncategorized) useAssetsStore.getState().bumpFolderCount(folderId, 1);
     }
-    updateAssetsBatch([...selectedIds], { folderId: realFolderId });
-    setSelectedIds(new Set());
     setBatchMoveOpen(false);
     // 刷新当前视图以立即反映移动结果
     if (activeFolderId !== null) {
@@ -211,11 +225,21 @@ export default function AssetsModal({ open, onClose }: Props) {
     }
   }, [selectedIds, updateAssetsBatch, items, activeFolderId, activeSpace, category, search, bumpUncategorizedCount, fetchAndReplace]);
 
-  const handleBatchType = useCallback((type: AssetType) => {
-    updateAssetsBatch([...selectedIds], { type });
+  const handleBatchType = useCallback(async (type: AssetType) => {
+    const ids = [...selectedIds];
+    const ok = await updateAssetsBatch(ids, { type });
+    // 失败保留选中，用户可直接重试
+    if (!ok) return;
     setSelectedIds(new Set());
     setBatchTypeOpen(false);
-  }, [selectedIds, updateAssetsBatch]);
+    // 类型变了，当前筛选可能已不适用，重新拉取比本地改字段更可靠
+    if (activeFolderId !== null) {
+      const fId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
+      fetchAndReplace({ category, search, folderId: fId, spaceKey: activeSpace });
+    } else {
+      setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
+    }
+  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, activeSpace, fetchAndReplace]);
 
   // Current folder depth (max 2 levels allowed)
   const currentFolderDepth = useMemo(() => {
@@ -314,20 +338,27 @@ export default function AssetsModal({ open, onClose }: Props) {
   );
 
   const handleRename = useCallback((asset: AssetItem) => { setRenamingId(asset.id); setRenameValue(asset.name); }, []);
-  const handleRenameConfirm = useCallback(() => {
-    if (renamingId && renameValue.trim()) updateAsset(renamingId, { name: renameValue.trim() });
+  const handleRenameConfirm = useCallback(async () => {
+    const id = renamingId;
+    const name = renameValue.trim();
     setRenamingId(null);
     setRenameValue("");
+    if (!id || !name) return;
+    // 成功后同步本地列表：此前只发请求，网格里仍是旧名称
+    if (await updateAsset(id, { name })) {
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name } : i)));
+    }
   }, [renamingId, renameValue, updateAsset]);
 
   const handleDelete = useCallback((asset: AssetItem) => { setDeleteAsset(asset); }, []);
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
 
-  const handleDeleteFolderConfirm = useCallback(() => {
+  const handleDeleteFolderConfirm = useCallback(async () => {
     if (!deleteFolder) return;
     const deletedId = deleteFolder.id;
-    removeFolder(deletedId);
-    if (activeFolderId) {
+    const removed = await removeFolder(deletedId);
+    // 只有删除成功才把用户切回根目录；失败原因由 store 统一通知
+    if (removed && activeFolderId) {
       let cur: string | null = activeFolderId;
       let within = false;
       while (cur) {
@@ -574,18 +605,21 @@ export default function AssetsModal({ open, onClose }: Props) {
           open={!!deleteAsset}
           title={t("asset.delete")}
           content={deleteAsset?.name || ""}
-          onOk={() => {
+          onOk={async () => {
             if (!deleteAsset) return;
             if (selectedIds.size > 0) {
-              handleBatchDeleteConfirm();
-            } else {
-              removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl as string | undefined);
+              await handleBatchDeleteConfirm();
+              return;
+            }
+            // 只有删除成功才从列表移除；失败原因由 store 统一通知
+            const removed = await removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl as string | undefined);
+            if (removed) {
               if (deleteAsset.folderId == null) bumpUncategorizedCount(-1);
               else if (deleteAsset.folderId) useAssetsStore.getState().bumpFolderCount(deleteAsset.folderId, -1);
               setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));
               setTotalCount((c) => Math.max(0, c - 1));
-              setDeleteAsset(null);
             }
+            setDeleteAsset(null);
           }}
           onCancel={() => { setDeleteAsset(null); setSelectedIds(new Set()); }}
         />

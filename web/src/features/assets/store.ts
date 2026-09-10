@@ -7,6 +7,8 @@ import { create } from "zustand";
 
 import { assetApi, type AssetFolderDto, type AssetItemDto } from "@/features/assets/api";
 import type { AssetFolder, AssetItem, AssetType, CreateAssetInput, MediaType } from "@/features/assets/types";
+import { resolveResultError } from "@/lib/api/error-message";
+import { showGlobalNotification } from "@/lib/global-notification";
 
 // --- Helpers ---
 
@@ -46,6 +48,15 @@ function dtoToFolder(dto: AssetFolderDto): AssetFolder {
 function toIntId(id: string): number | undefined {
   const n = parseInt(id, 10);
   return isNaN(n) ? undefined : n;
+}
+
+/** 写操作失败提示（store 层统一负责，UI 只处理成功分支） */
+function notifyFailure(res: { code: number; msg?: string } | null, fallbackKey: string) {
+  showGlobalNotification().error({
+    title: resolveResultError(res, fallbackKey),
+    placement: "bottomRight",
+    duration: 6,
+  });
 }
 
 // --- Shared pagination helper ---
@@ -98,12 +109,14 @@ interface AssetsState {
 
   addAsset: (input: CreateAssetInput) => AssetItem | null;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AssetItem[]>;
-  updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<void>;
-  removeAsset: (id: string, sourceUrl?: string) => Promise<void>;
-  updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<void>;
+  /** 返回值表示是否落库成功；失败原因由 store 统一提示 */
+  updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
+  removeAsset: (id: string, sourceUrl?: string) => Promise<boolean>;
+  updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<boolean>;
 
   addFolder: (name: string, spaceKey: string, parentId?: string) => Promise<AssetFolder | null>;
-  removeFolder: (id: string) => Promise<void>;
+  /** 返回值表示是否删除成功；失败原因由 store 统一提示 */
+  removeFolder: (id: string) => Promise<boolean>;
   bumpFolderCount: (folderId: string | undefined, delta: number) => void;
 
   getFoldersBySpace: (spaceKey: string) => AssetFolder[];
@@ -196,38 +209,48 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       }
       return items;
     }
+    notifyFailure(res, "asset.create_failed");
     return [];
   },
 
   updateAsset: async (id, patch) => {
     const intId = toIntId(id);
-    if (!intId) return;
+    if (!intId) return false;
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.type !== undefined) body.type = patch.type;
     if (patch.folderId !== undefined) body.folderId = toIntId(patch.folderId);
-    if (Object.keys(body).length > 0) {
-      await assetApi.updateAsset(intId, body).catch(() => {});
-    }
+    if (Object.keys(body).length === 0) return false;
+    // 校验业务码：此前无论成败都静默通过，UI 还显示旧名称
+    const res = await assetApi.updateAsset(intId, body).catch(() => null);
+    if (res && res.code === 200) return true;
+    notifyFailure(res, "asset.update_failed");
+    return false;
   },
 
   removeAsset: async (id, sourceUrl) => {
     const intId = toIntId(id);
-    if (!intId) return;
-    await assetApi.deleteAsset(intId);
-    if (sourceUrl) get().unmarkAssetUrlSaved(sourceUrl);
+    if (!intId) return false;
+    const res = await assetApi.deleteAsset(intId).catch(() => null);
+    if (res && res.code === 200) {
+      if (sourceUrl) get().unmarkAssetUrlSaved(sourceUrl);
+      return true;
+    }
+    notifyFailure(res, "asset.delete_failed");
+    return false;
   },
 
   updateAssetsBatch: async (ids, updates) => {
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
-    if (intIds.length > 0) {
-      const body: Record<string, unknown> = {};
-      if ("folderId" in updates) body.folderId = toIntId(String(updates.folderId || "")) ?? null;
-      if ("type" in updates) body.type = updates.type;
-      if (Object.keys(body).length > 0) {
-        await assetApi.updateAssetsBatch(intIds, body).catch(() => {});
-      }
-    }
+    if (intIds.length === 0) return false;
+    const body: Record<string, unknown> = {};
+    if ("folderId" in updates) body.folderId = toIntId(String(updates.folderId || "")) ?? null;
+    if ("type" in updates) body.type = updates.type;
+    if (Object.keys(body).length === 0) return false;
+    const res = await assetApi.updateAssetsBatch(intIds, body).catch(() => null);
+    if (res && res.code === 200) return true;
+    notifyFailure(res, "asset.update_failed");
+    return false;
   },
 
   // --- Folder CRUD ---
@@ -257,6 +280,15 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeFolder: async (id) => {
+    // 先落库再改本地：删除失败时不必回滚树，也避免本地显示已被删而服务端还在
+    const intId = toIntId(id);
+    if (intId) {
+      const res = await assetApi.deleteFolder(intId).catch(() => null);
+      if (!res || res.code !== 200) {
+        notifyFailure(res, "asset.folder_delete_failed");
+        return false;
+      }
+    }
     const subtree = new Set<string>([id]);
     const stack = [id];
     const { folders: rootFolders } = get();
@@ -274,8 +306,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       }
     }
     set((s) => ({ folders: s.folders.filter((f) => !subtree.has(f.id)) }));
-    const intId = toIntId(id);
-    if (intId) await assetApi.deleteFolder(intId).catch(() => {});
+    return true;
   },
 
   bumpFolderCount: (folderId, delta) => {

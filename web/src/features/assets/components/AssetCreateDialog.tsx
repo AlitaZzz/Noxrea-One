@@ -7,7 +7,7 @@
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button,Progress, Select } from "antd";
-import { type ReactNode,useCallback, useRef, useState } from "react";
+import { type ReactNode,useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
@@ -84,6 +84,27 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...partial } : f)));
   }, []);
 
+  // ---- blob: URL 生命周期 ----
+  // 每个 createObjectURL 都会把整份文件常驻内存，直到 revoke 或页面关闭。
+  // 这里集中登记，清空列表 / 关闭弹窗 / 组件卸载时统一回收。
+  const objectUrlsRef = useRef<Set<string>>(new Set());
+  const trackUrl = useCallback((url: string) => {
+    objectUrlsRef.current.add(url);
+    return url;
+  }, []);
+  const releaseUrls = useCallback(() => {
+    for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
+    objectUrlsRef.current.clear();
+  }, []);
+  /** 单次使用后即可回收（如尺寸探测），重复 revoke 无害 */
+  const revokeUrl = useCallback((url: string) => {
+    URL.revokeObjectURL(url);
+    objectUrlsRef.current.delete(url);
+  }, []);
+
+  // 弹窗关闭（destroyOnHidden 会卸载）或组件卸载时兜底回收
+  useEffect(() => () => releaseUrls(), [releaseUrls]);
+
   // ---- 上传：统一走画布上传管道（raw sink，复用并发 / 重试 / 离线判定 / 错误分类）----
   const pendingRef = useRef(0);
   const resolveAllRef = useRef<() => void>(() => {});
@@ -95,19 +116,22 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       try {
         if (isImage(file)) {
           return await new Promise<{ w: number; h: number }>((resolve) => {
+            const url = trackUrl(URL.createObjectURL(file));
             const img = new Image();
-            img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-            img.onerror = () => resolve({ w: 0, h: 0 });
-            img.src = URL.createObjectURL(file);
+            // 尺寸拿到即用完，立刻回收；超时分支由 releaseUrls 兜底
+            img.onload = () => { revokeUrl(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
+            img.onerror = () => { revokeUrl(url); resolve({ w: 0, h: 0 }); };
+            img.src = url;
           });
         }
         if (isVideo(file)) {
           return await new Promise<{ w: number; h: number }>((resolve) => {
+            const url = trackUrl(URL.createObjectURL(file));
             const v = document.createElement("video");
             v.preload = "metadata";
-            v.onloadedmetadata = () => resolve({ w: v.videoWidth, h: v.videoHeight });
-            v.onerror = () => resolve({ w: 0, h: 0 });
-            v.src = URL.createObjectURL(file);
+            v.onloadedmetadata = () => { revokeUrl(url); resolve({ w: v.videoWidth, h: v.videoHeight }); };
+            v.onerror = () => { revokeUrl(url); resolve({ w: 0, h: 0 }); };
+            v.src = url;
           });
         }
       } catch { /* ignore */ }
@@ -118,7 +142,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       setTimeout(() => resolve({ w: 0, h: 0 }), 5000),
     );
     return Promise.race([dimPromise, timeoutPromise]);
-  }, []);
+  }, [trackUrl, revokeUrl]);
 
   const waitAllDone = useCallback((): Promise<void> => {
     if (pendingRef.current > 0) return allDoneRef.current;
@@ -132,6 +156,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
   // Clear local state only — used after save (files are now referenced by asset records)
   const clearState = () => {
+    // 卡片已全部移除，blob: URL 不再被引用，必须显式回收
+    releaseUrls();
     setFiles([]);
     setCategory("other");
     setSaveFolderId(undefined);
@@ -149,7 +175,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     const entries: UploadFile[] = list.map((file) => ({
       id: uid(),
       file,
-      previewUrl: URL.createObjectURL(file),
+      previewUrl: trackUrl(URL.createObjectURL(file)),
       url: null,
       uploadProgress: 0,
       status: "ready",
@@ -214,15 +240,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         pendingRef.current -= 1;
         if (pendingRef.current === 0) resolveAllRef.current();
       });
-  }, [measureDims, updateFile, message, t]);
+  }, [measureDims, updateFile, message, t, trackUrl]);
 
   const removeFile = useCallback((id: string) => {
     const target = files.find((f) => f.id === id);
     if (target) {
-      URL.revokeObjectURL(target.previewUrl);
+      revokeUrl(target.previewUrl);
     }
     setFiles((prev) => prev.filter((f) => f.id !== id));
-  }, [files]);
+  }, [files, revokeUrl]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
