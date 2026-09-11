@@ -20,7 +20,7 @@ const configSchema = z.object({
   JWT_EXPIRE_MINUTES: z.coerce.number().int().positive().default(1440),
 
   // App
-  APP_NAME: z.string().default("Noxrea AI Canvas"),
+  APP_NAME: z.string().default("Noxrea One"),
   LOG_LEVEL: z.string().default("INFO"),
 
   // HTTP Server

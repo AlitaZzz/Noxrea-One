@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================
-# Noxrea AI Canvas - 单容器镜像
+# Noxrea One - 单容器镜像
 #   - web (Next.js)  : 3000（对外暴露）
 #   - server (Hono)   : 4000（仅容器内部）
 #   - SQLite + uploads: /data（挂载卷持久化）
