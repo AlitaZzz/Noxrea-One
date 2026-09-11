@@ -59,7 +59,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
 
   const handleDownload = () => {
     setMenuOpen(false);
-    const downloadUrl = asset.metadata?.sourceUrl as string;
+    const downloadUrl = asset.sourceUrl as string;
     if (!downloadUrl) return;
     const a = document.createElement("a");
     a.href = downloadUrl;
@@ -84,7 +84,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = asset.metadata?.sourceUrl as string | undefined;
+    const url = asset.sourceUrl;
     if (!url) return;
     if (!audioRef.current) {
       audioRef.current = new Audio(url);
@@ -137,8 +137,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
       {/* Cover (overflow-hidden wrapper to clip rounded corners) */}
       <div className="absolute inset-0 rounded-lg overflow-hidden">
         {(() => {
-          const meta = asset.metadata as Record<string, unknown> | undefined;
-          const sourceUrl = meta?.sourceUrl as string | undefined;
+          const sourceUrl = asset.sourceUrl;
           const isVideo = asset.mediaType === "video";
           const isAudio = asset.mediaType === "audio";
 

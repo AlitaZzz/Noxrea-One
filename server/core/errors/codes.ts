@@ -86,6 +86,10 @@ export const ERROR_CODES = [
   "assets.invalid_asset_id",
   /** 素材不存在 */
   "assets.asset_not_found",
+  /** 相同来源素材已保存 */
+  "assets.duplicate_source_url",
+  /** 系统「未分类」目录不可修改或删除 */
+  "assets.uncategorized_folder_protected",
 
   // ── Agent ──
   /** 会话不存在 */

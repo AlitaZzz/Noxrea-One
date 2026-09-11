@@ -16,11 +16,10 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import { createAssetNode } from "@/features/assets/add-asset";
-import { assetApi } from "@/features/assets/api";
 import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
-import type { AssetFolder, AssetItem, AssetType, CreateAssetInput } from "@/features/assets/types";
+import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { ASSET_CATEGORIES, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
+import { ASSET_CATEGORIES } from "@/lib/constants";
 
 import AssetCategoryTabs from "./AssetCategoryTabs";
 import AssetCreateDialog from "./AssetCreateDialog";
@@ -56,12 +55,10 @@ export default function AssetsModal({ open, onClose }: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const versionRef = useRef(0);
 
-  const [activeSpace, setActiveSpace] = useState("personal");
+  const [activeScope, setActiveScope] = useState<AssetScope>("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [uncategorizedCount, setUncategorizedCount] = useState(0);
-  const bumpUncategorizedCount = useCallback((delta: number) => {
-    setUncategorizedCount((c) => Math.max(0, c + delta));
-  }, []);
+  const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
+  const uncategorizedFolder = getUncategorizedFolder(activeScope);
   const [category, setCategory] = useState<AssetType | "all">("all");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -94,7 +91,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // --- Data fetching ---
 
-  const fetchAndReplace = useCallback(async (filters: { category: AssetType | "all"; search: string; folderId: string | null; spaceKey: string }) => {
+  const fetchAndReplace = useCallback(async (filters: { category: AssetType | "all"; search: string; folderId: string; scope: AssetScope }) => {
     const v = ++versionRef.current;
     setItems([]);
     setTotalCount(0);
@@ -102,7 +99,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     setLoadError(false);
     try {
       const result = await fetchAssetPage(
-        { category: filters.category, search: filters.search, folderId: filters.folderId, spaceKey: filters.spaceKey },
+        { category: filters.category, search: filters.search, folderId: filters.folderId, scope: filters.scope },
         0,
       );
       if (v !== versionRef.current) return;
@@ -121,10 +118,9 @@ export default function AssetsModal({ open, onClose }: Props) {
     setLoadingMore(true);
     setLoadError(false);
     try {
-      const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-      if (activeFolderId === null) return; // 根视图不展示散落资产，无需翻页
+      if (activeFolderId === null) return;
       const result = await fetchAssetPage(
-        { category, search, folderId, spaceKey: activeSpace },
+        { category, search, folderId: activeFolderId, scope: activeScope },
         items.length,
       );
       if (v !== versionRef.current) return;
@@ -136,7 +132,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       setLoadError(true);
       setLoadingMore(false);
     }
-  }, [category, search, activeFolderId, activeSpace, items.length]);
+  }, [category, search, activeFolderId, activeScope, items.length]);
 
   // Fetch when modal opens or filters change
   useEffect(() => {
@@ -146,20 +142,8 @@ export default function AssetsModal({ open, onClose }: Props) {
       queueMicrotask(() => { setItems([]); setTotalCount(0); setLoading(false); setLoadError(false); });
       return;
     }
-    const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-    queueMicrotask(() => fetchAndReplace({ category, search, folderId, spaceKey: activeSpace }));
-  }, [open, category, search, activeFolderId, activeSpace, fetchAndReplace]);
-
-  // 拉取「未分类」资产数量（仅根视图需要）
-  useEffect(() => {
-    if (activeFolderId !== null) { queueMicrotask(() => setUncategorizedCount(0)); return; }
-    if (!open) return;
-    let cancelled = false;
-    assetApi.listAssets({ spaceKey: activeSpace, folderId: -1, skip: 0, limit: 1 })
-      .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [activeFolderId, activeSpace, open]);
+    queueMicrotask(() => fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope }));
+  }, [open, category, search, activeFolderId, activeScope, fetchAndReplace]);
 
   const hasMore = items.length < totalCount;
 
@@ -173,7 +157,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", mediaType: "", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], metadata: {}, spaceKey: "personal" } as AssetItem);
+    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", mediaType: "", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], extraData: {}, scope: "personal" } as AssetItem);
   }, [selectedIds, t]);
 
   const handleBatchDeleteConfirm = useCallback(async () => {
@@ -182,15 +166,10 @@ export default function AssetsModal({ open, onClose }: Props) {
     const results = await Promise.all(
       ids.map((id) => {
         const item = items.find((i) => i.id === id);
-        return removeAsset(id, item?.metadata?.sourceUrl as string | undefined);
+        return removeAsset(id, item?.sourceUrl);
       }),
     );
     const removed = new Set(ids.filter((_, i) => results[i]));
-    for (const id of removed) {
-      const item = items.find((i) => i.id === id);
-      if (item?.folderId == null) bumpUncategorizedCount(-1);
-      else if (item?.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
-    }
     if (removed.size > 0) {
       setItems((prev) => prev.filter((i) => !removed.has(i.id)));
       setTotalCount((c) => Math.max(0, c - removed.size));
@@ -198,32 +177,19 @@ export default function AssetsModal({ open, onClose }: Props) {
     // 只保留删除失败的项，便于直接重试
     setSelectedIds(new Set(ids.filter((_, i) => !results[i])));
     setDeleteAsset(null);
-  }, [selectedIds, removeAsset, items, bumpUncategorizedCount]);
+  }, [selectedIds, removeAsset, items]);
 
   const handleBatchMove = useCallback(async (folderId: string) => {
-    const targetIsUncategorized = folderId === UNCATEGORIZED_FOLDER_ID;
-    const realFolderId = targetIsUncategorized ? undefined : folderId || undefined;
-    // 先等批量接口返回再刷新：此前未 await 就拉取，可能重新拉到旧数据
-    const ok = await updateAssetsBatch([...selectedIds], { folderId: realFolderId });
+    const ok = await updateAssetsBatch([...selectedIds], { folderId });
     // 失败保留选中，用户可直接重试
     if (!ok) return;
     setSelectedIds(new Set());
-    for (const id of selectedIds) {
-      const item = items.find((i) => i.id === id);
-      if (!item) continue;
-      const wasUncategorized = item.folderId == null;
-      if (wasUncategorized && !targetIsUncategorized) bumpUncategorizedCount(-1);
-      if (!wasUncategorized && targetIsUncategorized) bumpUncategorizedCount(1);
-      if (item.folderId) useAssetsStore.getState().bumpFolderCount(item.folderId, -1);
-      if (folderId && !targetIsUncategorized) useAssetsStore.getState().bumpFolderCount(folderId, 1);
-    }
     setBatchMoveOpen(false);
     // 刷新当前视图以立即反映移动结果
     if (activeFolderId !== null) {
-      const fId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-      fetchAndReplace({ category, search, folderId: fId, spaceKey: activeSpace });
+      fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
     }
-  }, [selectedIds, updateAssetsBatch, items, activeFolderId, activeSpace, category, search, bumpUncategorizedCount, fetchAndReplace]);
+  }, [selectedIds, updateAssetsBatch, activeFolderId, activeScope, category, search, fetchAndReplace]);
 
   const handleBatchType = useCallback(async (type: AssetType) => {
     const ids = [...selectedIds];
@@ -234,16 +200,15 @@ export default function AssetsModal({ open, onClose }: Props) {
     setBatchTypeOpen(false);
     // 类型变了，当前筛选可能已不适用，重新拉取比本地改字段更可靠
     if (activeFolderId !== null) {
-      const fId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-      fetchAndReplace({ category, search, folderId: fId, spaceKey: activeSpace });
+      fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
     } else {
       setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
     }
-  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, activeSpace, fetchAndReplace]);
+  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, activeScope, fetchAndReplace]);
 
   // Current folder depth (max 2 levels allowed)
   const currentFolderDepth = useMemo(() => {
-    if (!activeFolderId || activeFolderId === UNCATEGORIZED_FOLDER_ID) return 0;
+    if (!activeFolderId) return 0;
     let depth = 0;
     let id: string | undefined = activeFolderId;
     while (id) {
@@ -253,7 +218,10 @@ export default function AssetsModal({ open, onClose }: Props) {
     }
     return depth;
   }, [activeFolderId, folders]);
-  const canCreateFolder = currentFolderDepth < 2 && activeFolderId !== UNCATEGORIZED_FOLDER_ID;
+  const currentFolder = activeFolderId
+    ? folders.find((folder) => folder.id === activeFolderId)
+    : undefined;
+  const canCreateFolder = currentFolderDepth < 2 && currentFolder?.kind !== "uncategorized";
 
   // Folder counts from server (lazy-load safe)
   const folderCounts = useMemo(() => {
@@ -274,27 +242,14 @@ export default function AssetsModal({ open, onClose }: Props) {
     return counts;
   }, [folders]);
 
-  // 根视图额外注入虚拟「未分类」文件夹（folder_id 为 NULL 的资产集合）
   const gridFolders = useMemo<AssetFolder[]>(() => {
-    const childFolders = getChildFolders(activeSpace, activeFolderId ?? undefined);
+    const childFolders = getChildFolders(activeScope, activeFolderId ?? undefined);
     if (activeFolderId !== null) return childFolders;
-    return [
-      ...childFolders,
-      {
-        id: UNCATEGORIZED_FOLDER_ID,
-        name: t("asset.uncategorized"),
-        spaceKey: activeSpace,
-        parentId: undefined,
-        createdAt: 0,
-        count: uncategorizedCount,
-      },
-    ];
-  }, [activeFolderId, getChildFolders, uncategorizedCount, activeSpace, t, lang, folders]);
+    return uncategorizedFolder
+      ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders]
+      : childFolders;
+  }, [activeFolderId, getChildFolders, uncategorizedFolder, activeScope, t]);
 
-  const displayFolderCounts = useMemo(
-    () => ({ ...folderCounts, [UNCATEGORIZED_FOLDER_ID]: uncategorizedCount }),
-    [folderCounts, uncategorizedCount],
-  );
 
   // --- Handlers ---
 
@@ -313,28 +268,22 @@ export default function AssetsModal({ open, onClose }: Props) {
     async (inputs: CreateAssetInput[]) => {
       const created = await addAssetsBatch(inputs);
       if (created.length > 0) {
-        for (const asset of created) {
-          if (asset.folderId == null) bumpUncategorizedCount(1);
-          else useAssetsStore.getState().bumpFolderCount(asset.folderId, 1);
-        }
-        // 根视图不展示散落资产，跳过刷新以免把「未分类」资产直接显示到根目录
         if (activeFolderId !== null) {
-          const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-          fetchAndReplace({ category, search, folderId, spaceKey: activeSpace });
+          fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
         }
         gridRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
-    [addAssetsBatch, category, search, activeFolderId, activeSpace, fetchAndReplace, bumpUncategorizedCount],
+    [addAssetsBatch, category, search, activeFolderId, activeScope, fetchAndReplace],
   );
 
   const handleCreateFolder = useCallback(
     async (name: string): Promise<boolean> => {
-      const parentId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? undefined : activeFolderId ?? undefined;
-      const result = await addFolder(name, activeSpace, parentId);
+      const parentId = activeFolderId ?? undefined;
+      const result = await addFolder(name, activeScope, parentId);
       return result !== null;
     },
-    [addFolder, activeSpace, activeFolderId],
+    [addFolder, activeScope, activeFolderId],
   );
 
   const handleRename = useCallback((asset: AssetItem) => { setRenamingId(asset.id); setRenameValue(asset.name); }, []);
@@ -371,13 +320,12 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleteFolder(null);
   }, [deleteFolder, removeFolder, activeFolderId, folders]);
 
-  const handleSelectSpace = useCallback((key: string) => { setActiveSpace(key); setActiveFolderId(null); setSelectedIds(new Set()); }, []);
+  const handleSelectScope = useCallback((scope: AssetScope) => { setActiveScope(scope); setActiveFolderId(null); setSelectedIds(new Set()); }, []);
   const handleSelectFolder = useCallback((id: string | null) => { setActiveFolderId(id); setSelectedIds(new Set()); }, []);
 
   const spaceLabels = useMemo(
     () => [
-      { key: "personal", label: t("asset.spacePersonal"), icon: <UserOutlined /> },
-      { key: "reusable", label: t("asset.spaceReusable"), icon: <DatabaseOutlined /> },
+      { key: "personal" as AssetScope, label: t("asset.spacePersonal"), icon: <UserOutlined /> },
     ],
     [t, lang],
   );
@@ -385,16 +333,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   // Breadcrumb data
   const breadCrumb = useMemo((): AssetFolder[] => {
     if (!activeFolderId) return [];
-    if (activeFolderId === UNCATEGORIZED_FOLDER_ID) {
-      return [{
-        id: UNCATEGORIZED_FOLDER_ID,
-        name: t("asset.uncategorized"),
-        spaceKey: activeSpace,
-        parentId: undefined,
-        createdAt: 0,
-        count: 0,
-      }];
-    }
     const crumbs: AssetFolder[] = [];
     let cur: string | undefined = activeFolderId;
     while (cur) {
@@ -404,7 +342,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       cur = f.parentId || undefined;
     }
     return crumbs;
-  }, [activeFolderId, folders, activeSpace, t, lang]);
+  }, [activeFolderId, folders, activeScope, t, lang]);
 
   return (
     <>
@@ -462,10 +400,10 @@ export default function AssetsModal({ open, onClose }: Props) {
             style={{ borderColor: "var(--canvas-border)", paddingLeft: 0, paddingRight: 16 }}
           >
             <AssetNav
-              spaces={spaceLabels}
-              activeSpace={activeSpace}
+              scopes={spaceLabels}
+              activeScope={activeScope}
               activeFolderId={activeFolderId}
-              onSelectSpace={handleSelectSpace}
+              onSelectScope={handleSelectScope}
               onSelectFolder={handleSelectFolder}
               folders={folders}
               folderCounts={folderCounts}
@@ -498,7 +436,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                     <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
                     {isLast ? (
                       <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
-                        {f.name}
+                        {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
                       </span>
                     ) : (
                       <button
@@ -506,7 +444,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                         className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                         style={{ color: "var(--canvas-text-dim)" }}
                       >
-                        {f.name}
+                        {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
                       </button>
                     )}
                   </span>
@@ -537,7 +475,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               <AssetGrid
                 assets={items}
                 folders={gridFolders}
-                folderCounts={displayFolderCounts}
+                folderCounts={folderCounts}
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 onInsertCanvas={handleInsertCanvas}
@@ -612,10 +550,8 @@ export default function AssetsModal({ open, onClose }: Props) {
               return;
             }
             // 只有删除成功才从列表移除；失败原因由 store 统一通知
-            const removed = await removeAsset(deleteAsset.id, deleteAsset.metadata?.sourceUrl as string | undefined);
+            const removed = await removeAsset(deleteAsset.id, deleteAsset.sourceUrl);
             if (removed) {
-              if (deleteAsset.folderId == null) bumpUncategorizedCount(-1);
-              else if (deleteAsset.folderId) useAssetsStore.getState().bumpFolderCount(deleteAsset.folderId, -1);
               setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));
               setTotalCount((c) => Math.max(0, c - 1));
             }
@@ -654,15 +590,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         >
           <div className="flex flex-col gap-1.5 max-h-60 overflow-auto">
             <button
-              onClick={() => handleBatchMove("")}
-              className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left"
-              style={{ color: "var(--canvas-text)" }}
-            >
-              <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
-              {t("asset.spacePersonal")}
-            </button>
-            <button
-              onClick={() => handleBatchMove(UNCATEGORIZED_FOLDER_ID)}
+              onClick={() => uncategorizedFolder && handleBatchMove(uncategorizedFolder.id)}
               className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left"
               style={{ color: "var(--canvas-text)" }}
             >
@@ -670,7 +598,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               {t("asset.uncategorized")}
             </button>
             {(() => {
-              const personalFolders = folders.filter((f) => f.spaceKey === "personal");
+              const personalFolders = folders.filter((f) => f.scope === "personal" && f.kind === "normal");
               const buildTree = (parentId: string | undefined, depth: number): React.ReactNode[] => {
                 const children = personalFolders.filter((f) => (f.parentId || undefined) === parentId);
                 return children.flatMap((f) => [

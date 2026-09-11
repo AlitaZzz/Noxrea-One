@@ -94,7 +94,7 @@ export function AssetHoverPreview({
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   if (!visible || !asset) return null;
 
-  const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
+  const sourceUrl = asset.sourceUrl;
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
 

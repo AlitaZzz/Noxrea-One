@@ -10,7 +10,6 @@ import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
-import { UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";
@@ -83,7 +82,7 @@ export default function AssetGrid({
       <div className="grid gap-3 pb-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
         {/* Folders first */}
         {folders?.map((folder) => (
-          <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={folder.id === UNCATEGORIZED_FOLDER_ID ? undefined : onDeleteFolder} />
+          <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder} />
         ))}
         {/* Then assets */}
         {assets.map((asset) => (

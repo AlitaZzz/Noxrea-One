@@ -10,19 +10,19 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import NavButton from "@/components/ui/NavButton";
-import type { AssetFolder } from "@/features/assets/types";
+import type { AssetFolder, AssetScope } from "@/features/assets/types";
 
-interface SpaceItem {
-  key: string;
+interface ScopeItem {
+  key: AssetScope;
   label: string;
   icon: ReactNode;
 }
 
 interface Props {
-  spaces: SpaceItem[];
-  activeSpace: string;
+  scopes: ScopeItem[];
+  activeScope: AssetScope;
   activeFolderId: string | null;
-  onSelectSpace: (key: string) => void;
+  onSelectScope: (scope: AssetScope) => void;
   onSelectFolder: (folderId: string | null) => void;
   folders: AssetFolder[];
   folderCounts: Record<string, number>;
@@ -59,7 +59,9 @@ function FolderTree({
             style={{ padding: "5px 10px 5px " + (28 + depth * 16) + "px" }}
           >
             <FolderOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
-            <span className="flex-1 text-left truncate">{f.name}</span>
+            <span className="flex-1 text-left truncate">
+              {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
+            </span>
             <span className="text-xs text-white/30">{folderCounts[f.id] || 0} {t("asset.count")}</span>
           </NavButton>
           <FolderTree
@@ -77,23 +79,23 @@ function FolderTree({
   );
 }
 
-export default function AssetNav({ spaces, activeSpace, activeFolderId, onSelectSpace, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
+export default function AssetNav({ scopes, activeScope, activeFolderId, onSelectScope, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
   const { t } = useTranslation();
-  const spaceFolders = folders.filter((f) => f.spaceKey === activeSpace && !f.parentId);
+  const scopeFolders = folders.filter((f) => f.scope === activeScope && !f.parentId);
 
   return (
     <div className="flex flex-col shrink-0 gap-0.5" style={{ width: 160 }}>
-      {spaces.map((sp) => (
-        <div key={sp.key}>
+      {scopes.map((scope) => (
+        <div key={scope.key}>
           <NavButton
-            onClick={() => { onSelectSpace(sp.key); onSelectFolder(null); }}
-            active={activeSpace === sp.key && activeFolderId === null}
+            onClick={() => { onSelectScope(scope.key); onSelectFolder(null); }}
+            active={activeScope === scope.key && activeFolderId === null}
             style={{ padding: "6px 10px" }}
           >
-            <span className="text-base leading-none opacity-60">{sp.icon}</span>
-            <span>{sp.label}</span>
+            <span className="text-base leading-none opacity-60">{scope.icon}</span>
+            <span>{scope.label}</span>
           </NavButton>
-          {activeSpace === sp.key && spaceFolders.length > 0 && (
+          {activeScope === scope.key && scopeFolders.length > 0 && (
             <FolderTree
               folders={folders}
               parentId={undefined}

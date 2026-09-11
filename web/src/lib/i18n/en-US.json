@@ -658,7 +658,9 @@
       "invalid_folder_id": "Invalid folder ID",
       "folder_not_found": "Folder not found",
       "invalid_asset_id": "Invalid asset ID",
-      "asset_not_found": "Asset not found"
+      "asset_not_found": "Asset not found",
+      "duplicate_source_url": "This asset is already in the library",
+      "uncategorized_folder_protected": "The uncategorized folder cannot be renamed or deleted"
     },
     "models": {
       "fetch_failed": "Failed to fetch models",
