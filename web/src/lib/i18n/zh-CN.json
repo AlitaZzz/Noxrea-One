@@ -304,7 +304,11 @@
     "folderNamePlaceholder": "输入文件夹名称",
     "folderDuplicate": "同级已存在同名文件夹",
     "count": "项",
-    "batchSaveSummary": "{{saved}} 个文件将保存，{{failed}} 个文件失败",
+    "batchSaveDone": "已保存 {{saved}} 个文件",
+    "batchSaveSkipped": "已保存 {{saved}} 个，跳过 {{skipped}} 个已在资产库中的文件",
+    "batchSaveFailed": "已保存 {{saved}} 个，跳过 {{skipped}} 个，{{failed}} 个上传失败",
+    "batchSaveAllSkipped": "所选文件已全部在资产库中，无需重复保存",
+    "batchUploadFailed": "{{failed}} 个文件上传失败",
     "delete": "删除资产",
     "foldersLabel": "个文件夹",
     "cat": {
@@ -660,7 +664,8 @@
       "invalid_asset_id": "素材 ID 非法",
       "asset_not_found": "素材不存在",
       "duplicate_source_url": "该素材已在资产库中",
-      "uncategorized_folder_protected": "「未分类」目录不可修改或删除"
+      "uncategorized_folder_protected": "「未分类」目录不可修改或删除",
+      "batch_too_large": "一次最多提交 {{limit}} 个素材，请分批上传"
     },
     "models": {
       "fetch_failed": "拉取模型列表失败",

@@ -305,7 +305,11 @@
     "folderNamePlaceholder": "Enter folder name",
     "folderDuplicate": "A folder with this name already exists",
     "count": "items",
-    "batchSaveSummary": "{{saved}} files will be saved, {{failed}} files failed",
+    "batchSaveDone": "{{saved}} file(s) saved",
+    "batchSaveSkipped": "{{saved}} saved, {{skipped}} skipped (already in library)",
+    "batchSaveFailed": "{{saved}} saved, {{skipped}} skipped, {{failed}} upload(s) failed",
+    "batchSaveAllSkipped": "All selected files are already in your library",
+    "batchUploadFailed": "{{failed}} file(s) failed to upload",
     "delete": "Delete Asset",
     "foldersLabel": "folders",
     "cat": {
@@ -661,7 +665,8 @@
       "invalid_asset_id": "Invalid asset ID",
       "asset_not_found": "Asset not found",
       "duplicate_source_url": "This asset is already in the library",
-      "uncategorized_folder_protected": "The uncategorized folder cannot be renamed or deleted"
+      "uncategorized_folder_protected": "The uncategorized folder cannot be renamed or deleted",
+      "batch_too_large": "Up to {{limit}} assets per request, please upload in batches"
     },
     "models": {
       "fetch_failed": "Failed to fetch models",

@@ -4,7 +4,7 @@
  */
 import { create } from "zustand";
 
-import { assetApi, type AssetCountersDto, type AssetFolderDto, type AssetItemDto } from "@/features/assets/api";
+import { ASSET_BATCH_LIMIT, assetApi, type AssetCountersDto, type AssetFolderDto, type AssetItemDto } from "@/features/assets/api";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput, MediaType } from "@/features/assets/types";
 import { resolveResultError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
@@ -64,6 +64,16 @@ function notifyFailure(res: { code: number; msg?: string } | null, fallbackKey: 
 // --- Shared pagination helper ---
 export const ASSET_PAGE_SIZE = 50;
 
+/** 批量创建结果；重复来源由后端跳过，不计入失败。 */
+export interface AddAssetsBatchResult {
+  /** 请求是否成功（HTTP 与业务码均为 200）；失败时 store 已弹出错误提示。 */
+  ok: boolean;
+  /** 实际入库的资产。 */
+  items: AssetItem[];
+  /** 因来源重复被后端跳过的数量。 */
+  skippedCount: number;
+}
+
 export interface AssetListState {
   items: AssetItem[];
   totalCount: number;
@@ -111,7 +121,7 @@ interface AssetsState {
   unmarkAssetUrlSaved: (url: string) => void;
 
   addAsset: (input: CreateAssetInput) => Promise<AssetItem | null>;
-  addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AssetItem[]>;
+  addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
   updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
   removeAsset: (id: string, sourceUrl?: string) => Promise<boolean>;
   updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<boolean>;
@@ -202,38 +212,52 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   addAssetsBatch: async (inputs) => {
-    const res = await assetApi.createAssetsBatch(
-      inputs.map((input) => ({
-        name: input.name,
-        type: input.type,
-        mediaType: input.mediaType,
-        width: input.width,
-        height: input.height,
-        description: input.description,
-        tags: input.tags,
-        extraData: input.extraData,
-        sourceUrl: input.sourceUrl,
-        sourceType: input.sourceType,
-        folderId: toIntId(input.folderId || "") ?? null,
-        scope: input.scope || "personal",
-      })),
-    );
-    if (res.code === 200 && res.data) {
-      const items = res.data.items.map(dtoToAsset);
+    // 服务端单批上限为 ASSET_BATCH_LIMIT，超量批次在此分片提交并合并结果，避免整批被拒。
+    const items: AssetItem[] = [];
+    let skippedCount = 0;
+
+    for (let offset = 0; offset < inputs.length; offset += ASSET_BATCH_LIMIT) {
+      const chunk = inputs.slice(offset, offset + ASSET_BATCH_LIMIT);
+      const res = await assetApi.createAssetsBatch(
+        chunk.map((input) => ({
+          name: input.name,
+          type: input.type,
+          mediaType: input.mediaType,
+          width: input.width,
+          height: input.height,
+          description: input.description,
+          tags: input.tags,
+          extraData: input.extraData,
+          sourceUrl: input.sourceUrl,
+          sourceType: input.sourceType,
+          folderId: toIntId(input.folderId || "") ?? null,
+          scope: input.scope || "personal",
+        })),
+      );
+
+      if (res.code !== 200 || !res.data) {
+        // 已入库的前序分片保留；重复来源在重试时会被后端跳过，整体重试是安全的。
+        notifyFailure(res, "asset.create_failed");
+        return { ok: false, items, skippedCount };
+      }
+
+      const chunkItems = res.data.items.map(dtoToAsset);
+      items.push(...chunkItems);
+      skippedCount += res.data.skipped?.length ?? 0;
       get().applyCounters(res.data.counters);
 
       const urls = new Set<string>();
-      for (const item of items) {
+      for (const item of chunkItems) {
         if (item.sourceUrl) urls.add(item.sourceUrl);
       }
+      // 被跳过的来源本就已在库中；本地已知集合可能因并发过期，一并补登记。
+      for (const skip of res.data.skipped ?? []) urls.add(skip.sourceUrl);
       if (urls.size > 0) {
         set((state) => ({ knownAssetUrls: new Set([...state.knownAssetUrls, ...urls]) }));
       }
-      return items;
     }
 
-    notifyFailure(res, "asset.create_failed");
-    return [];
+    return { ok: true, items, skippedCount };
   },
 
   updateAsset: async (id, patch) => {

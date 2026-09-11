@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import {
+  ASSET_BATCH_LIMIT,
   folderCreateSchema,
   folderUpdateSchema,
   assetCreateSchema,
@@ -214,6 +215,8 @@ router.post("/api/assets/items", async (c) => {
 
   try {
     const result = await createAssetsBatch([{ ...parsed.data, userId: auth.user.id }]);
+    // 批量创建对重复来源是「跳过」，单条创建保持「重复即 409」语义，避免前端拿到空 item。
+    if (!result.items[0]) return failCode(409, "assets.duplicate_source_url");
     return c.json(ok({ item: result.items[0], counters: result.counters }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
@@ -310,6 +313,11 @@ router.post("/api/assets/items/batch", async (c) => {
     return failCode(400, "common.invalid_json");
   }
 
+  // 超出上限时给出可直接行动的提示，而不是笼统的「请求参数不合法」
+  if (Array.isArray(body) && body.length > ASSET_BATCH_LIMIT) {
+    return failCode(422, "assets.batch_too_large", { limit: ASSET_BATCH_LIMIT });
+  }
+
   const parsed = assetBatchCreateSchema.safeParse(body);
   if (!parsed.success) return failCode(422, "common.invalid_request");
 
@@ -318,7 +326,8 @@ router.post("/api/assets/items/batch", async (c) => {
       parsed.data.map((item) => ({ ...item, userId: auth.user.id }))
     );
 
-    return c.json(ok({ items: result.items, counters: result.counters }));
+    // skipped 为因重复被跳过的来源，前端据此提示「已保存 N、跳过 M」。
+    return c.json(ok({ items: result.items, counters: result.counters, skipped: result.skipped }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
   }

@@ -13,6 +13,8 @@ import { useTranslation } from "react-i18next";
 import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import ModalButton from "@/components/ui/ModalButton";
+import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
+import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { expandAccept } from "@/features/canvas/upload/pick-files";
@@ -62,12 +64,22 @@ function isAudio(file: File) {
   return ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"].includes(extOf(file.name));
 }
 
+/**
+ * 由文件名推导资产名。
+ * 服务端要求 1–200 字符：去掉扩展名为空（如 ".png"）或超长时兜底，否则整批会因单个字段被拒。
+ */
+function deriveAssetName(fileName: string): string {
+  const base = fileName.replace(/\.[^.]+$/, "").trim();
+  const fallback = base || fileName.trim() || "Untitled";
+  return fallback.slice(0, ASSET_NAME_MAX_LENGTH);
+}
+
 
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (inputs: CreateAssetInput[]) => Promise<void>;
+  onCreate: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
   folders?: AssetFolder[];
 }
 
@@ -280,17 +292,14 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       });
     });
 
-    if (errCount > 0) {
-      message.warning(t("assets.batchSaveSummary", { saved: doneFiles.length, failed: errCount }));
-    }
-
     if (doneFiles.length === 0) {
+      if (errCount > 0) message.warning(t("asset.batchUploadFailed", { failed: errCount }));
       setSaving(false);
       return;
     }
 
     const inputs: CreateAssetInput[] = doneFiles.map((f) => ({
-      name: f.file.name.replace(/\.[^.]+$/, ""),
+      name: deriveAssetName(f.file.name),
       type: category,
       mediaType: isVideo(f.file) ? "video" : isAudio(f.file) ? "audio" : "image",
       width: f.width,
@@ -300,10 +309,31 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       extraData: {},
       folderId: saveFolderId,
     }));
-    await onCreate(inputs);
+
+    const result = await onCreate(inputs);
+
+    // 请求失败：保留弹窗与已上传列表，用户可直接重试（错误提示由 store 统一弹出）。
+    if (!result.ok) {
+      setSaving(false);
+      return;
+    }
+
+    // 重复来源由后端跳过，成功 / 跳过 / 失败分别提示，避免「整批失败」或「部分丢失」的错觉。
+    const saved = result.items.length;
+    const skipped = result.skippedCount;
+    if (errCount > 0) {
+      message.warning(t("asset.batchSaveFailed", { saved, skipped, failed: errCount }));
+    } else if (saved === 0 && skipped > 0) {
+      message.info(t("asset.batchSaveAllSkipped"));
+    } else if (skipped > 0) {
+      message.info(t("asset.batchSaveSkipped", { saved, skipped }));
+    } else {
+      message.success(t("asset.batchSaveDone", { saved }));
+    }
+
     clearState();
     onClose();
-  }, [category, saveFolderId, onCreate, onClose, waitAllDone]);
+  }, [category, saveFolderId, onCreate, onClose, waitAllDone, message, t]);
 
   const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "uploading");
   const saveDisabled = files.length === 0 || hasActiveWork;
@@ -406,12 +436,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                 {/* 上传进行中 → 进度圈 */}
                 {f.status === "uploading" && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    {/* percent 到 100 时 antd 会自动切到 success 并画对勾；
+                        此处字节发完仍在等服务端落盘，显式指定 active 保持百分比显示 */}
                     <Progress
                       type="circle"
                       percent={f.uploadProgress}
                       size={48}
                       strokeColor="#fff"
                       railColor="rgba(255,255,255,0.2)"
+                      status="active"
                     />
                   </div>
                 )}

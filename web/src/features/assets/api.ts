@@ -3,6 +3,12 @@
  */
 import { api } from "@/lib/api/client";
 
+/** 与服务端 assetBatchCreateSchema 对齐的单批上限；超出时由 store 分片提交。 */
+export const ASSET_BATCH_LIMIT = 200;
+
+/** 与服务端 assetCreateSchema 对齐的素材名称长度上限。 */
+export const ASSET_NAME_MAX_LENGTH = 200;
+
 export interface AssetFolderDto {
   id: number;
   userId: number;
@@ -36,6 +42,12 @@ export interface AssetItemDto {
 export interface AssetCountersDto {
   folders: Record<string, number>;
   total: number;
+}
+
+/** 批量创建时因重复被跳过的来源；重复属正常结果，不视为失败。 */
+export interface AssetSkippedDto {
+  sourceUrl: string;
+  reason: "already_exists" | "duplicate_in_batch";
 }
 
 export interface AssetBootstrapDto {
@@ -99,7 +111,7 @@ export const assetApi = {
     width?: number; height?: number;
     description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number | null; scope?: string;
   }>) =>
-    api<{ items: AssetItemDto[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
+    api<{ items: AssetItemDto[]; counters: AssetCountersDto; skipped: AssetSkippedDto[] }>("/api/assets/items/batch", {
       method: "POST",
       body: JSON.stringify(items),
     }),

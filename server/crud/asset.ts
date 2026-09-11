@@ -39,6 +39,48 @@ export interface AssetCounters {
   total: number;
 }
 
+/** 批量创建时来源重复被跳过的原因。 */
+export type AssetSkipReason = "already_exists" | "duplicate_in_batch";
+
+/** 批量创建中被跳过的资产来源；重复属于正常结果，不再让整批失败。 */
+export interface SkippedAssetSource {
+  sourceUrl: string;
+  reason: AssetSkipReason;
+}
+
+/** 库内唯一性以 (scope, sourceUrl) 为键；用不可见分隔符拼接，避免 URL 内容造成误判。 */
+function sourceKey(scope: string, sourceUrl: string): string {
+  return `${scope}\u0000${sourceUrl}`;
+}
+
+/** 按 scope 分组查询库内已存在的来源 URL，返回 (scope, sourceUrl) 键集合。 */
+async function findExistingSourceKeys(
+  tx: TransactionClient,
+  userId: number,
+  items: Array<{ scope?: string; sourceUrl?: string | null }>
+): Promise<Set<string>> {
+  const urlsByScope = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (!item.sourceUrl) continue;
+    const scope = item.scope ?? "personal";
+    const urls = urlsByScope.get(scope) ?? new Set<string>();
+    urls.add(item.sourceUrl);
+    urlsByScope.set(scope, urls);
+  }
+
+  const existingKeys = new Set<string>();
+  for (const [scope, urls] of urlsByScope) {
+    const rows = await tx.assetItem.findMany({
+      where: { userId, scope, sourceUrl: { in: [...urls] } },
+      select: { sourceUrl: true },
+    });
+    for (const row of rows) {
+      if (row.sourceUrl) existingKeys.add(sourceKey(scope, row.sourceUrl));
+    }
+  }
+  return existingKeys;
+}
+
 function deserializeAsset<T extends { tags: unknown; extraData: unknown }>(item: T) {
   return {
     ...item,
@@ -304,34 +346,47 @@ export async function createAssetsBatch(
   }>
 ) {
   if (items.length === 0) {
-    return { items: [], counters: { folders: {}, total: 0 } satisfies AssetCounters };
+    return {
+      items: [],
+      counters: { folders: {}, total: 0 } satisfies AssetCounters,
+      skipped: [] as SkippedAssetSource[],
+    };
   }
 
   return prisma.$transaction(async (tx) => {
     const created: SerializedAssetItem[] = [];
+    const skipped: SkippedAssetSource[] = [];
     const uncategorizedByScope = new Map<string, number>();
 
+    // 去重不再整批失败：批内重复保留首条，库内已存在直接跳过，其余资产照常入库。
     // 来源 URL 精确保存即可去重；不额外落一列哈希。
-    const sourceUrls = items
-      .map((item) => item.sourceUrl)
-      .filter((url): url is string => Boolean(url));
-    const uniqueSourceUrls = [...new Set(sourceUrls)];
-    if (uniqueSourceUrls.length !== sourceUrls.length) {
-      throw new AssetOperationError("duplicate_source_url");
-    }
-    if (uniqueSourceUrls.length) {
-      const conflict = await tx.assetItem.findFirst({
-        where: {
-          userId: items[0].userId,
-          scope: items[0].scope ?? "personal",
-          sourceUrl: { in: uniqueSourceUrls },
-        },
-        select: { id: true },
-      });
-      if (conflict) throw new AssetOperationError("duplicate_source_url");
+    const seenKeys = new Set<string>();
+    const candidates: typeof items = [];
+    for (const item of items) {
+      const scope = item.scope ?? "personal";
+      const sourceUrl = item.sourceUrl ?? null;
+      if (sourceUrl) {
+        const key = sourceKey(scope, sourceUrl);
+        if (seenKeys.has(key)) {
+          skipped.push({ sourceUrl, reason: "duplicate_in_batch" });
+          continue;
+        }
+        seenKeys.add(key);
+      }
+      candidates.push(item);
     }
 
-    for (const item of items) {
+    // 按 scope 分组查库内已存在来源；命中项跳过，不阻塞同批其他资产。
+    const existingKeys = await findExistingSourceKeys(tx, items[0].userId, candidates);
+    const pending = candidates.filter((item) => {
+      if (!item.sourceUrl) return true;
+      const key = sourceKey(item.scope ?? "personal", item.sourceUrl);
+      if (!existingKeys.has(key)) return true;
+      skipped.push({ sourceUrl: item.sourceUrl, reason: "already_exists" });
+      return false;
+    });
+
+    for (const item of pending) {
       const scope = item.scope ?? "personal";
       let folderId = item.folderId ?? null;
       if (folderId == null) {
@@ -385,6 +440,7 @@ export async function createAssetsBatch(
     return {
       items: created,
       counters: await readCounters(tx, items[0].userId, items[0].scope ?? "personal"),
+      skipped,
     };
   });
 }
