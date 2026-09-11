@@ -42,10 +42,11 @@ CREATE TABLE "generation_tasks" (
 
 -- CreateTable
 CREATE TABLE "canvas_projects" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "canvas_data" TEXT NOT NULL DEFAULT '{}',
+    "revision" INTEGER NOT NULL DEFAULT 1,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "canvas_projects_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -79,8 +80,10 @@ CREATE TABLE "asset_folders" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
-    "space_key" TEXT NOT NULL DEFAULT 'personal',
+    "scope" TEXT NOT NULL DEFAULT 'personal',
+    "kind" TEXT NOT NULL DEFAULT 'normal',
     "parent_id" INTEGER,
+    "direct_count" INTEGER NOT NULL DEFAULT 0,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "asset_folders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "asset_folders_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "asset_folders" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -90,8 +93,10 @@ CREATE TABLE "asset_folders" (
 CREATE TABLE "asset_items" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
-    "folder_id" INTEGER,
-    "space_key" TEXT NOT NULL DEFAULT 'personal',
+    "folder_id" INTEGER NOT NULL,
+    "scope" TEXT NOT NULL DEFAULT 'personal',
+    "source_url" TEXT,
+    "source_type" TEXT NOT NULL DEFAULT '',
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "type" TEXT NOT NULL DEFAULT 'other',
     "media_type" TEXT NOT NULL DEFAULT '',
@@ -103,7 +108,7 @@ CREATE TABLE "asset_items" (
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "asset_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "asset_items_folder_id_fkey" FOREIGN KEY ("folder_id") REFERENCES "asset_folders" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "asset_items_folder_id_fkey" FOREIGN KEY ("folder_id") REFERENCES "asset_folders" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -122,10 +127,22 @@ CREATE TABLE "file_objects" (
 );
 
 -- CreateTable
+CREATE TABLE "file_refs" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "user_id" INTEGER NOT NULL,
+    "source_type" TEXT NOT NULL,
+    "source_id" TEXT NOT NULL,
+    "hash" TEXT NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 1,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL
+);
+
+-- CreateTable
 CREATE TABLE "agent_sessions" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "user_id" INTEGER NOT NULL,
-    "project_id" INTEGER,
+    "project_id" TEXT,
     "title" TEXT NOT NULL DEFAULT 'New Chat',
     "active_skill" TEXT,
     "skill_status" TEXT NOT NULL DEFAULT 'idle',
@@ -163,19 +180,34 @@ CREATE INDEX "canvas_projects_user_id_idx" ON "canvas_projects"("user_id");
 CREATE INDEX "model_providers_user_id_idx" ON "model_providers"("user_id");
 
 -- CreateIndex
-CREATE INDEX "asset_folders_user_id_idx" ON "asset_folders"("user_id");
+CREATE INDEX "asset_folders_user_id_scope_parent_id_idx" ON "asset_folders"("user_id", "scope", "parent_id");
+
+-- CreateIndex
+CREATE INDEX "asset_folders_user_id_scope_kind_idx" ON "asset_folders"("user_id", "scope", "kind");
 
 -- CreateIndex
 CREATE INDEX "asset_folders_parent_id_idx" ON "asset_folders"("parent_id");
 
 -- CreateIndex
-CREATE INDEX "asset_items_user_id_idx" ON "asset_items"("user_id");
+CREATE INDEX "asset_items_user_id_scope_folder_id_created_at_idx" ON "asset_items"("user_id", "scope", "folder_id", "created_at");
 
 -- CreateIndex
 CREATE INDEX "asset_items_folder_id_idx" ON "asset_items"("folder_id");
 
 -- CreateIndex
 CREATE INDEX "asset_items_media_type_idx" ON "asset_items"("media_type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "asset_items_user_id_scope_source_url_key" ON "asset_items"("user_id", "scope", "source_url");
+
+-- CreateIndex
+CREATE INDEX "file_refs_user_id_hash_idx" ON "file_refs"("user_id", "hash");
+
+-- CreateIndex
+CREATE INDEX "file_refs_user_id_source_type_source_id_idx" ON "file_refs"("user_id", "source_type", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "file_refs_source_type_source_id_hash_key" ON "file_refs"("source_type", "source_id", "hash");
 
 -- CreateIndex
 CREATE INDEX "agent_sessions_user_id_project_id_idx" ON "agent_sessions"("user_id", "project_id");
