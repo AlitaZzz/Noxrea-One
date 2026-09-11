@@ -16,7 +16,7 @@ import { useAuthStore } from "@/features/auth/store";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 
 // ── Types ──
 

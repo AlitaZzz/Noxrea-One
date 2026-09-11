@@ -1,4 +1,4 @@
-// ── Noxrea AI Canvas - Prisma Schema ──
+// ── Noxrea One - Prisma Schema ──
 // 字段 camelCase + @map("snake_case")，表名 @@map
 // JSON 列在 SQLite 下声明为 String(TEXT)，CRUD 层集中序列化
 

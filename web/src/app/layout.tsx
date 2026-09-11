@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 
 import { AppProviders } from "@/providers/AppProviders";
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea Canvas";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 
 export const metadata: Metadata = {
   title: APP_NAME,
