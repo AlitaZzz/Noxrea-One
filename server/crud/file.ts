@@ -3,6 +3,7 @@
  * 基于内容哈希去重存储文件元数据，并提供文件对象的 upsert 与查询。
  */
 import { prisma } from "@server/core/database/client";
+import { Prisma } from "@prisma/client";
 
 // FileObject upsert（去重：hash 碰撞时更新）
 export async function upsertFileObject(data: {
@@ -54,43 +55,49 @@ export async function getFileObjectByHash(hash: string) {
   });
 }
 
-// ── 引用计数操作 ──
+// ── 引用聚合计数操作 ──
 
-/** 原子递增文件引用计数（upsert：处理行可能已被 GC 的情况） */
-export async function incrementRefCount(hash: string, userId: number): Promise<void> {
-  await prisma.fileObject.upsert({
-    where: { userId_hash: { userId, hash } },
-    update: { refCount: { increment: 1 } },
-    create: {
-      userId,
-      hash,
-      refCount: 1,
-      size: 0,
-      mimeType: "",
-      ext: "",
-    },
-  });
-}
-
-/** 原子递减文件引用计数，归零时保留记录（不删除行、不删除物理文件），留待后续 GC 清理 */
-export async function decrementRefCount(
-  hash: string,
+/**
+ * 按账本差值调整文件引用聚合计数。
+ * 正数递增，负数递减；归零时保留记录，交由后续 GC 流程统一判断。
+ */
+export async function adjustFileRefCount(
+  tx: Prisma.TransactionClient,
   userId: number,
-): Promise<{ needGc: boolean; ext: string } | null> {
-  try {
-    const updated = await prisma.fileObject.update({
-      where: { userId_hash: { userId, hash } },
-      data: { refCount: { decrement: 1 } },
-      select: { refCount: true, ext: true },
-    });
+  hash: string,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) return;
 
-    // refCount 归零时保留记录，不做物理删除，留待后续 GC 清理
-    return { needGc: false, ext: updated.ext };
-  } catch (e: unknown) {
-    // P2025: 记录不存在（已 GC 或从未创建），忽略
-    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2025") {
-      return null;
+  if (delta > 0) {
+    await tx.fileObject.upsert({
+      where: { userId_hash: { userId, hash } },
+      update: { refCount: { increment: delta } },
+      create: {
+        userId,
+        hash,
+        refCount: delta,
+        size: 0,
+        mimeType: "",
+        ext: "",
+      },
+    });
+    return;
+  }
+
+  try {
+    await tx.fileObject.update({
+      where: { userId_hash: { userId, hash } },
+      data: { refCount: { decrement: -delta } },
+    });
+  } catch (error) {
+    // 账本删除不应被缺失的聚合行阻塞；这类缺失只说明文件对象已被外部清理。
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return;
     }
-    throw e;
+    throw error;
   }
 }

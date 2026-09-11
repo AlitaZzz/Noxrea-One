@@ -39,9 +39,9 @@ import { useProjectStore } from "@/features/project/store";
 const seed = () => {
   useProjectStore.setState({
     projects: [
-      { id: "p1", name: "A", createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
-      { id: "p2", name: "B", createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
-      { id: "p3", name: "C", createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
+      { id: "p1", name: "A", revision: 1, createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
+      { id: "p2", name: "B", revision: 1, createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
+      { id: "p3", name: "C", revision: 1, createdAt: 0, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", theme: "dark", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
     ],
     activeProjectId: "p1",
   });

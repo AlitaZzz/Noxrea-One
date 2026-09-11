@@ -30,11 +30,6 @@ import {
   getAssetLibrarySummary,
 } from "@server/crud/asset";
 import { ok, failCode } from "@server/core/response";
-import {
-  addAssetRef,
-  removeAssetRef,
-} from "@server/services/storage/ref-manager";
-import { extractHashFromUrl } from "@server/utils/extract-hashes";
 
 const router = new Hono();
 
@@ -160,12 +155,6 @@ router.delete("/api/assets/folders/:id", async (c) => {
 
   try {
     const result = await deleteFolder(auth.user.id, id);
-    await Promise.all(
-      result.sourceUrls.map((sourceUrl) => {
-        const hash = extractHashFromUrl(sourceUrl);
-        return hash ? removeAssetRef(hash, auth.user.id) : Promise.resolve();
-      }),
-    );
     return c.json(ok(result));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
@@ -225,8 +214,6 @@ router.post("/api/assets/items", async (c) => {
 
   try {
     const result = await createAssetsBatch([{ ...parsed.data, userId: auth.user.id }]);
-    const hash = result.items[0].sourceUrl ? extractHashFromUrl(result.items[0].sourceUrl) : null;
-    if (hash) await addAssetRef(hash, auth.user.id);
     return c.json(ok({ item: result.items[0], counters: result.counters }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
@@ -305,8 +292,6 @@ router.delete("/api/assets/items/:id", async (c) => {
 
   try {
     const result = await deleteAsset(auth.user.id, id);
-    const hash = result.item.sourceUrl ? extractHashFromUrl(result.item.sourceUrl) : null;
-    if (hash) await removeAssetRef(hash, auth.user.id);
     return c.json(ok({ counters: result.counters }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
@@ -333,12 +318,6 @@ router.post("/api/assets/items/batch", async (c) => {
       parsed.data.map((item) => ({ ...item, userId: auth.user.id }))
     );
 
-    await Promise.all(
-      result.items.map((item) => {
-        const hash = item.sourceUrl ? extractHashFromUrl(item.sourceUrl) : null;
-        return hash ? addAssetRef(hash, auth.user.id) : Promise.resolve();
-      })
-    );
     return c.json(ok({ items: result.items, counters: result.counters }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");

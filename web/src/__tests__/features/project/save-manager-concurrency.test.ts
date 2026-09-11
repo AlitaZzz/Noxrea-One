@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   clearDraft: vi.fn(),
   syncCanvasState: vi.fn(),
+  updateProjectRevision: vi.fn(),
 }));
 
 vi.mock("@/features/project/api", () => ({
@@ -30,7 +31,12 @@ vi.mock("@/features/project/draft-store", () => ({
 
 vi.mock("@/features/project/store", () => ({
   useProjectStore: {
-    getState: () => ({ activeProjectId: "p1", syncCanvasState: mocks.syncCanvasState }),
+    getState: () => ({
+      activeProjectId: "p1",
+      projects: [],
+      syncCanvasState: mocks.syncCanvasState,
+      updateProjectRevision: mocks.updateProjectRevision,
+    }),
   },
 }));
 
@@ -106,6 +112,7 @@ describe("SaveManager 并发保存", () => {
     mocks.saveDraft.mockReset();
     mocks.clearDraft.mockReset();
     mocks.syncCanvasState.mockReset();
+    mocks.updateProjectRevision.mockReset();
     resetSaveState();
   });
 

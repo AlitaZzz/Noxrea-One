@@ -18,8 +18,8 @@ export const projectApi = {
     api<T>(`/api/canvas/projects`, { method: "POST", body: JSON.stringify({ name, ...(canvasData ? { canvasData } : {}) }) }),
 
   /** 重命名 / 局部更新项目（JSON 包裹）。 */
-  updateProject: (id: string | number, patch: Record<string, unknown>) =>
-    api(`/api/canvas/projects/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
+  updateProject: <T = { revision: number }>(id: string | number, patch: Record<string, unknown>) =>
+    api<T>(`/api/canvas/projects/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
 
   /** 删除项目。 */
   deleteProject: (id: string | number) =>

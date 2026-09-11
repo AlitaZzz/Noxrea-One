@@ -4,7 +4,7 @@
  * 核心验证：
  *   - createNodeFromUrl 正确计算衍生节点位置、尺寸、label
  *   - save-manager.ts 的 _extractHashFromUrl 正确提取 hash
- *   - _collectCanvasHashes 正确收集画布中所有节点的文件 hash
+ *   - 引用收集按节点数量统计，且不再读取废弃的 data.images
  *
  * 注：原 uploadBlob / uploadAndAddNode 已随统一上传管道删除，
  * 上传与落库现由 runMediaUpload / uploadOne 承载，此处只保留纯函数与落库逻辑。
@@ -85,25 +85,16 @@ function extractHashFromUrl(url: string): string | null {
   return h.length === 64 ? h : null;
 }
 
-function collectCanvasHashes(nodes: unknown[]): string[] {
-  const hashes: string[] = [];
+function collectCanvasHashCounts(nodes: unknown[]): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const node of (nodes as Array<{ data?: Record<string, unknown> }>)) {
     const d = node?.data || {};
     if (typeof d.src === "string") {
       const h = extractHashFromUrl(d.src);
-      if (h) hashes.push(h);
-    }
-    if (Array.isArray(d.images)) {
-      for (const img of d.images) {
-        const imgObj = img as { url?: string } | undefined;
-        if (imgObj?.url) {
-          const h = extractHashFromUrl(imgObj.url);
-          if (h) hashes.push(h);
-        }
-      }
+      if (h) counts.set(h, (counts.get(h) ?? 0) + 1);
     }
   }
-  return [...new Set(hashes)].sort();
+  return counts;
 }
 
 
@@ -188,7 +179,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
   // ── collectCanvasHashes ──────────────────────────────────────
 
-  describe("collectCanvasHashes", () => {
+  describe("collectCanvasHashCounts", () => {
     const hash1 = "1".repeat(64);
     const hash2 = "2".repeat(64);
 
@@ -196,18 +187,18 @@ describe("P0-4: CSS transform baking flow", () => {
       const nodes = [
         { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
       ];
-      const result = collectCanvasHashes(nodes);
-      expect(result).toEqual([hash1]);
+      const result = collectCanvasHashCounts(nodes);
+      expect(result).toEqual(new Map([[hash1, 1]]));
     });
 
-    it("should deduplicate and sort", () => {
+    it("should count one reference per node", () => {
       const nodes = [
         { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
         { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
         { data: { src: `/api/files/1/${hash2.slice(0, 2)}/${hash2}.png` } },
       ];
-      const result = collectCanvasHashes(nodes);
-      expect(result).toEqual([hash1, hash2]);
+      const result = collectCanvasHashCounts(nodes);
+      expect(result).toEqual(new Map([[hash1, 2], [hash2, 1]]));
     });
   });
 });

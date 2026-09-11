@@ -31,28 +31,19 @@ function extractHashFromUrl(url: string): string | null {
 }
 
 /**
- * 匹配 save-manager.ts L37-57 的实现。
- * 从节点数组中收集所有文件的 hash。
+ * 匹配 save-manager.ts 的当前实现。
+ * 从节点数组中按节点数量统计文件 hash。
  */
-function collectCanvasHashes(nodes: Record<string, unknown>[]): string[] {
-  const hashes: string[] = [];
+function collectCanvasHashCounts(nodes: Record<string, unknown>[]): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const node of nodes) {
     const d = (node?.data || {}) as Record<string, unknown>;
     if (typeof d.src === "string") {
       const h = extractHashFromUrl(d.src);
-      if (h) hashes.push(h);
-    }
-    if (Array.isArray(d.images)) {
-      for (const rawImg of d.images) {
-        const img = rawImg as { url?: string } | undefined;
-        if (img?.url) {
-          const h = extractHashFromUrl(img.url);
-          if (h) hashes.push(h);
-        }
-      }
+      if (h) counts.set(h, (counts.get(h) ?? 0) + 1);
     }
   }
-  return [...new Set(hashes)].sort();
+  return counts;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -114,7 +105,7 @@ describe("_extractHashFromUrl（前端 save-manager 版本）", () => {
   });
 });
 
-describe("_collectCanvasHashes（前端 save-manager 版本）", () => {
+describe("_collectCanvasHashCounts（前端 save-manager 版本）", () => {
   const hashA = "a".repeat(64);
   const hashB = "b".repeat(64);
 
@@ -123,26 +114,26 @@ describe("_collectCanvasHashes（前端 save-manager 版本）", () => {
       { data: { src: `/api/files/1/${hashA.slice(0, 2)}/${hashA}.png` } },
       { data: { src: `/api/files/2/${hashB.slice(0, 2)}/${hashB}.jpg` } },
     ];
-    expect(collectCanvasHashes(nodes)).toEqual([hashA, hashB]);
+    expect(collectCanvasHashCounts(nodes)).toEqual(new Map([[hashA, 1], [hashB, 1]]));
   });
 
 
-  it("重复 hash 去重并排序", () => {
+  it("不同节点引用同一 hash 时按节点数量累加", () => {
     const nodes = [
       { data: { src: `/api/files/1/${hashA.slice(0, 2)}/${hashA}.png` } },
       { data: { src: `/api/files/1/${hashA.slice(0, 2)}/${hashA}.png` } },
       { data: { src: `/api/files/2/${hashB.slice(0, 2)}/${hashB}.jpg` } },
     ];
-    expect(collectCanvasHashes(nodes)).toEqual([hashA, hashB]);
+    expect(collectCanvasHashCounts(nodes)).toEqual(new Map([[hashA, 2], [hashB, 1]]));
   });
 
-  it("混合 src + images 一起收集", () => {
+  it("已废弃的 data.images 字段不再参与收集", () => {
     const hashC = "c".repeat(64);
     const nodes = [
       { data: { src: `/api/files/1/${hashA.slice(0, 2)}/${hashA}.png` } },
       { data: { images: [{ url: `/api/files/3/${hashC.slice(0, 2)}/${hashC}.webp` }] } },
     ];
-    expect(collectCanvasHashes(nodes)).toEqual([hashA, hashC]);
+    expect(collectCanvasHashCounts(nodes)).toEqual(new Map([[hashA, 1]]));
   });
 
   it("非 hash URL（非 /api/files/ 模式）被忽略", () => {
@@ -150,12 +141,12 @@ describe("_collectCanvasHashes（前端 save-manager 版本）", () => {
       { data: { src: "http://cdn.example.com/external.png" } },
       { data: { src: "data:image/png;base64,abc123" } },
     ];
-    expect(collectCanvasHashes(nodes)).toEqual([]);
+    expect(collectCanvasHashCounts(nodes)).toEqual(new Map());
   });
 
   it("缺失 data 或空 nodes 返回空数组", () => {
-    expect(collectCanvasHashes([])).toEqual([]);
-    expect(collectCanvasHashes([{}])).toEqual([]);
-    expect(collectCanvasHashes([{ data: null }])).toEqual([]);
+    expect(collectCanvasHashCounts([])).toEqual(new Map());
+    expect(collectCanvasHashCounts([{}])).toEqual(new Map());
+    expect(collectCanvasHashCounts([{ data: null }])).toEqual(new Map());
   });
 });

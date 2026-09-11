@@ -18,12 +18,9 @@ import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { clearDraft, saveDraft } from "@/features/project/draft-store";
 import { useProjectStore } from "@/features/project/store";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 
 type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
-
-interface ImageRef {
-  url?: unknown;
-}
 
 const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
@@ -82,25 +79,38 @@ function _extractHashFromUrl(url: string): string | null {
   return h.length === 64 ? h : null;
 }
 
-function _collectCanvasHashes(nodes: ReadonlyArray<{ data?: Record<string, unknown> }>): string[] {
-  const hashes: string[] = [];
+/** 提取单个节点引用的文件 hash；当前媒体节点只使用 data.src。 */
+function _collectNodeHashes(node: { data?: Record<string, unknown> }): Set<string> {
+  const hashes = new Set<string>();
+  const d = node?.data ?? {};
+  if (typeof d.src === "string") {
+    const hash = _extractHashFromUrl(d.src);
+    if (hash) hashes.add(hash);
+  }
+  return hashes;
+}
+
+/** 按节点数量统计画布文件引用；复制节点会带来新的数量。 */
+function _collectCanvasHashCounts(
+  nodes: ReadonlyArray<{ data?: Record<string, unknown> }>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const node of nodes) {
-    const d = node?.data ?? {};
-    // image-node / video-node: data.src
-    if (typeof d.src === "string") {
-      const h = _extractHashFromUrl(d.src);
-      if (h) hashes.push(h);
-    }
-    if (Array.isArray(d.images)) {
-      for (const img of d.images as ImageRef[]) {
-        if (typeof img?.url === "string") {
-          const h = _extractHashFromUrl(img.url);
-          if (h) hashes.push(h);
-        }
-      }
+    for (const hash of _collectNodeHashes(node)) {
+      counts.set(hash, (counts.get(hash) ?? 0) + 1);
     }
   }
-  return [...new Set(hashes)].sort();
+  return counts;
+}
+
+/** 引用指纹包含数量；仅 hash 列表会让复制节点被误判为无变化。 */
+function _buildCanvasHashFingerprint(
+  nodes: ReadonlyArray<{ data?: Record<string, unknown> }>,
+): string {
+  return [..._collectCanvasHashCounts(nodes)]
+    .sort(([hashA], [hashB]) => hashA.localeCompare(hashB))
+    .map(([hash, count]) => `${hash}:${count}`)
+    .join(",");
 }
 
 /** 按 projectId 区分指纹，项目切换时自动隔离 */
@@ -419,12 +429,16 @@ class SaveManager {
   ): Promise<void> {
     const clean = stripRuntimeFields(snapshot);
 
-    // 计算当前 fingerprint，判断文件引用是否变化
-    const currentFp = _collectCanvasHashes(clean.nodes).join(",");
+    // 计算当前 fingerprint，判断文件引用数量是否变化
+    const currentFp = _buildCanvasHashFingerprint(clean.nodes);
     const prevFp = fingerprintMap.get(projectId) ?? "";
     const needRefRecalc = currentFp !== prevFp;
+    // 每次更新都携带保存前的版本；服务端校验后递增，防止迟到请求回退引用账本。
+    const baseRevision =
+      useProjectStore.getState().projects.find((p) => p.id === projectId)?.revision ?? 1;
 
     const payload: Record<string, unknown> = {
+      baseRevision,
       canvasData: {
         nodes: clean.nodes,
         edges: clean.edges,
@@ -456,10 +470,23 @@ class SaveManager {
     // 也不重排定时器，改动静默丢失，草稿却还留着（刷新后误报且救不回来）。
     if (!res.ok) {
       if (res.status === 401) return;
+      if (res.status === 409) {
+        // 409 表示本请求基于旧版本；先同步服务端 revision，避免后续保存持续冲突。
+        const body = parseErrorBody(await res.json().catch(() => null));
+        const currentRevision = body?.ctx?.revision;
+        if (typeof currentRevision === "number") {
+          useProjectStore.getState().updateProjectRevision(projectId, currentRevision);
+        }
+        // 服务端内容可能已经变化；清空指纹强制下一次保存重算引用账本。
+        fingerprintMap.delete(projectId);
+        throw new Error(resolveApiError(body, res.status, "canvas.project_revision_conflict"));
+      }
       throw new Error(`[SaveManager] save failed: HTTP ${res.status}`);
     }
 
     fingerprintMap.set(projectId, currentFp);
+    // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
+    useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
     void clearDraft(projectId);
   }
 

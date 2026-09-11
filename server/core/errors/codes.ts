@@ -76,6 +76,8 @@ export const ERROR_CODES = [
   "canvas.invalid_project_id",
   /** 项目不存在 */
   "canvas.project_not_found",
+  /** 项目版本已变化，通常是请求迟到或并发保存 */
+  "canvas.project_revision_conflict",
 
   // ── 素材 ──
   /** 素材分类 ID 非法 */
