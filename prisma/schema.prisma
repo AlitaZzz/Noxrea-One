@@ -143,12 +143,14 @@ model ModelInfo {
 // 6. AssetFolder
 // ──────────────────────────────────────────
 model AssetFolder {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  name      String   @map("name")
-  spaceKey  String   @default("personal") @map("space_key")
-  parentId  Int?     @map("parent_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String   @map("name")
+  scope       String   @default("personal") @map("scope")
+  kind        String   @default("normal") @map("kind")
+  parentId    Int?     @map("parent_id")
+  directCount Int      @default(0) @map("direct_count")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   // 关系
   user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -156,7 +158,8 @@ model AssetFolder {
   children AssetFolder[] @relation("FolderHierarchy")
   items    AssetItem[]
 
-  @@index([userId])
+  @@index([userId, scope, parentId])
+  @@index([userId, scope, kind])
   @@index([parentId])
   @@map("asset_folders")
 }
@@ -167,8 +170,10 @@ model AssetFolder {
 model AssetItem {
   id          Int      @id @default(autoincrement())
   userId      Int      @map("user_id")
-  folderId    Int?     @map("folder_id")
-  spaceKey    String   @default("personal") @map("space_key")
+  folderId    Int      @map("folder_id")
+  scope       String   @default("personal") @map("scope")
+  sourceUrl   String?  @map("source_url")
+  sourceType  String   @default("") @map("source_type")
   name        String   @default("Untitled") @map("name")
   type        String   @default("other") @map("type")
   mediaType   String   @default("") @map("media_type") // 媒体类型：image/video/audio
@@ -182,9 +187,10 @@ model AssetItem {
 
   // 关系
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folder AssetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder AssetFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
 
-  @@index([userId])
+  @@index([userId, scope, folderId, createdAt])
+  @@unique([userId, scope, sourceUrl])
   @@index([folderId])
   @@index([mediaType])
   @@map("asset_items")

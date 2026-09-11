@@ -99,7 +99,6 @@ export const ASSET_CATEGORIES: { key: AssetType | "all"; labelKey: string }[] = 
 ];
 
 /** 虚拟「未分类」文件夹的 ID：代表 folder_id 为 NULL 的资产集合（不落库） */
-export const UNCATEGORIZED_FOLDER_ID = "__uncategorized__";
 
 // ── 任务绑定 / 上传状态常量（自 lib/types/nodes.ts 迁移） ──
 export const TASK_BINDING_KEY = "taskBinding" as const;

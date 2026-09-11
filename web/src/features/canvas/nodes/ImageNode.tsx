@@ -264,20 +264,21 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     }
   }, [id, src]);
 
-  const handleSaveToAssets = useCallback(() => {
+  const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
-    addAsset({
+    await addAsset({
       name: data.label || t("node.image"),
       type: "other",
+      mediaType: "image",
+      sourceUrl: src,
+      sourceType: d?.source,
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
       description: "",
-      metadata: {
-        sourceUrl: src,
+      extraData: {
         prompt: d?.genSettings?.prompt,
-        source: d?.source,
       },
     });
   }, [src, data.label, id, addAsset]);

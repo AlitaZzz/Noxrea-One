@@ -33,7 +33,7 @@ export function createAssetNode(
   const { width: dw, height: dh } = computeNodeSize(nw, nh);
   const pos = findFreePosition({ width: dw, height: dh }, center);
 
-  const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
+  const sourceUrl = asset.sourceUrl;
   const isAudio = asset.mediaType === "audio";
   const isVideo = asset.mediaType === "video";
 
@@ -53,7 +53,7 @@ export function createAssetNode(
     };
     return node;
   } else {
-    const imgSrc = asset.metadata?.sourceUrl as string;
+    const imgSrc = asset.sourceUrl as string;
     const node = createImageNode(pos, imgSrc);
     node.data.label = asset.name;
     node.data.naturalWidth = nw;

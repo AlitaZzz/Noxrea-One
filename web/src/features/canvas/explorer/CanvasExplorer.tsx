@@ -30,7 +30,6 @@ import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
-import { assetApi } from "@/features/assets/api";
 import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
@@ -39,7 +38,7 @@ import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } fr
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE, UNCATEGORIZED_FOLDER_ID } from "@/lib/constants";
+import { NODE_TYPE } from "@/lib/constants";
 
 // ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
 const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
@@ -454,6 +453,8 @@ function AssetsView() {
   const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
+  const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
+  const uncategorizedFolder = getUncategorizedFolder("personal");
 
   // Independent local state — not shared with AssetsModal
   const [items, setItems] = useState<AssetItem[]>([]);
@@ -464,12 +465,11 @@ function AssetsView() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const versionRef = useRef(0);
 
-  const fetchAndReplace = useCallback(async (filters: { search: string; folderId: string | null | undefined; category?: string[] }) => {
+  const fetchAndReplace = useCallback(async (filters: { search: string; folderId?: string; category?: string[] }) => {
     const v = ++versionRef.current;
     setItems([]);
     setTotalCount(0);
@@ -477,7 +477,7 @@ function AssetsView() {
     setLoadError(false);
     try {
       const result = await fetchAssetPage(
-        { category: filters.category && filters.category.length ? filters.category : "all", search: filters.search, folderId: filters.folderId, spaceKey: "personal" },
+        { category: filters.category && filters.category.length ? filters.category : "all", search: filters.search, folderId: filters.folderId, scope: "personal" },
         0,
       );
       if (v !== versionRef.current) return;
@@ -498,11 +498,9 @@ function AssetsView() {
     setLoadingMore(true);
     setLoadError(false);
     try {
-      const folderId = typeFilter.length > 0
-        ? undefined
-        : (activeFolderId === null ? undefined : (activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId));
+      const folderId = typeFilter.length > 0 ? undefined : activeFolderId ?? undefined;
       const result = await fetchAssetPage(
-        { category: typeFilter.length ? typeFilter : "all", search, folderId, spaceKey: "personal" },
+        { category: typeFilter.length ? typeFilter : "all", search, folderId, scope: "personal" },
         items.length,
       );
       if (v !== versionRef.current) return;
@@ -525,31 +523,20 @@ function AssetsView() {
       }
       if (activeFolderId === null) {
         if (!search.trim()) {
-          // 根视图无搜索：仅展示文件夹（含虚拟「未分类」）
+        // 根视图无搜索：仅展示文件夹
           setItems([]);
           setTotalCount(0);
           setLoading(false);
           return;
         }
-        // 根视图 + 搜索：跨文件夹全局搜索（folderId 为空）
+        // 根视图 + 搜索：跨文件夹全局搜索
         fetchAndReplace({ search, folderId: undefined });
         return;
       }
-      const folderId = activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId;
-      fetchAndReplace({ search, folderId });
+      fetchAndReplace({ search, folderId: activeFolderId });
     }, 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [search, activeFolderId, typeFilter, fetchAndReplace]);
-
-  // 拉取「未分类」资产数量（仅根视图需要）
-  useEffect(() => {
-    if (activeFolderId !== null) { queueMicrotask(() => setUncategorizedCount(0)); return; }
-    let cancelled = false;
-    assetApi.listAssets({ spaceKey: "personal", folderId: -1, skip: 0, limit: 1 })
-      .then((r) => { if (!cancelled) setUncategorizedCount(r.data?.total ?? 0); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [activeFolderId]);
 
   const hasMore = items.length < totalCount;
 
@@ -557,7 +544,7 @@ function AssetsView() {
   const retryLoad = useCallback(() => {
     const folderId = typeFilter.length > 0
       ? undefined
-      : (activeFolderId === null ? undefined : (activeFolderId === UNCATEGORIZED_FOLDER_ID ? null : activeFolderId));
+      : activeFolderId ?? undefined;
     fetchAndReplace({ search, folderId, category: typeFilter });
   }, [fetchAndReplace, search, activeFolderId, typeFilter]);
 
@@ -590,9 +577,6 @@ function AssetsView() {
   // 完整祖先面包屑链（从根到当前文件夹）
   const breadcrumb = useMemo<AssetFolder[]>(() => {
     if (!activeFolderId) return [];
-    if (activeFolderId === UNCATEGORIZED_FOLDER_ID) {
-      return [{ id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: 0 }];
-    }
     const crumbs: AssetFolder[] = [];
     let cur: string | undefined = activeFolderId;
     while (cur) {
@@ -602,11 +586,11 @@ function AssetsView() {
       cur = f.parentId || undefined;
     }
     return crumbs;
-  }, [activeFolderId, folders, t, lang]);
+  }, [activeFolderId, folders]);
 
   // 文件夹递归计数（含所有子孙子文件夹），仅取 personal 空间
   const recursiveCounts = useMemo(
-    () => computeRecursiveFolderCounts(folders.filter((f) => f.spaceKey === "personal")),
+    () => computeRecursiveFolderCounts(folders.filter((f) => f.scope === "personal" && f.kind === "normal")),
     [folders],
   );
 
@@ -616,11 +600,8 @@ function AssetsView() {
       count: recursiveCounts[f.id] ?? f.count ?? 0,
     }));
     if (activeFolderId !== null) return childFolders;
-    return [
-      ...childFolders,
-      { id: UNCATEGORIZED_FOLDER_ID, name: t("asset.uncategorized"), spaceKey: "personal", parentId: undefined, createdAt: 0, count: uncategorizedCount },
-    ];
-  }, [getChildFolders, activeFolderId, uncategorizedCount, recursiveCounts, t, lang]);
+    return uncategorizedFolder ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders] : childFolders;
+  }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t, lang]);
 
   const showFolderGrid = typeFilter.length === 0 && !search.trim();
   const hasContent = items.length > 0 || (showFolderGrid ? gridFolders.length : 0) > 0;
@@ -707,7 +688,7 @@ function AssetsView() {
               <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
               {isLast ? (
                 <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
-                  {crumb.name}
+                  {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
                 </span>
               ) : (
                 <button
@@ -715,7 +696,7 @@ function AssetsView() {
                   className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                   style={{ color: "var(--canvas-text-dim)" }}
                 >
-                  {crumb.name}
+                  {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
                 </button>
               )}
             </span>
@@ -805,7 +786,7 @@ function AssetsView() {
 function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () => void }) {
   const { t } = useTranslation();
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
-  const sourceUrl = asset.metadata?.sourceUrl as string | undefined;
+  const sourceUrl = asset.sourceUrl;
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
   const [imgError, setImgError] = useState(false);

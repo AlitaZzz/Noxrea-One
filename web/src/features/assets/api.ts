@@ -7,7 +7,8 @@ export interface AssetFolderDto {
   id: number;
   userId: number;
   name: string;
-  spaceKey: string;
+  scope: string;
+  kind: string;
   parentId: number | null;
   createdAt: string;
   count: number;
@@ -16,8 +17,10 @@ export interface AssetFolderDto {
 export interface AssetItemDto {
   id: number;
   userId: number;
-  folderId: number | null;
-  spaceKey: string;
+  folderId: number;
+  scope: string;
+  sourceUrl?: string | null;
+  sourceType?: string;
   name: string;
   type: string;
   mediaType: string;
@@ -30,15 +33,29 @@ export interface AssetItemDto {
   updatedAt: string;
 }
 
+export interface AssetCountersDto {
+  folders: Record<string, number>;
+  total: number;
+}
+
+export interface AssetBootstrapDto {
+  folders: AssetFolderDto[];
+  sourceUrls: string[];
+  totalCount: number;
+}
+
 // Folders
 export const assetApi = {
-  listFolders: (spaceKey = "personal") =>
-    api<AssetFolderDto[]>(`/api/assets/folders?space_key=${spaceKey}`),
+  bootstrap: (scope = "personal") =>
+    api<AssetBootstrapDto>(`/api/assets/bootstrap?scope=${scope}`),
 
-  createFolder: (name: string, spaceKey = "personal", parentId?: number) =>
+  listFolders: (scope = "personal") =>
+    api<AssetFolderDto[]>(`/api/assets/folders?scope=${scope}`),
+
+  createFolder: (name: string, scope = "personal", parentId?: number) =>
     api<AssetFolderDto>("/api/assets/folders", {
       method: "POST",
-      body: JSON.stringify({ name, spaceKey, parentId: parentId ?? null }),
+      body: JSON.stringify({ name, scope, parentId: parentId ?? null }),
     }),
 
   updateFolder: (id: number, name: string) =>
@@ -48,56 +65,60 @@ export const assetApi = {
     }),
 
   deleteFolder: (id: number) =>
-    api(`/api/assets/folders/${id}`, { method: "DELETE" }),
+    api<{ removedCount: number; sourceUrls: string[]; counters: AssetCountersDto }>(`/api/assets/folders/${id}`, {
+      method: "DELETE",
+    }),
 
   // Assets
-  listAssets: (params?: { folderId?: number; type?: string; search?: string; spaceKey?: string; skip?: number; limit?: number }) => {
+  listAssets: (params: { folderId?: number; type?: string; search?: string; scope?: string; skip?: number; limit?: number }) => {
     const sp = new URLSearchParams();
-    if (params?.folderId !== undefined) sp.set("folder_id", String(params.folderId));
-    if (params?.type) sp.set("type", params.type);
-    if (params?.search) sp.set("search", params.search);
-    if (params?.spaceKey) sp.set("space_key", params.spaceKey);
-    if (params?.skip !== undefined) sp.set("skip", String(params.skip));
-    if (params?.limit !== undefined) sp.set("limit", String(params.limit));
+    if (params.folderId !== undefined) sp.set("folder_id", String(params.folderId));
+    if (params.type) sp.set("type", params.type);
+    if (params.search) sp.set("search", params.search);
+    if (params.scope) sp.set("scope", params.scope);
+    if (params.skip !== undefined) sp.set("skip", String(params.skip));
+    if (params.limit !== undefined) sp.set("limit", String(params.limit));
     const qs = sp.toString();
-    return api<{ items: AssetItemDto[]; total: number }>(`/api/assets/items${qs ? `?${qs}` : ""}`);
+    return api<{ items: AssetItemDto[]; total: number }>(`/api/assets/items?${qs}`);
   },
 
   createAsset: (data: {
     name: string; type: string; mediaType?: string;
+    sourceUrl?: string; sourceType?: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
+    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number | null; scope?: string;
   }) =>
-    api<AssetItemDto>("/api/assets/items", {
+    api<{ item: AssetItemDto; counters: AssetCountersDto }>("/api/assets/items", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   createAssetsBatch: (items: Array<{
     name: string; type: string; mediaType?: string;
+    sourceUrl?: string; sourceType?: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number; spaceKey?: string;
+    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number | null; scope?: string;
   }>) =>
-    api<AssetItemDto[]>("/api/assets/items/batch", {
+    api<{ items: AssetItemDto[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
       method: "POST",
       body: JSON.stringify(items),
     }),
 
   updateAsset: (id: number, data: Record<string, unknown>) =>
-    api<AssetItemDto>(`/api/assets/items/${id}`, {
+    api<{ item: AssetItemDto; counters: AssetCountersDto }>(`/api/assets/items/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteAsset: (id: number) =>
-    api(`/api/assets/items/${id}`, { method: "DELETE" }),
+    api<{ counters: AssetCountersDto }>(`/api/assets/items/${id}`, { method: "DELETE" }),
 
   updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
-    api<{ count: number }>("/api/assets/items/batch", {
+    api<{ count: number; counters: AssetCountersDto }>("/api/assets/items/batch", {
       method: "PUT",
       body: JSON.stringify({ ids, updates }),
     }),
 
-  listSourceUrls: (spaceKey = "personal") =>
-    api<string[]>(`/api/assets/items/source-urls?space_key=${spaceKey}`),
+  listSourceUrls: (scope = "personal") =>
+    api<string[]>(`/api/assets/items/source-urls?scope=${scope}`),
 };

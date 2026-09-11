@@ -657,7 +657,9 @@
       "invalid_folder_id": "分类 ID 非法",
       "folder_not_found": "分类不存在",
       "invalid_asset_id": "素材 ID 非法",
-      "asset_not_found": "素材不存在"
+      "asset_not_found": "素材不存在",
+      "duplicate_source_url": "该素材已在资产库中",
+      "uncategorized_folder_protected": "「未分类」目录不可修改或删除"
     },
     "models": {
       "fetch_failed": "拉取模型列表失败",

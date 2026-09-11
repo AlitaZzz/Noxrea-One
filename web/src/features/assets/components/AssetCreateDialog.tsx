@@ -296,7 +296,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       width: f.width,
       height: f.height,
       description: "",
-      metadata: { sourceUrl: f.url },
+      sourceUrl: f.url || undefined,
+      extraData: {},
       folderId: saveFolderId,
     }));
     await onCreate(inputs);
@@ -460,7 +461,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
                 ];
                 const build = (parentId: string | undefined, depth: number) => {
                   const children = (folders || []).filter(
-                    (f) => f.spaceKey === "personal" && (f.parentId || undefined) === parentId,
+                    (f) => f.scope === "personal" && f.kind === "normal" && (f.parentId || undefined) === parentId,
                   );
                   for (const f of children) {
                     opts.push({

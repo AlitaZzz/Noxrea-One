@@ -5,15 +5,7 @@
 import { incrementRefCount, decrementRefCount } from "@server/crud/file";
 import { localStorage } from "./backends/local";
 import { buildStorageKey } from "./service";
-import { extractHashFromUrl } from "@server/utils/extract-hashes";
 import { logger } from "@server/core/logger";
-
-/** 从资产 extraData 中提取文件 hash */
-export function extractHashFromAsset(extraData: Record<string, unknown>): string | null {
-  const sourceUrl = extraData?.sourceUrl;
-  if (typeof sourceUrl !== "string") return null;
-  return extractHashFromUrl(sourceUrl);
-}
 
 /** 删除物理文件 */
 async function deletePhysicalFile(userId: number, hash: string, ext: string): Promise<void> {

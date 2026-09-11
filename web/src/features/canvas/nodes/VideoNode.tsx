@@ -381,22 +381,21 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     document.body.removeChild(a);
   }, [src, data.label]);
 
-  const handleSaveToAssets = useCallback(() => {
+  const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as VideoNodeData | undefined;
     // 缩略图不再在保存时生成：素材库读取时通过 sourceUrl?w= 由后端按需抽帧
-    addAsset({
+    await addAsset({
       name: data.label || t("node.video"),
       type: "other",
       mediaType: "video",
+      sourceUrl: src,
+      sourceType: d?.source,
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
       description: "",
-      metadata: {
-        sourceUrl: src,
-        source: d?.source,
-      },
+      extraData: {},
     });
   }, [src, data.label, id, addAsset, t]);
 
