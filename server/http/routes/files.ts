@@ -80,7 +80,6 @@ router.get("/api/files/*", async (c) => {
     ".wav": "audio/wav",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
-    // 音轨分离产物：AAC 音轨原样封装进 MP4 容器，扩展名用 m4a
     ".m4a": "audio/mp4",
     ".aac": "audio/aac",
   };
