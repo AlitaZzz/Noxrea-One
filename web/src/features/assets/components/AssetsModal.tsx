@@ -137,7 +137,7 @@ export default function AssetsModal({ open, onClose }: Props) {
   // Fetch when modal opens or filters change
   useEffect(() => {
     if (!open) { queueMicrotask(() => { setLoadError(false); setLoading(false); }); return; }
-    // 根视图：只展示文件夹（含虚拟「未分类」），不拉取散落资产
+    // 根视图：只展示文件夹（含真实「未分类」目录），不拉取散落资产
     if (activeFolderId === null) {
       queueMicrotask(() => { setItems([]); setTotalCount(0); setLoading(false); setLoadError(false); });
       return;
