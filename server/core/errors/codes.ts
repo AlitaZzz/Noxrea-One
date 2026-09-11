@@ -92,6 +92,8 @@ export const ERROR_CODES = [
   "assets.duplicate_source_url",
   /** 系统「未分类」目录不可修改或删除 */
   "assets.uncategorized_folder_protected",
+  /** 单次提交的素材数量超过上限 */
+  "assets.batch_too_large",
 
   // ── Agent ──
   /** 会话不存在 */

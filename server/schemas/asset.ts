@@ -46,7 +46,10 @@ export const assetCreateSchema = z.object({
   scope: z.literal("personal").optional(),
 });
 
-export const assetBatchCreateSchema = z.array(assetCreateSchema).min(1).max(200);
+/** 单次批量创建的素材数量上限；前端按同一上限分片提交，服务端仅作兜底校验。 */
+export const ASSET_BATCH_LIMIT = 200;
+
+export const assetBatchCreateSchema = z.array(assetCreateSchema).min(1).max(ASSET_BATCH_LIMIT);
 
 export const assetUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),

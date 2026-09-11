@@ -74,7 +74,7 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
 
-  // 单选页签映射为共用 Hook 的多类型筛选；空数组表示“全部”。
+  // 单选页签映射为共用 Hook 的多类型筛选；空数组表示"全部"。
   const categories = useMemo<AssetType[]>(
     () => (category === "all" ? [] : [category]),
     [category],
@@ -209,11 +209,13 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const handleCreateAssets = useCallback(
     async (inputs: CreateAssetInput[]) => {
-      const created = await addAssetsBatch(inputs);
-      if (created.length > 0) {
+      const result = await addAssetsBatch(inputs);
+      if (result.items.length > 0) {
         reload();
         gridRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       }
+      // 把结果交回上传弹窗，由其决定关闭与提示；失败时不再静默关闭。
+      return result;
     },
     [addAssetsBatch, reload],
   );
