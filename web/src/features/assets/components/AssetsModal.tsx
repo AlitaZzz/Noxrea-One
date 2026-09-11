@@ -8,7 +8,7 @@
 
 import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Button, Input, Select, Tooltip } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
@@ -16,7 +16,8 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import ModalButton from "@/components/ui/ModalButton";
 import { createAssetNode } from "@/features/assets/add-asset";
-import { ASSET_PAGE_SIZE, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
+import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
+import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
@@ -46,14 +47,7 @@ export default function AssetsModal({ open, onClose }: Props) {
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
 
-  // Independent local state — not shared with sidebar
-  const [items, setItems] = useState<AssetItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
-  const versionRef = useRef(0);
 
   const [activeScope, setActiveScope] = useState<AssetScope>("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -80,6 +74,31 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
 
+  // 单选页签映射为共用 Hook 的多类型筛选；空数组表示“全部”。
+  const categories = useMemo<AssetType[]>(
+    () => (category === "all" ? [] : [category]),
+    [category],
+  );
+
+  // 与画布抽屉共用同一条查询链路，弹窗只负责展示和批量操作。
+  const {
+    items,
+    loading,
+    loadingMore,
+    loadError,
+    hasMore,
+    reload,
+    loadMore: fetchNextPage,
+    setItems,
+    setTotalCount,
+  } = useAssetLibrary({
+    enabled: open,
+    scope: activeScope,
+    folderId: activeFolderId,
+    search,
+    categories,
+  });
+
   const handleToggleSelect = useCallback((asset: AssetItem) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -88,64 +107,6 @@ export default function AssetsModal({ open, onClose }: Props) {
       return next;
     });
   }, []);
-
-  // --- Data fetching ---
-
-  const fetchAndReplace = useCallback(async (filters: { category: AssetType | "all"; search: string; folderId: string; scope: AssetScope }) => {
-    const v = ++versionRef.current;
-    setItems([]);
-    setTotalCount(0);
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const result = await fetchAssetPage(
-        { category: filters.category, search: filters.search, folderId: filters.folderId, scope: filters.scope },
-        0,
-      );
-      if (v !== versionRef.current) return;
-      setItems(result.items);
-      setTotalCount(result.total);
-      setLoading(false);
-    } catch {
-      if (v !== versionRef.current) return;
-      setLoadError(true);
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchNextPage = useCallback(async () => {
-    const v = ++versionRef.current;
-    setLoadingMore(true);
-    setLoadError(false);
-    try {
-      if (activeFolderId === null) return;
-      const result = await fetchAssetPage(
-        { category, search, folderId: activeFolderId, scope: activeScope },
-        items.length,
-      );
-      if (v !== versionRef.current) return;
-      setItems((prev) => [...prev, ...result.items]);
-      setTotalCount(result.total);
-      setLoadingMore(false);
-    } catch {
-      if (v !== versionRef.current) return;
-      setLoadError(true);
-      setLoadingMore(false);
-    }
-  }, [category, search, activeFolderId, activeScope, items.length]);
-
-  // Fetch when modal opens or filters change
-  useEffect(() => {
-    if (!open) { queueMicrotask(() => { setLoadError(false); setLoading(false); }); return; }
-    // 根视图：只展示文件夹（含真实「未分类」目录），不拉取散落资产
-    if (activeFolderId === null) {
-      queueMicrotask(() => { setItems([]); setTotalCount(0); setLoading(false); setLoadError(false); });
-      return;
-    }
-    queueMicrotask(() => fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope }));
-  }, [open, category, search, activeFolderId, activeScope, fetchAndReplace]);
-
-  const hasMore = items.length < totalCount;
 
   // Selection
   const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
@@ -177,7 +138,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     // 只保留删除失败的项，便于直接重试
     setSelectedIds(new Set(ids.filter((_, i) => !results[i])));
     setDeleteAsset(null);
-  }, [selectedIds, removeAsset, items]);
+  }, [selectedIds, removeAsset, items, setItems, setTotalCount]);
 
   const handleBatchMove = useCallback(async (folderId: string) => {
     const ok = await updateAssetsBatch([...selectedIds], { folderId });
@@ -186,10 +147,8 @@ export default function AssetsModal({ open, onClose }: Props) {
     setSelectedIds(new Set());
     setBatchMoveOpen(false);
     // 刷新当前视图以立即反映移动结果
-    if (activeFolderId !== null) {
-      fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
-    }
-  }, [selectedIds, updateAssetsBatch, activeFolderId, activeScope, category, search, fetchAndReplace]);
+    reload();
+  }, [selectedIds, updateAssetsBatch, reload]);
 
   const handleBatchType = useCallback(async (type: AssetType) => {
     const ids = [...selectedIds];
@@ -199,12 +158,12 @@ export default function AssetsModal({ open, onClose }: Props) {
     setSelectedIds(new Set());
     setBatchTypeOpen(false);
     // 类型变了，当前筛选可能已不适用，重新拉取比本地改字段更可靠
-    if (activeFolderId !== null) {
-      fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
+    if (activeFolderId !== null || category !== "all" || search.trim()) {
+      reload();
     } else {
       setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
     }
-  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, activeScope, fetchAndReplace]);
+  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, reload, setItems]);
 
   // Current folder depth (max 2 levels allowed)
   const currentFolderDepth = useMemo(() => {
@@ -223,24 +182,8 @@ export default function AssetsModal({ open, onClose }: Props) {
     : undefined;
   const canCreateFolder = currentFolderDepth < 2 && currentFolder?.kind !== "uncategorized";
 
-  // Folder counts from server (lazy-load safe)
-  const folderCounts = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const f of folders) totals[f.id] = f.count || 0;
-    const cache: Record<string, number> = {};
-    const getRecursive = (folderId: string): number => {
-      if (cache[folderId] !== undefined) return cache[folderId];
-      let total = totals[folderId] || 0;
-      for (const child of folders.filter((f2) => f2.parentId === folderId)) {
-        total += getRecursive(child.id);
-      }
-      cache[folderId] = total;
-      return total;
-    };
-    const counts: Record<string, number> = {};
-    for (const f of folders) counts[f.id] = getRecursive(f.id);
-    return counts;
-  }, [folders]);
+  // 与抽屉共用同一套递归计数逻辑，避免目录数量展示不一致。
+  const folderCounts = useMemo(() => computeRecursiveFolderCounts(folders), [folders]);
 
   const gridFolders = useMemo<AssetFolder[]>(() => {
     const childFolders = getChildFolders(activeScope, activeFolderId ?? undefined);
@@ -268,13 +211,11 @@ export default function AssetsModal({ open, onClose }: Props) {
     async (inputs: CreateAssetInput[]) => {
       const created = await addAssetsBatch(inputs);
       if (created.length > 0) {
-        if (activeFolderId !== null) {
-          fetchAndReplace({ category, search, folderId: activeFolderId, scope: activeScope });
-        }
+        reload();
         gridRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
-    [addAssetsBatch, category, search, activeFolderId, activeScope, fetchAndReplace],
+    [addAssetsBatch, reload],
   );
 
   const handleCreateFolder = useCallback(
@@ -297,7 +238,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (await updateAsset(id, { name })) {
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name } : i)));
     }
-  }, [renamingId, renameValue, updateAsset]);
+  }, [renamingId, renameValue, updateAsset, setItems]);
 
   const handleDelete = useCallback((asset: AssetItem) => { setDeleteAsset(asset); }, []);
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
@@ -474,7 +415,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
               <AssetGrid
                 assets={items}
-                folders={gridFolders}
+                folders={activeFolderId === null && category === "all" && !search.trim() ? gridFolders : undefined}
                 folderCounts={folderCounts}
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
@@ -488,7 +429,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                 loadingMore={loadingMore}
                 onLoadMore={fetchNextPage}
                 loadError={loadError}
-                onRetry={fetchNextPage}
+                onRetry={reload}
               />
             </div>
           </div>
