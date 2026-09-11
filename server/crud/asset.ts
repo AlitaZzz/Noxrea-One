@@ -13,32 +13,46 @@ function deserializeAsset(item: { tags: unknown; extraData: unknown }) {
   };
 }
 
+type FolderWithCount = {
+  _count: { items: number };
+};
+
+function serializeFolder(folder: FolderWithCount) {
+  const { _count, ...dto } = folder;
+  return {
+    ...dto,
+    count: _count.items,
+  };
+}
+
 // Asset CRUD
 
 // Folders
 
 export async function getFolders(userId: number, spaceKey = "personal") {
-  return prisma.assetFolder.findMany({
+  const folders = await prisma.assetFolder.findMany({
     where: { userId, spaceKey },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { items: true } },
     },
   });
+  return folders.map(serializeFolder);
 }
 
 export async function getFolder(id: number) {
-  return prisma.assetFolder.findUnique({
+  const folder = await prisma.assetFolder.findUnique({
     where: { id },
     include: { _count: { select: { items: true } } },
   });
+  return folder ? serializeFolder(folder) : null;
 }
 
 export async function createFolder(
   userId: number,
   data: { name: string; spaceKey?: string; parentId?: number | null }
 ) {
-  return prisma.assetFolder.create({
+  const folder = await prisma.assetFolder.create({
     data: {
       userId,
       name: data.name,
@@ -47,14 +61,16 @@ export async function createFolder(
     },
     include: { _count: { select: { items: true } } },
   });
+  return serializeFolder(folder);
 }
 
 export async function updateFolder(id: number, name: string) {
-  return prisma.assetFolder.update({
+  const folder = await prisma.assetFolder.update({
     where: { id },
     data: { name },
     include: { _count: { select: { items: true } } },
   });
+  return serializeFolder(folder);
 }
 
 export async function deleteFolder(id: number) {
