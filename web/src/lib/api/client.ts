@@ -87,10 +87,19 @@ export function checkUnauthorized(status: number): boolean {
   return false;
 }
 
+/** 统一 API 结果；错误响应保留机器可读错误码与上下文，供业务侧做自愈处理。 */
+export interface ApiResult<T = unknown> {
+  code: number;
+  data: T;
+  msg: string;
+  error?: string;
+  ctx?: Record<string, string | number>;
+}
+
 export async function api<T = unknown>(
   path: string,
   options: RequestInit & { skipUnauthorized?: boolean } = {}
-): Promise<{ code: number; data: T; msg: string }> {
+): Promise<ApiResult<T>> {
   const { skipUnauthorized, ...fetchOptions } = options;
   try {
     const res = await fetch(`${BASE}${path}`, {
@@ -103,16 +112,19 @@ export async function api<T = unknown>(
     });
     if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
     // 响应体可能为空（204）或是网关返回的 HTML，解析失败按 null 处理，不要抛错
-    const body = (await res.json().catch(() => null)) as { code: number; data: T; msg: string } | null;
+    const body = (await res.json().catch(() => null)) as ApiResult<T> | null;
     // 非 2xx 不能再当作正常结果透出：此前 code 为 undefined，调用方无法区分
     // 「成功但无数据」与「请求失败」。这里统一按 HTTP 状态码 + 服务端错误码生成
     // 本地化文案。仍然保持「api() 不 reject」的既有契约——大量调用方依赖这一点，
     // 改为 throw 会产生未处理的 Promise rejection。
     if (!res.ok) {
+      const errorBody = parseErrorBody(body);
       return {
         code: res.status,
         data: null as T,
-        msg: resolveApiError(parseErrorBody(body), res.status),
+        msg: resolveApiError(errorBody, res.status),
+        error: errorBody?.error,
+        ctx: errorBody?.ctx,
       };
     }
     return body ?? { code: res.status, data: null as T, msg: "" };

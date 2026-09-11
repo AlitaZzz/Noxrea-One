@@ -12,6 +12,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   deleteProject: vi.fn(),
   listProjects: vi.fn(),
+  getProject: vi.fn(),
+  updateProject: vi.fn(),
   notify: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
@@ -19,9 +21,9 @@ vi.mock("@/features/project/api", () => ({
   projectApi: {
     deleteProject: (...args: unknown[]) => mocks.deleteProject(...args),
     listProjects: (...args: unknown[]) => mocks.listProjects(...args),
-    getProject: vi.fn(async () => ({ code: 200, data: null, msg: "" })),
+    getProject: (...args: unknown[]) => mocks.getProject(...args),
     createProject: vi.fn(async () => ({ code: 200, data: null, msg: "" })),
-    updateProject: vi.fn(async () => ({ code: 200, data: null, msg: "" })),
+    updateProject: (...args: unknown[]) => mocks.updateProject(...args),
     saveProjectRaw: vi.fn(async () => new Response(null, { status: 200 })),
   },
 }));
@@ -54,8 +56,27 @@ describe("project store 删除与列表", () => {
   beforeEach(() => {
     mocks.deleteProject.mockReset();
     mocks.listProjects.mockReset();
+    mocks.getProject.mockReset();
+    mocks.updateProject.mockReset();
     mocks.notify.error.mockReset();
     seed();
+  });
+
+  it("重命名遇到 409 时同步版本并自动重试一次", async () => {
+    mocks.updateProject
+      .mockResolvedValueOnce({ code: 409, data: null, msg: "conflict", ctx: { revision: 5 } })
+      .mockResolvedValueOnce({ code: 200, data: { revision: 6 }, msg: "" });
+
+    useProjectStore.getState().renameProject("p1", "A2");
+
+    await vi.waitFor(() => {
+      const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+      expect(project?.name).toBe("A2");
+      expect(project?.revision).toBe(6);
+    });
+    expect(mocks.updateProject).toHaveBeenCalledTimes(2);
+    expect(mocks.updateProject).toHaveBeenNthCalledWith(1, "p1", { name: "A2", baseRevision: 1 });
+    expect(mocks.updateProject).toHaveBeenNthCalledWith(2, "p1", { name: "A2", baseRevision: 5 });
   });
 
   it("删除失败时把项目放回列表", async () => {
