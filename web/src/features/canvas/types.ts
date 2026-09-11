@@ -44,6 +44,10 @@ interface BaseGenSettings {
 /** 文本生成设置 */
 export interface TextGenSettings extends BaseGenSettings {
   kind: "text";
+  /** 参考音频顺序（上游 AUDIO 节点 src），仅持久化排序偏好 */
+  refAudioOrder?: string[];
+  /** 参考视频顺序（上游 VIDEO 节点 src），仅持久化排序偏好 */
+  refVideoOrder?: string[];
 }
 
 /** 图片生成设置 */

@@ -52,7 +52,7 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
       label: "",
       content: "",
       plainText: "",
-      genSettings: { kind: "text", prompt: "", modelKey: "", refOrder: [] } satisfies TextGenSettings,
+      genSettings: { kind: "text", prompt: "", modelKey: "", refOrder: [], refAudioOrder: [], refVideoOrder: [] } satisfies TextGenSettings,
     } as TextNodeData,
     style: {
       width: TEXT_NODE_DEFAULT_WIDTH,
