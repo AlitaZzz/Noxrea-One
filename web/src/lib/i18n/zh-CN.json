@@ -651,7 +651,8 @@
       "missing_type_param": "缺少 type 查询参数",
       "template_not_found": "提示词模板 {{type}} 不存在",
       "invalid_project_id": "项目 ID 非法",
-      "project_not_found": "项目不存在"
+      "project_not_found": "项目不存在",
+      "project_revision_conflict": "画布已被更新，请刷新后重试"
     },
     "assets": {
       "invalid_folder_id": "分类 ID 非法",

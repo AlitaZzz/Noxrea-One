@@ -42,6 +42,7 @@ interface CanvasData {
 interface ServerProject {
   id: string;
   name: string;
+  revision?: number;
   canvasData?: CanvasData;
   updatedAt: string;
 }
@@ -50,6 +51,7 @@ function mapServerProject(p: ServerProject): CanvasProject {
   return {
     id: p.id,
     name: p.name,
+    revision: p.revision ?? 1,
     createdAt: Date.now(),
     updatedAt: new Date(p.updatedAt).getTime(),
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
@@ -95,6 +97,7 @@ async function apiCreateProject(name: string): Promise<CanvasProject | null> {
       return {
         id: String(res.data.id),
         name: res.data.name,
+        revision: res.data.revision ?? 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         viewport: DEFAULT_VIEWPORT,
@@ -135,6 +138,7 @@ interface ProjectState {
   renameProject: (id: string, name: string) => void;
   deleteProject: (id: string) => void;
   deleteProjects: (ids: string[]) => void;
+  updateProjectRevision: (id: string, revision: number) => void;
   setActiveProject: (id: string) => void;
   syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
   refreshProjects: () => Promise<void>;
@@ -172,14 +176,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   renameProject: (id, name) => {
     const prevName = get().projects.find((p) => p.id === id)?.name;
+    const baseRevision = get().projects.find((p) => p.id === id)?.revision ?? 1;
     // 乐观更新，失败回滚：此前无论响应码如何都留在本地，刷新后名称又变回去
     set((s) => ({
       projects: s.projects.map((p) => p.id === id ? { ...p, name, updatedAt: Date.now() } : p),
     }));
     void (async () => {
       try {
-        const res = await projectApi.updateProject(id, { name });
-        if (res.code === 200) return;
+        const res = await projectApi.updateProject(id, { name, baseRevision });
+        if (res.code === 200 && typeof res.data?.revision === "number") {
+          get().updateProjectRevision(id, res.data.revision);
+          return;
+        }
         throw new Error(resolveResultError(res, "project.rename_failed"));
       } catch (e) {
         if (prevName !== undefined) {
@@ -245,6 +253,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         return { projects, activeProjectId };
       });
     })();
+  },
+
+  /** 保存成功或版本冲突后同步服务端 revision，确保下一次请求携带正确版本。 */
+  updateProjectRevision: (id, revision) => {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, revision } : p)),
+    }));
   },
 
   setActiveProject: (id) => {

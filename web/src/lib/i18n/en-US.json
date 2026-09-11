@@ -652,7 +652,8 @@
       "missing_type_param": "Missing 'type' query parameter",
       "template_not_found": "Prompt template {{type}} not found",
       "invalid_project_id": "Invalid project ID",
-      "project_not_found": "Project not found"
+      "project_not_found": "Project not found",
+      "project_revision_conflict": "The canvas was updated elsewhere. Refresh and try again."
     },
     "assets": {
       "invalid_folder_id": "Invalid folder ID",

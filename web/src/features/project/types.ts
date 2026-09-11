@@ -12,6 +12,7 @@ import type { AnyNode } from "@/features/canvas/types";
 export interface CanvasProject {
   id: string;
   name: string;
+  revision: number;
   createdAt: number;
   updatedAt: number;
   viewport: ViewportState;

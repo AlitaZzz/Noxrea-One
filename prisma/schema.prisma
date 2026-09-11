@@ -92,6 +92,7 @@ model CanvasProject {
   userId     Int      @map("user_id")
   name       String   @default("Untitled") @map("name")
   canvasData String   @default("{}") @map("canvas_data") // JSON TEXT
+  revision   Int      @default(1) @map("revision") // 乐观并发版本号；每次更新递增
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -212,6 +213,27 @@ model FileObject {
 
   @@id([userId, hash])
   @@map("file_objects")
+}
+
+// ──────────────────────────────────────────
+// 8.1 FileRef（文件引用账本）
+// ──────────────────────────────────────────
+// 每一行表示一个业务来源（画布或资产条目）对某个内容哈希的引用数量。
+// file_objects.ref_count 只是聚合结果；账本才是删除、复制和对账时的事实来源。
+model FileRef {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  sourceType String   @map("source_type") // 来源类型：canvas / asset_item
+  sourceId   String   @map("source_id") // 画布 ID 或资产条目 ID，统一存字符串
+  hash       String // SHA256 hex
+  count      Int      @default(1) // 来源内部按节点/条目数量统计
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([sourceType, sourceId, hash])
+  @@index([userId, hash])
+  @@index([userId, sourceType, sourceId])
+  @@map("file_refs")
 }
 
 // ──────────────────────────────────────────

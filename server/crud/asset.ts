@@ -5,6 +5,11 @@
  */
 import { Prisma, type AssetItem as AssetItemModel } from "@prisma/client";
 import { prisma } from "@server/core/database/client";
+import { extractHashFromUrl } from "@server/utils/extract-hashes";
+import {
+  replaceSourceFileRefs,
+  removeSourceFileRefsBatch,
+} from "@server/services/storage/file-ref-ledger";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -207,7 +212,13 @@ export async function deleteFolder(userId: number, id: number) {
 
     const deletedAssets = await tx.assetItem.findMany({
       where: { userId, folderId: { in: subtreeIds } },
-      select: { sourceUrl: true },
+      select: { id: true, sourceUrl: true },
+    });
+    // 子树内资产可能引用同一文件，账本层会合并数量后递减聚合计数。
+    await removeSourceFileRefsBatch(tx, {
+      userId,
+      sourceType: "asset_item",
+      sourceIds: deletedAssets.map((asset) => String(asset.id)),
     });
     await tx.assetItem.deleteMany({
       where: { userId, folderId: { in: subtreeIds } },
@@ -359,6 +370,16 @@ export async function createAssetsBatch(
         where: { id: folderId },
         data: { directCount: { increment: 1 } },
       });
+
+      // 资产创建与引用登记必须在同一事务内，避免出现已入库但未计数的资产。
+      const hash = record.sourceUrl ? extractHashFromUrl(record.sourceUrl) : null;
+      if (hash) {
+        await replaceSourceFileRefs(tx, {
+          userId: item.userId,
+          sourceType: "asset_item",
+          sourceId: String(record.id),
+        }, new Map([[hash, 1]]));
+      }
     }
 
     return {
@@ -486,6 +507,12 @@ export async function deleteAsset(userId: number, id: number) {
     const current = await tx.assetItem.findFirst({ where: { id, userId } });
     if (!current) throw new AssetOperationError("asset_not_found");
 
+    // 账本删除和聚合计数递减先执行；缺失的聚合行不会阻塞资产删除。
+    await removeSourceFileRefsBatch(tx, {
+      userId,
+      sourceType: "asset_item",
+      sourceIds: [String(current.id)],
+    });
     await tx.assetItem.delete({ where: { id } });
     await tx.assetFolder.update({
       where: { id: current.folderId },

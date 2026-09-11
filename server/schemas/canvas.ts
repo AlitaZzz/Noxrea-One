@@ -13,12 +13,14 @@ export const canvasUpdateSchema = z.object({
   name: z.string().max(200).optional(),
   canvasData: z.record(z.unknown()).optional(),
   needRefRecalc: z.boolean().optional(),
+  baseRevision: z.number().int().min(1),
 });
 
 export const canvasOutSchema = z.object({
   id: z.string(),
   userId: z.number(),
   name: z.string(),
+  revision: z.number(),
   canvasData: z.record(z.unknown()),
   createdAt: z.string(),
   updatedAt: z.string(),

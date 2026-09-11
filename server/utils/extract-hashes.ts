@@ -7,10 +7,6 @@ interface CanvasNode {
   data?: Record<string, unknown>;
 }
 
-interface ImageRef {
-  url?: unknown;
-}
-
 /** 从 /api/files/{userId}/{hash[:2]}/{hash}{ext} URL 中提取 64 位 hash */
 export function extractHashFromUrl(url: string): string | null {
   if (!url || typeof url !== "string") return null;
@@ -45,25 +41,27 @@ export function extractHashFromUrlOrKey(value: string): string | null {
   return extractHashFromUrl(value) ?? extractHashFromStorageKey(value);
 }
 
-/** 从画布节点数组中提取所有文件 hash（去重排序） */
-export function extractHashesFromCanvas(canvasData: Record<string, unknown>): string[] {
+/**
+ * 从画布节点数组提取文件 hash 数量。
+ * 计数粒度是节点：同一节点内的同一文件只计一次，不同节点分别累加。
+ */
+export function extractHashCountsFromCanvas(
+  canvasData: Record<string, unknown>,
+): Map<string, number> {
   const nodes = (canvasData?.nodes as ReadonlyArray<CanvasNode>) ?? [];
-  const hashes: string[] = [];
+  const counts = new Map<string, number>();
   for (const node of nodes) {
     const d = node?.data ?? {};
-    // image-node / video-node: data.src
+    // image-node / video-node：data.src 是当前节点唯一的主媒体引用。
     if (typeof d.src === "string") {
       const h = extractHashFromUrl(d.src);
-      if (h) hashes.push(h);
-    }
-    if (Array.isArray(d.images)) {
-      for (const img of d.images as ImageRef[]) {
-        if (typeof img?.url === "string") {
-          const h = extractHashFromUrl(img.url);
-          if (h) hashes.push(h);
-        }
-      }
+      if (h) counts.set(h, (counts.get(h) ?? 0) + 1);
     }
   }
-  return [...new Set(hashes)].sort();
+  return counts;
+}
+
+/** 从画布节点数组中提取去重后的文件 hash（排序后返回，便于测试和展示）。 */
+export function extractHashesFromCanvas(canvasData: Record<string, unknown>): string[] {
+  return [...extractHashCountsFromCanvas(canvasData).keys()].sort();
 }

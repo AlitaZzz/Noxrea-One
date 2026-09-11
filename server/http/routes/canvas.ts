@@ -5,10 +5,15 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
-import { getProjects, createProject, getProject, updateProject, deleteProject } from "@server/crud/canvas";
+import {
+  getProjects,
+  createProject,
+  getProject,
+  updateProject,
+  deleteProject,
+  CanvasRevisionConflictError,
+} from "@server/crud/canvas";
 import { ok, failCode } from "@server/core/response";
-import { recalcCanvasRefs, cleanCanvasRefs } from "@server/services/storage/ref-manager";
-import { extractHashesFromCanvas } from "@server/utils/extract-hashes";
 import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
 
@@ -95,10 +100,6 @@ router.put("/api/canvas/projects/:id", async (c) => {
   const id = c.req.param("id");
   if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
 
-  const existing = await getProject(id, auth.user.id);
-  if (!existing) return failCode(404, "canvas.project_not_found");
-
-
   let body: unknown;
   try {
     body = await c.req.json();
@@ -111,20 +112,27 @@ router.put("/api/canvas/projects/:id", async (c) => {
     return failCode(422, "common.invalid_request");
   }
 
-  const project = await updateProject(id, auth.user.id, {
-    name: parsed.data.name,
-    canvasData: parsed.data.canvasData,
-  });
-  if (!project) return failCode(404, "canvas.project_not_found");
-
-  // 文件引用重算（diff 增减）
-  if (parsed.data.needRefRecalc && parsed.data.canvasData) {
-    const newHashes = extractHashesFromCanvas(parsed.data.canvasData);
-    const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
-    await recalcCanvasRefs(auth.user.id, oldHashes, newHashes);
+  try {
+    const project = await updateProject(id, auth.user.id, {
+      name: parsed.data.name,
+      canvasData: parsed.data.canvasData,
+    }, {
+      // 只有媒体结构指纹变化时前端才标记 needRefRecalc；布局保存不进入账本计算。
+      recalcRefs: Boolean(parsed.data.needRefRecalc && parsed.data.canvasData),
+      baseRevision: parsed.data.baseRevision,
+    });
+    if (!project) return failCode(404, "canvas.project_not_found");
+    return c.json(ok(project));
+  } catch (error) {
+    // 版本冲突携带当前 revision，前端可同步版本后继续保存，不会重复累计引用。
+    if (error instanceof CanvasRevisionConflictError) {
+      return failCode(409, "canvas.project_revision_conflict", {
+        revision: error.currentRevision,
+      });
+    }
+    throw error;
   }
 
-  return c.json(ok(project));
 });
 
 // DELETE /api/canvas/projects/:id
@@ -136,15 +144,8 @@ router.delete("/api/canvas/projects/:id", async (c) => {
   const id = c.req.param("id");
   if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
 
-  const existing = await getProject(id, auth.user.id);
-  if (!existing) return failCode(404, "canvas.project_not_found");
-
-
   const result = await deleteProject(id, auth.user.id);
   if (result.count === 0) return failCode(404, "canvas.project_not_found");
-
-  const oldHashes = extractHashesFromCanvas(existing.canvasData as Record<string, unknown>);
-  await cleanCanvasRefs(auth.user.id, oldHashes);
 
   return c.json(ok(null, "Project deleted"));
 });
