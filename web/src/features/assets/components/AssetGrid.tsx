@@ -18,6 +18,14 @@ interface Props {
   assets: AssetItem[];
   folders?: AssetFolder[];
   folderCounts?: Record<string, number>;
+  /** 紧凑模式供抽屉等窄容器使用，仅改变栅格密度，不改变查询逻辑。 */
+  compact?: boolean;
+  /** 关闭后不渲染重命名 / 删除菜单，适用于只需要插入画布的抽屉。 */
+  showActions?: boolean;
+  /** 悬浮大图预览是画布抽屉的既有交互；弹窗可按需关闭。 */
+  showHoverPreview?: boolean;
+  /** 悬浮预览的水平锚点，透传给资产卡片。 */
+  hoverPreviewAnchorX?: number;
   selectedIds?: Set<string>;
   onToggleSelect?: (asset: AssetItem) => void;
   onInsertCanvas?: (asset: AssetItem) => void;
@@ -34,7 +42,7 @@ interface Props {
 }
 
 export default function AssetGrid({
-  assets, folders, folderCounts, selectedIds,
+  assets, folders, folderCounts, compact, showActions = true, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds,
   onToggleSelect, onInsertCanvas, onRename, onDelete,
   onEnterFolder, onDeleteFolder,
   loading, hasMore, loadingMore, onLoadMore,
@@ -70,6 +78,19 @@ export default function AssetGrid({
   }
 
   if (!hasContent) {
+    if (loadError && onRetry) {
+      return (
+        <div className="flex items-center justify-center h-full min-h-[200px]">
+          <button
+            onClick={onRetry}
+            className="text-xs px-3 py-1 rounded transition-colors hover:bg-white/5"
+            style={{ color: "var(--canvas-text-dim)" }}
+          >
+            {t("asset.retry")}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center h-full min-h-[200px]">
         <Empty description={<span className="text-white/30">{t("asset.empty")}</span>} />
@@ -79,7 +100,7 @@ export default function AssetGrid({
 
   return (
     <div>
-      <div className="grid gap-3 pb-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+      <div className="grid gap-3 pb-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` }}>
         {/* Folders first */}
         {folders?.map((folder) => (
           <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder} />
@@ -89,6 +110,9 @@ export default function AssetGrid({
           <AssetCard
             key={asset.id}
             asset={asset}
+            showActions={showActions}
+            showHoverPreview={showHoverPreview}
+            hoverPreviewAnchorX={hoverPreviewAnchorX}
             selected={selectedIds?.has(asset.id)}
             onToggleSelect={onToggleSelect}
             onInsertCanvas={onInsertCanvas}

@@ -13,42 +13,28 @@ import {
   DownOutlined,
   FilterOutlined,
   FolderOpenOutlined,
-  FolderOutlined,
   LoadingOutlined,
-  PauseCircleFilled,
-  PlayCircleFilled,
-  PlusOutlined,
   RightOutlined,
   SearchOutlined,
-  VideoCameraOutlined,
 } from "@ant-design/icons";
 import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
+import AssetGrid from "@/features/assets/components/AssetGrid";
 import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
-import { ASSET_PAGE_SIZE, computeRecursiveFolderCounts, fetchAssetPage, useAssetsStore } from "@/features/assets/store";
+import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
+import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
-
-// ── 资产风格筛选选项（替换原「新建文件夹」按钮）──
-const ASSET_STYLE_TYPES: { key: AssetType; labelKey: string }[] = [
-  { key: "character", labelKey: "asset.cat.character" },
-  { key: "scene", labelKey: "asset.cat.scene" },
-  { key: "object", labelKey: "asset.cat.object" },
-  { key: "style", labelKey: "asset.cat.style" },
-  { key: "audio", labelKey: "asset.cat.audio" },
-  { key: "other", labelKey: "asset.cat.other" },
-];
+import { ASSET_CATEGORIES, NODE_TYPE } from "@/lib/constants";
 
 export const DRAWER_WIDTH = 360;
 
@@ -168,7 +154,6 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
     </Drawer>
   );
 }
-
 // ── 元素视图 ──
 
 /** 按 NODE_TYPE_ORDER 对节点按类型分组（未分组节点使用） */
@@ -299,7 +284,6 @@ function CanvasElementsView() {
     </div>
   );
 }
-
 /** 组条目：点击定位组，点击箭头折叠/展开，成员缩进渲染 */
 function GroupItem({ group, members, selected, collapsed, onToggle, selectedNodeIds }: {
   group: AnyNode;
@@ -456,112 +440,27 @@ function AssetsView() {
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
   const uncategorizedFolder = getUncategorizedFolder("personal");
 
-  // Independent local state — not shared with AssetsModal
-  const [items, setItems] = useState<AssetItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<AssetType[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const versionRef = useRef(0);
 
-  const fetchAndReplace = useCallback(async (filters: { search: string; folderId?: string; category?: string[] }) => {
-    const v = ++versionRef.current;
-    setItems([]);
-    setTotalCount(0);
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const result = await fetchAssetPage(
-        { category: filters.category && filters.category.length ? filters.category : "all", search: filters.search, folderId: filters.folderId, scope: "personal" },
-        0,
-      );
-      if (v !== versionRef.current) return;
-      setItems(result.items);
-      setTotalCount(result.total);
-    } catch {
-      if (v !== versionRef.current) return;
-      // 失败必须可见：此前只是静默结束加载，空白列表会被误读成「没有资产」
-      setLoadError(true);
-    }
-    if (v === versionRef.current) setLoading(false);
-  }, []);
-
-  const fetchNextPage = useCallback(async () => {
-    // 根视图无搜索且不筛选时不展示散落资产
-    if (activeFolderId === null && !search.trim() && typeFilter.length === 0) return;
-    const v = ++versionRef.current;
-    setLoadingMore(true);
-    setLoadError(false);
-    try {
-      const folderId = typeFilter.length > 0 ? undefined : activeFolderId ?? undefined;
-      const result = await fetchAssetPage(
-        { category: typeFilter.length ? typeFilter : "all", search, folderId, scope: "personal" },
-        items.length,
-      );
-      if (v !== versionRef.current) return;
-      setItems((prev) => [...prev, ...result.items]);
-      setTotalCount(result.total);
-    } catch {
-      if (v !== versionRef.current) return;
-      setLoadError(true);
-    }
-    if (v === versionRef.current) setLoadingMore(false);
-  }, [search, activeFolderId, typeFilter, items.length]);
-
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      if (typeFilter.length > 0) {
-        // 风格筛选：跨全部个人资产按类型筛选（忽略文件夹层级）
-        fetchAndReplace({ search, folderId: undefined, category: typeFilter });
-        return;
-      }
-      if (activeFolderId === null) {
-        if (!search.trim()) {
-        // 根视图无搜索：仅展示文件夹
-          setItems([]);
-          setTotalCount(0);
-          setLoading(false);
-          return;
-        }
-        // 根视图 + 搜索：跨文件夹全局搜索
-        fetchAndReplace({ search, folderId: undefined });
-        return;
-      }
-      fetchAndReplace({ search, folderId: activeFolderId });
-    }, 300);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [search, activeFolderId, typeFilter, fetchAndReplace]);
-
-  const hasMore = items.length < totalCount;
-
-  /** 用当前筛选条件重新拉取（供错误态重试） */
-  const retryLoad = useCallback(() => {
-    const folderId = typeFilter.length > 0
-      ? undefined
-      : activeFolderId ?? undefined;
-    fetchAndReplace({ search, folderId, category: typeFilter });
-  }, [fetchAndReplace, search, activeFolderId, typeFilter]);
-
-  // 用 ref 持有最新 fetchNextPage，避免 items 增长时反复重建 observer
-  const fetchNextPageRef = useRef(fetchNextPage);
-  useEffect(() => { fetchNextPageRef.current = fetchNextPage; });
-
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasMore || loadingMore) return;
-    const io = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) fetchNextPageRef.current(); },
-      { root: el.parentElement, rootMargin: "100px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMore, loadingMore]);
+  // 抽屉只保留紧凑展示；查询、防抖、分页、错误重试完全交给资产模块。
+  const {
+    items,
+    totalCount,
+    loading,
+    loadingMore,
+    loadError,
+    hasMore,
+    reload,
+    loadMore,
+  } = useAssetLibrary({
+    enabled: true,
+    scope: "personal",
+    folderId: activeFolderId,
+    search,
+    categories: typeFilter,
+  });
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
@@ -588,9 +487,9 @@ function AssetsView() {
     return crumbs;
   }, [activeFolderId, folders]);
 
-  // 文件夹递归计数（含所有子孙子文件夹），仅取 personal 空间
+  // 与资产弹窗共用同一套递归计数逻辑，保证目录数量一致。
   const recursiveCounts = useMemo(
-    () => computeRecursiveFolderCounts(folders.filter((f) => f.scope === "personal" && f.kind === "normal")),
+    () => computeRecursiveFolderCounts(folders),
     [folders],
   );
 
@@ -604,7 +503,6 @@ function AssetsView() {
   }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t, lang]);
 
   const showFolderGrid = typeFilter.length === 0 && !search.trim();
-  const hasContent = items.length > 0 || (showFolderGrid ? gridFolders.length : 0) > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -627,7 +525,7 @@ function AssetsView() {
           content={
             <div className="menu-popover asset-filter-popover">
               <div style={{ padding: "2px 12px 4px", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
-              {ASSET_STYLE_TYPES.map((st) => (
+              {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
                 <label key={st.key} className="filter-row">
                   <Checkbox
                     checked={typeFilter.includes(st.key)}
@@ -704,61 +602,25 @@ function AssetsView() {
         })}
       </div>
 
-      {/* 资产网格 */}
+      {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理 */}
       <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3" style={{ scrollbarGutter: "stable" }}>
-        {loading && items.length === 0 ? (
-          <div className="flex items-center justify-center h-full min-h-[200px]">
-            <LoadingOutlined style={{ fontSize: 18, color: "var(--canvas-text-dim)" }} />
-          </div>
-        ) : loadError && items.length === 0 ? (
-          <div className="flex items-center justify-center h-full min-h-[200px]">
-            <button
-              onClick={retryLoad}
-              className="text-xs cursor-pointer bg-transparent border-0"
-              style={{ color: "var(--canvas-text-dim)" }}
-            >
-              {t("asset.retry")}
-            </button>
-          </div>
-        ) : !hasContent ? (
-          <div className="flex items-center justify-center h-full min-h-[200px]">
-            <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</span>} />
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))" }}>
-              {showFolderGrid && gridFolders.map((folder) => (
-                <div
-                  key={folder.id}
-                  onClick={() => { setTypeFilter([]); setActiveFolderId(folder.id); }}
-                  className="relative group rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-1"
-                  style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
-                >
-                  <FolderOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.2)" }} />
-                  <span className="text-white/60 text-[11px] px-1 text-center truncate w-full">{folder.name}</span>
-                  {folder.count > 0 && (
-                    <span className="absolute top-1.5 right-2 text-[10px] px-1 rounded bg-white/10" style={{ color: "rgba(255,255,255,0.6)" }}>{folder.count}</span>
-                  )}
-                </div>
-              ))}
-              {items.map((asset) => (
-                <AssetThumbCard key={asset.id} asset={asset} onInsert={() => handleInsertCanvas(asset)} />
-              ))}
-            </div>
-            <div ref={sentinelRef} className="flex items-center justify-center py-3">
-              {loadingMore && <LoadingOutlined style={{ color: "var(--canvas-text-dim)" }} />}
-              {!loadingMore && loadError && (
-                <button
-                  onClick={() => fetchNextPageRef.current()}
-                  className="text-xs cursor-pointer bg-transparent border-0"
-                  style={{ color: "var(--canvas-text-dim)" }}
-                >
-                  {t("asset.retry")}
-                </button>
-              )}
-            </div>
-          </>
-        )}
+        <AssetGrid
+          assets={items}
+          folders={showFolderGrid ? gridFolders : undefined}
+          folderCounts={recursiveCounts}
+          compact
+          showActions={false}
+          showHoverPreview
+          hoverPreviewAnchorX={DRAWER_WIDTH}
+          onInsertCanvas={handleInsertCanvas}
+          onEnterFolder={(folder) => setActiveFolderId(folder.id)}
+          loading={loading}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={loadMore}
+          loadError={loadError}
+          onRetry={reload}
+        />
       </div>
 
       {/* 底部统计 */}
@@ -766,7 +628,7 @@ function AssetsView() {
         className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
         style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
       >
-        {activeFolderId === null && typeFilter.length === 0 ? (
+        {activeFolderId === null && typeFilter.length === 0 && !search.trim() ? (
           <>
             <FolderOpenOutlined />
             <span>{gridFolders.length} {t("asset.foldersLabel")}</span>
@@ -782,110 +644,3 @@ function AssetsView() {
   );
 }
 
-// ── 资产缩略图卡片 ──
-function AssetThumbCard({ asset, onInsert }: { asset: AssetItem; onInsert: () => void }) {
-  const { t } = useTranslation();
-  const preview = useAssetHoverPreview(DRAWER_WIDTH);
-  const sourceUrl = asset.sourceUrl;
-  const isVideo = asset.mediaType === "video";
-  const isAudio = asset.mediaType === "audio";
-  const [imgError, setImgError] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const imgSrc = (() => {
-    if (isAudio) return "";
-    const u = sourceUrl;
-    return u && u.includes('/api/files/') ? `${u}?w=160` : u || "";
-  })();
-
-  const stopAudio = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    setPlaying(false);
-  }, []);
-
-  const togglePlay = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!sourceUrl) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(sourceUrl);
-      audioRef.current.addEventListener("ended", () => setPlaying(false));
-    }
-    if (playing) {
-      stopAudio();
-    } else {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-      setPlaying(true);
-    }
-  }, [sourceUrl, playing, stopAudio]);
-
-  const handleCardLeave = useCallback(() => {
-    preview.onLeave();
-    if (playing) stopAudio();
-  }, [preview, playing, stopAudio]);
-
-  const formatDate = (ts: number) =>
-    `${new Date(ts).getFullYear()}-${String(new Date(ts).getMonth() + 1).padStart(2, "0")}-${String(new Date(ts).getDate()).padStart(2, "0")}`;
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInsert(); } },
-    [onInsert],
-  );
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div
-        tabIndex={0}
-        role="button"
-        aria-label={t("asset.send") + " " + asset.name}
-        onKeyDown={handleKeyDown}
-        onMouseEnter={(e) => { if (sourceUrl) preview.onEnter(asset, e); }}
-        onMouseLeave={handleCardLeave}
-        className="group relative rounded-lg overflow-hidden border border-white/10 hover:border-white/40 transition-all cursor-pointer"
-        style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
-      >
-        {/* Hover overlay — send to canvas */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-lg z-10">
-          <button
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
-            onClick={(e) => { e.stopPropagation(); onInsert(); }}
-          >
-            <PlusOutlined style={{ fontSize: 14 }} />
-          </button>
-        </div>
-        {imgSrc && !imgError ? (
-          <img src={imgSrc} alt={asset.name} className="w-full h-full object-cover" loading="lazy" onError={() => setImgError(true)} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-white/15 text-2xl font-bold">
-            {isVideo ? "VID" : isAudio ? <WaveIcon style={{ fontSize: 28 }} /> : "IMG"}
-          </div>
-        )}
-        {isVideo && !imgError && (
-          <div className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded bg-black/50">
-            <VideoCameraOutlined style={{ fontSize: 10, color: "rgba(255,255,255,0.8)" }} />
-          </div>
-        )}
-        {/* 底部信息栏：标题 + 日期（音频右侧含播放/停止按钮） */}
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg z-10">
-          <div className="flex items-center gap-1">
-            <span className="text-white/90 text-[10px] truncate font-medium flex-1 min-w-0">{asset.name}</span>
-            {isAudio && (
-              <button
-                className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer"
-                onClick={togglePlay}
-              >
-                {playing ? <PauseCircleFilled style={{ fontSize: 14 }} /> : <PlayCircleFilled style={{ fontSize: 14 }} />}
-              </button>
-            )}
-          </div>
-          <div className="text-white/40 text-[9px]">{formatDate(asset.createdAt)}</div>
-        </div>
-      </div>
-      <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-    </div>
-  );
-}

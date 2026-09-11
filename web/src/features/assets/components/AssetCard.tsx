@@ -17,8 +17,16 @@ import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetItem } from "@/features/assets/types";
 
+import { AssetHoverPreview, useAssetHoverPreview } from "./AssetHoverPreview";
+
 interface Props {
   asset: AssetItem;
+  /** 隐藏更多菜单后，卡片只保留插入画布能力，适合抽屉场景。 */
+  showActions?: boolean;
+  /** 是否启用悬浮大图预览，保持抽屉既有的快速查看体验。 */
+  showHoverPreview?: boolean;
+  /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
+  hoverPreviewAnchorX?: number;
   selected?: boolean;
   onToggleSelect?: (asset: AssetItem) => void;
   onInsertCanvas?: (asset: AssetItem) => void;
@@ -26,9 +34,20 @@ interface Props {
   onDelete?: (asset: AssetItem) => void;
 }
 
-export default function AssetCard({ asset, selected, onToggleSelect, onInsertCanvas, onRename, onDelete }: Props) {
+export default function AssetCard({
+  asset,
+  showActions = true,
+  showHoverPreview = false,
+  hoverPreviewAnchorX = 0,
+  selected,
+  onToggleSelect,
+  onInsertCanvas,
+  onRename,
+  onDelete,
+}: Props) {
   const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
+  const preview = useAssetHoverPreview(hoverPreviewAnchorX);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [playing, setPlaying] = useState(false);
@@ -100,9 +119,18 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
   };
 
   const handleCardLeave = () => {
+    preview.onLeave();
     if (playing) {
       stopAudio();
     }
+  };
+
+  /** 卡片保留键盘操作：弹窗内用于选中，抽屉内没有批量选中时用于插入画布。 */
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    if (onToggleSelect) onToggleSelect(asset);
+    else onInsertCanvas?.(asset);
   };
 
   const formatDate = (ts: number) => {
@@ -112,6 +140,10 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
 
   return (
     <div
+      tabIndex={0}
+      role="button"
+      aria-label={asset.name}
+      onKeyDown={handleKeyDown}
       className={`relative group rounded-lg border transition-all cursor-pointer ${selected ? "border-transparent" : "border-white/10 hover:border-white/30"}`}
       style={{
         background: "var(--canvas-bg-elevated)",
@@ -120,6 +152,7 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
         borderWidth: selected ? 2 : 1,
       }}
       onMouseLeave={handleCardLeave}
+      onMouseEnter={(event) => { if (showHoverPreview && asset.sourceUrl) preview.onEnter(asset, event); }}
       onClick={(e) => {
         // Only trigger selection when clicking the card body, not menu buttons
         const target = e.target as HTMLElement;
@@ -189,21 +222,25 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
         </button>
       </div>
 
-      {/* More menu button + dropdown */}
-      <div
-        className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-        onMouseEnter={handleMenuEnter}
-        onMouseLeave={handleMenuLeave}
-      >
-        <button
-          ref={triggerRef}
-          className="w-7 h-7 flex items-center justify-center rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors cursor-pointer"
-          onMouseEnter={handleMenuEnter}
-        >
-          <MoreOutlined />
-        </button>
+      {showHoverPreview && (
+        <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
+      )}
 
-        {menuOpen && createPortal(
+      {showActions && (
+        <div
+          className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+          onMouseEnter={handleMenuEnter}
+          onMouseLeave={handleMenuLeave}
+        >
+          <button
+            ref={triggerRef}
+            className="w-7 h-7 flex items-center justify-center rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors cursor-pointer"
+            onMouseEnter={handleMenuEnter}
+          >
+            <MoreOutlined />
+          </button>
+
+          {menuOpen && createPortal(
           <div
             className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg border"
             onMouseEnter={handleMenuEnter}
@@ -225,8 +262,9 @@ export default function AssetCard({ asset, selected, onToggleSelect, onInsertCan
             <MenuItem onClick={handleDelete}><DeleteOutlined /> {t("common.delete")}</MenuItem>
           </div>,
           layerOverlay || document.body
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Bottom info bar */}
       <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg pointer-events-none">
