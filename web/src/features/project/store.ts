@@ -183,7 +183,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     void (async () => {
       try {
-        const res = await projectApi.updateProject(id, { name, baseRevision });
+        let res = await projectApi.updateProject(id, { name, baseRevision });
+
+        // 409 表示本地版本落后；重命名是幂等更新，可同步版本后立即重试一次，
+        // 避免用户下一次画布保存先吃一次无意义的版本冲突。
+        if (res.code === 409 && typeof res.ctx?.revision === "number") {
+          const currentRevision = res.ctx.revision;
+          get().updateProjectRevision(id, currentRevision);
+          res = await projectApi.updateProject(id, { name, baseRevision: currentRevision });
+        }
+
+        // 第二次仍然冲突说明服务端状态已经不可预判；刷新一次本地项目，
+        // 让 revision 和名称回到服务端事实，再交给用户重新输入。
+        if (res.code === 409) {
+          await get().refreshProject(id);
+        }
+
         if (res.code === 200 && typeof res.data?.revision === "number") {
           get().updateProjectRevision(id, res.data.revision);
           return;
