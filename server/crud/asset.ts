@@ -53,9 +53,29 @@ async function getOrCreateUncategorizedFolder(
   });
   if (existing) return existing;
 
-  return tx.assetFolder.create({
-    data: { userId, scope, name: "Uncategorized", kind: "uncategorized", parentId: null },
-  });
+  try {
+    return await tx.assetFolder.create({
+      data: { userId, scope, name: "Uncategorized", kind: "uncategorized", parentId: null },
+    });
+  } catch (error) {
+    if (!isUncategorizedFolderUniqueError(error)) throw error;
+
+    const raced = await tx.assetFolder.findFirst({
+      where: { userId, scope, kind: "uncategorized" },
+    });
+    if (!raced) throw error;
+    return raced;
+  }
+}
+
+/** 判断唯一约束冲突是否来自「未分类」目录的固定索引。 */
+function isUncategorizedFolderUniqueError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+  const target = error.meta?.target;
+  const targetText = Array.isArray(target) ? target.join(":") : String(target ?? "");
+  return targetText.includes("uncategorized");
 }
 
 /** 校验目录归属与 scope，避免任意目录 ID 越权或跨库移动。 */
@@ -489,6 +509,11 @@ export async function listSourceUrls(userId: number, scope = "personal") {
 
 /** 初始化资产库：固定目录、来源集合和总数一次返回。 */
 export async function getAssetLibrarySummary(userId: number, scope = "personal") {
+  if (scope === "personal") {
+    await prisma.$transaction(async (tx) => {
+      await getOrCreateUncategorizedFolder(tx, userId, scope);
+    });
+  }
   const folders = await getFolders(userId, scope);
   const sourceUrls = await listSourceUrls(userId, scope);
   const totalCount = folders.reduce((total, folder) => total + folder.count, 0);
