@@ -79,6 +79,39 @@ describe("project store 删除与列表", () => {
     expect(mocks.updateProject).toHaveBeenNthCalledWith(2, "p1", { name: "A2", baseRevision: 5 });
   });
 
+  it("重命名重试仍冲突时刷新服务端项目并提示错误", async () => {
+    mocks.updateProject
+      .mockResolvedValueOnce({ code: 409, data: null, msg: "conflict", ctx: { revision: 5 } })
+      .mockResolvedValueOnce({ code: 409, data: null, msg: "conflict", ctx: { revision: 6 } });
+    mocks.getProject.mockResolvedValue({
+      code: 200,
+      data: { id: "p1", name: "Server A", revision: 6, updatedAt: new Date(0).toISOString(), canvasData: {} },
+      msg: "",
+    });
+
+    useProjectStore.getState().renameProject("p1", "A2");
+
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+    expect(mocks.getProject).toHaveBeenCalledWith("p1");
+    const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(project?.name).toBe("Server A");
+    expect(project?.revision).toBe(6);
+  });
+
+  it("重命名重试仍冲突且刷新失败时同步冲突响应中的版本", async () => {
+    mocks.updateProject
+      .mockResolvedValueOnce({ code: 409, data: null, msg: "conflict", ctx: { revision: 5 } })
+      .mockResolvedValueOnce({ code: 409, data: null, msg: "conflict", ctx: { revision: 6 } });
+    mocks.getProject.mockResolvedValue({ code: 500, data: null, msg: "server error" });
+
+    useProjectStore.getState().renameProject("p1", "A2");
+
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+    const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(project?.name).toBe("A");
+    expect(project?.revision).toBe(6);
+  });
+
   it("删除失败时把项目放回列表", async () => {
     mocks.deleteProject.mockResolvedValue(failRes);
 

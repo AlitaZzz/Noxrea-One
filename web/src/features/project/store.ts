@@ -196,7 +196,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // 第二次仍然冲突说明服务端状态已经不可预判；刷新一次本地项目，
         // 让 revision 和名称回到服务端事实，再交给用户重新输入。
         if (res.code === 409) {
-          await get().refreshProject(id);
+          // 先保留第二次冲突响应中的最新版本，即使项目详情刷新失败，
+          // 本地也不至于继续带着过期 revision 发起后续保存。
+          if (typeof res.ctx?.revision === "number") {
+            get().updateProjectRevision(id, res.ctx.revision);
+          }
+          const fresh = await get().refreshProject(id);
+          if (!fresh && prevName !== undefined) {
+            set((s) => ({
+              projects: s.projects.map((p) => (p.id === id ? { ...p, name: prevName } : p)),
+            }));
+          }
+          notifyError(resolveResultError(res, "project.rename_failed"));
+          return;
         }
 
         if (res.code === 200 && typeof res.data?.revision === "number") {
