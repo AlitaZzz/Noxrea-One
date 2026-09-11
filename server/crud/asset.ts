@@ -354,7 +354,6 @@ export async function updateAsset(
   updates: {
     name?: string;
     type?: string;
-    mediaType?: string;
     width?: number;
     height?: number;
     description?: string;
@@ -370,7 +369,6 @@ export async function updateAsset(
     const data: Prisma.AssetItemUpdateInput = { updatedAt: new Date() };
     if (updates.name !== undefined) data.name = updates.name;
     if (updates.type !== undefined) data.type = updates.type;
-    if (updates.mediaType !== undefined) data.mediaType = updates.mediaType;
     if (updates.width !== undefined) data.width = updates.width;
     if (updates.height !== undefined) data.height = updates.height;
     if (updates.description !== undefined) data.description = updates.description;
