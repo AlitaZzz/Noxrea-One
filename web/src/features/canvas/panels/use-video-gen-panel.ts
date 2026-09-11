@@ -6,9 +6,8 @@
  *
  * 参考排序架构（单一数据源 + 派生合并）：
  * - 存在性：refImages / upstreamAudio / upstreamVideos 全部实时派生自 edges，不落本地状态；
- * - 排序偏好：genSettings.refOrder / refAudioOrder / refVideoOrder 仅持久化用户排序，
- *   唯一写者是拖拽排序事件（writeOrderPref），本 hook 只读不写、断线不触碰偏好；
- * - 显示顺序：mergeOrder(偏好, 实时列表) 纯派生，任意时刻首帧即正确。
+ * - 显示顺序：refOrder / refAudioOrder / refVideoOrder 各自 mergeOrder(偏好, 实时列表) 纯派生，
+ *   任意时刻首帧即正确；排序只在同类型内生效，跨类型拖放被禁止。
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -42,11 +41,11 @@ export interface VideoGenPanelDerived {
   audioOrder: string[];
   /** 视频参考显示顺序（排序偏好 + 连线派生合并） */
   refVideoOrder: string[];
+  /** 上游 TEXT 节点引用（按连线顺序） */
   upstreamTexts: { id: string; content: string }[];
   upstreamAudio: { id: string; src: string; label: string }[];
   /** 上游 VIDEO 节点引用（参考视频） */
   upstreamVideos: { id: string; src: string; label: string }[];
-  audioSrcLabel: Map<string, string>;
   references: ReferenceItem[];
   finalPrompt: string;
   isGenerating: boolean;
@@ -87,7 +86,11 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       .filter((txt) => txt.content !== "" && !seen.has(txt.id) && seen.add(txt.id));
   }, [nodeId, canvasNodes, canvasEdges]);
 
-  // 最终 prompt：上游文本 + 当前 prompt。
+  // ── 排序偏好（genSettings，响应式只读）──
+  const genSettings = useGenSettings(nodeId);
+  const prefs = genSettings as Partial<VideoGenSettings> | undefined;
+
+  // 最终 prompt：上游文本（按连线顺序）+ 当前 prompt。文本参考不可拖动，不参与排序。
   const finalPrompt = useMemo(() => {
     return [...upstreamTexts.map((txt) => txt.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
@@ -114,15 +117,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       );
   }, [nodeId, canvasNodes, canvasEdges]);
 
-  // 上游音频 src→label 映射，用于回填持久化顺序的 label。
-  const audioSrcLabel = useMemo(() => {
-    const m = new Map<string, string>();
-    upstreamAudio.forEach((a) => {
-      if (a.src) m.set(a.src, a.label);
-    });
-    return m;
-  }, [upstreamAudio]);
-
   // Upstream reference videos (VIDEO 节点，按连接顺序，按节点 id 与 src 双重去重)。
   const upstreamVideos = useMemo(() => {
     const seenIds = new Set<string>();
@@ -145,9 +139,17 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       );
   }, [nodeId, canvasNodes, canvasEdges]);
 
+  // 上游音频 src→label 映射，用于 @ 引用回填展示名。
+  const audioSrcLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    upstreamAudio.forEach((a) => {
+      if (a.src) m.set(a.src, a.label);
+    });
+    return m;
+  }, [upstreamAudio]);
+
   // ── 参考排序：偏好（genSettings，响应式只读）+ 实时列表，纯派生合并 ──
-  const genSettings = useGenSettings(nodeId);
-  const prefs = genSettings as Partial<VideoGenSettings> | undefined;
+  // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。
   const refOrderPref = prefs?.refOrder ?? EMPTY_ORDER;
   const audioOrderPref = prefs?.refAudioOrder ?? EMPTY_ORDER;
   const refVideoOrderPref = prefs?.refVideoOrder ?? EMPTY_ORDER;
@@ -159,8 +161,7 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
   const audioOrder = useMemo(() => mergeOrder(audioOrderPref, audioSrcs), [audioOrderPref, audioSrcs]);
   const refVideoOrder = useMemo(() => mergeOrder(refVideoOrderPref, videoSrcs), [refVideoOrderPref, videoSrcs]);
 
-  // 构建 @ 提及的参考列表。顺序与参考区一致：音频 -> 视频 -> 图片；
-  // 各自编号基于对应 order（audioOrder / refVideoOrder / refOrder），排序后编号随之稳定。
+  // 构建 @ 提及的参考列表：顺序与参考区一致（音频 → 图片 → 视频），编号按各自 order
   const references = useMemo<ReferenceItem[]>(() => {
     const videoLabelMap = new Map(upstreamVideos.map((v) => [v.src, v.label]));
     const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
@@ -170,6 +171,12 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       kind: "audio",
       label: audioSrcLabel.get(src) || "",
     }));
+    const images: ReferenceItem[] = refOrder.map((src, i) => ({
+      src,
+      thumbnail: src.includes("/api/files/") ? `${src}?w=128` : src,
+      index: i,
+      kind: "image",
+    }));
     const videos: ReferenceItem[] = refVideoOrder.map((src, i) => ({
       src,
       thumbnail: src,
@@ -177,14 +184,8 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       kind: "video",
       label: videoLabelMap.get(src) || "",
     }));
-    const images: ReferenceItem[] = refOrder.map((src, i) => ({
-      src,
-      thumbnail: src.includes("/api/files/") ? `${src}?w=128` : src,
-      index: i,
-      kind: "image",
-    }));
-    return [...audios, ...videos, ...images];
-  }, [refOrder, audioOrder, refVideoOrder, audioSrcLabel, upstreamVideos]);
+    return [...audios, ...images, ...videos];
+  }, [audioOrder, refOrder, refVideoOrder, audioSrcLabel, upstreamVideos]);
 
   // Button disabled state derived from persistent node.data.task_status。
   const isGenerating = useMemo(() => {
@@ -263,7 +264,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     upstreamTexts,
     upstreamAudio,
     upstreamVideos,
-    audioSrcLabel,
     references,
     finalPrompt,
     isGenerating,

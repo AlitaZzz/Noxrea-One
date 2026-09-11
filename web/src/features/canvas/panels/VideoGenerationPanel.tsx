@@ -7,17 +7,13 @@
 
 import { ArrowUpOutlined, CloseOutlined, DownOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Popover, Tooltip } from "antd";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
-import { StopIcon } from "@/components/ui/icons/media/StopIcon";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
 import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
 import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
 import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -30,24 +26,27 @@ import { useRefUpload } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
 import { apiRaw } from "@/lib/api/client";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
-import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 
+import AudioRefCard from "../shared/AudioRefCard";
+import ImageRefCard from "../shared/ImageRefCard";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
-import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
+import RefGroupDivider from "../shared/RefGroupDivider";
+import TextRefChip from "../shared/TextRefChip";
+import VideoRefCard from "../shared/VideoRefCard";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
 
 const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
-  const reveal = useRevealCanvasNode();
   const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = useMemo(() => providers.flatMap((c) =>
@@ -87,12 +86,10 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const [seconds, setSeconds] = useState(saved.seconds);
   const [generateAudio, setGenerateAudio] = useState(saved.generateAudio);
   const [n, setN] = useState(saved.n);
-  const [hoverImg, setHoverImg] = useState<string | null>(null);
-  const [hoverVideo, setHoverVideo] = useState<string | null>(null);
-  const [videoDragOver, setVideoDragOver] = useState<number | null>(null);
-  const [isRefDragging, setIsRefDragging] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [refModeOpen, setRefModeOpen] = useState(false);
+  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
+  const [isRefDragging, setIsRefDragging] = useState(false);
 
   // 查找当前模型的参数配置（订阅 modelParamsCache：缓存晚于挂载到达时能触发重算）
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
@@ -158,12 +155,43 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 参考存在性与显示顺序均为纯派生：存在性来自连线，顺序 = 排序偏好(genSettings) + 连线合并，
   // 无本地同步状态、首帧即正确；排序偏好由拖拽排序事件（writeOrderPref）即时持久化。
   const {
-    refImages, refOrder, audioOrder, refVideoOrder,
-    upstreamTexts, upstreamAudio, upstreamVideos, audioSrcLabel, references, finalPrompt, isGenerating,
+    refOrder, audioOrder, refVideoOrder,
+    upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
     elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
   } = useVideoGenPanel({
     nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode,
   });
+
+  // 同类内拖拽排序（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
+  const handleAudioReorder = useCallback((dragged: string, target: string) => {
+    const list = [...audioOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refAudioOrder: list });
+  }, [audioOrder, nodeId]);
+
+  const handleImageReorder = useCallback((dragged: string, target: string) => {
+    const list = [...refOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refOrder: list });
+  }, [refOrder, nodeId]);
+
+  const handleVideoReorder = useCallback((dragged: string, target: string) => {
+    const list = [...refVideoOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refVideoOrder: list });
+  }, [refVideoOrder, nodeId]);
 
   // 参考模式可用范围：
   //   视频或音频 → 仅全能参考；1 张图 → 图生/全能；2 张图 → 首尾帧/全能；≥3 张图 → 仅全能参考；无图/视频/音频（仅文本或空）→ 只能文生视频
@@ -183,21 +211,71 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     setRefMode(allowedRefModes.includes("full") ? "full" : "text");
   }
 
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-
-  // 音频拖拽排序（仅音频之间）：事件驱动写入排序偏好并即时持久化
-  const handleAudioReorder = useCallback((dragged: string, target: string) => {
-    const list = [...audioOrder];
-    const fromIdx = list.indexOf(dragged);
-    const toIdx = list.indexOf(target);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-    writeOrderPref(nodeId, { refAudioOrder: list });
-  }, [audioOrder, nodeId]);
-
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, provider: null });
   const { notification } = App.useApp();
+
+  // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
+  // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
+  const refGroups: { key: string; content: React.ReactNode }[] = [];
+  if (upstreamTexts.length > 0) {
+    refGroups.push({
+      key: "text",
+      content: upstreamTexts.map((txt) => (
+        <TextRefChip key={`text-${txt.id}`} id={txt.id} content={txt.content} nodeId={nodeId} />
+      )),
+    });
+  }
+  if (audioOrder.length > 0) {
+    refGroups.push({
+      key: "audio",
+      content: audioOrder.map((src, i) => {
+        const aud = upstreamAudio.find((a) => a.src === src);
+        if (!aud) return null;
+        return (
+          <AudioRefCard
+            key={`audio-${aud.id}`}
+            audio={aud}
+            nodeId={nodeId}
+            index={i}
+            onReorder={handleAudioReorder}
+            onDragStateChange={setIsRefDragging}
+          />
+        );
+      }),
+    });
+  }
+  if (refOrder.length > 0) {
+    refGroups.push({
+      key: "image",
+      content: refOrder.map((img, i) => (
+        <ImageRefCard
+          key={img}
+          src={img}
+          nodeId={nodeId}
+          index={i}
+          onReorder={handleImageReorder}
+          onDragStateChange={setIsRefDragging}
+          dragActive={isRefDragging}
+        />
+      )),
+    });
+  }
+  if (refVideoOrder.length > 0) {
+    refGroups.push({
+      key: "video",
+      content: refVideoOrder.map((vid, i) => (
+        <VideoRefCard
+          key={`video-${vid}`}
+          src={vid}
+          nodeId={nodeId}
+          index={i}
+          onReorder={handleVideoReorder}
+          onDragStateChange={setIsRefDragging}
+          dragActive={isRefDragging}
+        />
+      )),
+    });
+  }
 
   const is: React.CSSProperties = {
     background: "transparent", border: "none", color: "var(--canvas-text)", borderRadius: 4, fontSize: 13,
@@ -243,7 +321,10 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     }
   };
 
-  /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
+  /**
+   * 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点。
+   * 参考连上后 allowedRefModes 会包含 full，下面的参考方式纠偏会自动切出「文生视频」。
+   */
   const handleRefUpload = useRefUpload(nodeId);
 
   /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
@@ -318,204 +399,36 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         width: 640,
       }}
     >
-      {refMode !== "text" && (
+      {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
+          文本参考不可拖动，按连线顺序排在首位 */}
       <div
         className="flex gap-2 flex-wrap"
         onDragOver={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-audio')) {
-            e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/文本/空白一律禁止
+          if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
+            e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
             return;
           }
           e.dataTransfer.dropEffect = 'move';
         }}
-        onDragLeave={() => setDragOverIdx(null)}
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setDragOverIdx(null);
         }}
       >
-          {/* 上游 Text 节点 - 不可拖动，排在最前 */}
-          {upstreamTexts.map((txt) => (
-            <Tooltip
-              key={`text-${txt.id}`}
-              title={
-                <div style={{ maxWidth: 320, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {txt.content}
-                </div>
-              }
-            >
-              <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
-                onDoubleClick={() => {
-                  const n = useCanvasStore.getState().nodes.find((x) => x.id === txt.id);
-                  if (n) reveal(n);
-                }}>
-                <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
-                <Button type="text" size="small"
-                  className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                  onClick={() => {
-                    const store = useCanvasStore.getState();
-                    const edge = store.edges.find((e) => e.target === nodeId && e.source === txt.id);
-                    if (edge) store.removeEdges([edge.id]);
-                  }}>✕</Button>
-              </div>
-            </Tooltip>
-          ))}
-          {/* 上游 Audio 节点 - 参考音频，可拖动排序（仅音频之间） */}
-          {[...upstreamAudio]
-            .sort((a, b) => {
-              const ai = audioOrder.indexOf(a.src);
-              const bi = audioOrder.indexOf(b.src);
-              return (ai === -1 ? Number.MAX_SAFE_INTEGER : ai) - (bi === -1 ? Number.MAX_SAFE_INTEGER : bi);
-            })
-            .map((aud, i) => (
-              <AudioRefCard
-                key={`audio-${aud.id}`}
-                audio={aud}
-                nodeId={nodeId}
-                index={i}
-                onReorder={handleAudioReorder}
-                onDragStateChange={setIsRefDragging}
-              />
-            ))}
-          {/* 上游 Video 节点 - 参考视频，可移除 */}
-          {refVideoOrder.map((vid, i) => (
-            <div key={`video-${vid}`} className={`relative group h-16 w-16 rounded transition-shadow cursor-grab active:cursor-grabbing ${videoDragOver === i ? 'ring-2 ring-white shadow-lg' : ''}`}
-              style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
-              draggable
-              onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, vid); if (n) reveal(n); }}
-              onDragStart={(e) => {
-                e.dataTransfer.setData('application/x-ref-video', vid);
-                e.dataTransfer.setData('text/plain', vid);
-                e.dataTransfer.effectAllowed = 'move';
-                setIsRefDragging(true);
-                // 以首帧视频为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
-                const el = (e.currentTarget as HTMLElement).querySelector('video');
-                if (el) e.dataTransfer.setDragImage(el, 32, 32);
-              }}
-              onDragEnd={() => setIsRefDragging(false)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!e.dataTransfer.types.includes('application/x-ref-video')) {
-                  e.dataTransfer.dropEffect = 'none'; // 图片不可放到视频位置
-                  return;
-                }
-                e.dataTransfer.dropEffect = 'move';
-                setVideoDragOver(i);
-              }}
-              onDragLeave={() => setVideoDragOver(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setVideoDragOver(null);
-                const dragged = e.dataTransfer.getData('text/plain');
-                if (!dragged || dragged === vid) return;
-                if (!refVideoOrder.includes(dragged)) return; // 仅视频之间排序
-                const list = [...refVideoOrder];
-                const fromIdx = list.indexOf(dragged);
-                const toIdx = list.indexOf(vid);
-                if (fromIdx === -1 || fromIdx === toIdx) return;
-                const [moved] = list.splice(fromIdx, 1);
-                list.splice(toIdx, 0, moved);
-                writeOrderPref(nodeId, { refVideoOrder: list });
-              }}
-              onMouseEnter={() => setHoverVideo(vid)}
-              onMouseLeave={() => setHoverVideo(null)}>
-              {/* 第一帧缩略：#t=0.1 片段定位首帧，preload=metadata 避免预载全片 */}
-              <video src={`${vid}#t=0.1`} className="w-full h-full object-cover rounded pointer-events-none" muted preload="metadata" playsInline draggable={false} />
-              {hoverVideo === vid && !isRefDragging && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-                  <video src={vid} className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }} autoPlay muted loop playsInline />
-                </div>
-              )}
-              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refVideoLabel", { index: i + 1 })}</span>
-              <Button type="text" size="small"
-                className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                onClick={() => {
-                  // 删除参考 = 断开连线（与图片/音频参考一致），显示顺序随后自动派生
-                  const store = useCanvasStore.getState();
-                  const edge = store.edges.find((e) => {
-                    if (e.target !== nodeId) return false;
-                    const srcNode = store.nodes.find((n) => n.id === e.source);
-                    return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === vid;
-                  });
-                  if (edge) store.removeEdges([edge.id]);
-                }}>✕</Button>
-            </div>
-          ))}
-          {refOrder.map((img, i) => (
-            <div
-              key={img}
-              draggable
-              onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, img); if (n) reveal(n); }}
-              onDragStart={(e) => {
-                e.dataTransfer.setData('application/x-ref-image', img);
-                e.dataTransfer.setData('text/plain', img);
-                e.dataTransfer.effectAllowed = 'move';
-                setIsRefDragging(true);
-                // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
-                const el = (e.currentTarget as HTMLElement).querySelector('img');
-                if (el) e.dataTransfer.setDragImage(el, 32, 32);
-              }}
-              onDragEnd={() => setIsRefDragging(false)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!e.dataTransfer.types.includes('application/x-ref-image')) {
-                  e.dataTransfer.dropEffect = 'none'; // 仅图片可放到图片位置
-                  return;
-                }
-                e.dataTransfer.dropEffect = 'move';
-                setDragOverIdx(i);
-              }}
-              onDragLeave={() => setDragOverIdx(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDragOverIdx(null);
-                const dragged = e.dataTransfer.getData('text/plain');
-                if (!dragged || dragged === img) return;
-                if (refVideoOrder.includes(dragged)) return; // 视频不参与图片排序
-                const list = [...refOrder];
-                const fromIdx = list.indexOf(dragged);
-                const toIdx = list.indexOf(img);
-                if (fromIdx === -1 || fromIdx === toIdx) return;
-                const [moved] = list.splice(fromIdx, 1);
-                list.splice(toIdx, 0, moved);
-                writeOrderPref(nodeId, { refOrder: list });
-              }}
-              className="relative group"
-            >
-              <img src={img.includes('/api/files/') ? `${img}?w=128` : img} alt={`Ref ${i+1}`} draggable={false} className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? 'ring-2 ring-white shadow-lg' : ''}`}
-                onMouseEnter={() => setHoverImg(img)}
-                onMouseLeave={() => setHoverImg(null)} />
-              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refImageLabel", { index: i + 1 })}</span>
-            {hoverImg === img && !isRefDragging && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-                  <img src={img.includes('/api/files/') ? `${img}?w=640` : img} className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", objectFit: "contain" }} />
-                </div>
-              )}
-              <Button type="text" size="small"
-                className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                onClick={() => {
-                  const store = useCanvasStore.getState();
-                  const edge = store.edges.find((e) => {
-                    if (e.target !== nodeId) return false;
-                    const srcNode = store.nodes.find((n) => n.id === e.source);
-                    return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === img;
-                  });
-                  if (edge) store.removeEdges([edge.id]);
-                }}>✕</Button>
-            </div>
+          {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
+          {refGroups.map((group, i) => (
+            <Fragment key={group.key}>
+              {i > 0 && <RefGroupDivider />}
+              {group.content}
+            </Fragment>
           ))}
           {/* 添加参考：方形加号占位，与参考缩略图同行 */}
           <Tooltip title={t("common.reference")}>
             <Button size="small" type="text"
               className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-              style={{ width: 64, height: 64, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
+              style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
               onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
               onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
               onClick={handleRefUpload}>
@@ -523,7 +436,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </Button>
           </Tooltip>
         </div>
-      )}
       <MentionPrompt
         references={references}
         value={prompt}
@@ -646,145 +558,3 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
 export default VideoGenerationPanel;
 
-// 上游音频参考卡片：展示 label，悬停显示播放图标，点击播放/停止，移出停止，下次从头播放
-function AudioRefCard({
-  audio,
-  nodeId,
-  index,
-  onReorder,
-  onDragStateChange,
-}: {
-  audio: { id: string; src: string; label: string };
-  nodeId: string;
-  index: number;
-  onReorder: (dragged: string, target: string) => void;
-  onDragStateChange: (dragging: boolean) => void;
-}) {
-  const { t } = useTranslation();
-  const reveal = useRevealCanvasNode();
-  const [hovered, setHovered] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const stop = useCallback(() => {
-    const el = audioRef.current;
-    if (el) {
-      el.pause();
-      el.currentTime = 0; // 下次从头播放
-    }
-    setPlaying(false);
-  }, []);
-
-  const toggle = useCallback(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (playing) {
-      stop();
-    } else {
-      el.currentTime = 0;
-      void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-    }
-  }, [playing, stop]);
-
-  return (
-    <Tooltip title={audio.label || audio.src}>
-      <div
-        className={`relative group h-16 w-16 rounded flex items-center justify-center transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? 'ring-2 ring-white shadow-lg' : ''}`}
-        style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
-        draggable
-        onDoubleClick={() => {
-          const s = useCanvasStore.getState();
-          const n = s.nodes.find((x) => x.id === audio.id);
-          if (n) reveal(n);
-        }}
-        onDragStart={(e) => {
-          e.dataTransfer.setData('application/x-ref-audio', audio.src);
-          e.dataTransfer.setData('text/plain', audio.src);
-          e.dataTransfer.effectAllowed = 'move';
-          onDragStateChange(true);
-          // 锚定卡片中心，保证拖拽图像跟随鼠标
-          e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 32, 32);
-        }}
-        onDragEnd={() => onDragStateChange(false)}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!e.dataTransfer.types.includes('application/x-ref-audio')) {
-            e.dataTransfer.dropEffect = 'none'; // 仅音频可放到音频位置
-            return;
-          }
-          e.dataTransfer.dropEffect = 'move';
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDragOver(false);
-          const dragged = e.dataTransfer.getData('text/plain');
-          if (!dragged || dragged === audio.src) return;
-          onReorder(dragged, audio.src); // 内部按 audioOrder 校验，非音频自动忽略
-        }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => {
-          setHovered(false);
-          if (playing) stop();
-        }}
-      >
-        <WaveIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
-        <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refAudioLabel", { index: index + 1 })}</span>
-        {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
-        {hovered && (
-          <Button
-            type="text"
-            size="small"
-            aria-label={playing ? "停止" : "播放"}
-            className="!absolute inset-0 !m-auto !w-8 !h-8 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggle();
-            }}
-          >
-            {playing ? (
-              <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
-            ) : (
-              <PlayIcon style={{ color: "#fff", width: 16, height: 16 }} />
-            )}
-          </Button>
-        )}
-        {/* 播放中不悬停时也显示停止图标，便于随时停止 */}
-        {playing && !hovered && (
-          <Button
-            type="text"
-            size="small"
-            aria-label="停止"
-            className="!absolute inset-0 !m-auto !w-8 !h-8 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              stop();
-            }}
-          >
-            <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
-          </Button>
-        )}
-        <Button type="text" size="small"
-          className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-          onClick={() => {
-            const store = useCanvasStore.getState();
-            const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
-            if (edge) store.removeEdges([edge.id]);
-          }}>✕</Button>
-        <audio
-          ref={audioRef}
-          src={audio.src}
-          preload="none"
-          onEnded={() => setPlaying(false)}
-          onPause={() => {
-            if (audioRef.current && audioRef.current.currentTime === 0) setPlaying(false);
-          }}
-        />
-      </div>
-    </Tooltip>
-  );
-}

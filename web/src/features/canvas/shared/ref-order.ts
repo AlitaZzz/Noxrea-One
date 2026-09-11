@@ -6,6 +6,8 @@
  * - genSettings 中的 refOrder / refAudioOrder / refVideoOrder 仅作为「排序偏好」持久化，
  *   写者是拖拽排序事件（writeOrderPref）与手动连线事件（bumpRefOrderToTail），
  *   断开连线不触碰偏好；
+ * - 参考区按类型分组展示（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，
+ *   跨类型拖放一律禁止；文本参考不可拖动，按连线顺序展示；
  * - 「重连 = 重新入列」：用户手动（重新）连线时对应参考一律置尾（bumpRefOrderToTail），
  *   断开再连排到最后；
  * - 撤销/重做整体恢复快照（含排序偏好），精确回到操作前状态——被断开的参考
@@ -16,13 +18,20 @@
 "use client";
 
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { AnyNode, MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
+import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
 
 /** 空序哨兵：模块级常量保证 selector 返回引用稳定，避免误重渲染 */
 export const EMPTY_ORDER: readonly string[] = [];
 
+/**
+ * 可写入 genSettings 的排序字段：按参考类型分列（图 / 音 / 视频各一条，存 src）。
+ * 文本参考不参与排序（不可拖动），故无对应字段。
+ */
 type OrderField = "refOrder" | "refAudioOrder" | "refVideoOrder";
+
+/** 分列字段（遍历顺序与参考区分组一致：音频 → 图片 → 视频） */
+const ORDER_FIELDS: readonly OrderField[] = ["refAudioOrder", "refOrder", "refVideoOrder"];
 
 /** 参考类上游节点类型 → genSettings 排序字段 */
 const REF_FIELD_BY_TYPE: Record<string, OrderField> = {
@@ -58,7 +67,7 @@ export function mergeOrder(pref: readonly string[], live: readonly string[]): st
  */
 export function writeOrderPref(
   nodeId: string,
-  patch: Partial<Pick<VideoGenSettings, OrderField>>,
+  patch: Partial<Record<OrderField, string[]>>,
 ): void {
   const store = useCanvasStore.getState();
   const node = store.nodes.find((n) => n.id === nodeId);
@@ -124,7 +133,7 @@ export function bumpRefOrderToTail(newEdges: ReadonlyArray<{ source: string; tar
     const cur = (((targetNode.data as MediaGenFields | undefined)?.genSettings ?? { kind }) as Record<string, unknown>);
     const live = collectLiveRefs(store.nodes, store.edges, targetId);
     const patch: Partial<Record<OrderField, string[]>> = {};
-    for (const field of ["refOrder", "refAudioOrder", "refVideoOrder"] as const) {
+    for (const field of ORDER_FIELDS) {
       const addedSrcs = added[field];
       if (addedSrcs.length === 0) continue;
       const pref = (cur[field] as string[] | undefined) ?? [];

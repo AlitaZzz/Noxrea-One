@@ -1,16 +1,16 @@
 /**
  * 文本生成面板，挂在文本节点下方。
- * 负责提示词输入（支持 @ 引用其他节点）与文本模型选择，
- * 以流式方式接收生成结果并写回节点内容。
+ * 参考区接入四类上游，按类型分组展示：文本（拼进 prompt）→ 音频 → 图片 → 视频，
+ * 组间竖线分隔；排序只在同类型内生效（跨类型拖放禁止），多模态参考可 @ 引用。
+ * 负责提示词输入与文本模型选择，以流式方式接收生成结果并写回节点内容。
  */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -25,10 +25,14 @@ import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants"
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
+import AudioRefCard from "../shared/AudioRefCard";
+import ImageRefCard from "../shared/ImageRefCard";
 import MentionPrompt from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
-import { findReferenceNode, useRevealCanvasNode } from "../shared/reveal-node";
+import RefGroupDivider from "../shared/RefGroupDivider";
+import TextRefChip from "../shared/TextRefChip";
+import VideoRefCard from "../shared/VideoRefCard";
 
 interface Props {
   nodeId: string;
@@ -44,7 +48,6 @@ interface ModelOption {
 
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
-  const reveal = useRevealCanvasNode();
   const providers = useModelStore((s) => s.providers);
   const { notification } = App.useApp();
 
@@ -71,7 +74,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   const [prompt, setPrompt] = useState(saved.prompt);
   const [modelKey, setModelKey] = useState(saved.modelKey);
   const [modelOpen, setModelOpen] = useState(false);
-  const [hoverImg, setHoverImg] = useState<string | null>(null);
+  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
   // 模型列表异步到达后用正确值补齐 modelKey（同 ImageGenerationPanel）：
@@ -108,26 +111,125 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       .filter((t) => t.content !== "");
   }, [nodeId, canvasNodes, canvasEdges]);
 
-  // 最终 prompt = 上游文本内容 + 面板输入，按连接顺序拼接
+  // 上游 AUDIO 节点（参考音频，按连接顺序，按节点 id 与 src 双重去重）
+  const upstreamAudio = useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenSrcs = new Set<string>();
+    return canvasEdges
+      .filter((e) => e.target === nodeId)
+      .map((e) => canvasNodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.AUDIO)
+      .map((n) => ({
+        id: n.id,
+        src: ((n.data as { src?: string }).src || "").trim(),
+        label: ((n.data as { label?: string }).label || "").trim(),
+      }))
+      .filter(
+        (a) =>
+          a.src !== "" &&
+          !seenIds.has(a.id) &&
+          !seenSrcs.has(a.src) &&
+          (seenIds.add(a.id), seenSrcs.add(a.src), true),
+      );
+  }, [nodeId, canvasNodes, canvasEdges]);
+
+  // 上游 VIDEO 节点（参考视频，按连接顺序，按节点 id 与 src 双重去重）
+  const upstreamVideos = useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenSrcs = new Set<string>();
+    return canvasEdges
+      .filter((e) => e.target === nodeId)
+      .map((e) => canvasNodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.VIDEO)
+      .map((n) => ({
+        id: n.id,
+        src: ((n.data as { src?: string }).src || "").trim(),
+        label: ((n.data as { label?: string }).label || "").trim(),
+      }))
+      .filter(
+        (v) =>
+          v.src !== "" &&
+          !seenIds.has(v.id) &&
+          !seenSrcs.has(v.src) &&
+          (seenIds.add(v.id), seenSrcs.add(v.src), true),
+      );
+  }, [nodeId, canvasNodes, canvasEdges]);
+
+  // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
+  // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。
+  const genSettings = useGenSettings(nodeId);
+  const prefs = genSettings as Partial<TextGenSettings> | undefined;
+  const orderPref = prefs?.refOrder ?? EMPTY_ORDER;
+  const audioOrderPref = prefs?.refAudioOrder ?? EMPTY_ORDER;
+  const refVideoOrderPref = prefs?.refVideoOrder ?? EMPTY_ORDER;
+
+  const audioSrcs = useMemo(() => upstreamAudio.map((a) => a.src), [upstreamAudio]);
+  const videoSrcs = useMemo(() => upstreamVideos.map((v) => v.src), [upstreamVideos]);
+
+  const refOrder = useMemo(() => mergeOrder(orderPref, refImages), [orderPref, refImages]);
+  const audioOrder = useMemo(() => mergeOrder(audioOrderPref, audioSrcs), [audioOrderPref, audioSrcs]);
+  const refVideoOrder = useMemo(() => mergeOrder(refVideoOrderPref, videoSrcs), [refVideoOrderPref, videoSrcs]);
+
+  // 最终 prompt = 上游文本内容（按连线顺序）+ 面板输入
   const finalPrompt = useMemo(() => {
     return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
 
-  // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并
-  const genSettings = useGenSettings(nodeId);
-  const orderPref = (genSettings as Partial<TextGenSettings> | undefined)?.refOrder ?? EMPTY_ORDER;
-  const refOrder = useMemo(() => mergeOrder(orderPref, refImages), [orderPref, refImages]);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  // 同类内拖拽排序（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
+  const handleAudioReorder = useCallback((dragged: string, target: string) => {
+    const list = [...audioOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refAudioOrder: list });
+  }, [audioOrder, nodeId]);
 
-  // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）
+  const handleImageReorder = useCallback((dragged: string, target: string) => {
+    const list = [...refOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refOrder: list });
+  }, [refOrder, nodeId]);
+
+  const handleVideoReorder = useCallback((dragged: string, target: string) => {
+    const list = [...refVideoOrder];
+    const fromIdx = list.indexOf(dragged);
+    const toIdx = list.indexOf(target);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    writeOrderPref(nodeId, { refVideoOrder: list });
+  }, [refVideoOrder, nodeId]);
+
+  // 构建 @ 提及的参考列表：顺序与参考区一致（音频 → 图片 → 视频），编号按各自 order
   const references = useMemo<ReferenceItem[]>(() => {
-    return refOrder.map((src, i) => ({
+    const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
+      src,
+      thumbnail: src,
+      index: i,
+      kind: "audio",
+      label: upstreamAudio.find((a) => a.src === src)?.label || "",
+    }));
+    const images: ReferenceItem[] = refOrder.map((src, i) => ({
       src,
       thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
       index: i,
-      kind: "image" as const,
+      kind: "image",
     }));
-  }, [refOrder]);
+    const videos: ReferenceItem[] = refVideoOrder.map((src, i) => ({
+      src,
+      thumbnail: src,
+      index: i,
+      kind: "video",
+      label: upstreamVideos.find((v) => v.src === src)?.label || "",
+    }));
+    return [...audios, ...images, ...videos];
+  }, [audioOrder, refOrder, refVideoOrder, upstreamAudio, upstreamVideos]);
 
   const latestSettingsRef = useRef({ prompt, modelKey });
   useEffect(() => {
@@ -144,7 +246,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const cur = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { kind: "text", prompt, modelKey, refOrder: cur.refOrder ?? [] } },
+        {
+          genSettings: {
+            kind: "text",
+            prompt,
+            modelKey,
+            refOrder: cur.refOrder ?? [],
+            refAudioOrder: cur.refAudioOrder ?? [],
+            refVideoOrder: cur.refVideoOrder ?? [],
+          },
+        },
         undefined,
         { skipHistory: true },
       );
@@ -167,7 +278,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const cur: Partial<TextGenSettings> = savedGen ?? {};
       useCanvasStore.getState().updateNodeData(
         nodeId,
-        { genSettings: { kind: "text", prompt: latest.prompt, modelKey: latest.modelKey, refOrder: cur.refOrder ?? [] } },
+        {
+          genSettings: {
+            kind: "text",
+            prompt: latest.prompt,
+            modelKey: latest.modelKey,
+            refOrder: cur.refOrder ?? [],
+            refAudioOrder: cur.refAudioOrder ?? [],
+            refVideoOrder: cur.refVideoOrder ?? [],
+          },
+        },
         undefined,
         { skipHistory: true },
       );
@@ -183,8 +303,71 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     fontSize: 13,
   };
 
-  /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
-  const handleRefUpload = useRefUpload(nodeId);
+  // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
+  // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
+  const refGroups: { key: string; content: React.ReactNode }[] = [];
+  if (upstreamTexts.length > 0) {
+    refGroups.push({
+      key: "text",
+      content: upstreamTexts.map((txt) => (
+        <TextRefChip key={`text-${txt.id}`} id={txt.id} content={txt.content} nodeId={nodeId} />
+      )),
+    });
+  }
+  if (audioOrder.length > 0) {
+    refGroups.push({
+      key: "audio",
+      content: audioOrder.map((src, i) => {
+        const aud = upstreamAudio.find((a) => a.src === src);
+        if (!aud) return null;
+        return (
+          <AudioRefCard
+            key={`audio-${aud.id}`}
+            audio={aud}
+            nodeId={nodeId}
+            index={i}
+            onReorder={handleAudioReorder}
+            onDragStateChange={setIsRefDragging}
+          />
+        );
+      }),
+    });
+  }
+  if (refOrder.length > 0) {
+    refGroups.push({
+      key: "image",
+      content: refOrder.map((img, i) => (
+        <ImageRefCard
+          key={img}
+          src={img}
+          nodeId={nodeId}
+          index={i}
+          onReorder={handleImageReorder}
+          onDragStateChange={setIsRefDragging}
+          dragActive={isRefDragging}
+        />
+      )),
+    });
+  }
+  if (refVideoOrder.length > 0) {
+    refGroups.push({
+      key: "video",
+      content: refVideoOrder.map((vid, i) => (
+        <VideoRefCard
+          key={`video-${vid}`}
+          src={vid}
+          nodeId={nodeId}
+          index={i}
+          onReorder={handleVideoReorder}
+          onDragStateChange={setIsRefDragging}
+          dragActive={isRefDragging}
+        />
+      )),
+    });
+  }
+
+  /** 参考区添加：上传图片 / 音频 / 视频 -> 新建对应参考节点并自动连到当前生成节点 */
+  const handleRefUpload = useRefUpload(nodeId, { accept: "image/*,video/*,audio/*" });
 
   /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
   const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
@@ -223,6 +406,8 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         providerId: entry.providerId,
         nodeId,
         refImages: refOrder.length > 0 ? refOrder : undefined,
+        refAudios: audioOrder.length > 0 ? audioOrder : undefined,
+        refVideos: refVideoOrder.length > 0 ? refVideoOrder : undefined,
       });
       const json = await res.json();
       if (json.code !== 200) {
@@ -278,128 +463,29 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (e.dataTransfer.types.includes("application/x-ref-image") || e.dataTransfer.types.includes("application/x-ref-video") || e.dataTransfer.types.includes("application/x-ref-audio")) {
-              e.dataTransfer.dropEffect = "none"; // 排序仅限图片缩略图上，加号/空白一律禁止
+            if (e.dataTransfer.types.includes("application/x-ref-image") || e.dataTransfer.types.includes("application/x-ref-video") || e.dataTransfer.types.includes("application/x-ref-audio") || e.dataTransfer.types.includes("application/x-ref-text")) {
+              e.dataTransfer.dropEffect = "none"; // 排序仅限同类缩略图上，加号/空白一律禁止
               return;
             }
             e.dataTransfer.dropEffect = "move";
           }}
-          onDragLeave={() => setDragOverIdx(null)}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setDragOverIdx(null);
           }}
         >
-            {/* 上游 Text 节点 - 不可拖动，按连接顺序自动排前 */}
-            {upstreamTexts.map((txt) => (
-              <Tooltip
-                key={`text-${txt.id}`}
-                title={
-                  <div style={{ maxWidth: 320, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {txt.content}
-                  </div>
-                }
-              >
-                <div className="relative group h-16 w-16 rounded flex items-center justify-center" style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
-                onDoubleClick={() => {
-                  const n = useCanvasStore.getState().nodes.find((x) => x.id === txt.id);
-                  if (n) reveal(n);
-                }}>
-                  <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
-                  <Button type="text" size="small"
-                    className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                    onClick={() => {
-                      const store = useCanvasStore.getState();
-                      const edge = store.edges.find((e) => e.target === nodeId && e.source === txt.id);
-                      if (edge) store.removeEdges([edge.id]);
-                    }}>✕</Button>
-                </div>
-              </Tooltip>
-            ))}
-            {refOrder.map((img, i) => (
-              <div
-                key={img}
-                draggable
-                onDoubleClick={() => { const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, img); if (n) reveal(n); }}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/x-ref-image", img);
-                  e.dataTransfer.setData("text/plain", img);
-                  e.dataTransfer.effectAllowed = "move";
-                  setIsRefDragging(true);
-                  // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
-                  const el = (e.currentTarget as HTMLElement).querySelector("img");
-                  if (el) e.dataTransfer.setDragImage(el, 32, 32);
-                }}
-                onDragEnd={() => setIsRefDragging(false)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!e.dataTransfer.types.includes("application/x-ref-image")) {
-                    e.dataTransfer.dropEffect = "none"; // 仅图片可放到图片位置
-                    return;
-                  }
-                  e.dataTransfer.dropEffect = "move";
-                  setDragOverIdx(i);
-                }}
-                onDragLeave={() => setDragOverIdx(null)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragOverIdx(null);
-                  const dragged = e.dataTransfer.getData("text/plain");
-                  if (!dragged || dragged === img) return;
-                  const list = [...refOrder];
-                  const fromIdx = list.indexOf(dragged);
-                  const toIdx = list.indexOf(img);
-                  if (fromIdx === -1 || fromIdx === toIdx) return;
-                  const [moved] = list.splice(fromIdx, 1);
-                  list.splice(toIdx, 0, moved);
-                  writeOrderPref(nodeId, { refOrder: list });
-                }}
-                className="relative group"
-              >
-                <img
-                  src={img.includes("/api/files/") ? `${img}?w=128` : img}
-                  draggable={false}
-                  alt={`Ref ${i + 1}`}
-                  className={`h-16 w-16 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOverIdx === i ? "ring-2 ring-white shadow-lg" : ""}`}
-                  onMouseEnter={() => setHoverImg(img)}
-                  onMouseLeave={() => setHoverImg(null)}
-                />
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[11px] font-bold px-1 rounded pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.6)", color: "#fff" }}>{t("common.refImageLabel", { index: i + 1 })}</span>
-                {hoverImg === img && !isRefDragging && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-                    <img
-                      src={img.includes("/api/files/") ? `${img}?w=640` : img}
-                      className="max-w-[360px] max-h-[360px] rounded-lg shadow-2xl"
-                      style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", objectFit: "contain" }}
-                    />
-                  </div>
-                )}
-                <Button
-                  type="text"
-                  size="small"
-                  className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
-                  onClick={() => {
-                    const store = useCanvasStore.getState();
-                    const edge = store.edges.find((e) => {
-                      if (e.target !== nodeId) return false;
-                      const srcNode = store.nodes.find((n) => n.id === e.source);
-                      return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === img;
-                    });
-                    if (edge) store.removeEdges([edge.id]);
-                  }}
-                >
-                  ✕
-                </Button>
-              </div>
+            {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
+            {refGroups.map((group, i) => (
+              <Fragment key={group.key}>
+                {i > 0 && <RefGroupDivider />}
+                {group.content}
+              </Fragment>
             ))}
             {/* 添加参考：方形加号占位，与参考缩略图同行 */}
             <Tooltip title={t("common.reference")}>
               <Button size="small" type="text"
                 className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-                style={{ width: 64, height: 64, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
+                style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
                 onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
                 onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
                 onClick={handleRefUpload}>
