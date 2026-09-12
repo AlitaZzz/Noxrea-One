@@ -5,7 +5,7 @@
 "use client";
 
 import { ThunderboltOutlined } from "@ant-design/icons";
-import { Empty, Popover, Spin, Tooltip } from "antd";
+import { Empty, Popover, Spin } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import { agentApi } from "@/features/agent/api";
@@ -126,11 +126,11 @@ export default function SkillPanel({ onSelect }: Props) {
         title="技能"
         content={content}
       >
-        <Tooltip title="技能" placement="top">
-          <button type="button" className="chat-composer-icon chat-skill-btn" aria-label="技能">
-            <ThunderboltOutlined />
-          </button>
-        </Tooltip>
+        {/* 外层 Popover 的标题已经是「技能」，再套一层同文案 Tooltip 是双重提示，去掉；
+            无障碍语义由 aria-label 承担 */}
+        <button type="button" className="chat-composer-icon chat-skill-btn" aria-label="技能">
+          <ThunderboltOutlined />
+        </button>
       </Popover>
     </>
   );

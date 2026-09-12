@@ -7,8 +7,8 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
-import ModalButton from "@/components/ui/ModalButton";
 
 interface Props {
   open: boolean;
@@ -46,8 +46,8 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       }}
       footer={
         <div className="flex justify-end gap-2">
-          <ModalButton onClick={onCancel}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</ModalButton>
-          <ModalButton variant="primary" onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</ModalButton>
+          <AppButton onClick={onCancel}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>
+          <AppButton variant="primary" onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
         </div>
       }
     >

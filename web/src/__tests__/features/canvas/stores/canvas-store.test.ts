@@ -282,3 +282,67 @@ describe("节点组件本地 state 同步", () => {
     expect(syncedSrc).toBe("");
   });
 });
+
+describe("删除节点时同步清空节点级 UI 态", () => {
+  // 残留 id 本身无害（uid 会话内永不复用），但撤销会以同一 id 复活节点：
+  // 不清空的话，Ctrl+Z 回来的节点会带着展开/标注/裁剪/编辑/选帧模式。
+  function makeImageNode(id: string): AnyNode {
+    return {
+      id, type: "image-node",
+      position: { x: 0, y: 0 },
+      data: { src: "a.png", label: id },
+    } as unknown as AnyNode;
+  }
+
+  beforeEach(() => {
+    useCanvasStore.setState({
+      multiExpandedNodeId: null,
+      annotatingNodeId: null,
+      croppingNodeId: null,
+      editingTextNodeId: null,
+      frameCaptureNodeId: null,
+    });
+  });
+
+  it("删除正展开的图片节点后展开态清空（撤销复活时不再带着展开态）", () => {
+    useCanvasStore.setState({ nodes: [makeImageNode("img1")], multiExpandedNodeId: "img1" });
+
+    useCanvasStore.getState().removeNodes(["img1"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes).toHaveLength(0);
+    expect(useCanvasStore.getState().multiExpandedNodeId).toBeNull();
+  });
+
+  it("删除标注/裁剪/文本编辑/选帧的目标节点时对应模式一并清空", () => {
+    useCanvasStore.setState({
+      nodes: [makeImageNode("n1"), makeImageNode("n2"), makeImageNode("n3"), makeImageNode("n4")],
+      annotatingNodeId: "n1",
+      croppingNodeId: "n2",
+      editingTextNodeId: "n3",
+      frameCaptureNodeId: "n4",
+    });
+
+    useCanvasStore.getState().removeNodes(["n1", "n2", "n3", "n4"], { skipHistory: true });
+
+    const s = useCanvasStore.getState();
+    expect(s.annotatingNodeId).toBeNull();
+    expect(s.croppingNodeId).toBeNull();
+    expect(s.editingTextNodeId).toBeNull();
+    expect(s.frameCaptureNodeId).toBeNull();
+  });
+
+  it("删除无关节点不影响其他节点挂载的 UI 态", () => {
+    useCanvasStore.setState({
+      nodes: [makeImageNode("keep"), makeImageNode("doomed")],
+      multiExpandedNodeId: "keep",
+      annotatingNodeId: "keep",
+    });
+
+    useCanvasStore.getState().removeNodes(["doomed"], { skipHistory: true });
+
+    const s = useCanvasStore.getState();
+    expect(s.nodes.map((n) => n.id)).toEqual(["keep"]);
+    expect(s.multiExpandedNodeId).toBe("keep");
+    expect(s.annotatingNodeId).toBe("keep");
+  });
+});

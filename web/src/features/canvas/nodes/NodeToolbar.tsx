@@ -415,7 +415,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: No
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
-          {/* 全屏预览按钮已移除：节点底部播放器自带足够控件，全屏入口冗余 */}
+          <Tooltip title={t("node.previewFullscreen")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
+          </Tooltip>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("common.clear")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}

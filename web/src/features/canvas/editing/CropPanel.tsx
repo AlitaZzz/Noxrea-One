@@ -256,17 +256,17 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
         }}
       >
         {/* Aspect presets */}
+        {/* 比例按钮本身已显示 1:1 / 16:9 等文字，再挂同文案的 tooltip 是重复提示，去掉 */}
         {ASPECT_PRESETS.map((p) => (
-          <Tooltip key={p.label} title={t(p.label)}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-              onClick={() => handleAspectChange(p.value)}
-            >
-              {t(p.label)}
-            </Button>
-          </Tooltip>
+          <Button
+            key={p.label}
+            type="text"
+            size="middle"
+            style={{ padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
+            onClick={() => handleAspectChange(p.value)}
+          >
+            {t(p.label)}
+          </Button>
         ))}
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />

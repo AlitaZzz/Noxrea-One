@@ -75,14 +75,16 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
       }}
       closable={false}
       title={
-        <button
-          onClick={onClose}
-          className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-white/10 cursor-pointer"
-          style={{ color: "var(--canvas-text-dim)" }}
-          title={t("common.close")}
-        >
-          <CloseOutlined />
-        </button>
+        // 原生 title 换成系统 Tooltip，样式与全站一致
+        <Tooltip title={t("common.close")}>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-white/10 cursor-pointer"
+            style={{ color: "var(--canvas-text-dim)" }}
+          >
+            <CloseOutlined />
+          </button>
+        </Tooltip>
       }
     >
       <style>{`
@@ -315,14 +317,15 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
       >
         {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
         <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
-          <button
-            className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
-            style={{ color: "var(--canvas-text-muted)" }}
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            title={collapsed ? t("common.expand") : t("common.collapse")}
-          >
-            {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
-          </button>
+          <Tooltip title={collapsed ? t("common.expand") : t("common.collapse")}>
+            <button
+              className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
+              style={{ color: "var(--canvas-text-muted)" }}
+              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            >
+              {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
+            </button>
+          </Tooltip>
         </span>
         <div
           className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"

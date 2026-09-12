@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { Button, Tooltip } from "antd";
+import { Tooltip } from "antd";
 import { memo } from "react";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
@@ -43,13 +43,14 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
         }}
       >
         <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
-        <Button type="text" size="small"
-          className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+        <button
+          type="button"
+          className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
           onClick={() => {
             const store = useCanvasStore.getState();
             const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
             if (edge) store.removeEdges([edge.id]);
-          }}>✕</Button>
+          }}>✕</button>
       </div>
     </Tooltip>
   );

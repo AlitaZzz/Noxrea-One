@@ -115,15 +115,12 @@ export default function Dock() {
 
   const dockBtn = (icon: string, title: string, onClick: () => void, active = false, hideTooltip = false) => (
     <Tooltip title={title} key={title} mouseEnterDelay={0.5} open={hideTooltip ? false : undefined}>
-      <button onClick={onClick}
-        style={{
-          width: 40, height: 38, borderRadius: 9, border: "none", background: active ? "var(--toolbar-btn-active)" : "none",
-          color: active ? "var(--dir-txt)" : "var(--toolbar-btn-color)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", transition: ".12s",
-        }}
-        onMouseEnter={(e) => { if (!active) { (e.target as HTMLElement).style.background = "var(--toolbar-btn-hover)"; (e.target as HTMLElement).style.color = "var(--dir-txt)"; } }}
-        onMouseLeave={(e) => { if (!active) { (e.target as HTMLElement).style.background = "none"; (e.target as HTMLElement).style.color = "var(--toolbar-btn-color)"; } }}
-        >{S(icon)}</button>
+      {/* 复用统一图标按钮：hover / active / 激活态都在 CSS 里，不再用 JS 改 style */}
+      <button
+        onClick={onClick}
+        className={`app-icon-btn app-icon-btn--lg${active ? " is-active" : ""}`}
+        aria-pressed={active}
+      >{S(icon)}</button>
     </Tooltip>
   );
 

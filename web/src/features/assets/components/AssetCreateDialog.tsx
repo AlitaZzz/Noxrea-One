@@ -6,13 +6,13 @@
 "use client";
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Button,Progress, Select } from "antd";
+import { App, Progress, Select } from "antd";
 import { type ReactNode,useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import ModalButton from "@/components/ui/ModalButton";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
 import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
@@ -529,32 +529,12 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
           {/* Bottom buttons */}
           <div className="flex flex-col gap-2">
-            <Button
-              block
-              onClick={handleSave}
-              disabled={saveDisabled} loading={saving}
-              style={{
-                background: "var(--canvas-text)",
-                border: "1px solid var(--canvas-border)",
-                color: "var(--canvas-bg)",
-                borderRadius: 8, height: 36, fontWeight: 500,
-                opacity: saveDisabled ? 0.35 : 1,
-              }}
-            >
+            <AppButton block variant="primary" onClick={handleSave} disabled={saveDisabled} loading={saving}>
               {t("common.save")}
-            </Button>
-            <Button
-              block
-              onClick={() => { reset(); onClose(); }}
-              style={{
-                background: "var(--canvas-bg-elevated)",
-                border: "1px solid var(--canvas-border)",
-                color: "var(--canvas-text)",
-                borderRadius: 8, height: 36,
-              }}
-            >
+            </AppButton>
+            <AppButton block onClick={() => { reset(); onClose(); }}>
               {t("common.cancel")}
-            </Button>
+            </AppButton>
           </div>
         </div>
       </div>

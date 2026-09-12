@@ -81,7 +81,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -121,6 +121,7 @@ export default function InfiniteCanvas() {
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
   const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
+  const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
   const selectedNodeIds = useMemo(
@@ -636,6 +637,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setCroppingNodeId(null);
     useCanvasStore.getState().setEditingTextNodeId(null);
     useCanvasStore.getState().setFrameCaptureNodeId(null);
+    useCanvasStore.getState().setMultiExpandedNodeId(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
     // 触发下游 useMemo（如 highlightedEdgeIds）与 React Flow 的无谓重算。
@@ -1006,7 +1008,7 @@ export default function InfiniteCanvas() {
                   height: 120,
                   pointerEvents: "auto",
                 }}
-                nodeColor={(n) => NODE_TYPE_COLOR[n.type ?? ""] ?? "#1677ff"}
+                nodeColor={(n) => NODE_TYPE_COLOR[n.type ?? ""] ?? DEFAULT_NODE_COLOR}
                 maskColor="rgba(255,255,255,0.08)"
               />
             )}
@@ -1029,8 +1031,8 @@ export default function InfiniteCanvas() {
                 onClick={() => setChatOpen(true)}
                 className="canvas-agent-btn"
               >
-                <AgentIcon style={{ width: 18, height: 18 }} />
-                <span className="text-sm font-medium">{t("agent.title")}</span>
+                <AgentIcon style={{ width: 22, height: 22 }} />
+                <span className="text-base font-medium">{t("agent.title")}</span>
               </button>
             </Tooltip>
           </div>
@@ -1073,7 +1075,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
@@ -1183,7 +1185,7 @@ export default function InfiniteCanvas() {
           >
             <DirUploadIcon
               className="animate-bounce"
-              style={{ width: 56, height: 56, color: "rgb(29, 158, 117)" }}
+              style={{ width: 56, height: 56, color: "var(--canvas-accent)" }}
             />
             <div className="text-lg font-medium" style={{ color: "var(--canvas-text)" }}>
               {t("file.dropToAdd")}

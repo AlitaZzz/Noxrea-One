@@ -34,43 +34,68 @@
   100% { transform: translate3d(4%, -3%, 0) scale(1.12); }
 }
 
-/* ===== Dark theme (default) ===== */
+/* ===== Dark theme（默认）=====
+   配色：中性石墨 + 青柠。
+   设计约束：深色模式、长时间使用不累眼、强调色固定为青柠 #c7f43d。
+
+   明度锚点（最关键的一条）：底色取 L*≈11 的深灰，不取纯黑也不取中灰。
+     - 纯黑 + 亮青柠对比约 16:1，亮色边缘会出现光晕（halation），最累眼；
+     - 试过提到 L*≈16 的中灰，又太亮、深色质感没了；
+     - L*≈11 落在两者中间，与青柠对比约 13:1：够清晰，又不过曝。
+   中性色不带色相偏色（R≈G≈B，仅蓝通道 +2 防止屏幕观感发暖）。
+     此前偏橄榄的暖灰在大面积暗色下发「脏」，已弃用。
+   层级：app-bg < header < bg < bg-hover < bg-active，每级约 +3.5 L*；
+     描边比底色亮约 +5 L*，保证提亮后边界依然清楚。
+   正文用 #e7e7ec 而非纯白：对比约 13.5:1（远高于 AAA 的 7:1），
+     同时避开纯白贴深灰的刺眼。
+
+   改色时 theme.ts 的 antd token 需同步（见该文件注释）。 */
 :root, [data-theme="dark"] {
-  --canvas-app-bg: #000000;
-  --canvas-header-bg: #0e0e11;
-  --canvas-bg: #1a1a1e;
-  --canvas-bg-hover: #232327;
-  --canvas-bg-active: #33333a;
-  --canvas-bg-elevated: #1a1a1e;
-  --canvas-border: #2c2c31;
-  --canvas-border-light: #3a3a40;
-  --canvas-text: #ececf0;
-  --canvas-text-dim: #7d7d86;
-  --canvas-text-muted: #6e6e76;
-  --canvas-text-disabled: rgba(236, 236, 240, 0.3);
-  --canvas-accent: #3b82f6;
+  --canvas-app-bg: #0c0c0e;
+  --canvas-header-bg: #151518;
+  --canvas-bg: #1d1d21;
+  --canvas-bg-hover: #26262b;
+  --canvas-bg-active: #323238;
+  --canvas-bg-elevated: #1d1d21;
+  --canvas-border: #2d2d33;
+  --canvas-border-light: #3b3b42;
+  --canvas-text: #e7e7ec;
+  --canvas-text-dim: #95959e;
+  --canvas-text-muted: #7e7e88;
+  --canvas-text-disabled: rgba(231, 231, 236, 0.3);
+  /* 品牌强调色（青柠）：链接 / 加载动画 / 徽标 / 选中描边等交互强调，不再用于按钮填充 */
+  --canvas-accent: #c7f43d;
+  /* 主色 hover / active：与 theme.ts 的 COLOR_PRIMARY_HOVER / ACTIVE 同值 */
+  --canvas-accent-hover: #d6f86a;
+  --canvas-accent-active: #aede2b;
+  /* 无彩强调填充：与 theme.ts 的 NEUTRAL_FILL 同值。
+     Switch / Checkbox / Slider / 主按钮共用，避免青柠外溢到控件与按钮上 */
+  --canvas-solid: #fff;
+  --canvas-solid-hover: #e6e6e6;
+  /* 危险语义色：与 theme.ts 的 COLOR_ERROR 同值，供自绘的危险按钮复用 */
+  --canvas-danger: #ff4d4f;
   /* 节点/画布选中态描边 */
   --canvas-select: #c7f43d;
   /* 拖拽中的框选矩形：中性灰，避免与「已选中」的品牌色抢语义 */
-  --canvas-marquee-bg: rgba(236, 236, 240, 0.06);
-  --canvas-marquee-border: rgba(236, 236, 240, 0.38);
+  --canvas-marquee-bg: rgba(231, 231, 236, 0.06);
+  --canvas-marquee-border: rgba(231, 231, 236, 0.38);
   /* 进度 / 成功 / 就绪 / 媒体流反馈色（当前与选中色同值，可独立拆分） */
   --canvas-success: #c7f43d;
-  /* 警示 / 超限提示色（如文本节点字数超限） */
-  --canvas-warning: #faad14;
-  --nav-active-bg: #232327;
-  --nav-hover-bg: #16161a;
+  /* 警示 / 超限提示色（如文本节点字数超限）：橙，与青柠拉开色相避免混淆 */
+  --canvas-warning: #ffb020;
+  --nav-active-bg: #26262b;
+  --nav-hover-bg: #191a1d;
   /* 工具栏 */
-  --toolbar-bg: #1b1b1f;
-  --toolbar-border: #2c2c31;
+  --toolbar-bg: #1e1e22;
+  --toolbar-border: #2d2d33;
   --toolbar-shadow: 0 10px 34px rgba(0,0,0,.55);
-  --toolbar-btn-hover: #2a2a30;
-  --toolbar-btn-active: #34343b;
-  --toolbar-btn-color: #c7c7cd;
+  --toolbar-btn-hover: #2a2a2f;
+  --toolbar-btn-active: #34343a;
+  --toolbar-btn-color: #cdcdd4;
   /* 菜单 */
-  --menu-bg: #1c1c20;
-  --menu-border: #2c2c31;
-  --menu-item-hover: #2a2a30;
+  --menu-bg: #1f1f23;
+  --menu-border: #2d2d33;
+  --menu-item-hover: #2a2a2f;
 }
 
 /* React Flow overrides */
@@ -362,29 +387,86 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 .ant-btn-sm { font-size: 13px; }
 
-/* Button sizing (global) */
-.modal-cancel-btn,
-.modal-save-btn {
-  width: 88px;
-  padding-inline: 0;
-  text-align: center;
+/* ===== 统一按钮（components/ui/AppButton）=====
+   全站按钮共用的视觉基线。原来散落在各处的「36px 高 / 8px 圆角 / 手写 hover」
+   以及无引用的 .modal-cancel-btn / .modal-save-btn 都由这里取代。
+   颜色全部取 --canvas-* 语义变量，换主题时自动跟随。
+   按下（:active）不再叠一层更深的颜色：按下时元素仍命中 :hover，视觉与悬停一致。 */
+.app-btn {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
 }
-/* Cancel button hover (global) */
-.modal-cancel-btn:not(:disabled):hover {
-  background: var(--canvas-bg-hover) !important;
-  color: #fff !important;
-  border-color: rgba(255,255,255,0.3) !important;
+.app-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 尺寸：md 用于弹窗 / 工具条，sm 用于设置面板等紧凑区域 */
+.app-btn--md { height: 36px; padding: 0 20px; }
+.app-btn--sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.app-btn--block { width: 100%; }
+/* 纯图标：宽度收敛到与高度相等 */
+.app-btn--icon { padding: 0; width: 36px; }
+.app-btn--sm.app-btn--icon { width: 28px; }
+
+/* 主行动：无彩白填充 + 深色字。青柠只留给链接 / 加载 / 徽标 / 选中描边，
+   不再作为按钮填充 —— 与 Switch / Checkbox / Slider 的 NEUTRAL_FILL 保持一致。 */
+.app-btn--primary {
+  background: var(--canvas-solid);
+  border: 1px solid var(--canvas-solid);
+  color: var(--canvas-app-bg);
 }
-/* Save button: disabled + hover (global) */
-.modal-save-btn:disabled {
-  background: rgba(255, 255, 255, 0.15) !important;
-  color: rgba(255, 255, 255, 0.25) !important;
-  border-color: var(--canvas-border) !important;
+.app-btn--primary:not(:disabled):hover {
+  background: var(--canvas-solid-hover);
+  border-color: var(--canvas-solid-hover);
 }
-.modal-save-btn:not(:disabled):hover {
-  background: #f0f0f0 !important;
+
+/* antd 的 type="primary" 实心按钮同样改成无彩白。
+   Button 组件层没有「填充色」token（只有字色 primaryColor），无法像 Switch / Checkbox
+   那样在 theme.ts 里中性化；而 Seed 层的 colorPrimary 参与整套色板派生，
+   theme.ts 明确禁止改动。故只能在 CSS 里定点覆盖，与 .app-btn--primary 对齐。 */
+.ant-btn-color-primary.ant-btn-variant-solid {
+  background: var(--canvas-solid) !important;
+  border-color: var(--canvas-solid) !important;
+  color: var(--canvas-app-bg) !important;
 }
+.ant-btn-color-primary.ant-btn-variant-solid:not(:disabled):hover {
+  background: var(--canvas-solid-hover) !important;
+  border-color: var(--canvas-solid-hover) !important;
+}
+
+/* 次行动 / 取消 */
+.app-btn--default {
+  background: var(--canvas-bg);
+  border: 1px solid var(--canvas-border);
+  color: var(--canvas-text);
+}
+.app-btn--default:not(:disabled):hover { background: var(--canvas-bg-hover); }
+
+/* 工具条图标按钮 / 纯文字按钮 */
+.app-btn--ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--canvas-text-dim);
+}
+.app-btn--ghost:not(:disabled):hover {
+  background: var(--canvas-bg-hover);
+  color: var(--canvas-text);
+}
+
+/* 破坏性操作：红是唯一危险语义，不要用主色顶替 */
+.app-btn--danger {
+  background: transparent;
+  border: 1px solid var(--canvas-danger);
+  color: var(--canvas-danger);
+}
+.app-btn--danger:not(:disabled):hover { background: var(--canvas-bg-hover); }
 
 /* Select dropdown: selected item same as hover */
 .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
@@ -454,19 +536,22 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 ::-webkit-scrollbar-track { background: var(--canvas-bg); }
 ::-webkit-scrollbar-thumb { background: var(--canvas-border-light); border-radius: 3px; }
 
-/* ===== 3D 导演台 CSS 变量 ===== */
+/* ===== 3D 导演台 CSS 变量 =====
+   与 --canvas-* 同一套「中性石墨 + 青柠」配色，命名不同是因为导演台自成一块皮肤，
+   但色值必须同源，避免两处各调各的。 */
 :root {
-  --dir-bg: #000000;
-  --dir-panel: #0e0e11;
-  --dir-panel2: #1a1a1e;
-  --dir-panel3: #232327;
-  --dir-line: #232327;
-  --dir-line2: #2c2c31;
-  --dir-txt: #ececf0;
-  --dir-dim: #7d7d86;
-  --dir-dim2: #56565d;
-  --dir-accent: #3b82f6;
-  --dir-green: #34c759;
+  --dir-bg: #0c0c0e;
+  --dir-panel: #151518;
+  --dir-panel2: #1d1d21;
+  --dir-panel3: #26262b;
+  --dir-line: #26262b;
+  --dir-line2: #2d2d33;
+  --dir-txt: #e7e7ec;
+  --dir-dim: #95959e;
+  --dir-dim2: #676770;
+  --dir-accent: #c7f43d;
+  /* 「通过 / 正常」态：比青柠更冷一点的绿，避免和强调色混为一谈 */
+  --dir-green: #5ad86a;
 }
 
 /* Director: Antd Slider 细条 + 白柄 + 黑底 */
@@ -663,41 +748,169 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .dir-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--dir-line2); border-radius: 9px; padding: 16px 12px; color: var(--dir-dim2); font-size: 12px; text-align: center; }
 .toggle-label { font-size: 14px; font-weight: 600; }
 
-/* Canvas 工具栏按钮 */
-.canvas-toolbar-btn.ant-btn-text { width: 40px; height: 38px; border-radius: 9px; color: var(--canvas-text); padding: 0; display: flex; align-items: center; justify-content: center; }
-.canvas-toolbar-btn.ant-btn-text:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
-.canvas-toolbar-btn.ant-btn-text:active { background: var(--canvas-bg-active) !important; }
-
-.canvas-agent-btn {
+/* ===== 统一图标按钮 =====
+   画布节点工具条（.canvas-toolbar-btn）、画布控制条（.canvas-ctrl-btn）、
+   生成面板（.gen-panel-btn）此前各写了一份几乎相同的「透明底 + hover 提亮 +
+   active 更深」实现，Director Dock 甚至用 onMouseEnter/Leave 在 JS 里改 style。
+   这里把交互规则收敛到一处（逗号选择器各自保留原有优先级，因此仍能压过 antd）；
+   调用方类名不变，新增代码统一用 .app-icon-btn。 */
+.app-icon-btn,
+.canvas-toolbar-btn.ant-btn-text,
+.canvas-ctrl-btn.ant-btn-text,
+.gen-panel-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9px;
-  background: var(--canvas-bg);
-  border: 1px solid var(--canvas-border);
+  justify-content: center;
+  padding: 0;
+  /* 不能写 border: none —— antd 会在 :hover / :active 用 border 简写重铺一遍
+     --ant-btn-border-width（默认 1px），选择器优先级高于本条，会把 none 覆盖掉。
+     定宽按钮是 border-box，加了也看不出；但宽度自适应的按钮（带文字、未设 width，
+     如控制条的「面板」按钮）外宽会 +2px，把整条工具条顶得抖一下。
+     保留 1px 透明边框：hover 前后盒模型一致，视觉上不可见。 */
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--canvas-text);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  transition: background .12s, border-color .12s, transform .12s;
+  transition: background 0.12s, color 0.12s;
+}
+/* hover 与按下（:active）同色：全站这类按钮都不再有「按下去更深」的反馈层 */
+.app-icon-btn:hover,
+.app-icon-btn:active,
+.canvas-toolbar-btn.ant-btn-text:hover,
+.canvas-toolbar-btn.ant-btn-text:active,
+.canvas-ctrl-btn.ant-btn-text:hover,
+.canvas-ctrl-btn.ant-btn-text:active,
+.gen-panel-btn:hover,
+.gen-panel-btn:active {
+  background: var(--canvas-bg-hover) !important;
+  color: var(--canvas-text) !important;
+}
+/* 激活态（开关已启用）：与 hover 同色，语义是状态不是悬停 */
+.app-icon-btn.is-active,
+.canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
+  background: var(--canvas-bg-hover) !important;
+  color: var(--canvas-text) !important;
+}
+.app-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 尺寸：lg 用于工具条，md 用于面板内 */
+.app-icon-btn--lg { width: 40px; height: 38px; border-radius: 9px; }
+.app-icon-btn--md { width: 36px; height: 36px; border-radius: 8px; }
+
+/* Canvas 工具栏按钮（只留尺寸；交互规则见上方「统一图标按钮」） */
+.canvas-toolbar-btn.ant-btn-text { width: 40px; height: 38px; border-radius: 9px; }
+
+/* ===== 覆盖层图标按钮 =====
+   浮在图片 / 视频之上的操作按钮（插入画布、更多、播放、全屏、翻页…）。
+   此前 AssetCard / ImageNode / AnnotationPanel 各自手写一遍，尺寸与 hover 都不一致。
+   与 .app-icon-btn 的区别：它压在媒体上，底色必须半透明、hover 靠加深底色 +
+   文字提白，不能复用面板按钮的 --canvas-bg-hover（会被媒体吃掉）。
+   --light 变体：用于已经铺了暗色蒙层的场景（如 hover 遮罩内），底色反过来用白。 */
+.app-overlay-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.7);
+  /* opacity 一并过渡：部分按钮靠 group-hover 淡入 */
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.app-overlay-btn:hover { background: rgba(0, 0, 0, 0.7); color: #fff; }
+.app-overlay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.app-overlay-btn--light { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.app-overlay-btn--light:hover { background: rgba(255, 255, 255, 0.4); }
+/* 尺寸：xxs 16 / xs 20 / sm 28 / md 36 / round 28（圆形）。
+   图标尺寸由尺寸类统一给出：antd 图标是 1em，会跟随按钮 font-size，
+   因此调用点不要再写 style={{ fontSize }}。 */
+.app-overlay-btn--xxs { width: 16px; height: 16px; border-radius: 999px; font-size: 10px; }
+.app-overlay-btn--xs { width: 20px; height: 20px; border-radius: 999px; font-size: 14px; }
+.app-overlay-btn--sm { width: 28px; height: 28px; border-radius: 6px; font-size: 13px; }
+.app-overlay-btn--md { width: 36px; height: 36px; border-radius: 999px; font-size: 14px; }
+/* 28px 圆形：与 --sm 同尺寸但要求圆形的场景（如音频参考卡居中的播放/停止键） */
+.app-overlay-btn--round { width: 28px; height: 28px; border-radius: 999px; font-size: 14px; }
+
+/* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
+@property --agent-ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.canvas-agent-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--canvas-bg);
+  border: none;
+  color: var(--canvas-text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  /* 刻意不含 transform：按下时尺寸保持不变，只靠背景变化给反馈 */
+  transition: background 0.12s;
+}
+/* 流动描边：conic-gradient 绕圈旋转，mask 挖空中间只留 1.5px 一圈，无需额外 DOM。
+   底色淡青柠保证静止时也有轮廓；高光有两颗，相隔 180° 同步绕行
+   （一颗在右侧时另一颗正好在左侧）。两颗的爬升/回落角度刻意等宽，亮度才一致。 */
+.canvas-agent-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--agent-ring-angle),
+    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 0deg,
+    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 150deg,
+    var(--canvas-accent) 168deg,
+    #fff 178deg,
+    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 180deg,
+    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 330deg,
+    var(--canvas-accent) 348deg,
+    #fff 358deg,
+    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: agent-ring-flow 4s linear infinite;
+  pointer-events: none;
+}
+@keyframes agent-ring-flow {
+  to {
+    --agent-ring-angle: 360deg;
+  }
 }
 .canvas-agent-btn:hover {
   background: var(--canvas-bg-hover);
 }
-.canvas-agent-btn:active {
-  background: var(--canvas-bg-active);
-  transform: scale(0.97);
+/* 系统开启「减弱动态效果」时停掉流光，只保留静态描边 */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-agent-btn::before {
+    animation: none;
+  }
 }
 .canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
-/* 生成面板按钮（模型选择/参数面板 trigger）：hover 与工具栏同色 */
-.gen-panel-btn { height: 36px; border-radius: 8px; color: var(--canvas-text); display: flex; align-items: center; background: transparent; user-select: none; }
-.gen-panel-btn:hover { background: var(--canvas-bg-hover) !important; color: var(--canvas-text) !important; }
-.gen-panel-btn:active { background: var(--canvas-bg-active) !important; }
+/* 生成面板按钮（模型选择/参数面板 trigger）：只留尺寸；交互规则见「统一图标按钮」 */
+.gen-panel-btn { height: 36px; border-radius: 8px; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
 /* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
 .canvas-toolbar .ant-btn { font-size: 16px; }
+/* 工具栏按钮 hover 与按下同色：点击不再闪一层更深底色（排除 disabled，避免禁用态被点亮） */
+.canvas-toolbar .ant-btn:not(:disabled):hover,
+.canvas-toolbar .ant-btn:not(:disabled):active {
+  background: var(--canvas-bg-hover) !important;
+  color: var(--canvas-text) !important;
+}
 /* 下拉菜单内图标统一 16px（lucide 默认 24 已被 size 覆盖；AntD/自绘跟随 font-size） */
 .menu-popover { font-size: 16px; }
 

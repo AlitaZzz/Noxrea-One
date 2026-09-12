@@ -9,6 +9,7 @@ import { Empty, Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
@@ -81,13 +82,9 @@ export default function AssetGrid({
     if (loadError && onRetry) {
       return (
         <div className="flex items-center justify-center h-full min-h-[200px]">
-          <button
-            onClick={onRetry}
-            className="text-xs px-3 py-1 rounded transition-colors hover:bg-white/5"
-            style={{ color: "var(--canvas-text-dim)" }}
-          >
+          <AppButton variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}
-          </button>
+          </AppButton>
         </div>
       );
     }
@@ -125,13 +122,9 @@ export default function AssetGrid({
       <div ref={sentinelRef} className="flex items-center justify-center py-3">
         {loadingMore && <Spin size="small" />}
         {loadError && !loadingMore && onRetry && (
-          <button
-            onClick={onRetry}
-            className="text-xs px-3 py-1 rounded transition-colors hover:bg-white/5"
-            style={{ color: "var(--canvas-text-dim)" }}
-          >
+          <AppButton variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}
-          </button>
+          </AppButton>
         )}
       </div>
     </div>

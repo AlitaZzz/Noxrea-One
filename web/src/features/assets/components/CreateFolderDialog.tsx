@@ -8,8 +8,8 @@ import { Input } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
-import ModalButton from "@/components/ui/ModalButton";
 
 interface Props {
   open: boolean;
@@ -50,8 +50,8 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       }}
       footer={
         <div className="flex justify-end gap-2">
-          <ModalButton onClick={() => { setName(""); onClose(); }}>{t("common.cancel")}</ModalButton>
-          <ModalButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</ModalButton>
+          <AppButton onClick={() => { setName(""); onClose(); }}>{t("common.cancel")}</AppButton>
+          <AppButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</AppButton>
         </div>
       }
     >

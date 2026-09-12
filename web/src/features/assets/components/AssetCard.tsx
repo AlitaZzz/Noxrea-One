@@ -214,8 +214,9 @@ export default function AssetCard({
 
       {/* Hover overlay — send to canvas */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-lg">
+        {/* 位于 hover 暗色蒙层之上，用 --light 变体 */}
         <button
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors cursor-pointer"
+          className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md"
           onClick={(e) => { e.stopPropagation(); handleInsert(); }}
         >
           <PlusOutlined />
@@ -234,7 +235,7 @@ export default function AssetCard({
         >
           <button
             ref={triggerRef}
-            className="w-7 h-7 flex items-center justify-center rounded bg-black/50 text-white/70 hover:text-white hover:bg-black/70 transition-colors cursor-pointer"
+            className="app-overlay-btn app-overlay-btn--sm"
             onMouseEnter={handleMenuEnter}
           >
             <MoreOutlined />
@@ -272,10 +273,10 @@ export default function AssetCard({
           <div className="text-white/90 text-xs truncate font-medium flex-1 min-w-0">{asset.name}</div>
           {asset.mediaType === "audio" && (
             <button
-              className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/30 transition-colors cursor-pointer pointer-events-auto"
+              className="app-overlay-btn app-overlay-btn--xs shrink-0 pointer-events-auto"
               onClick={togglePlay}
             >
-              {playing ? <PauseCircleFilled style={{ fontSize: 14 }} /> : <PlayCircleFilled style={{ fontSize: 14 }} />}
+              {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
             </button>
           )}
         </div>

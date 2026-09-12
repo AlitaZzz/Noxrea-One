@@ -98,7 +98,9 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
       <div className="dir-cam-preview">
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
-        <button className="dir-cam-expand" title="全屏扩大" onClick={() => {
+        {/* 原生 title 换成系统 Tooltip；本文件文案为硬编码中文（历史遗留），暂未接入 i18n */}
+        <Tooltip title="全屏扩大">
+        <button className="dir-cam-expand" onClick={() => {
           const stage = runtime._getStage();
           if (!stage) return;
           const url = renderCameraThumbnail(stage, ent.cam, 1280, 720, {
@@ -107,6 +109,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
           });
           setModalUrl(url);
         }}>⤢</button>
+        </Tooltip>
       </div>
       <div className="dir-field">
         <label className="dir-label">名称</label>
@@ -186,26 +189,34 @@ function CameraShots({ cameraId }: { cameraId: string }) {
       ) : (
         <div className="dir-shot-grid">
           {shots.map((shot) => (
-            <div key={shot.id}
-              className="dir-shot-card"
-              data-selected={shot.selected || undefined}
-              onClick={() => toggleShotSelected(shot.id)}
-              title={shot.name}>
-              <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
-              <span className="dir-shot-label">{shot.name}</span>
-              {/* hover 操作按钮 */}
-              <div className="dir-shot-actions">
-                <button title="发送到画布" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
-                  <DirSendIcon style={{ width: 14, height: 14 }} />
-                </button>
-                <button title="删除" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
-                  <DirTrashIcon style={{ width: 14, height: 14 }} />
-                </button>
-                <button title="放大预览" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
-                  <DirExpandIcon style={{ width: 14, height: 14 }} />
-                </button>
+            // 卡片名可能被 CSS 截断，tooltip 展示完整名称；操作按钮改用系统 Tooltip
+            <Tooltip key={shot.id} title={shot.name}>
+              <div
+                className="dir-shot-card"
+                data-selected={shot.selected || undefined}
+                onClick={() => toggleShotSelected(shot.id)}
+              >
+                <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
+                <span className="dir-shot-label">{shot.name}</span>
+                <div className="dir-shot-actions">
+                  <Tooltip title="发送到画布">
+                    <button onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
+                      <DirSendIcon style={{ width: 14, height: 14 }} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="删除">
+                    <button onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
+                      <DirTrashIcon style={{ width: 14, height: 14 }} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="放大预览">
+                    <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
+                      <DirExpandIcon style={{ width: 14, height: 14 }} />
+                    </button>
+                  </Tooltip>
+                </div>
               </div>
-            </div>
+            </Tooltip>
           ))}
         </div>
       )}

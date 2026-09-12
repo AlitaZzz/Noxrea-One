@@ -14,6 +14,7 @@ import {
 import { Handle, type NodeProps,Position } from "@xyflow/react";
 import { App, Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
@@ -25,6 +26,7 @@ import {
   type DetachAudioResult,
 } from "@/features/canvas/api/file-api";
 import { createEdge } from "@/features/canvas/node-defaults";
+import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
@@ -55,6 +57,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [src, setSrc] = useState(data.src || "");
   const [detaching, setDetaching] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
@@ -417,6 +420,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         case "download": handleDownload(); break;
         case "save-asset": handleSaveToAssets(); break;
         case "clear": handleClear(); break;
+        case "preview-fullscreen": if (src) setPreviewOpen(true); break;
         case "capture-frame": {
           const v = videoRef.current;
           if (detail.time === -1) {
@@ -433,7 +437,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio]);
+  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio]);
 
   // 换源后旧探测结论失效，清空以便重新判定。
   // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次
@@ -497,10 +501,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip title={t("common.replace")}>
               <button
-                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+                className="app-overlay-btn app-overlay-btn--sm"
                 onClick={handleUpload}
               >
-                <UploadOutlined style={{ fontSize: 12 }} />
+                <UploadOutlined />
               </button>
             </Tooltip>
           </div>
@@ -640,6 +644,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
       {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />}
       <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />
+      {previewOpen && src && createPortal(
+        <MediaPreviewOverlay
+          items={[{ url: src, mediaType: "video" }]}
+          index={0}
+          onClose={() => setPreviewOpen(false)}
+        />,
+        document.body
+      )}
     </div>
   );
 }

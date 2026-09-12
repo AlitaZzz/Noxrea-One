@@ -147,7 +147,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
         <div className="flex items-center gap-2 w-full">
           <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("common.zoom")}</span>
           <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
-            className="flex-1" style={{ accentColor: "#1677ff" }} />
+            className="flex-1" style={{ accentColor: "#c7f43d" }} />
         </div>
         <div className="flex gap-2 w-full">
           <Button onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("common.cancel")}</Button>
