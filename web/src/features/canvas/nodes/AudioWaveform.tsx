@@ -12,6 +12,12 @@ import { PauseIcon } from "@/components/ui/icons/media/PauseIcon";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
 import { formatTime } from "@/lib/utils/format";
 
+/** 波形绘制高度（wavesurfer canvas），固定上限，不随容器拉伸 */
+const WAVEFORM_HEIGHT = 64;
+
+/** 进度竖线高度：刻意高于波形，上下各冒出一截；容器不够高时由 maxHeight 兜底 */
+const CURSOR_HEIGHT = 96;
+
 interface AudioWaveformProps {
   url: string;
   /** 音频总时长（秒），用于底部时间显示 */
@@ -60,7 +66,7 @@ export default function AudioWaveform({
 
     const ws = WaveSurfer.create({
       container: containerRef.current,
-      height: 64,
+      height: WAVEFORM_HEIGHT,
       // 波形用不透明白色绘制，整体透明度交给 CSS（.canvases 层）控制：
       // 进度层是 source-in 叠加，若 waveColor 自带 alpha 会把进度色一并变淡。
       waveColor: "#ffffff",
@@ -150,23 +156,30 @@ export default function AudioWaveform({
 
   return (
     <div className="relative h-full w-full">
-      <div className="flex h-full flex-col p-2">
+      {/* 底部留白大于顶部：控制栏（时间 / 播放按钮）不贴节点下沿 */}
+      <div className="flex h-full flex-col px-2 pt-2 pb-5">
         {/* 波形区（点击不定位，可拖动节点；仅竖线可拖动定位） */}
         <div
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
           style={{
-            background: "rgb(54, 54, 54)",
+            // 背景透明：直接复用节点 body 底色，不再叠一层深灰
+            background: "transparent",
             borderRadius: 8,
             padding: "8px 12px",
           }}
         >
           {/* 波形与竖线放在同一个容器里：竖线按百分比定位，
-              只有与波形等宽才能和波形时间轴对齐（原先的 px-2 包裹层会让两者错位） */}
-          <div ref={seekRef} className="relative w-full">
+              只有与波形等宽才能和波形时间轴对齐（原先的 px-2 包裹层会让两者错位）。
+              容器自身高于波形：波形在其中垂直居中，竖线占满容器高度。 */}
+          <div
+            ref={seekRef}
+            className="relative flex w-full items-center"
+            style={{ height: CURSOR_HEIGHT, maxHeight: "100%" }}
+          >
             <div
               ref={containerRef}
               className="audio-waveform w-full"
-              style={{ opacity: failed ? 0 : 1, minHeight: 64 }}
+              style={{ opacity: failed ? 0 : 1, minHeight: WAVEFORM_HEIGHT }}
             />
             {/* 自定义进度竖线：仅在该竖线上切换指针样式并支持拖动 */}
             {ready && !failed && (
@@ -185,8 +198,9 @@ export default function AudioWaveform({
                 onPointerUp={handleSeekUp}
                 onPointerCancel={handleSeekUp}
               >
+                {/* 进度竖线：占满竖线容器，因此高于波形本身 */}
                 <div
-                  className="absolute left-1/2 top-1 bottom-1 -translate-x-1/2"
+                  className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2"
                   style={{ width: 2, background: "#c7f43d", borderRadius: 1 }}
                 />
               </div>
@@ -199,8 +213,8 @@ export default function AudioWaveform({
           )}
         </div>
 
-        {/* 底部控制栏 */}
-        <div className="mt-2 grid grid-cols-3 items-center">
+        {/* 底部控制栏：左右内缩与波形区对齐（根 8px + 波形区 12px = 20px） */}
+        <div className="mt-2 grid grid-cols-3 items-center px-3">
           <div className="justify-self-start text-sm tabular-nums text-white/70">
             {formatTime(current)} / {formatTime(duration)}
           </div>
