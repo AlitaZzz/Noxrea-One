@@ -13,6 +13,7 @@ import {
   assetUpdateSchema,
   assetBatchCreateSchema,
   assetBatchUpdateSchema,
+  assetBatchDeleteSchema,
 } from "@server/schemas/asset";
 import {
   AssetOperationError,
@@ -25,6 +26,7 @@ import {
   getAsset,
   updateAsset,
   deleteAsset,
+  deleteAssetsBatch,
   createAssetsBatch,
   updateAssetsBatch,
   listSourceUrls,
@@ -279,6 +281,29 @@ router.put("/api/assets/items/:id", async (c) => {
 
   try {
     const result = await updateAsset(auth.user.id, id, parsed.data);
+    return c.json(ok(result));
+  } catch (error) {
+    return handleAssetError(error) ?? failCode(500, "common.internal_error");
+  }
+});
+
+router.delete("/api/assets/items/batch", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return failCode(400, "common.invalid_json");
+  }
+
+  const parsed = assetBatchDeleteSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
+
+  try {
+    const result = await deleteAssetsBatch(auth.user.id, parsed.data.ids);
     return c.json(ok(result));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");

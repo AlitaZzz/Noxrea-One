@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { LoadingOutlined } from "@ant-design/icons";
 import { Empty, Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,9 @@ import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";
+
+/** 加载动画统一使用品牌青柠（见 globals.css：青柠用于链接 / 加载动画 / 徽标 / 选中描边）。 */
+const limeIndicator = <LoadingOutlined style={{ color: "var(--canvas-accent)" }} spin />;
 
 interface Props {
   assets: AssetItem[];
@@ -34,6 +38,7 @@ interface Props {
   onDelete?: (asset: AssetItem) => void;
   onEnterFolder?: (folder: AssetFolder) => void;
   onDeleteFolder?: (folder: AssetFolder) => void;
+  onRenameFolder?: (folder: AssetFolder) => void;
   loading?: boolean;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -45,7 +50,7 @@ interface Props {
 export default function AssetGrid({
   assets, folders, folderCounts, compact, showActions = true, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds,
   onToggleSelect, onInsertCanvas, onRename, onDelete,
-  onEnterFolder, onDeleteFolder,
+  onEnterFolder, onDeleteFolder, onRenameFolder,
   loading, hasMore, loadingMore, onLoadMore,
   loadError, onRetry,
 }: Props) {
@@ -73,7 +78,7 @@ export default function AssetGrid({
   if (loading && !hasContent) {
     return (
       <div className="flex items-center justify-center h-full min-h-[200px]">
-        <Spin />
+        <Spin indicator={limeIndicator} />
       </div>
     );
   }
@@ -97,10 +102,21 @@ export default function AssetGrid({
 
   return (
     <div>
+      {/* 固定高度的刷新指示槽：切换条件时小转圈出现/消失不会把网格顶动 */}
+      <div className="flex items-center justify-center h-6">
+        {loading && hasContent && <Spin size="small" indicator={limeIndicator} />}
+      </div>
       <div className="grid gap-3 pb-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` }}>
         {/* Folders first */}
         {folders?.map((folder) => (
-          <FolderCard key={folder.id} folder={folder} count={folderCounts?.[folder.id] || 0} onClick={onEnterFolder || (() => {})} onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder} />
+          <FolderCard
+            key={folder.id}
+            folder={folder}
+            count={folderCounts?.[folder.id] || 0}
+            onClick={onEnterFolder || (() => {})}
+            onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder}
+            onRename={folder.kind === "uncategorized" ? undefined : onRenameFolder}
+          />
         ))}
         {/* Then assets */}
         {assets.map((asset) => (
@@ -120,7 +136,7 @@ export default function AssetGrid({
       </div>
       {/* Sentinel + loading indicator */}
       <div ref={sentinelRef} className="flex items-center justify-center py-3">
-        {loadingMore && <Spin size="small" />}
+        {loadingMore && <Spin size="small" indicator={limeIndicator} />}
         {loadError && !loadingMore && onRetry && (
           <AppButton variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}

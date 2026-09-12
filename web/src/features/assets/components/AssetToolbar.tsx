@@ -19,6 +19,8 @@ interface Props {
   search: string;
   onSearchChange: (v: string) => void;
   selectedCount: number;
+  /** 当前查询匹配的资产总数，用于提示“全选”仅覆盖已加载项。 */
+  totalCount?: number;
   allSelected?: boolean;
   onSelectAll?: () => void;
   onBatchDelete?: () => void;
@@ -29,7 +31,7 @@ interface Props {
   canCreateFolder?: boolean;
 }
 
-export default function AssetToolbar({ search, onSearchChange, selectedCount, allSelected, onSelectAll, onBatchDelete, onBatchMove, onBatchType, onUpload, onCreateFolder, canCreateFolder = true }: Props) {
+export default function AssetToolbar({ search, onSearchChange, selectedCount, totalCount, allSelected, onSelectAll, onBatchDelete, onBatchMove, onBatchType, onUpload, onCreateFolder, canCreateFolder = true }: Props) {
   const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,6 +69,11 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
       <div className="flex-1" />
       {selectedCount > 0 && (
         <>
+          {totalCount !== undefined && totalCount > 0 && (
+            <span className="text-xs whitespace-nowrap" style={{ color: "var(--canvas-text-muted)" }}>
+              {t("asset.selectedOfTotal", { selected: selectedCount, total: totalCount })}
+            </span>
+          )}
           <AppButton style={{ minWidth: 108 }} onClick={onSelectAll}>
             <CheckSquareOutlined />
             {allSelected ? t("common.deselectAll") : t("common.selectAll")}

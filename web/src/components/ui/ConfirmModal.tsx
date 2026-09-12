@@ -16,13 +16,15 @@ interface Props {
   content: string;
   okText?: string;
   cancelText?: string;
+  /** 确定按钮进入加载态并阻止重复提交，用于异步 onOk。 */
+  confirmLoading?: boolean;
   onOk: () => void;
   onCancel: () => void;
   /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传更高值（如 1050）。 */
   zIndex?: number;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, onOk, onCancel, zIndex }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, onOk, onCancel, zIndex }: Props) {
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const okRef = useRef<HTMLButtonElement>(null);
@@ -46,8 +48,8 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       }}
       footer={
         <div className="flex justify-end gap-2">
-          <AppButton onClick={onCancel}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>
-          <AppButton variant="primary" onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
+          <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>
+          <AppButton variant="primary" loading={confirmLoading} onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
         </div>
       }
     >

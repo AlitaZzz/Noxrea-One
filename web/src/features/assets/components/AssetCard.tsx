@@ -8,7 +8,7 @@
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PauseCircleFilled, PlayCircleFilled, PlusOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
-import { useRef,useState } from "react";
+import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -54,6 +54,15 @@ export default function AssetCard({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 卡片卸载（分页回收 / 删除）时释放音频元素，避免长列表试听泄漏。
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+  }, []);
 
   const handleMenuEnter = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);

@@ -279,6 +279,8 @@
     "uncategorized": "Uncategorized",
     "create": "New Asset",
     "batchDelete": "Batch Delete",
+    "batchDeleteWarn": "Delete the selected {{count}} assets? This cannot be undone.",
+    "selectedOfTotal": "{{selected}} of {{total}} selected",
     "moveTo": "Move To",
     "changeType": "Change Type",
     "empty": "No assets yet",
@@ -323,6 +325,7 @@
     },
     "folder": {
       "delete": "Delete Folder",
+      "rename": "Rename Folder",
       "deleteWarn": "This will permanently delete the folder and all its subfolders and assets (including files), and cannot be undone."
     }
   },
@@ -585,7 +588,9 @@
       "create_failed": "Failed to create the asset",
       "update_failed": "Failed to update the asset",
       "delete_failed": "Failed to delete the asset",
-      "folder_delete_failed": "Failed to delete the folder"
+      "folder_delete_failed": "Failed to delete the folder",
+      "folder_create_failed": "Failed to create the folder",
+      "folder_update_failed": "Failed to rename the folder"
     },
     "upload": {
       "invalid_form_data": "Failed to parse the form data",

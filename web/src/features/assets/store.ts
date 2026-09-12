@@ -118,15 +118,19 @@ interface AssetsState {
   initialize: () => Promise<void>;
   applyCounters: (counters: AssetCountersDto) => void;
   markAssetUrlSaved: (url: string) => void;
-  unmarkAssetUrlSaved: (url: string) => void;
 
   addAsset: (input: CreateAssetInput) => Promise<AssetItem | null>;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
   updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
-  removeAsset: (id: string, sourceUrl?: string) => Promise<boolean>;
-  updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<boolean>;
+  removeAssetsBatch: (ids: string[]) => Promise<{ ok: boolean; total?: number }>;
+  updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<{ ok: boolean; total?: number }>;
 
-  addFolder: (name: string, scope: AssetScope, parentId?: string) => Promise<AssetFolder | null>;
+  addFolder: (name: string, scope: AssetScope, parentId?: string) => Promise<
+    { status: "created"; folder: AssetFolder } | { status: "duplicate" } | { status: "failed" }
+  >;
+  renameFolder: (id: string, name: string) => Promise<
+    { status: "updated" } | { status: "duplicate" } | { status: "failed" }
+  >;
   removeFolder: (id: string) => Promise<boolean>;
 
   getFoldersByScope: (scope: AssetScope) => AssetFolder[];
@@ -153,15 +157,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       if (state.knownAssetUrls.has(url)) return { knownAssetUrls: state.knownAssetUrls };
       const next = new Set(state.knownAssetUrls);
       next.add(url);
-      return { knownAssetUrls: next };
-    });
-  },
-
-  unmarkAssetUrlSaved: (url) => {
-    set((state) => {
-      if (!state.knownAssetUrls.has(url)) return {};
-      const next = new Set(state.knownAssetUrls);
-      next.delete(url);
       return { knownAssetUrls: next };
     });
   },
@@ -279,36 +274,41 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     return false;
   },
 
-  removeAsset: async (id, sourceUrl) => {
-    const intId = toIntId(id);
-    if (!intId) return false;
+  removeAssetsBatch: async (ids) => {
+    const intIds = ids.map(toIntId).filter((n): n is number => n != null);
+    if (intIds.length === 0) return { ok: false };
 
-    const res = await assetApi.deleteAsset(intId).catch(() => null);
-    if (res && res.code === 200) {
+    const res = await assetApi.deleteAssetsBatch(intIds).catch(() => null);
+    if (res && res.code === 200 && res.data) {
       get().applyCounters(res.data.counters);
-      if (sourceUrl) get().unmarkAssetUrlSaved(sourceUrl);
-      return true;
+      if (res.data.sourceUrls.length > 0) {
+        const removed = new Set(res.data.sourceUrls);
+        set((state) => ({
+          knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
+        }));
+      }
+      return { ok: true, total: res.data.counters.total };
     }
     notifyFailure(res, "asset.delete_failed");
-    return false;
+    return { ok: false };
   },
 
   updateAssetsBatch: async (ids, updates) => {
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
-    if (intIds.length === 0) return false;
+    if (intIds.length === 0) return { ok: false };
 
     const body: Record<string, unknown> = {};
     if ("folderId" in updates) body.folderId = toIntId(String(updates.folderId || "")) ?? null;
     if ("type" in updates) body.type = updates.type;
-    if (Object.keys(body).length === 0) return false;
+    if (Object.keys(body).length === 0) return { ok: false };
 
     const res = await assetApi.updateAssetsBatch(intIds, body).catch(() => null);
     if (res && res.code === 200) {
       get().applyCounters(res.data.counters);
-      return true;
+      return { ok: true, total: res.data.counters.total };
     }
     notifyFailure(res, "asset.update_failed");
-    return false;
+    return { ok: false };
   },
 
   // --- Folder CRUD ---
@@ -320,16 +320,43 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         (folder.parentId || undefined) === (parentId || undefined) &&
         folder.name.toLowerCase() === name.toLowerCase(),
     );
-    if (existing) return null;
+    if (existing) return { status: "duplicate" };
 
     const res = await assetApi.createFolder(name, scope, toIntId(parentId || "")).catch(() => null);
     if (res && res.code === 200 && res.data) {
       const folder = dtoToFolder(res.data);
       set((state) => ({ folders: [...state.folders, folder] }));
-      return folder;
+      return { status: "created", folder };
     }
     notifyFailure(res, "asset.folder_create_failed");
-    return null;
+    return { status: "failed" };
+  },
+
+  renameFolder: async (id, name) => {
+    const intId = toIntId(id);
+    if (!intId) return { status: "failed" };
+
+    const target = get().folders.find((folder) => folder.id === id);
+    if (!target) return { status: "failed" };
+    const duplicate = get().folders.some(
+      (folder) =>
+        folder.id !== id &&
+        folder.scope === target.scope &&
+        (folder.parentId || undefined) === (target.parentId || undefined) &&
+        folder.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (duplicate) return { status: "duplicate" };
+
+    const res = await assetApi.updateFolder(intId, name).catch(() => null);
+    if (res && res.code === 200 && res.data) {
+      const updated = dtoToFolder(res.data);
+      set((state) => ({
+        folders: state.folders.map((folder) => (folder.id === id ? { ...folder, name: updated.name } : folder)),
+      }));
+      return { status: "updated" };
+    }
+    notifyFailure(res, "asset.folder_update_failed");
+    return { status: "failed" };
   },
 
   removeFolder: async (id) => {

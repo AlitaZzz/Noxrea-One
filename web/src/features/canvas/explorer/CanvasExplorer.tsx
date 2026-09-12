@@ -455,8 +455,8 @@ function AssetsView() {
     loadingMore,
     loadError,
     hasMore,
-    reload,
     loadMore,
+    retry,
   } = useAssetLibrary({
     enabled: true,
     scope: "personal",
@@ -622,7 +622,7 @@ function AssetsView() {
           loadingMore={loadingMore}
           onLoadMore={loadMore}
           loadError={loadError}
-          onRetry={reload}
+          onRetry={retry}
         />
       </div>
 

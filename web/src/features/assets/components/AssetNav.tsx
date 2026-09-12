@@ -1,7 +1,7 @@
 /**
  * 资产库导航栏（Navigation）。
  * 上部为空间切换（个人 / 公共等），下部以递归树形展示文件夹层级与资产计数，
- * 支持选中定位与删除文件夹。
+ * 支持选中定位。文件夹的重命名 / 删除入口放在网格中的文件夹卡片上，树保持纯导航。
  */
 "use client";
 
@@ -26,7 +26,6 @@ interface Props {
   onSelectFolder: (folderId: string | null) => void;
   folders: AssetFolder[];
   folderCounts: Record<string, number>;
-  onDeleteFolder?: (folder: AssetFolder) => void;
 }
 
 function FolderTree({
@@ -51,35 +50,38 @@ function FolderTree({
 
   return (
     <>
-      {children.map((f) => (
-        <div key={f.id} className="group relative">
-          <NavButton
-            onClick={(e) => { e?.stopPropagation(); onSelectFolder(f.id); }}
-            active={activeFolderId === f.id}
-            style={{ padding: "5px 10px 5px " + (28 + depth * 16) + "px" }}
-          >
-            <FolderOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
-            <span className="flex-1 text-left truncate">
-              {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-            </span>
-            <span className="text-xs text-white/30">{folderCounts[f.id] || 0} {t("asset.count")}</span>
-          </NavButton>
-          <FolderTree
-            folders={folders}
-            parentId={f.id}
-            activeFolderId={activeFolderId}
-            onSelectFolder={onSelectFolder}
-            depth={depth + 1}
-            folderCounts={folderCounts}
-            t={t}
-          />
-        </div>
-      ))}
+      {children.map((f) => {
+        const protectedFolder = f.kind === "uncategorized";
+        return (
+          <div key={f.id}>
+            <NavButton
+              onClick={(e) => { e?.stopPropagation(); onSelectFolder(f.id); }}
+              active={activeFolderId === f.id}
+              style={{ padding: "5px 10px 5px " + (28 + depth * 16) + "px" }}
+            >
+              <FolderOutlined className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
+              <span className="flex-1 text-left truncate">
+                {protectedFolder ? t("asset.uncategorized") : f.name}
+              </span>
+              <span className="text-xs text-white/30">{folderCounts[f.id] || 0} {t("asset.count")}</span>
+            </NavButton>
+            <FolderTree
+              folders={folders}
+              parentId={f.id}
+              activeFolderId={activeFolderId}
+              onSelectFolder={onSelectFolder}
+              depth={depth + 1}
+              folderCounts={folderCounts}
+              t={t}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }
 
-export default function AssetNav({ scopes, activeScope, activeFolderId, onSelectScope, onSelectFolder, folders, folderCounts, onDeleteFolder }: Props) {
+export default function AssetNav({ scopes, activeScope, activeFolderId, onSelectScope, onSelectFolder, folders, folderCounts }: Props) {
   const { t } = useTranslation();
   const scopeFolders = folders.filter((f) => f.scope === activeScope && !f.parentId);
 
@@ -103,8 +105,8 @@ export default function AssetNav({ scopes, activeScope, activeFolderId, onSelect
               onSelectFolder={onSelectFolder}
               depth={0}
               folderCounts={folderCounts}
-            t={t}
-          />
+              t={t}
+            />
           )}
         </div>
       ))}

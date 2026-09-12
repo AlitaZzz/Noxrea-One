@@ -70,6 +70,10 @@ export const assetBatchUpdateSchema = z.object({
   }),
 });
 
+export const assetBatchDeleteSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(200),
+});
+
 export const assetOutSchema = z.object({
   id: z.number(),
   userId: z.number(),
