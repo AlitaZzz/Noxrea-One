@@ -278,6 +278,8 @@
     "uncategorized": "未分类",
     "create": "新建资产",
     "batchDelete": "批量删除",
+    "batchDeleteWarn": "确定删除选中的 {{count}} 项资产吗？删除后不可恢复。",
+    "selectedOfTotal": "已选 {{selected}} / {{total}}",
     "moveTo": "移动到",
     "changeType": "修改类型",
     "empty": "暂无资产",
@@ -322,6 +324,7 @@
     },
     "folder": {
       "delete": "删除文件夹",
+      "rename": "重命名文件夹",
       "deleteWarn": "此操作将永久删除该文件夹及其所有子文件夹与资产（含文件），且不可恢复。"
     }
   },
@@ -584,7 +587,9 @@
       "create_failed": "创建资产失败",
       "update_failed": "更新资产失败",
       "delete_failed": "删除资产失败",
-      "folder_delete_failed": "删除文件夹失败"
+      "folder_delete_failed": "删除文件夹失败",
+      "folder_create_failed": "新建文件夹失败",
+      "folder_update_failed": "重命名文件夹失败"
     },
     "upload": {
       "invalid_form_data": "表单数据解析失败",

@@ -14,7 +14,7 @@ import AppModal from "@/components/ui/AppModal";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string) => Promise<boolean>;
+  onCreate: (name: string) => Promise<"created" | "duplicate" | "failed">;
 }
 
 export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
@@ -26,14 +26,17 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
   const handleCreate = async () => {
     if (!name.trim() || saving) return;
     setSaving(true);
-    const ok = await onCreate(name.trim());
+    const status = await onCreate(name.trim());
     setSaving(false);
-    if (ok) {
+    if (status === "created") {
       setName("");
       setError("");
       onClose();
-    } else {
+    } else if (status === "duplicate") {
       setError(t("asset.folderDuplicate"));
+    } else {
+      // 服务端失败的具体原因已由 store 统一通知，这里只给行内反馈。
+      setError(t("error.asset.folder_create_failed"));
     }
   };
 

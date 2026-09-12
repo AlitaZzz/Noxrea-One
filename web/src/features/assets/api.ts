@@ -122,8 +122,11 @@ export const assetApi = {
       body: JSON.stringify(data),
     }),
 
-  deleteAsset: (id: number) =>
-    api<{ counters: AssetCountersDto }>(`/api/assets/items/${id}`, { method: "DELETE" }),
+  deleteAssetsBatch: (ids: number[]) =>
+    api<{ count: number; sourceUrls: string[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    }),
 
   updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
     api<{ count: number; counters: AssetCountersDto }>("/api/assets/items/batch", {

@@ -2,7 +2,7 @@
  * 资产库主弹窗，资产模块的容器与编排层。
  * 组合左侧空间 / 文件夹树、顶部分类页签与工具条、主体资产网格，
  * 统一处理分页加载、搜索筛选、批量选择与批量删除 / 移动 / 改类型、
- * 文件夹增删，以及「插入画布」（经 createAssetNode 转成画布节点）。
+ * 文件夹增删改，以及「插入画布」（经 createAssetNode 转成画布节点）。
  */
 "use client";
 
@@ -41,8 +41,9 @@ export default function AssetsModal({ open, onClose }: Props) {
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
   const addFolder = useAssetsStore((s) => s.addFolder);
+  const renameFolder = useAssetsStore((s) => s.renameFolder);
   const updateAsset = useAssetsStore((s) => s.updateAsset);
-  const removeAsset = useAssetsStore((s) => s.removeAsset);
+  const removeAssetsBatch = useAssetsStore((s) => s.removeAssetsBatch);
   const removeFolder = useAssetsStore((s) => s.removeFolder);
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
@@ -58,12 +59,21 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [folderCreateOpen, setFolderCreateOpen] = useState(false);
 
-  // Rename state
+  // Rename asset state
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
 
-  // Delete confirm state
+  // Rename folder state
+  const [renamingFolder, setRenamingFolder] = useState<AssetFolder | null>(null);
+  const [folderRenameValue, setFolderRenameValue] = useState("");
+  const [folderRenameSaving, setFolderRenameSaving] = useState(false);
+  const [folderRenameError, setFolderRenameError] = useState("");
+
+  // Delete confirm state —— 单个资产与批量删除各自独立，避免确认文案与实际删除集合不一致。
   const [deleteAsset, setDeleteAsset] = useState<AssetItem | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Delete folder confirm state
   const [deleteFolder, setDeleteFolder] = useState<AssetFolder | null>(null);
@@ -71,8 +81,10 @@ export default function AssetsModal({ open, onClose }: Props) {
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
+  const [batchMoving, setBatchMoving] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
+  const [batchTypeSaving, setBatchTypeSaving] = useState(false);
 
   // 单选页签映射为共用 Hook 的多类型筛选；空数组表示"全部"。
   const categories = useMemo<AssetType[]>(
@@ -83,14 +95,16 @@ export default function AssetsModal({ open, onClose }: Props) {
   // 与画布抽屉共用同一条查询链路，弹窗只负责展示和批量操作。
   const {
     items,
+    totalCount,
     loading,
     loadingMore,
     loadError,
     hasMore,
     reload,
     loadMore: fetchNextPage,
+    retry,
+    removeItems,
     setItems,
-    setTotalCount,
   } = useAssetLibrary({
     enabled: open,
     scope: activeScope,
@@ -98,6 +112,16 @@ export default function AssetsModal({ open, onClose }: Props) {
     search,
     categories,
   });
+
+  // 搜索词或分类变化后旧勾选可能已不在结果中，在事件中清空，避免批量操作误带不可见项。
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setSelectedIds(new Set());
+  }, []);
+  const handleCategoryChange = useCallback((value: AssetType | "all") => {
+    setCategory(value);
+    setSelectedIds(new Set());
+  }, []);
 
   const handleToggleSelect = useCallback((asset: AssetItem) => {
     setSelectedIds((prev) => {
@@ -108,7 +132,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     });
   }, []);
 
-  // Selection
+  // Selection —— 全选仅覆盖已加载页，工具条同时展示「已选 / 总数」提示范围。
   const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
   const handleSelectAll = useCallback(() => {
@@ -118,52 +142,66 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
-    setDeleteAsset({ id: String(selectedIds.size), name: `${selectedIds.size} ${t("asset.count")}`, type: "other", mediaType: "", width: 0, height: 0, description: "", createdAt: 0, updatedAt: 0, tags: [], extraData: {}, scope: "personal" } as AssetItem);
-  }, [selectedIds, t]);
+    setBatchDeleteOpen(true);
+  }, [selectedIds]);
 
   const handleBatchDeleteConfirm = useCallback(async () => {
     const ids = [...selectedIds];
-    // 逐个等待结果：只有真正删除成功的才从列表移除（失败原因由 store 提示）
-    const results = await Promise.all(
-      ids.map((id) => {
-        const item = items.find((i) => i.id === id);
-        return removeAsset(id, item?.sourceUrl);
-      }),
-    );
-    const removed = new Set(ids.filter((_, i) => results[i]));
-    if (removed.size > 0) {
-      setItems((prev) => prev.filter((i) => !removed.has(i.id)));
-      setTotalCount((c) => Math.max(0, c - removed.size));
-    }
-    // 只保留删除失败的项，便于直接重试
-    setSelectedIds(new Set(ids.filter((_, i) => !results[i])));
+    setDeleting(true);
+    const result = await removeAssetsBatch(ids);
+    setDeleting(false);
+    if (!result.ok) return;
+    await removeItems(ids);
+    setSelectedIds(new Set());
+    setBatchDeleteOpen(false);
+  }, [selectedIds, removeAssetsBatch, removeItems]);
+
+  const handleSingleDeleteConfirm = useCallback(async () => {
+    if (!deleteAsset) return;
+    setDeleting(true);
+    const result = await removeAssetsBatch([deleteAsset.id]);
+    setDeleting(false);
+    if (!result.ok) return;
+    await removeItems([deleteAsset.id]);
     setDeleteAsset(null);
-  }, [selectedIds, removeAsset, items, setItems, setTotalCount]);
+  }, [deleteAsset, removeAssetsBatch, removeItems]);
 
   const handleBatchMove = useCallback(async (folderId: string) => {
-    const ok = await updateAssetsBatch([...selectedIds], { folderId });
-    // 失败保留选中，用户可直接重试
-    if (!ok) return;
+    const ids = [...selectedIds];
+    if (ids.length === 0 || batchMoving) return;
+    // 移动到当前所在文件夹：直接收起，不发请求也不刷新。
+    if (folderId === activeFolderId) {
+      setSelectedIds(new Set());
+      setBatchMoveOpen(false);
+      return;
+    }
+    setBatchMoving(true);
+    const result = await updateAssetsBatch(ids, { folderId });
+    setBatchMoving(false);
+    if (!result.ok) return;
     setSelectedIds(new Set());
     setBatchMoveOpen(false);
-    // 刷新当前视图以立即反映移动结果
-    reload();
-  }, [selectedIds, updateAssetsBatch, reload]);
+    // 文件夹内列表：移动成功的项必然离开当前视图，本地剔除并补页；
+    // 根目录的跨文件夹搜索结果中这些项仍匹配，保留不动。
+    if (activeFolderId !== null) await removeItems(ids);
+  }, [selectedIds, batchMoving, activeFolderId, updateAssetsBatch, removeItems]);
 
   const handleBatchType = useCallback(async (type: AssetType) => {
     const ids = [...selectedIds];
-    const ok = await updateAssetsBatch(ids, { type });
-    // 失败保留选中，用户可直接重试
-    if (!ok) return;
+    if (ids.length === 0 || batchTypeSaving) return;
+    setBatchTypeSaving(true);
+    const result = await updateAssetsBatch(ids, { type });
+    setBatchTypeSaving(false);
+    if (!result.ok) return;
     setSelectedIds(new Set());
     setBatchTypeOpen(false);
-    // 类型变了，当前筛选可能已不适用，重新拉取比本地改字段更可靠
-    if (activeFolderId !== null || category !== "all" || search.trim()) {
-      reload();
+    // 当前按具体分类筛选且新类型不属于该分类时，这些项应离开视图；其余情况本地改字段。
+    if (category !== "all" && type !== category) {
+      await removeItems(ids);
     } else {
       setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
     }
-  }, [selectedIds, updateAssetsBatch, activeFolderId, category, search, reload, setItems]);
+  }, [selectedIds, batchTypeSaving, category, updateAssetsBatch, removeItems, setItems]);
 
   // Current folder depth (max 2 levels allowed)
   const currentFolderDepth = useMemo(() => {
@@ -221,10 +259,10 @@ export default function AssetsModal({ open, onClose }: Props) {
   );
 
   const handleCreateFolder = useCallback(
-    async (name: string): Promise<boolean> => {
+    async (name: string) => {
       const parentId = activeFolderId ?? undefined;
       const result = await addFolder(name, activeScope, parentId);
-      return result !== null;
+      return result.status;
     },
     [addFolder, activeScope, activeFolderId],
   );
@@ -233,14 +271,39 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleRenameConfirm = useCallback(async () => {
     const id = renamingId;
     const name = renameValue.trim();
-    setRenamingId(null);
-    setRenameValue("");
-    if (!id || !name) return;
-    // 成功后同步本地列表：此前只发请求，网格里仍是旧名称
-    if (await updateAsset(id, { name })) {
+    if (!id || !name || renameSaving) return;
+    setRenameSaving(true);
+    const ok = await updateAsset(id, { name });
+    setRenameSaving(false);
+    if (ok) {
+      // 成功后同步本地列表：此前只发请求，网格里仍是旧名称
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name } : i)));
+      setRenamingId(null);
+      setRenameValue("");
     }
-  }, [renamingId, renameValue, updateAsset, setItems]);
+  }, [renamingId, renameValue, renameSaving, updateAsset, setItems]);
+
+  const handleRenameFolder = useCallback((folder: AssetFolder) => {
+    setRenamingFolder(folder);
+    setFolderRenameValue(folder.name);
+    setFolderRenameError("");
+  }, []);
+  const handleRenameFolderConfirm = useCallback(async () => {
+    if (!renamingFolder || folderRenameSaving) return;
+    const name = folderRenameValue.trim();
+    if (!name) return;
+    setFolderRenameSaving(true);
+    const result = await renameFolder(renamingFolder.id, name);
+    setFolderRenameSaving(false);
+    if (result.status === "updated") {
+      setRenamingFolder(null);
+      setFolderRenameValue("");
+      setFolderRenameError("");
+    } else if (result.status === "duplicate") {
+      setFolderRenameError(t("asset.folderDuplicate"));
+    }
+    // failed 时 store 已弹出错误通知，弹窗保留便于重试。
+  }, [renamingFolder, folderRenameValue, folderRenameSaving, renameFolder, t]);
 
   const handleDelete = useCallback((asset: AssetItem) => { setDeleteAsset(asset); }, []);
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
@@ -350,7 +413,6 @@ export default function AssetsModal({ open, onClose }: Props) {
               onSelectFolder={handleSelectFolder}
               folders={folders}
               folderCounts={folderCounts}
-              onDeleteFolder={handleDeleteFolder}
             />
           </div>
 
@@ -398,8 +460,9 @@ export default function AssetsModal({ open, onClose }: Props) {
             {/* Toolbar */}
             <AssetToolbar
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={handleSearchChange}
               selectedCount={selectedIds.size}
+              totalCount={totalCount}
               allSelected={allSelected}
               onSelectAll={handleSelectAll}
               onBatchDelete={handleBatchDelete}
@@ -411,7 +474,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             />
 
             {/* Category tabs */}
-            <AssetCategoryTabs active={category} onChange={setCategory} />
+            <AssetCategoryTabs active={category} onChange={handleCategoryChange} />
 
             {/* Grid */}
             <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
@@ -426,30 +489,31 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onDelete={handleDelete}
                 onEnterFolder={(folder) => setActiveFolderId(folder.id)}
                 onDeleteFolder={handleDeleteFolder}
+                onRenameFolder={handleRenameFolder}
                 loading={loading}
                 hasMore={hasMore}
                 loadingMore={loadingMore}
                 onLoadMore={fetchNextPage}
                 loadError={loadError}
-                onRetry={reload}
+                onRetry={retry}
               />
             </div>
           </div>
         </div>
 
-        {/* Rename modal */}
+        {/* Rename asset modal */}
         <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.rename")}</span>}
           open={!!renamingId}
-          onCancel={() => setRenamingId(null)}
+          onCancel={() => { if (!renameSaving) { setRenamingId(null); setRenameValue(""); } }}
           centered
           destroyOnHidden
           width={400}
           className="rename-modal"
           footer={
             <div className="flex justify-end gap-2">
-              <AppButton onClick={() => setRenamingId(null)}>{t("common.cancel")}</AppButton>
-              <AppButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</AppButton>
+              <AppButton onClick={() => setRenamingId(null)} disabled={renameSaving}>{t("common.cancel")}</AppButton>
+              <AppButton variant="primary" loading={renameSaving} onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</AppButton>
             </div>
           }
           styles={{
@@ -481,26 +545,59 @@ export default function AssetsModal({ open, onClose }: Props) {
           />
         </AppModal>
 
-        {/* Delete confirm */}
+        {/* Rename folder modal */}
+        <AppModal
+          title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.folder.rename")}</span>}
+          open={!!renamingFolder}
+          onCancel={() => { if (!folderRenameSaving) { setRenamingFolder(null); setFolderRenameValue(""); setFolderRenameError(""); } }}
+          centered
+          destroyOnHidden
+          width={400}
+          footer={
+            <div className="flex justify-end gap-2">
+              <AppButton onClick={() => setRenamingFolder(null)} disabled={folderRenameSaving}>{t("common.cancel")}</AppButton>
+              <AppButton variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</AppButton>
+            </div>
+          }
+          styles={{
+            header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
+            body: { background: "var(--canvas-bg)", padding: "20px 24px 8px" },
+            footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
+          }}
+          closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
+        >
+          <Input
+            value={folderRenameValue}
+            onChange={(e) => { setFolderRenameValue(e.target.value.slice(0, 50)); setFolderRenameError(""); }}
+            onPressEnter={handleRenameFolderConfirm}
+            maxLength={50}
+            showCount
+            status={folderRenameError ? "error" : undefined}
+            style={{ background: "var(--canvas-bg-elevated)", borderColor: folderRenameError ? "#ff4d4f" : "var(--canvas-border)", color: "var(--canvas-text)" }}
+          />
+          {folderRenameError && (
+            <div className="text-xs mt-1.5" style={{ color: "#ff4d4f" }}>{folderRenameError}</div>
+          )}
+        </AppModal>
+
+        {/* Single delete confirm */}
         <ConfirmModal
           open={!!deleteAsset}
           title={t("asset.delete")}
           content={deleteAsset?.name || ""}
-          onOk={async () => {
-            if (!deleteAsset) return;
-            if (selectedIds.size > 0) {
-              await handleBatchDeleteConfirm();
-              return;
-            }
-            // 只有删除成功才从列表移除；失败原因由 store 统一通知
-            const removed = await removeAsset(deleteAsset.id, deleteAsset.sourceUrl);
-            if (removed) {
-              setItems((prev) => prev.filter((i) => i.id !== deleteAsset.id));
-              setTotalCount((c) => Math.max(0, c - 1));
-            }
-            setDeleteAsset(null);
-          }}
-          onCancel={() => { setDeleteAsset(null); setSelectedIds(new Set()); }}
+          confirmLoading={deleting}
+          onOk={handleSingleDeleteConfirm}
+          onCancel={() => { if (!deleting) setDeleteAsset(null); }}
+        />
+
+        {/* Batch delete confirm —— 取消只关弹窗，保留勾选便于改主意 */}
+        <ConfirmModal
+          open={batchDeleteOpen}
+          title={t("asset.delete")}
+          content={t("asset.batchDeleteWarn", { count: selectedIds.size })}
+          confirmLoading={deleting}
+          onOk={handleBatchDeleteConfirm}
+          onCancel={() => { if (!deleting) setBatchDeleteOpen(false); }}
         />
 
         {/* Delete folder confirm */}
@@ -522,7 +619,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <AppButton onClick={() => setBatchMoveOpen(false)}>{t("common.cancel")}</AppButton>
+              <AppButton onClick={() => setBatchMoveOpen(false)} disabled={batchMoving}>{t("common.cancel")}</AppButton>
             </div>
           }
           styles={{
@@ -533,8 +630,9 @@ export default function AssetsModal({ open, onClose }: Props) {
         >
           <div className="flex flex-col gap-1.5 max-h-60 overflow-auto">
             <button
+              disabled={!uncategorizedFolder || batchMoving}
               onClick={() => uncategorizedFolder && handleBatchMove(uncategorizedFolder.id)}
-              className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left"
+              className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ color: "var(--canvas-text)" }}
             >
               <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
@@ -547,8 +645,9 @@ export default function AssetsModal({ open, onClose }: Props) {
                 return children.flatMap((f) => [
                   <button
                     key={f.id}
+                    disabled={batchMoving}
                     onClick={() => handleBatchMove(f.id)}
-                    className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left"
+                    className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left disabled:opacity-40"
                     style={{ color: "var(--canvas-text)", paddingLeft: 24 + depth * 16 }}
                   >
                     <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
@@ -566,16 +665,16 @@ export default function AssetsModal({ open, onClose }: Props) {
         <AppModal
           title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.changeType")}</span>}
           open={batchTypeOpen}
-          onCancel={() => setBatchTypeOpen(false)}
+          onCancel={() => { if (!batchTypeSaving) setBatchTypeOpen(false); }}
           centered
           destroyOnHidden
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <AppButton onClick={() => setBatchTypeOpen(false)}>{t("common.cancel")}</AppButton>
+              <AppButton onClick={() => setBatchTypeOpen(false)} disabled={batchTypeSaving}>{t("common.cancel")}</AppButton>
               <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
-                  <AppButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
+                  <AppButton variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
                 </span>
               </Tooltip>
             </div>

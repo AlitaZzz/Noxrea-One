@@ -582,6 +582,47 @@ export async function deleteAsset(userId: number, id: number) {
   });
 }
 
+export async function deleteAssetsBatch(userId: number, ids: number[]) {
+  return prisma.$transaction(async (tx) => {
+    const currentItems = await tx.assetItem.findMany({
+      where: { id: { in: ids }, userId },
+      select: { id: true, folderId: true, scope: true, sourceUrl: true },
+    });
+    if (currentItems.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
+
+    const scopes = [...new Set(currentItems.map((item) => item.scope))];
+    if (scopes.length > 1) throw new AssetOperationError("asset_not_found");
+    const scope = scopes[0] ?? "personal";
+
+    await removeSourceFileRefsBatch(tx, {
+      userId,
+      sourceType: "asset_item",
+      sourceIds: currentItems.map((item) => String(item.id)),
+    });
+    await tx.assetItem.deleteMany({ where: { id: { in: ids }, userId } });
+
+    // 同一直属目录被删多条时聚合成一次递减，避免逐条 update。
+    const folderCounts = new Map<number, number>();
+    for (const item of currentItems) {
+      folderCounts.set(item.folderId, (folderCounts.get(item.folderId) ?? 0) + 1);
+    }
+    for (const [folderId, count] of folderCounts) {
+      await tx.assetFolder.update({
+        where: { id: folderId },
+        data: { directCount: { decrement: count } },
+      });
+    }
+
+    return {
+      count: currentItems.length,
+      sourceUrls: currentItems
+        .map((item) => item.sourceUrl)
+        .filter((sourceUrl): sourceUrl is string => Boolean(sourceUrl)),
+      counters: await readCounters(tx, userId, scope),
+    };
+  });
+}
+
 export async function listSourceUrls(userId: number, scope = "personal") {
   const items = await prisma.assetItem.findMany({
     where: { userId, scope, sourceUrl: { not: null } },
