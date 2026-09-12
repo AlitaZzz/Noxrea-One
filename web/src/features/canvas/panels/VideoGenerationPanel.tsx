@@ -447,7 +447,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         <MenuPopover
           open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
           trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm max-w-[180px]"
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
               style={{ border: "none", cursor: "pointer" }}>
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
@@ -473,7 +473,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             placement="bottomLeft"
             trigger={
               <Button size="small" type="text"
-                className="gen-panel-btn flex items-center justify-between gap-1.5 px-3 rounded text-sm"
+                className="gen-panel-btn flex items-center justify-between gap-1.5 rounded text-sm"
                 style={{ border: "none", cursor: "pointer", width: 120 }}>
                 <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
                   {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
@@ -531,7 +531,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           trigger="click" placement="bottomLeft"
           styles={{ container: { padding: 0, background: "transparent" } }}
         >
-          <button type="button" className="gen-panel-btn flex items-center gap-1 px-4 py-1.5 rounded flex-shrink-0 text-sm"
+          <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
             <ParamSummary fields={fields} values={fieldValues} />
           </button>

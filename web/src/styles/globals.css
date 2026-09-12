@@ -911,8 +911,12 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 .canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
-/* 生成面板按钮（模型选择/参数面板 trigger）：只留尺寸；交互规则见「统一图标按钮」 */
-.gen-panel-btn { height: 36px; border-radius: 8px; }
+/* 生成面板按钮（模型选择 / 参考方式 / 参数面板 trigger）：尺寸 + 水平内边距；
+   交互规则见上方「统一图标按钮」。
+   注意：那条规则为纯图标按钮把 padding 清零了，而 Tailwind 工具类在 @layer 里必输，
+   所以调用点写 px-* / py-* 无效——文字按钮的内边距必须由这条未分层规则给出，
+   否则文字贴边。宽度一律不固定，随内容自适应。 */
+.gen-panel-btn { height: 36px; border-radius: 8px; padding: 0 12px; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
 /* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
 .canvas-toolbar .ant-btn { font-size: 16px; }

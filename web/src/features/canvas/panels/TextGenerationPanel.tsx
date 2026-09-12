@@ -509,7 +509,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               <Button
                 size="small"
                 type="text"
-                className="gen-panel-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-sm max-w-[180px]"
+                className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
                 style={{ border: "none", cursor: "pointer" }}
               >
                 <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
