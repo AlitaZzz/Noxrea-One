@@ -28,6 +28,11 @@ export function startServer(): Promise<void> {
         resolve();
       },
     );
+    // 禁用服务端对空闲 keep-alive 连接的主动销毁（Node 默认 5s 会 destroy socket 发 RST）。
+    // Next rewrites 代理的连接池若在销毁瞬间复用该连接，读到 RST → read ECONNRESET，
+    // 表现为画布保存（PUT）偶发 HTTP 500。空闲连接改由客户端侧（undici 约 4s）先关闭，
+    // 竞态窗口随之消失。dev 与 prod（npm run server）同样生效。
+    server.keepAliveTimeout = 0;
   });
 }
 
