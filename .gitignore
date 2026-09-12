@@ -152,7 +152,7 @@ huggingface/
 
 # Claude cache
 .claude/cache/
-
+.claude/
 
 
 # =====================================================
