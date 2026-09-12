@@ -114,6 +114,17 @@
 .react-flow__node.selected:not(.react-flow__node-group) {
   z-index: 1000 !important;
 }
+/* 组节点沉到连线（边层 SVG）之下：React Flow 中节点层整体绘制在边层之上，
+   组的大矩形会盖住组内节点之间的连线，点击连线会先命中组节点，
+   导致组内连线无法选中。边层仅描边接收事件（visibleStroke），
+   组内空白处仍会穿透到组节点，选中组的交互不受影响。
+   .react-flow__node-group-node 是 React Flow 按 type=group-node 自动生成的 class，
+   与 createGroupNode 手动加的 .react-flow__node-group 双保险 */
+.react-flow__node-group.react-flow__node,
+.react-flow__node-group.react-flow__node.selected,
+.react-flow__node.react-flow__node-group-node {
+  z-index: -1 !important;
+}
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
 /* Multi-select rect: expand outward by GROUP_NODE_PADDING(40) so selection
