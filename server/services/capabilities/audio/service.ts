@@ -48,10 +48,10 @@ class AudioCapabilityService implements CapabilityService {
 
     const req = protocol.buildAudioRequest(ctx.baseUrl, ctx.apiKey, body);
 
-    // 转译完成阶段（对标外部服务的"转译完成, 返回 plan"）
+    // 请求组装完成阶段：内部参数已按厂商协议生成具体请求，即将提交
     logEvent("capability.audio", {
       banner: true,
-      bannerTitle: "音频转译完成",
+      bannerTitle: "音频请求组装完成，即将提交",
       stage: "translation_done",
       taskId: ctx.taskId,
       url: req.url,
