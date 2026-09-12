@@ -6,13 +6,10 @@
 "use client";
 
 import {
-  CloseOutlined,
   CrownOutlined,
   DownloadOutlined,
   FullscreenOutlined,
-  LeftOutlined,
   PictureOutlined,
-  RightOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import { Handle, type NodeProps,Position } from "@xyflow/react";
@@ -30,6 +27,7 @@ import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
+import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData, TextNodeData } from "@/features/canvas/types";
 import { runMediaUpload, useNodeUpload } from "@/features/canvas/upload";
@@ -112,7 +110,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     },
     [id]
   );
-  const [expanded, setExpanded] = useState(false);
+  // 多图展开态与标注 / 裁剪模式一致：提升到 store，供 NodeToolbar 判断是否隐藏
+  const expanded = useCanvasStore((s) => s.multiExpandedNodeId) === id;
+  const setExpanded = useCallback((v: boolean) => {
+    useCanvasStore.getState().setMultiExpandedNodeId(v ? id : null);
+  }, [id]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -127,7 +129,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     };
     document.addEventListener("mousedown", handler, true);
     return () => document.removeEventListener("mousedown", handler, true);
-  }, [expanded]);
+  }, [expanded, setExpanded]);
 
   // 主图真相统一为 data.src（不再有本地 src state / 渲染期 setState hack）。
   // 多图模式约定：src 必为 multiResultUrls 的成员；撤销会把整个 data 快照替换，故无需额外同步。
@@ -179,8 +181,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [data.label]);
 
   // 预览浮层：图片列表优先用多图结果，单图时退化为 [src]
-  const previewList = useMemo(
-    () => (isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls : [src]),
+  const previewList = useMemo<PreviewItem[]>(
+    () =>
+      (isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls : [src]).map((url) => ({
+        url,
+        mediaType: "image" as const,
+      })),
     [isMulti, data.multiResultUrls, src]
   );
   const openPreview = useCallback(() => {
@@ -219,12 +225,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         markDirtyImmediate();
       }
     });
-  }, [id]);
+  }, [id, setExpanded]);
 
   /** 多图模式：展开/收起——浮层展示，节点尺寸不变 */
   const toggleExpand = useCallback(() => {
-    setExpanded((prev) => !prev);
-  }, []);
+    setExpanded(!expanded);
+  }, [expanded, setExpanded]);
 
   const addAsset = useAssetsStore((s) => s.addAsset);
 
@@ -400,10 +406,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip title={t("common.expand")}>
               <button
-                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+                className="app-overlay-btn app-overlay-btn--sm"
                 onClick={toggleExpand}
               >
-                <FullscreenOutlined style={{ fontSize: 12 }} />
+                <FullscreenOutlined />
               </button>
             </Tooltip>
           </div>
@@ -412,10 +418,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip title={t("common.replace")}>
               <button
-                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors cursor-pointer"
+                className="app-overlay-btn app-overlay-btn--sm"
                 onClick={handleUpload}
               >
-                <UploadOutlined style={{ fontSize: 12 }} />
+                <UploadOutlined />
               </button>
             </Tooltip>
           </div>
@@ -471,29 +477,29 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
                             <Tooltip title={t("common.download")}>
                               <button
-                                className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                className="app-overlay-btn app-overlay-btn--sm"
                                 onClick={() => handleDownloadUrl(url)}
                               >
-                                <DownloadOutlined style={{ fontSize: 13 }} />
+                                <DownloadOutlined />
                               </button>
                             </Tooltip>
                             {!isMain && (
                               <Tooltip title={t("node.setAsMain")}>
                                 <button
-                                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                  className="app-overlay-btn app-overlay-btn--sm"
                                   onClick={() => handleSetMain(url)}
                                 >
-                                  <CrownOutlined style={{ fontSize: 13 }} />
+                                  <CrownOutlined />
                                 </button>
                               </Tooltip>
                             )}
                             {isMain && (
                               <Tooltip title={t("common.collapse")}>
                                 <button
-                                  className="flex items-center justify-center w-7 h-7 rounded-md bg-black/60 hover:bg-black/80 text-white/80 hover:text-white cursor-pointer"
+                                  className="app-overlay-btn app-overlay-btn--sm"
                                   onClick={toggleExpand}
                                 >
-                                  <FullscreenOutlined style={{ fontSize: 13 }} />
+                                  <FullscreenOutlined />
                                 </button>
                               </Tooltip>
                             )}
@@ -595,8 +601,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       document.body
     )}
     {previewOpen && createPortal(
-      <PreviewOverlay
-        list={previewList}
+      <MediaPreviewOverlay
+        items={previewList}
         index={previewIndex}
         onIndexChange={setPreviewIndex}
         onClose={() => setPreviewOpen(false)}
@@ -604,141 +610,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       document.body
     )}
     </>
-  );
-}
-
-/** 全屏预览浮层：支持多图切换、下载、Esc/点击背景关闭，带淡入动画 */
-function PreviewOverlay({
-  list, index, onIndexChange, onClose,
-}: {
-  list: string[];
-  index: number;
-  onIndexChange: (i: number) => void;
-  onClose: () => void;
-}) {
-  const [shown, setShown] = useState(false);
-  const count = list.length;
-  // index 可能与 list 不同步（多图结果被替换后列表变短等），统一 clamp 后再使用
-  const safeIndex = Math.max(0, Math.min(index, count - 1));
-  const current = list[safeIndex] || "";
-  const go = (dir: number) => {
-    if (count <= 1) return;
-    onIndexChange((safeIndex + dir + count) % count);
-  };
-  useEffect(() => {
-    const r = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(r);
-  }, []);
-
-  const handleDownload = () => {
-    if (!current) return;
-    const a = document.createElement("a");
-    const sep = current.includes("?") ? "&" : "?";
-    a.href = `${current}${sep}${new URLSearchParams({ download: "true" }).toString()}`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const btnBase =
-    "flex cursor-pointer items-center justify-center rounded-full text-white/90 transition hover:text-white hover:bg-white/15";
-
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center nodrag"
-      style={{
-        background: "rgba(0,0,0,0.92)",
-        opacity: shown ? 1 : 0,
-        transition: "opacity 0.2s ease",
-      }}
-      onClick={onClose}
-    >
-      {/* 关闭 */}
-      <button
-        className={`${btnBase} absolute right-5 top-5 h-10 w-10 text-xl`}
-        onClick={onClose}
-      >
-        <CloseOutlined />
-      </button>
-
-      {/* 下载 */}
-      <button
-        className={`${btnBase} absolute right-5 top-[68px] h-10 w-10 text-lg`}
-        onClick={(e) => { e.stopPropagation(); handleDownload(); }}
-      >
-        <DownloadOutlined />
-      </button>
-
-      {/* 上一张 */}
-      {count > 1 && (
-        <button
-          className={`${btnBase} absolute left-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
-          onClick={(e) => { e.stopPropagation(); go(-1); }}
-        >
-          <LeftOutlined />
-        </button>
-      )}
-
-      {/* 当前图片 */}
-      {current && (
-        <img
-          src={current}
-          alt=""
-          draggable={false}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            maxWidth: "90vw",
-            maxHeight: "88vh",
-            objectFit: "contain",
-            borderRadius: 8,
-            boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
-            transform: shown ? "scale(1)" : "scale(0.96)",
-            transition: "transform 0.2s ease",
-          }}
-        />
-      )}
-
-      {/* 下一张 */}
-      {count > 1 && (
-        <button
-          className={`${btnBase} absolute right-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
-          onClick={(e) => { e.stopPropagation(); go(1); }}
-        >
-          <RightOutlined />
-        </button>
-      )}
-
-      {/* 计数 */}
-      {count > 1 && (
-        <div
-          className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-sm text-white/90"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {safeIndex + 1} / {count}
-        </div>
-      )}
-
-      {/* 缩略图条 */}
-      {count > 1 && (
-        <div
-          className="absolute bottom-14 left-1/2 flex max-w-[90vw] -translate-x-1/2 gap-2 overflow-x-auto rounded-xl bg-black/40 p-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {list.map((url, i) => (
-            <button
-              key={i}
-              onClick={() => onIndexChange(i)}
-              className={`h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-md transition ${
-                i === safeIndex ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
-              }`}
-            >
-              <img src={url} alt="" className="h-full w-full object-cover" draggable={false} />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

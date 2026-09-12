@@ -11,10 +11,10 @@ import { App, Button, Input, Select, Tooltip } from "antd";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
-import ModalButton from "@/components/ui/ModalButton";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
@@ -448,8 +448,8 @@ export default function AssetsModal({ open, onClose }: Props) {
           className="rename-modal"
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setRenamingId(null)}>{t("common.cancel")}</ModalButton>
-              <ModalButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</ModalButton>
+              <AppButton onClick={() => setRenamingId(null)}>{t("common.cancel")}</AppButton>
+              <AppButton variant="primary" onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</AppButton>
             </div>
           }
           styles={{
@@ -522,7 +522,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setBatchMoveOpen(false)}>{t("common.cancel")}</ModalButton>
+              <AppButton onClick={() => setBatchMoveOpen(false)}>{t("common.cancel")}</AppButton>
             </div>
           }
           styles={{
@@ -572,10 +572,10 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={360}
           footer={
             <div className="flex justify-end gap-2">
-              <ModalButton onClick={() => setBatchTypeOpen(false)}>{t("common.cancel")}</ModalButton>
+              <AppButton onClick={() => setBatchTypeOpen(false)}>{t("common.cancel")}</AppButton>
               <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
-                  <ModalButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</ModalButton>
+                  <AppButton variant="primary" disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
                 </span>
               </Tooltip>
             </div>

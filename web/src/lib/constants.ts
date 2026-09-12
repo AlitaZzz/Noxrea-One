@@ -115,16 +115,17 @@ export const UPLOAD_KEY = "upload" as const;
 export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
 
 // ── Node colors（原 node-colors.ts，合并至此） ──
-// 节点类型对应的语义色，用于小地图 minimap 节点着色。
-// 各节点的 input/output handle 小圆点颜色以节点组件内写死的实际显示色为准，
-// 此处与之保持一致，保证小地图与画布上节点圆点颜色对齐。
+// 节点类型对应的语义色，用于小地图 minimap 节点着色与类型图标着色。
+// 取值属于「分类色板」：与青柠主题同屏和谐（明度接近、饱和度克制），
+// 但彼此色相拉开，保证小地图上一眼能区分类型。
+// 文本节点直接复用品牌青柠，因为它是画布里最常出现的类型。
 export const NODE_TYPE_COLOR: Record<string, string> = {
-  [NODE_TYPE.TEXT]: "#1677ff",
-  [NODE_TYPE.IMAGE]: "#52c41a",
-  [NODE_TYPE.VIDEO]: "#13c2c2",
-  [NODE_TYPE.AUDIO]: "#fa8c16",
-  [NODE_TYPE.GROUP]: "#722ed1",
-  [NODE_TYPE.DIRECTOR]: "#722ed1",
+  [NODE_TYPE.TEXT]: "#c7f43d",
+  [NODE_TYPE.IMAGE]: "#4ade80",
+  [NODE_TYPE.VIDEO]: "#38bdf8",
+  [NODE_TYPE.AUDIO]: "#ffb020",
+  [NODE_TYPE.GROUP]: "#a78bfa",
+  [NODE_TYPE.DIRECTOR]: "#a78bfa",
 };
 
 // ── Handle 悬浮按钮与连线端点 ──
@@ -167,7 +168,8 @@ export const insetEdgeAnchor = (position: string | undefined, x: number, y: numb
 export const insetHandleCenter = (position: string | undefined, x: number, y: number) =>
   insetBy(position, x, y, HANDLE_SIZE / 2 + HANDLE_GAP);
 
-export const DEFAULT_NODE_COLOR = "#1677ff";
+/** 未知节点类型的兜底色：直接用品牌青柠，避免再出现第二种强调色 */
+export const DEFAULT_NODE_COLOR = "#c7f43d";
 
 /**
  * 连线（管道）本体色：中性灰，用 CSS 变量以跟随明暗主题。

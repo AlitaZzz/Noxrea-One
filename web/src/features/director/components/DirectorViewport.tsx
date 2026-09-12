@@ -902,7 +902,8 @@ export default function DirectorViewport() {
       <div ref={viewportRef} className="absolute inset-0" />
       <div ref={frameRef} className="absolute pointer-events-none border-2 border-white/40" style={{ display: "none" }} />
       <div id="dirLabelLayer" className="absolute inset-0 pointer-events-none overflow-hidden" />
-      <div className="absolute z-[5] text-center cursor-pointer" style={{ top: 18, right: 18, width: 74 }} title="重置视角">
+      {/* 去掉原生 title：下方已有可见的「重置视角」文字，提示内容重复 */}
+      <div className="absolute z-[5] text-center cursor-pointer" style={{ top: 18, right: 18, width: 74 }}>
         <NavSvg>
           <circle cx="37" cy="37" r="3" fill="var(--dir-dim2)" />
         </NavSvg>

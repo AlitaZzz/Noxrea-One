@@ -134,6 +134,9 @@ interface CanvasState {
   // 帧序列选帧模式（hides node toolbar for the capturing node，并让生成面板让位）
   frameCaptureNodeId: string | null;
   setFrameCaptureNodeId: (id: string | null) => void;
+  // 图片节点多图展开态（hides node toolbar；展开网格自带下载/设主图/收起入口）
+  multiExpandedNodeId: string | null;
+  setMultiExpandedNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -153,6 +156,20 @@ interface CanvasState {
   // Persistence
   restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
 }
+
+/**
+ * 节点级 UI 态字段名（值为节点 id 或 null）：
+ * 目标节点被删除时需在 removeNodes 中同步清空——
+ * 残留 id 本身无害（uid 会话内永不复用），但撤销会以同一 id 复活节点，
+ * 不清空就会带着对应模式（展开/标注/裁剪/文本编辑/选帧）回来。
+ */
+const NODE_UI_STATE_KEYS = [
+  "multiExpandedNodeId",
+  "annotatingNodeId",
+  "croppingNodeId",
+  "editingTextNodeId",
+  "frameCaptureNodeId",
+] as const;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   viewport: DEFAULT_VIEWPORT,
@@ -200,12 +217,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         }
         return n;
       });
-      return {
+      const patch: Partial<CanvasState> = {
         nodes: nodes.filter((n) => !toDelete.has(n.id)),
         edges: s.edges.filter(
           (e) => !toDelete.has(e.source) && !toDelete.has(e.target)
         ),
       };
+      for (const key of NODE_UI_STATE_KEYS) {
+        const id = s[key];
+        if (id && toDelete.has(id)) patch[key] = null;
+      }
+      return patch;
     });
     saveManager.markDirtyImmediate();
   },
@@ -254,6 +276,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setEditingTextNodeId: (id) => set({ editingTextNodeId: id }),
   frameCaptureNodeId: null,
   setFrameCaptureNodeId: (id) => set({ frameCaptureNodeId: id }),
+  multiExpandedNodeId: null,
+  setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),

@@ -6,7 +6,6 @@
  */
 "use client";
 
-import { Button } from "antd";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -118,8 +117,9 @@ function ImageRefCard({
           />
         </div>
       )}
-      <Button type="text" size="small"
-        className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+      <button
+        type="button"
+        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
         onClick={() => {
           // 删除参考 = 断开连线，显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -129,7 +129,7 @@ function ImageRefCard({
             return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === src;
           });
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</Button>
+        }}>✕</button>
     </div>
   );
 }

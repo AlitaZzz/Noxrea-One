@@ -21,10 +21,6 @@ interface Props {
   previewUrl?: string;
 }
 
-/** 失败态上唯一的圆形图标按钮 */
-const CIRCLE_BTN =
-  "nodrag flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer";
-
 export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props) {
   const { t } = useTranslation();
   const [retrying, setRetrying] = useState(false);
@@ -77,15 +73,15 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
         <div className="mt-1">
           {error.retryable ? (
             <Tooltip title={t("file.uploadRetry")}>
-              <button className={CIRCLE_BTN} onClick={() => void handleRetry()}>
-                <RedoOutlined style={{ fontSize: 14 }} />
+              <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => void handleRetry()}>
+                <RedoOutlined />
               </button>
             </Tooltip>
           ) : (
             // 业务错误（体积超限 / 类型不支持）重试无意义，只留一个移除入口
             <Tooltip title={t("file.uploadDiscard")}>
-              <button className={CIRCLE_BTN} onClick={() => discardNodeUpload(nodeId)}>
-                <CloseOutlined style={{ fontSize: 14 }} />
+              <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => discardNodeUpload(nodeId)}>
+                <CloseOutlined />
               </button>
             </Tooltip>
           )}

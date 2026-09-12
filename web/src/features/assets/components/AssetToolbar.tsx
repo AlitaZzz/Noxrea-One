@@ -11,6 +11,7 @@ import { useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 
@@ -66,58 +67,23 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
       <div className="flex-1" />
       {selectedCount > 0 && (
         <>
-          <button
-            onClick={onSelectAll}
-            className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-colors"
-            style={{
-              height: 36, minWidth: 108,
-              background: "transparent", cursor: "pointer",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-text)",
-            }}
-          >
+          <AppButton style={{ minWidth: 108 }} onClick={onSelectAll}>
             <CheckSquareOutlined />
             {allSelected ? t("common.deselectAll") : t("common.selectAll")}
-          </button>
-          <button
-            onClick={onBatchMove}
-            className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-colors"
-            style={{
-              height: 36, minWidth: 110,
-              background: "transparent", cursor: "pointer",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-text)",
-            }}
-          >
+          </AppButton>
+          <AppButton style={{ minWidth: 110 }} onClick={onBatchMove}>
             <FolderOutlined />
             {t("asset.moveTo")}
-          </button>
-          <button
-            onClick={onBatchType}
-            className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-colors"
-            style={{
-              height: 36, minWidth: 110,
-              background: "transparent", cursor: "pointer",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-text)",
-            }}
-          >
+          </AppButton>
+          <AppButton style={{ minWidth: 110 }} onClick={onBatchType}>
             <TagsOutlined />
             {t("asset.changeType")}
-          </button>
-          <button
-            onClick={onBatchDelete}
-            className="flex items-center gap-1.5 px-3 rounded-lg text-sm transition-colors"
-            style={{
-              height: 36, minWidth: 108,
-              background: "transparent", cursor: "pointer",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-accent)",
-            }}
-          >
+          </AppButton>
+          {/* 删除是破坏性操作，走 danger 而不是主色 */}
+          <AppButton variant="danger" style={{ minWidth: 108 }} onClick={onBatchDelete}>
             <DeleteOutlined />
             {t("common.delete")} ({selectedCount})
-          </button>
+          </AppButton>
         </>
       )}
       {/* Hover dropdown */}
@@ -126,20 +92,10 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, al
         onMouseEnter={handleMenuEnter}
         onMouseLeave={handleMenuLeave}
       >
-        <button
-          ref={triggerRef}
-          className="flex items-center gap-1.5 px-4 rounded-lg text-sm font-medium transition-colors"
-          style={{
-            background: "var(--canvas-text)",
-            border: "1px solid var(--canvas-border)",
-            color: "var(--canvas-bg)",
-            borderRadius: 8,
-            height: 36,
-          }}
-        >
+        <AppButton ref={triggerRef} variant="primary">
           <PlusOutlined />
           {t("asset.create")}
-        </button>
+        </AppButton>
         {menuOpen && createPortal(
           <div
             className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg border"

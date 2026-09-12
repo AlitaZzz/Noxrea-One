@@ -96,7 +96,7 @@ export default function SettingsModal({ open, onClose }: Props) {
         <div className="flex flex-col items-center gap-2">
           <div
             className="w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold cursor-pointer relative group hover:opacity-80 transition-opacity"
-            style={{ background: "#1677ff", color: "#fff" }}
+            style={{ background: "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}
             onClick={() => fileRef.current?.click()}
           >
             {avatarUrl ? (

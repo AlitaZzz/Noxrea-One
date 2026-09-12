@@ -6,7 +6,6 @@
  */
 "use client";
 
-import { Button } from "antd";
 import { memo, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -118,11 +117,10 @@ function AudioRefCard({
       <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refAudioLabel", { index: index + 1 })}</span>
       {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
       {hovered && (
-        <Button
-          type="text"
-          size="small"
+        <button
+          type="button"
           aria-label={playing ? "停止" : "播放"}
-          className="!absolute inset-0 !m-auto !w-7 !h-7 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
+          className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
           onClick={(e) => {
             e.stopPropagation();
             toggle();
@@ -133,30 +131,30 @@ function AudioRefCard({
           ) : (
             <PlayIcon style={{ color: "#fff", width: 16, height: 16 }} />
           )}
-        </Button>
+        </button>
       )}
       {/* 播放中不悬停时也显示停止图标，便于随时停止 */}
       {playing && !hovered && (
-        <Button
-          type="text"
-          size="small"
+        <button
+          type="button"
           aria-label="停止"
-          className="!absolute inset-0 !m-auto !w-7 !h-7 !flex items-center justify-center !rounded-full !bg-black/60 !text-white hover:!text-white hover:!bg-black/70 !p-0 !border-0"
+          className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
           onClick={(e) => {
             e.stopPropagation();
             stop();
           }}
         >
           <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
-        </Button>
+        </button>
       )}
-      <Button type="text" size="small"
-        className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+      <button
+        type="button"
+        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
         onClick={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</Button>
+        }}>✕</button>
       <audio
         ref={audioRef}
         src={audio.src}

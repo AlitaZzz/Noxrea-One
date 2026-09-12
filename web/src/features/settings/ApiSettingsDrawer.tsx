@@ -8,7 +8,6 @@
 
 import {
   ApiOutlined,
-  AudioOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -17,15 +16,17 @@ import {
   PlusOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { App, Button, Checkbox, Drawer,Input, Select } from "antd";
+import { App, Checkbox, Drawer,Input, Select } from "antd";
 import type { ReactNode } from "react";
 import { memo, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -38,40 +39,39 @@ interface Props {
 }
 
 // ── 模块级常量与组件（稳定引用，避免每次渲染重建导致虚拟列表失效） ──
+// 不按能力分配主题色：选中态统一用 --canvas-text（白），
+// 避免四个 tab 切来切去时整块面板跟着换色
 const CAPABILITY_TABS: {
   key: ModelCapability;
   labelKey: string;
   icon: ReactNode;
-  color: string;
 }[] = [
-  { key: "text", labelKey: "modelConfig.cap.text", icon: <TextIcon />, color: "#1677ff" },
-  { key: "image", labelKey: "modelConfig.cap.image", icon: <PictureOutlined />, color: "#52c41a" },
-  { key: "video", labelKey: "modelConfig.cap.video", icon: <VideoCameraOutlined />, color: "#13c2c2" },
-  { key: "audio", labelKey: "modelConfig.cap.audio", icon: <AudioOutlined />, color: "#fa8c16" },
+  { key: "text", labelKey: "modelConfig.cap.text", icon: <TextIcon /> },
+  { key: "image", labelKey: "modelConfig.cap.image", icon: <PictureOutlined /> },
+  { key: "video", labelKey: "modelConfig.cap.video", icon: <VideoCameraOutlined /> },
+  // 音频统一用音频节点同款的声波图标，不用 antd 的麦克风
+  { key: "audio", labelKey: "modelConfig.cap.audio", icon: <WaveIcon /> },
 ];
 
-// 单行（已 memo）：仅在 m / checked / activeCap / onToggle 变化时才重渲染
+// 单行（已 memo）：仅在 m / checked / onToggle 变化时才重渲染
 const ModelRow = memo(function ModelRow({
   m,
   checked,
-  activeCap,
   onToggle,
 }: {
   m: ModelInfo;
   checked: boolean;
-  activeCap: ModelCapability;
   onToggle: (id: string) => void;
 }) {
-  const color = CAPABILITY_TABS.find((t) => t.key === activeCap)?.color;
   return (
     <label
       className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
       style={{ color: checked ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
     >
+      {/* 不随能力变色：沿用主题里的 Checkbox 主色（无彩白） */}
       <Checkbox
         checked={checked}
         onChange={() => onToggle(m.id)}
-        style={checked ? { accentColor: color } : undefined}
       />
       <ModelIcon model={m.name} className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
       <span className="flex-1 truncate">{m.name}</span>
@@ -328,8 +328,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         .model-config-wrap .ant-input-password .ant-input-suffix { display: flex; align-items: center; }
         .model-config-wrap .ant-input-password input { height: 34px !important; line-height: 34px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
         .model-config-wrap .ant-input-password:focus, .model-config-wrap .ant-input-password-focused, .model-config-wrap .ant-input-affix-wrapper-focused { border-color: var(--canvas-border) !important; box-shadow: none !important; outline: none !important; }
-        .model-config-wrap .model-btn { background: var(--canvas-bg); border: none !important; box-shadow: none !important; color: var(--canvas-text); border-radius: 8px; height: 36px; }
-        .model-config-wrap .model-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
+        /* .model-btn 已废弃：设置面板的按钮改用统一组件 AppButton（.app-btn），
+           这里只保留对 antd 内部按钮（输入框清除、下拉等）的去品牌色兜底。 */
         .model-config-wrap .ant-btn { background: var(--canvas-bg); border: none !important; box-shadow: none !important; color: var(--canvas-text); border-radius: 8px; height: 36px; }
         .model-config-wrap .ant-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
         .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -347,21 +347,26 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.noProviders")}</span>}
         />
         <div className="flex items-center gap-1 ml-auto">
-          <Button size="small" icon={<PlusOutlined />} onClick={() => { resetChForm(); setShowAddProvider(true); }} className="model-btn">
+          <AppButton size="sm" onClick={() => { resetChForm(); setShowAddProvider(true); }}>
+            <PlusOutlined />
             {t("modelConfig.addProvider")}
-          </Button>
+          </AppButton>
           {provider && (
             <>
               <div className="w-px h-4 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
-              <Button size="small" icon={<DownloadOutlined />} onClick={handleFetch} loading={fetching} className="model-btn">
+              <AppButton size="sm" onClick={handleFetch} loading={fetching}>
+                <DownloadOutlined />
                 {provider.models.length > 0 ? `${t("modelConfig.fetchModels")} (${provider.models.length})` : t("modelConfig.fetchModels")}
-              </Button>
-              <Button size="small" icon={<EditOutlined />} onClick={() => handleEditProvider(provider.id)} className="model-btn">
+              </AppButton>
+              <AppButton size="sm" onClick={() => handleEditProvider(provider.id)}>
+                <EditOutlined />
                 {t("common.edit")}
-              </Button>
-              <Button size="small" icon={<DeleteOutlined />} className="model-btn" onClick={() => setDeleteProviderId(provider.id)}>
+              </AppButton>
+              {/* 删除供应商是破坏性操作，用 danger 而不是默认变体 */}
+              <AppButton size="sm" variant="danger" onClick={() => setDeleteProviderId(provider.id)}>
+                <DeleteOutlined />
                 {t("common.delete")}
-              </Button>
+              </AppButton>
             </>
           )}
         </div>
@@ -430,24 +435,25 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                     iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
                   />
                   {editProviderId && (
-                    <Button
-                      size="small"
-                      icon={<CopyOutlined />}
+                    <AppButton
+                      size="sm"
+                      iconOnly
                       onClick={handleCopyApiKey}
                       loading={fetchingKey}
-                      className="model-btn"
                       style={{ flexShrink: 0 }}
-                    />
+                    >
+                      <CopyOutlined />
+                    </AppButton>
                   )}
                 </div>
           </div>
           </div>
           </div>
           <div className="flex gap-1 justify-end">
-            <Button size="small" onClick={resetChForm} className="model-btn text-[13px] px-4">{t("common.cancel")}</Button>
-            <Button size="small" onClick={handleSaveProvider} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()} style={{ height: 36, fontSize: 13 }}>
+            <AppButton size="sm" onClick={resetChForm}>{t("common.cancel")}</AppButton>
+            <AppButton size="sm" variant="primary" onClick={handleSaveProvider} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()}>
               {editProviderId ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
-            </Button>
+            </AppButton>
           </div>
         </div>
       )}
@@ -462,8 +468,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 border-transparent"
               style={{
                 background: "transparent", cursor: "pointer",
-                color: activeCap === tab.key ? tab.color : "var(--canvas-text-dim)",
-                borderColor: activeCap === tab.key ? tab.color : "transparent",
+                color: activeCap === tab.key ? "var(--canvas-text)" : "var(--canvas-text-dim)",
+                borderColor: activeCap === tab.key ? "var(--canvas-text)" : "transparent",
               }}
               onClick={() => setActiveCap(tab.key)}
             >
@@ -499,9 +505,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 onChange={(e) => setSearchModel(e.target.value)}
                 style={{ flex: 1 }}
               />
-              <Button size="small" className="model-btn" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll")}</Button>
-              <Button size="small" className="model-btn" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert")}</Button>
-              <Button size="small" className="model-btn" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap")}</Button>
+              <AppButton size="sm" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll")}</AppButton>
+              <AppButton size="sm" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert")}</AppButton>
+              <AppButton size="sm" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap")}</AppButton>
             </div>
 
             {/* Add model manually */}
@@ -514,9 +520,10 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 onPressEnter={handleAddModel}
                 style={{ flex: 1 }}
               />
-              <Button size="small" icon={<PlusOutlined />} onClick={handleAddModel} disabled={!newModelName.trim()} className="model-btn">
+              <AppButton size="sm" onClick={handleAddModel} disabled={!newModelName.trim()}>
+                <PlusOutlined />
                 {t("common.add")}
-              </Button>
+              </AppButton>
             </div>
 
             {/* 虚拟列表：仅渲染可视区行；搜索已在数据层完成（rows 已是过滤后结果），不影响搜得到 */}
@@ -532,17 +539,14 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                     className="flex items-center gap-1 text-[12px] font-medium"
                     style={{
                       height: 36,
-                      color:
-                        r.tone === "cap"
-                          ? CAPABILITY_TABS.find((t) => t.key === activeCap)?.color
-                          : "var(--canvas-text-muted)",
+                      color: r.tone === "cap" ? "var(--canvas-text)" : "var(--canvas-text-muted)",
                     }}
                   >
                     {r.tone === "cap" && CAPABILITY_TABS.find((t) => t.key === activeCap)?.icon}
                     {r.label}
                   </div>
                 ) : (
-                  <ModelRow m={r.m} checked={r.checked} activeCap={activeCap} onToggle={onToggleCap} />
+                  <ModelRow m={r.m} checked={r.checked} onToggle={onToggleCap} />
                 )
               }
             />

@@ -5,7 +5,6 @@
  */
 "use client";
 
-import { Button } from "antd";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -104,8 +103,9 @@ function VideoRefCard({
       )}
       {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
       <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refVideoLabel", { index: index + 1 })}</span>
-      <Button type="text" size="small"
-        className="!absolute -top-1.5 -right-1.5 !w-4 !h-4 !flex items-center justify-center !rounded-full !bg-black/70 !text-white/60 hover:!text-white hover:!bg-white/30 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity !p-0 !border-0"
+      <button
+        type="button"
+        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
         onClick={() => {
           // 删除参考 = 断开连线（与图片 / 音频参考一致），显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -115,7 +115,7 @@ function VideoRefCard({
             return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === src;
           });
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</Button>
+        }}>✕</button>
     </div>
   );
 }

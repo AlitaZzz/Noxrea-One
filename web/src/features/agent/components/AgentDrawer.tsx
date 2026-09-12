@@ -188,9 +188,9 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
             }}
           />
         ) : (
-          <span className="chat-title" title="点击重命名" onClick={startRename}>
-            {chatTitle ?? "新对话"}
-          </span>
+          <Tooltip title="点击重命名" placement="bottom">
+            <span className="chat-title" onClick={startRename}>{chatTitle ?? "新对话"}</span>
+          </Tooltip>
         )
       }
       extra={
@@ -228,20 +228,21 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
                           <span className="chat-history-name">{s.title || "新对话"}</span>
                         </button>
                         <div className="chat-history-side">
-                          <span className="chat-history-time" title={new Date(s.updatedAt).toLocaleString()}>
-                            {formatRelative(s.updatedAt)}
-                          </span>
+                          <Tooltip title={new Date(s.updatedAt).toLocaleString()} placement="top">
+                            <span className="chat-history-time">{formatRelative(s.updatedAt)}</span>
+                          </Tooltip>
+                          <Tooltip title="删除对话" placement="top">
                           <button
                             type="button"
                             className="chat-history-del"
                             aria-label={`删除「${s.title || "新对话"}」`}
-                            title="删除对话"
                             onClick={() => void deleteChat(s.id)}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19.5 21.5" width="14" height="14" aria-hidden="true" role="img">
                               <path d="M11.75 0c.74 0 1.43.36 1.9.84.49.48.85 1.17.85 1.91V4h4.25a.75.75 0 0 1 0 1.5h-1.3l-.95 13.3a2.8 2.8 0 0 1-.84 1.86c-.48.48-1.17.84-1.91.84h-8c-.74 0-1.43-.36-1.9-.84A2.8 2.8 0 0 1 3 18.8L2.05 5.5H.75a.75.75 0 0 1 0-1.5H5V2.75c0-.74.36-1.43.84-1.9A2.8 2.8 0 0 1 7.75 0zM4.5 18.7v.05c0 .26.14.57.4.84.28.27.6.41.85.41h8c.26 0 .57-.14.84-.4a1.3 1.3 0 0 0 .41-.9l.94-13.2H3.56zM7.75 9c.41 0 .75.34.75.75v6a.75.75 0 0 1-1.5 0v-6c0-.41.34-.75.75-.75m4 0c.41 0 .75.34.75.75v6a.75.75 0 0 1-1.5 0v-6c0-.41.34-.75.75-.75m-4-7.5c-.26 0-.57.14-.84.4-.27.28-.41.6-.41.85V4H13V2.75c0-.26-.14-.57-.4-.84-.28-.27-.6-.41-.85-.41z" fill="currentColor"></path>
                             </svg>
                           </button>
+                          </Tooltip>
                         </div>
                       </div>
                     ))
@@ -413,12 +414,11 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
                 onOpenChange={setModelOpen}
                 placement="topRight"
                 trigger={
-                  <Tooltip title={activeModel} placement="top">
-                    <button type="button" className="chat-composer-model" aria-label="选择模型">
-                      <span className="chat-composer-model-label">{activeModel}</span>
-                      <ChevronDownIcon />
-                    </button>
-                  </Tooltip>
+                  // 按钮上已显示模型名，再挂同名 tooltip 是重复提示，去掉
+                  <button type="button" className="chat-composer-model" aria-label="选择模型">
+                    <span className="chat-composer-model-label">{activeModel}</span>
+                    <ChevronDownIcon />
+                  </button>
                 }
                 content={modelOptions.map((m) => (
                   <MenuItem

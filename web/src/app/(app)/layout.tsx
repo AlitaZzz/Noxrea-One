@@ -58,7 +58,7 @@ export default function AppLayout({
 
   if (!authChecked) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[#0d0d0d] text-white">
+      <div className="flex items-center justify-center h-screen w-screen bg-[#151518] text-white">
         <div className="text-lg">Loading…</div>
       </div>
     );

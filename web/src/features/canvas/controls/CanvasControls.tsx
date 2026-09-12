@@ -117,18 +117,8 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   return (
     <>
+      {/* .canvas-ctrl-btn 的交互样式已收敛到 globals.css 的「统一图标按钮」，这里只留输入框 */}
       <style>{`
-        .canvas-ctrl-btn.ant-btn-text {
-          color: var(--canvas-text);
-        }
-        .canvas-ctrl-btn.ant-btn-text:hover {
-          background: var(--canvas-bg-hover) !important;
-          color: var(--canvas-text) !important;
-        }
-        .canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
-          background: var(--canvas-bg-hover) !important;
-          color: var(--canvas-text) !important;
-        }
         .zoom-input.ant-input-number:hover,
         .zoom-input.ant-input-number-focused {
           border-color: var(--canvas-border, #3a3a3a) !important;
@@ -144,18 +134,17 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           pointerEvents: "auto",
         }}
       >
-        {/* Canvas Explorer — 最左侧主面板开关（图标+文字） */}
-        <Tooltip title={canvasExplorerOpen ? t("canvas.closeSidebar") : t("canvas.openSidebar")}>
-          <Button
-            size="small"
-            type="text"
-            className={`canvas-ctrl-btn${canvasExplorerOpen ? " canvas-ctrl-active" : ""}`}
-            icon={canvasExplorerOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
-            onClick={onOpenCanvasExplorer}
-          >
-            {t("canvas.panel")}
-          </Button>
-        </Tooltip>
+        {/* Canvas Explorer — 最左侧主面板开关。
+            按钮同时有图标和文字「面板」，再挂 tooltip 属于重复提示，去掉 */}
+        <Button
+          size="small"
+          type="text"
+          className={`canvas-ctrl-btn${canvasExplorerOpen ? " canvas-ctrl-active" : ""}`}
+          icon={canvasExplorerOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+          onClick={onOpenCanvasExplorer}
+        >
+          {t("canvas.panel")}
+        </Button>
 
         {/* Minimap toggle */}
         <Tooltip title={minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}>

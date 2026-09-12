@@ -5,7 +5,7 @@
 "use client";
 
 import { DeleteOutlined } from "@ant-design/icons";
-import { Button,Input } from "antd";
+import { Button,Input, Tooltip } from "antd";
 import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -142,11 +142,15 @@ export default function Outliner() {
                 <span className={`gap-0.5 ${sel ? "flex" : "hidden"} group-hover/item:flex`} style={{ display: sel ? "flex" : undefined }}>
                   {(isCrowd || true) && (
                     <>
-                      {isCrowd && <button className="inline-flex items-center justify-center p-0.5 rounded bg-transparent border-0 cursor-pointer"
-                        style={{ color: "var(--dir-dim)" }}
-                        onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
-                        onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }} title={t("director.ungroup")}>⊟</button>}
+                      {isCrowd && (
+                        <Tooltip title={t("director.ungroup")}>
+                          <button className="inline-flex items-center justify-center p-0.5 rounded bg-transparent border-0 cursor-pointer"
+                            style={{ color: "var(--dir-dim)" }}
+                            onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
+                            onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
+                            onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }}>⊟</button>
+                        </Tooltip>
+                      )}
                       <Button type="text" size="small"
                         icon={<span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span>}
                         className="!p-0.5"
