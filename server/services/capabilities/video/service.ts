@@ -44,10 +44,10 @@ class VideoCapabilityService implements CapabilityService {
 
     const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);
 
-    // 转译完成阶段（对标外部服务的"转译完成, 返回 plan"）
+    // 请求组装完成阶段：内部参数已按厂商协议生成具体请求，即将提交
     logEvent("capability.video", {
       banner: true,
-      bannerTitle: "视频转译完成",
+      bannerTitle: "视频请求组装完成，即将提交",
       stage: "translation_done",
       taskId: ctx.taskId,
       url: req.url,
