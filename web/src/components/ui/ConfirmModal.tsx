@@ -22,9 +22,11 @@ interface Props {
   onCancel: () => void;
   /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传更高值（如 1050）。 */
   zIndex?: number;
+  /** 挂到 body 呈现全屏遮罩，打断底层上下文；默认跟随父 layer 嵌套挂载。 */
+  global?: boolean;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, onOk, onCancel, zIndex }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const okRef = useRef<HTMLButtonElement>(null);
@@ -40,20 +42,19 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       open={open}
       onCancel={onCancel}
       zIndex={zIndex}
+      global={isGlobal}
+      flush
+      className="app-dialog"
       afterOpenChange={handleAfterOpenChange}
       width={380}
-      styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "none" },
-        body: { background: "var(--canvas-bg)", padding: "0 20px 16px" },
-      }}
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="app-dialog-footer">
           <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>
           <AppButton variant="primary" loading={confirmLoading} onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
         </div>
       }
     >
-      <p style={{ color: "var(--canvas-text)", margin: 0 }}>{content}</p>
+      <p className="app-dialog-text">{content}</p>
     </AppModal>
   );
 }

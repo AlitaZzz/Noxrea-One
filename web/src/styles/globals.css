@@ -301,6 +301,76 @@
   margin-top: 0 !important;
 }
 
+/* 紧凑功能弹窗（二次确认、文件夹命名等）：不带分隔横线。
+   antd v6 的 .ant-modal-container 自带 contentPadding（16px 24px），这里清零后由
+   header/body/footer 三段统一控制 24px 水平留白与纵向节奏，
+   避免双重 padding；配合 AppModal 的 flush 使用。 */
+.app-dialog .ant-modal-container {
+  padding: 0 !important;
+}
+.app-dialog .ant-modal-header {
+  border-bottom: none !important;
+  padding: 20px 56px 0 24px !important;
+  margin-bottom: 0 !important;
+}
+.app-dialog .ant-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--canvas-text);
+}
+.app-dialog .ant-modal-body {
+  padding: 16px 24px 0 !important;
+}
+.app-dialog .ant-modal-footer {
+  padding: 16px 24px 20px !important;
+  margin: 0 !important;
+}
+.app-dialog .ant-modal-close {
+  color: var(--canvas-text-secondary);
+  /* 与标题行垂直居中对齐，右缘对齐 24px 水平留白（× 按钮 22px） */
+  top: 21px;
+  inset-inline-end: 24px;
+}
+/* 底部按钮行：右对齐、8px 间距 */
+.app-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* 确认正文 */
+.app-dialog-text {
+  margin: 0;
+  color: var(--canvas-text);
+}
+/* 行内错误提示 */
+.app-dialog-error {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--canvas-danger);
+}
+/* 弹窗内输入框：与中性设计语言一致，hover/focus 不出现主色描边或光晕。
+   v6 普通输入框类为 .ant-input.ant-input-outlined；带前缀/后缀时外层是
+   .ant-input-affix-wrapper。:not(.…-status-error) 保留校验失败时的红框。 */
+.app-dialog .ant-input:not(.ant-input-status-error),
+.app-dialog .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-status-error) {
+  background: var(--canvas-bg-elevated);
+  border-color: var(--canvas-border);
+  color: var(--canvas-text);
+}
+.app-dialog .ant-input:not(.ant-input-status-error):hover,
+.app-dialog .ant-input:not(.ant-input-status-error):focus,
+.app-dialog .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-status-error):hover,
+.app-dialog .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-status-error):focus,
+.app-dialog .ant-input-affix-wrapper-focused:not(.ant-input-affix-wrapper-status-error) {
+  border-color: var(--canvas-border) !important;
+  box-shadow: none !important;
+}
+.app-dialog .ant-input-data-count {
+  color: var(--canvas-text-muted);
+}
+
 /* Modal mask: blur + lighter background */
 .ant-modal-mask {
   backdrop-filter: blur(8px) !important;

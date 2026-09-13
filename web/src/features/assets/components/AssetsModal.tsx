@@ -595,24 +595,21 @@ export default function AssetsModal({ open, onClose }: Props) {
 
         {/* Rename folder modal */}
         <AppModal
-          title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.folder.rename")}</span>}
+          title={t("asset.folder.rename")}
           open={!!renamingFolder}
           onCancel={() => { if (!folderRenameSaving) { setRenamingFolder(null); setFolderRenameValue(""); setFolderRenameError(""); } }}
           centered
+          global
+          flush
+          className="app-dialog"
           destroyOnHidden
           width={400}
           footer={
-            <div className="flex justify-end gap-2">
+            <div className="app-dialog-footer">
               <AppButton onClick={() => setRenamingFolder(null)} disabled={folderRenameSaving}>{t("common.cancel")}</AppButton>
               <AppButton variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</AppButton>
             </div>
           }
-          styles={{
-            header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
-            body: { background: "var(--canvas-bg)", padding: "20px 24px 8px" },
-            footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
-          }}
-          closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
         >
           <Input
             value={folderRenameValue}
@@ -621,15 +618,15 @@ export default function AssetsModal({ open, onClose }: Props) {
             maxLength={50}
             showCount
             status={folderRenameError ? "error" : undefined}
-            style={{ background: "var(--canvas-bg-elevated)", borderColor: folderRenameError ? "#ff4d4f" : "var(--canvas-border)", color: "var(--canvas-text)" }}
           />
           {folderRenameError && (
-            <div className="text-xs mt-1.5" style={{ color: "#ff4d4f" }}>{folderRenameError}</div>
+            <div className="app-dialog-error">{folderRenameError}</div>
           )}
         </AppModal>
 
         {/* Single delete confirm */}
         <ConfirmModal
+          global
           open={!!deleteAsset}
           title={t("asset.delete")}
           content={deleteAsset?.name || ""}
@@ -640,6 +637,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
         {/* Batch delete confirm —— 取消只关弹窗，保留勾选便于改主意 */}
         <ConfirmModal
+          global
           open={batchDeleteOpen}
           title={t("asset.delete")}
           content={t("asset.batchDeleteWarn", { count: selectedIds.size })}
@@ -650,6 +648,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
         {/* Delete folder confirm */}
         <ConfirmModal
+          global
           open={!!deleteFolder}
           title={t("asset.folder.delete")}
           content={`${deleteFolder?.name || ""} — ${t("asset.folder.deleteWarn")}`}
