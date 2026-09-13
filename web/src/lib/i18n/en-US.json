@@ -319,6 +319,7 @@
     "addTag": "Add tag",
     "removeTag": "Remove tag",
     "tagPlaceholder": "Type and press Enter",
+    "tagLimit": "Up to {{max}} tags",
     "promptLabel": "Prompt",
     "editPrompt": "Edit",
     "promptEmpty": "No prompt",

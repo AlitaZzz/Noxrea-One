@@ -318,6 +318,7 @@
     "addTag": "添加标签",
     "removeTag": "移除标签",
     "tagPlaceholder": "输入后回车",
+    "tagLimit": "最多添加 {{max}} 个标签",
     "promptLabel": "提示词",
     "editPrompt": "编辑",
     "promptEmpty": "暂无提示词",

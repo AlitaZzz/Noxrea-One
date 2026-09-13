@@ -38,7 +38,6 @@ interface Props {
   allSelected: boolean;
   /** 单选素材所在文件夹的展示名（未分类已本地化），由父级从文件夹树解析。 */
   folderName?: string;
-  onClose: () => void;
   onSelectAll: () => void;
   onInsert: (asset: AssetItem) => void;
   /** 标题内联重命名：持久化成功返回 true，失败时输入态保留。 */
@@ -54,11 +53,30 @@ interface Props {
   onUpdatePrompt: (asset: AssetItem, prompt: string) => Promise<boolean>;
 }
 
-/** 单个标签的最大长度，与重命名输入一样只做前端截断。 */
+/** 单个标签的最大长度，与服务端 zod 校验保持一致。 */
 const MAX_TAG_LENGTH = 20;
+
+/** 每个素材允许的标签数量上限，与服务端 zod 校验保持一致。 */
+const MAX_TAGS = 6;
 
 /** 提示词最大长度，与服务端 assetCreateSchema 的上限保持一致。 */
 const MAX_PROMPT_LENGTH = 10000;
+
+/**
+ * 标题与重命名输入框的共享盒模型与字体度量。
+ * 两种状态是不同元素，必须逐属性一致（尤其 input 默认不继承字体/行高），
+ * 切换时文字基线才不会上下跳；头部容器另以固定高度兜底。
+ */
+const renameBoxStyle = {
+  height: 26,
+  padding: "2px 8px",
+  fontSize: 14,
+  fontWeight: 600,
+  lineHeight: "20px",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+  color: "var(--canvas-text)",
+} as const;
 
 function downloadAsset(asset: AssetItem) {
   if (!asset.sourceUrl) return;
@@ -92,7 +110,7 @@ function Preview({ asset }: { asset: AssetItem }) {
   return (
     <div
       className="relative w-full rounded-lg overflow-hidden flex items-center justify-center"
-      style={{ aspectRatio: "1", background: "#000" }}
+      style={{ aspectRatio: "1", maxHeight: 280, background: "#000" }}
     >
       {asset.mediaType === "audio" && asset.sourceUrl ? (
         <AudioWaveform
@@ -103,8 +121,8 @@ function Preview({ asset }: { asset: AssetItem }) {
           onReady={setAudioDuration}
         />
       ) : asset.mediaType === "video" && asset.sourceUrl ? (
-        // 复用画布节点同款播放器；检查器内不自动播放、默认静音（面板内不应突然出声）
-        <VideoPlayer src={asset.sourceUrl} fill autoPlay={false} loop defaultVolume={0} />
+        // 复用画布节点同款播放器；检查器内不自动播放，用户主动点播放时默认有声
+        <VideoPlayer src={asset.sourceUrl} fill autoPlay={false} loop defaultVolume={1} />
       ) : thumbUrl ? (
         // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
         // eslint-disable-next-line @next/next/no-img-element
@@ -145,6 +163,7 @@ function TagEditor({
   removeTitle: string;
   onUpdateTags: Props["onUpdateTags"];
 }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState("");
   const [busy, busySet] = useState(false);
@@ -157,6 +176,7 @@ function TagEditor({
   const commit = async () => {
     const tag = value.trim();
     if (!tag || busy) return;
+    if (asset.tags.length >= MAX_TAGS) return;
     if (asset.tags.some((existing) => existing.toLowerCase() === tag.toLowerCase())) {
       setAdding(false);
       setValue("");
@@ -229,15 +249,29 @@ function TagEditor({
               if (e.key === "Escape") cancel();
             }}
             onBlur={cancel}
-            className="text-xs rounded outline-none"
+            className="inspector-edit-input text-xs rounded"
             style={{
               width: 100,
               padding: "2px 8px",
               background: "var(--canvas-bg-elevated)",
-              border: "1px solid var(--canvas-accent)",
               color: "var(--canvas-text)",
             }}
           />
+        ) : asset.tags.length >= MAX_TAGS ? (
+          <Tooltip title={t("asset.tagLimit", { max: MAX_TAGS })}>
+            <span
+              className="inline-flex items-center gap-1 rounded text-xs cursor-not-allowed"
+              style={{
+                padding: "1px 8px",
+                border: "1px dashed var(--canvas-border)",
+                color: "var(--canvas-text-muted)",
+                opacity: 0.4,
+              }}
+            >
+              <PlusOutlined style={{ fontSize: 9 }} />
+              {addLabel}
+            </span>
+          </Tooltip>
         ) : (
           <button
             type="button"
@@ -310,10 +344,8 @@ function PromptEditor({
     if (ok) setEditing(false);
   };
   const copy = async () => {
-    // 编辑态复制草稿，只读态复制已保存内容
-    const text = editing ? value.trim() : asset.prompt;
-    if (!text || copied) return;
-    const ok = await copyText(text);
+    if (!asset.prompt || copied) return;
+    const ok = await copyText(asset.prompt);
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
@@ -327,19 +359,6 @@ function PromptEditor({
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{label}</span>
         <div className="flex items-center gap-3">
-          <Tooltip title={copied ? t("common.copied") : t("common.copy")}>
-            <button
-              type="button"
-              onClick={copy}
-              disabled={editing ? !value.trim() : !asset.prompt}
-              className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-              style={{ color: copied ? "var(--canvas-accent)" : "var(--canvas-text-muted)" }}
-              onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text)"; }}
-              onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-            >
-              {copied ? <CheckOutlined style={{ fontSize: 11 }} /> : <CopyOutlined style={{ fontSize: 11 }} />}
-            </button>
-          </Tooltip>
           {editing ? (
             <>
               <Tooltip title={t("common.save")}>
@@ -368,44 +387,56 @@ function PromptEditor({
               </Tooltip>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={startEdit}
-              className="inline-flex items-center gap-1 text-xs transition-colors cursor-pointer"
-              style={{ color: "var(--canvas-text-muted)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-            >
-              <EditOutlined style={{ fontSize: 10 }} />
-              {editLabel}
-            </button>
+            <>
+              <Tooltip title={copied ? t("common.copied") : t("common.copy")}>
+                <button
+                  type="button"
+                  onClick={copy}
+                  disabled={!asset.prompt}
+                  className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  style={{ color: copied ? "var(--canvas-accent)" : "var(--canvas-text-muted)" }}
+                  onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text)"; }}
+                  onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+                >
+                  {copied ? <CheckOutlined style={{ fontSize: 11 }} /> : <CopyOutlined style={{ fontSize: 11 }} />}
+                </button>
+              </Tooltip>
+              <button
+                type="button"
+                onClick={startEdit}
+                className="inline-flex items-center gap-1 text-xs transition-colors cursor-pointer"
+                style={{ color: "var(--canvas-text-muted)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+              >
+                <EditOutlined style={{ fontSize: 10 }} />
+                {editLabel}
+              </button>
+            </>
           )}
         </div>
       </div>
       {editing ? (
-        <>
-          <textarea
-            autoFocus
-            value={value}
-            maxLength={MAX_PROMPT_LENGTH}
-            disabled={busy}
-            placeholder={placeholder}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") cancel();
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void save();
-            }}
-            rows={5}
-            className="w-full text-xs rounded outline-none resize-y"
-            style={{
-              padding: "6px 8px",
-              background: "var(--canvas-bg-elevated)",
-              border: "1px solid var(--canvas-accent)",
-              color: "var(--canvas-text)",
-              lineHeight: 1.5,
-            }}
-          />
-        </>
+        <textarea
+          autoFocus
+          value={value}
+          maxLength={MAX_PROMPT_LENGTH}
+          disabled={busy}
+          placeholder={placeholder}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") cancel();
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void save();
+          }}
+          rows={6}
+          className="inspector-edit-input w-full text-xs rounded resize-y"
+          style={{
+            padding: "8px 10px",
+            background: "var(--canvas-bg-elevated)",
+            color: "var(--canvas-text)",
+            lineHeight: 1.6,
+          }}
+        />
       ) : (
         <div
           className="text-xs rounded whitespace-pre-wrap break-words"
@@ -428,7 +459,7 @@ function PromptEditor({
 }
 
 export default function AssetInspector({
-  assets, totalCount, allSelected, folderName, onClose, onSelectAll,
+  assets, totalCount, allSelected, folderName, onSelectAll,
   onInsert, onRenameConfirm, onSingleDelete,
   onBatchInsert, onBatchMove, onBatchType, onBatchDelete,
   onUpdateTags, onUpdatePrompt,
@@ -443,6 +474,8 @@ export default function AssetInspector({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [nameValue, setNameValue] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
+  /** Esc/保存成功导致的卸载性 blur 跳过自动保存；只有真正点击外部才保存 */
+  const skipBlurSaveRef = useRef(false);
   const [trackedId, setTrackedId] = useState(single?.id);
   if (trackedId !== single?.id) {
     setTrackedId(single?.id);
@@ -454,74 +487,101 @@ export default function AssetInspector({
 
   const startRename = () => {
     if (!single) return;
+    skipBlurSaveRef.current = false;
     setNameValue(single.name);
     setRenamingId(single.id);
   };
-  const cancelRename = () => {
-    if (renameSaving) return;
+  const exitRename = () => {
+    // 输入框随之卸载，标记卸载 blur 不是「点击外部」；选区随元素销毁，无高亮残留
+    skipBlurSaveRef.current = true;
     setRenamingId(null);
     setNameValue("");
   };
+  const cancelRename = () => {
+    if (renameSaving) return;
+    exitRename();
+  };
   const submitRename = async () => {
-    if (!single || renameSaving) return;
+    if (!single || renameSaving || renamingId !== single.id) return;
     const name = nameValue.trim();
     if (!name || name === single.name) {
-      cancelRename();
+      exitRename();
       return;
     }
     setRenameSaving(true);
     const ok = await onRenameConfirm(single, name);
     setRenameSaving(false);
-    if (ok) setRenamingId(null);
+    if (ok) exitRename();
   };
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Header：未选中时整个隐藏（空态提示已在内容区居中展示）；
-          单选重命名时标题位直接变为内联输入框 */}
-      {hasSelection && (
-      <div className="flex items-center gap-2 px-3 pt-4 pb-3 shrink-0">
-        {renaming && single ? (
+      {/* Header：仅单选时展示标题与内联重命名（清除选择已移至列表工具条行）；
+          多选时无需标题，内容区已有「已选 X / 共 Y」；未选中时空态在内容区居中 */}
+      {single && (
+      <div className="flex items-center gap-2 px-3 pt-3 pb-3 shrink-0" style={{ height: 50 }}>
+        {renaming ? (
           <input
             autoFocus
             value={nameValue}
             maxLength={100}
             disabled={renameSaving}
             onChange={(e) => setNameValue(e.target.value)}
+            onFocus={(e) => e.target.select()}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void submitRename();
-              if (e.key === "Escape") cancelRename();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submitRename();
+              }
+              if (e.key === "Escape") {
+                // antd Modal 既可能经 React onKeyDown 冒泡、也可能在 document 原生层监听 Esc
+                e.stopPropagation();
+                e.preventDefault();
+                e.nativeEvent.stopImmediatePropagation();
+                cancelRename();
+              }
             }}
-            onBlur={cancelRename}
-            className="flex-1 min-w-0 text-sm font-semibold rounded outline-none"
-            style={{
-              padding: "2px 8px",
-              background: "var(--canvas-bg-elevated)",
-              border: "1px solid var(--canvas-accent)",
-              color: "var(--canvas-text)",
+            // 只有焦点自然移到别处（点击外部）才保存；
+            // Esc/保存成功是组件卸载触发的 blur，由 skipBlurSaveRef 排除
+            onBlur={() => {
+              if (skipBlurSaveRef.current) {
+                skipBlurSaveRef.current = false;
+                return;
+              }
+              void submitRename();
             }}
+            className="inspector-edit-input flex-1 min-w-0 rounded"
+            style={{ ...renameBoxStyle, background: "var(--canvas-bg-elevated)" }}
+            aria-label={t("asset.rename")}
           />
         ) : (
-          <div className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: "var(--canvas-text)" }}>
-            {single ? single.name : t("asset.selectedN", { count: assets.length })}
+          <div
+            className="flex-1 min-w-0 flex items-center rounded"
+            style={{ ...renameBoxStyle, border: "1px solid transparent" }}
+          >
+            <span className="truncate" style={{ userSelect: "none" }} title={single.name}>
+              {single.name}
+            </span>
           </div>
         )}
-        <Tooltip title={t("asset.clearSelection")}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
-            style={{ color: "var(--canvas-text-muted)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-          >
-            <CloseOutlined style={{ fontSize: 13 }} />
-          </button>
-        </Tooltip>
+        {!renaming && (
+          <Tooltip title={t("asset.rename")}>
+            <button
+              type="button"
+              onClick={startRename}
+              className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
+              style={{ color: "var(--canvas-text-muted)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+            >
+              <EditOutlined style={{ fontSize: 13 }} />
+            </button>
+          </Tooltip>
+        )}
       </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 pb-4 min-h-0">
+      <div className={`flex-1 overflow-y-auto px-3 pb-4 min-h-0${single ? "" : " pt-3"}`}>
         {!hasSelection ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 pb-10">
             <FileImageOutlined style={{ fontSize: 36, color: "var(--canvas-text-muted)", opacity: 0.5 }} />
@@ -561,29 +621,24 @@ export default function AssetInspector({
               placeholder={t("asset.promptPlaceholder")}
               onUpdatePrompt={onUpdatePrompt}
             />
-            <div className="mt-4 flex flex-col gap-2">
+          </>
+        ) : (
+          <div className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>
+            {t("asset.selectedOfTotal", { selected: assets.length, total: totalCount })}
+          </div>
+        )}
+      </div>
+
+      {/* 操作按钮固定在检查器底部，不随上方内容滚动 */}
+      {hasSelection && (
+        <div className="shrink-0 px-3 pt-1 pb-4">
+          {single ? (
+            <div className="flex flex-col gap-2">
               <AppButton variant="primary" block onClick={() => onInsert(single)}>
                 {t("asset.addToCanvas")}
               </AppButton>
               <div className="flex gap-2">
-                {renaming ? (
-                  <AppButton
-                    block
-                    variant="primary"
-                    loading={renameSaving}
-                    onClick={submitRename}
-                    // 阻止输入框先 blur 取消编辑，导致点击保存按钮无效
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {t("common.save")}
-                  </AppButton>
-                ) : (
-                  <AppButton block onClick={startRename}>{t("asset.rename")}</AppButton>
-                )}
                 <AppButton block onClick={() => downloadAsset(single)}>{t("common.download")}</AppButton>
-              </div>
-              {/* 移动 / 改类型复用批量弹窗：单选时集合中只有当前素材 */}
-              <div className="flex gap-2">
                 <AppButton block onClick={onBatchMove}>{t("asset.moveTo")}</AppButton>
                 <AppButton block onClick={onBatchType}>{t("asset.changeType")}</AppButton>
               </div>
@@ -591,12 +646,7 @@ export default function AssetInspector({
                 {t("common.delete")}
               </AppButton>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="text-xs pb-3" style={{ color: "var(--canvas-text-muted)" }}>
-              {t("asset.selectedOfTotal", { selected: assets.length, total: totalCount })}
-            </div>
+          ) : (
             <div className="flex flex-col gap-2">
               <AppButton variant="primary" block onClick={() => onBatchInsert(assets)}>
                 {t("asset.addToCanvas")}（{assets.length}）
@@ -621,9 +671,9 @@ export default function AssetInspector({
                 {allSelected ? t("common.deselectAll") : t("common.selectAll")}
               </button>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

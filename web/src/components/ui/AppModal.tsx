@@ -26,12 +26,15 @@ interface AppModalProps {
   zIndex?: number;
   /** 弹窗打开/关闭动画结束后的回调，用于自定义焦点管理 */
   afterOpenChange?: (open: boolean) => void;
+  /** 贴边布局（如资产库三栏）：内容自行管理间距，去掉默认的顶部 pt-4 内边距。 */
+  flush?: boolean;
 }
 
 /** 通用弹窗 - 统一标题下边距 + 居中，所有功能弹窗都用这个。 */
 export default function AppModal({
   title, open, onCancel, width = 520, footer, children, styles,
   className, destroyOnHidden, closeIcon, centered, style, zIndex, afterOpenChange,
+  flush = false,
 }: AppModalProps) {
   return (
     <LayerModal
@@ -40,7 +43,7 @@ export default function AppModal({
       className={className} destroyOnHidden={destroyOnHidden} closeIcon={closeIcon}
       style={style} zIndex={zIndex} afterOpenChange={afterOpenChange}
     >
-      <div className="pt-4">{children}</div>
+      {flush ? children : <div className="pt-4">{children}</div>}
     </LayerModal>
   );
 }
