@@ -331,7 +331,7 @@
     "folder": {
       "delete": "Delete Folder",
       "rename": "Rename Folder",
-      "deleteWarn": "This will permanently delete the folder and all its subfolders and assets (including files), and cannot be undone."
+      "deleteWarn": "This will permanently delete the folder and all its subfolders and assets, and cannot be undone."
     }
   },
   "angle": {
