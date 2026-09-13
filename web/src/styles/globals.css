@@ -392,6 +392,20 @@
 .app-dialog .ant-select .ant-select-selection-placeholder {
   color: var(--canvas-text-muted);
 }
+/* TreeSelect 搜索命中片段：弹层挂在 body，须全局生效。白色高亮，不用青柠以免抢"选中"语义 */
+.ant-select-tree-match {
+  color: var(--canvas-solid);
+  font-weight: 600;
+}
+/* 暗色算法下 filter-node 标题与选中节点底色都由主色派生（青柠），统一改回中性 */
+.ant-select-tree .ant-select-tree-node-content-wrapper.ant-select-tree-node-selected {
+  background-color: var(--canvas-bg-hover) !important;
+  color: var(--canvas-text) !important;
+}
+.ant-select-tree-treenode:not(.ant-select-tree-treenode-disabled).filter-node .ant-select-tree-title {
+  color: var(--canvas-text) !important;
+  font-weight: 400 !important;
+}
 
 /* Modal mask: blur + lighter background */
 .ant-modal-mask {

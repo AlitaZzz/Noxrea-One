@@ -7,8 +7,8 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Input, Select, Tooltip } from "antd";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { App, Input, Select, Tooltip, TreeSelect } from "antd";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
@@ -78,6 +78,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   // 显式多选模式（工具条勾选图标切换）；一旦勾到 ≥2 项也自动视为多选态。
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
+  const [batchMoveTarget, setBatchMoveTarget] = useState<string | undefined>(undefined);
+  const [batchMoveQuery, setBatchMoveQuery] = useState("");
   const [batchMoving, setBatchMoving] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
@@ -153,6 +155,11 @@ export default function AssetsModal({ open, onClose }: Props) {
   const bulkOpen = selectedIds.size >= 2;
   // 多选模式：勾选框常驻、卡片点击直接增减；关闭时一并清空选择。
   const multiMode = multiSelectMode || bulkOpen;
+  const openBatchMove = useCallback(() => {
+    setBatchMoveTarget(undefined);
+    setBatchMoveQuery("");
+    setBatchMoveOpen(true);
+  }, []);
   const handleToggleMultiMode = useCallback(() => {
     if (multiSelectMode) setSelectedIds(new Set());
     setMultiSelectMode(!multiSelectMode);
@@ -294,6 +301,52 @@ export default function AssetsModal({ open, onClose }: Props) {
       : childFolders;
   }, [activeFolderId, getChildFolders, uncategorizedFolder, activeScope, t]);
 
+  // 移动弹窗的目标树：未分类固定在首位（根级叶子），普通文件夹递归构建；
+  // 当前所在文件夹禁选（移入自己无意义）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
+  // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
+  const moveFolderTreeData = useMemo(() => {
+    type FolderNode = { value: string; title: ReactNode; label: string; disabled?: boolean; children?: FolderNode[] };
+    const q = batchMoveQuery.trim().toLowerCase();
+    // 始终返回节点而非字符串：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
+    const renderTitle = (name: string): ReactNode => {
+      if (!q) return <>{name}</>;
+      const idx = name.toLowerCase().indexOf(q);
+      if (idx < 0) return <>{name}</>;
+      return (
+        <>
+          {name.slice(0, idx)}
+          <span className="ant-select-tree-match">{name.slice(idx, idx + q.length)}</span>
+          {name.slice(idx + q.length)}
+        </>
+      );
+    };
+    const normal = folders.filter((f) => f.scope === activeScope && f.kind === "normal");
+    function build(parentId: string | undefined): FolderNode[] {
+      return normal
+        .filter((f) => (f.parentId || undefined) === parentId)
+        .map((f) => {
+          const children = build(f.id);
+          const node: FolderNode = {
+            value: f.id,
+            label: f.name,
+            title: renderTitle(f.name),
+            disabled: f.id === activeFolderId,
+          };
+          if (children.length > 0) node.children = children;
+          return node;
+        });
+    }
+    const roots = build(undefined);
+    if (uncategorizedFolder) {
+      roots.unshift({
+        value: uncategorizedFolder.id,
+        label: t("asset.uncategorized"),
+        title: renderTitle(t("asset.uncategorized")),
+        disabled: uncategorizedFolder.id === activeFolderId,
+      });
+    }
+    return roots;
+  }, [folders, activeScope, activeFolderId, uncategorizedFolder, batchMoveQuery, t]);
 
   // --- Handlers ---
 
@@ -616,7 +669,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                     <PlusOutlined />
                     {t("asset.addToCanvas")}（{selectedAssets.length}）
                   </button>
-                  <button type="button" className="bulk-btn" onClick={() => setBatchMoveOpen(true)}>
+                  <button type="button" className="bulk-btn" onClick={openBatchMove}>
                     <FolderOutlined />
                     {t("asset.moveTo")}
                   </button>
@@ -681,7 +734,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               onInsert={handleInsertCanvas}
               onRenameConfirm={handleRenameConfirm}
               onSingleDelete={handleDelete}
-              onBatchMove={() => setBatchMoveOpen(true)}
+              onBatchMove={openBatchMove}
               onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
               onUpdateTags={handleUpdateTags}
               onUpdatePrompt={handleUpdatePrompt}
@@ -752,56 +805,44 @@ export default function AssetsModal({ open, onClose }: Props) {
           onCancel={() => { setDeleteFolder(null); setSelectedIds(new Set()); }}
         />
 
-        {/* Batch move modal */}
+        {/* Batch move modal —— app-dialog + 可搜索折叠树，目录规模增长后仍可定位目标 */}
         <AppModal
-          title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.moveTo")}</span>}
+          title={t("asset.moveTo")}
           open={batchMoveOpen}
-          onCancel={() => setBatchMoveOpen(false)}
+          onCancel={() => { if (!batchMoving) setBatchMoveOpen(false); }}
           centered
+          global
+          flush
+          className="app-dialog"
           destroyOnHidden
-          width={360}
+          width={400}
           footer={
-            <div className="flex justify-end gap-2">
+            <div className="app-dialog-footer">
               <AppButton onClick={() => setBatchMoveOpen(false)} disabled={batchMoving}>{t("common.cancel")}</AppButton>
+              <AppButton
+                variant="primary"
+                loading={batchMoving}
+                disabled={!batchMoveTarget}
+                onClick={() => batchMoveTarget && handleBatchMove(batchMoveTarget)}
+              >
+                {t("common.confirm")}
+              </AppButton>
             </div>
           }
-          styles={{
-                header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
-            body: { background: "var(--canvas-bg)", padding: "12px 24px" },
-            footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
-          }}
         >
-          <div className="flex flex-col gap-1.5 max-h-60 overflow-auto">
-            <button
-              disabled={!uncategorizedFolder || batchMoving}
-              onClick={() => uncategorizedFolder && handleBatchMove(uncategorizedFolder.id)}
-              className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ color: "var(--canvas-text)" }}
-            >
-              <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
-              {t("asset.uncategorized")}
-            </button>
-            {(() => {
-              const personalFolders = folders.filter((f) => f.scope === "personal" && f.kind === "normal");
-              const buildTree = (parentId: string | undefined, depth: number): React.ReactNode[] => {
-                const children = personalFolders.filter((f) => (f.parentId || undefined) === parentId);
-                return children.flatMap((f) => [
-                  <button
-                    key={f.id}
-                    disabled={batchMoving}
-                    onClick={() => handleBatchMove(f.id)}
-                    className="flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors hover:bg-white/5 w-full text-left disabled:opacity-40"
-                    style={{ color: "var(--canvas-text)", paddingLeft: 24 + depth * 16 }}
-                  >
-                    <FolderOutlined style={{ color: "var(--canvas-text-muted)" }} />
-                    {f.name}
-                  </button>,
-                  ...buildTree(f.id, depth + 1),
-                ]);
-              };
-              return buildTree(undefined, 0);
-            })()}
-          </div>
+          <TreeSelect
+            value={batchMoveTarget}
+            onChange={(v) => setBatchMoveTarget(v)}
+            style={{ width: "100%" }}
+            placeholder={t("asset.folderPickerPlaceholder")}
+            allowClear
+            showSearch
+            onSearch={setBatchMoveQuery}
+            treeDefaultExpandAll
+            listHeight={280}
+            treeNodeFilterProp="label"
+            treeData={moveFolderTreeData}
+          />
         </AppModal>
 
         {/* Batch type modal */}
