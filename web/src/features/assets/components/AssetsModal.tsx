@@ -806,14 +806,17 @@ export default function AssetsModal({ open, onClose }: Props) {
 
         {/* Batch type modal */}
         <AppModal
-          title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.changeType")}</span>}
+          title={t("asset.changeType")}
           open={batchTypeOpen}
           onCancel={() => { if (!batchTypeSaving) setBatchTypeOpen(false); }}
           centered
+          global
+          flush
+          className="app-dialog"
           destroyOnHidden
-          width={360}
+          width={400}
           footer={
-            <div className="flex justify-end gap-2">
+            <div className="app-dialog-footer">
               <AppButton onClick={() => setBatchTypeOpen(false)} disabled={batchTypeSaving}>{t("common.cancel")}</AppButton>
               <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
@@ -822,16 +825,10 @@ export default function AssetsModal({ open, onClose }: Props) {
               </Tooltip>
             </div>
           }
-          styles={{
-                header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
-            body: { background: "var(--canvas-bg)", padding: "12px 24px" },
-            footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
-          }}
         >
           <Select
             value={batchTypeValue}
             onChange={(v) => setBatchTypeValue(v)}
-            getPopupContainer={(t) => t.parentElement || document.body}
             style={{ width: "100%" }}
             placeholder={t("asset.typePlaceholder")}
             allowClear
