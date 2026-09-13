@@ -1,13 +1,19 @@
 /**
- * 资产检查器：选中素材后从右侧滑出的操作面板。
+ * 资产检查器：右侧常驻的详情 / 操作面板。
  * 单选时展示大图预览、类型、创建时间与单项操作；
- * 多选时展示已选数量与批量操作（添加到画布 / 移动 / 改类型 / 下载 / 删除）。
- * 未选中时由父级将面板宽度收为 0，本组件只负责有选中态的内容。
+ * 多选时展示已选数量与批量操作（添加到画布 / 移动 / 改类型 / 下载 / 删除）；
+ * 未选中时展示空态提示。
  */
 "use client";
 
-import { CloseOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { PauseCircleFilled, PlayCircleFilled } from "@ant-design/icons";
+import {
+  CloseOutlined,
+  FileImageOutlined,
+  PauseCircleFilled,
+  PictureOutlined,
+  PlayCircleFilled,
+  VideoCameraOutlined,
+} from "@ant-design/icons";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -95,6 +101,8 @@ function Preview({ asset }: { asset: AssetItem }) {
           {playing ? <PauseCircleFilled style={{ fontSize: 22 }} /> : <PlayCircleFilled style={{ fontSize: 22 }} />}
         </button>
       ) : thumbUrl ? (
+        // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={thumbUrl} alt={asset.name} className="w-full h-full object-cover" />
       ) : (
         asset.mediaType === "video"
@@ -127,28 +135,40 @@ export default function AssetInspector({
   const { t } = useTranslation();
   const single = assets.length === 1 ? assets[0] : null;
   const typeKey = single ? typeLabelKey(single.type) : undefined;
+  const hasSelection = assets.length > 0;
 
   return (
     <div className="h-full flex flex-col" style={{ width: 300 }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-4 pb-3 shrink-0">
         <div className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: "var(--canvas-text)" }}>
-          {single ? single.name : t("asset.selectedN", { count: assets.length })}
+          {single ? single.name : hasSelection ? t("asset.selectedN", { count: assets.length }) : t("asset.detailTitle")}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors"
-          style={{ color: "var(--canvas-text-muted)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-        >
-          <CloseOutlined style={{ fontSize: 13 }} />
-        </button>
+        {hasSelection && (
+          <button
+            type="button"
+            onClick={onClose}
+            title={t("asset.clearSelection")}
+            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors"
+            style={{ color: "var(--canvas-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+          >
+            <CloseOutlined style={{ fontSize: 13 }} />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
-        {single ? (
+        {!hasSelection ? (
+          <div className="h-full flex flex-col items-center justify-center gap-2 pb-10">
+            <FileImageOutlined style={{ fontSize: 36, color: "var(--canvas-text-muted)", opacity: 0.5 }} />
+            <div className="text-sm" style={{ color: "var(--canvas-text-muted)" }}>{t("asset.noDetail")}</div>
+            <div className="text-xs text-center px-2" style={{ color: "var(--canvas-text-muted)", opacity: 0.7 }}>
+              {t("asset.noDetailHint")}
+            </div>
+          </div>
+        ) : single ? (
           <>
             <Preview asset={single} />
             <div className="mt-2" style={{ borderTop: "1px solid var(--canvas-border)" }}>
