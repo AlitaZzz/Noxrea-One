@@ -27,7 +27,7 @@ function dtoToAsset(dto: AssetItemDto): AssetItem {
     createdAt: toTimestamp(dto.createdAt),
     updatedAt: toTimestamp(dto.updatedAt),
     tags: dto.tags || [],
-    extraData: dto.extraData || {},
+    prompt: dto.prompt || "",
     folderId: String(dto.folderId),
     scope: (dto.scope as AssetScope) || "personal",
     sourceUrl: dto.sourceUrl || undefined,
@@ -188,7 +188,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       height: input.height,
       description: input.description,
       tags: input.tags,
-      extraData: input.extraData,
+      prompt: input.prompt,
       sourceUrl: input.sourceUrl,
       sourceType: input.sourceType,
       folderId: toIntId(input.folderId || "") ?? null,
@@ -222,7 +222,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
           height: input.height,
           description: input.description,
           tags: input.tags,
-          extraData: input.extraData,
+          prompt: input.prompt,
           sourceUrl: input.sourceUrl,
           sourceType: input.sourceType,
           folderId: toIntId(input.folderId || "") ?? null,
@@ -263,6 +263,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.type !== undefined) body.type = patch.type;
     if (patch.folderId !== undefined) body.folderId = toIntId(patch.folderId);
+    if (patch.tags !== undefined) body.tags = patch.tags;
+    if (patch.prompt !== undefined) body.prompt = patch.prompt;
     if (Object.keys(body).length === 0) return false;
 
     const res = await assetApi.updateAsset(intId, body).catch(() => null);

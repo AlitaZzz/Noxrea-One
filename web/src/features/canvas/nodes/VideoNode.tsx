@@ -398,7 +398,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
       description: "",
-      extraData: {},
+      prompt: d?.genSettings?.prompt ?? "",
     });
   }, [src, data.label, id, addAsset, t]);
 

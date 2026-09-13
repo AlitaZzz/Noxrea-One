@@ -35,7 +35,7 @@ export interface AssetItem {
   createdAt: number;
   updatedAt: number;
   tags: string[];
-  extraData: Record<string, unknown>;
+  prompt: string;
   folderId?: string;
   scope: AssetScope;
   sourceUrl?: string;
@@ -50,7 +50,7 @@ export interface CreateAssetInput {
   height?: number;
   description?: string;
   tags?: string[];
-  extraData?: Record<string, unknown>;
+  prompt?: string;
   sourceUrl?: string;
   sourceType?: string;
   folderId?: string;

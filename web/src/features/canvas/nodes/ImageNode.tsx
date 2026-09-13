@@ -283,11 +283,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       width: d?.naturalWidth || 0,
       height: d?.naturalHeight || 0,
       description: "",
-      extraData: {
-        prompt: d?.genSettings?.prompt,
-      },
+      prompt: d?.genSettings?.prompt ?? "",
     });
-  }, [src, data.label, id, addAsset]);
+  }, [src, data.label, id, addAsset, t]);
 
   const handleGridSplit = useGridSplit(id, src);
 

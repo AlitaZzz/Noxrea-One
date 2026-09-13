@@ -10,14 +10,13 @@ import {
   replaceSourceFileRefs,
   removeSourceFileRefsBatch,
 } from "@server/services/storage/file-ref-ledger";
-import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
+import { stringifyJson, parseJsonArray } from "./_json";
 
 type TransactionClient = Prisma.TransactionClient;
 
 /** Prisma 资产记录反序列化后的返回结构。 */
-type SerializedAssetItem = Omit<AssetItemModel, "tags" | "extraData"> & {
+type SerializedAssetItem = Omit<AssetItemModel, "tags"> & {
   tags: string[];
-  extraData: Record<string, unknown>;
 };
 
 /** 业务冲突错误，路由层转换为统一错误码。 */
@@ -81,11 +80,10 @@ async function findExistingSourceKeys(
   return existingKeys;
 }
 
-function deserializeAsset<T extends { tags: unknown; extraData: unknown }>(item: T) {
+function deserializeAsset<T extends { tags: unknown }>(item: T) {
   return {
     ...item,
     tags: parseJsonArray(item.tags),
-    extraData: parseJsonObject(item.extraData),
   };
 }
 
@@ -340,7 +338,7 @@ export async function createAssetsBatch(
     height?: number;
     description?: string;
     tags?: string[];
-    extraData?: Record<string, unknown>;
+    prompt?: string;
     folderId?: number | null;
     scope?: string;
   }>
@@ -413,7 +411,7 @@ export async function createAssetsBatch(
           height: item.height ?? 0,
           description: item.description ?? "",
           tags: stringifyJson(item.tags ?? []),
-          extraData: stringifyJson(item.extraData ?? {}),
+          prompt: item.prompt ?? "",
           folderId,
           scope,
           sourceUrl: item.sourceUrl ?? null,
@@ -456,7 +454,7 @@ export async function updateAsset(
     description?: string;
     folderId?: number | null;
     tags?: string[];
-    extraData?: Record<string, unknown>;
+    prompt?: string;
   }
 ) {
   return prisma.$transaction(async (tx) => {
@@ -470,9 +468,7 @@ export async function updateAsset(
     if (updates.height !== undefined) data.height = updates.height;
     if (updates.description !== undefined) data.description = updates.description;
     if (updates.tags !== undefined) data.tags = stringifyJson(updates.tags);
-    if (updates.extraData !== undefined) {
-      data.extraData = stringifyJson(updates.extraData);
-    }
+    if (updates.prompt !== undefined) data.prompt = updates.prompt;
 
     let targetFolderId = current.folderId;
     if (updates.folderId !== undefined && updates.folderId !== current.folderId) {
