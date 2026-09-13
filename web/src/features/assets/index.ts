@@ -4,7 +4,6 @@
 
 // ── 组件 ──
 export { default as AssetCard } from "./components/AssetCard";
-export { default as AssetCategoryTabs } from "./components/AssetCategoryTabs";
 export { default as AssetCreateDialog } from "./components/AssetCreateDialog";
 export { default as AssetGrid } from "./components/AssetGrid";
 export {

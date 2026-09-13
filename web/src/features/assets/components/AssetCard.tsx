@@ -1,58 +1,55 @@
 /**
  * 单个资产卡片。
- * 按资产类型渲染图片 / 视频 / 音频缩略预览（视频悬停自动播放、音频内联试听），
- * 提供选中态与右上角更多菜单（插入画布、重命名、下载、删除）。
+ * 上半部分为正方形封面（图片 / 视频抽帧 / 音频波形），名称与日期排在封面下方；
+ * 悬停封面显示暗色蒙层与「插入画布」快捷按钮，右上角为多选勾选框（悬停显示、选中常驻）。
+ * 单击卡片本体 = 选中该项（右侧检查器展示详情）；单击勾选框 = 增减多选。
+ * 抽屉场景不传选择回调，卡片本体点击直接插入画布。
  */
 "use client";
 
-import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { CheckCircleFilled,DeleteOutlined, DownloadOutlined, EditOutlined, MoreOutlined, PauseCircleFilled, PlayCircleFilled, PlusOutlined } from "@ant-design/icons";
+import { CheckOutlined, PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { PauseCircleFilled, PlayCircleFilled } from "@ant-design/icons";
 import { Tooltip } from "antd";
-import { useEffect, useRef,useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
-import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetItem } from "@/features/assets/types";
 
 import { AssetHoverPreview, useAssetHoverPreview } from "./AssetHoverPreview";
 
 interface Props {
   asset: AssetItem;
-  /** 隐藏更多菜单后，卡片只保留插入画布能力，适合抽屉场景。 */
-  showActions?: boolean;
+  /** 抽屉场景关闭多选与选择能力，卡片本体点击直接插入画布。 */
+  selectable?: boolean;
+  /** 网格卡片或紧凑列表行。 */
+  layout?: "grid" | "list";
   /** 是否启用悬浮大图预览，保持抽屉既有的快速查看体验。 */
   showHoverPreview?: boolean;
   /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
   hoverPreviewAnchorX?: number;
   selected?: boolean;
+  /** 单击卡片本体：弹窗中为单选（additive=true 即 Ctrl/⌘ 点击时增减）；抽屉不传。 */
+  onSelect?: (asset: AssetItem, additive?: boolean) => void;
+  /** 单击勾选框：切换该项的多选状态。 */
   onToggleSelect?: (asset: AssetItem) => void;
   onInsertCanvas?: (asset: AssetItem) => void;
-  onRename?: (asset: AssetItem) => void;
-  onDelete?: (asset: AssetItem) => void;
 }
 
 export default function AssetCard({
   asset,
-  showActions = true,
+  selectable = true,
+  layout = "grid",
   showHoverPreview = false,
   hoverPreviewAnchorX = 0,
   selected,
+  onSelect,
   onToggleSelect,
   onInsertCanvas,
-  onRename,
-  onDelete,
 }: Props) {
   const { t } = useTranslation();
-  const layerOverlay = useLayerOverlay();
   const preview = useAssetHoverPreview(hoverPreviewAnchorX);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [playing, setPlaying] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // 卡片卸载（分页回收 / 删除）时释放音频元素，避免长列表试听泄漏。
@@ -63,44 +60,6 @@ export default function AssetCard({
       audioRef.current = null;
     }
   }, []);
-
-  const handleMenuEnter = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
-    }
-    setMenuOpen(true);
-  };
-  const handleMenuLeave = () => {
-    closeTimer.current = setTimeout(() => setMenuOpen(false), 150);
-  };
-
-  const handleInsert = () => {
-    onInsertCanvas?.(asset);
-  };
-
-  const handleRename = () => {
-    setMenuOpen(false);
-    onRename?.(asset);
-  };
-
-  const handleDownload = () => {
-    setMenuOpen(false);
-    const downloadUrl = asset.sourceUrl as string;
-    if (!downloadUrl) return;
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = asset.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDelete = () => {
-    setMenuOpen(false);
-    onDelete?.(asset);
-  };
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -129,167 +88,205 @@ export default function AssetCard({
 
   const handleCardLeave = () => {
     preview.onLeave();
-    if (playing) {
-      stopAudio();
-    }
+    if (playing) stopAudio();
   };
 
-  /** 卡片保留键盘操作：弹窗内用于选中，抽屉内没有批量选中时用于插入画布。 */
+  /** Enter / 空格：弹窗内单选，抽屉内直接插入画布。 */
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    if (onToggleSelect) onToggleSelect(asset);
+    if (selectable) onSelect?.(asset);
     else onInsertCanvas?.(asset);
   };
-
   const formatDate = (ts: number) => {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
+
+  const isVideo = asset.mediaType === "video";
+  const isAudio = asset.mediaType === "audio";
+  const sourceUrl = asset.sourceUrl;
+  const thumbUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=300` : sourceUrl;
+
+  const clickCard = (e: React.MouseEvent) => {
+    if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
+    else onInsertCanvas?.(asset);
+  };
+
+  // 列表视图：单行缩略图 + 名称 / 日期，右侧为试听、快速插入与勾选。
+  if (layout === "list") {
+    return (
+      <div
+        tabIndex={0}
+        role="button"
+        aria-label={asset.name}
+        aria-pressed={selected}
+        onKeyDown={handleKeyDown}
+        className="group flex items-center gap-3 rounded-lg border px-2 cursor-pointer transition-colors outline-none"
+        style={{
+          height: 60,
+          background: selected ? "rgba(199,244,61,0.06)" : "transparent",
+          borderColor: selected ? "var(--canvas-select)" : "rgba(255,255,255,0.1)",
+          borderWidth: selected ? 2 : 1,
+        }}
+        onMouseEnter={(event) => { if (showHoverPreview && sourceUrl) preview.onEnter(asset, event); }}
+        onMouseLeave={handleCardLeave}
+        onClick={clickCard}
+      >
+        <div className="relative w-10 h-10 rounded-md overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--canvas-bg-elevated)" }}>
+          {isAudio ? (
+            <WaveIcon style={{ fontSize: 18, color: "rgba(255,255,255,0.3)" }} />
+          ) : thumbUrl ? (
+            <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <PictureOutlined style={{ fontSize: 16, color: "rgba(255,255,255,0.3)" }} />
+          )}
+          {isVideo && (
+            <VideoCameraOutlined className="absolute bottom-0.5 right-0.5" style={{ fontSize: 9, color: "rgba(255,255,255,0.8)" }} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs truncate font-medium" style={{ color: "var(--canvas-text)" }}>{asset.name}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>{formatDate(asset.createdAt)}</div>
+        </div>
+        {isAudio && (
+          <button
+            type="button"
+            className="shrink-0 leading-none text-base"
+            style={{ color: "var(--canvas-text-muted)" }}
+            onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
+          >
+            {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
+          </button>
+        )}
+        <Tooltip title={t("asset.addToCanvas")}>
+          <button
+            type="button"
+            className="app-icon-btn w-7 h-7 rounded-md shrink-0 text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ color: "var(--canvas-text-muted)" }}
+            onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
+          >
+            <PlusOutlined />
+          </button>
+        </Tooltip>
+        {selectable && onToggleSelect && (
+          <button
+            type="button"
+            aria-label={asset.name}
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
+            className={`shrink-0 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-all ${
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
+            }`}
+            style={selected ? { background: "var(--canvas-select)", borderColor: "var(--canvas-select)" } : undefined}
+          >
+            {selected && <CheckOutlined style={{ fontSize: 11, color: "#141509", fontWeight: 700 }} />}
+          </button>
+        )}
+        {showHoverPreview && (
+          <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
       tabIndex={0}
       role="button"
       aria-label={asset.name}
+      aria-pressed={selected}
       onKeyDown={handleKeyDown}
-      className={`relative group rounded-lg border transition-all cursor-pointer ${selected ? "border-transparent" : "border-white/10 hover:border-white/30"}`}
-      style={{
-        background: "var(--canvas-bg-elevated)",
-        aspectRatio: "1",
-        borderColor: selected ? "var(--canvas-select)" : undefined,
-        borderWidth: selected ? 2 : 1,
-      }}
+      className="group rounded-lg transition-all cursor-pointer outline-none"
       onMouseLeave={handleCardLeave}
-      onMouseEnter={(event) => { if (showHoverPreview && asset.sourceUrl) preview.onEnter(asset, event); }}
+      onMouseEnter={(event) => { if (showHoverPreview && sourceUrl) preview.onEnter(asset, event); }}
       onClick={(e) => {
-        // Only trigger selection when clicking the card body, not menu buttons
-        const target = e.target as HTMLElement;
-        if (target.closest("button")) return;
-        onToggleSelect?.(asset);
+        if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
+        else onInsertCanvas?.(asset);
       }}
     >
-      {/* Selected checkmark */}
-      {selected && (
-        <div className="absolute top-2 left-2 z-10">
-          <CheckCircleFilled style={{ color: "var(--canvas-select)", fontSize: 18 }} />
-        </div>
-      )}
-
-      {/* Cover (overflow-hidden wrapper to clip rounded corners) */}
-      <div className="absolute inset-0 rounded-lg overflow-hidden">
-        {(() => {
-          const sourceUrl = asset.sourceUrl;
-          const isVideo = asset.mediaType === "video";
-          const isAudio = asset.mediaType === "audio";
-
-          // Video: 按 sourceUrl?w= 惰性生成缩略图（后端 ffmpeg 抽帧），失败时回退黑底
-          if (isVideo) {
-            const thumbUrl = sourceUrl?.includes('/api/files/') ? `${sourceUrl}?w=200` : '';
-            return (
-              <div className="w-full h-full relative bg-black/40">
-                {thumbUrl && (
-                  <img
-                    src={thumbUrl}
-                    alt={asset.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                  />
-                )}
-                <div className="absolute top-1 left-1 flex items-center justify-center w-6 h-6 rounded bg-black/50">
-                  <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
-                </div>
-              </div>
-            );
-          }
-          if (isAudio) {
-            return (
-              <div className="w-full h-full flex items-center justify-center">
-                <WaveIcon style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
-              </div>
-            );
-          }
-          const imgUrl = sourceUrl ? (sourceUrl.includes('/api/files/') ? `${sourceUrl}?w=200` : sourceUrl) : '';
-          return imgUrl ? (
-            <img src={imgUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <PictureOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.15)" }} />
+      {/* 封面区 */}
+      <div
+        className={`relative w-full rounded-lg overflow-hidden border transition-colors ${selected ? "" : "border-white/10 group-hover:border-white/30"}`}
+        style={{ aspectRatio: "1", background: "var(--canvas-bg-elevated)", borderColor: selected ? "var(--canvas-select)" : undefined, borderWidth: selected ? 2 : 1 }}
+      >
+        {isVideo ? (
+          <div className="w-full h-full relative bg-black/40">
+            {thumbUrl && (
+              <img
+                src={thumbUrl}
+                alt={asset.name}
+                loading="lazy"
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
+            <div className="absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded bg-black/50 pointer-events-none">
+              <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
             </div>
-          );
-        })()}
-      </div>
+          </div>
+        ) : isAudio ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <WaveIcon style={{ fontSize: 32, color: "rgba(255,255,255,0.15)" }} />
+          </div>
+        ) : thumbUrl ? (
+          <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <PictureOutlined style={{ fontSize: 32, color: "rgba(255,255,255,0.15)" }} />
+          </div>
+        )}
 
-      {/* Hover overlay — send to canvas */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-lg">
-        {/* 位于 hover 暗色蒙层之上，用 --light 变体 */}
-        <button
-          className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md"
-          onClick={(e) => { e.stopPropagation(); handleInsert(); }}
-        >
-          <PlusOutlined />
-        </button>
-      </div>
-
-      {showHoverPreview && (
-        <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-      )}
-
-      {showActions && (
-        <div
-          className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-          onMouseEnter={handleMenuEnter}
-          onMouseLeave={handleMenuLeave}
-        >
-          <button
-            ref={triggerRef}
-            className="app-overlay-btn app-overlay-btn--sm"
-            onMouseEnter={handleMenuEnter}
-          >
-            <MoreOutlined />
-          </button>
-
-          {menuOpen && createPortal(
-          <div
-            className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg border"
-            onMouseEnter={handleMenuEnter}
-            onMouseLeave={handleMenuLeave}
-            style={{
-              position: "fixed",
-              top: menuPos.top,
-              left: menuPos.left,
-              background: "var(--canvas-bg)",
-              borderColor: "var(--canvas-border)",
-              minWidth: 160,
-              pointerEvents: "auto",
-            }}
-          >
-            <style>{`.menu-popover-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-            <MenuItem onClick={handleDownload}><DownloadOutlined /> {t("common.download")}</MenuItem>
-            <MenuItem onClick={handleRename}><EditOutlined /> {t("asset.rename")}</MenuItem>
-            <MenuDivider />
-            <MenuItem onClick={handleDelete}><DeleteOutlined /> {t("common.delete")}</MenuItem>
-          </div>,
-          layerOverlay || document.body
-          )}
-        </div>
-      )}
-
-      {/* Bottom info bar */}
-      <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg pointer-events-none">
-        <div className="flex items-center gap-1">
-          <div className="text-white/90 text-xs truncate font-medium flex-1 min-w-0">{asset.name}</div>
-          {asset.mediaType === "audio" && (
+        {/* 悬停蒙层 + 快速插入 */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
+          <Tooltip title={t("asset.addToCanvas")}>
             <button
-              className="app-overlay-btn app-overlay-btn--xs shrink-0 pointer-events-auto"
-              onClick={togglePlay}
+              type="button"
+              className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
+            >
+              <PlusOutlined />
+            </button>
+          </Tooltip>
+        </div>
+
+        {/* 多选勾选框：未选中仅悬停显示，选中后常驻青柠实底 */}
+        {selectable && onToggleSelect && (
+          <button
+            type="button"
+            aria-label={asset.name}
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
+            className={`absolute top-1.5 right-1.5 z-10 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-all ${
+              selected
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
+            }`}
+            style={selected ? { background: "var(--canvas-select)", borderColor: "var(--canvas-select)" } : undefined}
+          >
+            {selected && <CheckOutlined style={{ fontSize: 11, color: "#141509", fontWeight: 700 }} />}
+          </button>
+        )}
+
+        {showHoverPreview && (
+          <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
+        )}
+      </div>
+
+      {/* 封面下方信息 */}
+      <div className="px-1 pt-1.5 pb-1">
+        <div className="flex items-center gap-1">
+          <div className="text-xs truncate font-medium flex-1 min-w-0" style={{ color: "var(--canvas-text)" }}>{asset.name}</div>
+          {isAudio && (
+            <button
+              type="button"
+              className="shrink-0 leading-none"
+              style={{ color: "var(--canvas-text-muted)" }}
+              onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
             >
               {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
             </button>
           )}
         </div>
-        <div className="text-white/40 text-[10px]">{formatDate(asset.createdAt)}</div>
+        <div className="text-[10px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>{formatDate(asset.createdAt)}</div>
       </div>
     </div>
   );
