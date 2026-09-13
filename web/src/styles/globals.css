@@ -506,6 +506,12 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .ant-input-sm { font-size: 13px; }
 .ant-select-sm { font-size: 13px; }
 
+/* antd Empty 的默认图标是内嵌 SVG，内部 <title> 会被浏览器渲染成悬停原生提示
+   （未配置 antd locale 时文案为英文 "No data"）。图标本身无任何交互，
+   禁掉指针事件让提示不再出现；资产管理 / 技能面板 / 画布大纲的空态一并生效。 */
+.ant-empty-image svg { pointer-events: none; }
+
+
 /* Select 全局统一样式（双类名提特异性，压过 antd cssinjs） */
 .ant-select.ant-select { height: 36px !important; }
 .ant-select-selector.ant-select-selector {
