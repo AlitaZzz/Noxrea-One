@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { CloseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Input, Select, Tooltip } from "antd";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,6 +22,7 @@ import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } 
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
+import { downloadAsset } from "../download";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
 import AssetInspector from "./AssetInspector";
@@ -74,6 +75,8 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // 显式多选模式（工具条勾选图标切换）；一旦勾到 ≥2 项也自动视为多选态。
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
   const [batchMoving, setBatchMoving] = useState(false);
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
@@ -83,7 +86,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   // 与画布抽屉共用同一条查询链路，弹窗只负责展示和批量操作。
   const {
     items,
-    totalCount,
     loading,
     loadingMore,
     loadError,
@@ -105,10 +107,12 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
     setSelectedIds(new Set());
+    setMultiSelectMode(false);
   }, []);
   const handleCategoriesChange = useCallback((next: AssetType[]) => {
     setCategories(next);
     setSelectedIds(new Set());
+    setMultiSelectMode(false);
   }, []);
 
   // 卡片本体单击 = 单选并展开右侧检查器；Ctrl/⌘ 点击 = 增减多选。
@@ -144,6 +148,25 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (allSelected) setSelectedIds(new Set());
     else setSelectedIds(new Set(items.map((a) => a.id)));
   }, [allSelected, items]);
+
+  // ≥2 项时批量操作从检查器移到网格正上方的批量条；检查器只留选择摘要。
+  const bulkOpen = selectedIds.size >= 2;
+  // 多选模式：勾选框常驻、卡片点击直接增减；关闭时一并清空选择。
+  const multiMode = multiSelectMode || bulkOpen;
+  const handleToggleMultiMode = useCallback(() => {
+    if (multiSelectMode) setSelectedIds(new Set());
+    setMultiSelectMode(!multiSelectMode);
+  }, [multiSelectMode]);
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setMultiSelectMode(false);
+  }, []);
+
+  // 多选模式下卡片单击直接增减；否则保持单选替换 / Ctrl 增减语义。
+  const handleGridCardSelect = useCallback((asset: AssetItem, additive?: boolean) => {
+    if (multiMode) handleToggleSelect(asset);
+    else handleCardSelect(asset, additive);
+  }, [multiMode, handleToggleSelect, handleCardSelect]);
 
   // 检查器单项详情的所在文件夹名；未分类目录使用本地化名称。
   const inspectorFolderName = useMemo(() => {
@@ -183,6 +206,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (!result.ok) return;
     await removeItems(ids);
     setSelectedIds(new Set());
+    setMultiSelectMode(false);
     setBatchDeleteOpen(false);
   }, [selectedIds, removeAssetsBatch, removeItems]);
 
@@ -208,6 +232,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     // 移动到当前所在文件夹：直接收起，不发请求也不刷新。
     if (folderId === activeFolderId) {
       setSelectedIds(new Set());
+      setMultiSelectMode(false);
       setBatchMoveOpen(false);
       return;
     }
@@ -216,6 +241,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     setBatchMoving(false);
     if (!result.ok) return;
     setSelectedIds(new Set());
+    setMultiSelectMode(false);
     setBatchMoveOpen(false);
     // 文件夹内列表：移动成功的项必然离开当前视图，本地剔除并补页；
     // 根目录的跨文件夹搜索结果中这些项仍匹配，保留不动。
@@ -230,6 +256,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     setBatchTypeSaving(false);
     if (!result.ok) return;
     setSelectedIds(new Set());
+    setMultiSelectMode(false);
     setBatchTypeOpen(false);
     // 当前筛选的分类集合不含新类型时，这些项应离开视图；其余情况本地改字段。
     if (categories.length > 0 && !categories.includes(type)) {
@@ -375,8 +402,8 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleteFolder(null);
   }, [deleteFolder, removeFolder, activeFolderId, folders]);
 
-  const handleSelectScope = useCallback((scope: AssetScope) => { setActiveScope(scope); setActiveFolderId(null); setSelectedIds(new Set()); }, []);
-  const handleSelectFolder = useCallback((id: string | null) => { setActiveFolderId(id); setSelectedIds(new Set()); }, []);
+  const handleSelectScope = useCallback((scope: AssetScope) => { setActiveScope(scope); setActiveFolderId(null); setSelectedIds(new Set()); setMultiSelectMode(false); }, []);
+  const handleSelectFolder = useCallback((id: string | null) => { setActiveFolderId(id); setSelectedIds(new Set()); setMultiSelectMode(false); }, []);
 
   const spaceLabels = useMemo(
     () => [
@@ -516,12 +543,12 @@ export default function AssetsModal({ open, onClose }: Props) {
                 })}
               </div>
 
-              {/* 选中态：工具条行显示「已选 N 项」chip，点击 × 清除选择（原检查器头部关闭按钮） */}
-              {selectedIds.size > 0 && (
+              {/* 单选时工具条行显示「已选 1 项」chip；多选由批量条承接，避免两处重复 */}
+              {selectedIds.size === 1 && (
                 <Tooltip title={t("asset.clearSelection")}>
                   <button
                     type="button"
-                    onClick={() => setSelectedIds(new Set())}
+                    onClick={clearSelection}
                     className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
                     style={{
                       background: "var(--canvas-bg-hover)",
@@ -543,7 +570,80 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onUpload={() => setCreateOpen(true)}
                 onCreateFolder={() => setFolderCreateOpen(true)}
                 canCreateFolder={canCreateFolder}
+                multiSelect={multiMode}
+                onToggleMultiSelect={handleToggleMultiMode}
               />
+            </div>
+
+            {/* 多选批量操作条：常驻挂载，外层 grid 行高动画折叠，出现/消失平滑推移网格 */}
+            <div className={`bulk-bar-collapse${bulkOpen ? " bulk-bar-collapse--open" : ""}`}>
+              <div inert={bulkOpen ? undefined : true}>
+                <div className="bulk-bar">
+                  {/* 计数即全选开关：白框对勾=已全选当前列表，横杠=部分选中，点击在两者间切换 */}
+                  <Tooltip title={allSelected ? t("common.deselectAll") : t("common.selectAll")}>
+                    <button
+                      type="button"
+                      className="bulk-select-btn"
+                      onClick={handleSelectAll}
+                      aria-pressed={allSelected}
+                    >
+                      <span className="bulk-check">
+                        {allSelected
+                          ? <CheckOutlined style={{ fontSize: 11, fontWeight: 700 }} />
+                          : <MinusOutlined style={{ fontSize: 10, fontWeight: 700 }} />}
+                      </span>
+                      <span className="bulk-select-label">{t("asset.selectedN", { count: selectedIds.size })}</span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip title={t("asset.clearSelection")}>
+                    <AppButton
+                      size="sm"
+                      iconOnly
+                      variant="ghost"
+                      aria-label={t("asset.clearSelection")}
+                      onClick={clearSelection}
+                    >
+                      <CloseOutlined style={{ fontSize: 11 }} />
+                    </AppButton>
+                  </Tooltip>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    className="bulk-btn bulk-btn--primary"
+                    disabled={selectedAssets.length === 0}
+                    onClick={() => handleBatchInsert(selectedAssets)}
+                  >
+                    <PlusOutlined />
+                    {t("asset.addToCanvas")}（{selectedAssets.length}）
+                  </button>
+                  <button type="button" className="bulk-btn" onClick={() => setBatchMoveOpen(true)}>
+                    <FolderOutlined />
+                    {t("asset.moveTo")}
+                  </button>
+                  <button
+                    type="button"
+                    className="bulk-btn"
+                    onClick={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
+                  >
+                    <SwapOutlined />
+                    {t("asset.changeType")}
+                  </button>
+                  <button
+                    type="button"
+                    className="bulk-btn"
+                    disabled={selectedAssets.length === 0}
+                    onClick={() => selectedAssets.forEach(downloadAsset)}
+                  >
+                    <DownloadOutlined />
+                    {t("common.download")}（{selectedAssets.length}）
+                  </button>
+                  <span className="bulk-bar-sep" />
+                  <button type="button" className="bulk-btn bulk-btn--danger" onClick={handleBatchDelete}>
+                    <DeleteOutlined />
+                    {t("common.delete")}（{selectedIds.size}）
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Grid */}
@@ -553,7 +653,8 @@ export default function AssetsModal({ open, onClose }: Props) {
                 folders={categories.length === 0 && !search.trim() ? gridFolders : undefined}
                 folderCounts={folderCounts}
                 selectedIds={selectedIds}
-                onSelect={handleCardSelect}
+                selectMode={multiMode}
+                onSelect={handleGridCardSelect}
                 onToggleSelect={handleToggleSelect}
                 onInsertCanvas={handleInsertCanvas}
                 onEnterFolder={(folder) => setActiveFolderId(folder.id)}
@@ -576,17 +677,12 @@ export default function AssetsModal({ open, onClose }: Props) {
           >
             <AssetInspector
               assets={selectedAssets}
-              totalCount={totalCount}
-              allSelected={allSelected}
               folderName={inspectorFolderName}
-              onSelectAll={handleSelectAll}
               onInsert={handleInsertCanvas}
               onRenameConfirm={handleRenameConfirm}
               onSingleDelete={handleDelete}
-              onBatchInsert={handleBatchInsert}
               onBatchMove={() => setBatchMoveOpen(true)}
               onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
-              onBatchDelete={handleBatchDelete}
               onUpdateTags={handleUpdateTags}
               onUpdatePrompt={handleUpdatePrompt}
             />

@@ -27,6 +27,8 @@ interface Props {
   /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
   hoverPreviewAnchorX?: number;
   selected?: boolean;
+  /** 多选模式：勾选框常驻显示（不再仅悬停出现）。 */
+  selectMode?: boolean;
   /** 单击卡片本体：弹窗中为单选（additive=true 即 Ctrl/⌘ 点击时增减）；抽屉不传。 */
   onSelect?: (asset: AssetItem, additive?: boolean) => void;
   /** 单击勾选框：切换该项的多选状态。 */
@@ -40,6 +42,7 @@ export default function AssetCard({
   showHoverPreview = false,
   hoverPreviewAnchorX = 0,
   selected,
+  selectMode = false,
   onSelect,
   onToggleSelect,
   onInsertCanvas,
@@ -171,10 +174,12 @@ export default function AssetCard({
             type="button"
             aria-label={asset.name}
             onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
-            className={`absolute top-1.5 right-1.5 z-10 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-all ${
+            className={`absolute top-1.5 right-1.5 z-10 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border cursor-pointer transition-all ${
               selected
                 ? "opacity-100 bg-white border-white"
-                : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
+                : selectMode
+                  ? "opacity-100 bg-black/45 border-white/60 hover:border-white"
+                  : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
             }`}
           >
             {selected && <CheckOutlined style={{ fontSize: 11, color: "#1d1d21", fontWeight: 700 }} />}

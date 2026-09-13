@@ -1,7 +1,7 @@
 /**
- * 资产检查器：右侧常驻的详情 / 操作面板。
+ * 资产检查器：右侧常驻的详情 / 选择面板。
  * 单选时展示大图预览、规格 / 位置 / 时间等元信息、可编辑标签与单项操作；
- * 多选时展示已选数量与批量操作（添加到画布 / 移动 / 改类型 / 下载 / 删除）；
+ * 多选时只显示已选数量（批量操作在网格上方的批量条）；
  * 未选中时展示空态提示。
  */
 "use client";
@@ -29,24 +29,20 @@ import { ASSET_CATEGORIES } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { copyText } from "@/lib/utils/text-export";
 
+import { downloadAsset } from "../download";
 import type { AssetItem } from "../types";
 
 interface Props {
-  /** 当前选中且仍在列表中的素材；1 项为详情态，多项为批量态。 */
+  /** 当前选中且仍在列表中的素材；1 项为详情态，多项时检查器留空（批量操作在网格上方批量条）。 */
   assets: AssetItem[];
-  totalCount: number;
-  allSelected: boolean;
   /** 单选素材所在文件夹的展示名（未分类已本地化），由父级从文件夹树解析。 */
   folderName?: string;
-  onSelectAll: () => void;
   onInsert: (asset: AssetItem) => void;
   /** 标题内联重命名：持久化成功返回 true，失败时输入态保留。 */
   onRenameConfirm: (asset: AssetItem, name: string) => Promise<boolean>;
   onSingleDelete: (asset: AssetItem) => void;
-  onBatchInsert: (assets: AssetItem[]) => void;
   onBatchMove: () => void;
   onBatchType: () => void;
-  onBatchDelete: () => void;
   /** 持久化标签编辑；返回是否成功，失败时检查器保留输入并由 store 弹错误提示。 */
   onUpdateTags: (asset: AssetItem, tags: string[]) => Promise<boolean>;
   /** 持久化提示词编辑；返回是否成功，失败时保留编辑态。 */
@@ -77,16 +73,6 @@ const renameBoxStyle = {
   boxSizing: "border-box",
   color: "var(--canvas-text)",
 } as const;
-
-function downloadAsset(asset: AssetItem) {
-  if (!asset.sourceUrl) return;
-  const a = document.createElement("a");
-  a.href = asset.sourceUrl;
-  a.download = asset.name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
 
 function formatDateTime(ts: number) {
   const d = new Date(ts);
@@ -459,9 +445,9 @@ function PromptEditor({
 }
 
 export default function AssetInspector({
-  assets, totalCount, allSelected, folderName, onSelectAll,
+  assets, folderName,
   onInsert, onRenameConfirm, onSingleDelete,
-  onBatchInsert, onBatchMove, onBatchType, onBatchDelete,
+  onBatchMove, onBatchType,
   onUpdateTags, onUpdatePrompt,
 }: Props) {
   const { t } = useTranslation();
@@ -622,56 +608,25 @@ export default function AssetInspector({
               onUpdatePrompt={onUpdatePrompt}
             />
           </>
-        ) : (
-          <div className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>
-            {t("asset.selectedOfTotal", { selected: assets.length, total: totalCount })}
-          </div>
-        )}
+        ) : null}
       </div>
 
-      {/* 操作按钮固定在检查器底部，不随上方内容滚动 */}
-      {hasSelection && (
+      {/* 单项操作按钮固定在检查器底部，不随上方内容滚动；多选时批量操作在网格上方批量条 */}
+      {single && (
         <div className="shrink-0 px-3 pt-1 pb-4">
-          {single ? (
-            <div className="flex flex-col gap-2">
-              <AppButton variant="primary" block onClick={() => onInsert(single)}>
-                {t("asset.addToCanvas")}
-              </AppButton>
-              <div className="flex gap-2">
-                <AppButton block onClick={() => downloadAsset(single)}>{t("common.download")}</AppButton>
-                <AppButton block onClick={onBatchMove}>{t("asset.moveTo")}</AppButton>
-                <AppButton block onClick={onBatchType}>{t("asset.changeType")}</AppButton>
-              </div>
-              <AppButton variant="danger" block onClick={() => onSingleDelete(single)}>
-                {t("common.delete")}
-              </AppButton>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <AppButton variant="primary" block onClick={() => onBatchInsert(assets)}>
-                {t("asset.addToCanvas")}（{assets.length}）
-              </AppButton>
+          <div className="flex flex-col gap-2">
+            <AppButton variant="primary" block onClick={() => onInsert(single)}>
+              {t("asset.addToCanvas")}
+            </AppButton>
+            <div className="flex gap-2">
+              <AppButton block onClick={() => downloadAsset(single)}>{t("common.download")}</AppButton>
               <AppButton block onClick={onBatchMove}>{t("asset.moveTo")}</AppButton>
               <AppButton block onClick={onBatchType}>{t("asset.changeType")}</AppButton>
-              <AppButton block onClick={() => assets.forEach(downloadAsset)}>
-                {t("common.download")}（{assets.length}）
-              </AppButton>
-              <div className="my-1" style={{ borderTop: "1px solid var(--canvas-border)" }} />
-              <AppButton variant="danger" block onClick={onBatchDelete}>
-                {t("common.delete")}（{assets.length}）
-              </AppButton>
-              <button
-                type="button"
-                onClick={onSelectAll}
-                className="mt-1 text-xs self-center transition-colors cursor-pointer"
-                style={{ color: "var(--canvas-text-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-              >
-                {allSelected ? t("common.deselectAll") : t("common.selectAll")}
-              </button>
             </div>
-          )}
+            <AppButton variant="danger" block onClick={() => onSingleDelete(single)}>
+              {t("common.delete")}
+            </AppButton>
+          </div>
         </div>
       )}
     </div>

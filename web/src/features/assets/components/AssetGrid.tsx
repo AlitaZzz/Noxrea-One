@@ -30,6 +30,8 @@ interface Props {
   /** 悬浮预览的水平锚点，透传给资产卡片。 */
   hoverPreviewAnchorX?: number;
   selectedIds?: Set<string>;
+  /** 多选模式：透传给卡片使勾选框常驻。 */
+  selectMode?: boolean;
   /** 单击卡片本体（弹窗为单选替换，Ctrl/⌘ 点击增减，抽屉不传）。 */
   onSelect?: (asset: AssetItem, additive?: boolean) => void;
   /** 单击卡片勾选框（多选增减）。 */
@@ -47,7 +49,7 @@ interface Props {
 }
 
 export default function AssetGrid({
-  assets, folders, folderCounts, compact, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds,
+  assets, folders, folderCounts, compact, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds, selectMode = false,
   onSelect, onToggleSelect, onInsertCanvas,
   onEnterFolder, onDeleteFolder, onRenameFolder,
   loading, hasMore, loadingMore, onLoadMore,
@@ -130,6 +132,7 @@ export default function AssetGrid({
             showHoverPreview={showHoverPreview}
             hoverPreviewAnchorX={hoverPreviewAnchorX}
             selected={selectedIds?.has(asset.id)}
+            selectMode={selectMode}
             onSelect={onSelect}
             onToggleSelect={onToggleSelect}
             onInsertCanvas={onInsertCanvas}
