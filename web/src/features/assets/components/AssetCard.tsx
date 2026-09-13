@@ -123,7 +123,7 @@ export default function AssetCard({
       {/* 封面区 */}
       <div
         className={`relative w-full rounded-lg overflow-hidden border transition-colors ${selected ? "" : "border-white/10 group-hover:border-white/30"}`}
-        style={{ aspectRatio: "1", background: "var(--canvas-bg-elevated)", borderColor: selected ? "var(--canvas-select)" : undefined, borderWidth: selected ? 2 : 1 }}
+        style={{ aspectRatio: "1", background: "var(--canvas-bg-elevated)", borderColor: selected ? "#fff" : undefined, borderWidth: selected ? 2 : 1 }}
       >
         {isVideo ? (
           <div className="w-full h-full relative bg-black/40">
@@ -165,7 +165,7 @@ export default function AssetCard({
           </Tooltip>
         </div>
 
-        {/* 多选勾选框：未选中仅悬停显示，选中后常驻青柠实底 */}
+        {/* 多选勾选框：未选中仅悬停显示，选中后常驻白色实底（与全局中性 Checkbox 一致） */}
         {selectable && onToggleSelect && (
           <button
             type="button"
@@ -173,12 +173,11 @@ export default function AssetCard({
             onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
             className={`absolute top-1.5 right-1.5 z-10 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-all ${
               selected
-                ? "opacity-100"
+                ? "opacity-100 bg-white border-white"
                 : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
             }`}
-            style={selected ? { background: "var(--canvas-select)", borderColor: "var(--canvas-select)" } : undefined}
           >
-            {selected && <CheckOutlined style={{ fontSize: 11, color: "#141509", fontWeight: 700 }} />}
+            {selected && <CheckOutlined style={{ fontSize: 11, color: "#1d1d21", fontWeight: 700 }} />}
           </button>
         )}
 
