@@ -300,8 +300,6 @@
     "saveLocation": "保存位置",
     "createFolder": "新建文件夹",
     "filter": "筛选",
-    "listView": "列表视图",
-    "gridView": "网格视图",
     "filterClear": "清除筛选",
     "retry": "加载失败，点击重试",
     "added": "已添加到画布",

@@ -14,7 +14,6 @@ import AppButton from "@/components/ui/AppButton";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
-import type { AssetViewMode } from "./AssetToolbar";
 import FolderCard from "./FolderCard";
 
 /** 加载动画统一使用品牌青柠（见 globals.css：青柠用于链接 / 加载动画 / 徽标 / 选中描边）。 */
@@ -31,7 +30,6 @@ interface Props {
   /** 悬浮预览的水平锚点，透传给资产卡片。 */
   hoverPreviewAnchorX?: number;
   selectedIds?: Set<string>;
-  viewMode?: AssetViewMode;
   /** 单击卡片本体（弹窗为单选替换，Ctrl/⌘ 点击增减，抽屉不传）。 */
   onSelect?: (asset: AssetItem, additive?: boolean) => void;
   /** 单击卡片勾选框（多选增减）。 */
@@ -49,7 +47,7 @@ interface Props {
 }
 
 export default function AssetGrid({
-  assets, folders, folderCounts, compact, viewMode = "grid", showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds,
+  assets, folders, folderCounts, compact, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds,
   onSelect, onToggleSelect, onInsertCanvas,
   onEnterFolder, onDeleteFolder, onRenameFolder,
   loading, hasMore, loadingMore, onLoadMore,
@@ -109,12 +107,8 @@ export default function AssetGrid({
         {loading && hasContent && <Spin size="small" indicator={limeIndicator} />}
       </div>
       <div
-        className={
-          viewMode === "list"
-            ? "flex flex-col gap-1 pb-2"
-            : "grid gap-x-3 gap-y-4 pb-2"
-        }
-        style={viewMode === "grid" ? { gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` } : undefined}
+        className="grid gap-x-3 gap-y-4 pb-2"
+        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` }}
       >
         {/* Folders first */}
         {folders?.map((folder) => (
@@ -122,7 +116,6 @@ export default function AssetGrid({
             key={folder.id}
             folder={folder}
             count={folderCounts?.[folder.id] || 0}
-            layout={viewMode}
             onClick={onEnterFolder || (() => {})}
             onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder}
             onRename={folder.kind === "uncategorized" ? undefined : onRenameFolder}
@@ -134,7 +127,6 @@ export default function AssetGrid({
             key={asset.id}
             asset={asset}
             selectable={selectable}
-            layout={viewMode}
             showHoverPreview={showHoverPreview}
             hoverPreviewAnchorX={hoverPreviewAnchorX}
             selected={selectedIds?.has(asset.id)}

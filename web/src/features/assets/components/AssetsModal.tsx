@@ -26,7 +26,7 @@ import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
 import AssetInspector from "./AssetInspector";
 import AssetNav from "./AssetNav";
-import AssetToolbar, { type AssetViewMode } from "./AssetToolbar";
+import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
 
 interface Props {
@@ -55,7 +55,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
   const uncategorizedFolder = getUncategorizedFolder(activeScope);
   const [categories, setCategories] = useState<AssetType[]>([]);
-  const [viewMode, setViewMode] = useState<AssetViewMode>("grid");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [folderCreateOpen, setFolderCreateOpen] = useState(false);
@@ -456,57 +455,56 @@ export default function AssetsModal({ open, onClose }: Props) {
 
           {/* Right main content */}
           <div className="flex-1 flex flex-col py-4 pr-4 pl-4 min-w-0">
-            {/* Breadcrumb — placed above toolbar, always visible */}
-            <div className="flex items-center gap-1 pb-2 flex-shrink-0">
-              {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
-              {activeFolderId === null ? (
-                <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
-                  {t("asset.spacePersonal")}
-                </span>
-              ) : (
-                <button
-                  onClick={() => setActiveFolderId(null)}
-                  className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                  style={{ color: "var(--canvas-text-dim)" }}
-                >
-                  {t("asset.spacePersonal")}
-                </button>
-              )}
-              {breadCrumb.map((f) => {
-                const isLast = f.id === activeFolderId;
-                return (
-                  <span key={f.id} className="flex items-center gap-1">
-                    <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
-                    {isLast ? (
-                      <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
-                        {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => setActiveFolderId(f.id)}
-                        className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                        style={{ color: "var(--canvas-text-dim)" }}
-                      >
-                        {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-                      </button>
-                    )}
+            {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
+            <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+              <div className="flex items-center gap-1 flex-1 min-w-0">
+                {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
+                {activeFolderId === null ? (
+                  <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                    {t("asset.spacePersonal")}
                   </span>
-                );
-              })}
-            </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveFolderId(null)}
+                    className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                    style={{ color: "var(--canvas-text-dim)" }}
+                  >
+                    {t("asset.spacePersonal")}
+                  </button>
+                )}
+                {breadCrumb.map((f) => {
+                  const isLast = f.id === activeFolderId;
+                  return (
+                    <span key={f.id} className="flex items-center gap-1">
+                      <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                      {isLast ? (
+                        <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                          {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setActiveFolderId(f.id)}
+                          className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
+                          style={{ color: "var(--canvas-text-dim)" }}
+                        >
+                          {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
 
-            {/* Toolbar */}
-            <AssetToolbar
-              search={search}
-              onSearchChange={handleSearchChange}
-              categories={categories}
-              onCategoriesChange={handleCategoriesChange}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onUpload={() => setCreateOpen(true)}
-              onCreateFolder={() => setFolderCreateOpen(true)}
-              canCreateFolder={canCreateFolder}
-            />
+              <AssetToolbar
+                search={search}
+                onSearchChange={handleSearchChange}
+                categories={categories}
+                onCategoriesChange={handleCategoriesChange}
+                onUpload={() => setCreateOpen(true)}
+                onCreateFolder={() => setFolderCreateOpen(true)}
+                canCreateFolder={canCreateFolder}
+              />
+            </div>
 
             {/* Grid */}
             <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
@@ -514,7 +512,6 @@ export default function AssetsModal({ open, onClose }: Props) {
                 assets={items}
                 folders={activeFolderId === null && categories.length === 0 && !search.trim() ? gridFolders : undefined}
                 folderCounts={folderCounts}
-                viewMode={viewMode}
                 selectedIds={selectedIds}
                 onSelect={handleCardSelect}
                 onToggleSelect={handleToggleSelect}
