@@ -14,6 +14,9 @@ type LayerModalProps = Omit<ComponentProps<typeof Modal>, "getContainer" | "zInd
   /** 显式指定 zIndex（默认由 depth 推导）。用于 Drawer 等不参与 layer 系统的容器内，
    *  需要压过容器自身 z-index 的场景（如 Drawer 默认 1000，确认框传 1050）。 */
   zIndex?: number;
+  /** 挂到 document.body 而非父 layer 的 overlay-root：用于需要全屏遮罩、
+   打断底层上下文的弹窗（如破坏性二次确认）。zIndex 默认提升到 1050。 */
+  global?: boolean;
 };
 
 /**
@@ -24,14 +27,14 @@ type LayerModalProps = Omit<ComponentProps<typeof Modal>, "getContainer" | "zInd
  * - Computes a stable, bounded zIndex from `depth * 50 + 1000`.
  * - No need to pass `zIndex`, `getContainer`, or `rootClassName` for layering.
  */
-export function LayerModal({ children, ...props }: LayerModalProps) {
+export function LayerModal({ children, zIndex: explicitZIndex, global: isGlobal = false, ...props }: LayerModalProps) {
   const { parentContainer, overlayRef, overlayRoot, depth, zIndex } =
     useLayerParent();
 
   return (
     <Modal
-      getContainer={parentContainer}
-      zIndex={zIndex}
+      getContainer={isGlobal ? () => document.body : parentContainer}
+      zIndex={isGlobal ? (explicitZIndex ?? 1050) : (explicitZIndex ?? zIndex)}
       {...props}
     >
       <LayerContext.Provider value={{ overlayRoot, depth }}>

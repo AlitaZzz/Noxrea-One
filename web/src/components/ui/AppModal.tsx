@@ -28,20 +28,22 @@ interface AppModalProps {
   afterOpenChange?: (open: boolean) => void;
   /** 贴边布局（如资产库三栏）：内容自行管理间距，去掉默认的顶部 pt-4 内边距。 */
   flush?: boolean;
+  /** 挂到 document.body 呈现全屏遮罩（如破坏性二次确认），而非嵌进父 layer。 */
+  global?: boolean;
 }
 
 /** 通用弹窗 - 统一标题下边距 + 居中，所有功能弹窗都用这个。 */
 export default function AppModal({
   title, open, onCancel, width = 520, footer, children, styles,
-  className, destroyOnHidden, closeIcon, centered, style, zIndex, afterOpenChange,
-  flush = false,
+  className, destroyOnHidden, closeIcon, centered = true, style, zIndex, afterOpenChange,
+  flush = false, global: isGlobal = false,
 }: AppModalProps) {
   return (
     <LayerModal
       title={title} open={open} onCancel={onCancel}
-      width={width} centered footer={footer} styles={styles}
+      width={width} centered={centered} footer={footer} styles={styles}
       className={className} destroyOnHidden={destroyOnHidden} closeIcon={closeIcon}
-      style={style} zIndex={zIndex} afterOpenChange={afterOpenChange}
+      style={style} zIndex={zIndex} afterOpenChange={afterOpenChange} global={isGlobal}
     >
       {flush ? children : <div className="pt-4">{children}</div>}
     </LayerModal>

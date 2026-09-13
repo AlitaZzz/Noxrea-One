@@ -46,25 +46,17 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       open={open}
       onCancel={() => { setName(""); setError(""); onClose(); }}
       width={400}
+      global
+      flush
+      className="app-dialog"
       destroyOnHidden
-      styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "none" },
-        body: { background: "var(--canvas-bg)", padding: "0 20px 16px" },
-      }}
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="app-dialog-footer">
           <AppButton onClick={() => { setName(""); onClose(); }}>{t("common.cancel")}</AppButton>
           <AppButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</AppButton>
         </div>
       }
     >
-      <style>{`
-        .ant-input:hover, .ant-input:focus,
-        .ant-input-affix-wrapper:hover, .ant-input-affix-wrapper:focus {
-          border-color: var(--canvas-border) !important;
-          box-shadow: none !important;
-        }
-      `}</style>
       <Input
         value={name}
         onChange={(e) => { setName(e.target.value.slice(0, 20)); setError(""); }}
@@ -73,14 +65,9 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
         maxLength={20}
         showCount
         status={error ? "error" : undefined}
-        style={{
-          background: "var(--canvas-bg-elevated)",
-          borderColor: error ? "#ff4d4f" : "var(--canvas-border)",
-          color: "var(--canvas-text)",
-        }}
       />
       {error && (
-        <div className="text-xs mt-1.5" style={{ color: "#ff4d4f" }}>{error}</div>
+        <div className="app-dialog-error">{error}</div>
       )}
     </AppModal>
   );
