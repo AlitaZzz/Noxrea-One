@@ -81,12 +81,21 @@ export interface AssetListState {
   loadingMore: boolean;
 }
 
-/** 分页拉取某个真实文件夹下的资产；不再支持 folderId 为 null 或 -1。 */
+/**
+ * 由列表中某条资产构造 keyset 游标，指向该条之后（更旧）的记录。
+ * 协议须与服务端 parseAssetCursor 一致：`<createdAt 毫秒>_<id>`。
+ */
+export function encodeAssetCursor(item: Pick<AssetItem, "createdAt" | "id">): string | null {
+  if (!Number.isFinite(item.createdAt) || !/^\d+$/.test(item.id)) return null;
+  return `${item.createdAt}_${item.id}`;
+}
+
+/** 分页拉取某个真实文件夹下的资产；cursor 为空/首页，否则从游标之后取下一页。 */
 export async function fetchAssetPage(
   filters: { category?: string | string[]; search?: string; folderId?: string; scope?: AssetScope },
-  skip: number,
+  cursor?: string | null,
   limit: number = ASSET_PAGE_SIZE,
-): Promise<{ items: AssetItem[]; total: number }> {
+): Promise<{ items: AssetItem[]; total: number; nextCursor: string | null }> {
   let typeParam: string | undefined;
   if (filters.category && filters.category !== "all") {
     typeParam = Array.isArray(filters.category) ? filters.category.join(",") : filters.category;
@@ -97,13 +106,14 @@ export async function fetchAssetPage(
     type: typeParam,
     search: filters.search || undefined,
     scope: filters.scope || "personal",
-    skip,
+    cursor: cursor || undefined,
     limit,
   });
-  const data = res.data || { items: [], total: 0 };
+  const data = res.data || { items: [], total: 0, nextCursor: null };
   return {
     items: (data.items || []).map(dtoToAsset),
     total: data.total,
+    nextCursor: data.nextCursor ?? null,
   };
 }
 

@@ -13,9 +13,7 @@ import {
   EditOutlined,
   FileImageOutlined,
   LoadingOutlined,
-  PauseCircleFilled,
   PictureOutlined,
-  PlayCircleFilled,
   PlusOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
@@ -25,6 +23,7 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
@@ -84,24 +83,7 @@ function typeLabelKey(type: string): string | undefined {
 /** 单项预览：图片 / 视频抽帧 / 音频波形，音频支持就地试听。 */
 function Preview({ asset }: { asset: AssetItem }) {
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const toggleAudio = () => {
-    if (!asset.sourceUrl) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(asset.sourceUrl);
-      audioRef.current.addEventListener("ended", () => setAudioPlaying(false));
-    }
-    if (audioPlaying) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setAudioPlaying(false);
-    } else {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-      setAudioPlaying(true);
-    }
-  };
+  const [audioDuration, setAudioDuration] = useState(0);
 
   const thumbUrl = asset.sourceUrl?.includes("/api/files/")
     ? `${asset.sourceUrl}?w=400`
@@ -112,16 +94,14 @@ function Preview({ asset }: { asset: AssetItem }) {
       className="relative w-full rounded-lg overflow-hidden flex items-center justify-center"
       style={{ aspectRatio: "1", background: "#000" }}
     >
-      {asset.mediaType === "audio" ? (
-        <button
-          type="button"
-          onClick={toggleAudio}
-          className="w-full h-full flex flex-col items-center justify-center gap-3 cursor-pointer"
-          style={{ color: "rgba(255,255,255,0.55)" }}
-        >
-          <WaveIcon style={{ fontSize: 44, color: "rgba(255,255,255,0.25)" }} />
-          {audioPlaying ? <PauseCircleFilled style={{ fontSize: 22 }} /> : <PlayCircleFilled style={{ fontSize: 22 }} />}
-        </button>
+      {asset.mediaType === "audio" && asset.sourceUrl ? (
+        <AudioWaveform
+          url={asset.sourceUrl}
+          duration={audioDuration}
+          playing={audioPlaying}
+          onToggle={setAudioPlaying}
+          onReady={setAudioDuration}
+        />
       ) : asset.mediaType === "video" && asset.sourceUrl ? (
         // 复用画布节点同款播放器；检查器内不自动播放、默认静音（面板内不应突然出声）
         <VideoPlayer src={asset.sourceUrl} fill autoPlay={false} loop defaultVolume={0} />
@@ -132,7 +112,9 @@ function Preview({ asset }: { asset: AssetItem }) {
       ) : (
         asset.mediaType === "video"
           ? <VideoCameraOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
-          : <PictureOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+          : asset.mediaType === "audio"
+            ? <WaveIcon style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+            : <PictureOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
       )}
       {asset.mediaType === "video" && (
         <div className="absolute top-2 left-2 flex items-center justify-center w-6 h-6 rounded bg-black/50 pointer-events-none">
@@ -555,7 +537,7 @@ export default function AssetInspector({
           </div>
         ) : single ? (
           <>
-            <Preview asset={single} />
+            <Preview key={`preview-${single.id}`} asset={single} />
             <div className="mt-2" style={{ borderTop: "1px solid var(--canvas-border)" }}>
               <MetaRow label={t("asset.typeLabel")} value={typeKey ? t(typeKey) : single.type} />
               {(single.mediaType === "image" || single.mediaType === "video") && single.width > 0 && single.height > 0 && (
@@ -576,7 +558,7 @@ export default function AssetInspector({
               onUpdateTags={onUpdateTags}
             />
             <PromptEditor
-              key={single.id}
+              key={`prompt-${single.id}`}
               asset={single}
               label={t("asset.promptLabel")}
               editLabel={t("asset.editPrompt")}

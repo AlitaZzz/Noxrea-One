@@ -113,7 +113,7 @@ export default function AssetGrid({
         {/* Folders first */}
         {folders?.map((folder) => (
           <FolderCard
-            key={folder.id}
+            key={`folder-${folder.id}`}
             folder={folder}
             count={folderCounts?.[folder.id] || 0}
             onClick={onEnterFolder || (() => {})}
@@ -124,7 +124,7 @@ export default function AssetGrid({
         {/* Then assets */}
         {assets.map((asset) => (
           <AssetCard
-            key={asset.id}
+            key={`asset-${asset.id}`}
             asset={asset}
             selectable={selectable}
             showHoverPreview={showHoverPreview}

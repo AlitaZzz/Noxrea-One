@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { fetchAssetPage } from "@/features/assets/store";
+import { ASSET_PAGE_SIZE, encodeAssetCursor, fetchAssetPage } from "@/features/assets/store";
 import type { AssetItem, AssetScope, AssetType } from "@/features/assets/types";
 
 /** 资产库查询条件；categories 为空数组表示“全部类型”。 */
@@ -46,12 +46,14 @@ interface AssetListState {
   key: string;
   items: AssetItem[];
   totalCount: number;
+  /** 取下一页的 keyset 游标；null 表示已到末页。 */
+  nextCursor: string | null;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function useAssetLibrary({ enabled, scope, folderId, search, categories }: Options): AssetLibraryState {
-  const [listState, setListState] = useState<AssetListState>({ key: "", items: [], totalCount: 0 });
+  const [listState, setListState] = useState<AssetListState>({ key: "", items: [], totalCount: 0, nextCursor: null });
   const [loadingMoreKey, setLoadingMoreKey] = useState<string | null>(null);
   /** 最近一次首页请求失败的条件及当时的刷新令牌；retry 自增令牌后旧错误自动失效。 */
   const [errorState, setErrorState] = useState<{ key: string; token: number } | null>(null);
@@ -125,18 +127,18 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     if (isRootBrowse) {
       // 根目录只展示文件夹：清空资产列表，避免离开根目录后旧文件夹内容被当作占位闪现。
       if (listStateRef.current.key !== queryKey || listStateRef.current.items.length > 0) {
-        setListState({ key: queryKey, items: [], totalCount: 0 });
+        setListState({ key: queryKey, items: [], totalCount: 0, nextCursor: null });
       }
       return;
     }
 
     const version = ++versionRef.current;
 
-    void fetchAssetPage(requestArgs, 0)
+    void fetchAssetPage(requestArgs, null)
       .then((result) => {
         if (version !== versionRef.current) return;
         setErrorState(null);
-        setListState({ key: queryKey, items: result.items, totalCount: result.total });
+        setListState({ key: queryKey, items: result.items, totalCount: result.total, nextCursor: result.nextCursor });
       })
       .catch(() => {
         if (version !== versionRef.current) return;
@@ -144,22 +146,34 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
       });
   }, [enabled, isRootBrowse, queryKey, refreshToken, requestArgs]);
 
-  /** 追加下一页；筛选时忽略文件夹层级，与搜索的目录语义保持一致。 */
+  /** 追加下一页；游标由服务端返回，keyset 顺序稳定，无需客户端去重或补拉。 */
   const loadMore = useCallback(() => {
-    if (!enabled || isRootBrowse || listState.key !== queryKey || loadingMoreKey === queryKey) return;
+    if (
+      !enabled ||
+      isRootBrowse ||
+      listState.key !== queryKey ||
+      loadingMoreKey === queryKey ||
+      listState.nextCursor === null
+    ) {
+      return;
+    }
     const version = ++versionRef.current;
     setLoadingMoreKey(queryKey);
 
-    void fetchAssetPage(requestArgs, listState.items.length)
+    const cursor = listState.nextCursor;
+    void fetchAssetPage(requestArgs, cursor)
       .then((result) => {
-        if (version === versionRef.current) {
-          setErrorState(null);
-          setListState((state) => (
-            state.key === queryKey
-              ? { ...state, items: [...state.items, ...result.items], totalCount: result.total }
-              : state
-          ));
-        }
+        if (version !== versionRef.current) return;
+        setErrorState(null);
+        setListState((state) => {
+          if (state.key !== queryKey || state.nextCursor !== cursor) return state;
+          return {
+            ...state,
+            items: [...state.items, ...result.items],
+            totalCount: result.total,
+            nextCursor: result.nextCursor,
+          };
+        });
       })
       .catch(() => {
         if (version === versionRef.current) setErrorState({ key: queryKey, token: refreshToken });
@@ -172,10 +186,10 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
   const reload = useCallback(() => setRefreshToken((token) => token + 1), []);
 
   /**
-   * 删除后的本地同步：先乐观剔除并本地递减总数，再按删除条数拉取补偿页，
-   * 让网格始终保持满页，不必等滚动到哨兵才补数据。
+   * 删除后的本地同步：先乐观剔除并本地递减总数，再用「当前窗口最后一条」作为游标
+   * 向后补拉被删掉的条数，让网格保持满页。keyset 游标在增删后仍然稳定，
+   * 补拉结果天然不与现有窗口重叠。整个窗口被删空时退化为重拉首页。
    * 不使用服务端 counters.total：那是全库总数，与当前筛选/文件夹视图无关。
-   * 补偿失败不回滚（服务端已删除），哨兵仍可通过 loadMore 补齐。
    */
   const removeItems = useCallback(async (ids: string[]) => {
     if (listState.key !== queryKey) return;
@@ -185,20 +199,33 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
 
     const remaining = listState.items.filter((item) => !idSet.has(item.id));
     const nextTotal = Math.max(0, listState.totalCount - removedInView);
-    setListState({ key: queryKey, items: remaining, totalCount: nextTotal });
+    const previousCursor = listState.nextCursor;
+    setListState({ key: queryKey, items: remaining, totalCount: nextTotal, nextCursor: previousCursor });
 
+    // 游标为 null（原本就到末页）且剩余数量已等于总数，没有可补的内容。
     if (remaining.length >= nextTotal) return;
 
     const version = ++versionRef.current;
     try {
-      const result = await fetchAssetPage(requestArgs, remaining.length, removedInView);
+      // 窗口删空：没有可用锚点，重拉首页。
+      // 否则以剩余窗口最后一条为锚点，向后补回被删的条数。
+      const anchor = remaining.length > 0 ? encodeAssetCursor(remaining[remaining.length - 1]) : null;
+      const result = anchor
+        ? await fetchAssetPage(requestArgs, anchor, removedInView)
+        : await fetchAssetPage(requestArgs, null, ASSET_PAGE_SIZE);
       if (version !== versionRef.current) return;
       setErrorState(null);
       setListState((state) => {
         if (state.key !== queryKey) return state;
         const known = new Set(state.items.map((item) => item.id));
         const appended = result.items.filter((item) => !known.has(item.id));
-        return { ...state, items: [...state.items, ...appended], totalCount: nextTotal };
+        // 补页返回了新游标则推进；补取数小于一页时服务端可能返回 null，沿用原游标。
+        return {
+          ...state,
+          items: [...state.items, ...appended],
+          totalCount: nextTotal,
+          nextCursor: result.nextCursor ?? state.nextCursor,
+        };
       });
     } catch {
       if (version === versionRef.current) setErrorState({ key: queryKey, token: refreshToken });
@@ -223,7 +250,7 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
   const visibleLoadError = isQueryable && failedCurrent && listState.items.length === 0;
   const visibleItems = isQueryable ? listState.items : [];
   const visibleTotalCount = isQueryable ? listState.totalCount : 0;
-  const visibleHasMore = !mismatched && listState.items.length < listState.totalCount;
+  const visibleHasMore = !mismatched && listState.nextCursor !== null;
 
   return {
     items: visibleItems,

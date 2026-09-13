@@ -213,16 +213,16 @@ export default function AudioWaveform({
           )}
         </div>
 
-        {/* 底部控制栏：左右内缩与波形区对齐（根 8px + 波形区 12px = 20px） */}
-        <div className="mt-2 grid grid-cols-3 items-center px-3">
-          <div className="justify-self-start text-sm tabular-nums text-white/70">
+        {/* 底部控制栏：时间靠左、播放按钮绝对居中（窄容器如资产检查器内也不会挤压换行） */}
+        <div className="relative mt-2 flex items-center px-3">
+          <div className="whitespace-nowrap text-sm tabular-nums text-white/70">
             {formatTime(current)} / {formatTime(duration)}
           </div>
           <button
             type="button"
             onClick={toggle}
             disabled={!ready || failed}
-            className="nodrag flex items-center justify-center gap-0.5 justify-self-center transition-opacity disabled:opacity-50"
+            className="nodrag absolute left-1/2 flex -translate-x-1/2 items-center justify-center gap-0.5 transition-opacity disabled:opacity-50"
             style={{
               width: 24,
               height: 24,
@@ -242,9 +242,6 @@ export default function AudioWaveform({
               <PlayIcon />
             )}
           </button>
-          <div className="justify-self-end text-sm tabular-nums opacity-0" aria-hidden="true">
-            {formatTime(current)} / {formatTime(duration)}
-          </div>
         </div>
       </div>
     </div>
