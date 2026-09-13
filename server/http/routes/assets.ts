@@ -172,7 +172,7 @@ router.get("/api/assets/items", async (c) => {
   if ("error" in auth) return auth.error;
 
   const folderIdRaw = c.req.query("folder_id");
-  const skipRaw = c.req.query("skip");
+  const cursor = c.req.query("cursor") ?? undefined;
   const limitRaw = c.req.query("limit");
   const folderId = folderIdRaw ? parseInt(folderIdRaw, 10) : undefined;
   if (folderId !== undefined && isNaN(folderId)) return failCode(400, "assets.invalid_folder_id");
@@ -183,11 +183,11 @@ router.get("/api/assets/items", async (c) => {
     type: c.req.query("type") ?? undefined,
     search: c.req.query("search") ?? undefined,
     scope: c.req.query("scope") ?? undefined,
-    skip: skipRaw ? parseInt(skipRaw, 10) : undefined,
+    cursor,
     limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
   });
 
-  return c.json(ok({ items: result.items, total: result.total }));
+  return c.json(ok({ items: result.items, total: result.total, nextCursor: result.nextCursor }));
 });
 
 router.get("/api/assets/items/source-urls", async (c) => {

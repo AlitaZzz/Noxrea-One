@@ -277,13 +277,28 @@ export async function deleteFolder(userId: number, id: number) {
 
 // Items
 
+/**
+ * 资产列表游标：`<createdAt 毫秒>_<id>`。
+ * 排序固定为 createdAt desc, id desc，游标指向「上一页最后一条」，
+ * 取下一行严格更旧的记录。keyset 分页在新增/删除后不会像 offset 那样漂移、重复或漏项。
+ */
+function parseAssetCursor(raw: string): { createdAt: Date; id: number } | null {
+  const match = /^(\d+)_(\d+)$/.exec(raw);
+  if (!match) return null;
+  return { createdAt: new Date(Number(match[1])), id: Number(match[2]) };
+}
+
+function encodeAssetCursor(row: { createdAt: Date; id: number }): string {
+  return `${row.createdAt.getTime()}_${row.id}`;
+}
+
 export async function getAssets(params: {
   userId: number;
   folderId?: number;
   type?: string;
   search?: string;
   scope?: string;
-  skip?: number;
+  cursor?: string;
   limit?: number;
 }) {
   const scope = params.scope ?? "personal";
@@ -291,34 +306,55 @@ export async function getAssets(params: {
     await requireFolder(prisma, params.userId, params.folderId, scope);
   }
 
-  const where: Prisma.AssetItemWhereInput = {
-    userId: params.userId,
-    scope,
-  };
-  if (params.folderId !== undefined) where.folderId = params.folderId;
-
   const typeList = params.type
     ? params.type.split(",").map((type) => type.trim()).filter(Boolean)
     : [];
   const search = params.search?.trim();
-  if (typeList.length || search) {
-    where.AND = [
-      ...(typeList.length ? [{ type: { in: typeList } }] : []),
-      ...(search ? [{ name: { contains: search } }] : []),
-    ];
-  }
 
-  const [items, total] = await Promise.all([
+  // 基础过滤（列表与 count 共用，保证 total 与筛选条件一致）；游标条件只加给列表查询。
+  const baseWhere: Prisma.AssetItemWhereInput = {
+    userId: params.userId,
+    scope,
+    ...(params.folderId !== undefined ? { folderId: params.folderId } : {}),
+  };
+  const baseAnd: Prisma.AssetItemWhereInput[] = [];
+  if (typeList.length) baseAnd.push({ type: { in: typeList } });
+  if (search) baseAnd.push({ name: { contains: search } });
+  if (baseAnd.length) baseWhere.AND = baseAnd;
+
+  const cursor = params.cursor ? parseAssetCursor(params.cursor) : null;
+  const listWhere: Prisma.AssetItemWhereInput = cursor
+    ? {
+        ...baseWhere,
+        AND: [
+          ...baseAnd,
+          // 严格落在游标之后（更旧）：createdAt 更小，或 createdAt 相同但 id 更小。
+          {
+            OR: [
+              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+            ],
+          },
+        ],
+      }
+    : baseWhere;
+
+  const take = Math.min(params.limit ?? 20, 200);
+  // 多取一条用于判断是否还有下一页，并据此生成下一游标。
+  const [rows, total] = await Promise.all([
     prisma.assetItem.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: params.skip ?? 0,
-      take: Math.min(params.limit ?? 20, 200),
+      where: listWhere,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: take + 1,
     }),
-    prisma.assetItem.count({ where }),
+    prisma.assetItem.count({ where: baseWhere }),
   ]);
 
-  return { items: items.map(deserializeAsset), total };
+  const hasMore = rows.length > take;
+  const page = rows.slice(0, take);
+  const nextCursor = hasMore && page.length > 0 ? encodeAssetCursor(page[page.length - 1]) : null;
+
+  return { items: page.map(deserializeAsset), total, nextCursor };
 }
 
 export async function getAsset(userId: number, id: number) {
