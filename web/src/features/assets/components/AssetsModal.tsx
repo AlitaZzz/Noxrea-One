@@ -35,8 +35,7 @@ interface Props {
 }
 
 export default function AssetsModal({ open, onClose }: Props) {
-  const { t, i18n } = useTranslation();
-  const lang = i18n.language;
+  const { t } = useTranslation();
   const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
@@ -370,7 +369,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     () => [
       { key: "personal" as AssetScope, label: t("asset.spacePersonal"), icon: <UserOutlined /> },
     ],
-    [t, lang],
+    [t],
   );
 
   // Breadcrumb data
@@ -385,7 +384,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       cur = f.parentId || undefined;
     }
     return crumbs;
-  }, [activeFolderId, folders, activeScope, t, lang]);
+  }, [activeFolderId, folders]);
 
   return (
     <>
@@ -510,7 +509,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
               <AssetGrid
                 assets={items}
-                folders={activeFolderId === null && categories.length === 0 && !search.trim() ? gridFolders : undefined}
+                folders={categories.length === 0 && !search.trim() ? gridFolders : undefined}
                 folderCounts={folderCounts}
                 selectedIds={selectedIds}
                 onSelect={handleCardSelect}
@@ -529,30 +528,25 @@ export default function AssetsModal({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* 右侧检查器：无选中时宽度收 0，选中后滑出单项详情或批量操作区 */}
+          {/* 右侧检查器：常驻展示；未选中时为空态提示，选中后为单项详情或批量操作区 */}
           <div
-            className="shrink-0 overflow-hidden transition-[width,border-color] duration-200 ease-out"
-            style={{
-              width: selectedAssets.length > 0 ? 300 : 0,
-              borderLeft: `1px solid ${selectedAssets.length > 0 ? "var(--canvas-border)" : "transparent"}`,
-            }}
+            className="shrink-0 overflow-hidden"
+            style={{ width: 300, borderLeft: "1px solid var(--canvas-border)" }}
           >
-            {selectedAssets.length > 0 && (
-              <AssetInspector
-                assets={selectedAssets}
-                totalCount={totalCount}
-                allSelected={allSelected}
-                onClose={() => setSelectedIds(new Set())}
-                onSelectAll={handleSelectAll}
-                onInsert={handleInsertCanvas}
-                onRename={handleRename}
-                onSingleDelete={handleDelete}
-                onBatchInsert={handleBatchInsert}
-                onBatchMove={() => setBatchMoveOpen(true)}
-                onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
-                onBatchDelete={handleBatchDelete}
-              />
-            )}
+            <AssetInspector
+              assets={selectedAssets}
+              totalCount={totalCount}
+              allSelected={allSelected}
+              onClose={() => setSelectedIds(new Set())}
+              onSelectAll={handleSelectAll}
+              onInsert={handleInsertCanvas}
+              onRename={handleRename}
+              onSingleDelete={handleDelete}
+              onBatchInsert={handleBatchInsert}
+              onBatchMove={() => setBatchMoveOpen(true)}
+              onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
+              onBatchDelete={handleBatchDelete}
+            />
           </div>
         </div>
 
