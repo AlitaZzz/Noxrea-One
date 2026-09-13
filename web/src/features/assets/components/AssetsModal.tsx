@@ -6,8 +6,8 @@
  */
 "use client";
 
-import { DatabaseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
-import { App, Button, Input, Select, Tooltip } from "antd";
+import { FolderOutlined, UserOutlined } from "@ant-design/icons";
+import { App, Input, Select, Tooltip } from "antd";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,11 +22,11 @@ import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } 
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
-import AssetCategoryTabs from "./AssetCategoryTabs";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
+import AssetInspector from "./AssetInspector";
 import AssetNav from "./AssetNav";
-import AssetToolbar from "./AssetToolbar";
+import AssetToolbar, { type AssetViewMode } from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
 
 interface Props {
@@ -54,7 +54,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
   const uncategorizedFolder = getUncategorizedFolder(activeScope);
-  const [category, setCategory] = useState<AssetType | "all">("all");
+  const [categories, setCategories] = useState<AssetType[]>([]);
+  const [viewMode, setViewMode] = useState<AssetViewMode>("grid");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [folderCreateOpen, setFolderCreateOpen] = useState(false);
@@ -86,12 +87,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
   const [batchTypeSaving, setBatchTypeSaving] = useState(false);
 
-  // 单选页签映射为共用 Hook 的多类型筛选；空数组表示"全部"。
-  const categories = useMemo<AssetType[]>(
-    () => (category === "all" ? [] : [category]),
-    [category],
-  );
-
   // 与画布抽屉共用同一条查询链路，弹窗只负责展示和批量操作。
   const {
     items,
@@ -118,9 +113,21 @@ export default function AssetsModal({ open, onClose }: Props) {
     setSearch(value);
     setSelectedIds(new Set());
   }, []);
-  const handleCategoryChange = useCallback((value: AssetType | "all") => {
-    setCategory(value);
+  const handleCategoriesChange = useCallback((next: AssetType[]) => {
+    setCategories(next);
     setSelectedIds(new Set());
+  }, []);
+
+  // 卡片本体单击 = 单选并展开右侧检查器；Ctrl/⌘ 点击 = 增减多选。
+  // 勾选框点击走 handleToggleSelect，只增减不替换。
+  const handleCardSelect = useCallback((asset: AssetItem, additive?: boolean) => {
+    setSelectedIds((prev) => {
+      if (!additive) return prev.has(asset.id) && prev.size === 1 ? prev : new Set([asset.id]);
+      const next = new Set(prev);
+      if (next.has(asset.id)) next.delete(asset.id);
+      else next.add(asset.id);
+      return next;
+    });
   }, []);
 
   const handleToggleSelect = useCallback((asset: AssetItem) => {
@@ -134,6 +141,11 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // Selection —— 全选仅覆盖已加载页，工具条同时展示「已选 / 总数」提示范围。
   const allSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
+  // 检查器只展示仍在当前列表中的勾选项；翻页 / 筛选回收的项不影响批量 id 集合。
+  const selectedAssets = useMemo(
+    () => items.filter((a) => selectedIds.has(a.id)),
+    [items, selectedIds],
+  );
 
   const handleSelectAll = useCallback(() => {
     if (allSelected) setSelectedIds(new Set());
@@ -163,6 +175,12 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleting(false);
     if (!result.ok) return;
     await removeItems([deleteAsset.id]);
+    setSelectedIds((prev) => {
+      if (!prev.has(deleteAsset.id)) return prev;
+      const next = new Set(prev);
+      next.delete(deleteAsset.id);
+      return next;
+    });
     setDeleteAsset(null);
   }, [deleteAsset, removeAssetsBatch, removeItems]);
 
@@ -195,13 +213,13 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (!result.ok) return;
     setSelectedIds(new Set());
     setBatchTypeOpen(false);
-    // 当前按具体分类筛选且新类型不属于该分类时，这些项应离开视图；其余情况本地改字段。
-    if (category !== "all" && type !== category) {
+    // 当前筛选的分类集合不含新类型时，这些项应离开视图；其余情况本地改字段。
+    if (categories.length > 0 && !categories.includes(type)) {
       await removeItems(ids);
     } else {
       setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
     }
-  }, [selectedIds, batchTypeSaving, category, updateAssetsBatch, removeItems, setItems]);
+  }, [selectedIds, batchTypeSaving, categories, updateAssetsBatch, removeItems, setItems]);
 
   // Current folder depth (max 2 levels allowed)
   const currentFolderDepth = useMemo(() => {
@@ -240,6 +258,26 @@ export default function AssetsModal({ open, onClose }: Props) {
     notif.success({
       title: t("asset.added"),
       description: asset.name,
+      placement: "bottomRight",
+      duration: 3,
+    });
+  }, [notif, t]);
+
+  // 检查器批量插入：以视口中心为基准错位落位，避免多个节点完全重叠。
+  const handleBatchInsert = useCallback((assets: AssetItem[]) => {
+    if (assets.length === 0) return;
+    const center = getViewportCenter();
+    const nodes = assets
+      .map((asset, i) => createAssetNode(
+        asset,
+        { x: center.x + (i % 8) * 40, y: center.y + Math.floor(i / 8) * 40 },
+        findFreePosition,
+      ))
+      .filter((node): node is NonNullable<typeof node> => !!node);
+    if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes);
+    notif.success({
+      title: t("asset.added"),
+      description: assets.length === 1 ? assets[0].name : t("asset.addedCount", { count: assets.length }),
       placement: "bottomRight",
       duration: 3,
     });
@@ -362,15 +400,15 @@ export default function AssetsModal({ open, onClose }: Props) {
         open={open}
         onCancel={onClose}
         footer={null}
-        width="90vw"
+        width="94vw"
         centered
         destroyOnHidden
         className="asset-library-modal select-none"
         styles={{
             header: { background: "var(--canvas-bg)" },
-          body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 140px)", overflow: "hidden" },
+          body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
         }}
-        style={{ maxWidth: 1200 }}
+        style={{ maxWidth: 1500 }}
         closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
@@ -399,7 +437,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             background: rgba(0,0,0,0.6) !important;
           }
         `}</style>
-        <div className="flex" style={{ height: "calc(85vh - 160px)", minHeight: 400 }}>
+        <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
           {/* Left sidebar */}
           <div
             className="flex flex-col py-4 border-r shrink-0"
@@ -461,32 +499,26 @@ export default function AssetsModal({ open, onClose }: Props) {
             <AssetToolbar
               search={search}
               onSearchChange={handleSearchChange}
-              selectedCount={selectedIds.size}
-              totalCount={totalCount}
-              allSelected={allSelected}
-              onSelectAll={handleSelectAll}
-              onBatchDelete={handleBatchDelete}
-              onBatchMove={() => setBatchMoveOpen(true)}
-              onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
+              categories={categories}
+              onCategoriesChange={handleCategoriesChange}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               onUpload={() => setCreateOpen(true)}
               onCreateFolder={() => setFolderCreateOpen(true)}
               canCreateFolder={canCreateFolder}
             />
 
-            {/* Category tabs */}
-            <AssetCategoryTabs active={category} onChange={handleCategoryChange} />
-
             {/* Grid */}
             <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
               <AssetGrid
                 assets={items}
-                folders={activeFolderId === null && category === "all" && !search.trim() ? gridFolders : undefined}
+                folders={activeFolderId === null && categories.length === 0 && !search.trim() ? gridFolders : undefined}
                 folderCounts={folderCounts}
+                viewMode={viewMode}
                 selectedIds={selectedIds}
+                onSelect={handleCardSelect}
                 onToggleSelect={handleToggleSelect}
                 onInsertCanvas={handleInsertCanvas}
-                onRename={handleRename}
-                onDelete={handleDelete}
                 onEnterFolder={(folder) => setActiveFolderId(folder.id)}
                 onDeleteFolder={handleDeleteFolder}
                 onRenameFolder={handleRenameFolder}
@@ -498,6 +530,32 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onRetry={retry}
               />
             </div>
+          </div>
+
+          {/* 右侧检查器：无选中时宽度收 0，选中后滑出单项详情或批量操作区 */}
+          <div
+            className="shrink-0 overflow-hidden transition-[width,border-color] duration-200 ease-out"
+            style={{
+              width: selectedAssets.length > 0 ? 300 : 0,
+              borderLeft: `1px solid ${selectedAssets.length > 0 ? "var(--canvas-border)" : "transparent"}`,
+            }}
+          >
+            {selectedAssets.length > 0 && (
+              <AssetInspector
+                assets={selectedAssets}
+                totalCount={totalCount}
+                allSelected={allSelected}
+                onClose={() => setSelectedIds(new Set())}
+                onSelectAll={handleSelectAll}
+                onInsert={handleInsertCanvas}
+                onRename={handleRename}
+                onSingleDelete={handleDelete}
+                onBatchInsert={handleBatchInsert}
+                onBatchMove={() => setBatchMoveOpen(true)}
+                onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
+                onBatchDelete={handleBatchDelete}
+              />
+            )}
           </div>
         </div>
 

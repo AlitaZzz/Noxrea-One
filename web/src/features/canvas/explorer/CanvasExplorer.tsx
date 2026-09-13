@@ -612,7 +612,6 @@ function AssetsView() {
           folders={showFolderGrid ? gridFolders : undefined}
           folderCounts={recursiveCounts}
           compact
-          showActions={false}
           showHoverPreview
           hoverPreviewAnchorX={DRAWER_WIDTH}
           onInsertCanvas={handleInsertCanvas}

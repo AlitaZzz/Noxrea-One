@@ -1,43 +1,73 @@
 /**
  * 资产库顶部工具条。
- * 提供搜索框、新建下拉（上传资产 / 新建文件夹），
- * 以及有选中项时出现的批量操作区（全选、改分类、移动、删除）。
+ * 右侧依次为：可向左展开的搜索图标、网格 / 列表视图切换、筛选下拉（多选分类）、新建下拉。
+ * 单项 / 批量操作统一收敛到右侧检查器，工具条不随选择态变化。
  */
 "use client";
 
-import { CheckSquareOutlined,DeleteOutlined, FolderAddOutlined, FolderOutlined, PlusOutlined, SearchOutlined, TagsOutlined, UploadOutlined } from "@ant-design/icons";
-import { Input } from "antd";
-import { useRef,useState } from "react";
+import {
+  AppstoreOutlined,
+  FilterOutlined,
+  FolderAddOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  UnorderedListOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
+import { Checkbox, Input, Popover, Tooltip } from "antd";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
-import { MenuDivider,MenuItem } from "@/components/ui/MenuPopover";
+import { MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
+import type { AssetType } from "@/features/assets/types";
+import { ASSET_CATEGORIES } from "@/lib/constants";
+
+export type AssetViewMode = "grid" | "list";
 
 interface Props {
   search: string;
   onSearchChange: (v: string) => void;
-  selectedCount: number;
-  /** 当前查询匹配的资产总数，用于提示“全选”仅覆盖已加载项。 */
-  totalCount?: number;
-  allSelected?: boolean;
-  onSelectAll?: () => void;
-  onBatchDelete?: () => void;
-  onBatchMove?: () => void;
-  onBatchType?: () => void;
+  categories: AssetType[];
+  onCategoriesChange: (categories: AssetType[]) => void;
+  viewMode: AssetViewMode;
+  onViewModeChange: (mode: AssetViewMode) => void;
   onUpload?: () => void;
   onCreateFolder?: () => void;
   canCreateFolder?: boolean;
 }
 
-export default function AssetToolbar({ search, onSearchChange, selectedCount, totalCount, allSelected, onSelectAll, onBatchDelete, onBatchMove, onBatchType, onUpload, onCreateFolder, canCreateFolder = true }: Props) {
+const SEARCH_WIDTH = 260;
+const ICON_WIDTH = 36;
+
+export default function AssetToolbar({
+  search, onSearchChange, categories, onCategoriesChange,
+  viewMode, onViewModeChange, onUpload, onCreateFolder, canCreateFolder = true,
+}: Props) {
   const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // 搜索默认收起为一颗图标，点击后输入框向左展开；失焦且内容为空时自动收回。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const inputRef = useRef<React.ComponentRef<typeof Input>>(null);
+  const searchExpanded = searchOpen || search.trim() !== "";
+
+  const toggleSearch = () => {
+    if (!searchExpanded) {
+      setSearchOpen(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else if (!search.trim()) {
+      setSearchOpen(false);
+    } else {
+      inputRef.current?.focus();
+    }
+  };
 
   const handleMenuEnter = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -50,50 +80,122 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, to
   const handleMenuLeave = () => {
     closeTimer.current = setTimeout(() => setMenuOpen(false), 150);
   };
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <Input
-        placeholder={t("asset.search")}
-        prefix={<SearchOutlined className="text-white/30" />}
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-        allowClear
-        style={{
-          width: 280,
-          height: 36,
-          background: "var(--canvas-bg-elevated)",
-          borderColor: "var(--canvas-border)",
-          color: "var(--canvas-text)",
-        }}
-      />
-      <div className="flex-1" />
-      {selectedCount > 0 && (
+
+  const filterContent = (
+    <div className="menu-popover asset-filter-popover">
+      <div style={{ padding: "2px 12px 4px", fontSize: 11, color: "var(--canvas-text-muted)" }}>
+        {t("asset.filter")}
+      </div>
+      {ASSET_CATEGORIES.filter(
+        (category): category is typeof category & { key: AssetType } => category.key !== "all",
+      ).map((cat) => (
+        <label key={cat.key} className="filter-row">
+          <Checkbox
+            checked={categories.includes(cat.key)}
+            onChange={(e) => {
+              onCategoriesChange(
+                e.target.checked
+                  ? [...categories, cat.key]
+                  : categories.filter((k) => k !== cat.key),
+              );
+            }}
+          >
+            {t(cat.labelKey)}
+          </Checkbox>
+        </label>
+      ))}
+      {categories.length > 0 && (
         <>
-          {totalCount !== undefined && totalCount > 0 && (
-            <span className="text-xs whitespace-nowrap" style={{ color: "var(--canvas-text-muted)" }}>
-              {t("asset.selectedOfTotal", { selected: selectedCount, total: totalCount })}
-            </span>
-          )}
-          <AppButton style={{ minWidth: 108 }} onClick={onSelectAll}>
-            <CheckSquareOutlined />
-            {allSelected ? t("common.deselectAll") : t("common.selectAll")}
-          </AppButton>
-          <AppButton style={{ minWidth: 110 }} onClick={onBatchMove}>
-            <FolderOutlined />
-            {t("asset.moveTo")}
-          </AppButton>
-          <AppButton style={{ minWidth: 110 }} onClick={onBatchType}>
-            <TagsOutlined />
-            {t("asset.changeType")}
-          </AppButton>
-          {/* 删除是破坏性操作，走 danger 而不是主色 */}
-          <AppButton variant="danger" style={{ minWidth: 108 }} onClick={onBatchDelete}>
-            <DeleteOutlined />
-            {t("common.delete")} ({selectedCount})
-          </AppButton>
+          <div className="menu-divider" />
+          <div
+            className="filter-row"
+            onClick={() => onCategoriesChange([])}
+            style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}
+          >
+            {t("asset.filterClear")}
+          </div>
         </>
       )}
-      {/* Hover dropdown */}
+    </div>
+  );
+
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      {/* 清除 × 让到固定搜索图标的左侧，避免两个图标叠在输入框右缘 */}
+      <style>{`.asset-search-input .ant-input-clear-icon { inset-inline-end: 40px; }`}</style>
+      <div className="flex-1" />
+
+      {/* 搜索：收起态仅图标，展开态图标固定在右端、输入框向左生长 */}
+      <div className="relative shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH, height: ICON_WIDTH }}>
+        {searchExpanded && (
+          <Input
+            ref={inputRef}
+            placeholder={t("asset.search")}
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onBlur={() => { if (!search.trim()) setSearchOpen(false); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { onSearchChange(""); setSearchOpen(false); }
+            }}
+            allowClear
+            className="asset-search-input w-full"
+            style={{
+              height: ICON_WIDTH,
+              paddingRight: 64,
+              background: "var(--canvas-bg-elevated)",
+              borderColor: "var(--canvas-border)",
+              color: "var(--canvas-text)",
+            }}
+          />
+        )}
+        <Tooltip title={t("asset.search")}>
+          <button
+            type="button"
+            // 阻止按下时输入框失焦：否则空内容会先自动收回、click 又展开，宽度抖一下
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={toggleSearch}
+            className="app-icon-btn app-icon-btn--md absolute top-0 right-0 z-10"
+            aria-label={t("asset.search")}
+            style={{ color: "var(--canvas-text-muted)" }}
+          >
+            <SearchOutlined />
+          </button>
+        </Tooltip>
+      </div>
+
+      {/* 网格 / 列表视图切换：图标显示切换后的目标视图 */}
+      <Tooltip title={viewMode === "grid" ? t("asset.listView") : t("asset.gridView")}>
+        <button
+          type="button"
+          onClick={() => onViewModeChange(viewMode === "grid" ? "list" : "grid")}
+          className="app-icon-btn app-icon-btn--md"
+          aria-label={viewMode === "grid" ? t("asset.listView") : t("asset.gridView")}
+          style={{ color: "var(--canvas-text-muted)" }}
+        >
+          {viewMode === "grid" ? <UnorderedListOutlined /> : <AppstoreOutlined />}
+        </button>
+      </Tooltip>
+
+      {/* 筛选：多选分类，选中任一分类后按钮常驻高亮 */}
+      <Popover
+        trigger="click"
+        placement="bottomRight"
+        styles={{ container: { padding: 0, background: "transparent" } }}
+        content={filterContent}
+      >
+        <Tooltip title={t("asset.filter")}>
+          <button
+            type="button"
+            className={`app-icon-btn app-icon-btn--md${categories.length > 0 ? " is-active" : ""}`}
+            aria-label={t("asset.filter")}
+            style={{ color: "var(--canvas-text-muted)" }}
+          >
+            <FilterOutlined />
+          </button>
+        </Tooltip>
+      </Popover>
+
+      {/* 新建下拉 */}
       <div
         className="relative"
         onMouseEnter={handleMenuEnter}
@@ -127,7 +229,9 @@ export default function AssetToolbar({ search, onSearchChange, selectedCount, to
             >
               <FolderAddOutlined /> {t("asset.createFolder")}
             </MenuItem>
-            <MenuItem onClick={() => { setMenuOpen(false); onUpload?.(); }}>
+            <MenuItem
+              onClick={() => { setMenuOpen(false); onUpload?.(); }}
+            >
               <UploadOutlined /> {t("asset.uploadTitle")}
             </MenuItem>
           </div>,
