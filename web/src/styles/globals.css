@@ -84,7 +84,8 @@
   /* 警示 / 超限提示色（如文本节点字数超限）：橙，与青柠拉开色相避免混淆 */
   --canvas-warning: #ffb020;
   --nav-active-bg: #26262b;
-  --nav-hover-bg: #191a1d;
+  /* hover 介于底色 #1d1d21 与选中 #26262b 之间，比选中淡一档；此前过深看起来像墨绿色凹陷 */
+  --nav-hover-bg: #222226;
   /* 工具栏 */
   --toolbar-bg: #1e1e22;
   --toolbar-border: #2d2d33;
@@ -368,6 +369,27 @@
   box-shadow: none !important;
 }
 .app-dialog .ant-input-data-count {
+  color: var(--canvas-text-muted);
+}
+/* 弹窗内下拉：与输入框同一中性控件语言，36px 高、8px 圆角、聚焦无主色描边 */
+.app-dialog .ant-select .ant-select-selector {
+  background: var(--canvas-bg-elevated) !important;
+  border-color: var(--canvas-border) !important;
+  color: var(--canvas-text) !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  height: 36px !important;
+}
+.app-dialog .ant-select:hover .ant-select-selector,
+.app-dialog .ant-select-focused .ant-select-selector {
+  border-color: var(--canvas-border) !important;
+  box-shadow: none !important;
+}
+.app-dialog .ant-select .ant-select-selection-item,
+.app-dialog .ant-select .ant-select-selection-placeholder {
+  line-height: 34px !important;
+}
+.app-dialog .ant-select .ant-select-selection-placeholder {
   color: var(--canvas-text-muted);
 }
 
