@@ -182,7 +182,7 @@ model AssetItem {
   height      Int      @default(0) @map("height")
   description String   @default("") @map("description")
   tags        String   @default("[]") @map("tags") // JSON TEXT
-  extraData   String   @default("{}") @map("extra_data") // JSON TEXT
+  prompt      String   @default("") @map("prompt") // 生成该素材所用的提示词
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 

@@ -28,9 +28,11 @@ interface Props {
   loop?: boolean;
   /** 初始音量 0~1，默认 1（有声） */
   defaultVolume?: number;
+  /** 填满父容器（父容器需有确定尺寸）；默认按视频自身尺寸并以 88vh/90vw 为上限，用于全屏预览。 */
+  fill?: boolean;
 }
 
-export default function VideoPlayer({ src, style, autoPlay = true, loop = true, defaultVolume = 1 }: Props) {
+export default function VideoPlayer({ src, style, autoPlay = true, loop = true, defaultVolume = 1, fill = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
   const volumeBarRef = useRef<HTMLDivElement>(null);
@@ -132,7 +134,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
   }, [autoPlay, src]);
 
   return (
-    <div className="relative" style={style} onClick={(e) => e.stopPropagation()}>
+    <div className={`relative${fill ? " w-full h-full" : ""}`} style={style} onClick={(e) => e.stopPropagation()}>
       <video
         ref={videoRef}
         src={src}
@@ -140,7 +142,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
         muted={volume === 0}
         playsInline
         preload="metadata"
-        className="block max-h-[88vh] max-w-[90vw]"
+        className={fill ? "block w-full h-full object-contain" : "block max-h-[88vh] max-w-[90vw]"}
         style={{ borderRadius: 8, background: "#000" }}
         onTimeUpdate={() => { const v = videoRef.current; if (v) setProgress(v.currentTime); }}
         onLoadedMetadata={() => { const v = videoRef.current; if (v) setDuration(v.duration || 0); }}
@@ -153,7 +155,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
       {/* 底部渐变遮罩：保证纯白 / 浅色视频下控件可见 */}
       <div className="video-controls-scrim pointer-events-none absolute bottom-0 left-0 right-0 h-24 rounded-b-lg" />
 
-      <div className="video-controls-bar absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-3">
+      <div className={`video-controls-bar absolute ${fill ? "bottom-2" : "bottom-4"} left-0 right-0 z-10 flex flex-col gap-2 px-3`}>
         {/* 进度条：已播放部分用品牌色，与视频节点一致 */}
         <div
           ref={seekBarRef}

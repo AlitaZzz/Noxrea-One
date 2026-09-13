@@ -41,7 +41,7 @@ export const assetCreateSchema = z.object({
   height: z.number().int().min(0).optional(),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  extraData: z.record(z.unknown()).optional(),
+  prompt: z.string().max(10000).optional(),
   folderId: z.number().int().positive().nullable().optional(),
   scope: z.literal("personal").optional(),
 });
@@ -59,7 +59,7 @@ export const assetUpdateSchema = z.object({
   description: z.string().optional(),
   folderId: z.number().int().positive().nullable().optional(),
   tags: z.array(z.string()).optional(),
-  extraData: z.record(z.unknown()).optional(),
+  prompt: z.string().max(10000).optional(),
 });
 
 export const assetBatchUpdateSchema = z.object({
@@ -88,7 +88,7 @@ export const assetOutSchema = z.object({
   height: z.number(),
   description: z.string(),
   tags: z.array(z.string()),
-  extraData: z.record(z.unknown()),
+  prompt: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

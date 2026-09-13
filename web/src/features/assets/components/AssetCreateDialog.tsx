@@ -306,7 +306,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       height: f.height,
       description: "",
       sourceUrl: f.url || undefined,
-      extraData: {},
       folderId: saveFolderId,
     }));
 

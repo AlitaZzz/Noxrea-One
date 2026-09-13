@@ -34,7 +34,7 @@ export interface AssetItemDto {
   height: number;
   description: string;
   tags: string[];
-  extraData: Record<string, unknown>;
+  prompt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,7 +98,7 @@ export const assetApi = {
     name: string; type: string; mediaType?: string;
     sourceUrl?: string; sourceType?: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number | null; scope?: string;
+    description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }) =>
     api<{ item: AssetItemDto; counters: AssetCountersDto }>("/api/assets/items", {
       method: "POST",
@@ -109,7 +109,7 @@ export const assetApi = {
     name: string; type: string; mediaType?: string;
     sourceUrl?: string; sourceType?: string;
     width?: number; height?: number;
-    description?: string; tags?: string[]; extraData?: Record<string, unknown>; folderId?: number | null; scope?: string;
+    description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }>) =>
     api<{ items: AssetItemDto[]; counters: AssetCountersDto; skipped: AssetSkippedDto[] }>("/api/assets/items/batch", {
       method: "POST",

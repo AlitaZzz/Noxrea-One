@@ -58,11 +58,6 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [folderCreateOpen, setFolderCreateOpen] = useState(false);
 
-  // Rename asset state
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [renameSaving, setRenameSaving] = useState(false);
-
   // Rename folder state
   const [renamingFolder, setRenamingFolder] = useState<AssetFolder | null>(null);
   const [folderRenameValue, setFolderRenameValue] = useState("");
@@ -149,6 +144,31 @@ export default function AssetsModal({ open, onClose }: Props) {
     if (allSelected) setSelectedIds(new Set());
     else setSelectedIds(new Set(items.map((a) => a.id)));
   }, [allSelected, items]);
+
+  // 检查器单项详情的所在文件夹名；未分类目录使用本地化名称。
+  const inspectorFolderName = useMemo(() => {
+    if (selectedAssets.length !== 1) return undefined;
+    const folder = folders.find((item) => item.id === selectedAssets[0].folderId);
+    if (!folder) return undefined;
+    return folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name;
+  }, [selectedAssets, folders, t]);
+
+  const handleUpdateTags = useCallback(async (asset: AssetItem, tags: string[]) => {
+    const ok = await updateAsset(asset.id, { tags });
+    if (ok) {
+      // 与重命名一致：写库成功后同步当前列表，翻页离开后以服务端数据为准。
+      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, tags } : item)));
+    }
+    return ok;
+  }, [updateAsset, setItems]);
+
+  const handleUpdatePrompt = useCallback(async (asset: AssetItem, prompt: string) => {
+    const ok = await updateAsset(asset.id, { prompt });
+    if (ok) {
+      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, prompt } : item)));
+    }
+    return ok;
+  }, [updateAsset, setItems]);
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -303,21 +323,14 @@ export default function AssetsModal({ open, onClose }: Props) {
     [addFolder, activeScope, activeFolderId],
   );
 
-  const handleRename = useCallback((asset: AssetItem) => { setRenamingId(asset.id); setRenameValue(asset.name); }, []);
-  const handleRenameConfirm = useCallback(async () => {
-    const id = renamingId;
-    const name = renameValue.trim();
-    if (!id || !name || renameSaving) return;
-    setRenameSaving(true);
-    const ok = await updateAsset(id, { name });
-    setRenameSaving(false);
+  // 素材重命名在检查器标题处内联完成，这里只负责持久化与本地列表同步。
+  const handleRenameConfirm = useCallback(async (asset: AssetItem, name: string) => {
+    const ok = await updateAsset(asset.id, { name });
     if (ok) {
-      // 成功后同步本地列表：此前只发请求，网格里仍是旧名称
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name } : i)));
-      setRenamingId(null);
-      setRenameValue("");
+      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, name } : item)));
     }
-  }, [renamingId, renameValue, renameSaving, updateAsset, setItems]);
+    return ok;
+  }, [updateAsset, setItems]);
 
   const handleRenameFolder = useCallback((folder: AssetFolder) => {
     setRenamingFolder(folder);
@@ -403,13 +416,21 @@ export default function AssetsModal({ open, onClose }: Props) {
         destroyOnHidden
         className="asset-library-modal select-none"
         styles={{
-            header: { background: "var(--canvas-bg)" },
+          // antd v6 的 .ant-modal-container 默认带 20px 24px 内边距；资产弹窗三栏要贴边，
+          // 外层清零，标题栏内边距在下方作用域 <style> 中覆盖（全局样式用了 !important）。
+          container: { padding: 0, background: "var(--canvas-bg)" },
+          header: { background: "var(--canvas-bg)" },
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
         }}
         style={{ maxWidth: 1500 }}
         closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
+          /* 覆盖全局 .ant-modal-header 的 !important 规则：标题栏保留 24px 左右内边距
+             （右侧 56px 避让关闭按钮）和 16px 上下内边距，横线不再与 × 按钮重叠。 */
+          .asset-library-modal .ant-modal-header {
+            padding: 16px 56px 16px 24px !important;
+          }
           .menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }
           .asset-library-modal .ant-input:hover,
           .asset-library-modal .ant-input:focus,
@@ -438,8 +459,8 @@ export default function AssetsModal({ open, onClose }: Props) {
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
           {/* Left sidebar */}
           <div
-            className="flex flex-col py-4 border-r shrink-0"
-            style={{ borderColor: "var(--canvas-border)", paddingLeft: 0, paddingRight: 16 }}
+            className="flex flex-col py-4 border-r shrink-0 px-3"
+            style={{ borderColor: "var(--canvas-border)" }}
           >
             <AssetNav
               scopes={spaceLabels}
@@ -453,9 +474,9 @@ export default function AssetsModal({ open, onClose }: Props) {
           </div>
 
           {/* Right main content */}
-          <div className="flex-1 flex flex-col py-4 pr-4 pl-4 min-w-0">
+          <div className="flex-1 flex flex-col py-4 min-w-0">
             {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
-            <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-2 mb-3 flex-shrink-0 px-3">
               <div className="flex items-center gap-1 flex-1 min-w-0">
                 {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
                 {activeFolderId === null ? (
@@ -506,7 +527,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             </div>
 
             {/* Grid */}
-            <div className="flex-1 overflow-auto min-h-0" style={{ paddingRight: 8, scrollbarGutter: "stable" }} ref={gridRef}>
+            <div className="flex-1 overflow-auto min-h-0 px-3" style={{ scrollbarGutter: "stable" }} ref={gridRef}>
               <AssetGrid
                 assets={items}
                 folders={categories.length === 0 && !search.trim() ? gridFolders : undefined}
@@ -537,62 +558,21 @@ export default function AssetsModal({ open, onClose }: Props) {
               assets={selectedAssets}
               totalCount={totalCount}
               allSelected={allSelected}
+              folderName={inspectorFolderName}
               onClose={() => setSelectedIds(new Set())}
               onSelectAll={handleSelectAll}
               onInsert={handleInsertCanvas}
-              onRename={handleRename}
+              onRenameConfirm={handleRenameConfirm}
               onSingleDelete={handleDelete}
               onBatchInsert={handleBatchInsert}
               onBatchMove={() => setBatchMoveOpen(true)}
               onBatchType={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
               onBatchDelete={handleBatchDelete}
+              onUpdateTags={handleUpdateTags}
+              onUpdatePrompt={handleUpdatePrompt}
             />
           </div>
         </div>
-
-        {/* Rename asset modal */}
-        <AppModal
-          title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.rename")}</span>}
-          open={!!renamingId}
-          onCancel={() => { if (!renameSaving) { setRenamingId(null); setRenameValue(""); } }}
-          centered
-          destroyOnHidden
-          width={400}
-          className="rename-modal"
-          footer={
-            <div className="flex justify-end gap-2">
-              <AppButton onClick={() => setRenamingId(null)} disabled={renameSaving}>{t("common.cancel")}</AppButton>
-              <AppButton variant="primary" loading={renameSaving} onClick={handleRenameConfirm} disabled={!renameValue.trim()}>{t("common.save")}</AppButton>
-            </div>
-          }
-          styles={{
-                header: { background: "var(--canvas-bg)", borderBottom: "none", paddingBottom: 12 },
-            body: { background: "var(--canvas-bg)", padding: "20px 24px 8px" },
-            footer: { background: "var(--canvas-bg)", borderTop: "none", paddingTop: 0 },
-          }}
-          closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
-        >
-          <style>{`
-            .rename-modal .ant-input:hover,
-            .rename-modal .ant-input:focus,
-            .rename-modal .ant-input-affix-wrapper:hover,
-            .rename-modal .ant-input-affix-wrapper:focus {
-              border-color: var(--canvas-border) !important;
-              box-shadow: none !important;
-            }
-            .rename-modal .rename-save-btn:not(:disabled):hover {
-              background: var(--canvas-bg-hover) !important;
-            }
-          `}</style>
-          <Input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value.slice(0, 100))}
-            onPressEnter={handleRenameConfirm}
-            maxLength={100}
-            showCount
-            style={{ background: "var(--canvas-bg-elevated)", borderColor: "var(--canvas-border)", color: "var(--canvas-text)" }}
-          />
-        </AppModal>
 
         {/* Rename folder modal */}
         <AppModal
