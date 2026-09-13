@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { FolderOutlined, UserOutlined } from "@ant-design/icons";
+import { CloseOutlined, FolderOutlined, UserOutlined } from "@ant-design/icons";
 import { App, Input, Select, Tooltip } from "antd";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -414,6 +414,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         width="94vw"
         centered
         destroyOnHidden
+        flush
         className="asset-library-modal select-none"
         styles={{
           // antd v6 的 .ant-modal-container 默认带 20px 24px 内边距；资产弹窗三栏要贴边，
@@ -457,9 +458,9 @@ export default function AssetsModal({ open, onClose }: Props) {
           }
         `}</style>
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
-          {/* Left sidebar */}
+          {/* Left sidebar：与横线下缘保留 12px 间距（header 自身的 16px 在横线上方） */}
           <div
-            className="flex flex-col py-4 border-r shrink-0 px-3"
+            className="flex flex-col pt-3 pb-4 border-r shrink-0 px-3"
             style={{ borderColor: "var(--canvas-border)" }}
           >
             <AssetNav
@@ -473,8 +474,8 @@ export default function AssetsModal({ open, onClose }: Props) {
             />
           </div>
 
-          {/* Right main content */}
-          <div className="flex-1 flex flex-col py-4 min-w-0">
+          {/* Right main content：顶部间距同左栏，三栏对齐 */}
+          <div className="flex-1 flex flex-col pt-3 pb-4 min-w-0">
             {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
             <div className="flex items-center gap-2 mb-3 flex-shrink-0 px-3">
               <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -514,6 +515,25 @@ export default function AssetsModal({ open, onClose }: Props) {
                   );
                 })}
               </div>
+
+              {/* 选中态：工具条行显示「已选 N 项」chip，点击 × 清除选择（原检查器头部关闭按钮） */}
+              {selectedIds.size > 0 && (
+                <Tooltip title={t("asset.clearSelection")}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                    style={{
+                      background: "var(--canvas-bg-hover)",
+                      border: "1px solid var(--canvas-border-light)",
+                      color: "var(--canvas-text)",
+                    }}
+                  >
+                    {t("asset.selectedN", { count: selectedIds.size })}
+                    <CloseOutlined style={{ fontSize: 10, color: "var(--canvas-text-muted)" }} />
+                  </button>
+                </Tooltip>
+              )}
 
               <AssetToolbar
                 search={search}
@@ -559,7 +579,6 @@ export default function AssetsModal({ open, onClose }: Props) {
               totalCount={totalCount}
               allSelected={allSelected}
               folderName={inspectorFolderName}
-              onClose={() => setSelectedIds(new Set())}
               onSelectAll={handleSelectAll}
               onInsert={handleInsertCanvas}
               onRenameConfirm={handleRenameConfirm}

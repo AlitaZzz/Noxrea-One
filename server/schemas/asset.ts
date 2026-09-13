@@ -31,6 +31,9 @@ export type FolderUpdate = z.infer<typeof folderUpdateSchema>;
 export type FolderOut = z.infer<typeof folderOutSchema>;
 
 // Asset Item
+/** 标签：单个 1~20 字符，每个素材最多 6 个；与前端 MAX_TAG_LENGTH / MAX_TAGS 保持一致。 */
+const tagsSchema = z.array(z.string().trim().min(1).max(20)).max(6);
+
 export const assetCreateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.string().max(20).optional(),
@@ -40,7 +43,7 @@ export const assetCreateSchema = z.object({
   width: z.number().int().min(0).optional(),
   height: z.number().int().min(0).optional(),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: tagsSchema.optional(),
   prompt: z.string().max(10000).optional(),
   folderId: z.number().int().positive().nullable().optional(),
   scope: z.literal("personal").optional(),
@@ -58,7 +61,7 @@ export const assetUpdateSchema = z.object({
   height: z.number().int().min(0).optional(),
   description: z.string().optional(),
   folderId: z.number().int().positive().nullable().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: tagsSchema.optional(),
   prompt: z.string().max(10000).optional(),
 });
 

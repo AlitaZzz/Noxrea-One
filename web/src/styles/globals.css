@@ -1518,3 +1518,10 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .audio-waveform > div::part(canvases) {
   opacity: 0.35;
 }
+
+/* 检查器内联编辑框：与设置页 antd 输入框保持同一中性控件语言，
+   常态中性描边，聚焦不出现主色描边或光晕（全局 controlOutlineWidth: 0）。 */
+.inspector-edit-input {
+  border: 1px solid var(--canvas-border-light);
+  outline: none;
+}
