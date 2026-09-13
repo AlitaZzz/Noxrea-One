@@ -301,8 +301,6 @@
     "saveLocation": "Save Location",
     "createFolder": "New Folder",
     "filter": "Filter",
-    "listView": "List view",
-    "gridView": "Grid view",
     "filterClear": "Clear filter",
     "retry": "Failed to load, click to retry",
     "added": "Added to canvas",

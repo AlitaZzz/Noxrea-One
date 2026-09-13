@@ -22,8 +22,6 @@ interface Props {
   asset: AssetItem;
   /** 抽屉场景关闭多选与选择能力，卡片本体点击直接插入画布。 */
   selectable?: boolean;
-  /** 网格卡片或紧凑列表行。 */
-  layout?: "grid" | "list";
   /** 是否启用悬浮大图预览，保持抽屉既有的快速查看体验。 */
   showHoverPreview?: boolean;
   /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
@@ -39,7 +37,6 @@ interface Props {
 export default function AssetCard({
   asset,
   selectable = true,
-  layout = "grid",
   showHoverPreview = false,
   hoverPreviewAnchorX = 0,
   selected,
@@ -107,87 +104,6 @@ export default function AssetCard({
   const isAudio = asset.mediaType === "audio";
   const sourceUrl = asset.sourceUrl;
   const thumbUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=300` : sourceUrl;
-
-  const clickCard = (e: React.MouseEvent) => {
-    if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
-    else onInsertCanvas?.(asset);
-  };
-
-  // 列表视图：单行缩略图 + 名称 / 日期，右侧为试听、快速插入与勾选。
-  if (layout === "list") {
-    return (
-      <div
-        tabIndex={0}
-        role="button"
-        aria-label={asset.name}
-        aria-pressed={selected}
-        onKeyDown={handleKeyDown}
-        className="group flex items-center gap-3 rounded-lg border px-2 cursor-pointer transition-colors outline-none"
-        style={{
-          height: 60,
-          background: selected ? "rgba(199,244,61,0.06)" : "transparent",
-          borderColor: selected ? "var(--canvas-select)" : "rgba(255,255,255,0.1)",
-          borderWidth: selected ? 2 : 1,
-        }}
-        onMouseEnter={(event) => { if (showHoverPreview && sourceUrl) preview.onEnter(asset, event); }}
-        onMouseLeave={handleCardLeave}
-        onClick={clickCard}
-      >
-        <div className="relative w-10 h-10 rounded-md overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--canvas-bg-elevated)" }}>
-          {isAudio ? (
-            <WaveIcon style={{ fontSize: 18, color: "rgba(255,255,255,0.3)" }} />
-          ) : thumbUrl ? (
-            <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
-          ) : (
-            <PictureOutlined style={{ fontSize: 16, color: "rgba(255,255,255,0.3)" }} />
-          )}
-          {isVideo && (
-            <VideoCameraOutlined className="absolute bottom-0.5 right-0.5" style={{ fontSize: 9, color: "rgba(255,255,255,0.8)" }} />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs truncate font-medium" style={{ color: "var(--canvas-text)" }}>{asset.name}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>{formatDate(asset.createdAt)}</div>
-        </div>
-        {isAudio && (
-          <button
-            type="button"
-            className="shrink-0 leading-none text-base"
-            style={{ color: "var(--canvas-text-muted)" }}
-            onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
-          >
-            {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-          </button>
-        )}
-        <Tooltip title={t("asset.addToCanvas")}>
-          <button
-            type="button"
-            className="app-icon-btn w-7 h-7 rounded-md shrink-0 text-sm opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ color: "var(--canvas-text-muted)" }}
-            onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
-          >
-            <PlusOutlined />
-          </button>
-        </Tooltip>
-        {selectable && onToggleSelect && (
-          <button
-            type="button"
-            aria-label={asset.name}
-            onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
-            className={`shrink-0 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border transition-all ${
-              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
-            }`}
-            style={selected ? { background: "var(--canvas-select)", borderColor: "var(--canvas-select)" } : undefined}
-          >
-            {selected && <CheckOutlined style={{ fontSize: 11, color: "#141509", fontWeight: 700 }} />}
-          </button>
-        )}
-        {showHoverPreview && (
-          <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-        )}
-      </div>
-    );
-  }
 
   return (
     <div

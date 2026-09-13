@@ -1,17 +1,14 @@
 /**
  * 资产库顶部工具条。
- * 右侧依次为：可向左展开的搜索图标、网格 / 列表视图切换、筛选下拉（多选分类）、新建下拉。
+ * 右侧依次为：可向左展开的搜索图标、筛选下拉（多选分类）、新建下拉。
  * 单项 / 批量操作统一收敛到右侧检查器，工具条不随选择态变化。
  */
 "use client";
 
 import {
-  AppstoreOutlined,
-  FilterOutlined,
   FolderAddOutlined,
   PlusOutlined,
   SearchOutlined,
-  UnorderedListOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
 import { Checkbox, Input, Popover, Tooltip } from "antd";
@@ -20,20 +17,17 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import FilterIcon from "@/components/ui/icons/common/FilterIcon";
 import { MenuItem } from "@/components/ui/MenuPopover";
 import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetType } from "@/features/assets/types";
 import { ASSET_CATEGORIES } from "@/lib/constants";
-
-export type AssetViewMode = "grid" | "list";
 
 interface Props {
   search: string;
   onSearchChange: (v: string) => void;
   categories: AssetType[];
   onCategoriesChange: (categories: AssetType[]) => void;
-  viewMode: AssetViewMode;
-  onViewModeChange: (mode: AssetViewMode) => void;
   onUpload?: () => void;
   onCreateFolder?: () => void;
   canCreateFolder?: boolean;
@@ -44,7 +38,7 @@ const ICON_WIDTH = 36;
 
 export default function AssetToolbar({
   search, onSearchChange, categories, onCategoriesChange,
-  viewMode, onViewModeChange, onUpload, onCreateFolder, canCreateFolder = true,
+  onUpload, onCreateFolder, canCreateFolder = true,
 }: Props) {
   const { t } = useTranslation();
   const layerOverlay = useLayerOverlay();
@@ -120,10 +114,9 @@ export default function AssetToolbar({
   );
 
   return (
-    <div className="flex items-center gap-2 mb-3">
+    <div className="flex items-center gap-2 shrink-0">
       {/* 清除 × 让到固定搜索图标的左侧，避免两个图标叠在输入框右缘 */}
       <style>{`.asset-search-input .ant-input-clear-icon { inset-inline-end: 40px; }`}</style>
-      <div className="flex-1" />
 
       {/* 搜索：收起态仅图标，展开态图标固定在右端、输入框向左生长 */}
       <div className="relative shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH, height: ICON_WIDTH }}>
@@ -156,25 +149,12 @@ export default function AssetToolbar({
             onClick={toggleSearch}
             className="app-icon-btn app-icon-btn--md absolute top-0 right-0 z-10"
             aria-label={t("asset.search")}
-            style={{ color: "var(--canvas-text-muted)" }}
+            style={{ color: "#fff", fontSize: 18 }}
           >
             <SearchOutlined />
           </button>
         </Tooltip>
       </div>
-
-      {/* 网格 / 列表视图切换：图标显示切换后的目标视图 */}
-      <Tooltip title={viewMode === "grid" ? t("asset.listView") : t("asset.gridView")}>
-        <button
-          type="button"
-          onClick={() => onViewModeChange(viewMode === "grid" ? "list" : "grid")}
-          className="app-icon-btn app-icon-btn--md"
-          aria-label={viewMode === "grid" ? t("asset.listView") : t("asset.gridView")}
-          style={{ color: "var(--canvas-text-muted)" }}
-        >
-          {viewMode === "grid" ? <UnorderedListOutlined /> : <AppstoreOutlined />}
-        </button>
-      </Tooltip>
 
       {/* 筛选：多选分类，选中任一分类后按钮常驻高亮 */}
       <Popover
@@ -188,9 +168,9 @@ export default function AssetToolbar({
             type="button"
             className={`app-icon-btn app-icon-btn--md${categories.length > 0 ? " is-active" : ""}`}
             aria-label={t("asset.filter")}
-            style={{ color: "var(--canvas-text-muted)" }}
+            style={{ color: "#fff", fontSize: 18 }}
           >
-            <FilterOutlined />
+            <FilterIcon />
           </button>
         </Tooltip>
       </Popover>
@@ -214,7 +194,8 @@ export default function AssetToolbar({
               position: "fixed",
               top: menuPos.top,
               left: menuPos.left,
-              zIndex: 1,
+              // 需高于资产卡片的多选框（z-10），否则菜单会盖在卡片上时被勾选框压住
+              zIndex: 1050,
               background: "var(--canvas-bg)",
               borderColor: "var(--canvas-border)",
               minWidth: 160,
