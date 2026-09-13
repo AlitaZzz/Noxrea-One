@@ -116,11 +116,6 @@ function Preview({ asset }: { asset: AssetItem }) {
             ? <WaveIcon style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
             : <PictureOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
       )}
-      {asset.mediaType === "video" && (
-        <div className="absolute top-2 left-2 flex items-center justify-center w-6 h-6 rounded bg-black/50 pointer-events-none">
-          <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
-        </div>
-      )}
     </div>
   );
 }
@@ -481,7 +476,7 @@ export default function AssetInspector({
   };
 
   return (
-    <div className="h-full flex flex-col" style={{ width: 300 }}>
+    <div className="h-full w-full flex flex-col">
       {/* Header：未选中时整个隐藏（空态提示已在内容区居中展示）；
           单选重命名时标题位直接变为内联输入框 */}
       {hasSelection && (

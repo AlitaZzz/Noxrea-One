@@ -422,7 +422,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           header: { background: "var(--canvas-bg)" },
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
         }}
-        style={{ maxWidth: 1500 }}
+        style={{ maxWidth: 1600 }}
         closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
@@ -552,7 +552,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           {/* 右侧检查器：常驻展示；未选中时为空态提示，选中后为单项详情或批量操作区 */}
           <div
             className="shrink-0 overflow-hidden"
-            style={{ width: 300, borderLeft: "1px solid var(--canvas-border)" }}
+            style={{ width: 360, borderLeft: "1px solid var(--canvas-border)" }}
           >
             <AssetInspector
               assets={selectedAssets}
