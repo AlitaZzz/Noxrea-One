@@ -663,6 +663,10 @@ export default function InfiniteCanvas() {
   // 右键节点 → 节点级操作菜单（复制 / 删除）。
   // 标准行为：若该节点尚未选中，先单选它，让菜单明确作用在它身上。
   const handleNodeContextMenu = useCallback((e: React.MouseEvent, node: AnyNode) => {
+    const target = e.target as HTMLElement;
+    // 文本节点编辑态（Tiptap contenteditable）与输入框：放行浏览器原生右键菜单，
+    // 供复制 / 粘贴 / 拼写检查。与 use-canvas-events 的 preventCtx 同一套豁免选择器。
+    if (target.closest("input, textarea, [contenteditable='true'], [contenteditable='']")) return;
     e.preventDefault();
     const store = useCanvasStore.getState();
     if (!node.selected) {
