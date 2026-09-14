@@ -104,10 +104,13 @@ export default function AssetGrid({
 
   return (
     <div>
-      {/* 固定高度的刷新指示槽：切换条件时小转圈出现/消失不会把网格顶动 */}
-      <div className="flex items-center justify-center h-6">
-        {loading && hasContent && <Spin size="small" indicator={limeIndicator} />}
-      </div>
+      {/* 刷新态：sticky 视口高 + 负底边距占位为 0，转圈始终在网格可视区正中；
+          弹窗与抽屉两个滚动容器复用，避免各自实现浮层。 */}
+      {loading && hasContent && (
+        <div className="grid-loading-overlay">
+          <Spin indicator={limeIndicator} />
+        </div>
+      )}
       <div
         className="grid gap-x-3 gap-y-4 pb-2"
         style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` }}
