@@ -505,7 +505,9 @@ function AssetsView() {
   const showFolderGrid = typeFilter.length === 0 && !appliedSearch.trim();
 
   return (
-    <div className="flex flex-col h-full">
+    // canvas-asset-drawer：画布拖放链路的排除标记（InfiniteCanvas.shouldIgnoreFileDrop），
+    // 使抽屉区域不作为画布落点——拖到抽屉上透传建节点 / 触发上传均被拦截
+    <div className="canvas-asset-drawer flex flex-col h-full">
       {/* 搜索栏 + 风格筛选 */}
       <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
         <Input

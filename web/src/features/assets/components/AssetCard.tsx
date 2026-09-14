@@ -56,7 +56,10 @@ export default function AssetCard({
   const { t } = useTranslation();
   const preview = useAssetHoverPreview(hoverPreviewAnchorX);
   const [playing, setPlaying] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 音频无封面图：离屏 ghost 作拖拽图像（setDragImage 不接受 display:none 元素，须真实渲染在视口外）
+  const audioGhostRef = useRef<HTMLDivElement | null>(null);
 
   // 卡片卸载（分页回收 / 删除）时释放音频元素，避免长列表试听泄漏。
   useEffect(() => () => {
@@ -128,12 +131,21 @@ export default function AssetCard({
         // 自定义标记承载完整资产信息（画布落点据此建节点），text/plain 兜底浏览器默认行为
         e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
         e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
+        setDragging(true);
+        preview.onLeave(); // 拖拽期间抑制悬浮大图，避免预览与拖拽图像错位（同视频参考卡）
+        // 拖拽图像与视频参考卡一致：用干净封面缩略图、锚点居中，避免默认整卡快照的半透明观感
+        const cover = (e.currentTarget as HTMLElement).querySelector("img");
+        if (cover) {
+          e.dataTransfer.setDragImage(cover, cover.offsetWidth / 2, cover.offsetHeight / 2);
+        } else if (audioGhostRef.current) {
+          e.dataTransfer.setDragImage(audioGhostRef.current, 28, 28);
+        }
       }}
       // 拖拽结束清掉可能残留的悬浮大图预览
-      onDragEnd={preview.onLeave}
-      className="group rounded-lg transition-all cursor-pointer outline-none"
+      onDragEnd={() => { setDragging(false); preview.onLeave(); }}
+      className={`group rounded-lg transition-all outline-none ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "opacity-50" : ""}`}
       onMouseLeave={handleCardLeave}
-      onMouseEnter={(event) => { if (showHoverPreview && sourceUrl) preview.onEnter(asset, event); }}
+      onMouseEnter={(event) => { if (showHoverPreview && sourceUrl && !dragging) preview.onEnter(asset, event); }}
       onClick={(e) => {
         // 弹窗：单击选中；抽屉：单击不作为，插入走悬停「+」/ 双击 / Enter，避免误触
         if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
@@ -193,8 +205,8 @@ export default function AssetCard({
           </button>
         )}
 
-        {/* 悬停蒙层 + 快速插入：仅插入为第一意图的抽屉场景显示 */}
-        {showInsertButton && (
+        {/* 悬停蒙层 + 快速插入：仅插入为第一意图的抽屉场景显示；拖拽期间隐藏，避免与拖拽图像叠加 */}
+        {showInsertButton && !dragging && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
             <button
               type="button"
@@ -229,6 +241,18 @@ export default function AssetCard({
         </div>
         <div className="text-[10px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>{formatDate(asset.createdAt)}</div>
       </div>
+
+      {/* 音频拖拽图像：仅作为 setDragImage 快照源，固定在视口外不影响布局 */}
+      {draggable && isAudio && (
+        <div
+          ref={audioGhostRef}
+          aria-hidden
+          className="fixed flex items-center justify-center rounded-lg"
+          style={{ top: -200, left: -200, width: 56, height: 56, background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+        >
+          <WaveIcon style={{ fontSize: 28, color: "rgba(255,255,255,0.3)" }} />
+        </div>
+      )}
     </div>
   );
 }

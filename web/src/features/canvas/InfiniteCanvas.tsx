@@ -780,7 +780,8 @@ export default function InfiniteCanvas() {
   // ---- File drop on canvas → create image node ----
 
   const shouldIgnoreFileDrop = useCallback((target: HTMLElement) => {
-    return target.closest('.asset-library-modal') !== null;
+    // 资产弹窗与资产抽屉都不是画布落点：拖到其上不建节点、不触发上传遮罩
+    return target.closest('.asset-library-modal, .canvas-asset-drawer') !== null;
   }, []);
 
   // 资产抽屉卡片拖入画布：在落点直接建资产节点（不走上传管道）
