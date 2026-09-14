@@ -34,6 +34,29 @@
   100% { transform: translate3d(4%, -3%, 0) scale(1.12); }
 }
 
+/* ===== 键盘焦点环（全局统一）=====
+   键盘聚焦（:focus-visible）的可交互元素统一画青柠 outline。
+   此前 antd 组件用其主题主色环、自绘按钮落浏览器默认白框，两种光圈并存无规范；
+   本规则收敛为一种（Tab 导航与弹窗关闭还焦时的视觉反馈保持一致）。
+   文本输入类自带焦点样式（antd 边框/底色），且鼠标点击也会命中 :focus-visible，
+   显式排除，避免与既有输入焦点态打架。 */
+:focus-visible {
+  outline: 2px solid var(--canvas-accent);
+  outline-offset: 2px;
+}
+/* antd 按钮自带的 focus-visible outline（activeBorderColor）权重更高，显式覆盖 */
+.ant-btn:focus-visible {
+  outline: 2px solid var(--canvas-accent) !important;
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible,
+[contenteditable] :focus-visible {
+  outline: none;
+}
+
 /* ===== Dark theme（默认）=====
    配色：中性石墨 + 青柠。
    设计约束：深色模式、长时间使用不累眼、强调色固定为青柠 #c7f43d。
