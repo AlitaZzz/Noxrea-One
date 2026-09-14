@@ -10,7 +10,6 @@ export {
   AssetHoverPreview,
   useAssetHoverPreview,
 } from "./components/AssetHoverPreview";
-export { default as AssetNav } from "./components/AssetNav";
 export { default as AssetsModal } from "./components/AssetsModal";
 export { default as AssetToolbar } from "./components/AssetToolbar";
 export { default as CreateFolderDialog } from "./components/CreateFolderDialog";

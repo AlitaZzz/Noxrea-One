@@ -35,8 +35,8 @@ import type { AssetItem } from "../types";
 interface Props {
   /** 当前选中且仍在列表中的素材；1 项为详情态，多项时检查器留空（批量操作在网格上方批量条）。 */
   assets: AssetItem[];
-  /** 单选素材所在文件夹的展示名（未分类已本地化），由父级从文件夹树解析。 */
-  folderName?: string;
+  /** 单选素材的完整位置路径（根空间 / 祖先链 / 当前文件夹），由父级从文件夹树解析。 */
+  folderPath?: string;
   onInsert: (asset: AssetItem) => void;
   /** 标题内联重命名：持久化成功返回 true，失败时输入态保留。 */
   onRenameConfirm: (asset: AssetItem, name: string) => Promise<boolean>;
@@ -445,7 +445,7 @@ function PromptEditor({
 }
 
 export default function AssetInspector({
-  assets, folderName,
+  assets, folderPath,
   onInsert, onRenameConfirm, onSingleDelete,
   onBatchMove, onBatchType,
   onUpdateTags, onUpdatePrompt,
@@ -584,8 +584,8 @@ export default function AssetInspector({
               {(single.mediaType === "image" || single.mediaType === "video") && single.width > 0 && single.height > 0 && (
                 <MetaRow label={t("asset.dimensionsLabel")} value={`${single.width} × ${single.height}`} />
               )}
-              {folderName && (
-                <MetaRow label={t("asset.locationLabel")} value={folderName} />
+              {folderPath && (
+                <MetaRow label={t("asset.locationLabel")} value={folderPath} />
               )}
               <MetaRow label={t("asset.createdAtLabel")} value={formatDateTime(single.createdAt)} />
               <MetaRow label={t("asset.updatedAtLabel")} value={formatDateTime(single.updatedAt)} />
