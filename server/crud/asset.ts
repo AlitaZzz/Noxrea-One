@@ -233,22 +233,7 @@ export async function deleteFolder(userId: number, id: number) {
       where: { userId, scope: root.scope },
       select: { id: true, parentId: true },
     });
-    const childrenByParent = new Map<number | null, number[]>();
-    for (const folder of folders) {
-      const parentId = folder.parentId ?? null;
-      const children = childrenByParent.get(parentId) ?? [];
-      children.push(folder.id);
-      childrenByParent.set(parentId, children);
-    }
-
-    const subtreeIds: number[] = [];
-    const stack = [id];
-    while (stack.length) {
-      const current = stack.pop()!;
-      if (subtreeIds.includes(current)) continue;
-      subtreeIds.push(current);
-      for (const childId of childrenByParent.get(current) ?? []) stack.push(childId);
-    }
+    const subtreeIds = collectSubtreeIds(id, folders);
 
     const deletedAssets = await tx.assetItem.findMany({
       where: { userId, folderId: { in: subtreeIds } },
@@ -292,6 +277,26 @@ function encodeAssetCursor(row: { createdAt: Date; id: number }): string {
   return `${row.createdAt.getTime()}_${row.id}`;
 }
 
+/** 展开某文件夹的完整子树 id（含自身）；folders 为同一 scope 下全部文件夹的 id/parentId 列表。 */
+function collectSubtreeIds(rootId: number, folders: { id: number; parentId: number | null }[]): number[] {
+  const childrenByParent = new Map<number | null, number[]>();
+  for (const folder of folders) {
+    const parentId = folder.parentId ?? null;
+    const children = childrenByParent.get(parentId) ?? [];
+    children.push(folder.id);
+    childrenByParent.set(parentId, children);
+  }
+  const ids: number[] = [];
+  const stack = [rootId];
+  while (stack.length) {
+    const current = stack.pop()!;
+    if (ids.includes(current)) continue;
+    ids.push(current);
+    for (const childId of childrenByParent.get(current) ?? []) stack.push(childId);
+  }
+  return ids;
+}
+
 export async function getAssets(params: {
   userId: number;
   folderId?: number;
@@ -302,8 +307,19 @@ export async function getAssets(params: {
   limit?: number;
 }) {
   const scope = params.scope ?? "personal";
+  let folderWhere: Prisma.AssetItemWhereInput | undefined;
   if (params.folderId !== undefined) {
     await requireFolder(prisma, params.userId, params.folderId, scope);
+    if (params.search?.trim()) {
+      // 文件夹内搜索覆盖整棵子树：展开后代 id 后按 IN 过滤（浏览态仍只看直属资产）
+      const folderRows = await prisma.assetFolder.findMany({
+        where: { userId: params.userId, scope },
+        select: { id: true, parentId: true },
+      });
+      folderWhere = { folderId: { in: collectSubtreeIds(params.folderId, folderRows) } };
+    } else {
+      folderWhere = { folderId: params.folderId };
+    }
   }
 
   const typeList = params.type
@@ -315,7 +331,7 @@ export async function getAssets(params: {
   const baseWhere: Prisma.AssetItemWhereInput = {
     userId: params.userId,
     scope,
-    ...(params.folderId !== undefined ? { folderId: params.folderId } : {}),
+    ...(folderWhere ?? {}),
   };
   const baseAnd: Prisma.AssetItemWhereInput[] = [];
   if (typeList.length) baseAnd.push({ type: { in: typeList } });

@@ -460,7 +460,7 @@ export default function AssetsModal({ open, onClose }: Props) {
         if (cur === deletedId) { within = true; break; }
         cur = folders.find((f) => f.id === cur)?.parentId || null;
       }
-      if (within) { setActiveFolderId(null); clearSelection(); }
+      if (within) { setActiveFolderId(null); clearSelection(); setSearch(""); }
     }
     clearSelection();
     setDeleteFolder(null);
@@ -551,7 +551,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                   </span>
                 ) : (
                   <button
-                    onClick={() => { clearSelection(); setActiveFolderId(null); }}
+                    onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(null); }}
                     className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                     style={{ color: "var(--canvas-text-dim)" }}
                   >
@@ -569,7 +569,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                         </span>
                       ) : (
                         <button
-                          onClick={() => { clearSelection(); setActiveFolderId(f.id); }}
+                          onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(f.id); }}
                           className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                           style={{ color: "var(--canvas-text-dim)" }}
                         >
@@ -695,7 +695,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onSelect={handleGridCardSelect}
                 onToggleSelect={handleToggleSelect}
                 onInsertCanvas={handleInsertCanvas}
-                onEnterFolder={(folder) => { clearSelection(); setActiveFolderId(folder.id); }}
+                onEnterFolder={(folder) => { clearSelection(); setSearch(""); setActiveFolderId(folder.id); }}
                 onDeleteFolder={handleDeleteFolder}
                 onRenameFolder={handleRenameFolder}
                 loading={loading}

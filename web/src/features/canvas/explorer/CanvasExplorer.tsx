@@ -575,7 +575,7 @@ function AssetsView() {
           </span>
         ) : (
           <button
-            onClick={() => { setTypeFilter([]); setActiveFolderId(null); }}
+            onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(null); }}
             className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
             style={{ color: "var(--canvas-text-dim)" }}
           >
@@ -593,7 +593,7 @@ function AssetsView() {
                 </span>
               ) : (
                 <button
-                  onClick={() => { setTypeFilter([]); setActiveFolderId(crumb.id); }}
+                  onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(crumb.id); }}
                   className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                   style={{ color: "var(--canvas-text-dim)" }}
                 >
@@ -617,7 +617,7 @@ function AssetsView() {
           draggable
           hoverPreviewAnchorX={DRAWER_WIDTH}
           onInsertCanvas={handleInsertCanvas}
-          onEnterFolder={(folder) => setActiveFolderId(folder.id)}
+          onEnterFolder={(folder) => { setSearch(""); setTypeFilter([]); setActiveFolderId(folder.id); }}
           loading={loading}
           hasMore={hasMore}
           loadingMore={loadingMore}
