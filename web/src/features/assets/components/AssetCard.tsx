@@ -126,7 +126,12 @@ export default function AssetCard({
       onKeyDown={handleKeyDown}
       draggable={draggable}
       onDragStart={(e) => {
-        if (!draggable) return;
+        // 封面 <img> 会被浏览器原生拖拽（拖影跟随光标、看似可拖入画布但落点无效）：
+        // 非拖拽模式（弹窗）直接取消；抽屉模式才是真正的资产拖拽。
+        if (!draggable) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.effectAllowed = "copy";
         // 自定义标记承载完整资产信息（画布落点据此建节点），text/plain 兜底浏览器默认行为
         e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));

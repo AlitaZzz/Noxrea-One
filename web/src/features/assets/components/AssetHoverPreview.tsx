@@ -173,6 +173,7 @@ export function AssetHoverPreview({
         <img
           src={bigUrl || undefined}
           alt={asset.name}
+          draggable={false}
           onLoad={(e) => {
             const img = e.currentTarget;
             const nw = img.naturalWidth;
