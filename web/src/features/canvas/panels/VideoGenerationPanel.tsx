@@ -50,7 +50,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = useMemo(() => providers.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
+    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
   // Read persisted settings from node data
@@ -81,6 +81,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 而不是在 effect 里 setState 去补，避免级联渲染。
   const [modelKeyDraft, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
   const modelKey = modelKeyDraft || saved.modelKey;
+  // modelKey 悬空兜底：重新拉取后端整表重建 model 行（ID 变化）或模型被移除时，
+  // 持久化键失效会一直显示占位且参数查不到——回退到持久化值若仍有效，否则第一个可用模型
+  useEffect(() => {
+    if (allModels.length === 0) return;
+    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
+    setModelKey(allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value);
+  }, [allModels, modelKey, saved.modelKey]);
   const [resolution, setResolution] = useState(saved.resolution);
   const [ratio, setRatio] = useState(saved.ratio);
   const [seconds, setSeconds] = useState(saved.seconds);
@@ -451,7 +458,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               style={{ border: "none", cursor: "pointer" }}>
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
-                {allModels.find((m) => m.value === modelKey)?.name ?? "Select model"}
+                {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
               </span>
             </Button>
           }
@@ -543,9 +550,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             width: 36, height: 36,
             background: isGenerating ? "#e74c3c" : (!prompt.trim() || !modelKey) ? "var(--canvas-border)" : "var(--canvas-text)",
             color: isGenerating ? "#fff" : (!prompt.trim() || !modelKey) ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
-            border: "none", cursor: "pointer",
+            border: "none",
+            cursor: !isGenerating && (!prompt.trim() || !modelKey) ? "not-allowed" : "pointer",
             opacity: (!prompt.trim() || !modelKey) && !isGenerating ? 0.5 : 1,
           }}
+          disabled={!isGenerating && (!prompt.trim() || !modelKey)}
           onClick={isGenerating ? handleCancel : handleGenerate}
         >
           {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}

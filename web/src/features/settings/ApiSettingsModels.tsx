@@ -83,19 +83,25 @@ const ModelRow = memo(function ModelRow({
           );
         })}
       </div>
-      <button
-        type="button"
-        aria-label={confirming ? t("common.delete") : t("modelConfig.deleteModel")}
-        className={`cap-pill shrink-0 ${confirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-        style={
-          confirming
-            ? { color: "var(--canvas-accent)", background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)" }
-            : undefined
-        }
-        onClick={() => (confirming ? onDelete(m.id) : setConfirming(true))}
-      >
-        {confirming ? <CheckOutlined /> : <CloseOutlined />}
-      </button>
+      {/* 删除只出现在未启用任何能力的行：已启用的行显示 × 会被误读为「停用」。
+          占位符保持 22px 槽位，保证启用 / 未启用行的能力 pill 垂直对齐。 */}
+      {(m.capabilities?.length ?? 0) === 0 ? (
+        <button
+          type="button"
+          aria-label={confirming ? t("common.delete") : t("modelConfig.deleteModel")}
+          className={`cap-pill shrink-0 ${confirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          style={
+            confirming
+              ? { color: "var(--canvas-accent)", background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)" }
+              : undefined
+          }
+          onClick={() => (confirming ? onDelete(m.id) : setConfirming(true))}
+        >
+          {confirming ? <CheckOutlined /> : <CloseOutlined />}
+        </button>
+      ) : (
+        <span aria-hidden className="w-[22px] shrink-0" />
+      )}
     </div>
   );
 });
