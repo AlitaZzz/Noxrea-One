@@ -17,7 +17,7 @@ import {
   RightOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
+import { Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
 import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -35,6 +35,7 @@ import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 import { ASSET_CATEGORIES, NODE_TYPE } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
 
 export const DRAWER_WIDTH = 360;
 
@@ -437,7 +438,6 @@ const ElementItem = memo(ElementItemImpl);
 function AssetsView() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
@@ -468,13 +468,8 @@ function AssetsView() {
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
     if (node) useCanvasStore.getState().addNodes([node]);
-    notif.success({
-      title: t("asset.added"),
-      description: asset.name,
-      placement: "bottomRight",
-      duration: 3,
-    });
-  }, [notif, t]);
+    showGlobalMessage().success(t("asset.added"));
+  }, [t]);
 
   // 完整祖先面包屑链（从根到当前文件夹）
   const breadcrumb = useMemo<AssetFolder[]>(() => {

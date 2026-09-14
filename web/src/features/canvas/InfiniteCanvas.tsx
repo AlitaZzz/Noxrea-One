@@ -84,6 +84,7 @@ import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -788,13 +789,8 @@ export default function InfiniteCanvas() {
     const asset = data as AssetItem;
     const node = createAssetNode(asset, pos, findFreePosition);
     if (node) addNodes([node]);
-    notif.success({
-      title: t("asset.added"),
-      description: asset.name,
-      placement: "bottomRight",
-      duration: 3,
-    });
-  }, [addNodes, notif, t]);
+    showGlobalMessage().success(t("asset.added"));
+  }, [addNodes, t]);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);
