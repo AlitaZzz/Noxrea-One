@@ -55,7 +55,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     .flatMap((c) =>
       c.models
         .filter((m) => m.capabilities?.includes("text"))
-        .map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name })),
+        .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name })),
     )
     .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
@@ -77,12 +77,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // 模型列表异步到达后用正确值补齐 modelKey（同 ImageGenerationPanel）：
-  // 否则首帧算出的空值会被防抖持久化写回节点，抹掉已保存的模型选择。
+  // modelKey 兜底（同 ImageGenerationPanel）：列表异步到达时补空值；持久化值悬空
+  // （重新拉取时后端整表重建、model 行 ID 变化，或模型被上游移除）时回退到
+  // 持久化值若仍有效，否则第一个可用模型。
   useEffect(() => {
-    if (modelKey) return;
-    const fallback = saved.modelKey || allModels[0]?.value;
-    if (fallback) setModelKey(fallback);
+    if (allModels.length === 0) return;
+    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
+    const fallback = allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value;
+    setModelKey(fallback);
   }, [allModels, modelKey, saved.modelKey]);
 
   // Upstream reference images - derived live from current edges
@@ -514,7 +516,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               >
                 <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
                 <span className="truncate">
-                  {allModels.find((m) => m.value === modelKey)?.name ?? "Select model"}
+                  {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
                 </span>
               </Button>
             }
@@ -546,9 +548,10 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               background: isGenerating ? "#e74c3c" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-border)" : "var(--canvas-text)",
               color: isGenerating ? "#fff" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
               border: "none",
-              cursor: "pointer",
+              cursor: !isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "not-allowed" : "pointer",
               opacity: (!prompt.trim() && upstreamTexts.length === 0 || !modelKey) && !isGenerating ? 0.5 : 1,
             }}
+            disabled={!isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
             onClick={isGenerating ? handleCancel : handleGenerate}
           >
             {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}

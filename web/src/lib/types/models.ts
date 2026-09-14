@@ -72,7 +72,12 @@ export interface ModelProvider {
 
 /** 生成面板中的模型选项 */
 export interface ModelOption {
-  /** 基于 id 的稳定键：providerId/modelId，改名不影响已有节点 */
+  /**
+   * 稳定键：providerId/modelName。
+   * 不能用 model 行的数据库 ID：重新拉取时后端 batchSetModels 会整表重建（deleteMany + createMany），
+   * ID 全部变化，持久化在节点 genSettings.modelKey 里的旧键会悬空；
+   * 模型名才是稳定身份（生成提交也是按 name 发送的）。
+   */
   value: string;
   providerId: string;
   modelId: string;

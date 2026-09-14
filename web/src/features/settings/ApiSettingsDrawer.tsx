@@ -293,9 +293,20 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                       >
                         {c.name}
                       </div>
-                      <div className="text-[11px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>
-                        {t("modelConfig.modelsCount", { count: c.models.length })}
-                      </div>
+                      {/* 「已启用/总数」分数形式：青柠分子呼应能力 pill 点亮语义，口径与右侧模型区一致 */}
+                      {(() => {
+                        const enabled = c.models.filter((m) => (m.capabilities?.length ?? 0) > 0).length;
+                        return (
+                          <div
+                            className="text-[11px] mt-0.5 tabular-nums"
+                            style={{ color: "var(--canvas-text-muted)" }}
+                            aria-label={t("modelConfig.enabledCount", { enabled, total: c.models.length })}
+                          >
+                            <span style={{ color: enabled > 0 ? "var(--canvas-accent)" : undefined }}>{enabled}</span>
+                            /{c.models.length}
+                          </div>
+                        );
+                      })()}
                     </button>
                   );
                 })}

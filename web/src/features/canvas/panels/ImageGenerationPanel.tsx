@@ -43,7 +43,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const findModelParams = useModelStore((s) => s.findModelParams);
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const allModels = useMemo(() => providers.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.id}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
+    c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
   // Read persisted settings from node data
@@ -75,13 +75,14 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // 模型列表异步到达后用正确值补齐 modelKey。
-  // 若不补齐，下方 300ms 的防抖持久化会把空 modelKey 写回节点，
-  // 抹掉该节点上已保存的模型选择。
+  // modelKey 兜底：列表异步到达时补空值；持久化值悬空（后端 batchSetModels
+  // 整表重建导致 model 行 ID 变化、或模型被上游移除）时回退到持久化值若仍有效，
+  // 否则第一个可用模型。否则悬空键会一直显示占位且参数查不到。
   useEffect(() => {
-    if (modelKey) return;
-    const fallback = saved.modelKey || allModels[0]?.value;
-    if (fallback) setModelKey(fallback);
+    if (allModels.length === 0) return;
+    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
+    const fallback = allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value;
+    setModelKey(fallback);
   }, [allModels, modelKey, saved.modelKey]);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
@@ -398,7 +399,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               style={{ border: "none", cursor: "pointer" }}>
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
-                {allModels.find((m) => m.value === modelKey)?.name ?? "Select model"}
+                {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
               </span>
             </Button>
           }
@@ -434,9 +435,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             width: 36, height: 36,
             background: isGenerating ? "#e74c3c" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-border)" : "var(--canvas-text)",
             color: isGenerating ? "#fff" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
-            border: "none", cursor: "pointer",
+            border: "none",
+            cursor: !isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "not-allowed" : "pointer",
             opacity: (!prompt.trim() && upstreamTexts.length === 0 || !modelKey) && !isGenerating ? 0.5 : 1,
           }}
+          disabled={!isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
           onClick={isGenerating ? handleCancel : handleGenerate}
         >
           {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}
