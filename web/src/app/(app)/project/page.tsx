@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
 import { Popover } from "antd";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -194,10 +194,21 @@ export default function ProjectPage() {
                       size="sm"
                       iconOnly
                       variant="ghost"
-                      aria-label={t("common.edit")}
-                      onClick={() => { setEditingId(p.id); setEditName(p.name); }}
+                      aria-label={editingId === p.id ? t("common.save") : t("common.edit")}
+                      // 编辑态点击不让 input 先失焦（blur 保存 + click 重开会产生闪跳），由 click 统一切换
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        if (editingId === p.id) {
+                          if (editName.trim()) renameProject(p.id, editName.trim());
+                          setEditingId(null);
+                        } else {
+                          setEditingId(p.id);
+                          setEditName(p.name);
+                        }
+                      }}
                     >
-                      <EditOutlined />
+                      {/* 确认对勾用青柠：与检查器内联保存等肯定语义一致（globals.css 品牌色规则） */}
+                      {editingId === p.id ? <CheckOutlined style={{ color: "var(--canvas-accent)" }} /> : <EditOutlined />}
                     </AppButton>
                     <AppButton
                       size="sm"
