@@ -7,7 +7,7 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
-import { App, Input, Select, Tooltip, TreeSelect } from "antd";
+import { Input, Select, Tooltip, TreeSelect } from "antd";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +22,7 @@ import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
 
 import { downloadAsset } from "../download";
 import AssetCreateDialog from "./AssetCreateDialog";
@@ -37,7 +38,6 @@ interface Props {
 
 export default function AssetsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
-  const { notification: notif } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
   const addFolder = useAssetsStore((s) => s.addFolder);
@@ -364,13 +364,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
     if (node) useCanvasStore.getState().addNodes([node]);
-    notif.success({
-      title: t("asset.added"),
-      description: asset.name,
-      placement: "bottomRight",
-      duration: 3,
-    });
-  }, [notif, t]);
+    showGlobalMessage().success(t("asset.added"));
+  }, [t]);
 
   // 检查器批量插入：以视口中心为基准错位落位，避免多个节点完全重叠。
   const handleBatchInsert = useCallback((assets: AssetItem[]) => {
@@ -384,13 +379,8 @@ export default function AssetsModal({ open, onClose }: Props) {
       ))
       .filter((node): node is NonNullable<typeof node> => !!node);
     if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes);
-    notif.success({
-      title: t("asset.added"),
-      description: assets.length === 1 ? assets[0].name : t("asset.addedCount", { count: assets.length }),
-      placement: "bottomRight",
-      duration: 3,
-    });
-  }, [notif, t]);
+    showGlobalMessage().success(t("asset.addedCount", { count: assets.length }));
+  }, [t]);
 
   const handleCreateAssets = useCallback(
     async (inputs: CreateAssetInput[]) => {
