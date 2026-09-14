@@ -35,7 +35,6 @@ export interface AssetLibraryState {
   /** 删除成功后的本地同步：剔除列表项与计数，随后立即补页填满当前窗口。 */
   removeItems: (ids: string[]) => Promise<void>;
   setItems: React.Dispatch<React.SetStateAction<AssetItem[]>>;
-  setTotalCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
 interface Options extends AssetLibraryQuery {
@@ -109,18 +108,6 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
         if (state.key !== queryKey) return state;
         const nextItems = typeof action === "function" ? action(state.items) : action;
         return { ...state, items: nextItems };
-      });
-    },
-    [queryKey],
-  );
-
-  /** 更新当前 query key 的总数；规则与 setItems 相同。 */
-  const setTotalCount = useCallback<React.Dispatch<React.SetStateAction<number>>>(
-    (action) => {
-      setListState((state) => {
-        if (state.key !== queryKey) return state;
-        const nextTotalCount = typeof action === "function" ? action(state.totalCount) : action;
-        return { ...state, totalCount: nextTotalCount };
       });
     },
     [queryKey],
@@ -274,6 +261,5 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     appliedSearch,
     removeItems,
     setItems,
-    setTotalCount,
   };
 }
