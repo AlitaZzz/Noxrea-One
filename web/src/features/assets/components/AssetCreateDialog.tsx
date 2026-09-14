@@ -486,6 +486,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
           <div>
             <label className="block text-xs text-white/40 mb-2">{t("asset.saveLocation")}</label>
             <TreeSelect
+              className="folder-tree-select"
               value={saveFolderId ?? "__root__"}
               onChange={(v) => setSaveFolderId(v === "__root__" ? undefined : v)}
               style={{ width: "100%" }}

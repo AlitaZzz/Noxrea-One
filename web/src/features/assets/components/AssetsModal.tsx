@@ -460,11 +460,11 @@ export default function AssetsModal({ open, onClose }: Props) {
         if (cur === deletedId) { within = true; break; }
         cur = folders.find((f) => f.id === cur)?.parentId || null;
       }
-      if (within) setActiveFolderId(null);
+      if (within) { setActiveFolderId(null); clearSelection(); }
     }
-    setSelectedIds(new Set());
+    clearSelection();
     setDeleteFolder(null);
-  }, [deleteFolder, removeFolder, activeFolderId, folders]);
+  }, [deleteFolder, removeFolder, activeFolderId, folders, clearSelection]);
 
   // Breadcrumb data
   const breadCrumb = useMemo((): AssetFolder[] => {
@@ -551,7 +551,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                   </span>
                 ) : (
                   <button
-                    onClick={() => setActiveFolderId(null)}
+                    onClick={() => { clearSelection(); setActiveFolderId(null); }}
                     className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                     style={{ color: "var(--canvas-text-dim)" }}
                   >
@@ -569,7 +569,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                         </span>
                       ) : (
                         <button
-                          onClick={() => setActiveFolderId(f.id)}
+                          onClick={() => { clearSelection(); setActiveFolderId(f.id); }}
                           className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
                           style={{ color: "var(--canvas-text-dim)" }}
                         >
@@ -695,7 +695,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                 onSelect={handleGridCardSelect}
                 onToggleSelect={handleToggleSelect}
                 onInsertCanvas={handleInsertCanvas}
-                onEnterFolder={(folder) => setActiveFolderId(folder.id)}
+                onEnterFolder={(folder) => { clearSelection(); setActiveFolderId(folder.id); }}
                 onDeleteFolder={handleDeleteFolder}
                 onRenameFolder={handleRenameFolder}
                 loading={loading}
@@ -816,6 +816,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           }
         >
           <TreeSelect
+            className="folder-tree-select"
             value={batchMoveTarget}
             onChange={(v) => setBatchMoveTarget(v)}
             style={{ width: "100%" }}

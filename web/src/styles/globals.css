@@ -451,6 +451,20 @@
   font-weight: 400 !important;
 }
 
+/* TreeSelect 触发器非编辑态手型光标（folder-tree-select 为移动 / 上传弹窗的文件夹树）。
+   选择器内部各层级（选中项 / 占位文本 / 搜索区）都要覆盖，悬停命中哪层都显示手型；
+   下拉打开（编辑态）后搜索输入恢复文本光标 */
+.folder-tree-select .ant-select-selector,
+.folder-tree-select .ant-select-selection-item,
+.folder-tree-select .ant-select-selection-placeholder,
+.folder-tree-select .ant-select-selection-search,
+.folder-tree-select .ant-select-selection-search-input {
+  cursor: pointer !important;
+}
+.folder-tree-select.ant-select-open .ant-select-selection-search-input {
+  cursor: text !important;
+}
+
 /* Modal mask: blur + lighter background */
 .ant-modal-mask {
   backdrop-filter: blur(8px) !important;
