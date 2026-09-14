@@ -77,6 +77,11 @@ export const assetBatchDeleteSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(200),
 });
 
+/** 画布「取消收藏」：按 sourceUrl 删除个人库中的资产条目 */
+export const assetDeleteBySourceSchema = z.object({
+  sourceUrls: z.array(z.string().min(1)).min(1).max(50),
+});
+
 export const assetOutSchema = z.object({
   id: z.number(),
   userId: z.number(),

@@ -8,7 +8,7 @@
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
 import { Input, Select, Tooltip, TreeSelect } from "antd";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
@@ -107,6 +107,16 @@ export default function AssetsModal({ open, onClose }: Props) {
     search,
     categories,
   });
+
+  // 资产条目在视图外变更（画布收藏 / 取消收藏等）时失效重拉；弹窗关闭期间只记账，
+  // 重开时 enabled 的查询链路自然会取最新数据。
+  const libraryVersion = useAssetsStore((s) => s.libraryVersion);
+  const lastLibraryVersionRef = useRef(libraryVersion);
+  useEffect(() => {
+    if (libraryVersion === lastLibraryVersionRef.current) return;
+    lastLibraryVersionRef.current = libraryVersion;
+    if (open) reload();
+  }, [libraryVersion, open, reload]);
 
   // 搜索词或分类变化后旧勾选可能已不在结果中，在事件中清空，避免批量操作误带不可见项。
   const handleSearchChange = useCallback((value: string) => {

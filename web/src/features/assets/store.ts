@@ -124,6 +124,13 @@ interface AssetsState {
   initialized: boolean;
   /** 保存过的 sourceUrl 集合，用于画布节点保存按钮状态。 */
   knownAssetUrls: Set<string>;
+  /**
+   * 资产条目变更令牌（查询失效信号）：任何增删改成功后自增。
+   * 资产视图（画布抽屉 / 管理弹窗）在打开期间订阅它触发重拉，
+   * 让「画布收藏」这类发生在视图外的变更能实时反映到已打开的列表里。
+   */
+  libraryVersion: number;
+  noteLibraryChanged: () => void;
 
   initialize: () => Promise<void>;
   applyCounters: (counters: AssetCountersDto) => void;
@@ -133,6 +140,8 @@ interface AssetsState {
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
   updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
   removeAssetsBatch: (ids: string[]) => Promise<{ ok: boolean; total?: number }>;
+  /** 画布「取消收藏」：按 sourceUrl 删除个人库条目，并同步 knownAssetUrls。 */
+  unsaveAssetsByUrls: (urls: string[]) => Promise<boolean>;
   updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<{ ok: boolean; total?: number }>;
 
   addFolder: (name: string, scope: AssetScope, parentId?: string) => Promise<
@@ -152,6 +161,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   folders: [],
   initialized: false,
   knownAssetUrls: new Set(),
+  libraryVersion: 0,
+  noteLibraryChanged: () => set((state) => ({ libraryVersion: state.libraryVersion + 1 })),
 
   applyCounters: (counters) => {
     set((state) => ({
@@ -213,6 +224,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const item = dtoToAsset(res.data.item);
     get().applyCounters(res.data.counters);
     if (item.sourceUrl) get().markAssetUrlSaved(item.sourceUrl);
+    get().noteLibraryChanged();
     return item;
   },
 
@@ -250,6 +262,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       items.push(...chunkItems);
       skippedCount += res.data.skipped?.length ?? 0;
       get().applyCounters(res.data.counters);
+      // 每个成功分片即时失效：后续分片失败提前返回时，已入库的条目也能让视图刷新。
+      if (chunkItems.length > 0) get().noteLibraryChanged();
 
       const urls = new Set<string>();
       for (const item of chunkItems) {
@@ -280,6 +294,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const res = await assetApi.updateAsset(intId, body).catch(() => null);
     if (res && res.code === 200) {
       get().applyCounters(res.data.counters);
+      get().noteLibraryChanged();
       return true;
     }
     notifyFailure(res, "asset.update_failed");
@@ -293,6 +308,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const res = await assetApi.deleteAssetsBatch(intIds).catch(() => null);
     if (res && res.code === 200 && res.data) {
       get().applyCounters(res.data.counters);
+      get().noteLibraryChanged();
       if (res.data.sourceUrls.length > 0) {
         const removed = new Set(res.data.sourceUrls);
         set((state) => ({
@@ -303,6 +319,24 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     }
     notifyFailure(res, "asset.delete_failed");
     return { ok: false };
+  },
+
+  unsaveAssetsByUrls: async (urls) => {
+    if (urls.length === 0) return false;
+    const res = await assetApi.deleteAssetsBySource(urls).catch(() => null);
+    if (res && res.code === 200 && res.data) {
+      get().applyCounters(res.data.counters);
+      get().noteLibraryChanged();
+      if (res.data.sourceUrls.length > 0) {
+        const removed = new Set(res.data.sourceUrls);
+        set((state) => ({
+          knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
+        }));
+      }
+      return true;
+    }
+    notifyFailure(res, "asset.delete_failed");
+    return false;
   },
 
   updateAssetsBatch: async (ids, updates) => {
@@ -317,6 +351,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const res = await assetApi.updateAssetsBatch(intIds, body).catch(() => null);
     if (res && res.code === 200) {
       get().applyCounters(res.data.counters);
+      get().noteLibraryChanged();
       return { ok: true, total: res.data.counters.total };
     }
     notifyFailure(res, "asset.update_failed");

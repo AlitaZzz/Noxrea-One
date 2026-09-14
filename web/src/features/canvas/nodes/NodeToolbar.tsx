@@ -22,7 +22,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
 import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
@@ -177,17 +177,40 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
   );
 }
 
+/** 收藏 / 取消收藏切换按钮（图片 / 视频节点共用）。
+    未收藏 = 空心星点击收藏；已收藏 = 实心星，再次点击从资产移除（toggle，
+    文件引用是计数账本，画布节点的引用不受影响）。 */
+function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: string }) {
+  const { t } = useTranslation();
+  const unsaveAssetsByUrls = useAssetsStore((s) => s.unsaveAssetsByUrls);
+  const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetUrls.has(assetSrc));
+  return (
+    <Tooltip title={isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}>
+      <Button
+        type="text"
+        size="middle"
+        style={{ padding: 8 }}
+        disabled={!assetSrc}
+        icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
+        onClick={() => {
+          if (!assetSrc) return;
+          if (isInAssets) void unsaveAssetsByUrls([assetSrc]);
+          else dispatchNodeAction(nodeId, "save-asset");
+        }}
+      />
+    </Tooltip>
+  );
+}
+
 function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
-  const knownAssetUrls = useAssetsStore((s) => s.knownAssetUrls);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
   // 音轨探测结论：undefined = 尚未确定（按「可能有音轨」处理，真无音轨时由后端兜底）；
   // false = 确定无音轨，禁用分离入口
   const videoHasAudio = (nodes.find(n => n.id === nodeId)?.data as { hasAudio?: boolean })?.hasAudio;
   const textContent = (nodes.find(n => n.id === nodeId)?.data as { plainText?: string })?.plainText;
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
-  const isInAssets = useMemo(() => !!assetSrc && knownAssetUrls.has(assetSrc), [assetSrc, knownAssetUrls]);
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
@@ -340,11 +363,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: No
           />
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={isInAssets ? t("node.alreadySaved") : t("node.saveToAssets")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}
-              icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
-              onClick={() => { if (!isInAssets) dispatchNodeAction(nodeId, "save-asset"); }} />
-          </Tooltip>
+          <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
@@ -406,11 +425,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: No
             />
           </Tooltip>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={isInAssets ? t("node.alreadySaved") : t("node.saveToAssets")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}
-              icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
-              onClick={() => { if (!isInAssets) dispatchNodeAction(nodeId, "save-asset"); }} />
-          </Tooltip>
+          <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />

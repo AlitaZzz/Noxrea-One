@@ -14,6 +14,7 @@ import {
   assetBatchCreateSchema,
   assetBatchUpdateSchema,
   assetBatchDeleteSchema,
+  assetDeleteBySourceSchema,
 } from "@server/schemas/asset";
 import {
   AssetOperationError,
@@ -27,6 +28,7 @@ import {
   updateAsset,
   deleteAsset,
   deleteAssetsBatch,
+  deleteAssetsBySourceUrls,
   createAssetsBatch,
   updateAssetsBatch,
   listSourceUrls,
@@ -304,6 +306,30 @@ router.delete("/api/assets/items/batch", async (c) => {
 
   try {
     const result = await deleteAssetsBatch(auth.user.id, parsed.data.ids);
+    return c.json(ok(result));
+  } catch (error) {
+    return handleAssetError(error) ?? failCode(500, "common.internal_error");
+  }
+});
+
+// DELETE /api/assets/items/by-source — 画布「取消收藏」：按 sourceUrl 删除个人库条目（宽松语义）
+router.delete("/api/assets/items/by-source", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return failCode(400, "common.invalid_json");
+  }
+
+  const parsed = assetDeleteBySourceSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
+
+  try {
+    const result = await deleteAssetsBySourceUrls(auth.user.id, parsed.data.sourceUrls);
     return c.json(ok(result));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");

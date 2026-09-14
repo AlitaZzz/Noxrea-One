@@ -128,6 +128,13 @@ export const assetApi = {
       body: JSON.stringify({ ids }),
     }),
 
+  /** 画布「取消收藏」：按 sourceUrl 删除个人库条目（宽松语义，无匹配也成功）。 */
+  deleteAssetsBySource: (sourceUrls: string[]) =>
+    api<{ count: number; sourceUrls: string[]; counters: AssetCountersDto }>("/api/assets/items/by-source", {
+      method: "DELETE",
+      body: JSON.stringify({ sourceUrls }),
+    }),
+
   updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
     api<{ count: number; counters: AssetCountersDto }>("/api/assets/items/batch", {
       method: "PUT",

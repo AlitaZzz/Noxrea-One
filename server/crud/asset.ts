@@ -671,6 +671,50 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
   });
 }
 
+/**
+ * 按 sourceUrl 删除资产（画布节点「收藏 / 取消收藏」切换用）。
+ * 仅删个人库中 URL 精确匹配的条目（画布收藏只写个人库）；
+ * 宽松语义：无匹配条目也算成功（count = 0），方便前端幂等取消。
+ */
+export async function deleteAssetsBySourceUrls(userId: number, sourceUrls: string[]) {
+  return prisma.$transaction(async (tx) => {
+    const currentItems = await tx.assetItem.findMany({
+      where: { userId, scope: "personal", sourceUrl: { in: sourceUrls } },
+      select: { id: true, folderId: true, scope: true, sourceUrl: true },
+    });
+    if (currentItems.length === 0) {
+      return { count: 0, sourceUrls: [], counters: await readCounters(tx, userId, "personal") };
+    }
+
+    await removeSourceFileRefsBatch(tx, {
+      userId,
+      sourceType: "asset_item",
+      sourceIds: currentItems.map((item) => String(item.id)),
+    });
+    await tx.assetItem.deleteMany({ where: { id: { in: currentItems.map((item) => item.id) }, userId } });
+
+    // 同一直属目录被删多条时聚合成一次递减，避免逐条 update。
+    const folderCounts = new Map<number, number>();
+    for (const item of currentItems) {
+      folderCounts.set(item.folderId, (folderCounts.get(item.folderId) ?? 0) + 1);
+    }
+    for (const [folderId, count] of folderCounts) {
+      await tx.assetFolder.update({
+        where: { id: folderId },
+        data: { directCount: { decrement: count } },
+      });
+    }
+
+    return {
+      count: currentItems.length,
+      sourceUrls: currentItems
+        .map((item) => item.sourceUrl)
+        .filter((sourceUrl): sourceUrl is string => Boolean(sourceUrl)),
+      counters: await readCounters(tx, userId, "personal"),
+    };
+  });
+}
+
 export async function listSourceUrls(userId: number, scope = "personal") {
   const items = await prisma.assetItem.findMany({
     where: { userId, scope, sourceUrl: { not: null } },
