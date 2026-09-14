@@ -421,13 +421,14 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
               {files.map((f) => (
                 <div key={f.id} className="upload-file-card group shrink-0">
                   {isImage(f.file) ? (
-                    <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
                   ) : isVideo(f.file) ? (
                     <div className="w-full h-full relative flex items-center justify-center bg-black/50">
                       {f.url ? (
                         <img
                           src={`${f.url}?w=200`}
                           alt=""
+                          draggable={false}
                           className="absolute inset-0 w-full h-full object-cover"
                           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                         />
