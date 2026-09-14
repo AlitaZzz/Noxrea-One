@@ -101,8 +101,9 @@ export function deleteSelection(): void {
   if (edgeIds.length > 0) store.removeEdges(edgeIds);
 }
 
-/** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点） */
-function hasGeneratingNode(): boolean {
+/** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点）。
+    导出给键盘层：拦截发生时给出提示，而不是静默吞掉快捷键。 */
+export function hasGeneratingNode(): boolean {
   return useCanvasStore
     .getState()
     .nodes.some((n) => isGenerating((n.data as MediaGenFields).taskBinding));

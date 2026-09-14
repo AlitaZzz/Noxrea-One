@@ -467,6 +467,7 @@
   },
   "shortcuts": {
     "title": "Shortcuts",
+    "undoBlocked": "A node is generating — undo / redo is temporarily unavailable",
     "zoom": "Zoom",
     "pan": "Pan",
     "edit": "Edit",
