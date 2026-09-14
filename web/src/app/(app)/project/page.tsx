@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
+import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
@@ -189,16 +190,24 @@ export default function ProjectPage() {
                     <div className="text-sm font-medium truncate flex-1">{p.name}</div>
                   )}
                   <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      style={{ background: "var(--canvas-bg-hover)", border: "none", cursor: "pointer", width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--canvas-text-dim)" }}
-                      onClick={() => { setEditingId(p.id); setEditName(p.name); }}>
-                      <EditOutlined style={{ fontSize: 12 }} />
-                    </button>
-                    <button
-                      style={{ background: "var(--canvas-bg-hover)", border: "none", cursor: "pointer", width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--canvas-text-dim)" }}
-                      onClick={() => setDeleteTarget(p)}>
-                      <DeleteOutlined style={{ fontSize: 12 }} />
-                    </button>
+                    <AppButton
+                      size="sm"
+                      iconOnly
+                      variant="ghost"
+                      aria-label={t("common.edit")}
+                      onClick={() => { setEditingId(p.id); setEditName(p.name); }}
+                    >
+                      <EditOutlined />
+                    </AppButton>
+                    <AppButton
+                      size="sm"
+                      iconOnly
+                      variant="ghost"
+                      aria-label={t("common.delete")}
+                      onClick={() => setDeleteTarget(p)}
+                    >
+                      <DeleteOutlined />
+                    </AppButton>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "var(--canvas-text-muted)" }}>
