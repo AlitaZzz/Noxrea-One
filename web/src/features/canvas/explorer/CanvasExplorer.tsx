@@ -600,8 +600,12 @@ function AssetsView() {
         })}
       </div>
 
-      {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理 */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-3" style={{ scrollbarGutter: "stable" }}>
+      {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理。
+          首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
+      <div
+        className="flex-1 min-h-0 px-4 pb-3"
+        style={{ scrollbarGutter: "stable", overflow: loading ? "hidden" : "auto" }}
+      >
         <AssetGrid
           assets={items}
           folders={showFolderGrid ? gridFolders : undefined}
