@@ -17,7 +17,7 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
@@ -457,6 +457,7 @@ function AssetsView() {
     hasMore,
     loadMore,
     retry,
+    reload,
     appliedSearch,
   } = useAssetLibrary({
     enabled: true,
@@ -465,6 +466,16 @@ function AssetsView() {
     search,
     categories: typeFilter,
   });
+
+  // 资产条目在视图外变更（画布收藏 / 取消收藏等）时失效重拉当前视图。
+  // 用 ref 记录上次处理过的版本：挂载首帧与版本未变时不重复请求。
+  const libraryVersion = useAssetsStore((s) => s.libraryVersion);
+  const lastLibraryVersionRef = useRef(libraryVersion);
+  useEffect(() => {
+    if (libraryVersion === lastLibraryVersionRef.current) return;
+    lastLibraryVersionRef.current = libraryVersion;
+    reload();
+  }, [libraryVersion, reload]);
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
