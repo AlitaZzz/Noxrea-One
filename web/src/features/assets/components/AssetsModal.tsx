@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined, UserOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
 import { App, Input, Select, Tooltip, TreeSelect } from "antd";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +27,6 @@ import { downloadAsset } from "../download";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
 import AssetInspector from "./AssetInspector";
-import AssetNav from "./AssetNav";
 import AssetToolbar from "./AssetToolbar";
 import CreateFolderDialog from "./CreateFolderDialog";
 
@@ -51,7 +50,8 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const [activeScope, setActiveScope] = useState<AssetScope>("personal");
+  // 空间固定为个人库（当前只有该空间）；状态保留供查询链路使用，将来加回系统库时恢复切换即可。
+  const [activeScope] = useState<AssetScope>("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
   const uncategorizedFolder = getUncategorizedFolder(activeScope);
@@ -178,11 +178,19 @@ export default function AssetsModal({ open, onClose }: Props) {
   }, [multiMode, handleToggleSelect, handleCardSelect]);
 
   // 检查器单项详情的所在文件夹名；未分类目录使用本地化名称。
-  const inspectorFolderName = useMemo(() => {
+  // 检查器「位置」显示完整路径：根空间 + 祖先链 + 当前文件夹，与面包屑层级一致
+  const inspectorFolderPath = useMemo(() => {
     if (selectedAssets.length !== 1) return undefined;
-    const folder = folders.find((item) => item.id === selectedAssets[0].folderId);
-    if (!folder) return undefined;
-    return folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name;
+    const folderId = selectedAssets[0].folderId;
+    if (!folderId) return t("asset.spacePersonal");
+    const names: string[] = [];
+    let cur = folders.find((f) => f.id === folderId);
+    while (cur) {
+      names.unshift(cur.kind === "uncategorized" ? t("asset.uncategorized") : cur.name);
+      const parentId = cur.parentId;
+      cur = parentId ? folders.find((f) => f.id === parentId) : undefined;
+    }
+    return [t("asset.spacePersonal"), ...names].join(" / ");
   }, [selectedAssets, folders, t]);
 
   const handleUpdateTags = useCallback(async (asset: AssetItem, tags: string[]) => {
@@ -458,16 +466,6 @@ export default function AssetsModal({ open, onClose }: Props) {
     setDeleteFolder(null);
   }, [deleteFolder, removeFolder, activeFolderId, folders]);
 
-  const handleSelectScope = useCallback((scope: AssetScope) => { setActiveScope(scope); setActiveFolderId(null); setSelectedIds(new Set()); setMultiSelectMode(false); }, []);
-  const handleSelectFolder = useCallback((id: string | null) => { setActiveFolderId(id); setSelectedIds(new Set()); setMultiSelectMode(false); }, []);
-
-  const spaceLabels = useMemo(
-    () => [
-      { key: "personal" as AssetScope, label: t("asset.spacePersonal"), icon: <UserOutlined /> },
-    ],
-    [t],
-  );
-
   // Breadcrumb data
   const breadCrumb = useMemo((): AssetFolder[] => {
     if (!activeFolderId) return [];
@@ -541,23 +539,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           }
         `}</style>
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
-          {/* Left sidebar：与横线下缘保留 12px 间距（header 自身的 16px 在横线上方） */}
-          <div
-            className="flex flex-col pt-3 pb-4 border-r shrink-0 px-3"
-            style={{ borderColor: "var(--canvas-border)" }}
-          >
-            <AssetNav
-              scopes={spaceLabels}
-              activeScope={activeScope}
-              activeFolderId={activeFolderId}
-              onSelectScope={handleSelectScope}
-              onSelectFolder={handleSelectFolder}
-              folders={folders}
-              folderCounts={folderCounts}
-            />
-          </div>
-
-          {/* Right main content：顶部间距同左栏，三栏对齐 */}
+          {/* Main content：面包屑/工具条、批量条与网格 */}
           <div className="flex-1 flex flex-col pt-3 pb-4 min-w-0">
             {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
             <div className="flex items-center gap-2 mb-3 flex-shrink-0 px-3">
@@ -733,7 +715,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           >
             <AssetInspector
               assets={selectedAssets}
-              folderName={inspectorFolderName}
+              folderPath={inspectorFolderPath}
               onInsert={handleInsertCanvas}
               onRenameConfirm={handleRenameConfirm}
               onSingleDelete={handleDelete}
