@@ -34,6 +34,7 @@ import { type ModelOption } from "@/lib/types/models";
 
 import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
+import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { writeOrderPref } from "../shared/ref-order";
@@ -57,7 +58,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const saved = useMemo(() => {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
-    const mk = s.modelKey || allModels[0]?.value || "";
+    const mk = s.modelKey || readLastModel("video", allModels) || allModels[0]?.value || "";
     const entry = allModels.find((m) => m.value === mk);
     const mp = entry ? findModelParams(entry.providerId, entry.name, "video") : null;
     const d = mp ? fieldDefaults(mp.fields) : {};
@@ -152,6 +153,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       }
     }
     setModelKey(value);
+    recordLastModel("video", value);
     setModelOpen(false);
   };
 
