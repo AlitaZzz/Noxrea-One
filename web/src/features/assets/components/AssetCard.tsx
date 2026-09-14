@@ -1,17 +1,15 @@
 /**
  * 单个资产卡片。
  * 上半部分为正方形封面（图片 / 视频抽帧 / 音频波形），名称与日期排在封面下方；
- * 悬停封面显示暗色蒙层与「插入画布」快捷按钮，右上角为多选勾选框（悬停显示、选中常驻）。
- * 单击卡片本体 = 选中该项（右侧检查器展示详情）；单击勾选框 = 增减多选。
+ * 右上角为多选勾选框（悬停显示、选中常驻）。
+ * 单击卡片本体 = 选中该项（右侧检查器展示详情），双击 = 插入画布；单击勾选框 = 增减多选。
  * 抽屉场景不传选择回调，卡片本体点击直接插入画布。
  */
 "use client";
 
-import { CheckOutlined, PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { CheckOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { PauseCircleFilled, PlayCircleFilled } from "@ant-design/icons";
-import { Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import type { AssetItem } from "@/features/assets/types";
@@ -47,7 +45,6 @@ export default function AssetCard({
   onToggleSelect,
   onInsertCanvas,
 }: Props) {
-  const { t } = useTranslation();
   const preview = useAssetHoverPreview(hoverPreviewAnchorX);
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -122,6 +119,10 @@ export default function AssetCard({
         if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
         else onInsertCanvas?.(asset);
       }}
+      onDoubleClick={(e) => {
+        // 勾选框 / 音频播放等内部按钮连点会冒泡到这里，不应触发插入
+        if (selectable && !(e.target as HTMLElement).closest("button")) onInsertCanvas?.(asset);
+      }}
     >
       {/* 封面区 */}
       <div
@@ -154,19 +155,6 @@ export default function AssetCard({
             <PictureOutlined style={{ fontSize: 32, color: "rgba(255,255,255,0.15)" }} />
           </div>
         )}
-
-        {/* 悬停蒙层 + 快速插入 */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
-          <Tooltip title={t("asset.addToCanvas")}>
-            <button
-              type="button"
-              className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
-              onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
-            >
-              <PlusOutlined />
-            </button>
-          </Tooltip>
-        </div>
 
         {/* 多选勾选框：未选中仅悬停显示，选中后常驻白色实底（与全局中性 Checkbox 一致） */}
         {selectable && onToggleSelect && (
