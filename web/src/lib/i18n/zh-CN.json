@@ -43,7 +43,8 @@
     "available": "可用（点击启用）",
     "saved": "已保存",
     "zoom": "缩放",
-    "fit": "适应屏幕"
+    "fit": "适应屏幕",
+    "noData": "暂无数据"
   },
   "param": {
     "quality": "质量",
@@ -148,10 +149,10 @@
     "creationCharacterFace": "角色面部三视图",
     "creationCharacterThreeView": "角色三视图",
     "creationNineGrid": "多机位九宫格",
-   "creation25Grid": "25宫格剧情分镜",
-   "creation4Grid": "剧情推演四宫格",
-   "creationForward3s": "画面推演 - 3S后",
-   "creationBack5s": "画面推演 - 5S前",
+    "creation25Grid": "25宫格剧情分镜",
+    "creation4Grid": "剧情推演四宫格",
+    "creationForward3s": "画面推演 - 3S后",
+    "creationBack5s": "画面推演 - 5S前",
     "previewFullscreen": "预览",
     "previewPrev": "上一张",
     "previewNext": "下一张",
@@ -276,7 +277,7 @@
     "spacePersonal": "个人资产库",
     "spaceReusable": "系统资产库",
     "search": "搜索资产...",
-    "uncategorized": "未分类",
+    "uncategorized": "待分类资产",
     "create": "新建",
     "batchDelete": "批量删除",
     "batchDeleteWarn": "确定删除选中的 {{count}} 项资产吗？删除后不可恢复。",
@@ -692,7 +693,7 @@
       "invalid_asset_id": "素材 ID 非法",
       "asset_not_found": "素材不存在",
       "duplicate_source_url": "该素材已在资产库中",
-      "uncategorized_folder_protected": "「未分类」目录不可修改或删除",
+      "uncategorized_folder_protected": "「待分类资产」目录不可修改或删除",
       "batch_too_large": "一次最多提交 {{limit}} 个素材，请分批上传"
     },
     "models": {
