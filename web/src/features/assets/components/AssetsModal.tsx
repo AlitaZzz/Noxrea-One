@@ -17,6 +17,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
+import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
 import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -79,8 +80,9 @@ export default function AssetsModal({ open, onClose }: Props) {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [batchMoveOpen, setBatchMoveOpen] = useState(false);
   const [batchMoveTarget, setBatchMoveTarget] = useState<string | undefined>(undefined);
-  const [batchMoveQuery, setBatchMoveQuery] = useState("");
   const [batchMoving, setBatchMoving] = useState(false);
+  // 移动弹窗文件夹树的搜索态（命中片段高亮，逻辑见 use-tree-match）
+  const { query: moveTreeQuery, onSearch: onMoveTreeSearch, reset: resetMoveTreeSearch } = useTreeMatchTitle();
   const [batchTypeOpen, setBatchTypeOpen] = useState(false);
   const [batchTypeValue, setBatchTypeValue] = useState<AssetType | undefined>(undefined);
   const [batchTypeSaving, setBatchTypeSaving] = useState(false);
@@ -157,9 +159,9 @@ export default function AssetsModal({ open, onClose }: Props) {
   const multiMode = multiSelectMode || bulkOpen;
   const openBatchMove = useCallback(() => {
     setBatchMoveTarget(undefined);
-    setBatchMoveQuery("");
+    resetMoveTreeSearch();
     setBatchMoveOpen(true);
-  }, []);
+  }, [resetMoveTreeSearch]);
   const handleToggleMultiMode = useCallback(() => {
     if (multiSelectMode) setSelectedIds(new Set());
     setMultiSelectMode(!multiSelectMode);
@@ -307,22 +309,20 @@ export default function AssetsModal({ open, onClose }: Props) {
   // 移动弹窗的目标树：未分类固定在首位（根级叶子），普通文件夹递归构建；
   // 当前所在文件夹禁选（移入自己无意义）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
   // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
+  // title 始终返回元素：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
+  const renderMoveTitle = useCallback((name: string) => {
+    const m = splitMatch(name, moveTreeQuery);
+    if (!m) return <>{name}</>;
+    return (
+      <>
+        {m.pre}
+        <span className="ant-select-tree-match">{m.hit}</span>
+        {m.post}
+      </>
+    );
+  }, [moveTreeQuery]);
   const moveFolderTreeData = useMemo(() => {
     type FolderNode = { value: string; title: ReactNode; label: string; disabled?: boolean; children?: FolderNode[] };
-    const q = batchMoveQuery.trim().toLowerCase();
-    // 始终返回节点而非字符串：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
-    const renderTitle = (name: string): ReactNode => {
-      if (!q) return <>{name}</>;
-      const idx = name.toLowerCase().indexOf(q);
-      if (idx < 0) return <>{name}</>;
-      return (
-        <>
-          {name.slice(0, idx)}
-          <span className="ant-select-tree-match">{name.slice(idx, idx + q.length)}</span>
-          {name.slice(idx + q.length)}
-        </>
-      );
-    };
     const normal = folders.filter((f) => f.scope === activeScope && f.kind === "normal");
     function build(parentId: string | undefined): FolderNode[] {
       return normal
@@ -332,7 +332,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           const node: FolderNode = {
             value: f.id,
             label: f.name,
-            title: renderTitle(f.name),
+            title: renderMoveTitle(f.name),
             disabled: f.id === activeFolderId,
           };
           if (children.length > 0) node.children = children;
@@ -344,12 +344,12 @@ export default function AssetsModal({ open, onClose }: Props) {
       roots.unshift({
         value: uncategorizedFolder.id,
         label: t("asset.uncategorized"),
-        title: renderTitle(t("asset.uncategorized")),
+        title: renderMoveTitle(t("asset.uncategorized")),
         disabled: uncategorizedFolder.id === activeFolderId,
       });
     }
     return roots;
-  }, [folders, activeScope, activeFolderId, uncategorizedFolder, batchMoveQuery, t]);
+  }, [folders, activeScope, activeFolderId, uncategorizedFolder, renderMoveTitle, t]);
 
   // --- Handlers ---
 
@@ -840,7 +840,8 @@ export default function AssetsModal({ open, onClose }: Props) {
             placeholder={t("asset.folderPickerPlaceholder")}
             allowClear
             showSearch
-            onSearch={setBatchMoveQuery}
+            notFoundContent={t("common.noData")}
+            onSearch={onMoveTreeSearch}
             treeDefaultExpandAll
             listHeight={280}
             treeNodeFilterProp="label"

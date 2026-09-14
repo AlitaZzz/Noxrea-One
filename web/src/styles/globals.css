@@ -320,6 +320,10 @@
   line-height: 24px;
   color: var(--canvas-text);
 }
+/* 弹窗标题是纯展示文本，禁止选中拖蓝 */
+.ant-modal-title {
+  user-select: none;
+}
 .app-dialog .ant-modal-body {
   padding: 16px 24px 0 !important;
 }
@@ -410,6 +414,32 @@
   margin-bottom: -100vh;
   background: color-mix(in srgb, var(--canvas-bg) 55%, transparent);
   pointer-events: none;
+}
+/* 上传弹窗：拖放区卡片，悬停提亮一格 */
+.upload-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 130px;
+  height: 130px;
+  border: 2px dashed var(--canvas-border);
+  border-radius: 8px;
+  background: var(--canvas-bg-elevated);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.upload-drop-zone:hover {
+  background: var(--canvas-bg-hover);
+}
+/* 上传弹窗：已选文件卡片 */
+.upload-file-card {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--canvas-bg-elevated);
 }
 /* 暗色算法下 filter-node 标题与选中节点底色都由主色派生（青柠），统一改回中性 */
 .ant-select-tree .ant-select-tree-node-content-wrapper.ant-select-tree-node-selected {

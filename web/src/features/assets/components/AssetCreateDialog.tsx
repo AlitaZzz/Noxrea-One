@@ -6,14 +6,15 @@
 "use client";
 
 import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Progress, Select } from "antd";
-import { type ReactNode,useCallback, useEffect,useRef, useState } from "react";
+import { App, Progress, Select, TreeSelect } from "antd";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
+import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
 import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { runMediaUpload } from "@/features/canvas/upload";
@@ -74,8 +75,6 @@ function deriveAssetName(fileName: string): string {
   return fallback.slice(0, ASSET_NAME_MAX_LENGTH);
 }
 
-
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -91,6 +90,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const [saveFolderId, setSaveFolderId] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 保存位置文件夹树的搜索态（命中片段高亮，逻辑见 use-tree-match）
+  const { query: folderTreeQuery, onSearch: onTreeSearch, reset: resetTreeSearch } = useTreeMatchTitle();
 
   const updateFile = useCallback((id: string, partial: Partial<UploadFile>) => {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...partial } : f)));
@@ -174,6 +175,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     setCategory("other");
     setSaveFolderId(undefined);
     setSaving(false);
+    resetTreeSearch();
   };
 
   const addFiles = useCallback(async (newFiles: FileList | File[]) => {
@@ -337,38 +339,56 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "uploading");
   const saveDisabled = files.length === 0 || hasActiveWork;
 
+  // 保存位置树：个人空间为根（选根 = 不入文件夹），普通文件夹递归构建；
+  // 与移动弹窗同一套可搜索折叠 TreeSelect，目录增长后仍可定位。
+  // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
+  // title 始终返回元素：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
+  const renderFolderTitle = useCallback((name: string) => {
+    const m = splitMatch(name, folderTreeQuery);
+    if (!m) return <>{name}</>;
+    return (
+      <>
+        {m.pre}
+        <span className="ant-select-tree-match">{m.hit}</span>
+        {m.post}
+      </>
+    );
+  }, [folderTreeQuery]);
+  const folderTreeData = useMemo(() => {
+    type FolderNode = { value: string; title: ReactNode; label: string; children?: FolderNode[] };
+    function build(parentId: string | undefined): FolderNode[] {
+      return (folders || [])
+        .filter((f) => f.scope === "personal" && f.kind === "normal" && (f.parentId || undefined) === parentId)
+        .map((f) => {
+          const children = build(f.id);
+          const node: FolderNode = { value: f.id, label: f.name, title: renderFolderTitle(f.name) };
+          if (children.length > 0) node.children = children;
+          return node;
+        });
+    }
+    return [{ value: "__root__", label: t("asset.spacePersonal"), title: renderFolderTitle(t("asset.spacePersonal")), children: build(undefined) }];
+  }, [folders, renderFolderTitle, t]);
+
   return (
     <AppModal
-      title={<span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.uploadTitle")}</span>}
+      title={t("asset.uploadTitle")}
       open={open}
       onCancel={() => { reset(); onClose(); }}
-      footer={null}
-      width={780}
       centered
+      global
+      flush
+      className="app-dialog"
       destroyOnHidden
-      className="asset-dialog"
-      styles={{
-        header: { background: "var(--canvas-bg)" },
-        body: { background: "var(--canvas-bg)", padding: 0 },
-      }}
-      closeIcon={<span style={{ color: "var(--canvas-text-dim)" }}>✕</span>}
+      width={780}
+      footer={
+        <div className="app-dialog-footer">
+          <AppButton onClick={() => { reset(); onClose(); }}>{t("common.cancel")}</AppButton>
+          <AppButton variant="primary" loading={saving} disabled={saveDisabled} onClick={handleSave}>
+            {t("common.save")}
+          </AppButton>
+        </div>
+      }
     >
-      <style>{`
-        .asset-dialog .ant-input:hover,
-        .asset-dialog .ant-input:focus,
-        .upload-drop-zone:hover {
-          background: var(--canvas-bg-hover) !important;
-        }
-        .asset-dialog .ant-select.ant-select { height: 36px !important; }
-        .asset-dialog .ant-select-selector.ant-select-selector {
-          background: var(--canvas-bg) !important;
-          border-color: var(--canvas-border) !important;
-          color: var(--canvas-text) !important;
-          border-radius: 8px !important;
-          font-size: 13px !important;
-          height: 36px !important;
-        }
-      `}</style>
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -384,128 +404,98 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
       <div className="flex" style={{ height: 440 }}>
         {/* Left — upload zone + preview */}
-        <div className="flex-1 flex flex-col p-4 min-w-0">
-          <div
-            className="overflow-auto flex-1"
-          >
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="overflow-auto flex-1">
             <div className="flex flex-wrap" style={{ gap: 12 }}>
               {/* Drop zone — always first card */}
               <div
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => fileInputRef.current?.click()}
-                className="upload-drop-zone flex items-center justify-center border-2 border-dashed rounded-lg cursor-pointer transition-colors shrink-0"
-                style={{
-                  borderColor: "var(--canvas-border)",
-                  background: "var(--canvas-bg-elevated)",
-                  width: 130,
-                  height: 130,
-                }}
+                className="upload-drop-zone shrink-0"
               >
                 <PlusOutlined style={{ fontSize: 28, color: "var(--canvas-text-muted)" }} />
               </div>
 
               {/* Uploaded files */}
               {files.map((f) => (
-                <div
-                  key={f.id}
-                  className="relative group rounded-lg overflow-hidden border border-white/10 shrink-0"
-                  style={{ background: "var(--canvas-bg-elevated)", width: 130, height: 130 }}
-                >
-                {isImage(f.file) ? (
-                  <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" className="w-full h-full object-cover" />
-                ) : isVideo(f.file) ? (
-                  <div className="w-full h-full relative flex items-center justify-center bg-black/50">
-                    {f.url ? (
-                      <img
-                        src={`${f.url}?w=200`}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                <div key={f.id} className="upload-file-card group shrink-0">
+                  {isImage(f.file) ? (
+                    <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" className="w-full h-full object-cover" />
+                  ) : isVideo(f.file) ? (
+                    <div className="w-full h-full relative flex items-center justify-center bg-black/50">
+                      {f.url ? (
+                        <img
+                          src={`${f.url}?w=200`}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : null}
+                      <PlayCircleOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.7)", position: "relative", zIndex: 1 }} />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <WaveIcon style={{ fontSize: 36, color: "rgba(255,255,255,0.3)" }} />
+                    </div>
+                  )}
+
+                  {/* 上传进行中 → 进度圈 */}
+                  {f.status === "uploading" && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      {/* percent 到 100 时 antd 会自动切到 success 并画对勾；
+                          此处字节发完仍在等服务端落盘，显式指定 active 保持百分比显示 */}
+                      <Progress
+                        type="circle"
+                        percent={f.uploadProgress}
+                        size={48}
+                        strokeColor="#fff"
+                        railColor="rgba(255,255,255,0.2)"
+                        status="active"
                       />
-                    ) : null}
-                    <PlayCircleOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.7)", position: "relative", zIndex: 1 }} />
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <WaveIcon style={{ fontSize: 36, color: "rgba(255,255,255,0.3)" }} />
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {/* 上传进行中 → 进度圈 */}
-                {f.status === "uploading" && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    {/* percent 到 100 时 antd 会自动切到 success 并画对勾；
-                        此处字节发完仍在等服务端落盘，显式指定 active 保持百分比显示 */}
-                    <Progress
-                      type="circle"
-                      percent={f.uploadProgress}
-                      size={48}
-                      strokeColor="#fff"
-                      railColor="rgba(255,255,255,0.2)"
-                      status="active"
-                    />
+                  {f.status === "error" && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-red-400 text-xs">
+                      {t("file.uploadFailed")}
+                    </div>
+                  )}
+
+                  {f.status === "done" && (
+                    <button
+                      className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer hover:bg-white hover:text-[#1d1d21]"
+                      onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
+                    >
+                      <CloseOutlined style={{ fontSize: 10 }} />
+                    </button>
+                  )}
+
+                  <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 bg-gradient-to-t from-black/80 to-transparent">
+                    <div className="text-white/70 text-[10px] truncate">{f.file.name}</div>
                   </div>
-                )}
-
-                {f.status === "error" && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-red-400 text-xs">
-                    Upload failed
-                  </div>
-                )}
-
-                {f.status === "done" && (
-                  <button
-                    className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
-                    onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "var(--canvas-accent)"}
-                    onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = ""}
-                    onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
-                  >
-                    <CloseOutlined style={{ fontSize: 10 }} />
-                  </button>
-                )}
-
-                <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 bg-gradient-to-t from-black/80 to-transparent">
-                  <div className="text-white/70 text-[10px] truncate">{f.file.name}</div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Right — settings panel */}
-        <div
-          className="flex flex-col w-52 shrink-0 border-l p-4 gap-5"
-          style={{ borderColor: "var(--canvas-border)" }}
-        >
+        <div className="flex flex-col w-52 shrink-0 border-l p-4 gap-5" style={{ borderColor: "var(--canvas-border)" }}>
           {/* Save location */}
           <div>
             <label className="block text-xs text-white/40 mb-2">{t("asset.saveLocation")}</label>
-            <Select
+            <TreeSelect
               value={saveFolderId ?? "__root__"}
               onChange={(v) => setSaveFolderId(v === "__root__" ? undefined : v)}
-              getPopupContainer={(t) => t.parentElement || document.body}
               style={{ width: "100%" }}
-              options={(() => {
-                const opts: { value: string; label: ReactNode }[] = [
-                  { value: "__root__", label: <span>{t("asset.spacePersonal")}</span> },
-                ];
-                const build = (parentId: string | undefined, depth: number) => {
-                  const children = (folders || []).filter(
-                    (f) => f.scope === "personal" && f.kind === "normal" && (f.parentId || undefined) === parentId,
-                  );
-                  for (const f of children) {
-                    opts.push({
-                      value: f.id,
-                      label: <span style={{ whiteSpace: "pre" }}>{"  ".repeat(depth + 1) + f.name}</span>,
-                    });
-                    build(f.id, depth + 1);
-                  }
-                };
-                build(undefined, 0);
-                return opts;
-              })()}
+              showSearch
+              notFoundContent={t("common.noData")}
+              onSearch={onTreeSearch}
+              treeDefaultExpandAll
+              listHeight={280}
+              treeNodeFilterProp="label"
+              treeData={folderTreeData}
             />
           </div>
 
@@ -515,25 +505,9 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
             <Select
               value={category}
               onChange={(v) => setCategory(v)}
-              getPopupContainer={(t) => t.parentElement || document.body}
-              options={ASSET_TYPE_OPTIONS.map((opt) => ({
-                value: opt.value,
-                label: <span>{t(opt.labelKey)}</span>,
-              }))}
+              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
               style={{ width: "100%" }}
             />
-          </div>
-
-          <div className="flex-1" />
-
-          {/* Bottom buttons */}
-          <div className="flex flex-col gap-2">
-            <AppButton block variant="primary" onClick={handleSave} disabled={saveDisabled} loading={saving}>
-              {t("common.save")}
-            </AppButton>
-            <AppButton block onClick={() => { reset(); onClose(); }}>
-              {t("common.cancel")}
-            </AppButton>
           </div>
         </div>
       </div>
