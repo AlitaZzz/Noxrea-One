@@ -3,25 +3,31 @@
  * 上半部分为正方形封面（图片 / 视频抽帧 / 音频波形），名称与日期排在封面下方；
  * 右上角为多选勾选框（悬停显示、选中常驻）。
  * 单击卡片本体 = 选中该项（右侧检查器展示详情），双击 = 插入画布；单击勾选框 = 增减多选。
- * 抽屉场景不传选择回调，卡片本体点击直接插入画布。
+ * 抽屉场景不传选择回调：单击不作为，插入走悬停中央「+」（showInsertButton）/ 双击 / Enter。
  */
 "use client";
 
-import { CheckOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { CheckOutlined, PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { PauseCircleFilled, PlayCircleFilled } from "@ant-design/icons";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
 
 import { AssetHoverPreview, useAssetHoverPreview } from "./AssetHoverPreview";
 
 interface Props {
   asset: AssetItem;
-  /** 抽屉场景关闭多选与选择能力，卡片本体点击直接插入画布。 */
+  /** 抽屉场景关闭多选与选择能力：单击不作为，插入走悬停「+」/ 双击 / Enter。 */
   selectable?: boolean;
   /** 是否启用悬浮大图预览，保持抽屉既有的快速查看体验。 */
   showHoverPreview?: boolean;
+  /** 悬停显示中央「+」插入按钮（抽屉等插入为第一意图的场景）；弹窗管理场景不传。 */
+  showInsertButton?: boolean;
+  /** 允许拖拽到画布插入（抽屉场景传入）；拖拽数据为 ASSET_DRAG_TYPE + AssetItem JSON。 */
+  draggable?: boolean;
   /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
   hoverPreviewAnchorX?: number;
   selected?: boolean;
@@ -38,6 +44,8 @@ export default function AssetCard({
   asset,
   selectable = true,
   showHoverPreview = false,
+  showInsertButton = false,
+  draggable = false,
   hoverPreviewAnchorX = 0,
   selected,
   selectMode = false,
@@ -45,6 +53,7 @@ export default function AssetCard({
   onToggleSelect,
   onInsertCanvas,
 }: Props) {
+  const { t } = useTranslation();
   const preview = useAssetHoverPreview(hoverPreviewAnchorX);
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -88,7 +97,7 @@ export default function AssetCard({
     if (playing) stopAudio();
   };
 
-  /** Enter / 空格：弹窗内单选，抽屉内直接插入画布。 */
+  /** Enter / 空格：弹窗内单选，抽屉内插入画布（键盘用户的插入路径）。 */
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
@@ -112,16 +121,26 @@ export default function AssetCard({
       aria-label={asset.name}
       aria-pressed={selected}
       onKeyDown={handleKeyDown}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return;
+        e.dataTransfer.effectAllowed = "copy";
+        // 自定义标记承载完整资产信息（画布落点据此建节点），text/plain 兜底浏览器默认行为
+        e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
+        e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
+      }}
+      // 拖拽结束清掉可能残留的悬浮大图预览
+      onDragEnd={preview.onLeave}
       className="group rounded-lg transition-all cursor-pointer outline-none"
       onMouseLeave={handleCardLeave}
       onMouseEnter={(event) => { if (showHoverPreview && sourceUrl) preview.onEnter(asset, event); }}
       onClick={(e) => {
+        // 弹窗：单击选中；抽屉：单击不作为，插入走悬停「+」/ 双击 / Enter，避免误触
         if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
-        else onInsertCanvas?.(asset);
       }}
       onDoubleClick={(e) => {
         // 勾选框 / 音频播放等内部按钮连点会冒泡到这里，不应触发插入
-        if (selectable && !(e.target as HTMLElement).closest("button")) onInsertCanvas?.(asset);
+        if (!(e.target as HTMLElement).closest("button")) onInsertCanvas?.(asset);
       }}
     >
       {/* 封面区 */}
@@ -172,6 +191,20 @@ export default function AssetCard({
           >
             {selected && <CheckOutlined style={{ fontSize: 11, color: "#1d1d21", fontWeight: 700 }} />}
           </button>
+        )}
+
+        {/* 悬停蒙层 + 快速插入：仅插入为第一意图的抽屉场景显示 */}
+        {showInsertButton && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
+            <button
+              type="button"
+              aria-label={t("asset.addToCanvas")}
+              className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
+            >
+              <PlusOutlined />
+            </button>
+          </div>
         )}
 
         {showHoverPreview && (

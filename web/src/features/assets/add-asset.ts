@@ -18,6 +18,12 @@ export type FindFreePosition = (
 ) => { x: number; y: number };
 
 /**
+ * 资产卡片拖入画布时 dataTransfer 上的自定义标记（值为 AssetItem 的 JSON）。
+ * 拖拽源（资产抽屉卡片）与落点（画布 useFileDrop）共用此常量。
+ */
+export const ASSET_DRAG_TYPE = "application/x-asset";
+
+/**
  * 根据资产创建画布节点（纯函数，不直接操作 store）。
  *
  * 以 AssetsModal 原有逻辑为准，统一处理图片/视频/音频节点创建、尺寸计算与字段填充。
