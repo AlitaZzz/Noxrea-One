@@ -457,6 +457,7 @@ function AssetsView() {
     hasMore,
     loadMore,
     retry,
+    appliedSearch,
   } = useAssetLibrary({
     enabled: true,
     scope: "personal",
@@ -500,7 +501,8 @@ function AssetsView() {
     return uncategorizedFolder ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders] : childFolders;
   }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t, lang]);
 
-  const showFolderGrid = typeFilter.length === 0 && !search.trim();
+  // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
+  const showFolderGrid = typeFilter.length === 0 && !appliedSearch.trim();
 
   return (
     <div className="flex flex-col h-full">
