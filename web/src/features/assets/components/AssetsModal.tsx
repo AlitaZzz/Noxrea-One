@@ -301,6 +301,9 @@ export default function AssetsModal({ open, onClose }: Props) {
       : childFolders;
   }, [activeFolderId, getChildFolders, uncategorizedFolder, activeScope, t]);
 
+  // 文件夹只在无分类筛选、无搜索词时参与网格。
+  const gridShowFolders = categories.length === 0 && !search.trim();
+
   // 移动弹窗的目标树：未分类固定在首位（根级叶子），普通文件夹递归构建；
   // 当前所在文件夹禁选（移入自己无意义）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
   // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
@@ -703,7 +706,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             <div className="flex-1 overflow-auto min-h-0 px-3" style={{ scrollbarGutter: "stable" }} ref={gridRef}>
               <AssetGrid
                 assets={items}
-                folders={categories.length === 0 && !search.trim() ? gridFolders : undefined}
+                folders={gridShowFolders ? gridFolders : undefined}
                 folderCounts={folderCounts}
                 selectedIds={selectedIds}
                 selectMode={multiMode}

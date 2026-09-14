@@ -397,6 +397,20 @@
   color: var(--canvas-solid);
   font-weight: 600;
 }
+/* 网格刷新态：sticky 占满视口高度再用负边距归零布局占位，转圈始终钉在可视区正中；
+   放在滚动内容内部，弹窗与抽屉两个 AssetGrid 使用方都生效。不拦截点击。 */
+.grid-loading-overlay {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin-bottom: -100vh;
+  background: color-mix(in srgb, var(--canvas-bg) 55%, transparent);
+  pointer-events: none;
+}
 /* 暗色算法下 filter-node 标题与选中节点底色都由主色派生（青柠），统一改回中性 */
 .ant-select-tree .ant-select-tree-node-content-wrapper.ant-select-tree-node-selected {
   background-color: var(--canvas-bg-hover) !important;
