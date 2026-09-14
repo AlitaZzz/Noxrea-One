@@ -99,6 +99,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     retry,
     removeItems,
     setItems,
+    appliedSearch,
   } = useAssetLibrary({
     enabled: open,
     scope: activeScope,
@@ -312,7 +313,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   }, [activeFolderId, getChildFolders, uncategorizedFolder, activeScope, t]);
 
   // 文件夹只在无分类筛选、无搜索词时参与网格。
-  const gridShowFolders = categories.length === 0 && !search.trim();
+  // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
+  const gridShowFolders = categories.length === 0 && !appliedSearch.trim();
 
   // 移动弹窗的目标树：未分类固定在首位（根级叶子），普通文件夹递归构建；
   // 当前所在文件夹禁选（移入自己无意义）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。

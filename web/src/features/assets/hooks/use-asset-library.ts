@@ -30,6 +30,8 @@ export interface AssetLibraryState {
   loadMore: () => void;
   /** 加载失败重试：已有首页结果时重拉下一页，否则重拉首页。 */
   retry: () => void;
+  /** 实际生效的搜索词：输入经防抖，清空立即生效。渲染层据此与查询保持同一信号。 */
+  appliedSearch: string;
   /** 删除成功后的本地同步：剔除列表项与计数，随后立即补页填满当前窗口。 */
   removeItems: (ids: string[]) => Promise<void>;
   setItems: React.Dispatch<React.SetStateAction<AssetItem[]>>;
@@ -67,23 +69,30 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     () => (categoriesKey ? categoriesKey.split(",") as AssetType[] : []),
     [categoriesKey],
   );
-  const isRootBrowse = folderId === null && !debouncedSearch.trim() && categories.length === 0;
+  // 生效搜索词：清空瞬间即取新值（不等防抖），输入时仍沿用防抖值。
+  const appliedSearch = search.trim() ? debouncedSearch : "";
+  const isRootBrowse = folderId === null && !appliedSearch.trim() && categories.length === 0;
   const queryKey = useMemo(
-    () => [scope, folderId ?? "root", debouncedSearch, categoriesKey].join("\u0000"),
-    [categoriesKey, folderId, scope, debouncedSearch],
+    () => [scope, folderId ?? "root", appliedSearch, categoriesKey].join("\u0000"),
+    [categoriesKey, folderId, scope, appliedSearch],
   );
   const requestArgs = useMemo(
     () => ({
       scope,
       folderId: folderId ?? undefined,
-      search: debouncedSearch,
+      search: appliedSearch,
       category: stableCategories.length > 0 ? stableCategories : "all",
     }),
-    [folderId, scope, debouncedSearch, stableCategories],
+    [folderId, scope, appliedSearch, stableCategories],
   );
 
   // 搜索输入先防抖再进入 query key；输入期间沿用旧结果，不打断浏览。
+  // 清空立即生效（回到根目录浏览无需等待），否则旧搜索结果会与文件夹网格短暂叠加。
   useEffect(() => {
+    if (!search.trim()) {
+      setDebouncedSearch(search);
+      return;
+    }
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [search]);
@@ -262,6 +271,7 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     reload,
     loadMore,
     retry,
+    appliedSearch,
     removeItems,
     setItems,
     setTotalCount,
