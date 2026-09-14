@@ -111,6 +111,11 @@ router.put("/api/canvas/projects/:id", async (c) => {
   if (!parsed.success) {
     return failCode(422, "common.invalid_request");
   }
+  // 版本校验只服务画布内容：带 canvasData 的保存必须携带 baseRevision，
+  // 否则会绕过冲突检查直写；纯改名不参与版本判定，允许省略。
+  if (parsed.data.canvasData !== undefined && parsed.data.baseRevision === undefined) {
+    return failCode(422, "common.invalid_request");
+  }
 
   try {
     const project = await updateProject(id, auth.user.id, {
@@ -124,7 +129,8 @@ router.put("/api/canvas/projects/:id", async (c) => {
     if (!project) return failCode(404, "canvas.project_not_found");
     return c.json(ok(project));
   } catch (error) {
-    // 版本冲突携带当前 revision，前端可同步版本后继续保存，不会重复累计引用。
+    // 版本冲突携带当前 revision。前端同页写通道已串行化，409 即画布已在
+    // 其他标签页 / 浏览器被修改，据此弹「会话已过期」引导刷新。
     if (error instanceof CanvasRevisionConflictError) {
       return failCode(409, "canvas.project_revision_conflict", {
         revision: error.currentRevision,

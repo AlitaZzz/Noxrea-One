@@ -17,8 +17,10 @@ import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { clearDraft, saveDraft } from "@/features/project/draft-store";
+import { saveMutex } from "@/features/project/save-mutex";
+import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
-import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
+import { parseErrorBody } from "@/lib/api/error-message";
 
 type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
 
@@ -160,6 +162,14 @@ class SaveManager {
   private saving = false;
   /** 是否离线：离线时暂停自动保存，恢复在线后立即补存 */
   private offline = false;
+  /**
+   * 会话已过期：画布已在其他标签页 / 浏览器被修改（保存收到 409）。
+   * 同页写通道已由 saveMutex 串行化，409 不可能来自本窗口——停用一切后续保存，
+   * 本地改动继续写草稿，由过期弹窗引导用户刷新后经草稿恢复承接。
+   */
+  private expired = false;
+  /** 过期期间有新的本地改动：驱动草稿持续写入（保存请求已停用） */
+  private expiredDirty = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   /** 离线草稿写入的防抖定时器 */
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
@@ -191,6 +201,12 @@ class SaveManager {
   }
 
   private setDirty(delay: number): void {
+    // 过期后不发保存请求；本地改动仍驱动草稿持续写入，刷新后经草稿恢复承接。
+    if (this.expired) {
+      this.expiredDirty = true;
+      this.scheduleDraftWrite();
+      return;
+    }
     // NOTE: syncCanvasState 已移至 save() 中执行，避免拖动时每帧重建 projects 数组
     if (!this.dirty) {
       this.dirty = true;
@@ -215,7 +231,7 @@ class SaveManager {
     // 没有未落库的改动、也不在保存中 → 不需要草稿。
     // 关键：保存成功后 dirty 与 saving 均为 false，此时若仍有排队的 draftTimer 触发，
     // 会把「已落库的状态」重新写回本地，形成幽灵草稿，导致下次进入误报「有未保存编辑」。
-    if (!this.dirty && !this.saving) return;
+    if (!this.dirty && !this.saving && !this.expiredDirty) return;
     const activeId = useProjectStore.getState().activeProjectId;
     if (!activeId) return;
     const s = useCanvasStore.getState();
@@ -230,6 +246,7 @@ class SaveManager {
       snapToGrid: clean.snapToGrid,
       agentModel: s.agentModel ?? undefined,
     });
+    this.expiredDirty = false;
   }
 
   /** 立即保存最新状态（fire-and-forget；页面存活，故无需 keepalive） */
@@ -293,7 +310,7 @@ class SaveManager {
 
   /** 兜底保存的公共实现；保留空画布保护，防止误覆盖有效数据 */
   private flush(opts: { keepalive: boolean; skipUnauthorized: boolean }): void {
-    if (!this.dirty) return;
+    if (this.expired || !this.dirty) return;
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
@@ -326,18 +343,13 @@ class SaveManager {
     void this.save(opts.keepalive, opts.skipUnauthorized);
   }
 
-  /** 查询保存状态，供 UI 显示 */
-  get status(): { dirty: boolean; saving: boolean } {
-    return { dirty: this.dirty, saving: this.saving };
-  }
-
   // ==================== 内部实现 ====================
 
   private resetTimer(delay: number = SAVE_DELAY): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
     // 离线暂停自动保存：不排定时器，保持 dirty 等待 online 事件触发补存
-    if (this.offline) return;
+    if (this.offline || this.expired) return;
     if (this.saving) {
       this.pendingDelay = Math.min(this.pendingDelay, delay);
       return;
@@ -355,6 +367,7 @@ class SaveManager {
   }
 
   private async save(keepalive: boolean, skipUnauthorized = false): Promise<void> {
+    if (this.expired) return;
     if (this.saving) {
       // 并发保护：保存进行中绝不启动第二次。
       // 此前每次调用都重建 savePromise 并覆盖 resolveSave，先前的 flushAndWait()
@@ -379,15 +392,19 @@ class SaveManager {
         return;
       }
 
-      // 同步项目列表内存状态（从 setDirty 移至此处，避免拖动时每帧重建 projects 数组）
-      const s = useCanvasStore.getState();
-      useProjectStore.getState().syncCanvasState(
-        activeId, s.nodes, s.edges, getLiveViewport(),
-        s.background, s.theme, s.minimapVisible, s.snapToGrid, s.agentModel,
-      );
+      // 网络段进入写互斥锁：与项目重命名共用同一条串行通道，
+      // baseRevision 因此总在请求发出前一刻读取，同页 409 从构造上不可能发生。
+      await saveMutex.runExclusive(async () => {
+        // 同步项目列表内存状态（从 setDirty 移至此处，避免拖动时每帧重建 projects 数组）
+        const s = useCanvasStore.getState();
+        useProjectStore.getState().syncCanvasState(
+          activeId, s.nodes, s.edges, getLiveViewport(),
+          s.background, s.theme, s.minimapVisible, s.snapToGrid, s.agentModel,
+        );
 
-      const snapshot = takeCanvasSnapshot();
-      await this.saveToApi(activeId, snapshot, { keepalive, skipUnauthorized });
+        const snapshot = takeCanvasSnapshot();
+        await this.saveToApi(activeId, snapshot, { keepalive, skipUnauthorized });
+      });
     } catch (e) {
       console.error("[SaveManager] save failed:", e);
       this.dirty = true;
@@ -471,15 +488,18 @@ class SaveManager {
     if (!res.ok) {
       if (res.status === 401) return;
       if (res.status === 409) {
-        // 409 表示本请求基于旧版本；先同步服务端 revision，避免后续保存持续冲突。
+        // 409 即会话过期：同页写通道已由 saveMutex 串行化，冲突只可能来自
+        // 其他标签页 / 浏览器。立即把最新快照写入草稿（刷新后由草稿恢复框承接
+        // 未落库改动），停用本窗口的全部后续保存，由过期弹窗引导用户刷新。
         const body = parseErrorBody(await res.json().catch(() => null));
         const currentRevision = body?.ctx?.revision;
         if (typeof currentRevision === "number") {
           useProjectStore.getState().updateProjectRevision(projectId, currentRevision);
         }
-        // 服务端内容可能已经变化；清空指纹强制下一次保存重算引用账本。
+        // 服务端内容已经变化；清空指纹，刷新恢复后如继续编辑会重算引用账本。
         fingerprintMap.delete(projectId);
-        throw new Error(resolveApiError(body, res.status, "canvas.project_revision_conflict"));
+        this.markExpired();
+        return;
       }
       throw new Error(`[SaveManager] save failed: HTTP ${res.status}`);
     }
@@ -488,6 +508,21 @@ class SaveManager {
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
     useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
     void clearDraft(projectId);
+  }
+
+  /** 进入过期态：停用全部保存路径，立即固化草稿，交由过期弹窗引导刷新。 */
+  private markExpired(): void {
+    this.expired = true;
+    this.dirty = false;
+    this.expiredDirty = true;
+    this.pendingSave = null;
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    // dirty=false、saving=true 的时机下 writeDraft 的幽灵草稿 guard 恰好放行
+    void this.writeDraft();
+    useSessionExpiredStore.getState().markExpired();
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */
