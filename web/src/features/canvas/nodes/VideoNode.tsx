@@ -65,10 +65,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [playing, setPlaying] = useState(false);
   /**
    * 音量：0~1。= 0 等价于静音；切换静音时用 lastVolume 记住上次非零值。
-   * 默认静音自动播放（hover 行为），降低干扰；用户主动拖过滑块后保留偏好。
+   * 默认 50%（浏览器自动播放策略下 hover 预览大概率带声播放；被拦截时静默降级）。
+   * 用户主动拖过滑块后保留偏好（仅本次挂载）。
    */
-  const [volume, setVolume] = useState(0);
+  const [volume, setVolume] = useState(0.5);
   const [lastVolume, setLastVolume] = useState(0.5);
+  /**
+   * 自动播放被策略拦截时的静音降级标记（业界通行做法：带声 play() 被拒 →
+   * 静音重试保证 hover 预览仍会动）。用户点击播放 / 拖音量等手势交互即解除。
+   * state 而非直接改 el.muted：muted 受控于 React，绕过 state 会在重渲染后被回写。
+   */
+  const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   // Sync local src when data.src changes externally (e.g. from undo/clear),
@@ -82,6 +89,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    // 点击播放是用户手势：解除静音降级，允许带声播放
+    setAutoplayMuted(false);
     if (v.paused) { v.play(); setPlaying(true); }
     else { v.pause(); setPlaying(false); }
   }, []);
@@ -92,6 +101,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const clamped = Math.max(0, Math.min(1, value));
     if (v) v.volume = clamped;
     setVolume(clamped);
+    setAutoplayMuted(false);
     if (clamped > 0) setLastVolume(clamped);
   }, []);
 
@@ -137,7 +147,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     const v = videoRef.current;
     if (v && v.paused) {
-      v.play().then(() => setPlaying(true)).catch(() => {});
+      // 每次悬停都先尝试带声播放：浏览器对带声自动播放的放行条件是「页面有过任意交互」
+      // （粘性激活），交互过后重试即恢复有声；被拦截才降级为静音自动播放。
+      // 降级不做成粘性——否则首个节点会永久锁死在静音，直到用户手动碰音量。
+      v.muted = false;
+      setAutoplayMuted(false);
+      v.play().then(() => setPlaying(true)).catch(() => {
+        v.muted = true;
+        setAutoplayMuted(true);
+        v.play().then(() => setPlaying(true)).catch(() => {});
+      });
     }
   }, [capturingFrame]);
   const handleMouseLeave = useCallback(() => {
@@ -475,6 +494,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     videoCleanupRef.current?.();
     videoCleanupRef.current = null;
     videoRef.current = el;
+    // 元素挂载即同步默认音量：state 初值 0.5，但 DOM volume 默认是 1，不写会失配。
+    // 条件渲染链下元素可能晚于首个 effect 挂载，放在 ref 回调里才保证生效。
+    if (el) el.volume = 0.5;
     if (el) videoCleanupRef.current = registerVideoElement(id, el);
   }, [id]);
 
@@ -541,7 +563,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               src={src}
               className="absolute inset-0 w-full h-full rounded-lg"
               loop
-              muted={volume === 0}
+              muted={volume === 0 || autoplayMuted}
               playsInline
               preload="metadata"
               onTimeUpdate={onTimeUpdate}
