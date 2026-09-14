@@ -13,6 +13,7 @@ import {
   deleteSelection,
   getSelectedEdgeIds,
   getSelectedNodeIds,
+  hasGeneratingNode,
   pasteClipboard,
   redoAction,
   selectAllNodes,
@@ -20,6 +21,8 @@ import {
 } from "@/features/canvas/shared/canvas-edit-actions";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EventNames } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
 
 /**
  * Global keyboard shortcuts for the canvas.
@@ -112,16 +115,24 @@ export function useCanvasKeyboard() {
         window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
       }
 
-      // ---- Undo ----
+      // ---- Undo / Redo ----
+      // 生成中节点会全局禁用撤销/重做（避免波及 taskBinding），此前是静默拦截，
+      // 用户按了没反应会以为快捷键丢了——这里补一条提示。
       if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
-        undoAction();
+        if (hasGeneratingNode()) {
+          showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+        } else {
+          undoAction();
+        }
       }
-
-      // ---- Redo ----
       if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         e.preventDefault();
-        redoAction();
+        if (hasGeneratingNode()) {
+          showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+        } else {
+          redoAction();
+        }
       }
 
       // ---- Toggle minimap ----

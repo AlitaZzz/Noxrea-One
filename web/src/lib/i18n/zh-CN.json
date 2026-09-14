@@ -466,6 +466,7 @@
   },
   "shortcuts": {
     "title": "快捷键",
+    "undoBlocked": "画布上有生成中的节点，暂时无法撤销 / 重做",
     "zoom": "缩放",
     "pan": "平移",
     "edit": "编辑",
