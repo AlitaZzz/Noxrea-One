@@ -674,8 +674,12 @@ export default function AssetsModal({ open, onClose }: Props) {
               </div>
             </div>
 
-            {/* Grid */}
-            <div className="flex-1 overflow-auto min-h-0 px-3" style={{ scrollbarGutter: "stable" }} ref={gridRef}>
+            {/* Grid。首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
+            <div
+              className="flex-1 min-h-0 px-3"
+              style={{ scrollbarGutter: "stable", overflow: loading ? "hidden" : "auto" }}
+              ref={gridRef}
+            >
               <AssetGrid
                 assets={items}
                 folders={gridShowFolders ? gridFolders : undefined}
