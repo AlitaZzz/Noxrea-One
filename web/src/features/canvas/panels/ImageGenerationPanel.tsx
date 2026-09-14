@@ -28,6 +28,7 @@ import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 
 import ImageRefCard from "../shared/ImageRefCard";
+import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
@@ -55,7 +56,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const d = mp ? fieldDefaults(mp.fields) : {};
     return {
       prompt: s.prompt || "",
-      modelKey: s.modelKey || allModels[0]?.value || "",
+      modelKey: s.modelKey || readLastModel("image", allModels) || allModels[0]?.value || "",
       quality: s.quality || (d.quality as string) || "auto",
       resolution: s.resolution || (d.resolution as string) || "1K",
       ratio: s.ratio || (d.ratio as string) || "1:1",
@@ -404,7 +405,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             </Button>
           }
           content={allModels.map((m) => (
-            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); setModelOpen(false); }} selected={modelKey === m.value}>
+            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); recordLastModel("image", m.value); setModelOpen(false); }} selected={modelKey === m.value}>
               <span className="flex items-center gap-1.5">
                 <ModelIcon model={m.name} className="size-4 shrink-0" />
                 <span className="truncate">{m.name}</span>

@@ -27,6 +27,7 @@ import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
+import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
@@ -65,7 +66,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     const s = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
     return {
       prompt: s.prompt || "",
-      modelKey: s.modelKey || allModels[0]?.value || "",
+      modelKey: s.modelKey || readLastModel("text", allModels) || allModels[0]?.value || "",
     };
   // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
   // 「providers 为空」时算出的结果（modelKey 为空）。
@@ -525,6 +526,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 key={m.value}
                 onClick={() => {
                   setModelKey(m.value);
+                  recordLastModel("text", m.value);
                   setModelOpen(false);
                 }}
                 selected={modelKey === m.value}
