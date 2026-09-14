@@ -220,9 +220,20 @@
       "video": "Video",
       "audio": "Audio"
     },
-    "selectAll": "All",
-    "invert": "Invert",
-    "clearCap": "Clear"
+    "back": "Back",
+    "editProvider": "Edit Provider",
+    "modelsCount": "{{count}} model(s)",
+    "filterAll": "All",
+    "batch": "Batch actions",
+    "batchSelectShown": "Enable all shown",
+    "batchClearShown": "Clear current capability",
+    "batchNeedFilter": "Filter by capability to batch-edit",
+    "enabled": "Enabled",
+    "available": "Available",
+    "noMatchModels": "No matching models",
+    "copy": "Copy",
+    "reveal": "Reveal key",
+    "hide": "Hide"
   },
   "project": {
     "title": "Projects",
