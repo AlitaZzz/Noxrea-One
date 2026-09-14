@@ -19,6 +19,10 @@ export const modelApi = {
       body: JSON.stringify({ name, capabilities: [] }),
     }),
 
+  /** 删除供应商下单个模型。 */
+  deleteModel: (providerId: string, modelId: string) =>
+    api(`/api/model-config/providers/${providerId}/models/${modelId}`, { method: "DELETE" }),
+
   /** 设置模型能力集合（覆盖式）。 */
   setModelCapability: (providerId: string, modelId: string, capabilities: string[]) =>
     api(`/api/model-config/providers/${providerId}/models/${modelId}/capability`, {

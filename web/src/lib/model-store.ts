@@ -61,6 +61,7 @@ interface ModelState {
   deleteProvider: (id: string) => Promise<boolean>;
 
   addModel: (providerId: string, name: string) => Promise<boolean>;
+  deleteModel: (providerId: string, modelId: string) => Promise<boolean>;
   toggleModelCapability: (providerId: string, modelId: string, cap: ModelCapability) => Promise<boolean>;
   setProviderModels: (providerId: string, models: { name: string; capabilities: ModelCapability[] }[]) => Promise<boolean>;
   fetchModels: (providerId: string) => Promise<{ success: boolean; error?: string }>;
@@ -218,6 +219,21 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }
     notifyFailure(res, "model_config.model_add_failed");
     return false;
+  },
+
+  deleteModel: async (providerId, modelId) => {
+    const res = await modelApi.deleteModel(providerId, modelId);
+    // 失败不动本地：行还在列表里，用户可重试（失败原因由 store 统一提示）
+    if (res.code !== 200) {
+      notifyFailure(res, "model_config.model_delete_failed");
+      return false;
+    }
+    set((s) => ({
+      providers: s.providers.map((c) =>
+        c.id === providerId ? { ...c, models: c.models.filter((m) => m.id !== modelId) } : c
+      ),
+    }));
+    return true;
   },
 
   toggleModelCapability: async (providerId, modelId, cap) => {
