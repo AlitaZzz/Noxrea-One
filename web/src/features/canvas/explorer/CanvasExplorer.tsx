@@ -11,7 +11,6 @@ import {
   CaretRightOutlined,
   CloseOutlined,
   DownOutlined,
-  FilterOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
   RightOutlined,
@@ -22,6 +21,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import FilterIcon from "@/components/ui/icons/common/FilterIcon";
 import { MenuDivider } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetGrid from "@/features/assets/components/AssetGrid";
@@ -554,7 +554,7 @@ function AssetsView() {
             <Button
               size="small"
               type="text"
-              icon={<FilterOutlined />}
+              icon={<FilterIcon style={{ fontSize: 16 }} />}
               style={{
                 height: 32,
                 background: typeFilter.length > 0 ? "rgba(255,255,255,0.16)" : undefined,
