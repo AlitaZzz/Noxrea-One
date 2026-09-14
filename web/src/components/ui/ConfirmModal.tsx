@@ -18,6 +18,8 @@ interface Props {
   cancelText?: string;
   /** 确定按钮进入加载态并阻止重复提交，用于异步 onOk。 */
   confirmLoading?: boolean;
+  /** 只保留确定按钮（无取消语义的强制流程，如会话过期）；Esc / 遮罩关闭同样走 onCancel。 */
+  hideCancel?: boolean;
   onOk: () => void;
   onCancel: () => void;
   /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传更高值（如 1050）。 */
@@ -26,7 +28,7 @@ interface Props {
   global?: boolean;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, hideCancel, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
   const { i18n } = useTranslation();
   const lang = i18n.language;
   const okRef = useRef<HTMLButtonElement>(null);
@@ -49,7 +51,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       width={380}
       footer={
         <div className="app-dialog-footer">
-          <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>
+          {!hideCancel && <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>}
           <AppButton variant="primary" loading={confirmLoading} onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
         </div>
       }

@@ -8,6 +8,7 @@ import { create } from "zustand";
 import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
+import { saveMutex } from "@/features/project/save-mutex";
 import type { CanvasProject } from "@/features/project/types";
 import { resolveResultError } from "@/lib/api/error-message";
 import { DEFAULT_BACKGROUND, DEFAULT_THEME, DEFAULT_VIEWPORT } from "@/lib/constants";
@@ -176,40 +177,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   renameProject: (id, name) => {
     const prevName = get().projects.find((p) => p.id === id)?.name;
-    const baseRevision = get().projects.find((p) => p.id === id)?.revision ?? 1;
     // 乐观更新，失败回滚：此前无论响应码如何都留在本地，刷新后名称又变回去
     set((s) => ({
       projects: s.projects.map((p) => p.id === id ? { ...p, name, updatedAt: Date.now() } : p),
     }));
     void (async () => {
       try {
-        let res = await projectApi.updateProject(id, { name, baseRevision });
-
-        // 409 表示本地版本落后；重命名是幂等更新，可同步版本后立即重试一次，
-        // 避免用户下一次画布保存先吃一次无意义的版本冲突。
-        if (res.code === 409 && typeof res.ctx?.revision === "number") {
-          const currentRevision = res.ctx.revision;
-          get().updateProjectRevision(id, currentRevision);
-          res = await projectApi.updateProject(id, { name, baseRevision: currentRevision });
-        }
-
-        // 第二次仍然冲突说明服务端状态已经不可预判；刷新一次本地项目，
-        // 让 revision 和名称回到服务端事实，再交给用户重新输入。
-        if (res.code === 409) {
-          // 先保留第二次冲突响应中的最新版本，即使项目详情刷新失败，
-          // 本地也不至于继续带着过期 revision 发起后续保存。
-          if (typeof res.ctx?.revision === "number") {
-            get().updateProjectRevision(id, res.ctx.revision);
-          }
-          const fresh = await get().refreshProject(id);
-          if (!fresh && prevName !== undefined) {
-            set((s) => ({
-              projects: s.projects.map((p) => (p.id === id ? { ...p, name: prevName } : p)),
-            }));
-          }
-          notifyError(resolveResultError(res, "project.rename_failed"));
-          return;
-        }
+        // 与画布保存共用同一条写互斥锁。改名是纯元数据：服务端不做版本校验也不递增
+        // revision，因此不存在改名引发的版本冲突（409 只属于画布内容保存）。
+        const res = await saveMutex.runExclusive(() =>
+          projectApi.updateProject(id, {
+            name,
+            baseRevision: get().projects.find((p) => p.id === id)?.revision ?? 1,
+          }),
+        );
 
         if (res.code === 200 && typeof res.data?.revision === "number") {
           get().updateProjectRevision(id, res.data.revision);
@@ -285,7 +266,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   /** 保存成功或版本冲突后同步服务端 revision，确保下一次请求携带正确版本。 */
   updateProjectRevision: (id, revision) => {
     set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, revision } : p)),
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p;
+        // 单调保护：版本只许前进。迟到的保存成功回写（baseRevision + 1）可能
+        // 晚于重命名等已推高版本的响应到达，放行会把版本开倒车、引发下次 409。
+        return revision > p.revision ? { ...p, revision } : p;
+      }),
     }));
   },
 

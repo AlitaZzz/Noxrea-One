@@ -20,6 +20,7 @@ import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { clearDraft, type DraftRecord,loadDraft } from "@/features/project/draft-store";
 import { useProjectStore } from "@/features/project/store";
+import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 
 const DirectorOverlay = dynamic(
   () => import("@/features/director/components/DirectorOverlay"),
@@ -48,6 +49,8 @@ export default function CanvasPage({
   // 避免短暂渲染上一个项目的画布内容，也避免在 effect 体内同步 setState。
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [draftPrompt, setDraftPrompt] = useState<DraftRecord | null>(null);
+  // 会话过期（画布在其他标签页 / 浏览器被修改）：唯一出口是刷新页面
+  const sessionExpired = useSessionExpiredStore((s) => s.expired);
 
   // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
   // URL 是项目身份的真相源：先同步进 store（save-manager 按 activeProjectId 存盘），
@@ -181,6 +184,17 @@ export default function CanvasPage({
         cancelText={t("draft.discard")}
         onOk={handleRestoreDraft}
         onCancel={handleDiscardDraft}
+      />
+
+      {/* 会话过期：不可关闭，唯一动作是刷新；未落库改动已由草稿承接，刷新后弹恢复框 */}
+      <ConfirmModal
+        open={sessionExpired}
+        title={t("conflict.title")}
+        content={t("conflict.content")}
+        okText={t("conflict.reload")}
+        hideCancel
+        onOk={() => window.location.reload()}
+        onCancel={() => window.location.reload()}
       />
     </ReactFlowProvider>
   );

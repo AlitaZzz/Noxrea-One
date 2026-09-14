@@ -74,12 +74,15 @@ export async function updateProject(
 ) {
   return prisma.$transaction(async (tx) => {
     // 事务内读取当前版本；旧请求的 baseRevision 不一致时立即拒绝。
+    // 版本校验只针对画布内容：revision 语义 = 画布内容版本，纯改名是元数据、
+    // 不参与冲突判定也不递增版本——否则改名会把其他窗口的画布会话误杀成过期。
     const existing = await tx.canvasProject.findFirst({
       where: { id, userId },
       select: { id: true, revision: true },
     });
     if (!existing) return null;
     if (
+      data.canvasData !== undefined &&
       options?.baseRevision !== undefined &&
       existing.revision !== options.baseRevision
     ) {
@@ -92,14 +95,12 @@ export async function updateProject(
     }
     if (data.canvasData !== undefined) {
       updateData.canvasData = stringifyJson(data.canvasData);
+      updateData.revision = { increment: 1 };
     }
 
     const updated = await tx.canvasProject.update({
       where: { id },
-      data: {
-        ...updateData,
-        revision: { increment: 1 },
-      },
+      data: updateData,
     });
 
     // 引用重算只在媒体结构变化时执行；拖动节点等布局保存不会解析引用。
