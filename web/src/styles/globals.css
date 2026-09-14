@@ -1817,3 +1817,74 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: #fff;
   color: #1d1d21;
 }
+
+/* ===== API 设置抽屉（ApiSettingsDrawer）=====
+   抽屉内输入类控件与全站中性语言对齐：36px 高、8px 圆角、聚焦仅描边提亮不出光晕。
+   Select 已有全局规则（.ant-select-selector）覆盖，这里只补 Input / 密码框。 */
+.api-drawer .ant-input:not(.ant-input-status-error),
+.api-drawer .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-status-error) {
+  background: var(--canvas-bg-elevated) !important;
+  border-color: var(--canvas-border) !important;
+  color: var(--canvas-text) !important;
+  border-radius: 8px !important;
+}
+.api-drawer .ant-input-affix-wrapper { height: 36px; }
+.api-drawer .ant-input-affix-wrapper .ant-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.api-drawer .ant-input:hover,
+.api-drawer .ant-input:focus,
+.api-drawer .ant-input-affix-wrapper:hover,
+.api-drawer .ant-input-affix-wrapper-focused {
+  border-color: var(--canvas-border-light) !important;
+  box-shadow: none !important;
+}
+.api-drawer input::placeholder { color: var(--canvas-text-muted) !important; opacity: 1 !important; }
+
+/* 能力筛选 chip：单选筛选器，选中与 hover 同为提亮底，靠字色区分当前态 */
+.cap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--canvas-text-dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cap-chip:hover { background: var(--canvas-bg-hover); color: var(--canvas-text); }
+.cap-chip[data-active="true"] { background: var(--canvas-bg-hover); color: var(--canvas-text); }
+.cap-chip-count { opacity: 0.55; font-variant-numeric: tabular-nums; }
+
+/* 模型行能力 pill：点亮 = 该模型已启用此能力（青柠语义，与画布选中描边一致） */
+.cap-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--canvas-text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cap-pill:hover { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); }
+.cap-pill[aria-pressed="true"] {
+  color: var(--canvas-accent);
+  background: color-mix(in srgb, var(--canvas-accent) 14%, transparent);
+}
+.cap-pill[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--canvas-accent) 26%, transparent);
+}

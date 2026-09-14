@@ -1,98 +1,143 @@
 /**
- * 模型渠道配置抽屉。
- * 管理服务商渠道（增删改、Base URL 与密钥填写）及其下模型清单，
- * 按文本 / 图像 / 视频 / 音频能力分页展示与勾选启用，供各生成面板取用。
+ * 模型渠道配置抽屉（API 设置）。
+ * master–detail 双栏：左栏供应商轨道（选择 / 新增入口），右栏详情或表单视图。
+ * 详情 = 连接信息（Base URL / 密钥掩码按需揭示）+ 模型能力管理（ApiSettingsModels）。
  * 属全局模型配置能力，与画布本身无依赖关系。
  */
 "use client";
 
 import {
   ApiOutlined,
+  CloseOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
-  PictureOutlined,
   PlusOutlined,
-  VideoCameraOutlined,
 } from "@ant-design/icons";
-import { App, Checkbox, Drawer,Input, Select } from "antd";
-import type { ReactNode } from "react";
-import { memo, useEffect, useRef, useState } from "react";
+import { App, Drawer } from "antd";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { ModelIcon } from "@/components/ui/ModelIcon";
-import { VirtualList } from "@/components/ui/VirtualList";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import ApiSettingsForm from "@/features/settings/ApiSettingsForm";
+import ApiSettingsModels from "@/features/settings/ApiSettingsModels";
 import { useModelStore } from "@/lib/model-store";
-import type { ModelCapability, ModelInfo } from "@/lib/types/models";
+import type { ModelProvider } from "@/lib/types/models";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-// ── 模块级常量与组件（稳定引用，避免每次渲染重建导致虚拟列表失效） ──
-// 不按能力分配主题色：选中态统一用 --canvas-text（白），
-// 避免四个 tab 切来切去时整块面板跟着换色
-const CAPABILITY_TABS: {
-  key: ModelCapability;
-  labelKey: string;
-  icon: ReactNode;
-}[] = [
-  { key: "text", labelKey: "modelConfig.cap.text", icon: <TextIcon /> },
-  { key: "image", labelKey: "modelConfig.cap.image", icon: <PictureOutlined /> },
-  { key: "video", labelKey: "modelConfig.cap.video", icon: <VideoCameraOutlined /> },
-  // 音频统一用音频节点同款的声波图标，不用 antd 的麦克风
-  { key: "audio", labelKey: "modelConfig.cap.audio", icon: <WaveIcon /> },
-];
+/** 连接信息：Base URL / API 密钥两行。密钥常态掩码，眼睛 / 复制按需拉明文。
+    key 由父组件绑定 provider.id，切换供应商时状态自动重置。 */
+function ConnectionInfo({ provider }: { provider: ModelProvider }) {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const fetchProviderApiKey = useModelStore((s) => s.fetchProviderApiKey);
 
-// 单行（已 memo）：仅在 m / checked / onToggle 变化时才重渲染
-const ModelRow = memo(function ModelRow({
-  m,
-  checked,
-  onToggle,
-}: {
-  m: ModelInfo;
-  checked: boolean;
-  onToggle: (id: string) => void;
-}) {
+  const [revealed, setRevealed] = useState(false);
+  const [plain, setPlain] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // 按需拉取明文；已揭示则直接返回缓存
+  const ensurePlain = async (): Promise<string | null> => {
+    if (revealed) return plain;
+    setLoading(true);
+    try {
+      const key = await fetchProviderApiKey(provider.id);
+      setPlain(key);
+      setRevealed(true);
+      return key;
+    } catch {
+      message.error(t("modelConfig.apiKeyFetchFailed"));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success(t("modelConfig.apiKeyCopied"));
+    } catch {
+      message.error(t("modelConfig.apiKeyCopyFailed"));
+    }
+  };
+
   return (
-    <label
-      className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--canvas-bg-hover)] text-sm transition-colors"
-      style={{ color: checked ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+    <div
+      className="flex flex-col gap-2 px-5 py-3.5 border-b"
+      style={{ borderColor: "var(--canvas-border)" }}
     >
-      {/* 不随能力变色：沿用主题里的 Checkbox 主色（无彩白） */}
-      <Checkbox
-        checked={checked}
-        onChange={() => onToggle(m.id)}
-      />
-      <ModelIcon model={m.name} className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
-      <span className="flex-1 truncate">{m.name}</span>
-    </label>
+      <div className="flex items-center gap-3">
+        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>
+          {t("modelConfig.baseUrl")}
+        </span>
+        <span
+          className="flex-1 min-w-0 truncate text-[12.5px]"
+          style={{ color: "var(--canvas-text-dim)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+        >
+          {provider.baseUrl}
+        </span>
+        <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.copy")} onClick={() => copyText(provider.baseUrl)}>
+          <CopyOutlined />
+        </AppButton>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>
+          {t("modelConfig.apiKey")}
+        </span>
+        <span
+          className="flex-1 min-w-0 truncate text-[12.5px]"
+          style={{ color: "var(--canvas-text-dim)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+        >
+          {revealed ? plain : provider.apiKey}
+        </span>
+        <AppButton
+          size="sm"
+          variant="ghost"
+          iconOnly
+          aria-label={revealed ? t("modelConfig.hide") : t("modelConfig.reveal")}
+          loading={loading}
+          onClick={() => {
+            if (revealed) setRevealed(false);
+            else ensurePlain();
+          }}
+        >
+          {revealed ? <EyeOffIcon /> : <EyeIcon />}
+        </AppButton>
+        <AppButton
+          size="sm"
+          variant="ghost"
+          iconOnly
+          aria-label={t("modelConfig.copy")}
+          onClick={async () => {
+            const key = await ensurePlain();
+            if (key !== null) copyText(key);
+          }}
+        >
+          <CopyOutlined />
+        </AppButton>
+      </div>
+    </div>
   );
-});
+}
 
 export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const { t } = useTranslation();
-  const isDark = useCanvasStore((s) => s.theme) === "dark";
   const { message } = App.useApp();
+  const isDark = useCanvasStore((s) => s.theme) === "dark";
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const providers = useModelStore((s) => s.providers);
   const presets = useModelStore((s) => s.presets);
-  const addProvider = useModelStore((s) => s.addProvider);
-  const updateProvider = useModelStore((s) => s.updateProvider);
-  const fetchProviderApiKey = useModelStore((s) => s.fetchProviderApiKey);
   const deleteProvider = useModelStore((s) => s.deleteProvider);
-  const addModel = useModelStore((s) => s.addModel);
-  const toggleModelCapability = useModelStore((s) => s.toggleModelCapability);
-  const setProviderModels = useModelStore((s) => s.setProviderModels);
   const fetchModels = useModelStore((s) => s.fetchModels);
 
   // Drawer 打开时阻止画布快捷键透传
@@ -102,27 +147,15 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
   }, [open, setModalOpen]);
 
   const [providerId, setProviderId] = useState<string | null>(null);
-  const [activeCap, setActiveCap] = useState<ModelCapability>("image");
-  const [showAddProvider, setShowAddProvider] = useState(false);
-  const [editProviderId, setEditProviderId] = useState<string | null>(null);
-  const [chForm, setChForm] = useState({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
-  const [apiKeyRevealed, setApiKeyRevealed] = useState(false);
-  const [apiKeyMasked, setApiKeyMasked] = useState("");
-  const [keyDirty, setKeyDirty] = useState(false);
-  const [fetchingKey, setFetchingKey] = useState(false);
-  const [newModelName, setNewModelName] = useState("");
+  const [view, setView] = useState<"detail" | "form">("detail");
+  const [formMode, setFormMode] = useState<"add" | "edit">("add");
   const [fetching, setFetching] = useState(false);
-  const [deleteProviderId, setDeleteProviderId] = useState<string | null>(null);
-  const [searchModel, setSearchModel] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const provider = providers.find((c) => c.id === providerId);
-  const deletingProvider = providers.find((c) => c.id === deleteProviderId);
 
-  // Pick the first provider when the modal opens without a selection.
-  // Adjusted during render (not in an effect) to avoid cascading renders.
-  // Pick the first provider when the modal opens without a selection.
-  // Adjusted during render (matching the "store previous render" pattern).
+  // 打开时未选中则默认选第一个供应商。
+  // 在渲染期调整（store previous render 模式），避免级联 effect。
   const [prevNeedProvider, setPrevNeedProvider] = useState(false);
   const needProvider = !!(open && providers.length > 0 && !providerId);
   if (needProvider !== prevNeedProvider) {
@@ -130,92 +163,17 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     if (needProvider) setProviderId(providers[0].id);
   }
 
-  const resetChForm = () => {
-    setChForm({ name: "", baseUrl: "", apiKey: "", protocol: "openai" });
-    setEditProviderId(null);
-    setShowAddProvider(false);
-    setApiKeyVisible(false);
-    setApiKeyRevealed(false);
-    setApiKeyMasked("");
-    setKeyDirty(false);
+  const startAdd = () => {
+    setFormMode("add");
+    setView("form");
   };
-
-  const handleSaveProvider = async () => {
-    if (!chForm.name.trim() || !chForm.baseUrl.trim()) return;
-    try {
-      // 必须等待结果：此前无论成败都提示「已新增/已更新」并清空表单
-      const ok = editProviderId
-        ? await updateProvider(editProviderId, {
-          name: chForm.name.trim(), baseUrl: chForm.baseUrl.trim(), protocol: chForm.protocol,
-          apiKey: keyDirty && !chForm.apiKey.includes("****") ? (chForm.apiKey.trim() || undefined) : undefined,
-        })
-        : await addProvider(chForm.name.trim(), chForm.baseUrl.trim(), chForm.apiKey.trim(), chForm.protocol);
-      // 失败保留表单内容，用户可直接改完重试（失败原因由 store 统一提示）
-      if (!ok) return;
-      message.success(editProviderId ? t("modelConfig.providerUpdated") : t("modelConfig.providerAdded"));
-      resetChForm();
-    } catch {
-      // 401 等异常由全局流程处理（清 token + 跳登录），这里只兜住 rejection
-    }
+  const startEdit = () => {
+    setFormMode("edit");
+    setView("form");
   };
-
-  const handleEditProvider = (id: string) => {
-    const ch = providers.find((c) => c.id === id);
-    if (!ch) return;
-    // 预填掩码 apiKey：用户可见掩码值，点击小眼睛拉取明文
-    setApiKeyMasked(ch.apiKey);
-    setApiKeyRevealed(false);
-    setKeyDirty(false);
-    setApiKeyVisible(false);
-    setChForm({
-      name: ch.name, baseUrl: ch.baseUrl, apiKey: ch.apiKey,
-      protocol: ch.protocol || "openai",
-    });
-    setEditProviderId(id);
-    setShowAddProvider(true);
-  };
-
-  // 点击小眼睛：首次揭示时从后端拉取明文密钥
-  const handleApiKeyVisibleChange = async (visible: boolean) => {
-    setApiKeyVisible(visible);
-    if (visible && editProviderId && !apiKeyRevealed && !keyDirty) {
-      setFetchingKey(true);
-      try {
-        const plain = await fetchProviderApiKey(editProviderId);
-        setChForm((f) => ({ ...f, apiKey: plain }));
-        setApiKeyRevealed(true);
-      } catch {
-        message.error(t("modelConfig.apiKeyFetchFailed"));
-        setApiKeyVisible(false);
-      }
-      setFetchingKey(false);
-    }
-  };
-
-  // 复制按钮：按需拉取明文后复制到剪贴板
-  const handleCopyApiKey = async () => {
-    if (!editProviderId) return;
-    let textToCopy = chForm.apiKey;
-    if (!apiKeyRevealed && !keyDirty) {
-      setFetchingKey(true);
-      try {
-        textToCopy = await fetchProviderApiKey(editProviderId);
-        setChForm((f) => ({ ...f, apiKey: textToCopy }));
-        setApiKeyRevealed(true);
-        setApiKeyVisible(true);
-      } catch {
-        message.error(t("modelConfig.apiKeyFetchFailed"));
-        setFetchingKey(false);
-        return;
-      }
-      setFetchingKey(false);
-    }
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      message.success(t("modelConfig.apiKeyCopied"));
-    } catch {
-      message.error(t("modelConfig.apiKeyCopyFailed"));
-    }
+  const selectProvider = (id: string) => {
+    setProviderId(id);
+    setView("detail");
   };
 
   const handleFetch = async () => {
@@ -225,357 +183,218 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     if (result.success) {
       message.success(t("modelConfig.modelsFetched"));
     } else {
-      message.error(result.error ?? t("modelConfig.fetchModelsFailed"));
+      // 失败原因由 store / fetchModels 统一提示
     }
     setFetching(false);
   };
 
-  const handleAddModel = async () => {
-    if (!newModelName.trim() || !providerId) return;
-    try {
-      // 失败不清空输入框，避免用户刚填的模型名丢失
-      if (await addModel(providerId, newModelName.trim())) setNewModelName("");
-    } catch {
-      // 同 handleSaveProvider：异常已由全局流程处理
+  // 表单保存成功：新增态选中新供应商（store 末尾），回到详情
+  const handleFormDone = () => {
+    if (formMode === "add") {
+      const latest = useModelStore.getState().providers;
+      if (latest.length > 0) setProviderId(latest[latest.length - 1].id);
     }
+    setView("detail");
   };
 
-  // Models filtered by current capability tab
-  const capModels = provider?.models.filter((m) => m.capabilities?.includes(activeCap)) || [];
-  const otherModels = provider?.models.filter((m) => !m.capabilities?.includes(activeCap)) || [];
-
-  // 搜索过滤（不区分大小写，空串 = 全部）
-  const searchLower = searchModel.trim().toLowerCase();
-  const filterFn = (m: { name: string }) => !searchLower || m.name.toLowerCase().includes(searchLower);
-  const filteredCap = capModels.filter(filterFn);
-  const filteredOther = otherModels.filter(filterFn);
-  // 批量操作目标：当前过滤后可见的全部模型（cap + other）
-  const visibleModels = [...filteredCap, ...filteredOther];
-
-  // 批量勾选：本地算好全量 capabilities，一次 set_models 提交
-  const batchApply = async (nextCapsForVisible: (m: ModelInfo) => ModelCapability[]) => {
-    if (!provider || visibleModels.length === 0) return;
-    const visibleIds = new Set(visibleModels.map((m) => m.id));
-    const merged = provider.models.map((m) => ({
-      name: m.name,
-      capabilities: visibleIds.has(m.id) ? nextCapsForVisible(m) : (m.capabilities || []),
-    }));
-    await setProviderModels(provider.id, merged).catch(() => {
-      // 失败原因由 store 提示；这里只需避免未处理的 rejection
-    });
-  };
-  const batchSelectAll = () => batchApply((m) => Array.from(new Set([...(m.capabilities || []), activeCap])));
-  const batchInvert = () => batchApply((m) => {
-    const has = (m.capabilities || []).includes(activeCap);
-    return has ? (m.capabilities || []).filter((c) => c !== activeCap) : [...(m.capabilities || []), activeCap];
-  });
-  const batchClear = () => batchApply((m) => (m.capabilities || []).filter((c) => c !== activeCap));
-
-  // 切换单行能力；交给 React Compiler 自动 memo，移除手写 useCallback 以让其优化。
-  const onToggleCap = (id: string) => {
-    // 失败时 store 会提示并回滚（本地不写入），这里兜住网络异常
-    toggleModelCapability(provider?.id ?? "", id, activeCap).catch(() => {});
-  };
-
-  // 合并为「已启用 / 可用」两段、带分组标题的扁平数组，交给虚拟列表渲染
-  type Row =
-    | { kind: "header"; key: string; label: string; tone: "cap" | "other" }
-    | { kind: "model"; key: string; m: ModelInfo; checked: boolean };
-  const rows: Row[] = [];
-  if (filteredCap.length > 0) {
-    rows.push({ kind: "header", key: "h-cap", label: t("common.enabled"), tone: "cap" });
-    for (const m of filteredCap) rows.push({ kind: "model", key: m.id, m, checked: true });
-  }
-  if (filteredOther.length > 0) {
-    rows.push({ kind: "header", key: "h-other", label: t("common.available"), tone: "other" });
-    for (const m of filteredOther) rows.push({ kind: "model", key: m.id, m, checked: false });
-  }
+  const fetchLabel =
+    provider && provider.models.length > 0
+      ? `${t("modelConfig.fetchModels")} (${provider.models.length})`
+      : t("modelConfig.fetchModels");
 
   return (
     <>
-    <Drawer
-      title={
-        <div className="flex items-center gap-2">
-          <ApiOutlined />
-          <span style={{ color: "var(--canvas-text)" }}>{t("modelConfig.apiSettings")}</span>
-        </div>
-      }
-      open={open}
-      onClose={onClose}
-      size={600}
-      placement="right"
-      closable={{ placement: "end" }}
-      destroyOnHidden
-      styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)", userSelect: "none" },
-        body: { background: "var(--canvas-bg)", padding: 0, display: "flex", flexDirection: "column", height: "100%" },
-        section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
-      }}
-    >
-    <div className="model-config-wrap flex flex-col h-full overflow-y-auto select-none">
-      <style>{`
-        .model-config-wrap { scrollbar-width: none; -ms-overflow-style: none; }
-        .model-config-wrap::-webkit-scrollbar { display: none; }
-        .model-config-wrap input:not([type]), .model-config-wrap .ant-input, .model-config-wrap .ant-input-password { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; color: var(--canvas-text) !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
-        .model-config-wrap textarea.ant-input { height: auto !important; padding: 8px 11px !important; }
-        .model-config-wrap .ant-select.ant-select, .model-config-wrap .ant-select-selector.ant-select-selector { height: 36px !important; background: var(--canvas-bg) !important; color: var(--canvas-text) !important; }
-        .model-config-wrap .ant-input-affix-wrapper { background: var(--canvas-bg) !important; border-color: var(--canvas-border) !important; border-radius: 8px !important; height: 36px !important; }
-        .model-config-wrap .ant-input-affix-wrapper .ant-input { background: transparent !important; border: none !important; height: 34px !important; }
-        .model-config-wrap input:not([type]):focus, .model-config-wrap .ant-input:focus, .model-config-wrap .ant-input-password:focus { border-color: var(--canvas-border) !important; box-shadow: none !important; }
-        .model-config-wrap input:not([type]):hover, .model-config-wrap .ant-input:hover, .model-config-wrap .ant-input-password:hover { border-color: var(--canvas-border) !important; }
-        .model-config-wrap textarea::placeholder, .model-config-wrap input::placeholder { color: var(--canvas-text-muted) !important; opacity: 1 !important; }
-        .model-config-wrap .ant-input-password { display: flex !important; align-items: center !important; }
-        .model-config-wrap .ant-input-password .ant-input-suffix { display: flex; align-items: center; }
-        .model-config-wrap .ant-input-password input { height: 34px !important; line-height: 34px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
-        .model-config-wrap .ant-input-password:focus, .model-config-wrap .ant-input-password-focused, .model-config-wrap .ant-input-affix-wrapper-focused { border-color: var(--canvas-border) !important; box-shadow: none !important; outline: none !important; }
-        /* .model-btn 已废弃：设置面板的按钮改用统一组件 AppButton（.app-btn），
-           这里只保留对 antd 内部按钮（输入框清除、下拉等）的去品牌色兜底。 */
-        .model-config-wrap .ant-btn { background: var(--canvas-bg); border: none !important; box-shadow: none !important; color: var(--canvas-text); border-radius: 8px; height: 36px; }
-        .model-config-wrap .ant-btn:hover:not(:disabled) { color: var(--canvas-text) !important; background: var(--canvas-bg-hover) !important; }
-        .model-config-wrap .ant-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-      `}</style>
-      {/* ===== Provider selector ===== */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        <span className="text-xs flex-shrink-0" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.providers")}:</span>
-        <Select
-          size="small"
-          value={providerId}
-          onChange={(v) => { setProviderId(v); setActiveCap("image"); }}
-          disabled={showAddProvider}
-          style={{ width: 150, height: 32 }}
-          options={providers.map((c) => ({ label: c.name, value: c.id }))}
-          notFoundContent={<span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.noProviders")}</span>}
-        />
-        <div className="flex items-center gap-1 ml-auto">
-          <AppButton size="sm" onClick={() => { resetChForm(); setShowAddProvider(true); }}>
-            <PlusOutlined />
-            {t("modelConfig.addProvider")}
-          </AppButton>
-          {provider && (
-            <>
-              <div className="w-px h-4 mx-0.5 self-center" style={{ background: "var(--canvas-border)" }} />
-              <AppButton size="sm" onClick={handleFetch} loading={fetching}>
-                <DownloadOutlined />
-                {provider.models.length > 0 ? `${t("modelConfig.fetchModels")} (${provider.models.length})` : t("modelConfig.fetchModels")}
-              </AppButton>
-              <AppButton size="sm" onClick={() => handleEditProvider(provider.id)}>
-                <EditOutlined />
-                {t("common.edit")}
-              </AppButton>
-              {/* 删除供应商是破坏性操作，用 danger 而不是默认变体 */}
-              <AppButton size="sm" variant="danger" onClick={() => setDeleteProviderId(provider.id)}>
-                <DeleteOutlined />
-                {t("common.delete")}
-              </AppButton>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ===== Add/Edit provider form ===== */}
-      {showAddProvider && (
-        <div className="px-4 py-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-          <div className="flex gap-1">
-            <div className="flex flex-col gap-2" style={{ flex: 1 }}>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("common.name")}</span>
-                <Input size="small" placeholder={t("modelConfig.myApi")} value={chForm.name} onChange={(e) => setChForm((f) => ({ ...f, name: e.target.value }))} style={{ width: "100%" }} autoFocus />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.baseUrl")}</span>
-                <Input size="small" placeholder="https://api.openai.com/v1" value={chForm.baseUrl} onChange={(e) => setChForm((f) => ({ ...f, baseUrl: e.target.value }))} style={{ width: "100%" }} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-2" style={{ flex: 1 }}>
-              <div className="flex gap-1">
-                <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
-                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocolLabel")}</span>
-                  <Select
-                    size="small"
-                    value={chForm.protocol}
-                    onChange={(v) => setChForm((f) => ({ ...f, protocol: v }))}
-                    style={{ width: "100%" }}
-                    options={[
-                      { label: t("modelConfig.protocol.openai"), value: "openai" },
-                      { label: t("modelConfig.protocol.gemini"), value: "gemini" },
-                      { label: t("modelConfig.protocol.ark"), value: "ark" },
-                    ]}
-                  />
-                </div>
-                <div className="flex flex-col gap-0.5" style={{ flex: 1 }}>
-                  <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.preset")}</span>
-                  <Select
-                    size="small" style={{ width: "100%" }}
-                    placeholder={t("modelConfig.preset")}
-                    options={presets.map((p) => ({ label: p.name, value: p.name }))}
-                    onChange={(name) => {
-                      const p = presets.find((pr) => pr.name === name);
-                      if (!p) return;
-                      setChForm((f) => ({
-                        ...f,
-                        baseUrl: p.baseUrl ?? "",
-                        protocol: p.protocol || "openai",
-                      }));
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.apiKey")}</span>
-                <div className="flex gap-1">
-                  <Input.Password
-                    placeholder={editProviderId ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
-                    value={chForm.apiKey}
-                    onChange={(e) => {
-                      setChForm((f) => ({ ...f, apiKey: e.target.value }));
-                      setKeyDirty(true);
-                    }}
-                    style={{ flex: 1 }}
-                    visibilityToggle={{ visible: apiKeyVisible, onVisibleChange: handleApiKeyVisibleChange }}
-                    iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
-                  />
-                  {editProviderId && (
-                    <AppButton
-                      size="sm"
-                      iconOnly
-                      onClick={handleCopyApiKey}
-                      loading={fetchingKey}
-                      style={{ flexShrink: 0 }}
-                    >
-                      <CopyOutlined />
-                    </AppButton>
-                  )}
-                </div>
-          </div>
-          </div>
-          </div>
-          <div className="flex gap-1 justify-end">
-            <AppButton size="sm" onClick={resetChForm}>{t("common.cancel")}</AppButton>
-            <AppButton size="sm" variant="primary" onClick={handleSaveProvider} disabled={!chForm.name.trim() || !chForm.baseUrl.trim()}>
-              {editProviderId ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
+      <Drawer
+        open={open}
+        onClose={onClose}
+        size={780}
+        placement="right"
+        closable={false}
+        destroyOnHidden
+        className="api-drawer"
+        styles={{
+          body: { background: "var(--canvas-bg)", padding: 0 },
+          section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
+        }}
+      >
+        <div className="flex h-full flex-col" style={{ color: "var(--canvas-text)" }}>
+          {/* 自绘头部：不用 antd 默认标题栏 */}
+          <div
+            className="flex items-center gap-2 px-5 py-3 border-b select-none"
+            style={{ borderColor: "var(--canvas-border)" }}
+          >
+            <ApiOutlined style={{ color: "var(--canvas-text-dim)" }} />
+            <span className="text-[15px] font-semibold" style={{ color: "var(--canvas-text)" }}>
+              {t("modelConfig.apiSettings")}
+            </span>
+            <AppButton size="sm" variant="ghost" iconOnly className="ml-auto" aria-label={t("common.close")} onClick={onClose}>
+              <CloseOutlined />
             </AppButton>
           </div>
-        </div>
-      )}
-
-      {/* ===== Capability tabs ===== */}
-      <div className="flex border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        {CAPABILITY_TABS.map((tab) => {
-          const count = provider?.models.filter((m) => m.capabilities?.includes(tab.key)).length || 0;
-          return (
-            <button
-              key={tab.key}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 border-transparent"
-              style={{
-                background: "transparent", cursor: "pointer",
-                color: activeCap === tab.key ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-                borderColor: activeCap === tab.key ? "var(--canvas-text)" : "transparent",
-              }}
-              onClick={() => setActiveCap(tab.key)}
-            >
-              {tab.icon}
-              {t(tab.labelKey)}
-              <span className="text-[12px] opacity-60">({count})</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ===== Model list ===== */}
-      <div className="p-5 flex-1 flex flex-col min-h-[300px] overflow-hidden" style={{ scrollbarGutter: "stable" }}>
-        {!provider ? (
-          <div className="text-center py-12" style={{ color: "var(--canvas-text-muted)" }}>
-            <ApiOutlined className="text-3xl mb-2 block" />
-            {t("modelConfig.noProvidersDesc")}
-          </div>
-        ) : provider.models.length === 0 ? (
-          <div className="text-center py-8" style={{ color: "var(--canvas-text-muted)" }}>
-            <div className="text-sm mb-1">{t("modelConfig.noModels")}</div>
-            <div className="text-xs mb-3">{t("modelConfig.noModelsDesc")}</div>
-          </div>
-        ) : (
-          <>
-            {/* Search + batch ops */}
-            <div className="flex items-center gap-1.5 mb-3 flex-shrink-0">
-              <Input
-                size="small"
-                allowClear
-                placeholder={t("modelConfig.searchModel")}
-                value={searchModel}
-                onChange={(e) => setSearchModel(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <AppButton size="sm" onClick={batchSelectAll} disabled={visibleModels.length === 0}>{t("modelConfig.selectAll")}</AppButton>
-              <AppButton size="sm" onClick={batchInvert} disabled={visibleModels.length === 0}>{t("modelConfig.invert")}</AppButton>
-              <AppButton size="sm" onClick={batchClear} disabled={filteredCap.length === 0}>{t("modelConfig.clearCap")}</AppButton>
-            </div>
-
-            {/* Add model manually */}
-            <div className="flex gap-1.5 mb-3 flex-shrink-0">
-              <Input
-                size="small"
-                placeholder={t("modelConfig.addModelPlaceholder")}
-                value={newModelName}
-                onChange={(e) => setNewModelName(e.target.value)}
-                onPressEnter={handleAddModel}
-                style={{ flex: 1 }}
-              />
-              <AppButton size="sm" onClick={handleAddModel} disabled={!newModelName.trim()}>
+          <div className="flex flex-1 min-h-0">
+          {/* ===== 左栏：供应商轨道 ===== */}
+          <div
+            className="w-[220px] shrink-0 flex flex-col border-r select-none"
+            style={{ borderColor: "var(--canvas-border)" }}
+          >
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b" style={{ borderColor: "var(--canvas-border)" }}>
+              <span className="text-[13px] font-medium" style={{ color: "var(--canvas-text)" }}>
+                {t("modelConfig.providers")}
+              </span>
+              {providers.length > 0 && (
+                <span className="text-[11px]" style={{ color: "var(--canvas-text-muted)" }}>
+                  {providers.length}
+                </span>
+              )}
+              <AppButton
+                size="sm"
+                variant="ghost"
+                iconOnly
+                className="ml-auto"
+                aria-label={t("modelConfig.addProvider")}
+                onClick={startAdd}
+              >
                 <PlusOutlined />
-                {t("common.add")}
               </AppButton>
             </div>
+            {providers.length === 0 ? (
+              <div
+                className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 text-center"
+                style={{ color: "var(--canvas-text-muted)" }}
+              >
+                <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.noProviders")}</div>
+                <AppButton size="sm" variant="primary" className="mt-1" onClick={startAdd}>
+                  <PlusOutlined />
+                  {t("modelConfig.addProvider")}
+                </AppButton>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5">
+                {providers.map((c) => {
+                  const active = view === "detail" && c.id === providerId;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectProvider(c.id)}
+                      className={`relative w-full text-left rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+                        active ? "bg-[var(--canvas-bg-hover)]" : "hover:bg-[var(--canvas-bg-hover)]"
+                      }`}
+                    >
+                      {active && (
+                        <span
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full"
+                          style={{ background: "var(--canvas-select)" }}
+                        />
+                      )}
+                      <div
+                        className="text-[13px] truncate"
+                        style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+                      >
+                        {c.name}
+                      </div>
+                      <div className="text-[11px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>
+                        {t("modelConfig.modelsCount", { count: c.models.length })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
-            {/* 虚拟列表：仅渲染可视区行；搜索已在数据层完成（rows 已是过滤后结果），不影响搜得到 */}
-            <VirtualList
-              items={rows}
-              itemHeight={36}
-              rowKey={(r) => r.key}
-              className="flex-1 min-h-0"
-              style={{ scrollbarGutter: "stable" }}
-              renderItem={(r) =>
-                r.kind === "header" ? (
-                  <div
-                    className="flex items-center gap-1 text-[12px] font-medium"
-                    style={{
-                      height: 36,
-                      color: r.tone === "cap" ? "var(--canvas-text)" : "var(--canvas-text-muted)",
-                    }}
-                  >
-                    {r.tone === "cap" && CAPABILITY_TABS.find((t) => t.key === activeCap)?.icon}
-                    {r.label}
+          {/* ===== 右栏：详情 / 表单 ===== */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {view === "form" ? (
+              <ApiSettingsForm
+                key={`${formMode}-${formMode === "edit" ? provider?.id ?? "gone" : "new"}`}
+                mode={formMode}
+                provider={formMode === "edit" ? provider : undefined}
+                presets={presets}
+                onDone={handleFormDone}
+                onCancel={() => setView("detail")}
+              />
+            ) : provider ? (
+              <>
+                {/* 详情头：名称 + 协议 + 操作 */}
+                <div
+                  className="flex items-center gap-2 px-5 py-3 border-b select-none"
+                  style={{ borderColor: "var(--canvas-border)" }}
+                >
+                  <span className="text-[15px] font-semibold truncate" style={{ color: "var(--canvas-text)" }}>
+                    {provider.name}
+                  </span>
+                  {provider.protocol && (
+                    <span
+                      className="shrink-0 text-[11px] leading-none px-1.5 py-1 rounded"
+                      style={{ color: "var(--canvas-text-dim)", border: "1px solid var(--canvas-border)" }}
+                    >
+                      {t(`modelConfig.protocol.${provider.protocol}`)}
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1 shrink-0">
+                    <AppButton size="sm" variant="ghost" onClick={handleFetch} loading={fetching}>
+                      <DownloadOutlined />
+                      {fetchLabel}
+                    </AppButton>
+                    <AppButton size="sm" variant="ghost" onClick={startEdit}>
+                      <EditOutlined />
+                      {t("common.edit")}
+                    </AppButton>
+                    {/* 删除供应商是破坏性操作，用 danger 而不是默认变体 */}
+                    <AppButton size="sm" variant="danger" onClick={() => setDeleteOpen(true)}>
+                      <DeleteOutlined />
+                      {t("common.delete")}
+                    </AppButton>
                   </div>
-                ) : (
-                  <ModelRow m={r.m} checked={r.checked} onToggle={onToggleCap} />
-                )
-              }
-            />
-          </>
-        )}
-
-      </div>
-    </div>
-    </Drawer>
+                </div>
+                {/* 连接信息（key 保证切供应商时揭示状态重置） */}
+                <ConnectionInfo key={provider.id} provider={provider} />
+                {/* 模型区 */}
+                <ApiSettingsModels provider={provider} onFetch={handleFetch} fetching={fetching} />
+              </>
+            ) : (
+              <div
+                className="flex-1 flex flex-col items-center justify-center gap-1.5 text-center"
+                style={{ color: "var(--canvas-text-muted)" }}
+              >
+                <ApiOutlined className="text-3xl mb-1" />
+                <div className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.noProviders")}</div>
+                <div className="text-xs">{t("modelConfig.noProvidersDesc")}</div>
+                <AppButton size="sm" variant="primary" className="mt-2" onClick={startAdd}>
+                  <PlusOutlined />
+                  {t("modelConfig.addProvider")}
+                </AppButton>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
+      </Drawer>
       <ConfirmModal
-        open={!!deleteProviderId}
+        open={deleteOpen}
         zIndex={1050}
         title={t("modelConfig.deleteProvider")}
-        content={t("modelConfig.deleteProviderConfirm", { name: deletingProvider?.name ?? "", count: deletingProvider?.models.length ?? 0 })}
+        content={t("modelConfig.deleteProviderConfirm", {
+          name: provider?.name ?? "",
+          count: provider?.models.length ?? 0,
+        })}
         okText={t("common.delete")}
         cancelText={t("common.cancel")}
         onOk={async () => {
-          if (!deleteProviderId) return;
+          if (!providerId) return;
           try {
             // 删除失败时不关闭确认框、不重置选择，用户可重试
-            if (await deleteProvider(deleteProviderId)) {
-              setProviderId(null);
-              setDeleteProviderId(null);
+            if (await deleteProvider(providerId)) {
+              const rest = useModelStore.getState().providers;
+              setProviderId(rest[0]?.id ?? null);
+              setDeleteOpen(false);
             }
           } catch {
-            // 同 handleSaveProvider：异常已由全局流程处理
+            // 异常已由全局流程处理（清 token + 跳登录）
           }
         }}
-        onCancel={() => setDeleteProviderId(null)}
+        onCancel={() => setDeleteOpen(false)}
       />
     </>
   );
