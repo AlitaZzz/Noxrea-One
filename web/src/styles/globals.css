@@ -219,6 +219,20 @@ select:focus-visible,
   height: 0;
 }
 [data-text-editor] > * + * { margin-top: 0.5em; }
+/* 编辑态编辑器撑满节点 body 高度：
+   否则 contenteditable 只随文字内容增长，节点内文字下方的空白区域不属于编辑器——
+   右键命中外层容器弹出自定义节点菜单（看起来「编辑器只有一行」），
+   点击空白处也无法落光标。编辑态才撑满（contenteditable=false 的展示态不变）。
+   注意 EditorContent 会在 ProseMirror 外再包一层 height:auto 的 div，
+   min-height 百分比对它不生效，必须经「包裹层 min-height + 列 flex」逐级拉伸。 */
+div:has(> [contenteditable="true"][data-text-editor]) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+[contenteditable="true"][data-text-editor] {
+  flex: 1;
+}
 [data-text-editor] h1 { font-size: 2em; font-weight: 700; line-height: 1.2; }
 [data-text-editor] h2 { font-size: 1.5em; font-weight: 700; line-height: 1.25; }
 [data-text-editor] h3 { font-size: 1.25em; font-weight: 600; line-height: 1.3; }
