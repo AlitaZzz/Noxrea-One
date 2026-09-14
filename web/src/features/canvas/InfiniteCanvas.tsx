@@ -39,8 +39,10 @@ import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import AgentDrawer from "@/features/agent/components/AgentDrawer";
+import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import { useAssetsStore } from "@/features/assets/store";
+import type { AssetItem } from "@/features/assets/types";
 import { useAuthStore } from "@/features/auth/store";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
@@ -73,7 +75,7 @@ import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
-import { flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
@@ -780,8 +782,22 @@ export default function InfiniteCanvas() {
     return target.closest('.asset-library-modal') !== null;
   }, []);
 
+  // 资产抽屉卡片拖入画布：在落点直接建资产节点（不走上传管道）
+  const handleAssetDrop = useCallback((data: unknown, pos: { x: number; y: number }) => {
+    if (!data || typeof data !== "object") return;
+    const asset = data as AssetItem;
+    const node = createAssetNode(asset, pos, findFreePosition);
+    if (node) addNodes([node]);
+    notif.success({
+      title: t("asset.added"),
+      description: asset.name,
+      placement: "bottomRight",
+      duration: 3,
+    });
+  }, [addNodes, notif, t]);
+
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
-  const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef);
+  const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);
 
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {

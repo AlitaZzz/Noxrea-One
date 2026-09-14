@@ -27,6 +27,10 @@ interface Props {
   compact?: boolean;
   /** 悬浮大图预览是画布抽屉的既有交互；弹窗可按需关闭。 */
   showHoverPreview?: boolean;
+  /** 悬停显示中央「+」插入按钮（抽屉传入）；弹窗管理场景不传。 */
+  showInsertButton?: boolean;
+  /** 资产卡片可拖拽到画布插入（抽屉传入）。 */
+  draggable?: boolean;
   /** 悬浮预览的水平锚点，透传给资产卡片。 */
   hoverPreviewAnchorX?: number;
   selectedIds?: Set<string>;
@@ -49,7 +53,7 @@ interface Props {
 }
 
 export default function AssetGrid({
-  assets, folders, folderCounts, compact, showHoverPreview = false, hoverPreviewAnchorX = 0, selectedIds, selectMode = false,
+  assets, folders, folderCounts, compact, showHoverPreview = false, showInsertButton = false, draggable = false, hoverPreviewAnchorX = 0, selectedIds, selectMode = false,
   onSelect, onToggleSelect, onInsertCanvas,
   onEnterFolder, onDeleteFolder, onRenameFolder,
   loading, hasMore, loadingMore, onLoadMore,
@@ -133,6 +137,8 @@ export default function AssetGrid({
             asset={asset}
             selectable={selectable}
             showHoverPreview={showHoverPreview}
+            showInsertButton={showInsertButton}
+            draggable={draggable}
             hoverPreviewAnchorX={hoverPreviewAnchorX}
             selected={selectedIds?.has(asset.id)}
             selectMode={selectMode}

@@ -613,6 +613,8 @@ function AssetsView() {
           folderCounts={recursiveCounts}
           compact
           showHoverPreview
+          showInsertButton
+          draggable
           hoverPreviewAnchorX={DRAWER_WIDTH}
           onInsertCanvas={handleInsertCanvas}
           onEnterFolder={(folder) => setActiveFolderId(folder.id)}

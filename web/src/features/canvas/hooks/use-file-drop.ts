@@ -7,6 +7,7 @@
 
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import { createNodesFromFiles } from "@/features/canvas/upload";
 
 /** 参考区缩略图拖拽的自定义标记：携带此类标记的拖拽一律不视为文件上传 */
@@ -17,6 +18,9 @@ function isRefDrag(dt: DataTransfer | null): boolean {
   return REF_DRAG_TYPES.some((k) => dt.types.includes(k));
 }
 
+/** 资产卡片拖拽的落点回调：data 为 ASSET_DRAG_TYPE 上的 JSON，pos 为画布坐标 */
+export type AssetDropHandler = (data: unknown, pos: { x: number; y: number }) => void;
+
 /**
  * 文件拖放 hook。
  *
@@ -24,12 +28,14 @@ function isRefDrag(dt: DataTransfer | null): boolean {
  * 上传成功后用 updateNodeData 原地替换为真实内容；失败则删除占位节点。
  *
  * @param screenToFlowPosition  React Flow 的屏幕坐标→画布坐标转换函数
+ * @param onAssetDrop  资产卡片（ASSET_DRAG_TYPE）拖入画布的落点回调，可选
  * @returns { handleDragOver, handleDrop, isFileDragging } 供 JSX 绑定
  */
 export function useFileDrop(
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
   shouldIgnore?: (target: HTMLElement) => boolean,
   containerRef?: React.RefObject<HTMLElement | null>,
+  onAssetDrop?: AssetDropHandler,
 ) {
   // 组件卸载时清理心跳定时器
   useEffect(() => {
@@ -105,8 +111,16 @@ export function useFileDrop(
     setFileDragging(false);
   }, []);
 
+  const isAssetDrag = useCallback((dt: DataTransfer | null) => !!dt?.types.includes(ASSET_DRAG_TYPE), []);
+
   const handleDragOver = useCallback((e: DragEvent) => {
     if (shouldIgnore?.(e.target as HTMLElement)) return;
+    // 资产卡片拖入：接受放置，落点由 handleDrop 建节点
+    if (isAssetDrag(e.dataTransfer)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      return;
+    }
     // 非文件拖拽（画布内元素 / 选中文本的原生拖拽）：不弹上传遮罩、也不建节点，
     // 但仍必须 preventDefault —— 否则浏览器判定「此处不可放置」，光标变成禁止图标。
     // dropEffect 置为 none，明确表示不接受放置（handleDrop 对这些类型同样放行）。
@@ -118,13 +132,23 @@ export function useFileDrop(
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     startWatcher();
-  }, [shouldIgnore, startWatcher]);
+  }, [isAssetDrag, shouldIgnore, startWatcher]);
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
       if (shouldIgnore?.(e.target as HTMLElement)) return;
       // 参考区缩略图排序拖拽落到画布：不作为文件上传处理
       if (isRefDrag(e.dataTransfer)) return;
+      // 资产卡片拖入：按拖拽携带的资产数据直接建节点，不走上传
+      if (isAssetDrag(e.dataTransfer)) {
+        e.preventDefault();
+        const raw = e.dataTransfer.getData(ASSET_DRAG_TYPE);
+        if (!raw || !onAssetDrop) return;
+        try {
+          onAssetDrop(JSON.parse(raw), screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+        } catch { /* JSON 损坏等异常数据：静默丢弃 */ }
+        return;
+      }
       e.preventDefault();
       // 释放后隐藏遮罩并停止心跳定时器
       stopWatcher();
@@ -135,7 +159,7 @@ export function useFileDrop(
       // 共享的「本地文件 → 新节点」落位 + 上传逻辑（右键菜单上传也走这里）
       await createNodesFromFiles(files, pos);
     },
-    [screenToFlowPosition, shouldIgnore, stopWatcher],
+    [isAssetDrag, onAssetDrop, screenToFlowPosition, shouldIgnore, stopWatcher],
   );
 
   /**
@@ -147,8 +171,11 @@ export function useFileDrop(
   const handleDragStart = useCallback((e: DragEvent) => {
     if (shouldIgnore?.(e.target as HTMLElement)) return;
     if (isRefDrag(e.dataTransfer)) return;
+    // 资产抽屉渲染在画布容器内，卡片的 dragstart 会冒泡到这里：放行，
+    // 否则刚启动的资产拖拽会被下面的 preventDefault 取消
+    if (isAssetDrag(e.dataTransfer)) return;
     e.preventDefault();
-  }, [shouldIgnore]);
+  }, [isAssetDrag, shouldIgnore]);
 
   return { handleDragOver, handleDragStart, handleDrop, isFileDragging };
 }
