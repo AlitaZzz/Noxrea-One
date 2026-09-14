@@ -232,7 +232,8 @@
     "noMatchModels": "无匹配模型",
     "copy": "复制",
     "reveal": "显示密钥",
-    "hide": "隐藏"
+    "hide": "隐藏",
+    "deleteModel": "删除模型"
   },
   "project": {
     "title": "项目",
@@ -616,6 +617,7 @@
       "provider_delete_failed": "删除供应商失败",
       "provider_fetch_failed": "读取供应商列表失败",
       "model_add_failed": "添加模型失败",
+      "model_delete_failed": "删除模型失败",
       "model_capability_failed": "更新模型能力失败",
       "models_set_failed": "批量更新模型失败"
     },

@@ -233,7 +233,8 @@
     "noMatchModels": "No matching models",
     "copy": "Copy",
     "reveal": "Reveal key",
-    "hide": "Hide"
+    "hide": "Hide",
+    "deleteModel": "Delete model"
   },
   "project": {
     "title": "Projects",
@@ -617,6 +618,7 @@
       "provider_delete_failed": "Failed to delete the provider",
       "provider_fetch_failed": "Failed to load the provider list",
       "model_add_failed": "Failed to add the model",
+      "model_delete_failed": "Failed to delete the model",
       "model_capability_failed": "Failed to update the model capability",
       "models_set_failed": "Failed to update models in bulk"
     },

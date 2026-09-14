@@ -6,6 +6,8 @@
 "use client";
 
 import {
+  CheckOutlined,
+  CloseOutlined,
   DownloadOutlined,
   EllipsisOutlined,
   PictureOutlined,
@@ -36,20 +38,27 @@ const CAP_PILLS: { cap: ModelCapability; Icon: ComponentType<{ className?: strin
   { cap: "audio", Icon: WaveIcon },
 ];
 
-/** 单行（已 memo）：仅在 m / dim / onToggle 变化时才重渲染。
-    dim = 该行在当前筛选下未启用（字色降级，不参与选中语义）。 */
+/** 单行（已 memo）：仅在 m / dim / onToggle / onDelete 变化时才重渲染。
+    dim = 该行在当前筛选下未启用（字色降级，不参与选中语义）。
+    悬停行尾出现删除 ×；点击后本行内变为青柠对勾二次确认，移出行即取消。 */
 const ModelRow = memo(function ModelRow({
   m,
   dim,
   onToggle,
+  onDelete,
 }: {
   m: ModelInfo;
   dim: boolean;
   onToggle: (id: string, cap: ModelCapability) => void;
+  onDelete: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
   return (
-    <div className="flex items-center gap-2 px-3 h-full">
+    <div
+      className="group flex items-center gap-2 px-3 h-full"
+      onMouseLeave={() => confirming && setConfirming(false)}
+    >
       <ModelIcon model={m.name} className="text-xs shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
       <span
         className="flex-1 min-w-0 truncate text-[13px]"
@@ -74,6 +83,19 @@ const ModelRow = memo(function ModelRow({
           );
         })}
       </div>
+      <button
+        type="button"
+        aria-label={confirming ? t("common.delete") : t("modelConfig.deleteModel")}
+        className={`cap-pill shrink-0 ${confirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+        style={
+          confirming
+            ? { color: "var(--canvas-accent)", background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)" }
+            : undefined
+        }
+        onClick={() => (confirming ? onDelete(m.id) : setConfirming(true))}
+      >
+        {confirming ? <CheckOutlined /> : <CloseOutlined />}
+      </button>
     </div>
   );
 });
@@ -126,6 +148,11 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
   // 切换单行能力；失败时 store 会提示并回滚（本地不写入），这里兜住网络异常
   const onToggle = (modelId: string, cap: ModelCapability) => {
     toggleModelCapability(provider.id, modelId, cap).catch(() => {});
+  };
+
+  // 删除模型（行内二次确认后触发）；失败时行仍在列表，store 统一提示
+  const onDelete = (modelId: string) => {
+    useModelStore.getState().deleteModel(provider.id, modelId).catch(() => {});
   };
 
   // 批量操作目标：当前筛选 + 搜索后可见的全部模型。
@@ -304,7 +331,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
                   {r.label}
                 </div>
               ) : (
-                <ModelRow m={r.m} dim={r.dim} onToggle={onToggle} />
+                <ModelRow m={r.m} dim={r.dim} onToggle={onToggle} onDelete={onDelete} />
               )
             }
           />
