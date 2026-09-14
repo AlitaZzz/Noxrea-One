@@ -11,10 +11,10 @@ import {
   CloseOutlined,
   CopyOutlined,
   EditOutlined,
-  FileImageOutlined,
   LoadingOutlined,
   PictureOutlined,
   PlusOutlined,
+  SelectOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { Tooltip } from "antd";
@@ -569,10 +569,16 @@ export default function AssetInspector({
 
       <div className={`flex-1 overflow-y-auto px-3 pb-4 min-h-0${single ? "" : " pt-3"}`}>
         {!hasSelection ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 pb-10">
-            <FileImageOutlined style={{ fontSize: 36, color: "var(--canvas-text-muted)", opacity: 0.5 }} />
-            <div className="text-sm" style={{ color: "var(--canvas-text-muted)" }}>{t("asset.noDetail")}</div>
-            <div className="text-xs text-center px-2" style={{ color: "var(--canvas-text-muted)", opacity: 0.7 }}>
+          // 空态与资产网格空态同款：圆角容器包原图标，替代裸图标
+          <div className="h-full flex flex-col items-center justify-center gap-3 pb-10 select-none">
+            <div
+              className="flex items-center justify-center w-16 h-16 rounded-2xl"
+              style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+            >
+              <SelectOutlined style={{ fontSize: 26, color: "var(--canvas-text-dim)" }} />
+            </div>
+            <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("asset.noDetail")}</div>
+            <div className="text-xs text-center px-2" style={{ color: "var(--canvas-text-muted)" }}>
               {t("asset.noDetailHint")}
             </div>
           </div>

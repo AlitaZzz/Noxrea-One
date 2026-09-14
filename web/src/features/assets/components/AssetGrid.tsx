@@ -6,11 +6,12 @@
 "use client";
 
 import { LoadingOutlined } from "@ant-design/icons";
-import { Empty, Spin } from "antd";
+import { Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
@@ -100,8 +101,15 @@ export default function AssetGrid({
       );
     }
     return (
-      <div className="flex items-center justify-center h-full min-h-[200px]">
-        <Empty description={<span className="text-white/30">{t("asset.empty")}</span>} />
+      // 自绘空态：中性图标容器，替代 antd Empty 默认插画（与暗色画布主题不搭）
+      <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-3 select-none">
+        <div
+          className="flex items-center justify-center w-16 h-16 rounded-2xl"
+          style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+        >
+          <AssetsIcon style={{ fontSize: 26, color: "var(--canvas-text-dim)" }} />
+        </div>
+        <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</div>
       </div>
     );
   }
