@@ -31,6 +31,7 @@ import {
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
+import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
   classifyUploadError,
@@ -454,6 +455,19 @@ async function runUploads(
     if (r.status === "fulfilled") {
       succeeded++;
       summaryResults[p.itemIndex] = r.value;
+      // 服务端上传体检发现视频截断 / 损坏：上传不阻断（文件可用部分照常入库），
+      // 但必须立刻告诉用户「标称时长 vs 实际可解码时长」
+      const mediaWarning = (
+        r.value as { data?: { media_warning?: { declared: number; decodable: number } } } | null
+      )?.data?.media_warning;
+      if (mediaWarning) {
+        showGlobalMessage().warning(
+          i18n.t("file.mediaTruncated", {
+            declared: formatTime(mediaWarning.declared),
+            actual: formatTime(mediaWarning.decodable),
+          }),
+        );
+      }
       if (p.node) {
         applyUploadResult(p.node.id, r.value, retryContextOf(p, source));
       } else {

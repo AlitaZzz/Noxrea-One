@@ -1,5 +1,6 @@
 {
   "common": {
+    "switchLanguage": "切换语言",
     "copy": "复制",
     "copied": "已复制到剪贴板",
     "copyFailed": "复制失败",
@@ -557,7 +558,8 @@
     "uploadRetryHint": "可在节点上点击重试",
     "dropToAdd": "释放以添加文件",
     "unsupportedType": "不支持的文件类型，仅支持图片、视频和音频",
-    "ignoredSome": "已忽略部分不支持的文件，仅支持图片、视频和音频"
+    "ignoredSome": "已忽略部分不支持的文件，仅支持图片、视频和音频",
+    "mediaTruncated": "视频文件疑似不完整：标称 {{declared}}，实际仅 {{actual}} 可解码"
   },
   "agent": {
     "title": "Agent",

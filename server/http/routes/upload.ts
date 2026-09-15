@@ -8,9 +8,12 @@ import { getConfig } from "@server/core/config";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
+import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media";
+import { logEvent } from "@server/core/logger/utils";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
+import path from "path";
 
 const router = new Hono();
 
@@ -126,6 +129,35 @@ router.post("/api/files/upload", async (c) => {
       source,
     });
 
+    // 视频上传体检：截断 / 损坏文件的全量解码会在数据断点提前结束（很快），
+    // 健康文件才需要整段解码。响应只等 1.5s——赶得上就把「标称 vs 实际」
+    // 随响应下发给前端提示；赶不上则体检在后台继续跑完，结论只进日志。
+    // 体检结论会进 probeVideoIntegrity 的缓存，之后打开片段面板无需重复解码。
+    let mediaWarning: { declared: number; decodable: number } | undefined;
+    if (/\.(mp4|webm|mov|mkv|m4v|avi|mpg|mpeg)$/i.test(finalExt)) {
+      const absPath = path.resolve(localStorage.baseDir, storageKey);
+      const check = (async () => {
+        const meta = await probeVideoMetaCached(absPath);
+        if (!meta?.duration) return null;
+        const integrity = await probeVideoIntegrity(absPath, meta.duration);
+        return integrity.truncated && integrity.decodableDuration
+          ? { declared: meta.duration, decodable: integrity.decodableDuration }
+          : null;
+      })();
+      check
+        .then((verdict) => {
+          if (verdict) {
+            logEvent("media", { stage: "upload_truncated", video: storageKey, ...verdict });
+          }
+        })
+        .catch(() => undefined);
+      const inlineVerdict = await Promise.race([
+        check,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+      ]);
+      if (inlineVerdict) mediaWarning = inlineVerdict;
+    }
+
     return c.json(
       ok({
         key: storageKey,
@@ -133,6 +165,7 @@ router.post("/api/files/upload", async (c) => {
         size: buffer.length,
         mime_type: mime,
         hash,
+        media_warning: mediaWarning,
       })
     );
   } catch (err: unknown) {

@@ -1,5 +1,6 @@
 {
   "common": {
+    "switchLanguage": "Switch language",
     "copy": "Copy",
     "copied": "Copied to clipboard",
     "copyFailed": "Copy failed",
@@ -558,7 +559,8 @@
     "uploadRetryHint": "You can retry from the node",
     "dropToAdd": "Drop to add files",
     "unsupportedType": "Unsupported file type. Only images, videos and audios are supported",
-    "ignoredSome": "Some unsupported files were ignored. Only images, videos and audios are supported"
+    "ignoredSome": "Some unsupported files were ignored. Only images, videos and audios are supported",
+    "mediaTruncated": "Video file looks incomplete: claims {{declared}} but only {{actual}} is decodable"
   },
   "agent": {
     "title": "Agent",

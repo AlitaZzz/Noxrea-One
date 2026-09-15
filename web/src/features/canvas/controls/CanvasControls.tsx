@@ -31,11 +31,11 @@ import type { BackgroundType } from "@/features/canvas/types";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 
 function LanguageToggle() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const toggle = () => i18n.changeLanguage(lang === "zh" ? "en" : "zh");
   return (
-    <Tooltip title={lang === "zh" ? "Switch to English" : "切换到中文"}>
+    <Tooltip title={t("common.switchLanguage")}>
       <Button
         size="small"
         type="text"

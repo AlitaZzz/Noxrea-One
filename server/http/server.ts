@@ -1,7 +1,11 @@
 import { serve, type ServerType } from "@hono/node-server";
+import type { Server as HttpServer } from "node:http";
+import fs from "fs/promises";
+import path from "path";
 import { app } from "./app";
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
+import { localStorage } from "@server/services/storage/backends/local";
 
 let server: ServerType | null = null;
 
@@ -11,6 +15,12 @@ let server: ServerType | null = null;
  */
 export function startServer(): Promise<void> {
   const cfg = getConfig();
+
+  // 启动清扫 _tmp：临时产物只服务于「进行中的请求」，服务重启后全部作废。
+  // 崩溃 / 强杀留下的残留若不清会永久占据磁盘（各路由的 finally 清理只覆盖正常路径）
+  void fs.rm(path.join(localStorage.baseDir, "_tmp"), { recursive: true, force: true }).catch(
+    () => undefined,
+  );
 
   return new Promise((resolve) => {
     server = serve(
@@ -32,7 +42,10 @@ export function startServer(): Promise<void> {
     // Next rewrites 代理的连接池若在销毁瞬间复用该连接，读到 RST → read ECONNRESET，
     // 表现为画布保存（PUT）偶发 HTTP 500。空闲连接改由客户端侧（undici 约 4s）先关闭，
     // 竞态窗口随之消失。dev 与 prod（npm run server）同样生效。
-    server.keepAliveTimeout = 0;
+    //
+    // ServerType 是 http1/http2 服务器的联合类型，keepAliveTimeout 只存在于
+    // http.Server（HTTP/1.1）上；本服务固定跑 HTTP/1.1，运行时必为该类型
+    (server as HttpServer).keepAliveTimeout = 0;
   });
 }
 
