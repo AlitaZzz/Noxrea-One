@@ -40,6 +40,9 @@ export interface FrameSpriteState {
   duration: number;
   /** 真实帧率，供一帧步进使用；拿不到时为 null */
   fps: number | null;
+  /** duration 的来源：sprite = 服务端按可解码内容计算（可信）；
+      fallback = 浏览器读原视频容器标称值（截断视频会虚报，调用方需自行核验） */
+  durationSource: "sprite" | "fallback" | null;
   /** 源文件被截断：duration 是实际可解码时长，declaredDuration 是容器标称值 */
   truncated: boolean;
   declaredDuration: number | null;
@@ -55,6 +58,7 @@ const INITIAL: FrameSpriteState = {
   frameWidth: 0,
   duration: 0,
   fps: null,
+  durationSource: null,
   truncated: false,
   declaredDuration: null,
   status: "loading",
@@ -165,6 +169,7 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
               frameWidth: FRAME_TRACK_WIDTH / count,
               duration: info.duration,
               fps: info.fps ?? null,
+              durationSource: "sprite",
               truncated: info.truncated ?? false,
               declaredDuration: info.declared_duration ?? null,
               status: "ready",
@@ -174,11 +179,13 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
         }
       }
 
-      // 兜底：拿不到雪碧图也要拿到时长，否则播放头无从定位、面板等同于不可用
+      // 兜底：拿不到雪碧图也要拿到时长，否则播放头无从定位、面板等同于不可用。
+      // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
+      // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴
       const duration = await probeDuration(videoSrc);
       apply(
         duration
-          ? { ...INITIAL, duration, status: "ready" }
+          ? { ...INITIAL, duration, durationSource: "fallback", status: "ready" }
           : { ...INITIAL, status: "error" },
       );
     })();

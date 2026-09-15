@@ -52,8 +52,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     cellHeight,
     count,
     frameWidth,
-    duration,
+    duration: spriteDuration,
     fps,
+    durationSource,
     truncated,
     declaredDuration,
     status,
@@ -62,6 +63,12 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
   // 代理生命周期：pending = 转码中 / ready = 已挂到节点上 / failed = 生成失败（面板禁用）
   const [proxyState, setProxyState] = useState<"pending" | "ready" | "failed">("pending");
+  // 代理文件的真实时长（服务端转码完探测，随响应返回）
+  const [proxyDuration, setProxyDuration] = useState<number | null>(null);
+  // 雪碧图失败时的兜底时长来自浏览器读原视频 moov（截断视频会虚报标称值），
+  // 不可信：此时时间轴改用代理的真实时长——代理只含可解码内容，且正是正在
+  // 播放的实体。代理时长未知（转码中/失败）时按 0 处理，面板保持禁用
+  const duration = durationSource === "fallback" ? proxyDuration ?? 0 : spriteDuration;
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -98,15 +105,18 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
       ? fetchVideoProxy(videoKey)
           .then(async (res) => {
             if (!res.ok) return null;
-            const json = (await res.json()) as { data?: { url?: string } };
-            return json.data?.url ?? null;
+            const json = (await res.json()) as { data?: { url?: string; duration?: number } };
+            return json.data?.url
+              ? { url: json.data.url, duration: json.data.duration ?? null }
+              : null;
           })
           .catch(() => null)
-      : Promise.resolve<string | null>(null);
-    void request.then((url) => {
+      : Promise.resolve<{ url: string; duration: number | null } | null>(null);
+    void request.then((result) => {
       if (cancelled) return;
-      setProxyUrl(url);
-      setProxyState(url ? "ready" : "failed");
+      setProxyUrl(result?.url ?? null);
+      setProxyDuration(result?.duration ?? null);
+      setProxyState(result ? "ready" : "failed");
     });
     return () => {
       cancelled = true;

@@ -91,6 +91,11 @@ async function generateProxy(
   }
 }
 
+/** 读取代理文件的真实时长（探一次后进缓存）；拿不到返回 null */
+async function proxyDurationOf(proxyPath: string): Promise<number | null> {
+  return (await probeVideoMetaCached(proxyPath))?.duration ?? null;
+}
+
 const router = new Hono();
 
 router.post("/api/files/video-proxy", async (c) => {
@@ -145,7 +150,7 @@ router.post("/api/files/video-proxy", async (c) => {
 
   try {
     await fs.access(proxyPath);
-    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, cached: true }));
+    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
   } catch {
     // 未生成，继续往下走
   }
@@ -156,7 +161,7 @@ router.post("/api/files/video-proxy", async (c) => {
     await pending.catch(() => {});
     try {
       await fs.access(proxyPath);
-      return c.json(ok({ url: `/api/files/${proxyKey}`, fps, cached: true }));
+      return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
     } catch {
       return failCode(500, "video_proxy.generation_failed");
     }
@@ -168,7 +173,7 @@ router.post("/api/files/video-proxy", async (c) => {
 
   try {
     await task;
-    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, cached: false }));
+    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: false }));
   } catch (err: unknown) {
     // ffmpeg 缺失或转码失败的底层信息只进日志，运维细节不下发给客户端
     logger.error({ err, videoKey: video_key }, "Video proxy generation failed");
