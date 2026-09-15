@@ -36,6 +36,26 @@ const INITIAL_RANGE_RATIO = 0.2;
 const INITIAL_RANGE_MIN_S = 1;
 const INITIAL_RANGE_MAX_S = 30;
 
+/**
+ * 计算初始选区：起点在打开时的播放位置，时长为片长 20%（钳 [1s, 30s]）；
+ * 贴尾部放不下时整段左滑贴齐片尾。初始化 effect 与「代理就绪前的预览渲染」
+ * 共用同一公式，保证预览画出的选区和初始化落下的选区完全一致、无缝接管。
+ */
+function computeInitialRange(duration: number, startPos: number): { inR: number; outR: number } {
+  const minRangeRatio = MIN_RANGE_S / duration;
+  const start = clamp01(startPos / duration);
+  const rangeRatio =
+    Math.min(INITIAL_RANGE_MAX_S, Math.max(INITIAL_RANGE_MIN_S, duration * INITIAL_RANGE_RATIO)) /
+    duration;
+  const outR = Math.min(1, start + rangeRatio);
+  const inR = Math.max(0, outR - rangeRatio);
+  // 极短视频（时长不足最小区间）：钳到末尾，rangeValid 自然为 false、确认禁用
+  if (outR - inR < minRangeRatio) {
+    return { inR: Math.max(0, 1 - minRangeRatio), outR: 1 };
+  }
+  return { inR, outR };
+}
+
 interface ClipStripPanelProps {
   nodeId: string;
   videoSrc: string;
@@ -73,9 +93,8 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
   useEffect(() => () => dragCleanupRef.current?.(), []);
-  // 打开瞬间的播放位置作为区间起点的初始值，之后不再随节点播放变化
-  const initialTimeRef = useRef<number | null>(null);
-  if (initialTimeRef.current === null) initialTimeRef.current = getVideoPlaybackTime(nodeId);
+  // 打开瞬间的播放位置：区间起点与预览渲染的基准（惰性初始化，仅取一次）
+  const [initialPosition] = useState(() => getVideoPlaybackTime(nodeId));
   // 区间双手柄与键盘微调目标（默认调终点：从当前播放位置向后扩一段是最常见操作）
   const [activeHandle, setActiveHandle] = useState<"in" | "out">("out");
   const [inRatio, setInRatio] = useState(0);
@@ -92,6 +111,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   // 区间最新值的 ref 镜像：tick 的 effect 依赖里没有区间值（见 tick 处说明），
   // 初始化/拖动在 setState 的同时更新这里，tick 每帧读到的始终是最新区间
   const loopStateRef = useRef({ inRatio: 0, outRatio: 1 });
+  // 初始化是否已写入真实区间：写入前选区/进度线不得渲染——operable 翻 true 的
+  // 那次渲染里 inRatio/outRatio 还是 0→1 默认值，直接渲染会闪现「满轨道全选」
+  const [rangeInitialized, setRangeInitialized] = useState(false);
   const initializedRef = useRef(false);
 
   // 取预览代理：拖动时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
@@ -146,37 +168,23 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const operable = ready && proxyState === "ready" && proxyUrl !== null;
   const inTime = ready ? inRatio * duration : 0;
   const outTime = ready ? outRatio * duration : 0;
-  const rangeValid = operable && outTime - inTime >= MIN_RANGE_S - 1e-6;
+  // rangeValid 必须等初始化写入真实区间：operable 翻 true 的那一帧里
+  // inRatio/outRatio 还是 0→1 默认值，不加守卫会允许「截取整段」的误操作窗口
+  const rangeValid = operable && rangeInitialized && outTime - inTime >= MIN_RANGE_S - 1e-6;
 
-  // 时长就绪且代理已挂上后初始化：区间起点放在打开时的播放位置，终点向后扩
-  // 默认区间；末尾放不下最小区间时向前借（贴尾打开也能拿到合法区间）。
-  // 随后立即开始循环播放所选片段（面板打开即预览，无需手动点播放）
+  // 时长就绪且代理已挂上后初始化：区间用与预览渲染相同的公式（computeInitialRange），
+  // 落下的选区和代理转码期间预览的完全一致；随后立即开始循环播放所选片段
   useEffect(() => {
     if (initializedRef.current || !operable) return;
     initializedRef.current = true;
-    const minRangeRatio = MIN_RANGE_S / duration;
-    const start = clamp01((initialTimeRef.current ?? 0) / duration);
-    // 初始区间随片长自适应：20% 片长，钳在 [1s, 30s]。
-    // 放不下时整个窗口向左滑（贴齐片尾）而不是塌缩到最小值——
-    // 旧逻辑在「短视频 + 打开位置靠后」时会把选区压成 0.5s
-    const rangeRatio = Math.min(
-      INITIAL_RANGE_MAX_S,
-      Math.max(INITIAL_RANGE_MIN_S, duration * INITIAL_RANGE_RATIO),
-    ) / duration;
-    const outR = Math.min(1, start + rangeRatio);
-    const inR = Math.max(0, outR - rangeRatio);
-    // 极短视频（时长不足最小区间）：钳到末尾，rangeValid 自然为 false、确认禁用
-    if (outR - inR < minRangeRatio) {
-      setInRatio(Math.max(0, 1 - minRangeRatio));
-      setOutRatio(1);
-    } else {
-      setInRatio(inR);
-      setOutRatio(outR);
-    }
+    const { inR, outR } = computeInitialRange(duration, initialPosition);
+    setInRatio(inR);
+    setOutRatio(outR);
     loopStateRef.current = { inRatio: inR, outRatio: outR };
+    setRangeInitialized(true);
     seekVideo(nodeId, inR * duration);
     playVideo(nodeId);
-  }, [operable, duration, nodeId]);
+  }, [operable, duration, nodeId, initialPosition]);
 
   // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
   useEffect(() => {
@@ -491,6 +499,15 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, count, spriteUrl, frameWidth, cellWidth, cellHeight, scale, spriteWidth, status, t]);
 
+  // 代理转码期间的选区预览：与初始化同一公式（computeInitialRange），先把最终
+  // 形态画出来（仅展示、不可交互），代理就绪后初始化落下的区间与预览完全
+  // 一致、无缝接管——不再出现「先全亮像全选、代理好了才出现选区」的观感
+  const previewRange =
+    ready && !rangeInitialized ? computeInitialRange(duration, initialPosition) : null;
+  const bandRange = rangeInitialized
+    ? { inR: inRatio, outR: outRatio }
+    : previewRange;
+
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
@@ -501,17 +518,17 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
       >
         <div className="flex size-full overflow-hidden rounded-xl bg-black">{trackCells}</div>
 
-        {/* 区间外压暗 + 选中段青柠描边：不在缩略图上叠实色（半透明色叠彩色
-            缩略图会发浑），靠区间外压暗做对比；带子中间常驻显示当前截取时长 */}
-        {ready && (
+        {/* 区间外压暗 + 选中段青柠描边：初始化前按同一公式预览最终形态（仅展示），
+            代理就绪后无缝接管为可交互选区 */}
+        {bandRange && (
           <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
             <div className="absolute inset-x-3 inset-y-0">
-              <div className="absolute inset-y-0 left-0 bg-black/55" style={{ width: `${inRatio * 100}%` }} />
-              <div className="absolute inset-y-0 right-0 bg-black/55" style={{ width: `${(1 - outRatio) * 100}%` }} />
+              <div className="absolute inset-y-0 left-0 bg-black/55" style={{ width: `${bandRange.inR * 100}%` }} />
+              <div className="absolute inset-y-0 right-0 bg-black/55" style={{ width: `${(1 - bandRange.outR) * 100}%` }} />
               {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
               <div
-                className="pointer-events-auto absolute inset-y-0 cursor-grab touch-none"
-                style={{ left: `${inRatio * 100}%`, width: `${(outRatio - inRatio) * 100}%` }}
+                className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
+                style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
                 onPointerDown={handleBandDown}
               >
                 <div
@@ -526,7 +543,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
                     className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
                     style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
                   >
-                    {(outTime - inTime).toFixed(2)}s
+                    {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
                   </span>
                 </div>
               </div>
@@ -535,7 +552,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         )}
 
         {/* 播放进度竖线：循环扫播当前位置的细线标记（只展示，不接管指针） */}
-        {ready && (
+        {operable && rangeInitialized && (
           <div className="pointer-events-none absolute inset-0 z-20 overflow-visible">
             <div className="absolute inset-x-3 inset-y-0">
               <div
@@ -546,9 +563,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
           </div>
         )}
 
-        {/* 区间双手柄：白色端帽，z-30 压过着色层（代理未就绪时不渲染=不可拖）；
+        {/* 区间双手柄：白色端帽，z-30 压过着色层（未初始化/代理未就绪不渲染）；
             手柄容器自带 pointer-events-auto，从 none 的层里把指针事件接回来 */}
-        {operable && (
+        {operable && rangeInitialized && (
           <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
             <div className="absolute inset-x-3 inset-y-0 overflow-visible">
               {handleRenderer("in", inRatio)}
