@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, WarningOutlined } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,6 +44,8 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     frameWidth,
     duration,
     fps,
+    truncated,
+    declaredDuration,
     status,
   } = useFrameSprite(videoSrc);
   // 代理地址单独留存：它同时也是拖动时节点播放器的临时播放源
@@ -287,6 +289,18 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       </div>
 
       <span className="text-sm tabular-nums text-[var(--canvas-text)]">{formatTime(currentTime)}</span>
+
+      {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
+      {truncated && declaredDuration !== null && (
+        <Tooltip
+          title={t("capture.truncated", {
+            actual: formatTime(duration),
+            declared: formatTime(declaredDuration),
+          })}
+        >
+          <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
+        </Tooltip>
+      )}
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 

@@ -513,7 +513,8 @@
     "processing": "正在捕获帧...",
     "confirm": "截取",
     "loading": "正在生成帧序列...",
-    "unavailable": "无法生成帧序列预览"
+    "unavailable": "无法生成帧序列预览",
+    "truncated": "源视频数据不完整：标称 {{declared}}，实际仅 {{actual}} 可解码，超出部分已损坏"
   },
   "detach": {
     "failed": "音轨分离失败，请稍后重试",

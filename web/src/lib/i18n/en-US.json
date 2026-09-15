@@ -514,7 +514,8 @@
     "processing": "Capturing frame...",
     "confirm": "Capture",
     "loading": "Generating frame strip...",
-    "unavailable": "Frame preview unavailable"
+    "unavailable": "Frame preview unavailable",
+    "truncated": "Source video is incomplete: claims {{declared}} but only {{actual}} is decodable; the rest is corrupt"
   },
   "detach": {
     "failed": "Audio detach failed, please try again later",

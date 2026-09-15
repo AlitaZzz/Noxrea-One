@@ -40,6 +40,9 @@ export interface FrameSpriteState {
   duration: number;
   /** 真实帧率，供一帧步进使用；拿不到时为 null */
   fps: number | null;
+  /** 源文件被截断：duration 是实际可解码时长，declaredDuration 是容器标称值 */
+  truncated: boolean;
+  declaredDuration: number | null;
   status: FrameStripStatus;
 }
 
@@ -52,6 +55,8 @@ const INITIAL: FrameSpriteState = {
   frameWidth: 0,
   duration: 0,
   fps: null,
+  truncated: false,
+  declaredDuration: null,
   status: "loading",
 };
 
@@ -160,6 +165,8 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
               frameWidth: FRAME_TRACK_WIDTH / count,
               duration: info.duration,
               fps: info.fps ?? null,
+              truncated: info.truncated ?? false,
+              declaredDuration: info.declared_duration ?? null,
               status: "ready",
             });
             return;

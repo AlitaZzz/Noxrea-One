@@ -38,10 +38,14 @@ export interface FrameSpriteInfo {
   count: number;
   /** 单格宽度（px） */
   cell_width: number;
-  /** 视频时长（s） */
+  /** 视频时长（s）；截断文件时是实际可解码时长，不是容器声明值 */
   duration: number;
   /** 真实帧率，拿不到时为 null */
   fps: number | null;
+  /** 源文件被截断（容器声明时长 > 实际数据）：轨道已收敛到可解码范围 */
+  truncated?: boolean;
+  /** 截断文件的容器声明时长（s），供面板展示标称值 */
+  declared_duration?: number | null;
 }
 
 /**
