@@ -523,6 +523,16 @@
     "audioSuffix": " (audio)",
     "mutedSuffix": " (muted)"
   },
+  "clip": {
+    "menu": "Clip extraction",
+    "processing": "Extracting clip...",
+    "confirm": "Extract clip",
+    "modePrecise": "Precise",
+    "modeFast": "Fast",
+    "modePreciseHint": "Re-encode, frame-accurate, slower",
+    "modeFastHint": "Stream copy, instant, cuts snap to keyframes",
+    "suffix": " (clip {{range}})"
+  },
   "draft": {
     "title": "Unsaved offline edits found",
     "content": "Detected unsaved changes from your last session. Restore the local draft?",
@@ -671,6 +681,15 @@
       "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "no_audio_track": "This video has no audio track",
       "extract_failed": "Audio detach failed, please try again later",
+      "cancelled": "Processing cancelled"
+    },
+    "clip": {
+      "video_not_found": "Source video not found",
+      "invalid_range": "Invalid range: start must be before end, and at least 0.5s",
+      "range_too_long": "Clip too long: max 10 minutes per extraction",
+      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
+      "timeout": "Clip extraction timed out, try a shorter range",
+      "extract_failed": "Clip extraction failed, please retry",
       "cancelled": "Processing cancelled"
     },
     "generate": {

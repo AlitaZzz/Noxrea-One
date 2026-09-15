@@ -49,6 +49,19 @@ export function pauseVideo(nodeId: string): void {
   if (v && !v.paused) v.pause();
 }
 
+/** 播放节点视频——片段截取面板用它在所选区间内循环预览 */
+export function playVideo(nodeId: string): void {
+  const v = registry.get(nodeId);
+  if (v && v.paused) void v.play().catch(() => undefined);
+}
+
+/** 只改播放时间、不改变播放/暂停状态——循环回跳专用（seekVideo 会 pause，
+    用它做回跳会把循环播停成一圈就停） */
+export function setVideoTime(nodeId: string, time: number): void {
+  const v = registry.get(nodeId);
+  if (v && Number.isFinite(time)) v.currentTime = Math.max(0, time);
+}
+
 /** 抓取当前帧做封面：换源期间顶住画面，避免 video 短暂空白造成闪烁 */
 function captureCurrentFrame(v: HTMLVideoElement): string | null {
   try {
@@ -74,8 +87,11 @@ function captureCurrentFrame(v: HTMLVideoElement): string | null {
  *
  * 只改 video 元素的 src，节点数据里的原始 src 不动——保存素材、下载、后端抽帧
  * 出图仍走原视频，不受影响。恢复时会停在代理上的当前时间，也就是用户选中的那一帧。
+ *
+ * resume：换源默认停在暂停态（帧序列面板本来就是暂停 scrub）；片段截取面板
+ * 在循环预览中换源，需要元数据就绪后自动续播，由该开关控制。
  */
-export function swapVideoSource(nodeId: string, proxySrc: string): () => void {
+export function swapVideoSource(nodeId: string, proxySrc: string, opts?: { resume?: boolean }): () => void {
   const v = registry.get(nodeId);
   if (!v) {
     // 空转会让播放器继续用原视频（长 GOP），拖轨道时画面与轨道不同步
@@ -84,16 +100,20 @@ export function swapVideoSource(nodeId: string, proxySrc: string): () => void {
   }
 
   const prevSrc = v.getAttribute("src") ?? "";
+  const resume = opts?.resume === true;
   let restored = false;
 
-  /** 换源后 metadata 需要重新加载，时间点必须等加载完再写回 */
-  const apply = (src: string, time: number) => {
+  /** 换源后 metadata 需要重新加载，时间点必须等加载完再写回。
+      shouldResume 只在换入代理时为 true：恢复原视频（面板关闭）永远保持暂停，
+      否则关闭面板会违背用户意图地自动播放 */
+  const apply = (src: string, time: number, shouldResume: boolean) => {
     // 先把当前帧设成封面顶住画面，loadeddata（新视频已有可显示帧）后再撤掉，
     // 否则切换瞬间 video 没有内容可显示，看起来就是闪一下
     const poster = captureCurrentFrame(v);
     if (poster) v.poster = poster;
     const onMeta = () => {
       v.currentTime = time;
+      if (shouldResume) void v.play().catch(() => undefined);
     };
     const onData = () => v.removeAttribute("poster");
     v.addEventListener("loadedmetadata", onMeta, { once: true });
@@ -102,13 +122,13 @@ export function swapVideoSource(nodeId: string, proxySrc: string): () => void {
     v.load();
   };
 
-  apply(proxySrc, v.currentTime);
+  apply(proxySrc, v.currentTime, resume);
 
   return () => {
     if (restored) return;
     restored = true;
     // 用代理上的当前时间回写：用户选到哪一帧，恢复后就停在哪一帧
-    apply(prevSrc, v.currentTime);
+    apply(prevSrc, v.currentTime, false);
   };
 }
 

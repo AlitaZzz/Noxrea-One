@@ -52,6 +52,7 @@ import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
+import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
@@ -124,6 +125,7 @@ export default function InfiniteCanvas() {
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
   const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
+  const clipCaptureNodeId = useCanvasStore((s) => s.clipCaptureNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
@@ -205,9 +207,9 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId, setRfViewport]);
 
-  // 编辑态（标注 / 裁剪 / 选帧）激活的节点：生成面板必须让位，
+  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId;
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId;
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -260,6 +262,14 @@ export default function InfiniteCanvas() {
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
     return n;
   }, [frameCaptureNodeId, nodes]);
+
+  // 片段截取面板的宿主节点：同上
+  const clipStripNode = useMemo(() => {
+    if (!clipCaptureNodeId) return null;
+    const n = nodes.find((x) => x.id === clipCaptureNodeId);
+    if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
+    return n;
+  }, [clipCaptureNodeId, nodes]);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
   const { animateTo, cancel: cancelTidy } = useTidyAnimation();
@@ -640,6 +650,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setCroppingNodeId(null);
     useCanvasStore.getState().setEditingTextNodeId(null);
     useCanvasStore.getState().setFrameCaptureNodeId(null);
+    useCanvasStore.getState().setClipCaptureNodeId(null);
     useCanvasStore.getState().setMultiExpandedNodeId(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
@@ -698,6 +709,10 @@ export default function InfiniteCanvas() {
       const currentFrameCapture = useCanvasStore.getState().frameCaptureNodeId;
       if (currentFrameCapture && currentFrameCapture !== nodeId) {
         useCanvasStore.getState().setFrameCaptureNodeId(null);
+      }
+      const currentClipCapture = useCanvasStore.getState().clipCaptureNodeId;
+      if (currentClipCapture && currentClipCapture !== nodeId) {
+        useCanvasStore.getState().setClipCaptureNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -1085,17 +1100,37 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
+        {/* 片段截取面板 — 与帧序列面板同构互斥：打开其一时先关掉另一个 */}
+        {clipStripNode && (
+          <RfNodeToolbar nodeId={clipStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+            <ClipStripPanel
+              key={clipStripNode.id}
+              nodeId={clipStripNode.id}
+              videoSrc={(clipStripNode.data as { src?: string }).src ?? ""}
+              onClose={() => useCanvasStore.getState().setClipCaptureNodeId(null)}
+            />
+          </RfNodeToolbar>
+        )}
+
         {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
         {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
                 onShowInspector={(id) => setInspectedNodeId(id)}
-                onOpenFrameStrip={(id) => useCanvasStore.getState().setFrameCaptureNodeId(id)}
+                onOpenFrameStrip={(id) => {
+                  // 两套编辑条互斥：同一节点同一时刻只允许挂一个浮层
+                  useCanvasStore.getState().setClipCaptureNodeId(null);
+                  useCanvasStore.getState().setFrameCaptureNodeId(id);
+                }}
+                onOpenClipStrip={(id) => {
+                  useCanvasStore.getState().setFrameCaptureNodeId(null);
+                  useCanvasStore.getState().setClipCaptureNodeId(id);
+                }}
               />
             )}
           </RfNodeToolbar>

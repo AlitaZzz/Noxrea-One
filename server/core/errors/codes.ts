@@ -189,6 +189,22 @@ export const ERROR_CODES = [
   /** 客户端提前断开，处理已中止 */
   "detach_audio.cancelled",
 
+  // ── 视频片段截取 ──
+  /** 源视频不存在 */
+  "clip.video_not_found",
+  /** 片段范围无效（起点不早于终点，或不足 0.5 秒） */
+  "clip.invalid_range",
+  /** 片段超过单次截取时长上限 */
+  "clip.range_too_long",
+  /** 未安装 ffmpeg */
+  "clip.ffmpeg_missing",
+  /** 截取超时 */
+  "clip.timeout",
+  /** 截取处理失败 */
+  "clip.extract_failed",
+  /** 客户端提前断开，处理已中止 */
+  "clip.cancelled",
+
   // ── 认证 ──
   /** 未携带登录凭证 */
   "auth.not_authenticated",

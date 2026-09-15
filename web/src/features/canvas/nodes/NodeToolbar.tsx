@@ -60,6 +60,8 @@ interface NodeToolbarProps {
   onShowInspector: (nodeId: string) => void;
   /** 打开帧序列面板（由画布层挂在节点下方，故需回抛给 InfiniteCanvas） */
   onOpenFrameStrip: (nodeId: string) => void;
+  /** 打开片段截取面板（同上，画布层挂载；与帧序列面板互斥） */
+  onOpenClipStrip: (nodeId: string) => void;
 }
 
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
@@ -202,7 +204,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   );
 }
 
-function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: NodeToolbarProps) {
+function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
@@ -399,6 +401,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip }: No
                 <MenuItem onClick={() => { setCaptureOpen(false); onOpenFrameStrip(nodeId); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
+                  </span>
+                </MenuItem>
+                <MenuItem onClick={() => { setCaptureOpen(false); onOpenClipStrip(nodeId); }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <ScissorOutlined style={{ fontSize: 16 }} /> {t("clip.menu")}
                   </span>
                 </MenuItem>
                 <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: 0 }); }}>

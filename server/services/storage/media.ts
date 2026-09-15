@@ -936,6 +936,120 @@ export async function extractMutedVideo(
   });
 }
 
+/** 流拷贝超时：与分离音频同预算——即便 copy 也要完整读一遍所选区间 */
+const FFMPEG_CLIP_TIMEOUT_COPY_MS = 120_000;
+/** 重编码超时：8 分钟全片 veryfast 720p 约需 1 分钟，留出约 2.7 倍最坏情形余量 */
+const FFMPEG_CLIP_TIMEOUT_PRECISE_MS = 300_000;
+
+/** 片段截取模式：precise = 重编码（帧精确），fast = 流拷贝（切点吸附关键帧） */
+export type ClipMode = "precise" | "fast";
+
+export interface ExtractedClip {
+  /** 产物临时路径（调用方落盘后负责清理所在临时目录） */
+  path: string;
+  ext: string;
+  mime: string;
+}
+
+/** 快速模式的输出容器：源扩展名 → 容器族映射 */
+const CLIP_COPY_EXT_BY_SOURCE: Record<string, { ext: string; mime: string }> = {
+  ".mp4": { ext: ".mp4", mime: "video/mp4" },
+  ".m4v": { ext: ".mp4", mime: "video/mp4" },
+  ".mov": { ext: ".mp4", mime: "video/mp4" },
+  ".webm": { ext: ".webm", mime: "video/webm" },
+};
+
+/**
+ * 截取视频片段（spawn ffmpeg）。
+ *
+ * 两种模式共用「-ss 在 -i 前」的输入 seek：
+ * - precise：重编码下输入 seek 就是帧精确的——ffmpeg 从 seek 落点所在 GOP 起点解码，
+ *   丢弃到 start 为止的帧后开始编码，起点与播放器里看到的完全一致；
+ * - fast：流拷贝下 demuxer 吸附到 ≤start 的关键帧——切点只会提前、绝不会包含
+ *   起点之前的画面，时间戳从 0 起（avoid_negative_ts 再兜一层）。不用输出 seek：
+ *   它会把切点推后，还可能丢掉开头的音频包造成音画错位。
+ *
+ * 容器选择：precise 固定 .mp4（编码器是自己指定的）；fast 沿用源容器族——
+ * 编码流原样拷贝，装进陌生容器（如 H.264 装 webm）会直接失败，装不进的极端
+ * 情况回退 .mkv（matroska 几乎收一切编码）。
+ *
+ * 音轨用可选流映射（0:a:0?）：无音轨源静默产出纯视频，而不是整次失败。
+ * 不 clamp end：-t 超出数据末端时 ffmpeg 自然停在 EOF，正是截断文件想要的行为。
+ */
+export async function extractVideoClip(
+  videoPath: string,
+  outputDir: string,
+  range: { start: number; end: number },
+  mode: ClipMode,
+  signal?: AbortSignal,
+): Promise<ExtractedClip> {
+  await fs.mkdir(outputDir, { recursive: true });
+
+  // start 靠近 0 时输入 seek 会退化为全片解码起点，本身无害；钳到 0 避免 -ss 0 的冗余
+  const start = Math.max(0, range.start);
+  const duration = Math.max(0, range.end - start);
+
+  const sourceExt = path.extname(videoPath).toLowerCase();
+  const output: ExtractedClip =
+    mode === "precise"
+      ? { path: path.join(outputDir, "clip.mp4"), ext: ".mp4", mime: "video/mp4" }
+      : { ...(CLIP_COPY_EXT_BY_SOURCE[sourceExt] ?? { ext: ".mkv", mime: "video/x-matroska" }), path: "" };
+  if (mode === "fast" && !output.path) {
+    output.path = path.join(outputDir, `clip${output.ext}`);
+  }
+
+  const seekArgs = ["-ss", start.toFixed(3), "-i", videoPath, "-t", duration.toFixed(3)];
+  const args =
+    mode === "precise"
+      ? [
+          ...seekArgs,
+          "-map", "0:v:0", "-map", "0:a:0?",
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+          "-c:a", "aac", "-b:a", "128k",
+          "-movflags", "+faststart",
+          "-y", output.path,
+        ]
+      : [
+          ...seekArgs,
+          "-map", "0:v:0", "-map", "0:a:0?",
+          "-c", "copy", "-avoid_negative_ts", "make_zero",
+          ...(output.ext === ".mp4" ? ["-movflags", "+faststart"] : []),
+          "-y", output.path,
+        ];
+
+  const run = await runFfmpeg(
+    args,
+    mode === "precise" ? FFMPEG_CLIP_TIMEOUT_PRECISE_MS : FFMPEG_CLIP_TIMEOUT_COPY_MS,
+    signal,
+  );
+
+  if (run.code !== 0) {
+    logEvent("media", {
+      stage: "clip_extract_failed",
+      video: path.basename(videoPath),
+      mode,
+      exitCode: run.code,
+      stderr: run.stderr.slice(-200),
+    });
+    throw new Error(`ffmpeg exited with code ${run.code}: ${run.stderr.slice(-200)}`);
+  }
+
+  // copy 偶发产出 0 字节（如区间整体落在数据末端之外）：当作失败处理
+  const stat = await fs.stat(output.path).catch(() => null);
+  if (!stat || stat.size === 0) {
+    logEvent("media", { stage: "clip_extract_empty", video: path.basename(videoPath), mode });
+    throw new Error("Clip extraction produced an empty file");
+  }
+
+  logEvent("media", {
+    stage: "clip_extract",
+    video: path.basename(videoPath),
+    mode,
+  });
+
+  return { path: output.path, ext: output.ext, mime: output.mime };
+}
+
 /**
  * 路径穿越防护：校验用户文件访问
  * 校验用户文件合法性
