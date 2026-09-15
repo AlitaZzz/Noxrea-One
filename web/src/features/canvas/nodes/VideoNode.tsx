@@ -151,7 +151,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
 
   const handleMouseEnter = useCallback(() => {
-    if (capturingFrame()) return;
+    if (capturingFrame() || busy) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     const v = videoRef.current;
     if (v && v.paused) {
@@ -170,12 +170,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const handleMouseLeave = useCallback(() => {
     hoverTimerRef.current = setTimeout(() => {
       // 延迟期间可能已经打开选帧面板：此时不能把画面拉回 0
-      if (capturingFrame()) { hoverTimerRef.current = null; return; }
+      if (capturingFrame() || busy) { hoverTimerRef.current = null; return; }
       const v = videoRef.current;
       if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
       hoverTimerRef.current = null;
     }, 150);
-  }, [capturingFrame]);
+  }, [capturingFrame, busy]);
 
   /**
    * 回填音轨结论到节点数据。

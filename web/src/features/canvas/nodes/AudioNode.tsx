@@ -19,6 +19,7 @@ import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
 import AudioWaveform from "./AudioWaveform";
+import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
@@ -141,10 +142,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         ) : data.upload?.error ? (
           <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
         ) : isGenerating(data.taskBinding) ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-white/70 font-medium">{t("common.generating")}</span>
-          </div>
+          <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasAudio ? (
           <AudioWaveform
             url={src}
