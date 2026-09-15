@@ -44,6 +44,7 @@ import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
 
+import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
@@ -57,9 +58,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
-  const [detaching, setDetaching] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const [clipExtracting, setClipExtracting] = useState(false);
+  // 本地处理忙状态：抽帧 / 分离音频 / 片段截取互斥共用（同一节点同一时刻
+  // 只跑一个），startedAt 驱动忙浮层的实时耗时
+  const [busy, setBusy] = useState<{
+    kind: "capture" | "detach" | "clip";
+    startedAt: number;
+  } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -257,8 +261,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const captureFrame = useCallback(async (time: number | null) => {
     const v = videoRef.current;
-    if (!v || !src || capturing) return;
-    setCapturing(true);
+    if (!v || !src || busy) return;
+    setBusy({ kind: "capture", startedAt: Date.now() });
     try {
       const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
       const videoKey = toFileKey(src);
@@ -289,9 +293,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       console.error("Frame capture failed:", e);
       notification.error({ message: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
     } finally {
-      setCapturing(false);
+      setBusy(null);
     }
-  }, [src, data.label, id, t, notification, capturing]);
+  }, [src, data.label, id, t, notification, busy]);
 
   /**
    * 分离音频：服务端无损拆出音轨与静音视频。
@@ -304,9 +308,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 撤销一次即整体删除两个派生节点及其连线。
    */
   const handleDetachAudio = useCallback(async () => {
-    if (!src || detaching) return;
+    if (!src || busy) return;
     const videoKey = src.replace(/^\/api\/files\//, "").split("?")[0];
-    setDetaching(true);
+    setBusy({ kind: "detach", startedAt: Date.now() });
     try {
       const res = await detachAudioApi(videoKey);
       const json = await res.json();
@@ -376,11 +380,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       console.error("Audio detach failed:", e);
       notification.error({ message: t("detach.failed"), placement: "bottomRight" });
     } finally {
-      setDetaching(false);
+      setBusy(null);
     }
   }, [
     src,
-    detaching,
+    busy,
     t,
     commitHasAudio,
     data.naturalWidth,
@@ -400,9 +404,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 同批写入，撤销一次即整体删除。
    */
   const handleExtractClip = useCallback(async (start: number, end: number, mode: ClipMode) => {
-    if (!src || clipExtracting) return;
+    if (!src || busy) return;
     const videoKey = toFileKey(src);
-    setClipExtracting(true);
+    setBusy({ kind: "clip", startedAt: Date.now() });
     try {
       const res = await extractClipApi(videoKey, start, end, mode);
       const json = await res.json();
@@ -447,9 +451,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       console.error("Clip extraction failed:", e);
       notification.error({ message: t("error.clip.extract_failed"), placement: "bottomRight" });
     } finally {
-      setClipExtracting(false);
+      setBusy(null);
     }
-  }, [src, clipExtracting, t, data.naturalWidth, data.naturalHeight, id, notification]);
+  }, [src, busy, t, data.naturalWidth, data.naturalHeight, id, notification]);
 
   const addAsset = useAssetsStore((s) => s.addAsset);
 
@@ -718,17 +722,19 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         )}
 
-        {/* 分离音频 / 捕获帧 / 截取片段处理中：同步请求可能持续数秒到分钟级，必须给出明确反馈 */}
-        {(detaching || capturing || clipExtracting) && (
-          <div
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-lg"
-            style={{ background: "rgba(0,0,0,0.45)" }}
-          >
-            <span className="w-7 h-7 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
-            <span className="text-xs text-white/80">
-              {clipExtracting ? t("clip.processing") : detaching ? t("detach.processing") : t("capture.processing")}
-            </span>
-          </div>
+        {/* 分离音频 / 捕获帧 / 截取片段处理中：同步请求可能持续数秒到分钟级，
+            忙浮层给出操作文案 + 实时耗时 */}
+        {busy && (
+          <BusyOverlay
+            label={
+              busy.kind === "clip"
+                ? t("clip.processing")
+                : busy.kind === "detach"
+                  ? t("detach.processing")
+                  : t("capture.processing")
+            }
+            startedAt={busy.startedAt}
+          />
         )}
       </div>
 

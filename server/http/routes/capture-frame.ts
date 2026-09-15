@@ -64,7 +64,7 @@ router.post("/api/files/capture-frame", async (c) => {
   );
 
   try {
-    await captureVideoFrame(videoPath, tmpFramePath, time ?? 1);
+    await captureVideoFrame(videoPath, tmpFramePath, time ?? 1, request.signal);
 
     // 读取截取的帧，按标准流程落盘 + 落库
     const buffer = await fs.readFile(tmpFramePath);

@@ -4,10 +4,15 @@
 import { apiRaw } from "@/lib/api/client";
 
 /** 从视频指定时间抽帧，返回原始 Response（调用方解析 data.url）。 */
-export async function captureFrame(videoKey: string, time: number): Promise<Response> {
+export async function captureFrame(
+  videoKey: string,
+  time: number,
+  signal?: AbortSignal,
+): Promise<Response> {
   return apiRaw("/api/files/capture-frame", {
     method: "POST",
     body: JSON.stringify({ video_key: videoKey, time }),
+    signal,
   });
 }
 
@@ -72,10 +77,11 @@ export interface DetachAudioResult {
  * 从视频中分离音轨，返回原始 Response。
  * 同时产出独立音轨与静音视频两个文件；视频无音轨时后端返回 422。
  */
-export async function detachAudio(videoKey: string): Promise<Response> {
+export async function detachAudio(videoKey: string, signal?: AbortSignal): Promise<Response> {
   return apiRaw("/api/files/detach-audio", {
     method: "POST",
     body: JSON.stringify({ video_key: videoKey }),
+    signal,
   });
 }
 
@@ -101,9 +107,11 @@ export async function extractClip(
   start: number,
   end: number,
   mode: ClipMode,
+  signal?: AbortSignal,
 ): Promise<Response> {
   return apiRaw("/api/files/extract-clip", {
     method: "POST",
     body: JSON.stringify({ video_key: videoKey, start, end, mode }),
+    signal,
   });
 }
