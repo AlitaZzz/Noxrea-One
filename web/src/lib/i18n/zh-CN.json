@@ -526,6 +526,8 @@
     "menu": "片段截取",
     "processing": "正在截取片段...",
     "confirm": "截取片段",
+    "proxyLoading": "正在生成预览代理...",
+    "proxyFailed": "预览代理生成失败，请关闭后重开面板重试",
     "modePrecise": "精确",
     "modeFast": "快速",
     "modePreciseHint": "重新编码，精确到帧，稍慢",

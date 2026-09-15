@@ -340,12 +340,13 @@ const FALLBACK_FPS = 25;
  * filter 而报错，转义写法又存在跨平台解析差异；分辨率低于 720 的源视频会被
  * 轻微放大，对预览没有影响。
  *
- * 默认 720 宽是跟着节点默认宽度 600px 定的：低于它选帧时会明显发虚。
+ * 默认 480 宽刻意低于节点显示宽度：代理画质发虚是特性，肉眼可分辨当前
+ * 播放的是代理还是原视频。路由始终显式传宽度，此默认值仅兜底。
  */
 export async function createScrubProxy(
   videoPath: string,
   outputPath: string,
-  width = 720,
+  width = 480,
   fps: number | null = null,
 ): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
