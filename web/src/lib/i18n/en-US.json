@@ -530,6 +530,7 @@
     "confirm": "Extract clip",
     "proxyLoading": "Generating preview proxy...",
     "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
+    "buffering": "Buffering preview...",
     "modePrecise": "Precise",
     "modeFast": "Fast",
     "modePreciseHint": "Re-encode, frame-accurate, slower",

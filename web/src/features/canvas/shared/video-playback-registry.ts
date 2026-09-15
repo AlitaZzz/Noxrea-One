@@ -103,8 +103,18 @@ function captureCurrentFrame(v: HTMLVideoElement): string | null {
  *
  * resume：换源默认停在暂停态（帧序列面板本来就是暂停 scrub）；片段截取面板
  * 在循环预览中换源，需要元数据就绪后自动续播，由该开关控制。
+ *
+ * onReady：换入的代理达到可流畅播放（canplay）时回调一次——片段截取面板用
+ * 它在缓冲就绪后再解锁交互（首次打开时代理刚生成、浏览器缓存全冷，立即
+ * 拖动会触发一串 Range 拉取 + 解码，跟不上指针）。监听挂在本函数内部，
+ * 保证等待的是换入的代理而不是换源前的旧元素（旧元素早已就绪，会造成
+ * 闸门被立即满足、冷缓存保护失效）；代理加载失败也回调，避免面板永久冻结。
  */
-export function swapVideoSource(nodeId: string, proxySrc: string, opts?: { resume?: boolean }): () => void {
+export function swapVideoSource(
+  nodeId: string,
+  proxySrc: string,
+  opts?: { resume?: boolean; onReady?: () => void },
+): () => void {
   const v = registry.get(nodeId);
   if (!v) {
     // 空转会让播放器继续用原视频（长 GOP），拖轨道时画面与轨道不同步
@@ -114,12 +124,17 @@ export function swapVideoSource(nodeId: string, proxySrc: string, opts?: { resum
 
   const prevSrc = v.getAttribute("src") ?? "";
   const resume = opts?.resume === true;
+  const onReady = opts?.onReady;
   let restored = false;
+  /** 换源监听器的清理函数：换回原视频时移除上一轮尚未触发的监听 */
+  let lastCleanup: (() => void) | null = null;
 
-  /** 换源后 metadata 需要重新加载，时间点必须等加载完再写回。
-      shouldResume 只在换入代理时为 true：恢复原视频（面板关闭）永远保持暂停，
-      否则关闭面板会违背用户意图地自动播放 */
-  const apply = (src: string, time: number, shouldResume: boolean) => {
+  /**
+   * 换源后 metadata 需要重新加载，时间点必须等加载完再写回。
+   * shouldResume / readyCallback 只在换入代理时生效：恢复原视频（面板关闭）
+   * 永远保持暂停、也不触发 onReady，否则会违背用户意图地自动播放。
+   */
+  const apply = (src: string, time: number, shouldResume: boolean, readyCallback?: () => void) => {
     // 先把当前帧设成封面顶住画面，loadeddata（新视频已有可显示帧）后再撤掉，
     // 否则切换瞬间 video 没有内容可显示，看起来就是闪一下
     const poster = captureCurrentFrame(v);
@@ -129,18 +144,33 @@ export function swapVideoSource(nodeId: string, proxySrc: string, opts?: { resum
       if (shouldResume) void v.play().catch(() => undefined);
     };
     const onData = () => v.removeAttribute("poster");
+    const onCanPlay = () => readyCallback?.();
+    const onLoadError = () => readyCallback?.();
+    const cleanup = () => {
+      v.removeEventListener("loadedmetadata", onMeta);
+      v.removeEventListener("loadeddata", onData);
+      v.removeEventListener("canplay", onCanPlay);
+      v.removeEventListener("error", onLoadError);
+    };
     v.addEventListener("loadedmetadata", onMeta, { once: true });
     v.addEventListener("loadeddata", onData, { once: true });
+    // canplay / error 都触发 readyCallback：前者正常解锁，后者避免面板冻结
+    if (readyCallback) {
+      v.addEventListener("canplay", onCanPlay, { once: true });
+      v.addEventListener("error", onLoadError, { once: true });
+    }
     v.src = src;
     v.load();
+    return cleanup;
   };
 
-  apply(proxySrc, v.currentTime, resume);
+  lastCleanup = apply(proxySrc, v.currentTime, resume, onReady);
 
   return () => {
     if (restored) return;
     restored = true;
     // 用代理上的当前时间回写：用户选到哪一帧，恢复后就停在哪一帧
+    lastCleanup?.();
     apply(prevSrc, v.currentTime, false);
   };
 }

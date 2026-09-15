@@ -85,6 +85,10 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const [proxyState, setProxyState] = useState<"pending" | "ready" | "failed">("pending");
   // 代理文件的真实时长（服务端转码完探测，随响应返回）
   const [proxyDuration, setProxyDuration] = useState<number | null>(null);
+  // 代理缓冲就绪（canplay）：首次打开时代理刚生成、浏览器缓存全冷，立即拖动
+  // 会触发一串 Range 拉取 + 解码跟不上指针（重开时代理已入缓存故无此问题），
+  // 因此缓冲就绪前保持禁用，拖动发生时数据必在本地
+  const [bufferReady, setBufferReady] = useState(false);
   // 雪碧图失败时的兜底时长来自浏览器读原视频 moov（截断视频会虚报标称值），
   // 不可信：此时时间轴改用代理的真实时长——代理只含可解码内容，且正是正在
   // 播放的实体。代理时长未知（转码中/失败）时按 0 处理，面板保持禁用
@@ -155,17 +159,24 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   useEffect(() => suppressNativeLoop(nodeId), [nodeId]);
 
   // 选帧期间把节点播放器切到预览代理；循环播放中的换源在元数据就绪后续播，
-  // 暂停中的换源保持暂停；关闭面板自动恢复原视频
+  // 暂停中的换源保持暂停；关闭面板自动恢复原视频。
+  // onReady：代理缓冲就绪（canplay）才解锁交互——首次打开时代理刚生成、
+  // 浏览器缓存全冷，立即拖动会触发一串 Range 拉取 + 解码跟不上指针
+  // （重开时代理已入缓存故无此问题）。监听在 swapVideoSource 内部挂载，
+  // 等待的必然是换入的代理而非换源前就绪的旧元素
   useEffect(() => {
     if (!proxyUrl) return;
-    return swapVideoSource(nodeId, proxyUrl, { resume: isVideoPlaying(nodeId) });
+    return swapVideoSource(nodeId, proxyUrl, {
+      resume: isVideoPlaying(nodeId),
+      onReady: () => setBufferReady(true),
+    });
   }, [nodeId, proxyUrl]);
 
-  // 可操作 = 雪碧图时长可信 + 代理已就绪：两者缺一，时间轴与画面都不可信
-  // （拖原视频长 GOP 必然不跟手，截断视频的兜底时长还会错），拖动/键盘/确认
-  // 全部禁用——宁等不乱。代理失败时面板禁用，重开面板重试。
+  // 可操作 = 雪碧图时长可信 + 代理已就绪 + 代理缓冲就绪：三者缺一，时间轴与
+  // 画面都不可信（拖原视频长 GOP 必然不跟手、冷缓存 seek 跟不上指针），
+  // 拖动/键盘/确认全部禁用——宁等不乱。代理失败时面板禁用，重开面板重试。
   const ready = duration > 0;
-  const operable = ready && proxyState === "ready" && proxyUrl !== null;
+  const operable = ready && proxyState === "ready" && proxyUrl !== null && bufferReady;
   const inTime = ready ? inRatio * duration : 0;
   const outTime = ready ? outRatio * duration : 0;
   // rangeValid 必须等初始化写入真实区间：operable 翻 true 的那一帧里
@@ -518,37 +529,48 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
       >
         <div className="flex size-full overflow-hidden rounded-xl bg-black">{trackCells}</div>
 
-        {/* 区间外压暗 + 选中段青柠描边：初始化前按同一公式预览最终形态（仅展示），
-            代理就绪后无缝接管为可交互选区 */}
+        {/* 压暗层铺满整条轨道、贴住选区框边缘：若沿用选区的内缩坐标系
+            （inset-x-3，给播放头圆点留 12px），两端各剩 12px 格子永远压不到暗，
+            观感是「最左侧没被压暗」；宽度用 calc 按内缩坐标系换算 */}
         {bandRange && (
-          <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
-            <div className="absolute inset-x-3 inset-y-0">
-              <div className="absolute inset-y-0 left-0 bg-black/55" style={{ width: `${bandRange.inR * 100}%` }} />
-              <div className="absolute inset-y-0 right-0 bg-black/55" style={{ width: `${(1 - bandRange.outR) * 100}%` }} />
-              {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
+          <>
+            <div className="pointer-events-none absolute inset-0 z-10">
               <div
-                className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
-                style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
-                onPointerDown={handleBandDown}
-              >
+                className="absolute inset-y-0 left-0 bg-black/55"
+                style={{ width: `calc(12px + (100% - 24px) * ${bandRange.inR})` }}
+              />
+              <div
+                className="absolute inset-y-0 right-0 bg-black/55"
+                style={{ width: `calc(12px + (100% - 24px) * ${1 - bandRange.outR})` }}
+              />
+            </div>
+            <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
+              <div className="absolute inset-x-3 inset-y-0">
+                {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
                 <div
-                  className="absolute inset-0"
-                  style={{
-                    border: "2px solid var(--canvas-accent)",
-                    background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)",
-                  }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span
-                    className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-                    style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
-                  >
-                    {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
-                  </span>
+                  className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
+                  style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
+                  onPointerDown={handleBandDown}
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      border: "2px solid var(--canvas-accent)",
+                      background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)",
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span
+                      className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
+                      style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+                    >
+                      {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* 播放进度竖线：循环扫播当前位置的细线标记（只展示，不接管指针） */}
@@ -574,14 +596,18 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
           </div>
         )}
 
-        {/* 代理未就绪/失败的面板级提示：可操作前提是雪碧图 + 代理都就绪 */}
+        {/* 代理未就绪/缓冲中/失败的面板级提示：可操作前提是雪碧图 + 代理 + 缓冲都就绪 */}
         {ready && !operable && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
             <span
               className="rounded-md px-3 py-1 text-xs text-white/85"
               style={{ background: "rgba(0,0,0,0.65)" }}
             >
-              {proxyState === "pending" ? t("clip.proxyLoading") : t("clip.proxyFailed")}
+              {proxyState === "failed"
+                ? t("clip.proxyFailed")
+                : proxyState === "pending"
+                  ? t("clip.proxyLoading")
+                  : t("clip.buffering")}
             </span>
           </div>
         )}
