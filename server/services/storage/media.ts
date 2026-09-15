@@ -644,6 +644,93 @@ export function probeVideoMetaCached(videoPath: string): Promise<VideoMeta | nul
   });
 }
 
+/** 完整解码校验的超时：与代理转码同量级；超长的视频宁可放弃判定也不无限等 */
+const FFMPEG_INTEGRITY_TIMEOUT_MS = 60_000;
+
+export interface VideoIntegrity {
+  /** 实际可解码时长（s）；无法判定时为 null */
+  decodableDuration: number | null;
+  /** 可解码时长明显短于容器声明时长：文件被截断，超出部分是坏数据 */
+  truncated: boolean;
+}
+
+/**
+ * 完整性校验结果缓存。雪碧图与代理两条路由都可能问询，同一次全量解码的结果
+ * 按路径共享；条目上限沿用 META_CACHE_MAX 的整体清空策略。
+ */
+const integrityCache = new Map<string, VideoIntegrity>();
+
+/**
+ * 校验视频实际可解码时长（spawn ffmpeg 全量解码到 null）。
+ *
+ * MP4 的 moov 声明时长与 mdat 实际数据量可以不一致——典型是下载中断的
+ * faststart 文件：头部完整声明 8 分钟，媒体数据只落盘了前 20 秒。这类文件
+ * 探测（只读 -i）与浏览器都按声明时长显示，但解码到断点即止，雪碧图按声明
+ * 时长采样会把超出部分铺满坏帧，代理与播放器的时长也对不上。这里真解码一遍，
+ * 取最后的 progress time 作为实际可解码时长，供调用方把时间轴收敛到真实数据
+ * 范围（截断只发生在尾部，可解码部分一定是 0 起点的前缀，时间轴无需平移）。
+ *
+ * 判定容差取 max(1s, 1%)：正常文件解码末点与声明时长相差不到一秒；ffmpeg 对
+ * 中途个别损坏包只跳帧不解码（可恢复），不会把这种文件误判成截断。
+ * 超时被杀时 progress 停在中途，与截断无法区分，因此超时一律返回「无法判定」。
+ */
+export async function probeVideoIntegrity(
+  videoPath: string,
+  declaredDuration: number,
+): Promise<VideoIntegrity> {
+  const cached = integrityCache.get(videoPath);
+  if (cached) return cached;
+
+  const result = await new Promise<VideoIntegrity>((resolve) => {
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
+    // 只要视频流：截断影响的是帧数据，音轨解码对判定没有意义还拖慢速度
+    const ffmpeg = spawn(ffmpegBin, ["-i", videoPath, "-an", "-sn", "-dn", "-f", "null", "-"]);
+    let stderr = "";
+    let settled = false;
+
+    const settle = (value: VideoIntegrity) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+
+    // 必须只在自己发起的关闭里采信结果：超时路径的 progress 停点不代表文件边界
+    let killedByTimeout = false;
+    const timer = setTimeout(() => {
+      killedByTimeout = true;
+      ffmpeg.kill("SIGKILL");
+      settle({ decodableDuration: null, truncated: false });
+    }, FFMPEG_INTEGRITY_TIMEOUT_MS);
+
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    ffmpeg.on("close", () => {
+      if (killedByTimeout) return;
+      // progress 行的 time= 是最后一个可信的解码位置；解码到断点即止的文件，
+      // 它就是实际可解码时长
+      const matches = [...stderr.matchAll(/time=(\d+):(\d+):([\d.]+)/g)];
+      const last = matches[matches.length - 1];
+      const decodable = last
+        ? Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3])
+        : null;
+      const truncated =
+        decodable !== null &&
+        Number.isFinite(declaredDuration) &&
+        declaredDuration - decodable > Math.max(1, declaredDuration * 0.01);
+      settle({ decodableDuration: decodable, truncated });
+    });
+
+    ffmpeg.on("error", () => settle({ decodableDuration: null, truncated: false }));
+  });
+
+  if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
+  integrityCache.set(videoPath, result);
+  return result;
+}
+
 /** 音视频分离超时：即便 copy 也要完整读一遍长视频，抽帧的 30s 兜不住 */
 const FFMPEG_AUDIO_TIMEOUT_MS = 120_000;
 

@@ -14,7 +14,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { createFrameSprite, probeVideoMetaCached } from "@server/services/storage/media";
+import { createFrameSprite, probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
@@ -36,8 +36,12 @@ const TARGET_SEC_PER_FRAME = 0.5;
  */
 const MIN_FRAMES = 8;
 const MAX_FRAMES = 20;
-/** 雪碧图参数版本：采样或编码参数变化后自动生成新图，不命中旧缓存 */
-const SPRITE_VERSION = 1;
+/**
+ * 雪碧图参数版本：采样或编码参数变化后自动生成新图，不命中旧缓存。
+ * v2：截断文件的采样时长从容器声明值收敛为实际可解码时长，旧图的
+ * 超出部分是坏帧，必须整体重生成。
+ */
+const SPRITE_VERSION = 2;
 /** 正在生成的图：同一视频的并发请求共用一次转码 */
 const inflight = new Map<string, Promise<void>>();
 /** 清理扫描的最小间隔：避免每次请求都遍历目录 */
@@ -132,12 +136,22 @@ router.post("/api/files/frame-sprite", async (c) => {
   }
 
   const meta = await probeVideoMetaCached(videoPath);
-  const duration = meta?.duration ?? null;
+  const declaredDuration = meta?.duration ?? null;
   // 拿不到时长就无法把格子映射到时间轴，采样间隔无从计算——此时只能放弃缩略图。
   // 面板退化为「只有播放头」仍可定位与截取：成片抽帧走后端精确 seek
-  if (!duration) {
+  if (!declaredDuration) {
     return failCode(422, "frame_sprite.duration_unavailable");
   }
+
+  // 容器声明时长可能大于实际数据（下载中断的截断文件：moov 完整、mdat 只有前段）。
+  // 按声明时长采样会把超出部分铺满坏帧，且与代理、播放器的时长对不上；
+  // 这里把采样收敛到实际可解码范围，并随响应下发标记，前端在面板上给出警示
+  const integrity = await probeVideoIntegrity(videoPath, declaredDuration);
+  const duration =
+    integrity.truncated && integrity.decodableDuration
+      ? integrity.decodableDuration
+      : declaredDuration;
+  const truncated = integrity.truncated && integrity.decodableDuration !== null;
 
   // 密度由时长决定（每格约 TARGET_SEC_PER_FRAME 秒）后钳到上下限：
   // 10 秒内的视频能拿到 0.5 秒粒度，更长的视频固定 20 格、粒度随之变粗
@@ -161,6 +175,8 @@ router.post("/api/files/frame-sprite", async (c) => {
     cell_width: CELL_WIDTH,
     duration,
     fps,
+    truncated,
+    declared_duration: declaredDuration,
   };
 
   try {
