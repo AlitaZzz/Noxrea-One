@@ -15,6 +15,7 @@
  * 一致，因此这里不做额外校验。
  *
  * 代理按「源键 + 宽度」派生文件名，生成一次后长期复用；成片抽帧仍走原视频。
+ * v3：宽度从 720 降到 480——刻意压低代理画质，模糊即可肉眼分辨当前播放源。
  */
 import { Hono } from "hono";
 import { z } from "zod";
@@ -31,10 +32,11 @@ const videoProxySchema = z.object({
   video_key: z.string().min(1),
 });
 
-/** 代理宽度上限：跟随节点默认宽度 600px 取值，低于它会明显发虚 */
-const PROXY_WIDTH = 720;
+/** 代理宽度：480 刻意低于节点显示宽度，画质发虚便于肉眼区分当前播放的是
+    代理还是原视频（模糊 = 代理）；选帧面板只做定位预览，清晰度可让 */
+const PROXY_WIDTH = 480;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
-const PROXY_VERSION = 2;
+const PROXY_VERSION = 3;
 /** 正在生成的代理：同一视频的并发请求共用一次转码 */
 const inflight = new Map<string, Promise<void>>();
 /** 清理扫描的最小间隔：避免每次请求都遍历目录 */

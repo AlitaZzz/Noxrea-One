@@ -62,6 +62,19 @@ export function setVideoTime(nodeId: string, time: number): void {
   if (v && Number.isFinite(time)) v.currentTime = Math.max(0, time);
 }
 
+/** 临时关闭节点 <video> 的原生循环，返回恢复函数。
+    片段截取面板的循环由区间回跳控制：原生 loop 到头会先跳回 0、再被面板拉回
+    入点，每圈多两次 seek 且画面闪跳，故面板打开期间必须关掉它 */
+export function suppressNativeLoop(nodeId: string): () => void {
+  const v = registry.get(nodeId);
+  if (!v) return () => {};
+  const prev = v.loop;
+  v.loop = false;
+  return () => {
+    v.loop = prev;
+  };
+}
+
 /** 抓取当前帧做封面：换源期间顶住画面，避免 video 短暂空白造成闪烁 */
 function captureCurrentFrame(v: HTMLVideoElement): string | null {
   try {

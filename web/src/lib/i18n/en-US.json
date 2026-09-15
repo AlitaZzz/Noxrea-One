@@ -527,6 +527,8 @@
     "menu": "Clip extraction",
     "processing": "Extracting clip...",
     "confirm": "Extract clip",
+    "proxyLoading": "Generating preview proxy...",
+    "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
     "modePrecise": "Precise",
     "modeFast": "Fast",
     "modePreciseHint": "Re-encode, frame-accurate, slower",
