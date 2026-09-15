@@ -134,6 +134,9 @@ interface CanvasState {
   // 帧序列选帧模式（hides node toolbar for the capturing node，并让生成面板让位）
   frameCaptureNodeId: string | null;
   setFrameCaptureNodeId: (id: string | null) => void;
+  // 片段截取模式（与选帧互斥：同一节点同一时刻只允许一个编辑条浮层）
+  clipCaptureNodeId: string | null;
+  setClipCaptureNodeId: (id: string | null) => void;
   // 图片节点多图展开态（hides node toolbar；展开网格自带下载/设主图/收起入口）
   multiExpandedNodeId: string | null;
   setMultiExpandedNodeId: (id: string | null) => void;
@@ -169,6 +172,7 @@ const NODE_UI_STATE_KEYS = [
   "croppingNodeId",
   "editingTextNodeId",
   "frameCaptureNodeId",
+  "clipCaptureNodeId",
 ] as const;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -276,6 +280,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setEditingTextNodeId: (id) => set({ editingTextNodeId: id }),
   frameCaptureNodeId: null,
   setFrameCaptureNodeId: (id) => set({ frameCaptureNodeId: id }),
+  clipCaptureNodeId: null,
+  setClipCaptureNodeId: (id) => set({ clipCaptureNodeId: id }),
   multiExpandedNodeId: null,
   setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
 

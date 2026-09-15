@@ -78,3 +78,32 @@ export async function detachAudio(videoKey: string): Promise<Response> {
     body: JSON.stringify({ video_key: videoKey }),
   });
 }
+
+/** 片段截取模式：precise = 重编码（帧精确），fast = 流拷贝（切点吸附关键帧） */
+export type ClipMode = "precise" | "fast";
+
+/** 片段截取结果 */
+export interface ExtractedClipInfo {
+  key: string;
+  url: string;
+  size: number;
+  ext: string;
+  mime: string;
+}
+
+/**
+ * 截取视频片段，返回原始 Response。
+ * 同步长请求（重编码可能持续数十秒），调用方需自行给出忙反馈；
+ * 失败时按 `error.<code>` 读取本地化错误。
+ */
+export async function extractClip(
+  videoKey: string,
+  start: number,
+  end: number,
+  mode: ClipMode,
+): Promise<Response> {
+  return apiRaw("/api/files/extract-clip", {
+    method: "POST",
+    body: JSON.stringify({ video_key: videoKey, start, end, mode }),
+  });
+}

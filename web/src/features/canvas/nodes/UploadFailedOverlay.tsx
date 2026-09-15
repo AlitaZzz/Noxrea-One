@@ -56,10 +56,9 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.55)" }} />
       <div className="relative z-10 flex flex-col items-center gap-2">
         <ExclamationCircleOutlined style={{ fontSize: 22, color: "#ff7875" }} />
-        {/* 节点尺寸有限，超长文案截断；title 保证悬停时仍能看到完整原因 */}
+        {/* 节点尺寸有限，超长文案截断：不加任何悬停提示（原生 title / Tooltip 都不要） */}
         <span
           className="text-xs text-white/85 leading-relaxed"
-          title={error.message}
           style={{
             maxWidth: 200,
             display: "-webkit-box",

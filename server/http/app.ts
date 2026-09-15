@@ -18,6 +18,7 @@ import { router as captureFrameRouter } from "./routes/capture-frame";
 import { router as videoProxyRouter } from "./routes/video-proxy";
 import { router as frameSpriteRouter } from "./routes/frame-sprite";
 import { router as detachAudioRouter } from "./routes/detach-audio";
+import { router as extractClipRouter } from "./routes/extract-clip";
 import { router as uploadRouter } from "./routes/upload";
 import { router as filesRouter } from "./routes/files";
 
@@ -43,6 +44,7 @@ app.route("/", captureFrameRouter);
 app.route("/", videoProxyRouter);
 app.route("/", frameSpriteRouter);
 app.route("/", detachAudioRouter);
+app.route("/", extractClipRouter);
 app.route("/", uploadRouter);
 app.route("/", filesRouter);
 

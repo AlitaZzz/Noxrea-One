@@ -22,8 +22,10 @@ import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
 import { useAssetsStore } from "@/features/assets/store";
 import {
   captureFrame as captureFrameApi,
+  type ClipMode,
   detachAudio as detachAudioApi,
   type DetachAudioResult,
+  extractClip as extractClipApi,
 } from "@/features/canvas/api/file-api";
 import { createEdge } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
@@ -57,6 +59,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [src, setSrc] = useState(data.src || "");
   const [detaching, setDetaching] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [clipExtracting, setClipExtracting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -134,11 +137,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** 选帧面板打开期间：hover 播放会顶掉用户选中的那一帧，必须让位 */
-  const capturingFrame = useCallback(
-    () => useCanvasStore.getState().frameCaptureNodeId === id,
-    [id],
-  );
+  /** 选帧 / 片段截取面板打开期间：hover 播放会顶掉面板的循环预览与所选帧，
+      mouseleave 的「暂停 + 归零」也会掐断面板的自动播放，必须整体让位 */
+  const capturingFrame = useCallback(() => {
+    const s = useCanvasStore.getState();
+    return s.frameCaptureNodeId === id || s.clipCaptureNodeId === id;
+  }, [id]);
 
 
 
@@ -388,6 +392,65 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
   const handleUpload = useNodeUpload(id, { accept: "video/*", clearFields: ["hasAudio"] });
 
+  /**
+   * 截取片段：服务端按 [start, end] 截出一段视频（precise 重编码 / fast 流拷贝），
+   * 产物作为派生视频节点连回源节点。
+   *
+   * 历史栈策略与分离音频一致：write:false 仅构建节点，再一次 addNodes + setEdges
+   * 同批写入，撤销一次即整体删除。
+   */
+  const handleExtractClip = useCallback(async (start: number, end: number, mode: ClipMode) => {
+    if (!src || clipExtracting) return;
+    const videoKey = toFileKey(src);
+    setClipExtracting(true);
+    try {
+      const res = await extractClipApi(videoKey, start, end, mode);
+      const json = await res.json();
+
+      if (!res.ok || !json?.data) {
+        // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
+        const code = json?.error as string | undefined;
+        const fallback = t("error.clip.extract_failed");
+        notification.error({
+          message: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+          placement: "bottomRight",
+        });
+        return;
+      }
+
+      const { url } = json.data as { url: string };
+      const v = videoRef.current;
+      const nw = v?.videoWidth || data.naturalWidth || 0;
+      const nh = v?.videoHeight || data.naturalHeight || 0;
+      const store = useCanvasStore.getState();
+      const range = `${formatTime(start)}-${formatTime(end)}`;
+
+      const clipNode = createVideoNodeFromUrl(
+        id,
+        url,
+        nw,
+        nh,
+        t("clip.suffix", { range }),
+        store,
+        { source: "derived" },
+        undefined,
+        undefined,
+        { write: false },
+      );
+
+      // addNodes 压一条「截取前」快照，setEdges 被节流，撤销一次即整体删除
+      store.addNodes([clipNode]);
+      store.setEdges([...store.edges, createEdge(id, clipNode.id)]);
+
+      markDirtyImmediate();
+    } catch (e) {
+      console.error("Clip extraction failed:", e);
+      notification.error({ message: t("error.clip.extract_failed"), placement: "bottomRight" });
+    } finally {
+      setClipExtracting(false);
+    }
+  }, [src, clipExtracting, t, data.naturalWidth, data.naturalHeight, id, notification]);
+
   const addAsset = useAssetsStore((s) => s.addAsset);
 
   const handleDownload = useCallback(() => {
@@ -452,11 +515,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         case "detach-audio":
           void handleDetachAudio();
           break;
+        case "extract-clip":
+          void handleExtractClip(detail.start as number, detail.end as number, detail.mode as ClipMode);
+          break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio]);
+  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio, handleExtractClip]);
 
   // 换源后旧探测结论失效，清空以便重新判定。
   // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次
@@ -652,14 +718,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         )}
 
-        {/* 分离音频 / 捕获帧处理中：同步请求可能持续数秒，必须给出明确反馈 */}
-        {(detaching || capturing) && (
+        {/* 分离音频 / 捕获帧 / 截取片段处理中：同步请求可能持续数秒到分钟级，必须给出明确反馈 */}
+        {(detaching || capturing || clipExtracting) && (
           <div
             className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-lg"
             style={{ background: "rgba(0,0,0,0.45)" }}
           >
             <span className="w-7 h-7 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
-            <span className="text-xs text-white/80">{detaching ? t("detach.processing") : t("capture.processing")}</span>
+            <span className="text-xs text-white/80">
+              {clipExtracting ? t("clip.processing") : detaching ? t("detach.processing") : t("capture.processing")}
+            </span>
           </div>
         )}
       </div>

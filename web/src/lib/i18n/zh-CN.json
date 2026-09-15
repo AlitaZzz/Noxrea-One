@@ -522,6 +522,16 @@
     "audioSuffix": " (音频)",
     "mutedSuffix": " (静音)"
   },
+  "clip": {
+    "menu": "片段截取",
+    "processing": "正在截取片段...",
+    "confirm": "截取片段",
+    "modePrecise": "精确",
+    "modeFast": "快速",
+    "modePreciseHint": "重新编码，精确到帧，稍慢",
+    "modeFastHint": "原样拷贝，即刻完成，切点对齐关键帧",
+    "suffix": " (片段 {{range}})"
+  },
   "draft": {
     "title": "发现未保存的离线编辑",
     "content": "检测到上次编辑后未能保存到服务器，是否恢复本地草稿？",
@@ -670,6 +680,15 @@
       "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "no_audio_track": "该视频没有音轨",
       "extract_failed": "音轨分离失败，请稍后重试",
+      "cancelled": "处理已取消"
+    },
+    "clip": {
+      "video_not_found": "源视频不存在",
+      "invalid_range": "片段范围无效：起点需早于终点，且不少于 0.5 秒",
+      "range_too_long": "片段过长：单次截取最长 10 分钟",
+      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
+      "timeout": "片段截取超时，请缩短片段后重试",
+      "extract_failed": "片段截取失败，请稍后重试",
       "cancelled": "处理已取消"
     },
     "generate": {
