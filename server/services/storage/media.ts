@@ -236,7 +236,8 @@ async function captureVideoPoster(
 export async function captureVideoFrame(
   videoPath: string,
   outputPath: string,
-  timeSeconds = 1
+  timeSeconds = 1,
+  signal?: AbortSignal,
 ): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
@@ -271,13 +272,24 @@ export async function captureVideoFrame(
       reject(new Error(`ffmpeg timed out after ${FFMPEG_TIMEOUT_MS}ms`));
     }, FFMPEG_TIMEOUT_MS);
 
-    /** 统一收口：只结算一次，并清理定时器 */
+    /** 统一收口：只结算一次，并清理定时器与信号监听 */
     const settle = (fn: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
       fn();
     };
+
+    // 客户端取消（如忙浮层的取消按钮）：SIGKILL 掉 ffmpeg，及时释放文件句柄
+    const onAbort = () => {
+      ffmpeg.kill("SIGKILL");
+      settle(() => reject(new DOMException("Aborted", "AbortError")));
+    };
+    if (signal) {
+      if (signal.aborted) { onAbort(); return; }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
 
     ffmpeg.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
