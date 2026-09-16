@@ -40,6 +40,7 @@ import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
+import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
@@ -393,7 +394,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             placement="bottom"
             trigger={
               <Tooltip title={t("node.captureFrame")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<CameraOutlined />} disabled={!assetSrc} />
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<FrameCaptureIcon />} disabled={!assetSrc} />
               </Tooltip>
             }
             content={
@@ -401,11 +402,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
                 <MenuItem onClick={() => { setCaptureOpen(false); onOpenFrameStrip(nodeId); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCaptureOpen(false); onOpenClipStrip(nodeId); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <ScissorOutlined style={{ fontSize: 16 }} /> {t("clip.menu")}
                   </span>
                 </MenuItem>
                 <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: 0 }); }}>
@@ -421,6 +417,17 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               </>
             }
           />
+          {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
+          <Tooltip title={t("clip.menu")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<ScissorOutlined />}
+              disabled={!assetSrc}
+              onClick={() => onOpenClipStrip(nodeId)}
+            />
+          </Tooltip>
           <Tooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>
             <Button
               type="text"
