@@ -14,11 +14,11 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, Segmented, Tooltip } from "antd";
+import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type ClipMode,fetchVideoProxy } from "@/features/canvas/api/file-api";
+import { fetchVideoProxy } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { getVideoPlaybackTime, isVideoPlaying, pauseVideo, playVideo, seekVideo, setVideoTime, suppressNativeLoop, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
@@ -103,7 +103,6 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const [activeHandle, setActiveHandle] = useState<"in" | "out">("out");
   const [inRatio, setInRatio] = useState(0);
   const [outRatio, setOutRatio] = useState(1);
-  const [mode, setMode] = useState<ClipMode>("precise");
   // 播放进度：只以「选区内已播部分加亮」呈现，不设独立播放头
   const [playedRatio, setPlayedRatio] = useState(0);
   // 拖动状态：null = 未拖动；"in"/"out" = 拖手柄（浮出时间气泡）；"band" = 整段平移
@@ -406,11 +405,11 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     if (!rangeValid) return;
     window.dispatchEvent(
       new CustomEvent(EventNames.CANVAS_NODE_ACTION, {
-        detail: { nodeId, action: "extract-clip", start: inTime, end: outTime, mode },
+        detail: { nodeId, action: "extract-clip", start: inTime, end: outTime },
       }),
     );
     onClose();
-  }, [rangeValid, nodeId, inTime, outTime, mode, onClose]);
+  }, [rangeValid, nodeId, inTime, outTime, onClose]);
 
   /** 整段平移：按住亮带中段拖动，时长不变地平移整个区间（两端同步钳在轨道内）。
       画面连续 scrub 到新区间的入点帧（与拖手柄一致），松手后恢复循环播放 */
@@ -628,19 +627,6 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
           <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
         </Tooltip>
       )}
-
-      {/* 每个模式各自的 tooltip（antd Segmented 原生 option.tooltip）；
-          title:"" 显式覆盖 rc-segmented 默认塞到 item 上的原生 title（= label 文本），
-          否则悬停会出现浏览器原生黑块提示 */}
-      <Segmented
-        size="small"
-        value={mode}
-        onChange={(v) => setMode(v as ClipMode)}
-        options={[
-          { label: t("clip.modePrecise"), value: "precise", title: "", tooltip: t("clip.modePreciseHint") },
-          { label: t("clip.modeFast"), value: "fast", title: "", tooltip: t("clip.modeFastHint") },
-        ]}
-      />
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 

@@ -85,9 +85,6 @@ export async function detachAudio(videoKey: string, signal?: AbortSignal): Promi
   });
 }
 
-/** 片段截取模式：precise = 重编码（帧精确），fast = 流拷贝（切点吸附关键帧） */
-export type ClipMode = "precise" | "fast";
-
 /** 片段截取结果 */
 export interface ExtractedClipInfo {
   key: string;
@@ -98,7 +95,7 @@ export interface ExtractedClipInfo {
 }
 
 /**
- * 截取视频片段，返回原始 Response。
+ * 截取视频片段（帧精确重编码），返回原始 Response。
  * 同步长请求（重编码可能持续数十秒），调用方需自行给出忙反馈；
  * 失败时按 `error.<code>` 读取本地化错误。
  */
@@ -106,12 +103,35 @@ export async function extractClip(
   videoKey: string,
   start: number,
   end: number,
-  mode: ClipMode,
   signal?: AbortSignal,
 ): Promise<Response> {
   return apiRaw("/api/files/extract-clip", {
     method: "POST",
-    body: JSON.stringify({ video_key: videoKey, start, end, mode }),
+    body: JSON.stringify({ video_key: videoKey, start, end }),
+    signal,
+  });
+}
+
+/** 视频画面裁剪的源像素矩形（服务端会再次做偶数钳位与边界校验） */
+export interface CropRectPx {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 裁剪视频画面区域（重编码整段视频），返回原始 Response。
+ * 同步长请求，调用方需自行给出忙反馈；失败时按 `error.<code>` 读取本地化错误。
+ */
+export async function cropVideo(
+  videoKey: string,
+  rect: CropRectPx,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiRaw("/api/files/crop-video", {
+    method: "POST",
+    body: JSON.stringify({ video_key: videoKey, ...rect }),
     signal,
   });
 }

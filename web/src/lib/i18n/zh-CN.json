@@ -530,11 +530,11 @@
     "proxyLoading": "正在生成预览代理...",
     "proxyFailed": "预览代理生成失败，请关闭后重开面板重试",
     "buffering": "正在缓冲预览...",
-    "modePrecise": "精确",
-    "modeFast": "快速",
-    "modePreciseHint": "重新编码，精确到帧，稍慢",
-    "modeFastHint": "原样拷贝，即刻完成，切点对齐关键帧",
     "suffix": " (片段 {{range}})"
+  },
+  "crop": {
+    "processing": "正在裁剪视频...",
+    "suffix": " (裁剪 {{size}})"
   },
   "draft": {
     "title": "发现未保存的离线编辑",
@@ -695,6 +695,11 @@
       "timeout": "片段截取超时，请缩短片段后重试",
       "extract_failed": "片段截取失败，请稍后重试",
       "cancelled": "处理已取消"
+    },
+    "crop": {
+      "invalid_rect": "裁剪区域无效：需落在画面范围内",
+      "timeout": "视频裁剪超时，请稍后重试",
+      "failed": "视频裁剪失败，请稍后重试"
     },
     "generate": {
       "body_too_large": "请求体过大",

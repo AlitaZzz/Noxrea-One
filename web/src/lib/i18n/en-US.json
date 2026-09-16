@@ -531,11 +531,11 @@
     "proxyLoading": "Generating preview proxy...",
     "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
     "buffering": "Buffering preview...",
-    "modePrecise": "Precise",
-    "modeFast": "Fast",
-    "modePreciseHint": "Re-encode, frame-accurate, slower",
-    "modeFastHint": "Stream copy, instant, cuts snap to keyframes",
     "suffix": " (clip {{range}})"
+  },
+  "crop": {
+    "processing": "Cropping video...",
+    "suffix": " (crop {{size}})"
   },
   "draft": {
     "title": "Unsaved offline edits found",
@@ -696,6 +696,11 @@
       "timeout": "Clip extraction timed out, try a shorter range",
       "extract_failed": "Clip extraction failed, please retry",
       "cancelled": "Processing cancelled"
+    },
+    "crop": {
+      "invalid_rect": "Invalid crop area: it must stay within the video frame",
+      "timeout": "Video crop timed out, please retry",
+      "failed": "Video crop failed, please retry"
     },
     "generate": {
       "body_too_large": "Request body too large",
