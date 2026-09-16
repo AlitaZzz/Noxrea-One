@@ -7,7 +7,6 @@
 
 import {
   BgColorsOutlined,
-  CameraOutlined,
   CheckOutlined,
   CopyOutlined,
   DownloadOutlined,
@@ -19,6 +18,8 @@ import {
   ScissorOutlined,
   StarFilled,
   StarOutlined,
+  StepBackwardOutlined,
+  StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
 import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
@@ -401,17 +402,17 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               <>
                 <MenuItem onClick={() => { setCaptureOpen(false); onOpenFrameStrip(nodeId); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
+                    <FrameCaptureIcon style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
                   </span>
                 </MenuItem>
                 <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: 0 }); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.firstFrame")}
+                    <StepBackwardOutlined style={{ fontSize: 16 }} /> {t("capture.firstFrame")}
                   </span>
                 </MenuItem>
                 <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: -1 }); }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <CameraOutlined style={{ fontSize: 16 }} /> {t("capture.lastFrame")}
+                    <StepForwardOutlined style={{ fontSize: 16 }} /> {t("capture.lastFrame")}
                   </span>
                 </MenuItem>
               </>
