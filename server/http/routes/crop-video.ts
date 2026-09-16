@@ -1,15 +1,13 @@
 /**
- * 视频片段截取路由。
- * 从视频里按 [start, end] 区间截出一段，落盘去重后返回可访问地址。
- *
- * 与分离音频同构：产物可能是几十 MB 的视频，全程走流式哈希与文件拷贝；
- * 同步长请求（前端用节点忙浮层反馈），客户端断开经 request.signal 传导到
- * ffmpeg SIGKILL。路由只做校验、派发与落盘。
+ * 视频画面裁剪路由。
+ * 按源像素矩形 crop 并重编码整段视频，落盘去重后返回可访问地址。
+ * 与片段截取同构（同步长请求 + 流式落盘 + 客户端断开中断），
+ * 矩形由服务端做偶数钳位与边界校验（yuv420p 色度采样要求）。
  */
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/core/auth/middleware";
-import { extractVideoClip } from "@server/services/storage/media";
+import { cropVideoRegion, probeVideoMetaCached } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
 import { computeFileHash } from "@server/services/storage/hash";
 import { buildFileUrl, buildStorageKey } from "@server/services/storage/service";
@@ -20,17 +18,13 @@ import path from "path";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
 
-const extractClipSchema = z
-  .object({
-    video_key: z.string().min(1),
-    start: z.number().finite().min(0),
-    end: z.number().finite(),
-  })
-  .refine((d) => d.end > d.start, { message: "invalid range" });
-
-/** 区间下限（s）：短于此视为误操作；上限为同步请求封顶（前端轨道可选拖满全片） */
-const MIN_CLIP_DURATION_S = 0.5;
-const MAX_CLIP_DURATION_S = 600;
+const cropVideoSchema = z.object({
+  video_key: z.string().min(1),
+  x: z.number().int().min(0),
+  y: z.number().int().min(0),
+  width: z.number().int().min(2),
+  height: z.number().int().min(2),
+});
 
 const router = new Hono();
 
@@ -41,7 +35,7 @@ async function persistDerived(params: {
   ext: string;
   mime: string;
 }): Promise<{ key: string; url: string; size: number }> {
-  // 流式哈希：片段产物可能几十 MB，不能用 computeBufferHash 整份读入
+  // 流式哈希：裁剪产物可能几十 MB，不能用 computeBufferHash 整份读入
   const hash = await computeFileHash(params.tmpPath);
   const { size } = await fs.stat(params.tmpPath);
   const storageKey = buildStorageKey(params.userId, hash, params.ext);
@@ -60,7 +54,25 @@ async function persistDerived(params: {
   return { key: storageKey, url: buildFileUrl(storageKey), size };
 }
 
-router.post("/api/files/extract-clip", async (c) => {
+/** 把矩形钳进源画面，且偏移/宽高取偶（yuv420p 色度采样要求） */
+function clampRect(
+  rect: { x: number; y: number; width: number; height: number },
+  srcW: number,
+  srcH: number,
+): { x: number; y: number; width: number; height: number } {
+  const even = (v: number) => v - (v % 2);
+  let width = Math.min(even(rect.width), even(srcW));
+  let height = Math.min(even(rect.height), even(srcH));
+  let x = Math.min(even(rect.x), srcW - width);
+  let y = Math.min(even(rect.y), srcH - height);
+  width = Math.max(2, width);
+  height = Math.max(2, height);
+  x = Math.max(0, x);
+  y = Math.max(0, y);
+  return { x, y, width, height };
+}
+
+router.post("/api/files/crop-video", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
@@ -72,24 +84,12 @@ router.post("/api/files/extract-clip", async (c) => {
     return failCode(400, "common.invalid_json");
   }
 
-  const parsed = extractClipSchema.safeParse(body);
+  const parsed = cropVideoSchema.safeParse(body);
   if (!parsed.success) {
     return failCode(422, "common.invalid_request");
   }
-  const { video_key } = parsed.data;
-  const start = parsed.data.start;
-  const end = parsed.data.end;
 
-  // zod refine 已保证 end > start，这里再按业务语义限宽（1e-6 容差吃掉浮点误差：
-  // 前端钳位极限处 end-start 可能是 0.49999999999999994 这类值）
-  if (end - start < MIN_CLIP_DURATION_S - 1e-6) {
-    return failCode(422, "clip.invalid_range");
-  }
-  if (end - start > MAX_CLIP_DURATION_S) {
-    return failCode(422, "clip.range_too_long");
-  }
-
-  const videoPath = path.resolve(localStorage.baseDir, video_key);
+  const videoPath = path.resolve(localStorage.baseDir, parsed.data.video_key);
 
   // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
   const baseDir = path.resolve(localStorage.baseDir);
@@ -104,55 +104,61 @@ router.post("/api/files/extract-clip", async (c) => {
     return failCode(404, "clip.video_not_found");
   }
 
+  // 源分辨率用于钳位；探测失败按无法裁剪处理（源画面尺寸都拿不到时裁剪无从谈起）
+  const meta = await probeVideoMetaCached(videoPath);
+  if (!meta?.width || !meta?.height) {
+    return failCode(422, "crop.invalid_rect");
+  }
+  const rect = clampRect(parsed.data, meta.width, meta.height);
+  if (rect.width < 2 || rect.height < 2) {
+    return failCode(422, "crop.invalid_rect");
+  }
+
   // 独立临时目录：UUID 避免并发请求互相踩踏临时文件
   const tmpDir = path.resolve(
     localStorage.baseDir,
     "_tmp",
-    `clip_${process.pid}_${randomUUID()}`,
+    `crop_${process.pid}_${randomUUID()}`,
   );
 
   try {
-    const clip = await extractVideoClip(
-      videoPath,
-      tmpDir,
-      { start, end },
-      request.signal,
-    );
+    const crop = await cropVideoRegion(videoPath, path.join(tmpDir, "crop.mp4"), rect, request.signal);
 
     const stored = await persistDerived({
       userId: auth.user.id,
-      tmpPath: clip.path,
-      ext: clip.ext,
-      mime: clip.mime,
+      tmpPath: crop.path,
+      ext: crop.ext,
+      mime: crop.mime,
     });
 
-    return c.json(ok({ ...stored, ext: clip.ext, mime: clip.mime }));
+    return c.json(
+      ok({ ...stored, ext: crop.ext, mime: crop.mime, width: rect.width, height: rect.height })
+    );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Clip extraction failed";
+    const message = err instanceof Error ? err.message : "Video crop failed";
     const code = typeof err === "object" && err !== null && "code" in err
       ? err.code
       : undefined;
 
     // 客户端断开：不记 error 级别，也无需向已断开的一端回复杂信息
     if ((err as Error).name === "AbortError") {
-      logger.debug({ videoKey: video_key }, "Clip extraction aborted by client");
+      logger.debug({ videoKey: parsed.data.video_key }, "Video crop aborted by client");
       return failCode(499, "clip.cancelled");
     }
 
-    // ffmpeg 缺失或截取失败的底层信息只进日志，运维细节不下发给客户端
-    logger.error({ err, videoKey: video_key }, "Clip extraction failed");
+    logger.error({ err, videoKey: parsed.data.video_key }, "Video crop failed");
 
     if (code === "ENOENT" || message.includes("ENOENT")) {
       return failCode(500, "clip.ffmpeg_missing");
     }
     if (message.includes("timed out")) {
-      return failCode(504, "clip.timeout");
+      return failCode(504, "crop.timeout");
     }
-    return failCode(500, "clip.extract_failed");
+    return failCode(500, "crop.failed");
   } finally {
     // 清理临时目录；失败通常意味着 ffmpeg 仍持有句柄，必须留痕以便排查
     await fs.rm(tmpDir, { recursive: true, force: true }).catch((err: unknown) => {
-      logger.warn({ err, tmpDir }, "Failed to remove temp clip dir");
+      logger.warn({ err, tmpDir }, "Failed to remove temp crop dir");
     });
   }
 });

@@ -22,11 +22,13 @@ import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
 import { useAssetsStore } from "@/features/assets/store";
 import {
   captureFrame as captureFrameApi,
-  type ClipMode,
+  type CropRectPx,
+  cropVideo as cropVideoApi,
   detachAudio as detachAudioApi,
   type DetachAudioResult,
   extractClip as extractClipApi,
 } from "@/features/canvas/api/file-api";
+import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
 import { createEdge } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
@@ -58,10 +60,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
-  // 本地处理忙状态：抽帧 / 分离音频 / 片段截取互斥共用（同一节点同一时刻
-  // 只跑一个），startedAt 驱动忙浮层的实时耗时
+  // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
+  // 同一时刻只跑一个），startedAt 驱动忙浮层的实时耗时
   const [busy, setBusy] = useState<{
-    kind: "capture" | "detach" | "clip";
+    kind: "capture" | "detach" | "clip" | "crop";
     startedAt: number;
   } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -166,7 +168,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         v.play().then(() => setPlaying(true)).catch(() => {});
       });
     }
-  }, [capturingFrame]);
+  }, [capturingFrame, busy]);
   const handleMouseLeave = useCallback(() => {
     hoverTimerRef.current = setTimeout(() => {
       // 延迟期间可能已经打开选帧面板：此时不能把画面拉回 0
@@ -397,18 +399,18 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const handleUpload = useNodeUpload(id, { accept: "video/*", clearFields: ["hasAudio"] });
 
   /**
-   * 截取片段：服务端按 [start, end] 截出一段视频（precise 重编码 / fast 流拷贝），
+   * 截取片段：服务端按 [start, end] 帧精确重编码截出一段视频，
    * 产物作为派生视频节点连回源节点。
    *
    * 历史栈策略与分离音频一致：write:false 仅构建节点，再一次 addNodes + setEdges
    * 同批写入，撤销一次即整体删除。
    */
-  const handleExtractClip = useCallback(async (start: number, end: number, mode: ClipMode) => {
+  const handleExtractClip = useCallback(async (start: number, end: number) => {
     if (!src || busy) return;
     const videoKey = toFileKey(src);
     setBusy({ kind: "clip", startedAt: Date.now() });
     try {
-      const res = await extractClipApi(videoKey, start, end, mode);
+      const res = await extractClipApi(videoKey, start, end);
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
@@ -454,6 +456,57 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       setBusy(null);
     }
   }, [src, busy, t, data.naturalWidth, data.naturalHeight, id, notification]);
+
+  /**
+   * 裁剪画面：服务端按源像素矩形 crop 并重编码整段视频，
+   * 产物作为派生视频节点连回源节点（历史栈策略与片段截取一致）。
+   */
+  const handleCropVideoApply = useCallback(async (rect: CropRectPx) => {
+    if (!src || busy) return;
+    const videoKey = toFileKey(src);
+    setBusy({ kind: "crop", startedAt: Date.now() });
+    try {
+      const res = await cropVideoApi(videoKey, rect);
+      const json = await res.json();
+
+      if (!res.ok || !json?.data) {
+        const code = json?.error as string | undefined;
+        const fallback = t("error.crop.failed");
+        notification.error({
+          message: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+          placement: "bottomRight",
+        });
+        return;
+      }
+
+      const { url } = json.data as { url: string };
+      const store = useCanvasStore.getState();
+      const size = `${rect.width}×${rect.height}`;
+
+      const cropNode = createVideoNodeFromUrl(
+        id,
+        url,
+        rect.width,
+        rect.height,
+        t("crop.suffix", { size }),
+        store,
+        { source: "derived" },
+        undefined,
+        undefined,
+        { write: false },
+      );
+
+      store.addNodes([cropNode]);
+      store.setEdges([...store.edges, createEdge(id, cropNode.id)]);
+
+      markDirtyImmediate();
+    } catch (e) {
+      console.error("Video crop failed:", e);
+      notification.error({ message: t("error.crop.failed"), placement: "bottomRight" });
+    } finally {
+      setBusy(null);
+    }
+  }, [src, busy, t, id, notification]);
 
   const addAsset = useAssetsStore((s) => s.addAsset);
 
@@ -520,13 +573,20 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           void handleDetachAudio();
           break;
         case "extract-clip":
-          void handleExtractClip(detail.start as number, detail.end as number, detail.mode as ClipMode);
+          void handleExtractClip(detail.start as number, detail.end as number);
+          break;
+        case "crop-video":
+          // 打开画面裁剪面板（复用 croppingNodeId，与图片裁剪互斥天然成立）
+          if (src) useCanvasStore.getState().setCroppingNodeId(id);
+          break;
+        case "crop-video-apply":
+          void handleCropVideoApply(detail.rect as CropRectPx);
           break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio, handleExtractClip]);
+  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio, handleExtractClip, handleCropVideoApply]);
 
   // 换源后旧探测结论失效，清空以便重新判定。
   // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次
@@ -548,6 +608,21 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [id, src]);
 
   const hasVideo = src && src.length > 0;
+
+  // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
+  // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，
+  // 与播放位置无关），避免在 effect 里同步 setState 造成级联渲染
+  const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
+  const cropOpen = croppingNodeId === id;
+  const captureFrameSnapshot = useCallback((): { src: string; w: number; h: number } | null => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    canvas.getContext("2d")?.drawImage(v, 0, 0);
+    return { src: canvas.toDataURL("image/jpeg", 0.92), w: v.videoWidth, h: v.videoHeight };
+  }, []);
 
   // 把 video 元素登记进注册表：帧序列面板渲染在画布层，拿不到本组件的 videoRef，
   // 需要通过它读取「打开面板时的播放位置」。走 store 会把播放进度写进撤销栈，故不用。
@@ -722,7 +797,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         )}
 
-        {/* 分离音频 / 捕获帧 / 截取片段处理中：同步请求可能持续数秒到分钟级，
+        {/* 分离音频 / 捕获帧 / 截取片段 / 画面裁剪处理中：同步请求可能持续数秒到分钟级，
             忙浮层给出操作文案 + 实时耗时 */}
         {busy && (
           <BusyOverlay
@@ -731,12 +806,25 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 ? t("clip.processing")
                 : busy.kind === "detach"
                   ? t("detach.processing")
-                  : t("capture.processing")
+                  : busy.kind === "crop"
+                    ? t("crop.processing")
+                    : t("capture.processing")
             }
             startedAt={busy.startedAt}
           />
         )}
       </div>
+
+      {/* 画面裁剪面板：挂 body 之外以露出顶部工具条（与图片裁剪同构） */}
+      {cropOpen && (
+        <div className="pointer-events-none absolute inset-0 overflow-visible">
+          <VideoCropPanel
+            nodeId={id}
+            captureFrame={captureFrameSnapshot}
+            onClose={() => useCanvasStore.getState().setCroppingNodeId(null)}
+          />
+        </div>
+      )}
 
       {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />}
       <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />

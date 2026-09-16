@@ -22,7 +22,7 @@ import {
   StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover,Tooltip } from "antd";
-import { Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Crop, Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -427,6 +427,17 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               icon={<ScissorOutlined />}
               disabled={!assetSrc}
               onClick={() => onOpenClipStrip(nodeId)}
+            />
+          </Tooltip>
+          {/* 画面裁剪：与图片节点同语义（源像素矩形重编码为派生视频） */}
+          <Tooltip title={t("node.crop")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<Crop size={16} />}
+              disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "crop-video")}
             />
           </Tooltip>
           <Tooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>

@@ -205,6 +205,14 @@ export const ERROR_CODES = [
   /** 客户端提前断开，处理已中止 */
   "clip.cancelled",
 
+  // ── 视频画面裁剪（复用 clip.video_not_found / ffmpeg_missing / cancelled）──
+  /** 裁剪矩形无效（退化或超出画面） */
+  "crop.invalid_rect",
+  /** 视频裁剪超时 */
+  "crop.timeout",
+  /** 裁剪处理失败 */
+  "crop.failed",
+
   // ── 认证 ──
   /** 未携带登录凭证 */
   "auth.not_authenticated",
