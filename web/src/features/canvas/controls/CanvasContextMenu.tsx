@@ -25,6 +25,8 @@ import {
   deleteSelection,
   duplicateSelection,
   pasteClipboard,
+  pasteFromClipboardContent,
+  readSystemClipboard,
   redoAction,
   selectAllNodes,
   undoAction,
@@ -59,10 +61,10 @@ export default function CanvasContextMenu(props: Props) {
   // 菜单坐标是屏幕坐标，粘贴落点需要的是画布坐标
   const { screenToFlowPosition } = useReactFlow();
 
-  // 编辑类菜单项的可用性：随画布选中态与画布剪贴板实时变化
+  // 编辑类菜单项的可用性：随画布选中态实时变化（粘贴不置灰：内部剪贴板为空时
+  // 会主动读取系统剪贴板，无法在菜单打开时廉价预判系统剪贴板内容）
   const hasSelection = useCanvasStore((s) => s.nodes.some((n) => n.selected));
   const hasNodes = useCanvasStore((s) => s.nodes.length > 0);
-  const canPaste = useSelectionStore((s) => (s.clipboard?.nodes.length ?? 0) > 0);
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
   // 单选图片节点时的 src：右键菜单据此显示「复制图片」（位图进系统剪贴板）。
@@ -79,6 +81,25 @@ export default function CanvasContextMenu(props: Props) {
     if (!singleImageSrc) return;
     const ok = await copyImageSrcToClipboard(singleImageSrc);
     showGlobalMessage().success(ok ? t("common.copied") : t("common.copyFailed"));
+  };
+
+  /** 右键菜单「粘贴」：内部剪贴板优先；为空时主动读取系统剪贴板走智能粘贴
+      （clipboard.read 需浏览器一次授权，Firefox 降级 readText 只取文本） */
+  const handleMenuPaste = async () => {
+    hide();
+    const at = screenToFlowPosition({ x, y });
+    if ((useSelectionStore.getState().clipboard?.nodes.length ?? 0) > 0) {
+      pasteClipboard(at);
+      return;
+    }
+    const content = await readSystemClipboard();
+    if (!content) {
+      showGlobalMessage().info(t("common.clipboardReadFailed"));
+      return;
+    }
+    if (!pasteFromClipboardContent(content, at)) {
+      showGlobalMessage().info(t("common.pasteUnsupported"));
+    }
   };
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -165,7 +186,7 @@ export default function CanvasContextMenu(props: Props) {
               <>
                 <MenuItem onClick={() => { hide(); void handleUpload(); }}><UploadOutlined /> {t("common.upload")}</MenuItem>
                 <MenuDivider />
-                <MenuItem dimmed={!canPaste} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { pasteClipboard(screenToFlowPosition({ x, y })); hide(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
+                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
                 <MenuItem dimmed={!hasNodes} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+A</span>} onClick={() => { selectAllNodes(); hide(); }}><SelectOutlined /> {t("common.selectAll")}</MenuItem>
                 {canvasActions}
                 <MenuDivider />
@@ -176,12 +197,12 @@ export default function CanvasContextMenu(props: Props) {
 
             {kind === "node" && (
               <>
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+C</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copy")}</MenuItem>
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+C</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copyNode")}</MenuItem>
                 {singleImageSrc !== null && (
                   <MenuItem onClick={() => { void handleCopyImage(); }}><PictureOutlined /> {t("node.copyImage")}</MenuItem>
                 )}
                 <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+D</span>} onClick={() => { duplicateSelection(); hide(); }}><PlusSquareOutlined /> {t("common.duplicate")}</MenuItem>
-                <MenuItem dimmed={!canPaste} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { pasteClipboard(screenToFlowPosition({ x, y })); hide(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
+                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
                 <MenuDivider />
                 <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Del</span>} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
               </>
