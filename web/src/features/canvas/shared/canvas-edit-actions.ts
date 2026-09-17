@@ -39,7 +39,19 @@ export function copySelection(): boolean {
   const selIds = getSelectedNodeIds();
   if (selIds.length === 0) return false;
   const nodes = useCanvasStore.getState().nodes;
-  useSelectionStore.getState().copySelected(nodes.filter((n) => selIds.includes(n.id)));
+  // 选中组时自动带上其全部成员：复制组 = 复制整组内容（成员经粘贴重映射归新组）
+  const selSet = new Set(selIds);
+  const selectedGroupIds = new Set(
+    nodes.filter((n) => n.type === NODE_TYPE.GROUP && selSet.has(n.id)).map((n) => n.id)
+  );
+  const expanded = selectedGroupIds.size
+    ? nodes.filter((n) => {
+        if (selSet.has(n.id)) return true;
+        const gid = (n.data as { groupId?: string } | undefined)?.groupId;
+        return n.type !== NODE_TYPE.GROUP && gid !== undefined && selectedGroupIds.has(gid);
+      })
+    : nodes.filter((n) => selSet.has(n.id));
+  useSelectionStore.getState().copySelected(expanded);
   return true;
 }
 
