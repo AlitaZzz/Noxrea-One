@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import {
   copySelection,
   deleteSelection,
+  duplicateSelection,
   getSelectedEdgeIds,
   getSelectedNodeIds,
   hasGeneratingNode,
@@ -84,6 +85,13 @@ export function useCanvasKeyboard() {
           e.preventDefault();
           copySelection();
         }
+      }
+
+      // ---- Duplicate ----
+      // Ctrl+D 浏览器默认行为是收藏书签，必须 preventDefault
+      if (mod && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateSelection();
       }
 
       // ---- Paste ----

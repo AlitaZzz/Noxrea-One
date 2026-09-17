@@ -3,14 +3,14 @@
  *
  * - create：左键双击空白处唤起 → 新增各类节点
  * - canvas：右键空白处唤起     → 上传 / 粘贴 / 全选 / 整理 / 重置视图 / 撤销 / 重做
- * - node  ：右键节点上唤起     → 复制 / 删除
+ * - node  ：右键节点上唤起     → 复制 / 复制图片（单选图片节点）/ 创建副本 / 粘贴 / 删除
  *
  * 双击负责「创建」，右键负责「对已有内容的操作」，两者职责不重叠。
  * 编辑类动作统一取自 canvas-edit-actions，与键盘快捷键共用同一份实现。
  */
 "use client";
 
-import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
 import { Popover } from "antd";
 import { useEffect, useRef } from "react";
@@ -20,8 +20,10 @@ import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem } from "@/components/ui/MenuPopover";
 import {
+  copyImageSrcToClipboard,
   copySelection,
   deleteSelection,
+  duplicateSelection,
   pasteClipboard,
   redoAction,
   selectAllNodes,
@@ -32,6 +34,8 @@ import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import { createNodesFromFiles, pickFiles } from "@/features/canvas/upload";
+import { NODE_TYPE } from "@/lib/constants";
+import { showGlobalMessage } from "@/lib/global-message";
 
 interface Props {
   onAddText: () => void;
@@ -61,6 +65,21 @@ export default function CanvasContextMenu(props: Props) {
   const canPaste = useSelectionStore((s) => (s.clipboard?.nodes.length ?? 0) > 0);
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
+  // 单选图片节点时的 src：右键菜单据此显示「复制图片」（位图进系统剪贴板）。
+  // 空 src（新建未生成的占位节点）视为无图，不显示该项
+  const singleImageSrc = useCanvasStore((s) => {
+    const sel = s.nodes.filter((n) => n.selected);
+    if (sel.length !== 1 || sel[0].type !== NODE_TYPE.IMAGE) return null;
+    return (sel[0].data as { src?: string }).src || null;
+  });
+
+  /** 右键菜单「复制图片」：节点图片转 PNG 写入系统剪贴板，可贴到画布外应用 */
+  const handleCopyImage = async () => {
+    hide();
+    if (!singleImageSrc) return;
+    const ok = await copyImageSrcToClipboard(singleImageSrc);
+    showGlobalMessage().success(ok ? t("common.copied") : t("common.copyFailed"));
+  };
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -157,8 +176,14 @@ export default function CanvasContextMenu(props: Props) {
 
             {kind === "node" && (
               <>
-                <MenuItem dimmed={!hasSelection} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copy")}</MenuItem>
-                <MenuItem dimmed={!hasSelection} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+C</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copy")}</MenuItem>
+                {singleImageSrc !== null && (
+                  <MenuItem onClick={() => { void handleCopyImage(); }}><PictureOutlined /> {t("node.copyImage")}</MenuItem>
+                )}
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+D</span>} onClick={() => { duplicateSelection(); hide(); }}><PlusSquareOutlined /> {t("common.duplicate")}</MenuItem>
+                <MenuItem dimmed={!canPaste} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { pasteClipboard(screenToFlowPosition({ x, y })); hide(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
+                <MenuDivider />
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Del</span>} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
               </>
             )}
           </div>
