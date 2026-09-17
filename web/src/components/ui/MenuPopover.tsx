@@ -5,27 +5,34 @@
  */
 "use client";
 
-import { Popover } from "antd";
+import { Popover, Tooltip } from "antd";
 import { ReactNode } from "react";
 
-// Reusable menu item
-export function MenuItem({ children, onClick, dimmed, selected, iconRight }: {
-  children: ReactNode; onClick?: () => void; dimmed?: boolean; selected?: boolean; iconRight?: ReactNode;
+/**
+ * 通用菜单条目。
+ * - dimmed：弱化视觉且完全不可交互（pointer-events: none，tooltip 也无法触发）；
+ * - disabled：禁用但保留悬停（供 Tooltip 说明禁用原因），点击被拦截；
+ * - tooltip：悬停提示文案，配合 disabled 展示禁用原因。
+ */
+export function MenuItem({ children, onClick, dimmed, disabled, selected, iconRight, tooltip }: {
+  children: ReactNode; onClick?: () => void; dimmed?: boolean; disabled?: boolean; selected?: boolean; iconRight?: ReactNode; tooltip?: string;
 }) {
-  return (
+  const inactive = dimmed || disabled;
+  const item = (
     <div
-      className={`menu-popover-item${dimmed ? " menu-item-disabled" : ""}`}
+      className={`menu-popover-item${inactive ? " menu-item-disabled" : ""}`}
       style={dimmed ? { pointerEvents: "none" } : undefined}
     >
     <button
       className={`menu-item-btn${selected ? " selected" : ""}`}
-      style={{ color: selected ? undefined : (dimmed ? "var(--canvas-text-dim)" : "var(--canvas-text)") }}
-      onClick={onClick}>
+      style={{ color: selected ? undefined : (inactive ? "var(--canvas-text-dim)" : "var(--canvas-text)"), cursor: disabled ? "not-allowed" : undefined }}
+      onClick={inactive ? undefined : onClick}>
       <span className="flex-1">{children}</span>
       {iconRight}
     </button>
   </div>
   );
+  return tooltip ? <Tooltip title={tooltip} placement="right">{item}</Tooltip> : item;
 }
 
 // Reusable divider

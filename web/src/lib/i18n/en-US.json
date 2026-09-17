@@ -578,6 +578,12 @@
       "image": "Image-to-Video",
       "first-last": "First+Last",
       "full": "Full Reference"
+    },
+    "refModeDisabled": {
+      "text": "Media inputs connected. Text-to-Video is unavailable.",
+      "image": "Connect 1 image node.",
+      "first-last": "Connect 2 image nodes.",
+      "full": "Connect 1 image or video node."
     }
   },
   "director": {

@@ -577,6 +577,12 @@
       "image": "图生视频",
       "first-last": "首尾帧",
       "full": "全能参考"
+    },
+    "refModeDisabled": {
+      "text": "已连接媒体输入，无法使用文生视频。",
+      "image": "需要连接图片节点（1个）",
+      "first-last": "需要连接图片节点（2个）",
+      "full": "需要连接图片或视频节点（1个）"
     }
   },
   "director": {
