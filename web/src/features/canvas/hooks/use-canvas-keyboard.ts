@@ -6,7 +6,7 @@
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   copySelection,
@@ -28,9 +28,20 @@ import i18n from "@/lib/i18n/config";
  * Global keyboard shortcuts for the canvas.
  */
 export function useCanvasKeyboard() {
-  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
 
   const resetViewport = useCanvasStore((s) => s.resetViewport);
+
+  // 跟踪光标位置：Ctrl+V 粘贴跟随光标（Figma / tldraw 约定）。
+  // null = 尚未捕获到任何鼠标移动（如刷新后直接键盘操作），粘贴走视口中心兜底
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -77,8 +88,18 @@ export function useCanvasKeyboard() {
 
       // ---- Paste ----
       if (mod && e.key.toLowerCase() === "v") {
-        // 输入框内已在本函数开头 return，此处只会是画布语境的「粘贴节点」
-        if (pasteClipboard()) e.preventDefault();
+        // 输入框内已在本函数开头 return，此处只会是画布语境的「粘贴节点」。
+        // 光标在画布上 → 粘贴到光标处；不在（如悬停面板）或未捕获到光标 → 兜底贴到画布视口中心
+        const container = document.querySelector(".canvas-container");
+        const rect = container?.getBoundingClientRect();
+        const center = {
+          x: (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2,
+          y: (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2,
+        };
+        const pointer = lastPointerRef.current;
+        const overCanvas = !!pointer && !!container?.contains(document.elementFromPoint(pointer.x, pointer.y));
+        const at = overCanvas ? screenToFlowPosition({ x: pointer.x, y: pointer.y }) : screenToFlowPosition(center);
+        if (pasteClipboard(at)) e.preventDefault();
       }
 
       // ---- Delete selected nodes AND edges ----
@@ -149,5 +170,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, resetViewport]);
+  }, [zoomIn, zoomOut, fitView, resetViewport, screenToFlowPosition]);
 }
