@@ -606,10 +606,6 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         )}
       </div>
 
-      {/* 截取时长已常驻显示在轨道亮带中间，这里不再重复时间码 */}
-
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
         <Tooltip
