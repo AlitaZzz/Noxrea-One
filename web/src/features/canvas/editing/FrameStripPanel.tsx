@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { fetchVideoProxy } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
-import { getVideoPlaybackTime, isVideoPlaying, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
+import { getVideoPlaybackTime, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
@@ -202,13 +202,20 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
   // 节点播放时播放头跟随：复用节点控件栏的播放按钮，边听边看；
   // 暂停后播放头即停在当前帧，再用 ←/→ 微调
+  // 跟随范围：节点的任何位置变化（播放推进 / 拖节点进度条 / 点击跳转）都实时
+  // 反映到播放头与时间码；面板自身轨道拖动期间挂起——拖动中节点时间的轻微
+  // 滞后会把播放头往回拽，松手后恢复
+  const lastCurRef = useRef(0);
   useEffect(() => {
     if (!ready || duration <= 0) return;
     let raf = 0;
     const tick = () => {
-      // 只在播放中跟随：拖动或步进时视频是暂停的，此时跟随会用滞后的位置覆盖用户操作
-      if (isVideoPlaying(nodeId)) {
-        setRatio(clamp01(getVideoPlaybackTime(nodeId) / duration));
+      if (!dragCleanupRef.current) {
+        const cur = getVideoPlaybackTime(nodeId);
+        if (Math.abs(cur - lastCurRef.current) > 0.003) {
+          lastCurRef.current = cur;
+          setRatio(clamp01(cur / duration));
+        }
       }
       raf = requestAnimationFrame(tick);
     };
