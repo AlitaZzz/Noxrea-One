@@ -443,6 +443,8 @@
     "reset": "重置",
     "confirm": "确认",
     "cancel": "取消",
+    "processing": "正在裁剪视频...",
+    "suffix": " (裁剪 {{size}})",
     "aspect": {
       "free": "自由",
       "1_1": "1:1",
@@ -531,10 +533,6 @@
     "proxyFailed": "预览代理生成失败，请关闭后重开面板重试",
     "buffering": "正在缓冲预览...",
     "suffix": " (片段 {{range}})"
-  },
-  "crop": {
-    "processing": "正在裁剪视频...",
-    "suffix": " (裁剪 {{size}})"
   },
   "draft": {
     "title": "发现未保存的离线编辑",

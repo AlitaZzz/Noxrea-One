@@ -15,7 +15,8 @@ import { useEffect, useState } from "react";
 
 import { fetchFrameSprite, type FrameSpriteInfo } from "@/features/canvas/api/file-api";
 
-/** 轨道宽（px）——与 FrameStripPanel 的 w-250 对齐，即 250 × 0.25rem = 1000px */
+/** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
+    轨道容器宽度必须是它 + 24px（用 px 而非 rem，避免两边坐标系漂移） */
 export const FRAME_TRACK_WIDTH = 1000;
 /** 轨道高（px）——与 FrameStripPanel 的 h-14 对齐，用于把单格等比缩放进轨道 */
 export const FRAME_TRACK_HEIGHT = 56;

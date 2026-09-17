@@ -444,6 +444,8 @@
     "reset": "Reset",
     "confirm": "Confirm",
     "cancel": "Cancel",
+    "processing": "Cropping video...",
+    "suffix": " (crop {{size}})",
     "aspect": {
       "free": "Free",
       "1_1": "1:1",
@@ -532,10 +534,6 @@
     "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
     "buffering": "Buffering preview...",
     "suffix": " (clip {{range}})"
-  },
-  "crop": {
-    "processing": "Cropping video...",
-    "suffix": " (crop {{size}})"
   },
   "draft": {
     "title": "Unsaved offline edits found",

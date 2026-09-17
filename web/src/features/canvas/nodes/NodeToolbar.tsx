@@ -271,7 +271,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             }
           />
           <Tooltip title={t("node.crop")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ScissorOutlined />} disabled={!assetSrc}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Crop size={16} />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
           </Tooltip>
           <Tooltip title={t("annotation.title")}>

@@ -279,12 +279,14 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
       </WheelGuard>
 
       {/* Crop overlay */}
+      {/* 只覆盖视频画面区（标题栏以下）：面板挂在节点根部以露出顶部工具条，
+          若用 inset-0 会把背景帧铺到标题栏里，画面被拉伸并超出视频显示区 */}
       <div
-        className="nodrag absolute inset-0 z-30 pointer-events-auto rounded-lg overflow-hidden"
+        className="nodrag absolute z-30 pointer-events-auto rounded-lg overflow-hidden"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        style={{ cursor: "crosshair", touchAction: "none" }}
+        style={{ top: NODE_TITLE_HEIGHT, left: 0, right: 0, bottom: 0, cursor: "crosshair", touchAction: "none" }}
       >
         {/* 背景是本地 dataURL 快照，不用 next/image */}
         {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -19,13 +19,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { fetchVideoProxy } from "@/features/canvas/api/file-api";
-import { FRAME_TRACK_HEIGHT, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
+import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { getVideoPlaybackTime, isVideoPlaying, pauseVideo, playVideo, seekVideo, setVideoTime, suppressNativeLoop, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
-/** 播放头所在层左右各留 12px（与 inset-x-3 对齐），按内区换算才能跟手 */
-const PLAYHEAD_INSET = 12;
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
 /** 最小区间（s）：拖动与键盘步进都被钳住，防止截出过短片段 */
@@ -209,9 +207,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     const el = trackRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const inner = rect.width - PLAYHEAD_INSET * 2;
+    const inner = rect.width;
     if (inner <= 0) return null;
-    return clamp01((clientX - rect.left - PLAYHEAD_INSET) / inner);
+    return clamp01((clientX - rect.left) / inner);
   }, []);
 
   /** 设置某一只手柄的位置，并钳住最小区间（in 不越过 out，out 不落后于 in）。
@@ -354,10 +352,11 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [duration, fps, inRatio, outRatio, activeHandle, operable, setHandle, seekPreview]);
 
-  // 单格按 contain 规则缩放并居中，与 FrameStripPanel 的渲染规则一致：
-  // 横屏时上下留边、竖屏时左右留边，不会为了铺满格子而裁掉画面。
+  // 单格按 cover 规则缩放居中（裁掉超出部分）：contain 会在竖屏视频的每格左右
+  // 留黑边、横屏视频上下留黑边，相邻格子的黑边连成「竖线」观感；cover 铺满格子
+  // 后缩略条视觉连续，代价是每格只显示帧的中间部分（识别足够）
   const scale = cellWidth > 0 && cellHeight > 0
-    ? Math.min(frameWidth / cellWidth, FRAME_TRACK_HEIGHT / cellHeight)
+    ? Math.max(frameWidth / cellWidth, FRAME_TRACK_HEIGHT / cellHeight)
     : 0;
   const cellStyle = (index: number) => ({
     left: (frameWidth - cellWidth * scale) / 2,
@@ -498,7 +497,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         <div
           key={i}
           className="relative h-full shrink-0 overflow-hidden"
-          style={{ width: frameWidth, marginLeft: i === 0 ? 0 : -1 }}
+          style={{ width: frameWidth }}
         >
           <div className="absolute bg-black" style={cellStyle(i)} />
         </div>
@@ -523,49 +522,48 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       <div
         ref={trackRef}
-        className="relative h-14 w-250 cursor-ew-resize overflow-visible"
+        className="relative h-14 cursor-ew-resize overflow-visible"
+        style={{ width: FRAME_TRACK_WIDTH }}
         onPointerDown={handleTrackDown}
       >
-        <div className="flex size-full overflow-hidden rounded-xl bg-black">{trackCells}</div>
+        {/* 格子/压暗/选区/手柄共用同一坐标系（轨道全宽），雪碧图贴满轨道两端 */}
+        <div className="absolute inset-0 rounded-xl bg-black" />
+        <div className="absolute inset-0 flex overflow-hidden">{trackCells}</div>
 
-        {/* 压暗层铺满整条轨道、贴住选区框边缘：若沿用选区的内缩坐标系
-            （inset-x-3，给播放头圆点留 12px），两端各剩 12px 格子永远压不到暗，
-            观感是「最左侧没被压暗」；宽度用 calc 按内缩坐标系换算 */}
+        {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
         {bandRange && (
           <>
             <div className="pointer-events-none absolute inset-0 z-10">
               <div
                 className="absolute inset-y-0 left-0 bg-black/55"
-                style={{ width: `calc(12px + (100% - 24px) * ${bandRange.inR})` }}
+                style={{ width: `${bandRange.inR * 100}%` }}
               />
               <div
                 className="absolute inset-y-0 right-0 bg-black/55"
-                style={{ width: `calc(12px + (100% - 24px) * ${1 - bandRange.outR})` }}
+                style={{ width: `${(1 - bandRange.outR) * 100}%` }}
               />
             </div>
             <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
-              <div className="absolute inset-x-3 inset-y-0">
-                {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
+              {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
+              <div
+                className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
+                style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
+                onPointerDown={handleBandDown}
+              >
                 <div
-                  className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
-                  style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
-                  onPointerDown={handleBandDown}
-                >
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      border: "2px solid var(--canvas-accent)",
-                      background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)",
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span
-                      className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-                      style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
-                    >
-                      {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
-                    </span>
-                  </div>
+                  className="absolute inset-0"
+                  style={{
+                    border: "2px solid var(--canvas-accent)",
+                    background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)",
+                  }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span
+                    className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
+                    style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+                  >
+                    {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
+                  </span>
                 </div>
               </div>
             </div>
@@ -575,12 +573,10 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         {/* 播放进度竖线：循环扫播当前位置的细线标记（只展示，不接管指针） */}
         {operable && rangeInitialized && (
           <div className="pointer-events-none absolute inset-0 z-20 overflow-visible">
-            <div className="absolute inset-x-3 inset-y-0">
-              <div
-                className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
-                style={{ left: `${playedRatio * 100}%` }}
-              />
-            </div>
+            <div
+              className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
+              style={{ left: `${playedRatio * 100}%` }}
+            />
           </div>
         )}
 
@@ -588,10 +584,8 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
             手柄容器自带 pointer-events-auto，从 none 的层里把指针事件接回来 */}
         {operable && rangeInitialized && (
           <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
-            <div className="absolute inset-x-3 inset-y-0 overflow-visible">
-              {handleRenderer("in", inRatio)}
-              {handleRenderer("out", outRatio)}
-            </div>
+            {handleRenderer("in", inRatio)}
+            {handleRenderer("out", outRatio)}
           </div>
         )}
 
