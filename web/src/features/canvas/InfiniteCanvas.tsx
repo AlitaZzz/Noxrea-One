@@ -51,6 +51,7 @@ import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/c
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
+import SelectionFrameHandles from "@/features/canvas/controls/SelectionFrameHandles";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
@@ -162,6 +163,22 @@ export default function InfiniteCanvas() {
     const selected = nodes.filter((n) => n.selected);
     if (selected.length < 2) return true;
     return selected.every((n) => n.type === NODE_TYPE.GROUP);
+  }, [nodes]);
+
+  // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle
+  const selectionFrame = useMemo(() => {
+    const sel = nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
+    if (sel.length < 2) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of sel) {
+      const w = Number(n.style?.width) || n.measured?.width || 200;
+      const h = Number(n.style?.height) || n.measured?.height || 120;
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + w);
+      maxY = Math.max(maxY, n.position.y + h);
+    }
+    return { ids: sel.map((n) => n.id), bbox: { x: minX, y: minY, width: maxX - minX, height: maxY - minY } };
   }, [nodes]);
 
   // 冻结 defaultViewport 引用——React Flow 仅在首次挂载时读取此值，
@@ -436,14 +453,50 @@ export default function InfiniteCanvas() {
     [setEdges]
   );
 
-  const handleConnect = useCallback(
-    (connection: Connection) => {
-      setEdges([...useCanvasStore.getState().edges, createEdge(connection.source || "", connection.target || "")]);
-      // 「重连 = 重新入列」：参考边（重新）建立后，对应参考置尾（含 ✕ 后重连、断开重连）
-      bumpRefOrderToTail([{ source: connection.source || "", target: connection.target || "" }]);
+  /** 批量建边：去重已存在的连线，新边统一触发参考置尾与落库 */
+  const batchConnect = useCallback(
+    (pairs: { source: string; target: string }[]) => {
+      if (pairs.length === 0) return;
+      const state = useCanvasStore.getState();
+      const existing = new Set(state.edges.map((e) => `${e.source}->${e.target}`));
+      const fresh = pairs
+        .filter((p) => !existing.has(`${p.source}->${p.target}`))
+        .map((p) => createEdge(p.source, p.target));
+      if (fresh.length === 0) return;
+      setEdges([...state.edges, ...fresh]);
+      bumpRefOrderToTail(fresh);
       markDirtyImmediate();
     },
     [setEdges]
+  );
+
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      const state = useCanvasStore.getState();
+      const nodeById = new Map(state.nodes.map((n) => [n.id, n]));
+      const src = nodeById.get(connection.source || "");
+      const tgt = nodeById.get(connection.target || "");
+      if (!src || !tgt) return;
+
+      // 多选扇出：拖线起点/终点在多选集合（≥2 非组节点）中时，
+      // 扩展为「所有选中节点 ↔ 对端节点」的批量连线，逐个按类型校验
+      const selected = state.nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
+      const pairs: { source: string; target: string }[] = [];
+      const inSelection = (n: AnyNode) => selected.some((s) => s.id === n.id);
+      if (selected.length > 1 && inSelection(src) && !inSelection(tgt)) {
+        for (const s of selected) {
+          if (canConnect(s.type, tgt.type)) pairs.push({ source: s.id, target: tgt.id });
+        }
+      } else if (selected.length > 1 && inSelection(tgt) && !inSelection(src)) {
+        for (const t of selected) {
+          if (canConnect(src.type, t.type)) pairs.push({ source: src.id, target: t.id });
+        }
+      } else {
+        pairs.push({ source: src.id, target: tgt.id });
+      }
+      batchConnect(pairs);
+    },
+    [batchConnect]
   );
 
   // 节点连接规则：根据源/目标节点类型判断连接是否合法
@@ -515,8 +568,8 @@ export default function InfiniteCanvas() {
           : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 + NODE_TITLE_HEIGHT / 2 };
 
       setPendingConnectionCreate({
-        sourceNodeId: sourceNode.id,
-        sourceNodeType: sourceNode.type ?? "",
+        sourceNodeIds: [sourceNode.id],
+        sourceNodeTypes: [sourceNode.type ?? ""],
         direction,
         canvasPosition,
         screenPosition: { x: clientX, y: clientY },
@@ -529,7 +582,7 @@ export default function InfiniteCanvas() {
   const handleCreateConnectedNode = useCallback(
     (nodeType: string) => {
       if (!pendingConnectionCreate) return;
-      const { sourceNodeId, canvasPosition, direction } = pendingConnectionCreate;
+      const { sourceNodeIds, canvasPosition, direction } = pendingConnectionCreate;
 
       let newNode: AnyNode;
       switch (nodeType) {
@@ -550,15 +603,57 @@ export default function InfiniteCanvas() {
       }
 
       addNodes([newNode]);
-      // 输出方向：源节点 → 新节点；输入方向：新节点 → 源节点
-      const edge =
-        direction === "output"
-          ? createEdge(sourceNodeId, newNode.id)
-          : createEdge(newNode.id, sourceNodeId);
-      setEdges([...useCanvasStore.getState().edges, edge]);
-      markDirtyImmediate();
+      // 批量接线：逐个按类型校验（批量连线时部分选中节点可能不兼容新节点类型），
+      // 输出方向：各选中节点 → 新节点；输入方向：新节点 → 各选中节点
+      const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+      const pairs = sourceNodeIds
+        .map((id) => nodeById.get(id))
+        .filter((n): n is AnyNode => !!n)
+        .flatMap((n) => {
+          const ok = direction === "output" ? canConnect(n.type, newNode.type) : canConnect(newNode.type, n.type);
+          if (!ok) return [];
+          return [direction === "output" ? { source: n.id, target: newNode.id } : { source: newNode.id, target: n.id }];
+        });
+      batchConnect(pairs);
     },
-    [pendingConnectionCreate, addNodes, setEdges]
+    [pendingConnectionCreate, addNodes, batchConnect]
+  );
+
+  /** 框选外框 Handle（右缘 = 输出方向）拖到已有节点：批量扇出，逐个按类型校验 */
+  const connectSelectionToNode = useCallback(
+    (selectedIds: string[], targetId: string) => {
+      const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+      const tgt = nodeById.get(targetId);
+      if (!tgt) return;
+      const pairs = selectedIds
+        .map((id) => nodeById.get(id))
+        .filter((n): n is AnyNode => !!n && n.id !== targetId)
+        .flatMap((n) => (canConnect(n.type, tgt.type) ? [{ source: n.id, target: targetId }] : []));
+      batchConnect(pairs);
+    },
+    [batchConnect]
+  );
+
+  /** 框选外框 Handle 拖到空白：弹出「创建连接节点」菜单，创建后批量接驳全部选中节点 */
+  const openSelectionCreateMenu = useCallback(
+    (
+      selectedIds: string[],
+      canvasPosition: { x: number; y: number },
+      screenPosition: { x: number; y: number },
+      sourceAnchor: { x: number; y: number }
+    ) => {
+      const selected = useCanvasStore.getState().nodes.filter((n) => selectedIds.includes(n.id));
+      if (selected.length === 0) return;
+      setPendingConnectionCreate({
+        sourceNodeIds: selected.map((n) => n.id),
+        sourceNodeTypes: selected.map((n) => n.type ?? ""),
+        direction: "output",
+        canvasPosition,
+        screenPosition,
+        sourceAnchor,
+      });
+    },
+    []
   );
 
   const handleViewportChange = useCallback(
@@ -1138,6 +1233,19 @@ export default function InfiniteCanvas() {
             )}
           </RfNodeToolbar>
         )})}
+
+        {/* 框选外框批量连线 Handle（≥2 个非组节点选中时出现） */}
+        {selectionFrame && (
+          <SelectionFrameHandles
+            bbox={selectionFrame.bbox}
+            selectedIds={selectionFrame.ids}
+            onConnectToNode={connectSelectionToNode}
+            onConnectToBlank={openSelectionCreateMenu}
+            onDragStart={canvasInteraction.onConnectStart}
+            onDragEnd={canvasInteraction.onConnectEnd}
+            screenToFlowPosition={screenToFlowPosition}
+          />
+        )}
 
         {/* 拖拽连线落在空白、弹出创建菜单期间：持续渲染绿色流光预览线 */}
         {pendingConnectionCreate && (

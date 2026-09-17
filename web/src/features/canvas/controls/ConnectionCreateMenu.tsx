@@ -14,9 +14,10 @@ import { MenuItem } from "@/components/ui/MenuPopover";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
 
 export interface PendingConnectionCreate {
-  /** 发起拖拽的节点（即用户从它的 Handle 拖出的那个节点） */
-  sourceNodeId: string;
-  sourceNodeType: string;
+  /** 参与本次连线的全部节点 id 与类型（单节点连线时长度为 1；
+   *  框选外框 Handle / 多选扇出时为全部选中节点） */
+  sourceNodeIds: string[];
+  sourceNodeTypes: string[];
   /** 连接方向：从 source 节点右侧 Handle 拖出 = "output"（新节点为下游）；
    *            从 source 节点左侧 Handle 拉入 = "input"（新节点为上游） */
   direction: "input" | "output";
@@ -60,10 +61,12 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
               {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
             </div>
             {nodeOptions.map((opt) => {
+              // 批量连线：仅当全部参与节点都兼容该类型时才启用，
+              // 保证点击后所有选中节点都会接上新节点（与单节点行为一致）
               const disabled =
                 pending.direction === "output"
-                  ? !canConnect(pending.sourceNodeType, opt.type)
-                  : !canConnectToInput(pending.sourceNodeType, opt.type);
+                  ? !pending.sourceNodeTypes.every((t) => canConnect(t, opt.type))
+                  : !pending.sourceNodeTypes.every((t) => canConnectToInput(t, opt.type));
               return (
                 <MenuItem
                   key={opt.type}

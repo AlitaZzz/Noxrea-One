@@ -597,6 +597,12 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
     pointer-events: auto;
   }
 }
+/* 框选外框批量连线 Handle：常显（节点 Handle 由 hover/选中规则控制显隐），
+   定位由组件内联 left/top 提供，复用 .react-flow__handle-right 的外浮 transform */
+.react-flow__handle.selection-frame-handle {
+  opacity: 1 !important;
+  pointer-events: auto;
+}
 .ant-btn-sm { font-size: 13px; }
 
 /* ===== 统一按钮（components/ui/AppButton）=====
