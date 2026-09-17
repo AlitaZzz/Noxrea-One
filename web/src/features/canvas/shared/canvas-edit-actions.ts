@@ -16,7 +16,7 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
-import { isGenerating, PASTE_OFFSET } from "@/lib/constants";
+import { isGenerating, NODE_TYPE, PASTE_OFFSET } from "@/lib/constants";
 
 /** 当前选中的节点 id */
 export function getSelectedNodeIds(): string[] {
@@ -72,6 +72,25 @@ export function pasteClipboard(at?: { x: number; y: number }): boolean {
   } else {
     newNodes = clip.nodes.map((n) => duplicateNode(n, PASTE_OFFSET));
   }
+
+  // 重映射组归属：剪贴板内含组节点时，成员副本指向粘贴出的新组；
+  // 原组不在本次剪贴板内则解除归属，避免副本「串」到画布上的原组
+  // （否则拖原组会带着粘贴副本跑、原组成员计数虚增）。
+  const groupIdMap = new Map<string, string>();
+  clip.nodes.forEach((orig, i) => {
+    if (orig.type === NODE_TYPE.GROUP) groupIdMap.set(orig.id, newNodes[i].id);
+  });
+  newNodes = newNodes.map((n) => {
+    if (n.type === NODE_TYPE.GROUP) return n;
+    const gid = (n.data as { groupId?: string } | undefined)?.groupId;
+    if (!gid) return n;
+    const mapped = groupIdMap.get(gid);
+    if (mapped) {
+      return { ...n, data: { ...n.data, groupId: mapped } } as AnyNode;
+    }
+    const { groupId: _omit, ...rest } = n.data as Record<string, unknown>;
+    return { ...n, data: rest } as AnyNode;
+  });
 
   useCanvasStore.getState().addNodes(newNodes);
   // 粘贴后选中新节点，与键盘 Ctrl+V 行为保持一致
