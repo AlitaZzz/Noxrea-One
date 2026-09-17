@@ -274,7 +274,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const errJson = await res.json().catch(() => null);
         const code = errJson?.error as string | undefined;
         notification.error({
-          message: code
+          title: code
             ? t(`error.${code}`, { defaultValue: t("error.capture_frame.capture_failed") })
             : t("error.capture_frame.capture_failed"),
           placement: "bottomRight",
@@ -284,7 +284,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const json = await res.json();
       const imgUrl = json.data?.url;
       if (!imgUrl) {
-        notification.error({ message: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+        notification.error({ title: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
         return;
       }
 
@@ -293,7 +293,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
     } catch (e) {
       console.error("Frame capture failed:", e);
-      notification.error({ message: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+      notification.error({ title: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
     } finally {
       setBusy(null);
     }
@@ -322,7 +322,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const code = json?.error as string | undefined;
         const fallback = t("detach.failed");
         notification.error({
-          message: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
           placement: "bottomRight",
         });
         // 确认无音轨后同步禁用入口，避免用户反复点击撞同一个错误
@@ -380,7 +380,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Audio detach failed:", e);
-      notification.error({ message: t("detach.failed"), placement: "bottomRight" });
+      notification.error({ title: t("detach.failed"), placement: "bottomRight" });
     } finally {
       setBusy(null);
     }
@@ -418,7 +418,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const code = json?.error as string | undefined;
         const fallback = t("error.clip.extract_failed");
         notification.error({
-          message: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
           placement: "bottomRight",
         });
         return;
@@ -451,7 +451,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Clip extraction failed:", e);
-      notification.error({ message: t("error.clip.extract_failed"), placement: "bottomRight" });
+      notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
     } finally {
       setBusy(null);
     }
@@ -473,7 +473,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const code = json?.error as string | undefined;
         const fallback = t("error.crop.failed");
         notification.error({
-          message: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
           placement: "bottomRight",
         });
         return;
@@ -502,7 +502,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Video crop failed:", e);
-      notification.error({ message: t("error.crop.failed"), placement: "bottomRight" });
+      notification.error({ title: t("error.crop.failed"), placement: "bottomRight" });
     } finally {
       setBusy(null);
     }
