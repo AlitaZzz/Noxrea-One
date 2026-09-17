@@ -16,7 +16,7 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
-import { isGenerating, NODE_TYPE } from "@/lib/constants";
+import { isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
 
 /** 当前选中的节点 id */
 export function getSelectedNodeIds(): string[] {
@@ -53,6 +53,52 @@ export function copySelection(): boolean {
     : nodes.filter((n) => selSet.has(n.id));
   useSelectionStore.getState().copySelected(expanded);
   return true;
+}
+
+/**
+ * 创建副本：等价于「复制 + 在原位置旁粘贴」，副本落在原选中内容右下方并保持选中。
+ * 与 Ctrl+V 的区别：落点固定跟随原内容，不依赖光标位置。
+ * 偏移量取 LAYOUT_GAP（与整理/网格间距同约定）：节点尺寸普遍 200px+，
+ * 偏移过小副本与原件几乎完全重叠；连续 Ctrl+D 时以副本为基准继续偏移，
+ * 自然形成 LAYOUT_GAP 步进的斜向级联（Figma 同款行为）。
+ * @returns 是否实际执行
+ */
+export function duplicateSelection(): boolean {
+  const selIds = getSelectedNodeIds();
+  if (selIds.length === 0) return false;
+  const selSet = new Set(selIds);
+  const sel = useCanvasStore.getState().nodes.filter((n) => selSet.has(n.id));
+  const minX = Math.min(...sel.map((n) => n.position.x));
+  const minY = Math.min(...sel.map((n) => n.position.y));
+  if (!copySelection()) return false;
+  return pasteClipboard({ x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP });
+}
+
+/**
+ * 把图片节点的内容写入系统剪贴板（PNG），供粘贴到画布外应用（微信 / 文档等）。
+ * 统一经 canvas 转码为 PNG——ClipboardItem 对 png 支持最广，jpeg/webp 兼容性参差。
+ * @returns 是否成功（权限拒绝 / 加载失败返回 false，调用方负责提示）
+ */
+export async function copyImageSrcToClipboard(src: string): Promise<boolean> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("image load failed"));
+      img.src = src;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext("2d")?.drawImage(img, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) return false;
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
