@@ -10,6 +10,7 @@ import { Button, Popover, Tooltip } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -426,6 +427,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         >
           <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
+            <ParamsIcon style={{ color: "#ffffff" }} />
             <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>

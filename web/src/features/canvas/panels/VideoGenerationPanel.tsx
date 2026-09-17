@@ -10,6 +10,7 @@ import { App, Button, Popover, Tooltip } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
 import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
 import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
 import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
@@ -542,6 +543,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         >
           <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
             style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
+            <ParamsIcon style={{ color: "#ffffff" }} />
             <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>

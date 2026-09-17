@@ -50,9 +50,6 @@ export const TEXT_NODE_MIN_HEIGHT = DEFAULT_NODE_CONTENT_HEIGHT;
 export const DIRECTOR_NODE_DEFAULT_WIDTH = 350;
 export const DIRECTOR_NODE_DEFAULT_HEIGHT = 400;
 
-// Copy/paste offset
-export const PASTE_OFFSET = { x: 30, y: 30 };
-
 // Group node
 export const GROUP_NODE_PADDING = 40;
 export const GROUP_NODE_MIN_WIDTH = 200;

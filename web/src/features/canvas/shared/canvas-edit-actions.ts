@@ -16,7 +16,7 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
-import { isGenerating, NODE_TYPE, PASTE_OFFSET } from "@/lib/constants";
+import { isGenerating, NODE_TYPE } from "@/lib/constants";
 
 /** 当前选中的节点 id */
 export function getSelectedNodeIds(): string[] {
@@ -58,32 +58,26 @@ export function copySelection(): boolean {
 /**
  * 粘贴画布剪贴板：派生新节点 → 落位 → 选中新节点。
  *
- * @param at 目标画布坐标（粘贴内容的包围盒左上角）。
- *           传入时保持剪贴板内各节点的相对布局、整体平移到该点，
- *           用于右键菜单的「粘贴到此处」；
- *           省略时沿用 PASTE_OFFSET 相对偏移，用于键盘 Ctrl+V。
+ * @param at 目标画布坐标（粘贴内容的包围盒左上角）。保持剪贴板内各节点的
+ *           相对布局、整体平移到该点——键盘 Ctrl+V 传光标处（不在画布上时
+ *           传视口中心），右键菜单传右键落点。
  * @returns 是否实际执行了粘贴
  */
-export function pasteClipboard(at?: { x: number; y: number }): boolean {
+export function pasteClipboard(at: { x: number; y: number }): boolean {
   const clip = useSelectionStore.getState().clipboard;
   if (!clip || clip.nodes.length === 0) return false;
 
-  let newNodes: AnyNode[];
-  if (at) {
-    // 以剪贴板内容的包围盒左上角为基准整体平移，保持内部相对布局不被打乱
-    const minX = Math.min(...clip.nodes.map((n) => n.position.x));
-    const minY = Math.min(...clip.nodes.map((n) => n.position.y));
-    newNodes = clip.nodes.map((n) => {
-      const cloned = duplicateNode(n, { x: 0, y: 0 });
-      cloned.position = {
-        x: at.x + (n.position.x - minX),
-        y: at.y + (n.position.y - minY),
-      };
-      return cloned;
-    });
-  } else {
-    newNodes = clip.nodes.map((n) => duplicateNode(n, PASTE_OFFSET));
-  }
+  // 以 at 为基准整体平移，保持内部相对布局不被打乱
+  const minX = Math.min(...clip.nodes.map((n) => n.position.x));
+  const minY = Math.min(...clip.nodes.map((n) => n.position.y));
+  let newNodes: AnyNode[] = clip.nodes.map((n) => {
+    const cloned = duplicateNode(n, { x: 0, y: 0 });
+    cloned.position = {
+      x: at.x + (n.position.x - minX),
+      y: at.y + (n.position.y - minY),
+    };
+    return cloned;
+  });
 
   // 重映射组归属：剪贴板内含组节点时，成员副本指向粘贴出的新组；
   // 原组不在本次剪贴板内则解除归属，避免副本「串」到画布上的原组
