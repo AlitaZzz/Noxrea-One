@@ -16,13 +16,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { fetchVideoProxy } from "@/features/canvas/api/file-api";
-import { FRAME_TRACK_HEIGHT,useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
+import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { getVideoPlaybackTime, isVideoPlaying, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
-/** 播放头所在层左右各留 12px（与 inset-x-3 对齐），按内区换算才能跟手 */
-const PLAYHEAD_INSET = 12;
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
 
@@ -145,9 +143,9 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     const el = trackRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const inner = rect.width - PLAYHEAD_INSET * 2;
+    const inner = rect.width;
     if (inner <= 0) return null;
-    return clamp01((clientX - rect.left - PLAYHEAD_INSET) / inner);
+    return clamp01((clientX - rect.left) / inner);
   }, []);
 
   const handleTrackDown = useCallback(
@@ -184,8 +182,12 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   // 内层 div 的尺寸正好等于单格内容，用它把连续的雪碧图裁出当前格。不能直接把
   // 背景画满整格再做居中偏移——雪碧图里格子首尾相连，竖屏时内容窄于格宽，居中
   // 让出的那几像素正好露出下一格的画面。
+  //
+  // 缩放用 cover（max）而不是 contain（min）：contain 会在竖屏视频的每格左右
+  // 留黑边、横屏视频上下留黑边，相邻格子的黑边连成「竖线」观感；cover 铺满
+  // 格子后缩略条视觉连续，代价是每格只显示帧的中间部分（识别足够）。
   const scale = cellWidth > 0 && cellHeight > 0
-    ? Math.min(frameWidth / cellWidth, FRAME_TRACK_HEIGHT / cellHeight)
+    ? Math.max(frameWidth / cellWidth, FRAME_TRACK_HEIGHT / cellHeight)
     : 0;
   const cellStyle = (index: number) => ({
     left: (frameWidth - cellWidth * scale) / 2,
@@ -241,20 +243,27 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       <div
         ref={trackRef}
-        className="relative h-14 w-250 cursor-ew-resize overflow-visible"
+        className="relative h-14 cursor-ew-resize overflow-visible"
+        style={{ width: FRAME_TRACK_WIDTH }}
         onPointerDown={handleTrackDown}
       >
-        <div className="flex size-full overflow-hidden rounded-xl bg-black">
+        {/* 背板铺满整条轨道，格子铺满内容区——与播放头坐标系一致（同片段截取面板） */}
+        <div className="absolute inset-0 rounded-xl bg-black" />
+        <div className="absolute inset-0 flex overflow-hidden">
           {ready ? (
             count > 0 && spriteUrl ? (
               Array.from(Array(count).keys()).map((i) => (
                 // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
                 // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
                 // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
+                //
+                // 不再追加 -1px 左边距（contain 时代用于遮蔽格子间接缝）：
+                // cover 模式下内容溢出格子被裁切，边缘本就被自身背景盖住，
+                // 累计 -1px 只会让末尾格子的右缘逐渐偏离轨道右缘、播放头超出雪碧图
                 <div
                   key={i}
                   className="relative h-full shrink-0 overflow-hidden"
-                  style={{ width: frameWidth, marginLeft: i === 0 ? 0 : -1 }}
+                  style={{ width: frameWidth }}
                 >
                   <div className="absolute bg-black" style={cellStyle(i)} />
                 </div>
@@ -270,18 +279,16 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
           )}
         </div>
 
-        {/* 播放头：白色圆点 + 竖线，与轨道内侧留 12px 边距 */}
+        {/* 播放头：白色圆点 + 竖线 */}
         {ready && (
           <div className="pointer-events-none absolute inset-0 z-20 overflow-visible">
-            <div className="absolute inset-x-3 inset-y-0 overflow-visible">
-              <div
-                className="absolute top-0 h-full -translate-x-1/2"
-                style={{ left: `${ratio * 100}%` }}
-              >
-                <div className="relative h-14 w-4 touch-none">
-                  <div className="absolute -top-1 left-1/2 size-4 -translate-x-1/2 rounded-full bg-white shadow-[0_4px_12px_rgba(0,0,0,0.45)]" />
-                  <div className="absolute bottom-px left-1/2 top-0.5 w-0.5 -translate-x-1/2 bg-white/95" />
-                </div>
+            <div
+              className="absolute top-0 h-full -translate-x-1/2"
+              style={{ left: `${ratio * 100}%` }}
+            >
+              <div className="relative h-14 w-4 touch-none">
+                <div className="absolute -top-1 left-1/2 size-4 -translate-x-1/2 rounded-full bg-white shadow-[0_4px_12px_rgba(0,0,0,0.45)]" />
+                <div className="absolute bottom-px left-1/2 top-0.5 w-0.5 -translate-x-1/2 bg-white/95" />
               </div>
             </div>
           </div>
