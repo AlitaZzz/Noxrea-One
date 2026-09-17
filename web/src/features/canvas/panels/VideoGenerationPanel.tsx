@@ -221,6 +221,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     setRefMode(allowedRefModes.includes("full") ? "full" : "text");
   }
 
+  /** 模式不可用时的禁用原因（挂菜单项 Tooltip）：按模式本身的要求给静态文案。
+      refModeOptions 来自模型能力声明，可能出现四个标准模式之外的自定义值——
+      无对应文案时返回 undefined，不显示 Tooltip（而不是把 i18n key 串暴露给用户） */
+  const refModeDisabledReason = (m: string): string | undefined => {
+    const key = `video.refModeDisabled.${m}`;
+    return i18n.exists(key) ? i18n.t(key) : undefined;
+  };
+
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, provider: null });
   const { notification } = App.useApp();
 
@@ -498,9 +506,12 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             content={
               <>
                 <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
-                {refModeOptions.map((m: string) => (
-                  <MenuItem key={m} selected={refMode === m} dimmed={!allowedRefModes.includes(m)}
-                    onClick={() => { if (allowedRefModes.includes(m)) { setRefMode(m); setRefModeOpen(false); } }}>
+                {refModeOptions.map((m: string) => {
+                  const allowed = allowedRefModes.includes(m);
+                  return (
+                  <MenuItem key={m} selected={refMode === m} disabled={!allowed}
+                    tooltip={allowed ? undefined : refModeDisabledReason(m)}
+                    onClick={() => { if (allowed) { setRefMode(m); setRefModeOpen(false); } }}>
                     {m === "full" && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <VideoRefIcon style={{ fontSize: 14 }} />
@@ -527,10 +538,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                     )}
                     {m !== "full" && m !== "first-last" && m !== "image" && m !== "text" && t(`video.refMode.${m}`)}
                   </MenuItem>
-                ))}
+                  );
+                })}
               </>
             }
           />
+        )}
+        {refModeOptions.length > 0 && (
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         )}
         <Popover
           content={
