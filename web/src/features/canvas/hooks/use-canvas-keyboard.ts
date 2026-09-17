@@ -15,7 +15,7 @@ import {
   getSelectedEdgeIds,
   getSelectedNodeIds,
   hasGeneratingNode,
-  pasteClipboard,
+  pasteFromClipboardContent,
   redoAction,
   selectAllNodes,
   undoAction,
@@ -43,6 +43,49 @@ export function useCanvasKeyboard() {
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
+
+  // ---- 智能粘贴：监听原生 paste 事件（免权限读取系统剪贴板） ----
+  // 内容判定顺序：图片 → 走上传管道建图片节点；我们复制的节点 JSON（带标记）
+  // → 还原节点（支持跨标签页）；普通文本 → 建文本节点；空 → 回退内部剪贴板。
+  // 输入框 / Tiptap 内的原生粘贴在监听器开头放行，不受影响。
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const state = useCanvasStore.getState();
+      if (state.modalOpen || state.directorOverlayOpen) return;
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if (!e.clipboardData) return;
+
+      // 粘贴落点：光标在画布上 → 光标处；不在（如悬停面板）或未捕获到光标 → 画布视口中心
+      const container = document.querySelector(".canvas-container");
+      const rect = container?.getBoundingClientRect();
+      const center = {
+        x: (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2,
+        y: (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2,
+      };
+      const pointer = lastPointerRef.current;
+      const overCanvas = !!pointer && !!container?.contains(document.elementFromPoint(pointer.x, pointer.y));
+      const at = overCanvas
+        ? screenToFlowPosition({ x: pointer.x, y: pointer.y })
+        : screenToFlowPosition(center);
+
+      const imageFiles = [...e.clipboardData.items]
+        .filter((item) => item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => !!f);
+      const text = e.clipboardData.getData("text/plain") ?? "";
+      if (pasteFromClipboardContent({ imageFiles, text }, at)) e.preventDefault();
+    }
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [screenToFlowPosition]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -92,22 +135,6 @@ export function useCanvasKeyboard() {
       if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelection();
-      }
-
-      // ---- Paste ----
-      if (mod && e.key.toLowerCase() === "v") {
-        // 输入框内已在本函数开头 return，此处只会是画布语境的「粘贴节点」。
-        // 光标在画布上 → 粘贴到光标处；不在（如悬停面板）或未捕获到光标 → 兜底贴到画布视口中心
-        const container = document.querySelector(".canvas-container");
-        const rect = container?.getBoundingClientRect();
-        const center = {
-          x: (rect?.left ?? 0) + (rect?.width ?? window.innerWidth) / 2,
-          y: (rect?.top ?? 0) + (rect?.height ?? window.innerHeight) / 2,
-        };
-        const pointer = lastPointerRef.current;
-        const overCanvas = !!pointer && !!container?.contains(document.elementFromPoint(pointer.x, pointer.y));
-        const at = overCanvas ? screenToFlowPosition({ x: pointer.x, y: pointer.y }) : screenToFlowPosition(center);
-        if (pasteClipboard(at)) e.preventDefault();
       }
 
       // ---- Delete selected nodes AND edges ----
