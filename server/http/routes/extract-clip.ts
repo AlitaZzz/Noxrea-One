@@ -114,7 +114,7 @@ router.post("/api/files/extract-clip", async (c) => {
   try {
     const clip = await extractVideoClip(
       videoPath,
-      tmpDir,
+      path.join(tmpDir, "clip.mp4"),
       { start, end },
       request.signal,
     );

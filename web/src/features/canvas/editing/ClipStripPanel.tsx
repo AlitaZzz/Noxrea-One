@@ -112,6 +112,8 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   // 区间最新值的 ref 镜像：tick 的 effect 依赖里没有区间值（见 tick 处说明），
   // 初始化/拖动在 setState 的同时更新这里，tick 每帧读到的始终是最新区间
   const loopStateRef = useRef({ inRatio: 0, outRatio: 1 });
+  // 节点位置的变更检测基准：tick 由此判断位置是否变化（变化才触发渲染）
+  const lastCurRef = useRef(0);
   // 初始化是否已写入真实区间：写入前选区/进度线不得渲染——operable 翻 true 的
   // 那次渲染里 inRatio/outRatio 还是 0→1 默认值，直接渲染会闪现「满轨道全选」
   const [rangeInitialized, setRangeInitialized] = useState(false);
@@ -382,17 +384,20 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     if (!operable || duration <= 0) return;
     let raf = 0;
     const tick = () => {
-      if (isVideoPlaying(nodeId)) {
-        const cur = getVideoPlaybackTime(nodeId);
-        const { inRatio: iR, outRatio: oR } = loopStateRef.current;
-        const iT = iR * duration;
-        const oT = oR * duration;
-        if (oT - iT >= MIN_RANGE_S - 1e-6 && (cur >= oT || cur < iT - 0.05)) {
-          setVideoTime(nodeId, iT);
-          setPlayedRatio(iR);
-        } else {
-          setPlayedRatio(clamp01(cur / duration));
-        }
+      const cur = getVideoPlaybackTime(nodeId);
+      const { inRatio: iR, outRatio: oR } = loopStateRef.current;
+      const iT = iR * duration;
+      const oT = oR * duration;
+      // 播放中的循环回跳：到选区终点跳回起点（起点被拖到播放位置之后也拉回）；
+      // 暂停时不回跳——用户可以把播放头停在选区外的位置查看画面
+      if (isVideoPlaying(nodeId) && oT - iT >= MIN_RANGE_S - 1e-6 && (cur >= oT || cur < iT - 0.05)) {
+        setVideoTime(nodeId, iT);
+        lastCurRef.current = iT;
+        setPlayedRatio(iR);
+      } else if (Math.abs(cur - lastCurRef.current) > 0.003) {
+        // 任何来源的位置变化（播放推进 / 拖节点进度条 / 点击跳转）都实时反映到进度线
+        lastCurRef.current = cur;
+        setPlayedRatio(clamp01(cur / duration));
       }
       raf = requestAnimationFrame(tick);
     };
