@@ -608,6 +608,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [id, src]);
 
   const hasVideo = src && src.length > 0;
+  // 帧截取 / 片段截取面板打开期间：播放控件保持常显（不受悬停影响）——
+  // 用户在面板里拖选区时鼠标不在节点上，控件淡出会导致无法边拖边听对点
+  const panelOpen = useCanvasStore(
+    (s) => s.frameCaptureNodeId === id || s.clipCaptureNodeId === id,
+  );
 
   // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
   // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，
@@ -721,9 +726,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               onContextMenu={(e) => e.preventDefault()}
             />
             {/* 底部渐变遮罩：与控件栏同步显隐，静止时保持画面纯净 */}
-            <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-24 z-[5] video-controls-scrim transition-opacity ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"}`} />
+            <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-24 z-[5] video-controls-scrim transition-opacity ${playing || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"}`} />
             {/* Controls bar */}
-            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${playing ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
+            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${playing || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
               {/* 第一行：进度条横跨整行（已播放部分用品牌色，与图片一致） */}
               <div
                 ref={seekBarRef}
