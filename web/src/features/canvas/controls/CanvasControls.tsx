@@ -6,7 +6,6 @@
 "use client";
 
 import {
-  AimOutlined,
   ApiOutlined,
   BgColorsOutlined,
   ExpandOutlined,
@@ -23,6 +22,7 @@ import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
+import { MapPinIcon } from "@/components/ui/icons/canvas/MapPinIcon";
 import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAuthStore } from "@/features/auth/store";
@@ -152,7 +152,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
             size="small"
             type="text"
             className={`canvas-ctrl-btn ${minimapVisible ? "canvas-ctrl-active" : ""}`}
-            icon={<AimOutlined />}
+            icon={<MapPinIcon />}
             onClick={() => { toggleMinimap(); }}
           />
         </Tooltip>
