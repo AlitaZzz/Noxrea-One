@@ -24,10 +24,10 @@ export function setGlobalNotificationApi(api: NotificationApi) {
 
 function adapt(instance: typeof antdNotification): NotificationApi {
   return {
-    error: (o) => instance.error({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
-    success: (o) => instance.success({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
-    info: (o) => instance.info({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
-    warning: (o) => instance.warning({ message: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
+    error: (o) => instance.error({ title: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
+    success: (o) => instance.success({ title: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
+    info: (o) => instance.info({ title: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
+    warning: (o) => instance.warning({ title: o.title, description: o.description, placement: o.placement ?? "bottomRight", duration: o.duration }),
   };
 }
 
