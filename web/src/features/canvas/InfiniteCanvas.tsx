@@ -74,6 +74,7 @@ import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
+import { computeFittedGroupRect } from "@/features/canvas/shared/group-bounds";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import { findFreePosition, flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -298,16 +299,16 @@ export default function InfiniteCanvas() {
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
 
-      // 提前检测是否在拖拽分组节点，并收集其成员节点 ID。
+      // 提前检测正在被拖拽的组节点（可能同时拖多个组），并收集各自成员节点 ID。
       // 成员节点在分组拖动时只需跟随平移，不应被独立磁吸，否则会导致累积偏移。
-      const groupDrag = positionChanges.find((c) => {
-        const node = currentNodes.find((n) => n.id === c.id);
-        return node?.type === NODE_TYPE.GROUP;
-      });
+      const draggedGroups = positionChanges
+        .map((c) => currentNodes.find((n) => n.id === c.id))
+        .filter((n): n is AnyNode => n?.type === NODE_TYPE.GROUP);
+      const draggedGroupIds = new Set(draggedGroups.map((g) => g.id));
       const groupChildIds = new Set<string>();
-      if (groupDrag) {
+      if (draggedGroups.length > 0) {
         for (const n of currentNodes) {
-          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId === groupDrag.id) {
+          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && draggedGroupIds.has(n.data.groupId)) {
             groupChildIds.add(n.id);
           }
         }
@@ -396,26 +397,24 @@ export default function InfiniteCanvas() {
         });
       }
 
-      // 拖动组节点时，手动把同 groupId 的成员节点同步平移相同 delta。
-      // 关键：delta 必须基于分组节点吸附后的最终位置来计算，而非 React Flow
-      // 报告的原始位置，否则分组与成员之间会产生累积偏移。
+      // 拖动组节点时，手动把同 groupId 的成员节点同步平移相同 delta（支持多组同拖，
+      // 每个组按自身 delta 平移各自成员）。关键：delta 必须基于分组节点吸附后的
+      // 最终位置来计算，而非 React Flow 报告的原始位置，否则分组与成员之间
+      // 会产生累积偏移。
       let finalNodes = appliedNodes;
-      if (groupDrag) {
-        const groupNode = currentNodes.find((n) => n.id === groupDrag.id);
-        const snappedGroup = appliedNodes.find((n) => n.id === groupDrag.id);
-        if (groupNode && snappedGroup) {
+      if (draggedGroups.length > 0) {
+        finalNodes = appliedNodes.map((n) => {
+          if (n.type === NODE_TYPE.GROUP) return n;
+          const gid = n.data?.groupId;
+          if (!gid || !draggedGroupIds.has(gid)) return n;
+          const groupNode = currentNodes.find((g) => g.id === gid);
+          const snappedGroup = appliedNodes.find((g) => g.id === gid);
+          if (!groupNode || !snappedGroup) return n;
           const deltaX = snappedGroup.position.x - groupNode.position.x;
           const deltaY = snappedGroup.position.y - groupNode.position.y;
-          if (deltaX !== 0 || deltaY !== 0) {
-            finalNodes = appliedNodes.map((n) => {
-              if (n.id === groupDrag.id || n.type === NODE_TYPE.GROUP) return n;
-              if (n.data?.groupId === groupDrag.id) {
-                return { ...n, position: { x: n.position.x + deltaX, y: n.position.y + deltaY } };
-              }
-              return n;
-            });
-          }
-        }
+          if (deltaX === 0 && deltaY === 0) return n;
+          return { ...n, position: { x: n.position.x + deltaX, y: n.position.y + deltaY } };
+        });
       }
 
       setNodes(finalNodes);
@@ -575,71 +574,75 @@ export default function InfiniteCanvas() {
   }, [pushHistory, canvasInteraction]);
 
   const handleNodeDragStop = useCallback(
-    (_: unknown, draggedNode: AnyNode) => {
+    (_: unknown, rawNode: AnyNode) => {
       canvasInteraction.onNodeDragStop();
       markDirtyImmediate();
       setAlignmentGuides([]);
 
       const allNodes = useCanvasStore.getState().nodes;
+      // 以 store 中的最终位置为准：拖组时成员位置由组 delta 同步，
+      // React Flow 内部状态与 store 可能不一致
+      const draggedNode = allNodes.find((n) => n.id === rawNode.id) ?? rawNode;
+      if (draggedNode.type === NODE_TYPE.GROUP) return;
 
-      // 成员节点：拖拽停止后，若中心点已离开所属组的矩形范围，则脱离组
-      if (draggedNode.type !== NODE_TYPE.GROUP && draggedNode.data?.groupId) {
-        const group = allNodes.find((n) => n.id === draggedNode.data?.groupId);
-        if (group) {
-          const groupW = Number(group.style?.width) || group.width || 0;
-          const groupH = Number(group.style?.height) || group.height || 0;
-          const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
-          const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
-          const centerX = draggedNode.position.x + nodeW / 2;
-          const centerY = draggedNode.position.y + nodeH / 2;
-          if (
-            centerX < group.position.x ||
-            centerY < group.position.y ||
-            centerX > group.position.x + groupW ||
-            centerY > group.position.y + groupH
-          ) {
-            // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
-            // 否则会把"拖出前"状态重复压栈，导致撤销/重做丢失真正的组外状态。
-            setNodes(
-              allNodes.map((n) =>
-                n.id === draggedNode.id
-                  ? ({ ...n, data: { ...n.data, groupId: undefined } } as AnyNode)
-                  : n
-              )
-            );
-          }
-        }
-      } else if (draggedNode.type !== NODE_TYPE.GROUP) {
-        // 独立节点：拖拽停止后，若中心点落入某组矩形内，则加入该组
-        const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
-        const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
-        const centerX = draggedNode.position.x + nodeW / 2;
-        const centerY = draggedNode.position.y + nodeH / 2;
-
-        const targetGroup = allNodes.find(
-          (n) =>
-            n.type === NODE_TYPE.GROUP &&
-            n.id !== draggedNode.id &&
-            centerX >= n.position.x &&
-            centerX <= n.position.x + (Number(n.style?.width) || 0) &&
-            centerY >= n.position.y &&
-            centerY <= n.position.y + (Number(n.style?.height) || 0)
+      const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
+      const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
+      const centerX = draggedNode.position.x + nodeW / 2;
+      const centerY = draggedNode.position.y + nodeH / 2;
+      const insideGroup = (g: AnyNode) => {
+        const gw = Number(g.style?.width) || g.width || 0;
+        const gh = Number(g.style?.height) || g.height || 0;
+        return (
+          centerX >= g.position.x &&
+          centerX <= g.position.x + gw &&
+          centerY >= g.position.y &&
+          centerY <= g.position.y + gh
         );
+      };
 
-        if (targetGroup) {
-          // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
-          // 否则会把"拖入前"状态重复压栈，导致撤销/重做丢失真正的组内状态。
-          setNodes(
-            allNodes.map((n) =>
-              n.id === draggedNode.id
-                ? ({ ...n, data: { ...n.data, groupId: targetGroup.id } } as AnyNode)
-                : n
-            )
-          );
-        }
+      // 统一判定归属：中心点仍在原组内 → 不变；离开原组 / 原组已不存在 →
+      // 按落点重新判定（一次拖拽即可完成跨组换组或脱离）
+      const oldGroupId = draggedNode.data?.groupId;
+      const oldGroup = oldGroupId
+        ? allNodes.find((n) => n.type === NODE_TYPE.GROUP && n.id === oldGroupId)
+        : undefined;
+      let nextGroupId: string | undefined = oldGroupId;
+      if (!oldGroup || !insideGroup(oldGroup)) {
+        nextGroupId = allNodes.find((n) => n.type === NODE_TYPE.GROUP && insideGroup(n))?.id;
       }
+
+      if (nextGroupId === oldGroupId) return;
+
+      // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
+      // 否则会把"拖动前"状态重复压栈，导致撤销/重做丢失真正的组外状态。
+      const withMembership = allNodes.map((n) =>
+        n.id === draggedNode.id
+          ? ({ ...n, data: { ...n.data, groupId: nextGroupId } } as AnyNode)
+          : n
+      );
+
+      // 组框随成员变化自适应：加入 → 扩张覆盖成员（只扩不缩）；
+      // 脱离后变空 → 收缩到最小尺寸，避免留下巨大空壳
+      const touchedGroupIds = new Set<string>();
+      if (oldGroupId) touchedGroupIds.add(oldGroupId);
+      if (nextGroupId) touchedGroupIds.add(nextGroupId);
+      const finalNodes = withMembership.map((n) => {
+        if (n.type !== NODE_TYPE.GROUP || !touchedGroupIds.has(n.id)) return n;
+        const members = withMembership.filter(
+          (m) => m.type !== NODE_TYPE.GROUP && m.data?.groupId === n.id
+        );
+        const rect = computeFittedGroupRect(n, members);
+        if (!rect) return n;
+        return {
+          ...n,
+          position: { x: rect.x, y: rect.y },
+          style: { ...n.style, width: rect.width, height: rect.height },
+        } as AnyNode;
+      });
+
+      setNodes(finalNodes);
     },
-    [canvasInteraction, markDirtyImmediate, setAlignmentGuides, setNodes, pushHistory]
+    [canvasInteraction, markDirtyImmediate, setAlignmentGuides, setNodes]
   );
 
   const handlePaneClick = useCallback(() => {

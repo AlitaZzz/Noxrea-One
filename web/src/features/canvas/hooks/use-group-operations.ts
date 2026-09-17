@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
+import { measureNode } from "@/features/canvas/shared/tidy-layout";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
@@ -29,7 +30,6 @@ import {
  */
 export function useGroupOperations() {
   const pushHistory = useHistoryStore((s) => s.push);
-  const addNodes = useCanvasStore((s) => s.addNodes);
 
   useEffect(() => {
     function onGroupNodes() {
@@ -40,8 +40,7 @@ export function useGroupOperations() {
       // Calculate bounding box of selected nodes
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const n of selected) {
-        const w = Number(n.style?.width) || 200;
-        const h = Number(n.style?.height) || 120;
+        const { width: w, height: h } = measureNode(n);
         minX = Math.min(minX, n.position.x);
         minY = Math.min(minY, n.position.y);
         maxX = Math.max(maxX, n.position.x + w);
@@ -70,7 +69,24 @@ export function useGroupOperations() {
         return n;
       });
 
-      store.setNodes([{ ...groupNode, selected: true }, ...updatedNodes]);
+      // 成员被重新编组后变空的旧组：收缩到最小尺寸，避免留下巨大空壳
+      const memberCountByGroup = new Map<string, number>();
+      for (const n of updatedNodes) {
+        const gid = (n.data as { groupId?: string }).groupId;
+        if (gid) memberCountByGroup.set(gid, (memberCountByGroup.get(gid) ?? 0) + 1);
+      }
+      const collapsedNodes = updatedNodes.map((n): AnyNode => {
+        if (n.type !== NODE_TYPE.GROUP || n.id === groupNode.id) return n;
+        if ((memberCountByGroup.get(n.id) ?? 0) > 0) return n;
+        const { width: gw, height: gh } = measureNode(n);
+        if (gw <= GROUP_NODE_MIN_WIDTH && gh <= GROUP_NODE_MIN_HEIGHT) return n;
+        return {
+          ...n,
+          style: { ...n.style, width: GROUP_NODE_MIN_WIDTH, height: GROUP_NODE_MIN_HEIGHT },
+        } as AnyNode;
+      });
+
+      store.setNodes([{ ...groupNode, selected: true }, ...collapsedNodes]);
       markDirtyImmediate();
     }
 
@@ -85,12 +101,12 @@ export function useGroupOperations() {
       let newNodes = [...store.nodes];
 
       for (const group of selectedGroup) {
-        // 清除归属到该组的子节点标记（坐标保持绝对不变）
+        // 清除归属到该组的子节点标记（坐标保持绝对不变），成员保持选中以便继续操作
         newNodes = newNodes.map((n): AnyNode => {
           if (n.type === NODE_TYPE.GROUP) return n;
           if (n.data.groupId === group.id) {
             const { groupId: _omit, ...restData } = n.data;
-            return { ...n, data: restData } as AnyNode;
+            return { ...n, data: restData, selected: true } as AnyNode;
           }
           return n;
         });
@@ -116,8 +132,9 @@ export function useGroupOperations() {
       let maxW = 0;
       let maxH = 0;
       for (const m of members) {
-        maxW = Math.max(maxW, Number(m.style?.width) || 0);
-        maxH = Math.max(maxH, Number(m.style?.height) || 0);
+        const { width, height } = measureNode(m);
+        maxW = Math.max(maxW, width);
+        maxH = Math.max(maxH, height);
       }
       return { maxW, maxH };
     }
@@ -141,8 +158,7 @@ export function useGroupOperations() {
         let cursorX = originX;
         let rowMaxH = 0;
         for (const m of rowMembers) {
-          const w = Number(m.style?.width) || 0;
-          const h = Number(m.style?.height) || 0;
+          const { width: w, height: h } = measureNode(m);
           positioned.set(m.id, { x: cursorX, y: cursorY });
           cursorX += w + LAYOUT_GAP;
           rowMaxH = Math.max(rowMaxH, h);
@@ -170,8 +186,7 @@ export function useGroupOperations() {
       const positioned = new Map<string, { x: number; y: number }>();
       let cursorX = originX;
       for (const m of members) {
-        const w = Number(m.style?.width) || 0;
-        const h = Number(m.style?.height) || 0;
+        const { width: w, height: h } = measureNode(m);
         positioned.set(m.id, {
           x: cursorX,
           y: originY + Math.max(0, (maxH - h) / 2),
@@ -198,8 +213,7 @@ export function useGroupOperations() {
       const positioned = new Map<string, { x: number; y: number }>();
       let cursorY = originY;
       for (const m of members) {
-        const w = Number(m.style?.width) || 0;
-        const h = Number(m.style?.height) || 0;
+        const { width: w, height: h } = measureNode(m);
         positioned.set(m.id, {
           x: originX + Math.max(0, (maxW - w) / 2),
           y: cursorY,
@@ -269,5 +283,5 @@ export function useGroupOperations() {
       window.removeEventListener(EventNames.CANVAS_UNGROUP_NODES, onUngroupNodes);
       window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     };
-  }, [pushHistory, addNodes]);
+  }, [pushHistory]);
 }
