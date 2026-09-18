@@ -5,8 +5,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined } from "@ant-design/icons";
-import { Button, ColorPicker, Slider, Switch } from "antd";
+import { ColorPicker, Slider, Switch } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,6 +13,8 @@ import AppModal from "@/components/ui/AppModal";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+
+import PrimaryActionButton from "./PrimaryActionButton";
 
 interface LightingState {
   intensity: number;
@@ -505,17 +506,7 @@ export default function LightingPanel({ src, onClose }: Props) {
             >
               {t("lighting.reset")}
             </button>
-            <Button size="small" type="text"
-              className="flex items-center justify-center rounded-full flex-shrink-0 transition-all"
-              style={{
-                width: 36, height: 36,
-                background: "var(--canvas-text)",
-                color: "var(--canvas-bg)",
-                border: "none", cursor: "pointer",
-              }}
-            >
-              <ArrowUpOutlined style={{ fontSize: 16 }} />
-            </Button>
+            <PrimaryActionButton size="lg" />
           </div>
         </div>
       </WheelGuard>

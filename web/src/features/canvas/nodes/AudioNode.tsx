@@ -12,7 +12,10 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { extractAudioClip as extractAudioClipApi } from "@/features/canvas/api/file-api";
+import {
+  applyAudioSpeed as applyAudioSpeedApi,
+  extractAudioClip as extractAudioClipApi,
+} from "@/features/canvas/api/file-api";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromUrl } from "@/features/canvas/upload";
@@ -137,6 +140,47 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     [src, busy, id, notification, t],
   );
 
+  /** 变速：服务端 atempo 重编码（保留音调）生成变速产物，派生音频节点连回源节点 */
+  const handleApplyAudioSpeed = useCallback(
+    async (speed: number) => {
+      if (!src || busy) return;
+      const audioKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+      if (!audioKey) return;
+      setBusy({ kind: "audio-speed", startedAt: Date.now() });
+      try {
+        const res = await applyAudioSpeedApi(audioKey, speed);
+        const json = await res.json();
+
+        if (!res.ok || !json?.data) {
+          const code = json?.error as string | undefined;
+          const fallback = t("error.clip.extract_failed");
+          notification.error({
+            title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+            placement: "bottomRight",
+          });
+          return;
+        }
+
+        const { url } = json.data as { url: string };
+        const speedLabel = `${Number(speed.toFixed(2))}x`;
+        createAudioNodeFromUrl(
+          id,
+          url,
+          t("node.speedSuffix", { speed: speedLabel }),
+          useCanvasStore.getState(),
+          { source: "derived" },
+        );
+        markDirtyImmediate();
+      } catch (e) {
+        console.error("Audio speed change failed:", e);
+        notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [src, busy, id, notification, t],
+  );
+
   // Listen for node action events from NodeToolbar
   useEffect(() => {
     function onNodeAction(e: Event) {
@@ -149,11 +193,14 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         case "clear":
           handleClear();
           break;
+        case "apply-audio-speed":
+          void handleApplyAudioSpeed(detail.speed as number);
+          break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleClear]);
+  }, [id, handleDownload, handleClear, handleApplyAudioSpeed]);
 
   const hasAudio = src && src.length > 0;
 

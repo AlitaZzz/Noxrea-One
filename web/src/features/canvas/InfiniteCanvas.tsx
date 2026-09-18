@@ -1246,23 +1246,29 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
                 onShowInspector={(id) => setInspectedNodeId(id)}
                 onOpenFrameStrip={(id) => {
-                  // 两套编辑条互斥：同一节点同一时刻只允许挂一个浮层
+                  // 编辑面板全局互斥：任一入口进入编辑，先关闭其它所有编辑态
+                  useCanvasStore.getState().setAnnotatingNodeId(null);
+                  useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
+                  useCanvasStore.getState().setAudioClipNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(id);
                 }}
                 onOpenClipStrip={(id) => {
+                  useCanvasStore.getState().setAnnotatingNodeId(null);
+                  useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(id);
                 }}
                 onOpenAudioClip={(id) => {
-                  // 三套编辑条互斥：同一节点同一时刻只允许挂一个浮层
+                  useCanvasStore.getState().setAnnotatingNodeId(null);
+                  useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(id);

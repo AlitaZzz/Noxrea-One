@@ -1074,6 +1074,68 @@ export async function extractAudioClip(
 }
 
 /**
+ * 音频变速（spawn ffmpeg）：atempo 滤镜重编码，保留音调。
+ * atempo 单级限 0.5–2，超出范围链式拆分（0.25 = 0.5×0.5，4 = 2×2）。
+ * 产物统一重编码为 m4a（aac 128k）：变速必须重编码，容器固定以简化产物管理。
+ */
+export async function changeAudioSpeed(
+  audioPath: string,
+  outputPath: string,
+  speed: number,
+  signal?: AbortSignal,
+): Promise<{ path: string }> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const filters: string[] = [];
+  let remaining = speed;
+  while (remaining > 2) {
+    filters.push("atempo=2.0");
+    remaining /= 2;
+  }
+  while (remaining < 0.5) {
+    filters.push("atempo=0.5");
+    remaining *= 2;
+  }
+  filters.push(`atempo=${remaining.toFixed(6)}`);
+
+  const run = await runFfmpeg(
+    [
+      "-i", audioPath, "-map", "0:a:0",
+      "-af", filters.join(","),
+      "-c:a", "aac", "-b:a", "128k",
+      "-y", outputPath,
+    ],
+    FFMPEG_CLIP_TIMEOUT_MS,
+    signal,
+  );
+
+  if (run.code !== 0) {
+    logEvent("media", {
+      stage: "audio_speed_failed",
+      audio: path.basename(audioPath),
+      speed,
+      exitCode: run.code,
+      stderr: run.stderr.slice(-200),
+    });
+    throw new Error(`ffmpeg exited with code ${run.code}: ${run.stderr.slice(-200)}`);
+  }
+
+  const stat = await fs.stat(outputPath).catch(() => null);
+  if (!stat || stat.size === 0) {
+    logEvent("media", { stage: "audio_speed_empty", audio: path.basename(audioPath) });
+    throw new Error("Audio speed change produced an empty file");
+  }
+
+  logEvent("media", {
+    stage: "audio_speed",
+    audio: path.basename(audioPath),
+    speed,
+  });
+
+  return { path: outputPath };
+}
+
+/**
  * 裁剪视频画面区域（spawn ffmpeg）：重编码整段视频，画面按矩形裁剪。
  * 与片段截取共用重编码参数与产物规格（mp4 / h264+aac）。
  * 矩形必须已按源分辨率钳位且宽高为偶数（yuv420p 的色度采样要求），

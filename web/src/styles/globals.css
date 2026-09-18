@@ -1173,7 +1173,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
    所以调用点写 px-* / py-* 无效——文字按钮的内边距必须由这条未分层规则给出，
    否则文字贴边。宽度一律不固定，随内容自适应。 */
 .gen-panel-btn { height: 36px; border-radius: 8px; padding: 0 12px; }
-.canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); }
+.canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
 /* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
 .canvas-toolbar .ant-btn { font-size: 16px; }
 /* 工具栏按钮 hover 与按下同色：点击不再闪一层更深底色（排除 disabled，避免禁用态被点亮） */

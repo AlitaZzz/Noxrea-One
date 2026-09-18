@@ -126,6 +126,8 @@
     "clipboardImage": "Clipboard Image",
     "video": "Video",
     "audio": "Audio",
+    "audioSpeed": "Speed",
+    "speedSuffix": "Speed {speed}",
     "group": "Group",
     "groupWithCount": "Group of {{count}} nodes",
     "groupNamedWithCount": "{{label}} · {{count}} nodes",
@@ -533,7 +535,7 @@
     "mutedSuffix": " (muted)"
   },
   "clip": {
-    "menu": "Clip extraction",
+    "menu": "Clip",
     "processing": "Extracting clip...",
     "confirm": "Extract clip",
     "proxyLoading": "Generating preview proxy...",

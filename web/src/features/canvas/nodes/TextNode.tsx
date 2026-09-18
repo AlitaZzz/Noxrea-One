@@ -16,7 +16,7 @@ import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import RichTextToolbar from "@/features/canvas/editing/RichTextToolbar";
+import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { EventNames, isGenerating, NODE_HANDLE_TOP, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
@@ -219,7 +219,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       {/* 富文本编辑工具条：定位在节点上方，counter-scale 保持视觉大小恒定 */}
       {editingContent && editor && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <RichTextToolbar editor={editor} nodeId={id} />
+          <RichTextPanel editor={editor} nodeId={id} />
         </div>
       )}
 

@@ -1,5 +1,5 @@
 /**
- * 文本节点富文本编辑工具条。
+ * 文本节点富文本编辑面板。
  * 双击进入编辑态时显示在节点上方，提供行内格式、块级格式与撤销/重做。
  * 定位由 RfNodeToolbar 恒定尺寸处理（与其它编辑工具栏统一）。
  */
@@ -37,7 +37,7 @@ const HEADING_BUTTONS = [
   { level: 3, Icon: Heading3 },
 ] as const;
 
-export default function RichTextToolbar({ editor, nodeId }: Props) {
+export default function RichTextPanel({ editor, nodeId }: Props) {
   const { t } = useTranslation();
   // 订阅编辑器事务，光标位置 / 格式状态变化时刷新激活态
   const active = useEditorState({

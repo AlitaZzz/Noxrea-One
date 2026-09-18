@@ -126,6 +126,8 @@
     "clipboardImage": "剪贴板图片",
     "video": "视频",
     "audio": "音频",
+    "audioSpeed": "变速",
+    "speedSuffix": "变速 {speed}",
     "group": "分组",
     "groupWithCount": "分组 {{count}}个节点",
     "groupNamedWithCount": "{{label}} · {{count}}个节点",
@@ -532,7 +534,7 @@
     "mutedSuffix": " (静音)"
   },
   "clip": {
-    "menu": "片段截取",
+    "menu": "截取",
     "processing": "正在截取片段...",
     "confirm": "截取片段",
     "proxyLoading": "正在生成预览代理...",

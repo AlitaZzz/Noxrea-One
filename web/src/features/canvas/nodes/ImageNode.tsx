@@ -349,14 +349,21 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       const detail = (e as CustomEvent).detail;
       if (detail.nodeId !== id) return;
       const a = actionRefs.current;
+      // 编辑面板全局互斥：任一入口进入编辑，先关闭其它所有编辑态
+      const closeOtherEditors = () => {
+        const s = useCanvasStore.getState();
+        s.setFrameCaptureNodeId(null);
+        s.setClipCaptureNodeId(null);
+        s.setAudioClipNodeId(null);
+      };
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
-        case "crop-interactive": if (src) setCroppingNodeId(id); break;
+        case "crop-interactive": if (src) { closeOtherEditors(); setCroppingNodeId(id); } break;
         case "angle-editor": if (src) setAngleEditorOpen(true); break;
         case "lighting": if (src) setLightingOpen(true); break;
-        case "annotate": if (src) setAnnotateOpen(true); break;
-        case "panorama": if (src) setPanoramaOpen(true); break;
+        case "annotate": if (src) { closeOtherEditors(); setAnnotateOpen(true); } break;
+        case "panorama": if (src) { closeOtherEditors(); setPanoramaOpen(true); } break;
         case "preview-fullscreen": a.openPreview(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;

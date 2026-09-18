@@ -576,8 +576,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           void handleExtractClip(detail.start as number, detail.end as number);
           break;
         case "crop-video":
-          // 打开画面裁剪面板（复用 croppingNodeId，与图片裁剪互斥天然成立）
-          if (src) useCanvasStore.getState().setCroppingNodeId(id);
+          // 打开画面裁剪面板（复用 croppingNodeId，与图片裁剪互斥天然成立）；
+          // 编辑面板全局互斥：先关闭其它所有编辑态
+          if (src) {
+            const s = useCanvasStore.getState();
+            s.setAnnotatingNodeId(null);
+            s.setFrameCaptureNodeId(null);
+            s.setClipCaptureNodeId(null);
+            s.setAudioClipNodeId(null);
+            s.setCroppingNodeId(id);
+          }
           break;
         case "crop-video-apply":
           void handleCropVideoApply(detail.rect as CropRectPx);

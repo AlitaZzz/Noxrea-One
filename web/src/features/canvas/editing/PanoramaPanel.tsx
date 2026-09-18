@@ -15,7 +15,6 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
-import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -327,6 +326,14 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           whiteSpace: "nowrap",
         }}
       >
+        {/* 左组：✗ 关闭 + 标题 */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+          <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.panorama")}</span>
+        </div>
+
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
         {/* 截图：截取当前视角并新建图片节点 */}
         <Tooltip title={t("panorama.screenshot")}>
           <Button
@@ -414,12 +421,6 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           <Button type="text" size="middle" style={{ padding: 8 }} icon={<ReloadOutlined />} onClick={handleReset} />
         </Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-
-        {/* 退出全景（等价于裁剪的取消按钮） */}
-        <Tooltip title={t("panorama.exit")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
-        </Tooltip>
       </WheelGuard>
       </RfNodeToolbar>
 

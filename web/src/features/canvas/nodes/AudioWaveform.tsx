@@ -11,13 +11,12 @@
 
 import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
-import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import WaveSurfer from "wavesurfer.js";
 
 import { PauseIcon } from "@/components/ui/icons/media/PauseIcon";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
+import AudioClipPanel from "@/features/canvas/editing/AudioClipPanel";
 import { clamp01, computeInitialRange, MIN_RANGE_S } from "@/features/canvas/editing/clip-range";
 import { formatTime } from "@/lib/utils/format";
 
@@ -67,7 +66,6 @@ export default function AudioWaveform({
   onClipConfirm,
   onClipCancel,
 }: AudioWaveformProps) {
-  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const [ready, setReady] = useState(false);
@@ -414,40 +412,14 @@ export default function AudioWaveform({
 
   return (
     <>
-      {/* 截取工具栏：RfNodeToolbar 挂在节点上方（时间段 + ✓/✗），与其它编辑工具栏统一 */}
+      {/* 截取工具栏：编辑目录的 AudioClipPanel（时间段 + ✓/✗），与其它编辑工具栏统一 */}
       {clipMode && (
-        <RfNodeToolbar nodeId={nodeId} position={Position.Top} align="center" offset={8} isVisible>
-          <div
-            className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
-            style={{ height: 50, padding: "6px 10px", whiteSpace: "nowrap" }}
-          >
-            <span className="whitespace-nowrap text-sm tabular-nums" style={{ color: "var(--canvas-text)" }}>
-              {clipRange
-                ? `${formatTime(clipRange.inR * duration)} - ${formatTime(clipRange.outR * duration)}`
-                : "--"}
-            </span>
-            <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-            <Tooltip title={t("common.cancel")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8 }}
-                icon={<CloseOutlined />}
-                onClick={onClipCancel}
-              />
-            </Tooltip>
-            <Tooltip title={t("clip.confirm")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8, color: "var(--canvas-success)" }}
-                icon={<CheckOutlined />}
-                disabled={!clipRangeValid}
-                onClick={handleClipConfirm}
-              />
-            </Tooltip>
-          </div>
-        </RfNodeToolbar>
+        <AudioClipPanel
+          nodeId={nodeId}
+          range={clipRange ? { start: clipRange.inR * duration, end: clipRange.outR * duration } : null}
+          onConfirm={handleClipConfirm}
+          onCancel={onClipCancel}
+        />
       )}
       <div className="relative h-full w-full">
       {/* 底部留白大于顶部：控制栏（时间 / 播放按钮）不贴节点下沿 */}
