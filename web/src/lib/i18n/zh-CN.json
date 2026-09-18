@@ -167,7 +167,7 @@
     "previewNext": "下一张",
     "previewDownload": "下载当前图片",
     "panorama": "全景",
-    "captureFrame": "帧截取",
+    "captureFrame": "抽帧",
     "detachAudio": "分离音频",
     "detachAudioNoTrack": "该视频无音轨"
   },
@@ -518,9 +518,9 @@
     "audio": "拖放音频或点击上传"
   },
   "capture": {
-    "currentFrame": "选择帧截取",
-    "firstFrame": "截取首帧",
-    "lastFrame": "截取末帧",
+    "currentFrame": "自定义",
+    "firstFrame": "首帧",
+    "lastFrame": "尾帧",
     "processing": "正在捕获帧...",
     "confirm": "截取",
     "loading": "正在生成帧序列...",

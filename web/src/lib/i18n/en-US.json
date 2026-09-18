@@ -167,7 +167,7 @@
     "previewNext": "Next",
     "previewDownload": "Download Current",
     "panorama": "Panorama",
-    "captureFrame": "Frame capture",
+    "captureFrame": "Extract frame",
     "detachAudio": "Detach Audio",
     "detachAudioNoTrack": "This video has no audio track"
   },
@@ -519,9 +519,9 @@
     "audio": "Drop audio or click Upload"
   },
   "capture": {
-    "currentFrame": "Select frame",
-    "firstFrame": "Capture first frame",
-    "lastFrame": "Capture last frame",
+    "currentFrame": "Custom",
+    "firstFrame": "First frame",
+    "lastFrame": "Last frame",
     "processing": "Capturing frame...",
     "confirm": "Capture",
     "loading": "Generating frame strip...",
