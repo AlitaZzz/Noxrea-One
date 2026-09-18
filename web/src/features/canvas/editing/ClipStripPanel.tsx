@@ -13,7 +13,7 @@
  */
 "use client";
 
-import { CheckOutlined, CloseOutlined, WarningOutlined } from "@ant-design/icons";
+import { CloseOutlined, WarningOutlined } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,7 @@ import { EventNames } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, computeInitialRange, MIN_RANGE_S } from "./clip-range";
+import PrimaryActionButton from "./PrimaryActionButton";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -500,6 +501,14 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
+      {/* 左组：✗ 关闭 + 标题 */}
+      <div className="flex shrink-0 items-center gap-1">
+        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("clip.menu")}</span>
+      </div>
+
+      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
       <div
         ref={trackRef}
         className="relative h-14 cursor-ew-resize overflow-visible"
@@ -600,20 +609,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-      {/* 取消 / 确认：与裁剪、标注编辑条使用同一套图标语义（X 取消、✓ 确认） */}
-      <Tooltip title={t("common.cancel")}>
-        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
-      </Tooltip>
-      <Tooltip title={t("clip.confirm")}>
-        <Button
-          type="text"
-          size="middle"
-          style={{ padding: 8, color: rangeValid ? "var(--canvas-success)" : undefined }}
-          icon={<CheckOutlined />}
-          disabled={!rangeValid}
-          onClick={handleConfirm}
-        />
-      </Tooltip>
+      {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
+      {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
+      <PrimaryActionButton onClick={handleConfirm} disabled={!ready} />
     </div>
   );
 }

@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
+import { CloseOutlined, UndoOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -15,6 +15,9 @@ import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
+
+import PrimaryActionButton from "./PrimaryActionButton";
+
 
 interface Props {
   src: string;
@@ -251,6 +254,14 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
           whiteSpace: "nowrap",
         }}
       >
+        {/* 左组：✗ 关闭 + 标题 */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+          <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.crop")}</span>
+        </div>
+
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
         {/* Aspect presets */}
         {/* 比例按钮本身已显示 1:1 / 16:9 等文字，再挂同文案的 tooltip 是重复提示，去掉 */}
         {ASPECT_PRESETS.map((p) => (
@@ -281,13 +292,8 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-        {/* Cancel / Confirm */}
-        <Tooltip title={t("crop.cancel")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
-        </Tooltip>
-        <Tooltip title={t("crop.confirm")}>
-          <Button type="text" size="middle" style={{ padding: 8, color: loading ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleConfirm} loading={loading} />
-        </Tooltip>
+        {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
+        <PrimaryActionButton onClick={handleConfirm} disabled={loading || !imgLoaded} loading={loading} />
       </WheelGuard>
       </RfNodeToolbar>
 

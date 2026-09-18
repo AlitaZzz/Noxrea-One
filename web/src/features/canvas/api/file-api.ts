@@ -130,6 +130,23 @@ export async function extractAudioClip(
   });
 }
 
+/**
+ * 音频变速（ffmpeg atempo 重编码为 m4a，保留音调），返回原始 Response。
+ * 同步请求（重编码可能持续数秒到数十秒），调用方需自行给出忙反馈；
+ * 失败时按 `error.<code>` 读取本地化错误。
+ */
+export async function applyAudioSpeed(
+  audioKey: string,
+  speed: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiRaw("/api/files/apply-audio-speed", {
+    method: "POST",
+    body: JSON.stringify({ audio_key: audioKey, speed }),
+    signal,
+  });
+}
+
 /** 视频画面裁剪的源像素矩形（服务端会再次做偶数钳位与边界校验） */
 export interface CropRectPx {
   x: number;

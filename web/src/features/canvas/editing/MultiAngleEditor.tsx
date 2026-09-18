@@ -5,8 +5,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined } from "@ant-design/icons";
-import { Button, Slider } from "antd";
+import { Slider } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,6 +13,8 @@ import AppModal from "@/components/ui/AppModal";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+
+import PrimaryActionButton from "./PrimaryActionButton";
 
 interface Props {
   src: string;
@@ -438,17 +439,7 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
             >
               {t("angle.reset")}
             </button>
-            <Button size="small" type="text"
-              className="flex items-center justify-center rounded-full flex-shrink-0 transition-all"
-              style={{
-                width: 36, height: 36,
-                background: "var(--canvas-text)",
-                color: "var(--canvas-bg)",
-                border: "none", cursor: "pointer",
-              }}
-            >
-              <ArrowUpOutlined style={{ fontSize: 16 }} />
-            </Button>
+            <PrimaryActionButton size="lg" />
           </div>
         </div>
       </WheelGuard>

@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { BorderOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined,HighlightOutlined } from "@ant-design/icons";
+import { BorderOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined, HighlightOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +18,9 @@ import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
+
+import PrimaryActionButton from "./PrimaryActionButton";
+
 
 interface Props {
   src: string;
@@ -485,6 +488,14 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           whiteSpace: "nowrap",
         }}
       >
+        {/* 左组：✗ 关闭 + 标题 */}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+          <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("annotation.title")}</span>
+        </div>
+
+        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+
         {/* Mode buttons */}
         <Tooltip title={t("annotation.mode.brush")}>
           <Button
@@ -542,13 +553,8 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-        {/* Cancel / Save */}
-        <Tooltip title={t("annotation.cancel")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
-        </Tooltip>
-        <Tooltip title={t("annotation.save")}>
-          <Button type="text" size="middle" style={{ padding: 8, color: loading || !imgLoaded ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleSave} loading={loading} />
-        </Tooltip>
+        {/* 保存：反色 ↑（与截取/变速工具栏确认键一致） */}
+        <PrimaryActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />
       </WheelGuard>
       </RfNodeToolbar>
 

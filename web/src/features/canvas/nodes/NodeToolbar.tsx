@@ -22,7 +22,7 @@ import {
   StepBackwardOutlined,
   StepForwardOutlined,
 } from "@ant-design/icons";
-import { Button, Popover,Tooltip } from "antd";
+import { Button, Popover, Slider, Tooltip } from "antd";
 import { Crop, Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,6 +39,7 @@ import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
+import { SpeedIcon } from "@/components/ui/icons/canvas/SpeedIcon";
 import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
@@ -46,6 +47,7 @@ import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
+import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
@@ -219,6 +221,19 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   const videoHasAudio = (nodes.find(n => n.id === nodeId)?.data as { hasAudio?: boolean })?.hasAudio;
   const textContent = (nodes.find(n => n.id === nodeId)?.data as { plainText?: string })?.plainText;
   const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
+  // 变速调节模式：点变速按钮进入，滑杆调出目标倍率，✓ 交由服务端生成变速产物
+  const [speedMode, setSpeedMode] = useState(false);
+  const [speedDraft, setSpeedDraft] = useState(1);
+  // 本节点处于音频片段截取中：常规工具栏隐藏（✓/✗ 由 AudioWaveform 自带渲染）
+  const audioClipActive = useCanvasStore((s) => s.audioClipNodeId === nodeId);
+  // 状态卫生：进入截取模式 / 切换到其它节点时退出变速调节（渲染期派生调整）
+  const [prevNodeId, setPrevNodeId] = useState(nodeId);
+  if (speedMode && (audioClipActive || prevNodeId !== nodeId)) {
+    setSpeedMode(false);
+  }
+  if (prevNodeId !== nodeId) {
+    setPrevNodeId(nodeId);
+  }
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
@@ -237,15 +252,18 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       className="canvas-toolbar flex items-center gap-1 rounded-xl z-20"
       style={{ height: 50, padding: "6px 10px", whiteSpace: "nowrap" }}
     >
-      <Tooltip title={t("common.info")}>
-        <Button
-          type="text"
-          size="middle"
-          style={{ padding: 8 }}
-          icon={<InfoCircleOutlined />}
-          onClick={handleInfo}
-        />
-      </Tooltip>
+      {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
+      {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
+        <Tooltip title={t("common.info")}>
+          <Button
+            type="text"
+            size="middle"
+            style={{ padding: 8 }}
+            icon={<InfoCircleOutlined />}
+            onClick={handleInfo}
+          />
+        </Tooltip>
+      )}
 
       {/* Image node actions */}
       {nodeType === NODE_ACTIONS.IMAGE && (
@@ -472,28 +490,60 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
         </>
       )}
 
-      {/* Audio node actions — 基础工具栏：片段截取 / 下载 / 清除（上传在节点内） */}
+      {/* Audio node actions — 二态：变速调节 → 常规（片段截取/变速/下载/清除）；
+          音频片段截取中本工具栏整体隐藏（✓/✗ 由 AudioWaveform 自带渲染） */}
       {nodeType === NODE_ACTIONS.AUDIO && (
         <>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("clip.menu")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<ScissorOutlined />}
-              disabled={!assetSrc}
-              onClick={() => onOpenAudioClip(nodeId)}
+          {speedMode ? (
+            <AudioSpeedPanel
+              speed={speedDraft}
+              onSpeedChange={(next) => setSpeedDraft(next)}
+              onApply={() => {
+                window.dispatchEvent(
+                  new CustomEvent(EventNames.CANVAS_NODE_ACTION, {
+                    detail: { nodeId, action: "apply-audio-speed", speed: speedDraft },
+                  }),
+                );
+                setSpeedMode(false);
+              }}
+              onCancel={() => setSpeedMode(false)}
             />
-          </Tooltip>
-          <Tooltip title={t("common.download")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
-              onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
-          <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
-              onClick={() => dispatchNodeAction(nodeId, "clear")} />
-          </Tooltip>
+          ) : (
+            <>
+              <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+              <Tooltip title={t("clip.menu")}>
+                <Button
+                  type="text"
+                  size="middle"
+                  style={{ padding: 8 }}
+                  icon={<ScissorOutlined />}
+                  disabled={!assetSrc}
+                  onClick={() => onOpenAudioClip(nodeId)}
+                />
+              </Tooltip>
+              <Tooltip title={t("node.audioSpeed")}>
+                <Button
+                  type="text"
+                  size="middle"
+                  style={{ padding: 8 }}
+                  icon={<SpeedIcon />}
+                  disabled={!assetSrc}
+                  onClick={() => {
+                    setSpeedDraft(1);
+                    setSpeedMode(true);
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title={t("common.download")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
+                  onClick={() => dispatchNodeAction(nodeId, "download")} />
+              </Tooltip>
+              <Tooltip title={t("common.clear")}>
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
+                  onClick={() => dispatchNodeAction(nodeId, "clear")} />
+              </Tooltip>
+            </>
+          )}
         </>
       )}
 
