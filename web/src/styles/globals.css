@@ -1284,6 +1284,11 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   pointer-events: none !important;
 }
 
+/* 通知关闭按钮：antd v6 未设 cursor，裸 button 默认箭头缺少可点击暗示 */
+.ant-notification-notice-close {
+  cursor: pointer;
+}
+
 /* Outliner 列表：默认隐藏滚动条，hover 时显示 */
 .dir-outliner-list {
   overflow-y: auto;
