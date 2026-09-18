@@ -986,6 +986,12 @@ export default function InfiniteCanvas() {
         nodeClickDistance={3}
         multiSelectionKeyCode={["Shift", "Control", "Meta"]}
         deleteKeyCode={[]}
+        // RF 的 a11y 焦点路径（节点聚焦后方向键移动）永久关闭：方向键移动由
+        // use-canvas-keyboard 统一持有（nudgeSelectedNodes），不依赖焦点状态——
+        // 编辑面板打开时其顶部守卫让位给面板滑轨，关闭后即刻恢复，且
+        // 「关闭面板后方向键失灵」的焦点归还问题从根上消除
+        disableKeyboardA11y
+        nodesFocusable={false}
         fitView={false}
         // 画布导航（Figma 约定）：左键拖空白 = 框选，空格+拖拽 或 中键 = 平移。
         // panOnDrag 去掉左键 0、只留中键 1；按住空格时 React Flow 会把 panOnDrag 视为 true。

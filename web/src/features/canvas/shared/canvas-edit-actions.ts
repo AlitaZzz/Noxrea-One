@@ -38,8 +38,43 @@ export function getSelectedEdgeIds(): string[] {
     .map((e) => e.id);
 }
 
+/**
+ * 是否有媒体编辑面板打开中（标注 / 裁剪 / 选帧 / 片段截取）。
+ * 键盘作用域所有权：面板打开时画布整体让出键盘——RF 的选中节点方向键移动
+ * （disableKeyboardA11y）与画布全局快捷键（use-canvas-keyboard）都以此为准，
+ * 各编辑面板自己的按键监听不经过此判断、始终生效。
+ */
+export function isMediaEditorOpen(): boolean {
+  const s = useCanvasStore.getState();
+  return !!(s.annotatingNodeId || s.croppingNodeId || s.frameCaptureNodeId || s.clipCaptureNodeId);
+}
+
 /** 复制到系统剪贴板的节点 JSON 前缀标记：粘贴时据此识别「我们复制的节点」 */
 export const CLIPBOARD_NODE_MARKER = "noxrea-nodes:";
+
+/**
+ * 方向键移动选中节点（画布键盘 hook 的方向键分支调用）。
+ * 与 RF a11y 行为对齐：步长 5px，Shift ×4；开启网格吸附时按网格步长。
+ * 不依赖焦点——RF 的 a11y 焦点路径（nodesFocusable/disableKeyboardA11y）已永久关闭。
+ * @returns 是否有选中节点被移动
+ */
+export function nudgeSelectedNodes(direction: { x: number; y: number }, factor: number): boolean {
+  const s = useCanvasStore.getState();
+  const selected = s.nodes.filter((n) => n.selected);
+  if (selected.length === 0) return false;
+  const step = s.snapToGrid ? s.snapGridSize : 5;
+  const dx = direction.x * step * factor;
+  const dy = direction.y * step * factor;
+  if (dx === 0 && dy === 0) return false;
+  const ids = new Set(selected.map((n) => n.id));
+  s.setNodes(
+    s.nodes.map((n) =>
+      ids.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n
+    )
+  );
+  markDirtyImmediate();
+  return true;
+}
 
 /** 复制当前选中节点到画布剪贴板。@returns 是否实际执行了复制 */
 export function copySelection(): boolean {
