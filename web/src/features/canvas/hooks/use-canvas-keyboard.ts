@@ -15,6 +15,8 @@ import {
   getSelectedEdgeIds,
   getSelectedNodeIds,
   hasGeneratingNode,
+  isMediaEditorOpen,
+  nudgeSelectedNodes,
   pasteFromClipboardContent,
   redoAction,
   selectAllNodes,
@@ -89,9 +91,10 @@ export function useCanvasKeyboard() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Skip canvas shortcuts when a modal or director overlay is open
+      // Skip canvas shortcuts when a modal or director overlay is open,
+      // or when a media editor panel (标注/裁剪/选帧/片段截取) owns the keyboard
       const state = useCanvasStore.getState();
-      if (state.modalOpen || state.directorOverlayOpen) return;
+      if (state.modalOpen || state.directorOverlayOpen || isMediaEditorOpen()) return;
 
       const target = e.target as HTMLElement;
       if (
@@ -135,6 +138,20 @@ export function useCanvasKeyboard() {
       if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelection();
+      }
+
+      // ---- Move selected nodes with arrow keys ----
+      // RF 的 a11y 焦点路径（nodesFocusable/disableKeyboardA11y）已永久关闭，
+      // 方向键移动由本 hook 统一持有：不依赖焦点，编辑面板打开时上方守卫
+      // 直接让位（方向键归面板滑轨），关闭后即刻恢复，任何焦点状态下行为一致
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        const direction = {
+          ArrowLeft: { x: -1, y: 0 },
+          ArrowRight: { x: 1, y: 0 },
+          ArrowUp: { x: 0, y: -1 },
+          ArrowDown: { x: 0, y: 1 },
+        }[e.key];
+        if (nudgeSelectedNodes(direction, e.shiftKey ? 4 : 1)) e.preventDefault();
       }
 
       // ---- Delete selected nodes AND edges ----
