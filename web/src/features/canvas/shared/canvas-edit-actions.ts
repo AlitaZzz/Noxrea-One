@@ -39,14 +39,14 @@ export function getSelectedEdgeIds(): string[] {
 }
 
 /**
- * 是否有媒体编辑面板打开中（标注 / 裁剪 / 选帧 / 片段截取）。
+ * 是否有媒体编辑面板打开中（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取）。
  * 键盘作用域所有权：面板打开时画布整体让出键盘——RF 的选中节点方向键移动
  * （disableKeyboardA11y）与画布全局快捷键（use-canvas-keyboard）都以此为准，
  * 各编辑面板自己的按键监听不经过此判断、始终生效。
  */
 export function isMediaEditorOpen(): boolean {
   const s = useCanvasStore.getState();
-  return !!(s.annotatingNodeId || s.croppingNodeId || s.frameCaptureNodeId || s.clipCaptureNodeId);
+  return !!(s.annotatingNodeId || s.croppingNodeId || s.frameCaptureNodeId || s.clipCaptureNodeId || s.audioClipNodeId);
 }
 
 /** 复制到系统剪贴板的节点 JSON 前缀标记：粘贴时据此识别「我们复制的节点」 */

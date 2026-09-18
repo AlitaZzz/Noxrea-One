@@ -705,7 +705,8 @@
       "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "timeout": "Clip extraction timed out, try a shorter range",
       "extract_failed": "Clip extraction failed, please retry",
-      "cancelled": "Processing cancelled"
+      "cancelled": "Processing cancelled",
+      "audio_not_found": "Source audio not found"
     },
     "crop": {
       "invalid_rect": "Invalid crop area: it must stay within the video frame",

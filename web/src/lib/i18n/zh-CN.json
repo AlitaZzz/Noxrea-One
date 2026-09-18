@@ -704,7 +704,8 @@
       "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "timeout": "片段截取超时，请缩短片段后重试",
       "extract_failed": "片段截取失败，请稍后重试",
-      "cancelled": "处理已取消"
+      "cancelled": "处理已取消",
+      "audio_not_found": "源音频不存在"
     },
     "crop": {
       "invalid_rect": "裁剪区域无效：需落在画面范围内",

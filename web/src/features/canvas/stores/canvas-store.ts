@@ -137,6 +137,9 @@ interface CanvasState {
   // 片段截取模式（与选帧互斥：同一节点同一时刻只允许一个编辑条浮层）
   clipCaptureNodeId: string | null;
   setClipCaptureNodeId: (id: string | null) => void;
+  // 音频片段截取模式（与选帧/片段截取互斥：同一节点同一时刻只允许一个编辑条浮层）
+  audioClipNodeId: string | null;
+  setAudioClipNodeId: (id: string | null) => void;
   // 图片节点多图展开态（hides node toolbar；展开网格自带下载/设主图/收起入口）
   multiExpandedNodeId: string | null;
   setMultiExpandedNodeId: (id: string | null) => void;
@@ -173,6 +176,7 @@ const NODE_UI_STATE_KEYS = [
   "editingTextNodeId",
   "frameCaptureNodeId",
   "clipCaptureNodeId",
+  "audioClipNodeId",
 ] as const;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -282,6 +286,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setFrameCaptureNodeId: (id) => set({ frameCaptureNodeId: id }),
   clipCaptureNodeId: null,
   setClipCaptureNodeId: (id) => set({ clipCaptureNodeId: id }),
+  audioClipNodeId: null,
+  setAudioClipNodeId: (id) => set({ audioClipNodeId: id }),
   multiExpandedNodeId: null,
   setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
 

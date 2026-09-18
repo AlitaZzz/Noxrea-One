@@ -205,6 +205,10 @@ export const ERROR_CODES = [
   /** 客户端提前断开，处理已中止 */
   "clip.cancelled",
 
+  // ── 音频片段截取（其余错误码复用 clip.*）──
+  /** 源音频不存在 */
+  "clip.audio_not_found",
+
   // ── 视频画面裁剪（复用 clip.video_not_found / ffmpeg_missing / cancelled）──
   /** 裁剪矩形无效（退化或超出画面） */
   "crop.invalid_rect",

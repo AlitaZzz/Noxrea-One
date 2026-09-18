@@ -7,28 +7,38 @@
 
 import { UploadOutlined } from "@ant-design/icons";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { App } from "antd";
+import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { extractAudioClip as extractAudioClipApi } from "@/features/canvas/api/file-api";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
+import { createAudioNodeFromUrl } from "@/features/canvas/upload";
 import { useNodeUpload } from "@/features/canvas/upload";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
 import AudioWaveform from "./AudioWaveform";
+import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
+  const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
 
   const [duration, setDuration] = useState(data.duration || 0);
   const [playing, setPlaying] = useState(false);
+  // 本地处理忙浮层（音频片段截取：ffmpeg 流 copy，通常秒级完成）
+  const [busy, setBusy] = useState<{ kind: string; startedAt: number } | null>(null);
+  // 片段截取模式：本节点进入区间选择（波形上叠加双手柄，键盘作用域归面板）；
+  // ✓/✗ 工具栏由 AudioWaveform 通过 RfNodeToolbar 自带渲染
+  const clipActive = useCanvasStore((s) => s.audioClipNodeId === id);
 
   // Sync local src/duration when data changes externally (e.g. from undo/clear),
   // adjusted during render to avoid cascading renders.
@@ -81,6 +91,51 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     );
     markDirtyImmediate();
   }, [id]);
+
+  /** 片段截取：服务端音频流 copy 截取 [start, end]，产物作为派生音频节点
+      连回源节点（历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
+  const handleExtractAudioClip = useCallback(
+    async (start: number, end: number) => {
+      if (!src || busy) return;
+      const audioKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+      if (!audioKey) return;
+      setBusy({ kind: "audio-clip", startedAt: Date.now() });
+      // 退出截取模式：选区叠层撤下、试听暂停（节点进入忙浮层状态）
+      useCanvasStore.getState().setAudioClipNodeId(null);
+      try {
+        const res = await extractAudioClipApi(audioKey, start, end);
+        const json = await res.json();
+
+        if (!res.ok || !json?.data) {
+          // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
+          const code = json?.error as string | undefined;
+          const fallback = t("error.clip.extract_failed");
+          notification.error({
+            title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+            placement: "bottomRight",
+          });
+          return;
+        }
+
+        const { url } = json.data as { url: string };
+        const rangeLabel = `${formatTime(start)}-${formatTime(end)}`;
+        createAudioNodeFromUrl(
+          id,
+          url,
+          t("clip.suffix", { range: rangeLabel }),
+          useCanvasStore.getState(),
+          { source: "derived" },
+        );
+        markDirtyImmediate();
+      } catch (e) {
+        console.error("Audio clip extraction failed:", e);
+        notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
+      } finally {
+        setBusy(null);
+      }
+    },
+    [src, busy, id, notification, t],
+  );
 
   // Listen for node action events from NodeToolbar
   useEffect(() => {
@@ -150,6 +205,10 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             playing={playing}
             onToggle={setPlaying}
             onReady={handleAudioReady}
+            clipMode={clipActive}
+            nodeId={id}
+            onClipConfirm={handleExtractAudioClip}
+            onClipCancel={() => useCanvasStore.getState().setAudioClipNodeId(null)}
           />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
@@ -163,6 +222,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             </button>
           </div>
         )}
+        {busy && <BusyOverlay label={t("clip.processing")} startedAt={busy.startedAt} />}
       </div>
     </div>
   );

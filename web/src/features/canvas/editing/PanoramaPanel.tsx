@@ -2,7 +2,7 @@ import "@photo-sphere-viewer/core/index.css";
 
 import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Viewer } from "@photo-sphere-viewer/core";
-import { useViewport } from "@xyflow/react";
+import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,7 +38,6 @@ type ViewCount = 4 | 8 | 12;
 
 export default function PanoramaPanel({ src, sourceId, selected, onClose }: Props) {
   const { t } = useTranslation();
-  const { zoom } = useViewport();
 
   const mountRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -318,16 +317,14 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
   return (
     <>
-      {/* 全景专属工具栏：样式/位置完全参考裁剪、标注；仅当节点被选中时显示 */}
-      {selected && <WheelGuard
-        className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
+      {/* 全景专属工具栏：RfNodeToolbar 恒定尺寸定位；仅当节点被选中时显示 */}
+      <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible={selected}>
+      <WheelGuard
+        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
         style={{
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
-          transform: `translateX(-50%) scale(${1 / zoom})`,
-          transformOrigin: "center bottom",
         }}
       >
         {/* 截图：截取当前视角并新建图片节点 */}
@@ -423,7 +420,8 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
         <Tooltip title={t("panorama.exit")}>
           <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
         </Tooltip>
-      </WheelGuard>}
+      </WheelGuard>
+      </RfNodeToolbar>
 
       {/* 全景画布：覆盖原图，z-30 蒙版 */}
       <div

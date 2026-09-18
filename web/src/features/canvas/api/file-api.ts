@@ -112,6 +112,24 @@ export async function extractClip(
   });
 }
 
+/**
+ * 截取音频片段（音频流 copy，不重编码），返回原始 Response。
+ * 同步请求（copy 秒级完成），调用方需自行给出忙反馈；
+ * 失败时按 `error.<code>` 读取本地化错误。
+ */
+export async function extractAudioClip(
+  audioKey: string,
+  start: number,
+  end: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  return apiRaw("/api/files/extract-audio-clip", {
+    method: "POST",
+    body: JSON.stringify({ audio_key: audioKey, start, end }),
+    signal,
+  });
+}
+
 /** 视频画面裁剪的源像素矩形（服务端会再次做偶数钳位与边界校验） */
 export interface CropRectPx {
   x: number;

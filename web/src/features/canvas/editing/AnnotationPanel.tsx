@@ -6,7 +6,7 @@
 "use client";
 
 import { BorderOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined,HighlightOutlined } from "@ant-design/icons";
-import { useViewport } from "@xyflow/react";
+import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +17,6 @@ import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
-import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -42,7 +41,6 @@ interface TextAnnotation {
 
 export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
-  const { zoom } = useViewport();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
 
@@ -477,16 +475,14 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
   return (
     <>
-      {/* Toolbar */}
+      {/* Toolbar — RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
+      <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
+        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
         style={{
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
-          transform: `translateX(-50%) scale(${1 / zoom})`,
-          transformOrigin: "center bottom",
         }}
       >
         {/* Mode buttons */}
@@ -554,6 +550,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           <Button type="text" size="middle" style={{ padding: 8, color: loading || !imgLoaded ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleSave} loading={loading} />
         </Tooltip>
       </WheelGuard>
+      </RfNodeToolbar>
 
       {/* Canvas overlay */}
       <div

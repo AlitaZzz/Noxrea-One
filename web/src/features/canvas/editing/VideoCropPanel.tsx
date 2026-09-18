@@ -7,7 +7,7 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
-import { useViewport } from "@xyflow/react";
+import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -46,7 +46,6 @@ const MIN_SIZE = 20;
 export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props) {
   const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
-  const { zoom } = useViewport();
 
   const imgRef = useRef<HTMLImageElement>(null);
   // 挂载时抓帧一次：state 初始化器只在首次挂载执行，抓到的帧在面板生命周期内固定
@@ -225,16 +224,14 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
 
   return (
     <>
-      {/* Toolbar - above node, counter-scaled */}
+      {/* Toolbar - RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
+      <RfNodeToolbar nodeId={nodeId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
+        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
         style={{
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
-          transform: `translateX(-50%) scale(${1 / zoom})`,
-          transformOrigin: "center bottom",
         }}
       >
         {ASPECT_PRESETS.map((p) => (
@@ -277,6 +274,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
           />
         </Tooltip>
       </WheelGuard>
+      </RfNodeToolbar>
 
       {/* Crop overlay */}
       {/* 只覆盖视频画面区（标题栏以下）：面板挂在节点根部以露出顶部工具条，
