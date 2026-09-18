@@ -1021,6 +1021,59 @@ export async function extractVideoClip(
 }
 
 /**
+ * 截取音频片段（spawn ffmpeg）：音频流直接 copy，不重编码。
+ * 音频帧只有 ~20ms，copy 的切点误差远低于体感阈值，无损且秒级完成；
+ * 输出文件名（含扩展名）由路由按源扩展名决定，产物容器与源一致。
+ * 不 clamp end：-t 超出数据末端时 ffmpeg 自然停在 EOF，正是截断文件想要的行为。
+ */
+export async function extractAudioClip(
+  audioPath: string,
+  outputPath: string,
+  range: { start: number; end: number },
+  signal?: AbortSignal,
+): Promise<{ path: string }> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const start = Math.max(0, range.start);
+  const duration = Math.max(0, range.end - start);
+
+  const run = await runFfmpeg(
+    [
+      "-ss", start.toFixed(3), "-i", audioPath, "-t", duration.toFixed(3),
+      "-map", "0:a:0",
+      "-c:a", "copy",
+      "-y", outputPath,
+    ],
+    FFMPEG_CLIP_TIMEOUT_MS,
+    signal,
+  );
+
+  if (run.code !== 0) {
+    logEvent("media", {
+      stage: "audio_clip_extract_failed",
+      audio: path.basename(audioPath),
+      exitCode: run.code,
+      stderr: run.stderr.slice(-200),
+    });
+    throw new Error(`ffmpeg exited with code ${run.code}: ${run.stderr.slice(-200)}`);
+  }
+
+  // 区间整体落在数据末端之外时会产出 0 字节：当作失败处理
+  const stat = await fs.stat(outputPath).catch(() => null);
+  if (!stat || stat.size === 0) {
+    logEvent("media", { stage: "audio_clip_extract_empty", audio: path.basename(audioPath) });
+    throw new Error("Audio clip extraction produced an empty file");
+  }
+
+  logEvent("media", {
+    stage: "audio_clip_extract",
+    audio: path.basename(audioPath),
+  });
+
+  return { path: outputPath };
+}
+
+/**
  * 裁剪视频画面区域（spawn ffmpeg）：重编码整段视频，画面按矩形裁剪。
  * 与片段截取共用重编码参数与产物规格（mp4 / h264+aac）。
  * 矩形必须已按源分辨率钳位且宽高为偶数（yuv420p 的色度采样要求），

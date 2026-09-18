@@ -86,7 +86,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, EventNames, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
@@ -128,6 +128,7 @@ export default function InfiniteCanvas() {
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
   const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
   const clipCaptureNodeId = useCanvasStore((s) => s.clipCaptureNodeId);
+  const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
   // Selection — computed from node.selected (React Flow's source of truth)
@@ -225,9 +226,9 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId, setRfViewport]);
 
-  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取）激活的节点：生成面板必须让位，
+  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId;
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId;
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -288,6 +289,15 @@ export default function InfiniteCanvas() {
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
     return n;
   }, [clipCaptureNodeId, nodes]);
+
+  // 音频片段截取的宿主节点校验：类型不再是音频/已取消选中时退出截取模式
+  useEffect(() => {
+    if (!audioClipNodeId) return;
+    const n = nodes.find((x) => x.id === audioClipNodeId);
+    if (!n || n.type !== NODE_TYPE.AUDIO || !n.selected) {
+      useCanvasStore.getState().setAudioClipNodeId(null);
+    }
+  }, [audioClipNodeId, nodes]);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
   const { animateTo, cancel: cancelTidy } = useTidyAnimation();
@@ -749,6 +759,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setEditingTextNodeId(null);
     useCanvasStore.getState().setFrameCaptureNodeId(null);
     useCanvasStore.getState().setClipCaptureNodeId(null);
+    useCanvasStore.getState().setAudioClipNodeId(null);
     useCanvasStore.getState().setMultiExpandedNodeId(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
@@ -811,6 +822,10 @@ export default function InfiniteCanvas() {
       const currentClipCapture = useCanvasStore.getState().clipCaptureNodeId;
       if (currentClipCapture && currentClipCapture !== nodeId) {
         useCanvasStore.getState().setClipCaptureNodeId(null);
+      }
+      const currentAudioClip = useCanvasStore.getState().audioClipNodeId;
+      if (currentAudioClip && currentAudioClip !== nodeId) {
+        useCanvasStore.getState().setAudioClipNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -1216,6 +1231,9 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
+        {/* 音频片段截取：选区直接叠加在音频节点自身的波形上（AudioWaveform clipMode），
+            无浮层面板；audioClipNodeId 仅承担互斥/键盘作用域/工具栏隐藏 */}
+
         {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
         {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
@@ -1233,7 +1251,14 @@ export default function InfiniteCanvas() {
                 }}
                 onOpenClipStrip={(id) => {
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
+                  useCanvasStore.getState().setAudioClipNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(id);
+                }}
+                onOpenAudioClip={(id) => {
+                  // 三套编辑条互斥：同一节点同一时刻只允许挂一个浮层
+                  useCanvasStore.getState().setFrameCaptureNodeId(null);
+                  useCanvasStore.getState().setClipCaptureNodeId(null);
+                  useCanvasStore.getState().setAudioClipNodeId(id);
                 }}
               />
             )}

@@ -6,7 +6,7 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
-import { useViewport } from "@xyflow/react";
+import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,6 @@ import { useTranslation } from "react-i18next";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
-import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -46,7 +45,6 @@ const MIN_SIZE = 20;
 export default function CropPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
-  const { zoom } = useViewport();
 
   const imgRef = useRef<HTMLImageElement>(null);
   const [loading, setLoading] = useState(false);
@@ -243,16 +241,14 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
 
   return (
     <>
-      {/* Toolbar - above node, counter-scaled */}
+      {/* Toolbar — RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
+      <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
+        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
         style={{
           height: 50,
           padding: "6px 10px",
           whiteSpace: "nowrap",
-          bottom: `calc(100% + ${NODE_TITLE_HEIGHT + 8 / zoom}px)`,
-          transform: `translateX(-50%) scale(${1 / zoom})`,
-          transformOrigin: "center bottom",
         }}
       >
         {/* Aspect presets */}
@@ -293,6 +289,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
           <Button type="text" size="middle" style={{ padding: 8, color: loading ? undefined : "var(--canvas-success)" }} icon={<CheckOutlined />} disabled={loading || !imgLoaded} onClick={handleConfirm} loading={loading} />
         </Tooltip>
       </WheelGuard>
+      </RfNodeToolbar>
 
       {/* Crop overlay */}
       <div

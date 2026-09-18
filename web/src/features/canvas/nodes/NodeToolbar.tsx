@@ -8,6 +8,7 @@
 import {
   BgColorsOutlined,
   CheckOutlined,
+  CloseOutlined,
   CopyOutlined,
   DownloadOutlined,
   ExpandOutlined,
@@ -47,6 +48,7 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
+import { formatTime } from "@/lib/utils/format";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
@@ -64,6 +66,8 @@ interface NodeToolbarProps {
   onOpenFrameStrip: (nodeId: string) => void;
   /** 打开片段截取面板（同上，画布层挂载；与帧序列面板互斥） */
   onOpenClipStrip: (nodeId: string) => void;
+  /** 打开音频片段截取面板（同上，画布层挂载；与帧序列/片段截取互斥） */
+  onOpenAudioClip: (nodeId: string) => void;
 }
 
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
@@ -206,7 +210,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   );
 }
 
-function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip }: NodeToolbarProps) {
+function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip, onOpenAudioClip }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
@@ -468,10 +472,20 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
         </>
       )}
 
-      {/* Audio node actions — 基础工具栏：下载 / 清除（上传在节点内） */}
+      {/* Audio node actions — 基础工具栏：片段截取 / 下载 / 清除（上传在节点内） */}
       {nodeType === NODE_ACTIONS.AUDIO && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip title={t("clip.menu")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<ScissorOutlined />}
+              disabled={!assetSrc}
+              onClick={() => onOpenAudioClip(nodeId)}
+            />
+          </Tooltip>
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
               onClick={() => dispatchNodeAction(nodeId, "download")} />

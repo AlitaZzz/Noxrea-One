@@ -1,12 +1,12 @@
 /**
  * 文本节点富文本编辑工具条。
  * 双击进入编辑态时显示在节点上方，提供行内格式、块级格式与撤销/重做。
- * 样式与定位完全参考裁剪 / 全景工具条：counter-scale 保证画布缩放下视觉大小恒定。
+ * 定位由 RfNodeToolbar 恒定尺寸处理（与其它编辑工具栏统一）。
  */
 "use client";
 
 import { type Editor,useEditorState } from "@tiptap/react";
-import { useViewport } from "@xyflow/react";
+import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import {
   Bold,
@@ -26,6 +26,8 @@ import WheelGuard from "@/components/ui/WheelGuard";
 
 interface Props {
   editor: Editor;
+  /** 所属文本节点 id：RfNodeToolbar 定位用 */
+  nodeId: string;
 }
 
 /** 标题级别按纽：级别 + 对应图标，直接平铺在工具条上 */
@@ -35,9 +37,8 @@ const HEADING_BUTTONS = [
   { level: 3, Icon: Heading3 },
 ] as const;
 
-export default function RichTextToolbar({ editor }: Props) {
+export default function RichTextToolbar({ editor, nodeId }: Props) {
   const { t } = useTranslation();
-  const { zoom } = useViewport();
   // 订阅编辑器事务，光标位置 / 格式状态变化时刷新激活态
   const active = useEditorState({
     editor,
@@ -57,19 +58,17 @@ export default function RichTextToolbar({ editor }: Props) {
   });
 
   return (
+    <RfNodeToolbar nodeId={nodeId} position={Position.Top} align="center" offset={8} isVisible>
     <WheelGuard
       data-rich-text-toolbar=""
       // 统一阻止 mousedown 默认行为：点击工具条任意位置（含按钮间隙/背景）都不抢走编辑器焦点，
       // 否则编辑器失焦会触发退出编辑态。焦点不转移，光标位置也得以保留。
       onMouseDown={(e) => e.preventDefault()}
-      className="canvas-toolbar nodrag absolute left-1/2 flex items-center gap-1 rounded-xl z-40 pointer-events-auto"
+      className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
       style={{
         height: 50,
         padding: "6px 10px",
         whiteSpace: "nowrap",
-        bottom: `calc(100% + ${8 / zoom}px)`,
-        transform: `translateX(-50%) scale(${1 / zoom})`,
-        transformOrigin: "center bottom",
       }}
     >
       {/* 行内格式 */}
@@ -155,5 +154,6 @@ export default function RichTextToolbar({ editor }: Props) {
       </Tooltip>
 
     </WheelGuard>
+    </RfNodeToolbar>
   );
 }

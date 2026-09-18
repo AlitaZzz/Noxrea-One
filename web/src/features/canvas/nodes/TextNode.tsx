@@ -219,7 +219,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       {/* 富文本编辑工具条：定位在节点上方，counter-scale 保持视觉大小恒定 */}
       {editingContent && editor && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <RichTextToolbar editor={editor} />
+          <RichTextToolbar editor={editor} nodeId={id} />
         </div>
       )}
 
