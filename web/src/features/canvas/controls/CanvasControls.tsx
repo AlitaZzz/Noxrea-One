@@ -10,8 +10,6 @@ import {
   BgColorsOutlined,
   ExpandOutlined,
   MedicineBoxOutlined, // unused — kept for other components
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
 } from "@ant-design/icons";
@@ -23,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
 import { MapPinIcon } from "@/components/ui/icons/canvas/MapPinIcon";
+import { PanelIcon } from "@/components/ui/icons/canvas/PanelIcon";
 import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAuthStore } from "@/features/auth/store";
@@ -126,9 +125,13 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         }
       `}</style>
       <div
-        className="flex items-center gap-1 px-1.5 py-1 rounded-lg shadow-lg w-fit"
+        className="flex items-center gap-1 px-1.5 rounded-lg shadow-lg w-fit"
         style={{
-          background: "var(--canvas-bg, #262626)",
+          height: 40,
+          // 磨砂玻璃：背景 70% 不透明度 + 背景模糊，透出并柔化画布内容
+          background: "color-mix(in srgb, var(--canvas-bg, #262626) 70%, transparent)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           border: "1px solid var(--canvas-border, #3a3a3a)",
           // 外层 Panel 为 pointer-events: none，这里恢复自身（含内部浮层）的交互
           pointerEvents: "auto",
@@ -140,7 +143,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           size="small"
           type="text"
           className={`canvas-ctrl-btn${canvasExplorerOpen ? " canvas-ctrl-active" : ""}`}
-          icon={canvasExplorerOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+          icon={<PanelIcon />}
           onClick={onOpenCanvasExplorer}
         >
           {t("canvas.panel")}

@@ -1052,8 +1052,15 @@ export default function InfiniteCanvas() {
         <Panel position="top-left" style={{ margin: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease", pointerEvents: "none" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
             <div
-              className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
-              style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", pointerEvents: "auto" }}
+              className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
+              style={{
+                // 磨砂玻璃：背景 70% 不透明度 + 背景模糊，透出并柔化画布内容
+                background: "color-mix(in srgb, var(--canvas-bg) 70%, transparent)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                border: "1px solid var(--canvas-border)",
+                pointerEvents: "auto",
+              }}
             >
               <MenuPopover
                 open={toolbarMenuOpen}
