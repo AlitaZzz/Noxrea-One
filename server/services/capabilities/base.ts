@@ -14,6 +14,8 @@ export interface CapabilityContext {
   config?: Record<string, unknown>;
   userId: number;
   taskId: string;
+  /** 认领时间戳：供 TaskManager 校验本执行者仍持有任务所有权 */
+  startedAt: Date | null;
 }
 
 export interface CapabilityParams {

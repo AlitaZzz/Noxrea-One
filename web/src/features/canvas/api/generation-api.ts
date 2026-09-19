@@ -2,7 +2,9 @@
  * 生成任务（视频 / 文本 / 图片）相关 API 封装。
  * 提交、取消与流式监听共用 /api/generate/task 端点，按 type 区分业务。
  */
-import { apiRaw, apiStream } from "@/lib/api/client";
+import type { ApiResult } from "@/lib/api/client";
+import { api, apiRaw, apiStream } from "@/lib/api/client";
+import type { TaskStatus } from "@/lib/types/canvas";
 
 export interface SubmitGenerationTaskBody {
   type: "video" | "image" | "llm";
@@ -46,9 +48,38 @@ export async function streamGenerationTask(taskId: string, signal?: AbortSignal)
   return apiStream(`/api/generate/task/${taskId}/stream`, { signal });
 }
 
+/**
+ * 任务终态事件（SSE 推送与批量对账共用同一结构，字段由服务端
+ * toTaskPayload 统一映射，见 server/http/routes/generate.ts）。
+ */
+export interface TaskStatusEvent {
+  taskId: string;
+  status: TaskStatus;
+  resultUrls?: string[];
+  resultText?: string;
+  error?: string;
+  errorCode?: string;
+  prompt?: string;
+  config?: unknown;
+}
+
+/** 终态判断的单一谓词：SSE 推送与批量对账共用，避免字面量逐处漂移 */
+export function isTerminalTaskStatus(status: TaskStatus): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+/** 批量查询任务状态（对账兜底：页面重新可见 / 网络恢复时调用）。 */
+export async function fetchTasksStatus(taskIds: string[]): Promise<ApiResult<TaskStatusEvent[]>> {
+  return api<TaskStatusEvent[]>("/api/generate/tasks/batch-status", {
+    method: "POST",
+    body: JSON.stringify({ ids: taskIds }),
+  });
+}
+
 /** 生成任务接口命名空间，按业务聚合上述函数。 */
 export const generationApi = {
   submitGenerationTask,
   cancelGenerationTask,
   streamGenerationTask,
+  fetchTasksStatus,
 };

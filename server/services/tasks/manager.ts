@@ -4,14 +4,13 @@
  */
 
 import { getConfig } from "@server/core/config";
-import { logEvent } from "@server/core/logger/utils";
+import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { extractUpstreamMessage } from "@server/core/errors/task-failure";
 import {
-  updateTaskStatus,
+  markTaskProcessing,
   isTaskCancelled,
-  getTaskStatus,
   touchTaskHeartbeat,
   TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
@@ -33,6 +32,8 @@ export interface SubmitAndWaitResult {
 export interface SubmitAndWaitInput {
   taskId: string;
   userId: number;
+  /** 认领时间戳：markTaskProcessing 用它校验本执行者仍持有任务所有权 */
+  startedAt: Date | null;
   protocol: ProtocolService;
   capability: string;
   baseUrl: string;
@@ -47,51 +48,6 @@ export interface SubmitAndWaitInput {
   pollInterval?: number;
   maxPollAttempts?: number;
   initialDelay?: number;
-}
-
-// 导出（供 executor 使用）
-
-export interface PollOptions {
-  maxAttempts?: number;
-  initialDelay?: number;
-  pollInterval?: number;
-  taskId?: string;
-}
-
-/**
- * 通用异步轮询器（兼容旧接口，内部使用）
- */
-export async function pollUntilResult<T>(
-  pollFn: () => Promise<T | null>,
-  options: PollOptions = {}
-): Promise<T | null> {
-  const cfg = getConfig();
-  const maxAttempts = options.maxAttempts ?? cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS;
-  const initialDelay = (options.initialDelay ?? cfg.WORKER_ASYNC_POLL_INITIAL_DELAY) * 1000;
-  const pollInterval = (options.pollInterval ?? cfg.WORKER_ASYNC_POLL_INTERVAL) * 1000;
-  const taskId = options.taskId;
-
-  await new Promise((r) => setTimeout(r, initialDelay));
-
-  for (let i = 0; i < maxAttempts; i++) {
-    if (taskId && i % 5 === 0) {
-      try {
-        const status = await getTaskStatus(taskId);
-        if (status === "cancelled") {
-          logEvent("poll", { stage: "cancelled", taskId });
-          return null;
-        }
-      } catch { /* ignore */ }
-    }
-
-    const result = await pollFn();
-    if (result !== null) return result;
-
-    const delay = i < 30 ? Math.min(pollInterval, 3000) : Math.min(pollInterval * 2, 6000);
-    await new Promise((r) => setTimeout(r, delay));
-  }
-
-  return null;
 }
 
 // 核心：submit_and_wait
@@ -161,7 +117,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       const extractedId = protocol.extractTaskId?.(errData, channelConfig, capability);
       if (extractedId) {
         // 检查是否已被取消
-        if (await _checkCancelled(taskId)) {
+        if (await isTaskCancelled(taskId)) {
           return {
             status: "failed",
             urls: [],
@@ -170,7 +126,8 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
           };
         }
         return await _poll({
-          taskId, protocol, capability, baseUrl, apiKey,
+          taskId, startedAt: input.startedAt,
+          protocol, capability, baseUrl, apiKey,
           upstreamTaskId: extractedId,
           channelConfig,
           model,
@@ -255,11 +212,12 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       upstreamTaskId,
       pollUrl: pollUrlPreview,
     });
-    if (await _checkCancelled(taskId)) {
+    if (await isTaskCancelled(taskId)) {
       return { status: "failed", urls: [], error: "Cancelled" };
     }
     return await _poll({
-      taskId, protocol, capability, baseUrl, apiKey,
+      taskId, startedAt: input.startedAt,
+      protocol, capability, baseUrl, apiKey,
       upstreamTaskId,
       channelConfig,
       model,
@@ -292,6 +250,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
 
 interface PollInput {
   taskId: string;
+  startedAt: Date | null;
   protocol: ProtocolService;
   capability: string;
   baseUrl: string;
@@ -306,7 +265,7 @@ interface PollInput {
 
 async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   const {
-    taskId, protocol, capability, baseUrl, apiKey,
+    taskId, startedAt, protocol, capability, baseUrl, apiKey,
     upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay,
   } = input;
 
@@ -341,10 +300,55 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     interval: pollInterval,
   });
 
-  // 保存 upstream_task_id
-  try {
-    await updateTaskStatus(taskId, { status: "processing", upstreamTaskId });
-  } catch { /* non-critical */ }
+  // 保存 upstream_task_id（带 processing + startedAt 守卫：期间被取消、被僵尸
+  // 清理重置、或已被重新认领时写入被丢弃，不会污染新所有者的状态）
+  // 守卫拒绝的真实原因（用户取消 / 僵尸重置 / 已被重新认领）在此无法区分，
+  // 不硬编码 cancelled 误导遥测；该结果只进执行日志，不会写库
+  const ownershipLost = (): SubmitAndWaitResult => ({
+    status: "failed",
+    urls: [],
+    error: "Task ownership lost",
+  });
+  const logWriteFailed = (attempt: number | string, err: unknown) => {
+    // 写库失败不能静默吞掉：upstreamTaskId 落不了盘，进程重启后
+    // recoverProcessingTasks 会把任务当作同步任务重新提交上游（重复生成、重复计费）
+    logEvent("taskmgr", {
+      level: "warn",
+      stage: "processing_write_failed",
+      taskId,
+      attempt,
+      error: errText(err),
+    });
+  };
+
+  let persisted = false;
+  let persistPending = false;
+  for (let attempt = 1; attempt <= 3 && !persisted; attempt++) {
+    let threw = false;
+    try {
+      persisted = await markTaskProcessing(taskId, upstreamTaskId, startedAt);
+    } catch (err: unknown) {
+      threw = true;
+      logWriteFailed(attempt, err);
+    }
+    if (persisted) break;
+    if (!threw) {
+      // 守卫拒绝 = 任务已离开本次认领，本轮执行者已失去所有权，继续轮询上游
+      // 只会产生无人接收的结果。不能在这里写终态：重置/重认领场景下任务属于
+      // 新执行者，failTask 的所有权守卫会拒绝本次写入。
+      logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
+      return ownershipLost();
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 200 * attempt));
+  }
+  if (!persisted) {
+    // 重试耗尽仍写不进去——不判死：上游已受理（必然计费），此刻判死等于让用户
+    // 付费却拿不到结果。upstreamTaskId 保留在内存中继续轮询，随心跳周期重试落盘；
+    // DB 恢复后落盘成功，进程重启不再重复提交。整个轮询期都失败时重启仍会重新
+    // 提交上游（at-least-once 的剩余窗口），相比判死丢弃已计费结果优先保交付。
+    persistPending = true;
+    logEvent("taskmgr", { level: "warn", stage: "processing_persist_deferred", taskId });
+  }
 
   // 初始等待
   if (initialDelay > 0) {
@@ -361,11 +365,29 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     // 造成重复生成与重复计费
     if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
       lastHeartbeatAt = Date.now();
-      void touchTaskHeartbeat(taskId);
+      // persistPending 时由下方重试推进 updatedAt（仅重试成功时；重试也失败则
+      // 由 catch 里的裸心跳兜底再试一次，避免 updatedAt 冻结被清理误重置）
+      if (!persistPending) void touchTaskHeartbeat(taskId, startedAt);
+      // 落盘被推迟的补投递：与心跳同周期重试（重试失败不影响主轮询）。
+      // 守卫拒绝 = 任务已离开本次认领，同 persist 首次写入的处理
+      if (persistPending) {
+        try {
+          if (await markTaskProcessing(taskId, upstreamTaskId, startedAt)) {
+            persistPending = false;
+            logEvent("taskmgr", { stage: "processing_persist_recovered", taskId });
+          } else {
+            logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
+            return ownershipLost();
+          }
+        } catch (err: unknown) {
+          logWriteFailed("heartbeat", err);
+          void touchTaskHeartbeat(taskId, startedAt);
+        }
+      }
     }
 
-    // 每次轮询前都检查取消状态
-    if (await _checkCancelled(taskId)) {
+    // 每次轮询前都检查取消状态（isTaskCancelled 自身吞 DB 错误视为未取消）
+    if (await isTaskCancelled(taskId)) {
       logEvent("taskmgr", { stage: "poll_cancelled", taskId, attempt: attempt + 1 });
       return { status: "failed", urls: [], error: "Cancelled" };
     }
@@ -436,12 +458,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
 
       // pending: continue
     } catch (err: unknown) {
-      const e = err as Error & { code?: string; name?: string };
-      logger.warn({
-        taskId,
-        attempt: attempt + 1,
-        err: e.message?.slice(0, 120) || e.code || e.name || String(err).slice(0, 120),
-      }, "poll error");
+      logger.warn({ taskId, attempt: attempt + 1, err: errText(err) }, "poll error");
     }
   }
 
@@ -454,10 +471,4 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     // 超时 ≠ 上游失败：上游可能仍在生成。给专门错误码，前端据此提示用户
     errorCode: "generation.poll_timeout",
   };
-}
-
-// 取消检查
-
-async function _checkCancelled(taskId: string): Promise<boolean> {
-  return isTaskCancelled(taskId);
 }

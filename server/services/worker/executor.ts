@@ -4,9 +4,12 @@
  */
 
 import { routeGenerate } from "@server/services/gateway/router";
-import { updateTaskStatus, getTaskStatus } from "@server/crud/task";
+import {
+  safeCompleteTask,
+  safeFailTask,
+  getTaskStatus,
+} from "@server/crud/task";
 import { getProvider } from "@server/crud/model-config";
-import { downloadAndSave } from "@server/services/storage/download";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
@@ -16,9 +19,9 @@ import {
 } from "@server/core/errors/task-failure";
 import { buildContext } from "./context";
 import { resumeAsyncPolling } from "./resume-polling";
+import { downloadResultsWithHeartbeat } from "./download-results";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
-import { logger } from "@server/core/logger";
 import type { HydratedGenerationTask } from "@server/crud/task";
 
 /**
@@ -110,6 +113,7 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       providerId,
       userId: task.userId,
       taskId: task.id,
+      startedAt: task.startedAt,
       params: rawParams,
     };
 
@@ -129,11 +133,12 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
 
     // LLM 文本结果：直接完成，不走 URL 下载（对齐 Python _finalize_result）
     if (capability === "llm" && !result?.urls?.length && result?.text) {
-      await updateTaskStatus(task.id, {
-        status: "completed",
+      const finalized = await safeCompleteTask(task.id, {
         resultText: result.text,
-        completedAt: new Date(),
-      });
+      }, { startedAt: task.startedAt });
+      // null = 所有权守卫拒绝或写库失败（safeCompleteTask 已记日志）；
+      // 写库失败时任务停留 processing 交僵尸清理重试，不能流入 catch 误判失败
+      if (!finalized) return;
 
       logEvent("executor", {
         banner: true,
@@ -153,23 +158,21 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       return;
     }
 
-    const resultUrls: string[] = [];
-    for (const url of result?.urls ?? []) {
-      try {
-        const storageKey = await downloadAndSave(url, task.userId, task.id);
-        if (storageKey) resultUrls.push(storageKey);
-      } catch (err) {
-        logger.error({ err, taskId: task.id }, "Failed to download result");
-      }
-    }
+    // 下载落盘并保持心跳（大文件下载可能远超心跳间隔，防止僵尸清理误判重跑）
+    const resultUrls = await downloadResultsWithHeartbeat(
+      task.id,
+      task.userId,
+      result?.urls ?? [],
+      "Failed to download result",
+      task.startedAt
+    );
 
-    // 更新任务状态
-    await updateTaskStatus(task.id, {
-      status: "completed",
+    // 更新任务状态（终态守卫：期间被取消的话写入会被丢弃，保留 cancelled）
+    const finalized = await safeCompleteTask(task.id, {
       resultUrls,
       resultText: result?.text,
-      completedAt: new Date(),
-    });
+    }, { startedAt: task.startedAt });
+    if (!finalized) return;
 
     // 全部动作（保存 + 状态更新 + 媒体处理）完成后再输出收尾节点
     const saved = resultUrls.length > 0;
@@ -196,13 +199,15 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       errorCode: code,
     });
 
-    await updateTaskStatus(task.id, {
-      status: "failed",
+    // 所有权守卫：任务在执行期间被僵尸清理重置（pending）或重新认领（startedAt
+    // 变化）时，本执行者的 failTask 会被终态守卫拒绝——重试属于新执行者，不能误杀。
+    // safeFailTask 自身不抛：failTask 写库失败时记日志返回 null，不会让 DB 错误
+    // 冒充生成错误上报给 loop
+    await safeFailTask(task.id, {
       // 可重试标记仅体现在日志 stage 中，不再拼进展示给用户的错误文案
       error: errorMsg,
       // 失败分类落库：供前端本地化展示，也便于按错误码统计失败分布
       errorCode: code,
-      completedAt: new Date(),
-    });
+    }, { startedAt: task.startedAt });
   }
 }

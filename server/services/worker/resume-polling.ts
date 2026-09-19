@@ -3,21 +3,22 @@
  * Worker 重启后继续轮询已有 upstreamTaskId 的任务，直至终态或超时。
  */
 
-import { logEvent } from "@server/core/logger/utils";
+import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
 import type { PollResult } from "@server/services/protocols/base";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
-import { downloadAndSave } from "@server/services/storage/download";
 import { fetchWithTimeout } from "@server/core/http-client";
 import {
-  updateTaskStatus,
+  safeCompleteTask,
+  safeFailTask,
   isTaskCancelled,
   touchTaskHeartbeat,
   TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
+import { downloadResultsWithHeartbeat } from "./download-results";
 import type { HydratedGenerationTask } from "@server/crud/task";
 import type { StopSignal } from "./loop";
 
@@ -80,7 +81,7 @@ async function _doResumePoll(
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
     pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type, model);
   } catch (err: unknown) {
-    await _failTask(taskId, `Failed to resume polling: ${(err as Error).message}`);
+    await _failTask(task, `Failed to resume polling: ${errText(err)}`);
     return;
   }
 
@@ -103,7 +104,7 @@ async function _doResumePoll(
     // 恢复的长任务若不心跳，会再次被误判并重新提交到上游
     if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
       lastHeartbeatAt = Date.now();
-      void touchTaskHeartbeat(taskId);
+      void touchTaskHeartbeat(taskId, task.startedAt);
     }
 
     if (stopSignal.stopped) {
@@ -111,8 +112,8 @@ async function _doResumePoll(
       return;
     }
 
-    // 检查取消
-    if (await _checkCancelled(taskId)) {
+    // 检查取消（isTaskCancelled 自身吞 DB 错误视为未取消，防止抖动杀死整个恢复轮询）
+    if (await isTaskCancelled(taskId)) {
       logEvent("resume_poll", { stage: "cancelled", taskId, attempt });
       return;
     }
@@ -148,62 +149,45 @@ async function _doResumePoll(
       if (parsed.status === "completed") {
         logEvent("resume_poll", { stage: "completed", taskId, attempt: attempt + 1, urls: parsed.urls.length });
 
-        // 下载结果落盘
-        const resultUrls: string[] = [];
-        for (const url of parsed.urls) {
-          try {
-            const key = await downloadAndSave(url, task.userId, taskId);
-            if (key) resultUrls.push(key);
-          } catch (err) {
-            logger.error({ err, taskId }, "Resume poll download failed");
-          }
-        }
+        // 下载落盘并保持心跳（与 executor 同理，防止僵尸清理误判重跑）
+        const resultUrls = await downloadResultsWithHeartbeat(
+          taskId,
+          task.userId,
+          parsed.urls,
+          "Resume poll download failed",
+          task.startedAt
+        );
 
-        await updateTaskStatus(taskId, {
-          status: "completed",
-          resultUrls,
-          completedAt: new Date(),
-        });
+        // safeCompleteTask 自身不抛：守卫拒绝/写库失败均已记日志，任务交由
+        // 僵尸清理兜底，不会让 DB 错误冒充生成失败
+        await safeCompleteTask(taskId, { resultUrls }, { startedAt: task.startedAt });
         return;
       }
 
       if (parsed.status === "failed") {
-        await _failTask(taskId, parsed.error ?? "Upstream task failed");
+        await _failTask(task, parsed.error ?? "Upstream task failed");
         return;
       }
 
       // pending: continue
     } catch (err: unknown) {
-      const e = err as Error & { code?: string; name?: string };
-      logger.warn({
-        taskId,
-        attempt: attempt + 1,
-        err: e.message?.slice(0, 120) || e.code || e.name || String(err).slice(0, 120),
-      }, "resume poll error");
+      logger.warn({ taskId, attempt: attempt + 1, err: errText(err) }, "resume poll error");
     }
   }
 
   // 超时：与首次提交轮询超时同码，前端据此提示用户
   await _failTask(
-    taskId,
+    task,
     `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,
     "generation.poll_timeout",
   );
 }
 
-async function _checkCancelled(taskId: string): Promise<boolean> {
-  return isTaskCancelled(taskId);
-}
-
-async function _failTask(taskId: string, error: string, errorCode?: string): Promise<void> {
-  try {
-    await updateTaskStatus(taskId, {
-      status: "failed",
-      error,
-      errorCode,
-      completedAt: new Date(),
-    });
-  } catch (err) {
-    logger.error({ err, taskId }, "Failed to update failed task");
-  }
+function _failTask(
+  task: HydratedGenerationTask,
+  error: string,
+  errorCode?: string
+): Promise<void> {
+  // safeFailTask 自身不抛：DB 抖动记日志返回 null，所有权守卫拒绝记 skipped_terminal_write
+  return safeFailTask(task.id, { error, errorCode }, { startedAt: task.startedAt }).then(() => undefined);
 }

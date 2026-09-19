@@ -5,16 +5,34 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/core/auth/middleware";
 import { taskCreateSchema } from "@server/schemas/task";
-import { createTask, getTask, cancelTask } from "@server/crud/task";
+import { createTask, getTask, cancelTask, getTaskTerminalByIds, isTerminalTaskStatus, toTerminalState } from "@server/crud/task";
+import type { TerminalTaskState } from "@server/core/events/task-watcher";
 import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { taskWatcher } from "@server/core/events/task-watcher";
-import { logger } from "@server/core/logger";
+import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
 import { buildFileUrl } from "@server/services/storage/service";
 
 const router = new Hono();
+
+/**
+ * 终态回填 payload 的统一映射：SSE 快照、SSE 推送与 batch-status 对账三处共用，
+ * 保证同一任务的字段形状不会随入口漂移。
+ */
+function toTaskPayload(state: TerminalTaskState) {
+  return {
+    taskId: state.taskId,
+    status: state.status,
+    resultUrls: state.resultUrls?.map(buildFileUrl),
+    resultText: state.resultText,
+    error: state.error,
+    errorCode: state.errorCode,
+    prompt: state.prompt,
+    config: state.config || undefined,
+  };
+}
 
 router.post("/api/generate/task", async (c) => {
   const request = c.req.raw;
@@ -160,12 +178,41 @@ router.on(["POST", "DELETE"], "/api/generate/task/:id/cancel", async (c) => {
   if (!task) return failCode(404, "generate.task_not_found");
   if (task.userId !== auth.user.id) return failCode(403, "common.forbidden");
 
-  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+  if (isTerminalTaskStatus(task.status)) {
     return failCode(400, "generate.task_already_finished");
   }
 
-  await cancelTask(taskId);
+  // 守卫拒绝 = 检查与写入之间任务已终态（如恰好完成），不能谎报 cancelled
+  const cancelled = await cancelTask(taskId);
+  if (!cancelled) return failCode(400, "generate.task_already_finished");
   return c.json(ok(null, "cancelled"));
+});
+
+// POST /api/generate/tasks/batch-status
+// 前端对账兜底：SSE 推送丢失（连接死亡 / token 过期）时，
+// 页面重新可见或网络恢复时批量查询生成中任务的真实状态
+router.post("/api/generate/tasks/batch-status", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  let body: { ids?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return failCode(400, "common.invalid_json");
+  }
+
+  const ids = Array.isArray(body.ids)
+    ? body.ids.filter((v): v is string => typeof v === "string")
+    : [];
+  if (ids.length === 0) return c.json(ok([]));
+  if (ids.length > 100) return failCode(422, "common.invalid_request");
+
+  // 归属过滤下推 SQL：只查当前用户的终态行，非本人/非终态行不再拉取+反序列化后丢弃
+  const tasks = await getTaskTerminalByIds(ids, { userId: auth.user.id });
+
+  return c.json(ok(tasks.map((t) => toTaskPayload(toTerminalState(t)))));
 });
 
 // GET /api/generate/task/:id/stream (SSE)
@@ -181,116 +228,33 @@ router.get("/api/generate/task/:id/stream", async (c) => {
   if (!task) return failCode(404, "generate.task_not_found");
   if (task.userId !== auth.user.id) return failCode(403, "common.forbidden");
 
-  // 如果已经是终态，直接返回
-  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-    const resultUrls = (task.resultUrls as string[] | null) ?? undefined;
-
-    const body = JSON.stringify({
-      type: "status",
-      taskId: task.id,
-      status: task.status,
-      resultUrls: resultUrls?.map(buildFileUrl),
-      resultText: task.resultText,
-      error: task.error,
-      errorCode: task.errorCode,
-      prompt: task.prompt,
-      config: task.config || undefined,
-    });
-    return new Response(`data: ${body}\n\n`, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
+  // 如果已经是终态，直接返回一次性快照（走 createSseResponse 保证响应头一致）
+  if (isTerminalTaskStatus(task.status)) {
+    const snapshot = { type: "status", ...toTaskPayload(toTerminalState(task)) };
+    return createSseResponse(request, async ({ emit }) => {
+      emit("status", snapshot);
     });
   }
 
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      let aborted = false;
-      let closed = false;
-
-      const safeEnqueue = (chunk: Uint8Array) => {
-        if (closed) return;
-        try {
-          controller.enqueue(chunk);
-        } catch {
-          closed = true;
-        }
-      };
-
-      const safeClose = () => {
-        if (closed) return;
-        closed = true;
-        try {
-          controller.close();
-        } catch { /* already closed */ }
-      };
-
-      request.signal.addEventListener("abort", () => {
-        aborted = true;
-        safeClose();
-      });
-
-      // 心跳定时器
-      const heartbeat = setInterval(() => {
-        if (aborted || closed) return;
-        safeEnqueue(encoder.encode(": ping\n\n"));
-      }, 15_000);
-
-      try {
-        while (!aborted && !closed) {
-          const state = await taskWatcher.watch(taskId, request.signal);
-          if (aborted || closed) break;
-          if (!state) continue;
-
-          const result = { data: state };
-
-          if (result) {
-            const rawUrls: string[] | undefined = result.data.resultUrls as string[] | undefined;
-            const payload = {
-              type: "status",
-              taskId: taskId,
-              status: result.data.status,
-              resultUrls: rawUrls?.map(buildFileUrl),
-              resultText: result.data.resultText,
-              error: result.data.error,
-              errorCode: result.data.errorCode,
-              prompt: result.data.prompt,
-              config: result.data.config,
-            };
-
-            safeEnqueue(
-              encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)
-            );
-
-            if (
-              payload.status === "completed" ||
-              payload.status === "failed" ||
-              payload.status === "cancelled"
-            ) {
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        logger.debug({ err, taskId }, "SSE stream error");
-      } finally {
-        clearInterval(heartbeat);
-        safeClose();
+  return createSseResponse(request, async ({ emit, signal }) => {
+    // watch() 只在请求中止或 watcher 被 dispose 时 resolve null，而 dispose 不中止
+    // signal——不加计数的话，立即重订阅会构成零退避忙循环把 CPU 打满
+    let nullResolves = 0;
+    while (!signal.aborted) {
+      const state = await taskWatcher.watch(taskId, signal);
+      if (signal.aborted) return;
+      if (!state) {
+        if (++nullResolves >= 3) return;
+        continue;
       }
-    },
-  });
+      nullResolves = 0;
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
+      const payload = { type: "status", ...toTaskPayload(state) };
+      emit("status", payload);
+
+      // 终态：推完即关流
+      if (isTerminalTaskStatus(payload.status)) return;
+    }
   });
 });
 

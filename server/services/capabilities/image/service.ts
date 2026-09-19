@@ -54,6 +54,7 @@ class ImageCapabilityService implements CapabilityService {
     const result = await submitAndWait({
       taskId: ctx.taskId,
       userId: ctx.userId,
+      startedAt: ctx.startedAt,
       protocol,
       capability: "image",
       baseUrl: ctx.baseUrl,

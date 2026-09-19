@@ -1,9 +1,12 @@
 /**
  * 任务状态监听器。
- * 监听跨进程任务的状态变更，并同步终态结果至内存与下游。
+ * 终态事件由 Worker 写库后经事件总线即时推送（主路径）；
+ * DB 轮询仅作为事件丢失时的兜底，确保状态最终可达。
  */
 import { logger } from "@server/core/logger";
-import { getTasksByIds } from "@server/crud/task";
+import { getTaskTerminalByIds, toTerminalState } from "@server/crud/task";
+
+import { onAnyTaskTerminal } from "./task-event-bus";
 
 export interface TerminalTaskState {
   taskId: string;
@@ -31,8 +34,9 @@ const globalForWatcher = globalThis as unknown as {
 export class TaskWatcher {
   private pending = new Map<string, PendingSubscription[]>();
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private pollIntervalMs = 1000;
-  private startedAt: number | null = null;
+  /** 事件总线为主路径，轮询只做兜底，2s 足够 */
+  private pollIntervalMs = 2000;
+  private busUnsubscribe: (() => void) | null = null;
 
   watch(
     taskId: string,
@@ -57,6 +61,7 @@ export class TaskWatcher {
       list.push(sub);
       this.pending.set(taskId, list);
 
+      this.ensureBusListener();
       this.ensureTimer();
     });
   }
@@ -70,6 +75,8 @@ export class TaskWatcher {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    this.busUnsubscribe?.();
+    this.busUnsubscribe = null;
     for (const subs of this.pending.values()) {
       for (const sub of subs) {
         this.detachAbortHandler(sub);
@@ -77,8 +84,6 @@ export class TaskWatcher {
       }
     }
     this.pending.clear();
-    this.startedAt = null;
-    this.pollIntervalMs = 1000;
   }
 
   private removeSubscription(sub: PendingSubscription): void {
@@ -96,11 +101,24 @@ export class TaskWatcher {
     }
   }
 
+  /** 终态事件到达：立即唤醒该任务的全部订阅者，无需等轮询 */
+  private ensureBusListener(): void {
+    if (this.busUnsubscribe) return;
+    this.busUnsubscribe = onAnyTaskTerminal((state) => {
+      const subs = this.pending.get(state.taskId);
+      if (!subs) return;
+      for (const sub of subs) {
+        this.detachAbortHandler(sub);
+        sub.resolve(state);
+      }
+      this.pending.delete(state.taskId);
+    });
+  }
+
   private ensureTimer(): void {
     if (this.timer) return;
     if (this.pending.size === 0) return;
 
-    if (!this.startedAt) this.startedAt = Date.now();
     this.timer = setTimeout(() => {
       void this.poll();
     }, this.pollIntervalMs);
@@ -111,31 +129,19 @@ export class TaskWatcher {
 
     if (this.pending.size === 0) return;
 
-    const elapsed = Date.now() - (this.startedAt ?? Date.now());
-    this.pollIntervalMs = elapsed < 30_000 ? 1000 : 2000;
-
     try {
       const ids = [...this.pending.keys()];
 
-      const tasks = await getTasksByIds(ids);
-      const terminalTasks = tasks.filter(
-        (t) => t.status === "completed" || t.status === "failed" || t.status === "cancelled"
-      );
+      // 投影查询：轮询兜底只消费 toTerminalState 的 8 个字段，不拉大 JSON 列；
+      // 查询本身只返回终态行，无需再内存过滤
+      const terminalTasks = await getTaskTerminalByIds(ids);
 
       for (const task of terminalTasks) {
         const subs = this.pending.get(task.id);
         if (!subs) continue;
 
-        const state: TerminalTaskState = {
-          taskId: task.id,
-          status: task.status as "completed" | "failed" | "cancelled",
-          resultUrls: task.resultUrls ?? undefined,
-          resultText: task.resultText ?? undefined,
-          error: task.error ?? undefined,
-          errorCode: task.errorCode ?? undefined,
-          prompt: task.prompt || undefined,
-          config: task.config,
-        };
+        // 与事件总线主路径共用同一映射，保证兜底路径的 payload 形状一致
+        const state = toTerminalState(task);
 
         for (const sub of subs) {
           this.detachAbortHandler(sub);
@@ -149,9 +155,6 @@ export class TaskWatcher {
 
     if (this.pending.size > 0) {
       this.ensureTimer();
-    } else {
-      this.startedAt = null;
-      this.pollIntervalMs = 1000;
     }
   }
 }

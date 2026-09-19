@@ -187,3 +187,13 @@ export function summarizeText(text: string | null | undefined): string {
   if (text.length <= 80) return text;
   return text.slice(0, 77) + "...";
 }
+
+/** 未知错误的单行摘要：优先 message 并截断到 200 字符，供日志与落库字段使用 */
+export function errText(err: unknown): string {
+  const msg = (err as Error)?.message;
+  // 非 string 的真值 message（如 reject({ message: 42 })）不能走 slice，会抛
+  // TypeError 击穿调用方 catch 的 no-throw 契约；空 message 回退 String(err)
+  // 保留类型信息
+  if (typeof msg === "string" && msg) return msg.slice(0, 200);
+  return String(err).slice(0, 200);
+}
