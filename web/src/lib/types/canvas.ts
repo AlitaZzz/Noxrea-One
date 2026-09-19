@@ -19,7 +19,8 @@ export interface ViewportState {
   zoom: number;
 }
 
-export type TaskStatus = "pending" | "processing" | "completed" | "failed";
+/** 任务状态：与服务端终态词汇对齐（cancelled 为用户取消的终态） */
+export type TaskStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface TaskBinding {
   /** 后端任务 ID（本地处理如裁剪/变换时为空串） */

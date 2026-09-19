@@ -17,6 +17,8 @@ export interface RouteContext {
   providerId: number;
   userId: number;
   taskId: string;
+  /** 认领时间戳：供 TaskManager 校验本执行者仍持有任务所有权 */
+  startedAt: Date | null;
   config?: Record<string, unknown>;
   params: Record<string, unknown>;
 }
@@ -46,6 +48,7 @@ export async function routeGenerate(ctx: RouteContext): Promise<GenerationResult
       config: ctx.config,
       userId: ctx.userId,
       taskId: ctx.taskId,
+      startedAt: ctx.startedAt,
     },
     ctx.params as Record<string, unknown> & { prompt: string }
   );

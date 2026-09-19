@@ -39,6 +39,13 @@ export function createSseResponse(
     cleanup();
     upstreamAbort.abort();
     options.onDisconnect?.();
+    // close() 会因 terminated 已置位提前返回，必须直接关流：不关的话这个
+    // 响应体永不终结，只能靠 GC 回收
+    try {
+      controller?.close();
+    } catch {
+      // The consumer may have cancelled between the state check and close.
+    }
   };
 
   const write = (content: string) => {

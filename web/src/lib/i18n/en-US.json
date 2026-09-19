@@ -730,6 +730,7 @@
       "timeout": "The provider request timed out, please try again later",
       "poll_timeout": "Timed out waiting for the provider result, please try again later",
       "network_error": "Cannot reach the provider, please check your connection",
+      "zombie_timeout": "The task made no progress and exceeded the maximum number of retries, please generate again.",
       "upstream_http_error": "Provider returned an error, please try again later",
       "cancelled": "Task cancelled",
       "missing_provider_id": "The task is missing provider configuration",

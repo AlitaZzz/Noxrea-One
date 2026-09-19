@@ -1,12 +1,14 @@
 /**
- * 生成任务 SSE 监控 hook。
- * 扫描画布中处于生成中的节点并建立 SSE 连接，任务完成 / 失败时回填节点数据、
- * 调整节点尺寸并弹出通知。
+ * 生成任务监控 hook。
+ * 主路径：SSE 订阅任务状态，服务端经事件总线即时推送终态；
+ * 兜底：SSE 带心跳看门狗（连接静默死亡即断开重连），页面重新可见 /
+ * 网络恢复时按 DB 批量对账一次，保证「已落盘」的任务最终一定回填到节点。
  */
 "use client";
 
 import { createElement, useEffect, useRef } from "react";
 
+import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
 import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
@@ -15,6 +17,13 @@ import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 /** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
 const MAX_ERROR_LEN = 1000;
+
+/** SSE 看门狗超时：服务端每 15s 发心跳，30s 收不到任何字节即判定连接已静默死亡 */
+const SSE_WATCHDOG_TIMEOUT_MS = 30_000;
+/** 连接建立阶段（fetch 至响应头）的预算：TLS/代理握手慢不等于连接死亡，放宽到 60s，
+ * 否则慢握手会陷入「30s abort → 3s 重连」的死循环 */
+const SSE_CONNECT_TIMEOUT_MS = 60_000;
+const SSE_WATCHDOG_CHECK_MS = 5_000;
 
 /**
  * 截断错误文案。
@@ -71,209 +80,272 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
+    let cleanupListeners: (() => void) | null = null;
+    // 卸载后 reconcile 不再落地：allSettled 期间卸载时，响应仍会回来，
+    // 不能再回填节点或弹通知
+    let disposed = false;
 
-    import("@/features/canvas/api/generation-api").then(({ generationApi }) => {
-      if (cancelled) return;
-      const scanAndConnect = () => {
-        const allNodes = useCanvasStore.getState().nodes;
-        // 清理 notifiedTasksRef：只保留当前节点中仍存在的任务 ID，避免 Set 无界增长
-        const activeTaskIds = new Set<string>();
-        for (const n of allNodes) {
-          const tb = (n.data as MediaGenFields).taskBinding;
-          if (tb?.taskId) activeTaskIds.add(tb.taskId);
+    /**
+     * 终态落地：SSE 推送与批量对账共用。
+     * 按结果类型回填节点数据并清除 taskBinding（遮罩此时消失）；
+     * 节点已删除或绑定已换绑（重新生成）时静默忽略。
+     */
+    const handleTerminal = (nodeId: string, taskId: string, evt: TaskStatusEvent) => {
+      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+      if (!cur || curBinding?.taskId !== taskId) return;
+
+      const isVideoNode = cur.type === "video-node";
+      const isTextNode = cur.type === "text-node";
+      const t = i18n.t;
+      // 同一任务只弹一次通知（SSE 与对账可能先后送达同一终态）；
+      // 失败类通知必须走 error 通道（红色/错误图标），不能与成功混用
+      const notifyOnce = (
+        kind: "success" | "error",
+        payload: {
+          title: string;
+          description?: React.ReactNode;
+          placement: string;
+          duration: number;
         }
-        for (const id of notifiedTasksRef.current) {
-          if (!activeTaskIds.has(id)) notifiedTasksRef.current.delete(id);
-        }
-        // 任务已从画布消失（节点被删 / taskBinding 被清/换）：这些流已无人消费，
-        // 但服务端会一直推送心跳，必须主动断开，否则连接与内存都挂着。
-        for (const [id, ctrl] of sseCtrlsRef.current) {
-          if (activeTaskIds.has(id)) continue;
-          ctrl.abort();
-          sseCtrlsRef.current.delete(id);
-        }
-        for (const node of allNodes) {
-          const binding = (node.data as MediaGenFields).taskBinding;
-          if (!binding?.taskId) continue;
-          if (binding.status !== "pending" && binding.status !== "processing") continue;
-          if (sseCtrlsRef.current.has(binding.taskId)) continue;
-
-          const taskId = binding.taskId;
-          const nodeId = node.id;
-          const ctrl = new AbortController();
-          sseCtrlsRef.current.set(taskId, ctrl);
-          /** 收尾：先摘表再中断连接。
-           *  只摘表不 abort 的话，未读完的流会一直挂着，且卸载时已无法找到它。 */
-          const finish = () => {
-            sseCtrlsRef.current.delete(taskId);
-            ctrl.abort();
-          };
-
-          (async () => {
-            try {
-              const res = await generationApi.streamGenerationTask(taskId, ctrl.signal);
-              if (!res.ok || !res.body) { finish(); return; }
-              const reader = res.body.getReader();
-              const decoder = new TextDecoder();
-              let buffer = "";
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-                for (const line of lines) {
-                  if (!line.startsWith("data: ")) continue;
-                  try {
-                    const evt = JSON.parse(line.slice(6));
-                    let completedUrls: string[] = evt.resultUrls || [];
-
-                    // LLM 文本结果：从 resultText 更新 content
-                    if (evt.status === "completed" && evt.resultText) {
-                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
-                      useCanvasStore.getState().updateNodeData(nodeId, {
-                        content: textToHtml(evt.resultText),
-                        plainText: evt.resultText,
-                        taskBinding: undefined,
-                      }, undefined, { skipHistory: true });
-                      markDirtyImmediate();
-                      const t = i18n.t;
-                      if (!notifiedTasksRef.current.has(taskId)) {
-                        notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
-                      }
-                      finish();
-                      return;
-                    }
-
-                    if (evt.status === "completed" && completedUrls.length) {
-                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
-                      const prompt = evt.prompt || "";
-
-                      const label = prompt.slice(0, 20);
-                      const isVideoNode = cur.type === "video-node";
-                      // 【测试用 TODO】多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
-                      // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
-                      // 上游正式支持多图后，删除这段 mock 补齐逻辑。
-                      // 追加 ?mock=n 区分，避免 URL 完全相同被堆叠卡片 filter(u !== src) 过滤掉导致背景卡不显示。
-                      const expectedCount = Number((evt.config as { n?: number } | undefined)?.n) || 0;
-                      if (!isVideoNode && expectedCount > 1 && completedUrls.length === 1) {
-                        const first = completedUrls[0];
-                        const sep = first.includes("?") ? "&" : "?";
-                        completedUrls = Array.from({ length: expectedCount }, (_, i) =>
-                          i === 0 ? first : `${first}${sep}mock=${i}`);
-                      }
-                      const firstUrl = completedUrls[0];
-                      // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
-                      // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
-                      const t = i18n.t;
-                      const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
-                      // 一次性回填：图片 + 多图列表 + 清除生成中状态（遮罩此时才消失）。
-                      // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
-                      // 异步探测到真实分辨率后再统一回填真实尺寸。
-                      useCanvasStore.getState().updateNodeData(nodeId, {
-                        src: firstUrl, label,
-                        naturalWidth: 0, naturalHeight: 0,
-                        lockAspectRatio: true, taskBinding: undefined,
-                        source: "generate",
-                        // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
-                        // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
-                        multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,
-                        multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
-                      }, undefined, { skipHistory: true });
-                      markDirtyImmediate();
-                      if (!notifiedTasksRef.current.has(taskId)) {
-                        notifiedTasksRef.current.add(taskId);
-                        notifRef.current.success({ title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
-                      }
-                      finish();
-
-                      // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
-                      // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；
-                      // 失败/节点内容已变更时静默放弃。
-                      loadMediaDimensions(firstUrl, isVideoNode).then((dims) => {
-                        if (dims.w <= 0 || dims.h <= 0) return;
-                        const s = useCanvasStore.getState();
-                        const n = s.nodes.find(x => x.id === nodeId);
-                        if (!n) return;
-                        if ((n.data as { src?: string }).src !== firstUrl) return;
-                        const natural = { naturalWidth: dims.w, naturalHeight: dims.h };
-                        const { width, height } = computeNodeSize(dims.w, dims.h);
-                        s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true });
-                        markDirtyImmediate();
-                      });
-                      return;
-                    } else if (evt.status === "failed") {
-                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (!cur || curBinding?.taskId !== taskId) { finish(); return; }
-                      const isVideoNode = cur.type === "video-node";
-                      const isTextNode = cur.type === "text-node";
-                      useCanvasStore.getState().updateNodeData(nodeId, {
-                        taskBinding: undefined,
-                      }, undefined, { skipHistory: true });
-                      markDirtyImmediate();
-                      if (!notifiedTasksRef.current.has(taskId)) {
-                        notifiedTasksRef.current.add(taskId);
-                        const t = i18n.t;
-                        notifRef.current.error({
-                          title: t(isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"),
-                          // 详情区可展开完整失败原因，避免长文案被截断后用户拿不到原文
-                          description: createElement(TaskErrorDetail, { message: resolveTaskError(evt) }),
-                          placement: "bottomRight",
-                          duration: 15,
-                        });
-                      }
-                      finish();
-                      return;
-                    } else if (evt.status === "completed") {
-                      // 兜底：completed 但没有可消费的结果（上游未回传 resultText / resultUrls，
-                      // 或结果为空数组）。三个结果分支都不命中时必须清理 taskBinding，
-                      // 否则节点永久停留在「生成中」遮罩，且 hasGeneratingNode() 会
-                      // 全局禁用撤销 / 重做，用户只能刷新页面才能恢复。
-                      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-                      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-                      if (cur && curBinding?.taskId === taskId) {
-                        useCanvasStore.getState().updateNodeData(nodeId, {
-                          taskBinding: undefined,
-                        }, undefined, { skipHistory: true });
-                        markDirtyImmediate();
-                        if (!notifiedTasksRef.current.has(taskId)) {
-                          notifiedTasksRef.current.add(taskId);
-                          const t = i18n.t;
-                          notifRef.current.error({
-                            title: t("generation.failed"),
-                            description: evt.error ? resolveTaskError(evt) : t("error.unknown"),
-                            placement: "bottomRight",
-                            duration: 15,
-                          });
-                        }
-                      }
-                      finish();
-                      return;
-                    }
-                  } catch {}
-                }
-              }
-            } catch { /* SSE disconnected */ }
-            finish();
-          })();
-        }
+      ) => {
+        if (notifiedTasksRef.current.has(taskId)) return;
+        notifiedTasksRef.current.add(taskId);
+        if (kind === "success") notifRef.current.success(payload);
+        else notifRef.current.error(payload);
       };
 
-      scanAndConnect();
-      timer = setInterval(scanAndConnect, 3000);
-    });
+      // LLM 文本结果：从 resultText 更新 content
+      if (evt.status === "completed" && evt.resultText) {
+        useCanvasStore.getState().updateNodeData(nodeId, {
+          content: textToHtml(evt.resultText),
+          plainText: evt.resultText,
+          taskBinding: undefined,
+        }, undefined, { skipHistory: true });
+        markDirtyImmediate();
+        notifyOnce("success", { title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
+        return;
+      }
+
+      let completedUrls: string[] = evt.resultUrls || [];
+      if (evt.status === "completed" && completedUrls.length) {
+        const prompt = evt.prompt || "";
+
+        const label = prompt.slice(0, 20);
+        // 【测试用 TODO】多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
+        // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
+        // 上游正式支持多图后，删除这段 mock 补齐逻辑。
+        // 追加 ?mock=n 区分，避免 URL 完全相同被堆叠卡片 filter(u !== src) 过滤掉导致背景卡不显示。
+        const expectedCount = Number((evt.config as { n?: number } | undefined)?.n) || 0;
+        if (!isVideoNode && expectedCount > 1 && completedUrls.length === 1) {
+          const first = completedUrls[0];
+          const sep = first.includes("?") ? "&" : "?";
+          completedUrls = Array.from({ length: expectedCount }, (_, i) =>
+            i === 0 ? first : `${first}${sep}mock=${i}`);
+        }
+        const firstUrl = completedUrls[0];
+        // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
+        // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
+        const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
+        // 一次性回填：图片 + 多图列表 + 清除生成中状态（遮罩此时才消失）。
+        // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
+        // 异步探测到真实分辨率后再统一回填真实尺寸。
+        useCanvasStore.getState().updateNodeData(nodeId, {
+          src: firstUrl, label,
+          naturalWidth: 0, naturalHeight: 0,
+          lockAspectRatio: true, taskBinding: undefined,
+          source: "generate",
+          // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
+          // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
+          multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,
+          multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
+        }, undefined, { skipHistory: true });
+        markDirtyImmediate();
+        notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
+
+        // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
+        // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；
+        // 失败/节点内容已变更时静默放弃。
+        loadMediaDimensions(firstUrl, isVideoNode).then((dims) => {
+          // effect 卸载后不再写 store（ disposed 只护 reconcile 路径，SSE 路径在此补防）
+          if (disposed) return;
+          if (dims.w <= 0 || dims.h <= 0) return;
+          const s = useCanvasStore.getState();
+          const n = s.nodes.find(x => x.id === nodeId);
+          if (!n) return;
+          if ((n.data as { src?: string }).src !== firstUrl) return;
+          const natural = { naturalWidth: dims.w, naturalHeight: dims.h };
+          const { width, height } = computeNodeSize(dims.w, dims.h);
+          s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true });
+          markDirtyImmediate();
+        });
+        return;
+      }
+
+      // 失败 / 取消 / completed 但无结果（上游未回传 resultText/resultUrls）：
+      // 三种情况都必须清理 taskBinding，否则节点永久停留在「生成中」遮罩，
+      // 且 hasGeneratingNode() 会全局禁用撤销 / 重做，用户只能刷新页面才能恢复。
+      useCanvasStore.getState().updateNodeData(nodeId, {
+        taskBinding: undefined,
+      }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      // 取消是用户主动操作，只清遮罩不弹「生成失败」——误导性通知比没有通知更糟
+      if (evt.status === "cancelled") return;
+      notifyOnce("error", {
+        title: t(
+          evt.status === "completed"
+            ? "generation.failed"
+            : isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"
+        ),
+        description: createElement(TaskErrorDetail, {
+          message: evt.error || evt.errorCode ? resolveTaskError(evt) : t("error.unknown"),
+        }),
+        placement: "bottomRight",
+        duration: 15,
+      });
+    };
+
+    const scanAndConnect = () => {
+      const allNodes = useCanvasStore.getState().nodes;
+      // 清理 notifiedTasksRef：只保留当前节点中仍存在的任务 ID，避免 Set 无界增长
+      const activeTaskIds = new Set<string>();
+      for (const n of allNodes) {
+        const tb = (n.data as MediaGenFields).taskBinding;
+        if (tb?.taskId) activeTaskIds.add(tb.taskId);
+      }
+      for (const id of notifiedTasksRef.current) {
+        if (!activeTaskIds.has(id)) notifiedTasksRef.current.delete(id);
+      }
+      // 任务已从画布消失（节点被删 / taskBinding 被清/换）：这些流已无人消费，
+      // 但服务端会一直推送心跳，必须主动断开，否则连接与内存都挂着。
+      for (const [id, ctrl] of sseCtrlsRef.current) {
+        if (activeTaskIds.has(id)) continue;
+        ctrl.abort();
+        sseCtrlsRef.current.delete(id);
+      }
+      for (const node of allNodes) {
+        const binding = (node.data as MediaGenFields).taskBinding;
+        if (!binding?.taskId) continue;
+        if (binding.status !== "pending" && binding.status !== "processing") continue;
+        if (sseCtrlsRef.current.has(binding.taskId)) continue;
+
+        const taskId = binding.taskId;
+        const nodeId = node.id;
+        const ctrl = new AbortController();
+        sseCtrlsRef.current.set(taskId, ctrl);
+        /** 收尾：先摘表再中断连接。
+         *  只摘表不 abort 的话，未读完的流会一直挂着，且卸载时已无法找到它。 */
+        const finish = () => {
+          sseCtrlsRef.current.delete(taskId);
+          ctrl.abort();
+        };
+
+        (async () => {
+          // 看门狗：连接静默死亡（代理掐流 / 睡眠唤醒 / 网络切换）时 read() 永远挂起，
+          // 任务完成后前台也不知道。30s 无任何字节即断开，交给扫描器重连并取快照。
+          // 连接建立阶段（fetch 未返回）用更宽的 60s 预算，避免慢握手被误杀。
+          let lastDataAt = Date.now();
+          let connected = false;
+          const watchdog = setInterval(() => {
+            const budget = connected ? SSE_WATCHDOG_TIMEOUT_MS : SSE_CONNECT_TIMEOUT_MS;
+            if (Date.now() - lastDataAt > budget) ctrl.abort();
+          }, SSE_WATCHDOG_CHECK_MS);
+          try {
+            const res = await generationApi.streamGenerationTask(taskId, ctrl.signal);
+            // 看门狗从收到响应头起算
+            lastDataAt = Date.now();
+            connected = true;
+            if (!res.ok || !res.body) return;
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              lastDataAt = Date.now();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                try {
+                  const evt = JSON.parse(line.slice(6)) as TaskStatusEvent;
+                  if (isTerminalTaskStatus(evt.status)) {
+                    // 终态：落地后直接退出（服务端推完即关流）
+                    handleTerminal(nodeId, taskId, evt);
+                    return;
+                  }
+                } catch {}
+              }
+            }
+          } catch { /* SSE 断开：扫描器稍后重连取快照 */ }
+          finally {
+            clearInterval(watchdog);
+            finish();
+          }
+        })();
+      }
+    };
+
+    // 对账兜底：页面重新可见 / 网络恢复时，按 DB 批量查询生成中任务的真实状态。
+    // SSE 推送全部丢失（连接挂死期间任务完成、token 过期等）时，这是唯一能收敛状态的路径。
+    const reconcile = async () => {
+      const nodes = useCanvasStore.getState().nodes;
+      const watching: { nodeId: string; taskId: string }[] = [];
+      for (const n of nodes) {
+        const b = (n.data as MediaGenFields).taskBinding;
+        if (b?.taskId && (b.status === "pending" || b.status === "processing")) {
+          watching.push({ nodeId: n.id, taskId: b.taskId });
+        }
+      }
+      if (watching.length === 0) return;
+      try {
+        // 服务端单次查询上限 100：超出的 id 分批并行请求后合并。
+        // 单块失败只跳过该块——SSE 已死的场景下对账是唯一恢复路径，
+        // 一次瞬时 502 不能把已拿到的其余块结果一并丢掉。
+        const ids = [...new Set(watching.map(w => w.taskId))];
+        const byId = new Map<string, TaskStatusEvent>();
+        const chunkResults = await Promise.allSettled(
+          Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) =>
+            generationApi.fetchTasksStatus(ids.slice(i * 100, (i + 1) * 100))
+          )
+        );
+        if (disposed) return;
+        for (const chunk of chunkResults) {
+          if (chunk.status !== "fulfilled") continue;
+          const res = chunk.value;
+          if (res.code >= 400 || !Array.isArray(res.data)) continue;
+          for (const t of res.data) {
+            byId.set(t.taskId, t);
+          }
+        }
+        for (const { nodeId, taskId } of watching) {
+          const evt = byId.get(taskId);
+          if (evt && isTerminalTaskStatus(evt.status)) {
+            handleTerminal(nodeId, taskId, evt);
+          }
+        }
+      } catch { /* 网络不可达：等下次对账 */ }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reconcile();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", reconcile);
+    cleanupListeners = () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", reconcile);
+    };
+
+    scanAndConnect();
+    timer = setInterval(scanAndConnect, 3000);
 
     return () => {
-      cancelled = true;
+      disposed = true;
       if (timer) clearInterval(timer);
+      cleanupListeners?.();
       for (const ctrl of sseCtrlsRef.current.values()) ctrl.abort();
       sseCtrlsRef.current.clear();
     };
