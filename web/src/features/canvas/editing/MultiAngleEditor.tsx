@@ -439,7 +439,7 @@ export default function MultiAngleEditor({ src, sourceId, onClose }: Props) {
             >
               {t("angle.reset")}
             </button>
-            <PrimaryActionButton size="lg" />
+            <PrimaryActionButton />
           </div>
         </div>
       </WheelGuard>

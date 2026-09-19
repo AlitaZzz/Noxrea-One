@@ -1,7 +1,7 @@
 /**
- * 编辑工具栏共用的「确认」按钮：反色 ↑ 箭头，无 hover 变色（仅亮度提升）。
- * 片段截取 / 变速 / 标注 / 裁剪 / 视频画面裁剪工具栏与多角度、光照弹窗共用，
- * 避免样式漂移。
+ * 主操作按钮（PrimaryActionButton）：反色 ↑ 箭头，无 hover 变色（仅亮度提升）。
+ * 统一「向上提交主操作」的视觉语言：编辑工具栏 = 应用/确认，生成面板 = 生成。
+ * 片段截取 / 变速 / 标注 / 裁剪 / 视频画面裁剪 / 多角度 / 光照共用，避免样式漂移。
  */
 "use client";
 
@@ -12,26 +12,18 @@ interface PrimaryActionButtonProps {
   disabled?: boolean;
   /** 处理中：图标切换为 loading spinner */
   loading?: boolean;
-  /** sm = 32px 方圆角（编辑工具栏默认）；lg = 36px 全圆（弹窗底部主操作） */
-  size?: "sm" | "lg";
 }
 
-const SIZE_CLASS: Record<NonNullable<PrimaryActionButtonProps["size"]>, string> = {
-  sm: "h-8 w-8 rounded-lg",
-  lg: "h-9 w-9 rounded-full",
-};
-
-export default function PrimaryActionButton({ onClick, disabled, loading = false, size = "sm" }: PrimaryActionButtonProps) {
-  const iconSize = size === "lg" ? 16 : 14;
+export default function PrimaryActionButton({ onClick, disabled, loading = false }: PrimaryActionButtonProps) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex cursor-pointer items-center justify-center transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 ${SIZE_CLASS[size]}`}
+      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
       style={{ background: "var(--canvas-text)", color: "var(--canvas-bg)" }}
     >
-      {loading ? <LoadingOutlined style={{ fontSize: iconSize }} /> : <ArrowUpOutlined style={{ fontSize: iconSize }} />}
+      {loading ? <LoadingOutlined style={{ fontSize: 14 }} /> : <ArrowUpOutlined style={{ fontSize: 14 }} />}
     </button>
   );
 }

@@ -506,7 +506,7 @@ export default function LightingPanel({ src, onClose }: Props) {
             >
               {t("lighting.reset")}
             </button>
-            <PrimaryActionButton size="lg" />
+            <PrimaryActionButton />
           </div>
         </div>
       </WheelGuard>
