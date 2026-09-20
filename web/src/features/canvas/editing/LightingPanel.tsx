@@ -204,7 +204,7 @@ export default function LightingPanel({ src, onClose }: Props) {
                   if (Number.isFinite(v)) update("intensity", Math.max(10, Math.min(100, Math.round(v))));
                 }}
               />
-              <span className="shrink-0 text-[11px]" style={{ color: "var(--canvas-text-dim)" }}>%</span>
+              <span className="shrink-0 text-xs" style={{ color: "var(--canvas-text-dim)" }}>%</span>
             </div>
           </div>
 

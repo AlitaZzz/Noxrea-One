@@ -258,7 +258,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-        <span className="text-[11px] font-medium text-center" style={{ color: "var(--canvas-text-dim)", minWidth: 70 }}>
+        <span className="text-xs font-medium text-center" style={{ color: "var(--canvas-text-dim)", minWidth: 70 }}>
           {cropW} × {cropH}
         </span>
 

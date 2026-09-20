@@ -57,7 +57,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={
           <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
-            <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>
+            <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
               {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
             </div>
             {nodeOptions.map((opt) => {

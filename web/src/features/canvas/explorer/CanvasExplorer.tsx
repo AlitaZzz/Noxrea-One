@@ -537,7 +537,7 @@ function AssetsView() {
           styles={{ container: { padding: 0, background: "transparent" } }}
           content={
             <div className="menu-popover asset-filter-popover">
-              <div style={{ padding: "2px 12px 4px", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
+              <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
               {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
                 <label key={st.key} className="filter-row">
                   <Checkbox
