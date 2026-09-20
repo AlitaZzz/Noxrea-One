@@ -95,9 +95,10 @@ export function directorTheme() {
         ...NEUTRAL_OUTLINE,
       },
       Slider: {
+        // 实心白柄：lineWidth 0 去掉描边圈，内芯填白由 globals.css 的 ant-slider 覆盖补齐
         trackBg: NEUTRAL_FILL, trackHoverBg: NEUTRAL_FILL, railBg: "#3b3b42", railHoverBg: "#474750",
         handleColor: NEUTRAL_FILL, handleActiveColor: NEUTRAL_FILL, dotActiveBorderColor: NEUTRAL_FILL,
-        handleSizeHover: 10, handleSize: 10, railSize: 2, ...NEUTRAL_DARK,
+        handleSize: 12, handleSizeHover: 12, handleLineWidth: 0, handleLineWidthHover: 0, railSize: 4, ...NEUTRAL_DARK,
       },
       Segmented: { trackBg: "#26262b", itemSelectedBg: "#26262b", itemSelectedColor: NEUTRAL_FILL },
       Switch: { handleBg: "#0c0c0e", colorPrimary: NEUTRAL_FILL, colorPrimaryHover: NEUTRAL_FILL },

@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +15,7 @@ import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
+import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
@@ -540,24 +541,11 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             ))}
           />
           <div className="flex-1" />
-          <Button
-            size="small"
-            type="text"
-            className="flex items-center justify-center rounded-full flex-shrink-0 transition-all"
-            style={{
-              width: 36,
-              height: 36,
-              background: isGenerating ? "#e74c3c" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-border)" : "var(--canvas-text)",
-              color: isGenerating ? "#fff" : ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
-              border: "none",
-              cursor: !isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) ? "not-allowed" : "pointer",
-              opacity: (!prompt.trim() && upstreamTexts.length === 0 || !modelKey) && !isGenerating ? 0.5 : 1,
-            }}
+          <PrimaryActionButton
+            cancel={isGenerating}
             disabled={!isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
             onClick={isGenerating ? handleCancel : handleGenerate}
-          >
-            {isGenerating ? <CloseOutlined style={{ fontSize: 16 }} /> : <ArrowUpOutlined style={{ fontSize: 16 }} />}
-          </Button>
+          />
         </div>
       </WheelGuard>
     </>

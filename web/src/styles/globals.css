@@ -1175,19 +1175,14 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 .gen-panel-btn { height: 36px; border-radius: 8px; padding: 0 12px; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
 
+/* antd 滑块内芯默认取 colorBgElevated（深色主题下呈黑芯白圈），
+   统一填白成实心圆点；描边圈已在 theme.ts 的 Slider token 里置 0 */
+.ant-slider .ant-slider-handle::after {
+  background: var(--canvas-solid, #fff);
+}
+
 /* ── 图片打光面板（LightingPanel） ── */
 /* 档位滑杆：填充色由内联 background 渐变按当前档位驱动 */
-.light-panel-slider {
-  -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-  border-radius: 2px; outline: none;
-}
-.light-panel-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
-  background: var(--canvas-text); cursor: pointer; border: none; box-shadow: 0 1px 3px rgba(0,0,0,.3);
-}
-.light-panel-slider::-moz-range-thumb {
-  width: 13px; height: 13px; border-radius: 50%; background: var(--canvas-text); cursor: pointer; border: none;
-}
 /* 亮度百分比输入（亮度组合框内，隐藏原生箭头） */
 .light-panel-pct-input {
   width: 30px; background: transparent; border: none; outline: none; color: var(--canvas-text);
