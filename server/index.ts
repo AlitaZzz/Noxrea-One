@@ -8,7 +8,7 @@
 import { bootstrap } from "@server/core/bootstrap";
 import { workerLoop } from "@server/services/worker/loop";
 import { prisma } from "@server/core/database/client";
-import { taskWatcher } from "@server/core/events/task-watcher";
+import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
 import { getConfig } from "@server/core/config";

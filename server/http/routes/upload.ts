@@ -3,7 +3,7 @@
  * 处理 multipart 文件上传，完成哈希校验、落盘与文件对象持久化。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { getConfig } from "@server/core/config";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";

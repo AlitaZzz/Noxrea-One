@@ -1,5 +1,5 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonArray } from "./_json";
+import { stringifyJson, parseJsonArray } from "./json-column";
 /**
  * Agent 会话 CRUD。
  * 管理按画布工程隔离的 Agent 会话与消息的创建与读取。

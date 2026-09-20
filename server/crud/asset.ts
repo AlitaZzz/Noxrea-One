@@ -5,12 +5,12 @@
  */
 import { Prisma, type AssetItem as AssetItemModel } from "@prisma/client";
 import { prisma } from "@server/core/database/client";
-import { extractHashFromUrl } from "@server/utils/extract-hashes";
+import { extractHashFromUrl } from "@server/services/canvas/extract-hashes";
 import {
   replaceSourceFileRefs,
   removeSourceFileRefsBatch,
 } from "@server/services/storage/file-ref-ledger";
-import { stringifyJson, parseJsonArray } from "./_json";
+import { stringifyJson, parseJsonArray } from "./json-column";
 
 type TransactionClient = Prisma.TransactionClient;
 

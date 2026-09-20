@@ -4,7 +4,7 @@
  */
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import {
   ASSET_BATCH_LIMIT,
   folderCreateSchema,

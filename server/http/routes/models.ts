@@ -3,7 +3,7 @@
  * 提供模型列表查询与按能力过滤等接口，含跨域模型代理转发。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { getProvider } from "@server/crud/model-config";

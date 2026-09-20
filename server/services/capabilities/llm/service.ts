@@ -17,7 +17,7 @@ import { logEvent } from "@server/core/logger/utils";
 import {
   GenerationFailureError,
   extractUpstreamMessage,
-} from "@server/core/errors/task-failure";
+} from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 /**

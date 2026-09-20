@@ -7,7 +7,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import {
   extractAudioTrack,
   extractMutedVideo,

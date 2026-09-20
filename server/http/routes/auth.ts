@@ -3,7 +3,7 @@
  * 处理登录、注册、个人信息更新与登出等鉴权接口。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
 import { getUserByUsername, getUserById, updateUser, createUser } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";

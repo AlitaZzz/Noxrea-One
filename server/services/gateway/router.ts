@@ -5,7 +5,7 @@
  */
 
 import { getCapability } from "@server/services/capabilities/base";
-import { GenerationFailureError } from "@server/core/errors/task-failure";
+import { GenerationFailureError } from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 export interface RouteContext {

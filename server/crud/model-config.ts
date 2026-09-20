@@ -3,7 +3,7 @@
  * 管理 API 供应商、模型能力与配置项的读写，并处理配置 JSON 字段的反序列化。
  */
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonArray } from "./_json";
+import { stringifyJson, parseJsonArray } from "./json-column";
 
 function deserializeProvider<T extends { models: Array<{ capabilities: unknown }> }>(ch: T) {
   return {

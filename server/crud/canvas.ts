@@ -4,12 +4,12 @@
  */
 import { prisma } from "@server/core/database/client";
 import { newId } from "@server/utils/id";
-import { extractHashCountsFromCanvas } from "@server/utils/extract-hashes";
+import { extractHashCountsFromCanvas } from "@server/services/canvas/extract-hashes";
 import {
   replaceSourceFileRefs,
   removeSourceFileRefs,
 } from "@server/services/storage/file-ref-ledger";
-import { stringifyJson, parseJsonObject } from "./_json";
+import { stringifyJson, parseJsonObject } from "./json-column";
 
 /** 画布版本冲突错误；currentRevision 帮助前端同步到服务端最新版本。 */
 export class CanvasRevisionConflictError extends Error {

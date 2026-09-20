@@ -5,7 +5,7 @@
  */
 import { EventEmitter } from "node:events";
 
-import type { TerminalTaskState } from "./task-watcher";
+import type { TerminalTaskState } from "./watcher";
 
 const TASK_TERMINAL_EVENT = "task:terminal";
 

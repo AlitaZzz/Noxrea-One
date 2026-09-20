@@ -7,7 +7,7 @@ import { getConfig } from "@server/core/config";
 import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
-import { extractUpstreamMessage } from "@server/core/errors/task-failure";
+import { extractUpstreamMessage } from "@server/services/tasks/failure";
 import {
   markTaskProcessing,
   isTaskCancelled,
