@@ -42,10 +42,6 @@ const DEFAULT_STATE: LightingState = {
   elevation: 0,
 };
 
-// 档位(0-4) ↔ 亮度百分比(10-100) 双向映射：10/33/55/78/100
-const levelToPct = (level: number) => Math.round(10 + level * 22.5);
-const pctToLevel = (pct: number) => Math.max(0, Math.min(4, Math.round(((pct - 10) / 90) * 4)));
-
 // 色温(K) → RGB hex：Tanner Helland 近似公式，2000K 暖橙 → 10000K 冷蓝
 function kelvinToHex(kelvin: number): string {
   const t = kelvin / 100;
@@ -118,7 +114,6 @@ export default function LightingPanel({ src, onClose }: Props) {
     });
   }, []);
 
-  const level = pctToLevel(state.intensity);
   const activeDir = DIRECTION_ORDER.find(
     (d) =>
       Math.abs(DIRECTIONS[d].azimuth - state.azimuth) < 3 &&
@@ -182,11 +177,11 @@ export default function LightingPanel({ src, onClose }: Props) {
             <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
             <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
               <Slider
-                min={0}
-                max={4}
+                min={10}
+                max={100}
                 step={1}
-                value={level}
-                onChange={(v) => update("intensity", levelToPct(Number(v)))}
+                value={state.intensity}
+                onChange={(v) => update("intensity", Number(v))}
                 className="min-w-0 flex-1"
                 style={{ margin: 0 }}
                 tooltip={{ open: false }}
@@ -197,11 +192,20 @@ export default function LightingPanel({ src, onClose }: Props) {
                 type="number"
                 min={10}
                 max={100}
+                step={1}
                 value={state.intensity}
                 className="light-panel-pct-input shrink-0"
+                // 输入中间态（如打 "55" 时的 "5"）不能立即钳位，否则每次按键都被夹成 10/100；
+                // 只在值合法时提交，非法中间态留在 DOM，失焦时统一钳位回写
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (Number.isFinite(v)) update("intensity", Math.max(10, Math.min(100, Math.round(v))));
+                  if (Number.isFinite(v) && v >= 10 && v <= 100) update("intensity", Math.round(v));
+                }}
+                onBlur={(e) => {
+                  const v = Number(e.target.value);
+                  const clamped = Number.isFinite(v) ? Math.max(10, Math.min(100, Math.round(v))) : state.intensity;
+                  e.target.value = String(clamped);
+                  update("intensity", clamped);
                 }}
               />
               <span className="shrink-0 text-xs" style={{ color: "var(--canvas-text-dim)" }}>%</span>
@@ -250,9 +254,18 @@ export default function LightingPanel({ src, onClose }: Props) {
                     max={KELVIN_MAX}
                     value={kelvin}
                     className="light-panel-temp-input shrink-0"
+                    // 同亮度输入：中间态不钳位，失焦统一归一并回写
                     onChange={(e) => {
                       const v = Number(e.target.value);
-                      if (Number.isFinite(v)) handleKelvin(Math.max(KELVIN_MIN, Math.min(KELVIN_MAX, Math.round(v))));
+                      if (Number.isFinite(v) && v >= KELVIN_MIN && v <= KELVIN_MAX) handleKelvin(Math.round(v));
+                    }}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value);
+                      const clamped = Number.isFinite(v)
+                        ? Math.max(KELVIN_MIN, Math.min(KELVIN_MAX, Math.round(v)))
+                        : kelvin;
+                      e.target.value = String(clamped);
+                      handleKelvin(clamped);
                     }}
                   />
                   <span className="shrink-0 text-[13px]" style={{ color: "var(--canvas-text-muted)" }}>K</span>
