@@ -16,6 +16,7 @@ import {
 import { ok, failCode } from "@server/core/response";
 import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
+import { renderLightingTemplate } from "@server/services/lighting-prompt";
 
 const router = new Hono();
 
@@ -26,6 +27,8 @@ function loadPromptTemplates(): Record<string, string> {
 
 // GET /api/canvas/prompt-template?type=reverse
 // 返回指定类型的提示词模板（模板库由后端下发，支持修改配置热更新）。
+// lighting 类型额外支持 {{占位符}}：按 query 参数（intensity/azimuth/elevation/kelvin/color）
+// 插值成成稿提示词，语义翻译见 services/lighting-prompt；其余类型为静态文案。
 router.get("/api/canvas/prompt-template", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -38,7 +41,8 @@ router.get("/api/canvas/prompt-template", async (c) => {
   const template = templates[type];
   if (template === undefined) return failCode(404, "canvas.template_not_found", { type });
 
-  return c.json(ok({ type, template }));
+  const rendered = type === "lighting" ? renderLightingTemplate(template, c.req.query()) : template;
+  return c.json(ok({ type, template: rendered }));
 });
 
 router.get("/api/canvas/projects", async (c) => {

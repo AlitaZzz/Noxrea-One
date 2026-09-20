@@ -404,6 +404,7 @@
     "colorTemp": "Temp",
     "mainDirection": "Main Light",
     "reset": "Reset",
+    "generateFailed": "Failed to build prompt. Please retry.",
     "view": {
       "perspective": "3D",
       "front": "Front"

@@ -1,18 +1,23 @@
 /**
  * 图片打光参数面板（悬浮于节点下方，不随画布缩放）。
  * 左侧 three.js 三维预览（透视/正面双视角，拖拽调光源方位/仰角），
- * 右侧亮度（档位滑杆 + 数值框联动）、颜色、主光源六向预设。
- * 输出的是打光描述参数而非像素结果，交由生成链路使用。
+ * 右侧亮度（滑杆 + 数值框联动，10-100）、颜色、主光源六向预设。
+ * 点生成后参数交由后端 lighting 模板插值成提示词，派生图片节点预填（链路同「创作」）。
  */
 "use client";
 
-import { Button, ColorPicker, Slider } from "antd";
+import { App, Button, ColorPicker, Slider } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
 import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
 import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
+import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
+import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { ImageNodeData } from "@/features/canvas/types";
+import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
 
 import LightingScene3D, { type LightViewMode } from "./LightingScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
@@ -65,16 +70,20 @@ const KELVIN_MAX = 10000;
 
 interface Props {
   src: string;
+  /** 源图片节点 id：点生成时据此定位派生位置并建立连线（连线即参考图来源） */
+  nodeId: string;
   onClose: () => void;
 }
 
-export default function LightingPanel({ src, onClose }: Props) {
+export default function LightingPanel({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
+  const { notification } = App.useApp();
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);
   const [viewMode, setViewMode] = useState<LightViewMode>("perspective");
   const [colorTab, setColorTab] = useState<"temp" | "custom">("temp");
   const [kelvin, setKelvin] = useState(6500);
+  const [submitting, setSubmitting] = useState(false);
 
   // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
   useEffect(() => {
@@ -113,6 +122,43 @@ export default function LightingPanel({ src, onClose }: Props) {
       return { ...prev, azimuth: Math.round(az), elevation: Math.round(el) };
     });
   }, []);
+
+  // 生成：参数交由后台提示词模板（type=lighting）插值成稿，派生图片节点预填 prompt，
+  // 链路与图片节点「创作」一致（createImageNode + createEdge，连线即参考图来源）。
+  // 前端不做语义翻译，只传原始参数：intensity/azimuth/elevation + kelvin（色温）或 color（自定义色）。
+  const handleGenerate = useCallback(async () => {
+    if (!src || submitting) return;
+    setSubmitting(true);
+    try {
+      const template = await getPromptTemplate("lighting", {
+        intensity: state.intensity,
+        azimuth: state.azimuth,
+        elevation: state.elevation,
+        ...(colorTab === "temp" ? { kelvin } : { color: state.color }),
+      });
+      if (!template) {
+        notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight" });
+        return;
+      }
+      const source = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      if (!source) return;
+      const nodeWidth = (source.style?.width as number) || DEFAULT_NODE_WIDTH;
+      const position = { x: source.position.x + nodeWidth + 48, y: source.position.y };
+      const imageNode = createImageNode(position);
+      imageNode.data = {
+        ...imageNode.data,
+        genSettings: { ...(imageNode.data.genSettings || { prompt: "" }), prompt: template } as ImageNodeData["genSettings"],
+      };
+      const edge = createEdge(nodeId, imageNode.id);
+      const store = useCanvasStore.getState();
+      store.addNodes([imageNode]);
+      store.setEdges([...store.edges, edge]);
+      markDirtyImmediate();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }, [src, nodeId, state, colorTab, kelvin, submitting, notification, t, onClose]);
 
   const activeDir = DIRECTION_ORDER.find(
     (d) =>
@@ -318,7 +364,7 @@ export default function LightingPanel({ src, onClose }: Props) {
           <ResetIcon style={{ width: 13, height: 13 }} />
           {t("lighting.reset")}
         </button>
-        <PrimaryActionButton />
+        <PrimaryActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
       </div>
     </div>
   );

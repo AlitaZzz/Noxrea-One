@@ -403,6 +403,7 @@
     "colorTemp": "色温",
     "mainDirection": "主光源",
     "reset": "重置参数",
+    "generateFailed": "生成提示词失败，请重试",
     "view": {
       "perspective": "透视",
       "front": "正面"
