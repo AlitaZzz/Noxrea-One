@@ -1260,6 +1260,7 @@ export default function InfiniteCanvas() {
             <LightingPanel
               key={lightingNode.id}
               src={(lightingNode.data as ImageNodeData).src ?? ""}
+              nodeId={lightingNode.id}
               onClose={() => useCanvasStore.getState().setLightingNodeId(null)}
             />
           </RfNodeToolbar>
