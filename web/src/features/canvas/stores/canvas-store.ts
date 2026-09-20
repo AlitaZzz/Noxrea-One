@@ -143,6 +143,9 @@ interface CanvasState {
   // 图片节点多图展开态（hides node toolbar；展开网格自带下载/设主图/收起入口）
   multiExpandedNodeId: string | null;
   setMultiExpandedNodeId: (id: string | null) => void;
+  // 图片打光模式（hides node toolbar；面板经 RfNodeToolbar 悬浮于节点下方）
+  lightingNodeId: string | null;
+  setLightingNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -290,6 +293,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setAudioClipNodeId: (id) => set({ audioClipNodeId: id }),
   multiExpandedNodeId: null,
   setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
+  lightingNodeId: null,
+  setLightingNodeId: (id) => set({ lightingNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),

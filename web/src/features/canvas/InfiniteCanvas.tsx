@@ -55,6 +55,7 @@ import SelectionFrameHandles from "@/features/canvas/controls/SelectionFrameHand
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
+import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
@@ -128,6 +129,7 @@ export default function InfiniteCanvas() {
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
   const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
   const clipCaptureNodeId = useCanvasStore((s) => s.clipCaptureNodeId);
+  const lightingNodeId = useCanvasStore((s) => s.lightingNodeId);
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
@@ -226,9 +228,9 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId, setRfViewport]);
 
-  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取）激活的节点：生成面板必须让位，
+  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId;
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId;
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -289,6 +291,15 @@ export default function InfiniteCanvas() {
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
     return n;
   }, [clipCaptureNodeId, nodes]);
+
+  // 打光面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
+  const lightingNode = useMemo(() => {
+    if (!lightingNodeId) return null;
+    const n = nodes.find((x) => x.id === lightingNodeId);
+    if (!n || n.type !== NODE_TYPE.IMAGE || !n.selected) return null;
+    if (!(n.data as ImageNodeData).src) return null;
+    return n;
+  }, [lightingNodeId, nodes]);
 
   // 音频片段截取的宿主节点校验：类型不再是音频/已取消选中时退出截取模式
   useEffect(() => {
@@ -760,6 +771,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setFrameCaptureNodeId(null);
     useCanvasStore.getState().setClipCaptureNodeId(null);
     useCanvasStore.getState().setAudioClipNodeId(null);
+    useCanvasStore.getState().setLightingNodeId(null);
     useCanvasStore.getState().setMultiExpandedNodeId(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
@@ -826,6 +838,10 @@ export default function InfiniteCanvas() {
       const currentAudioClip = useCanvasStore.getState().audioClipNodeId;
       if (currentAudioClip && currentAudioClip !== nodeId) {
         useCanvasStore.getState().setAudioClipNodeId(null);
+      }
+      const currentLighting = useCanvasStore.getState().lightingNodeId;
+      if (currentLighting && currentLighting !== nodeId) {
+        useCanvasStore.getState().setLightingNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -1238,6 +1254,17 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
+        {/* 图片打光面板 — 跟随选中图片节点，不随画布缩放，尺寸恒定 */}
+        {lightingNode && (
+          <RfNodeToolbar nodeId={lightingNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+            <LightingPanel
+              key={lightingNode.id}
+              src={(lightingNode.data as ImageNodeData).src ?? ""}
+              onClose={() => useCanvasStore.getState().setLightingNodeId(null)}
+            />
+          </RfNodeToolbar>
+        )}
+
         {/* 音频片段截取：选区直接叠加在音频节点自身的波形上（AudioWaveform clipMode），
             无浮层面板；audioClipNodeId 仅承担互斥/键盘作用域/工具栏隐藏 */}
 
@@ -1246,7 +1273,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || lightingNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
@@ -1257,6 +1284,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
+                  useCanvasStore.getState().setLightingNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(id);
                 }}
                 onOpenClipStrip={(id) => {
@@ -1264,6 +1292,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
+                  useCanvasStore.getState().setLightingNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(id);
                 }}
                 onOpenAudioClip={(id) => {
@@ -1271,7 +1300,16 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setCroppingNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
+                  useCanvasStore.getState().setLightingNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(id);
+                }}
+                onOpenLighting={(id) => {
+                  useCanvasStore.getState().setAnnotatingNodeId(null);
+                  useCanvasStore.getState().setCroppingNodeId(null);
+                  useCanvasStore.getState().setFrameCaptureNodeId(null);
+                  useCanvasStore.getState().setClipCaptureNodeId(null);
+                  useCanvasStore.getState().setAudioClipNodeId(null);
+                  useCanvasStore.getState().setLightingNodeId(id);
                 }}
               />
             )}

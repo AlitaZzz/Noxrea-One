@@ -584,6 +584,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             s.setFrameCaptureNodeId(null);
             s.setClipCaptureNodeId(null);
             s.setAudioClipNodeId(null);
+            s.setLightingNodeId(null);
             s.setCroppingNodeId(id);
           }
           break;

@@ -397,15 +397,17 @@
     "reset": "Reset"
   },
   "lighting": {
-    "title": "Light",
+    "title": "Lighting",
     "global": "Global",
-    "smartMode": "Smart Mode",
     "intensity": "Intensity",
     "color": "Color",
-    "mainDirection": "Main Light Direction",
-    "rimLight": "Rim Light",
+    "colorTemp": "Temp",
+    "mainDirection": "Main Light",
     "reset": "Reset",
-    "dragHint": "↖ drag to move light",
+    "view": {
+      "perspective": "3D",
+      "front": "Front"
+    },
     "dir": {
       "left": "Left",
       "top": "Top",

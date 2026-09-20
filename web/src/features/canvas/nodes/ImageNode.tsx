@@ -23,7 +23,6 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
-import LightingPanel from "@/features/canvas/editing/LightingPanel";
 import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
@@ -89,7 +88,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const cropOpen = croppingNodeId === id;
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
-  const [lightingOpen, setLightingOpen] = useState(false);
   // annotateOpen is driven by the store's annotatingNodeId so that clicking
   // other nodes or the pane can close annotation mode externally.
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
@@ -352,16 +350,18 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 编辑面板全局互斥：任一入口进入编辑，先关闭其它所有编辑态
       const closeOtherEditors = () => {
         const s = useCanvasStore.getState();
+        s.setAnnotatingNodeId(null);
+        s.setCroppingNodeId(null);
         s.setFrameCaptureNodeId(null);
         s.setClipCaptureNodeId(null);
         s.setAudioClipNodeId(null);
+        s.setLightingNodeId(null);
       };
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
         case "crop-interactive": if (src) { closeOtherEditors(); setCroppingNodeId(id); } break;
-        case "angle-editor": if (src) setAngleEditorOpen(true); break;
-        case "lighting": if (src) setLightingOpen(true); break;
+        case "angle-editor": if (src) { closeOtherEditors(); setAngleEditorOpen(true); } break;
         case "annotate": if (src) { closeOtherEditors(); setAnnotateOpen(true); } break;
         case "panorama": if (src) { closeOtherEditors(); setPanoramaOpen(true); } break;
         case "preview-fullscreen": a.openPreview(); break;
@@ -599,10 +599,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     </div>
     {angleEditorOpen && src && createPortal(
       <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
-      document.body
-    )}
-    {lightingOpen && src && createPortal(
-      <LightingPanel src={src} onClose={() => setLightingOpen(false)} />,
       document.body
     )}
     {previewOpen && createPortal(
