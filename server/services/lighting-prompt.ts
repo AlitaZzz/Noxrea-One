@@ -31,11 +31,11 @@ function directionWord(azimuth: number, elevation: number): string {
 
 // 仰角(-90~90) → 光线照射角度描述（与 directionWord 的区间一致，互相印证不矛盾）
 function elevationWord(elevation: number): string {
-  if (elevation >= 60) return "自正上方垂直向下照射";
-  if (elevation > 15) return "斜向下照射";
-  if (elevation >= -15) return "接近水平地照射";
-  if (elevation > -60) return "斜向上照射";
-  return "自正下方垂直向上照射";
+  if (elevation >= 60) return "自画面正上方垂直向下照射";
+  if (elevation > 15) return "自上方斜向下照射画面";
+  if (elevation >= -15) return "沿接近画面水平的方向照射";
+  if (elevation > -60) return "自下方斜向上照射画面";
+  return "自画面正下方垂直向上照射";
 }
 
 // 色温(K) → 色光描述（经验分段，覆盖面板 1500-10000 的调节范围）
@@ -76,7 +76,8 @@ export function renderLightingTemplate(template: string, query: Record<string, s
     direction: directionWord(azimuth, elevation),
     elevation: elevationWord(elevation),
     color: colorWord,
-    strength: strengthWord(intensity),
+    // 描述词后括注原始百分比，与色光的括注风格一致，便于模型和用户核对
+    strength: `${strengthWord(intensity)}（约 ${intensity}%）`,
   };
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
 }
