@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { Button, ColorPicker } from "antd";
+import { Button, ColorPicker, Slider } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -181,17 +181,15 @@ export default function LightingPanel({ src, onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
             <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <input
-                type="range"
+              <Slider
                 min={0}
                 max={4}
                 step={1}
                 value={level}
-                className="light-panel-slider min-w-0 flex-1"
-                style={{
-                  background: `linear-gradient(to right, var(--canvas-text) 0%, var(--canvas-text) ${(level / 4) * 100}%, var(--canvas-bg) ${(level / 4) * 100}%)`,
-                }}
-                onChange={(e) => update("intensity", levelToPct(Number(e.target.value)))}
+                onChange={(v) => update("intensity", levelToPct(Number(v)))}
+                className="min-w-0 flex-1"
+                style={{ margin: 0 }}
+                tooltip={{ open: false }}
               />
               <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
               <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--canvas-text-dim)" }} />
@@ -232,15 +230,17 @@ export default function LightingPanel({ src, onClose }: Props) {
             <div className="flex h-9 items-center">
               {colorTab === "temp" ? (
                 <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-                  <input
-                    type="range"
+                  <Slider
                     min={KELVIN_MIN}
                     max={KELVIN_MAX}
                     step={100}
                     value={kelvin}
-                    className="light-panel-slider min-w-0 flex-1"
-                    style={{ background: "linear-gradient(to right, #FFB253, #3499FF)" }}
-                    onChange={(e) => handleKelvin(Number(e.target.value))}
+                    onChange={(v) => handleKelvin(Number(v))}
+                    className="min-w-0 flex-1"
+                    style={{ margin: 0 }}
+                    tooltip={{ open: false }}
+                    // 色温带：渐变铺满整条轨道（rail），已填充段透明保持色带完整可见
+                    styles={{ rail: { background: "linear-gradient(to right, #FFB253, #3499FF)" }, track: { background: "transparent" } }}
                   />
                   <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
                   <ThermometerIcon className="size-4 shrink-0" style={{ color: "var(--canvas-text-dim)" }} />

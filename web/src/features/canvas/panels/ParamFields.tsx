@@ -109,9 +109,9 @@ function FieldControl({
             max={max}
             step={step}
             value={num}
-            onChange={(v) => onChange(v)}
-            style={{ flex: 1 }}
-            tooltip={{ formatter: (v) => `${v}${unitKey ? t(unitKey) : ""}` }}
+            onChange={(v) => onChange(Number(v))}
+            style={{ flex: 1, margin: 0 }}
+            tooltip={{ open: false }}
           />
           <div className="flex items-center rounded-md" style={{
             background: "var(--canvas-bg-active, #33333a)",
