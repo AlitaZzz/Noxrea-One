@@ -1174,6 +1174,67 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
    否则文字贴边。宽度一律不固定，随内容自适应。 */
 .gen-panel-btn { height: 36px; border-radius: 8px; padding: 0 12px; }
 .canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
+
+/* ── 图片打光面板（LightingPanel） ── */
+/* 档位滑杆：填充色由内联 background 渐变按当前档位驱动 */
+.light-panel-slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+  border-radius: 2px; outline: none;
+}
+.light-panel-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--canvas-text); cursor: pointer; border: none; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.light-panel-slider::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 50%; background: var(--canvas-text); cursor: pointer; border: none;
+}
+/* 亮度百分比输入（亮度组合框内，隐藏原生箭头） */
+.light-panel-pct-input {
+  width: 30px; background: transparent; border: none; outline: none; color: var(--canvas-text);
+  font-size: 12px; text-align: right; padding: 0;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.light-panel-pct-input::-webkit-inner-spin-button,
+.light-panel-pct-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* 色温输入框（温标组合框内，隐藏原生箭头） */
+.light-panel-temp-input {
+  width: 44px; background: transparent; border: none; outline: none;
+  color: var(--canvas-text); font-size: 13px; text-align: right; padding: 0;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.light-panel-temp-input::-webkit-inner-spin-button,
+.light-panel-temp-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* 透视/正面 视角切换 pill：占满预览列宽，两段等宽 */
+.light-panel-view-toggle {
+  display: flex; width: 100%; padding: 2px; gap: 2px;
+  background: var(--canvas-bg-hover); border: 1px solid var(--canvas-border); border-radius: 8px;
+}
+.light-panel-view-opt {
+  flex: 1; padding: 3px 0; font-size: 12px; text-align: center; border: none; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--canvas-text-dim); transition: background .15s, color .15s;
+}
+.light-panel-view-opt.active {
+  background: var(--canvas-text); color: var(--canvas-bg);
+}
+/* 主光源方向按钮：骨架与 API 设置能力筛选 chip（.cap-chip）一致，
+   选中态保留白底反色以强调当前方位 */
+.light-panel-dir-btn {
+  height: 26px; padding: 0; font-size: 12px; border-radius: 7px; cursor: pointer;
+  border: none; background: transparent; color: var(--canvas-text-dim);
+  transition: background .15s, color .15s;
+}
+.light-panel-dir-btn:hover { background: var(--canvas-bg-active); color: var(--canvas-text); }
+.light-panel-dir-btn.active { background: var(--canvas-text); color: var(--canvas-bg); }
+/* 颜色区 色温/颜色 迷你选项卡：占满列宽，两段等分（与视角切换 pill 同构） */
+.light-panel-mini-tabs {
+  display: flex; width: 100%; gap: 2px; padding: 2px;
+  background: var(--canvas-bg-hover); border: 1px solid var(--canvas-border); border-radius: 7px;
+}
+.light-panel-mini-tab {
+  flex: 1; padding: 3px 0; font-size: 11px; text-align: center; border: none; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--canvas-text-dim); transition: background .15s, color .15s;
+}
+.light-panel-mini-tab.active { background: var(--canvas-text); color: var(--canvas-bg); }
 /* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
 .canvas-toolbar .ant-btn { font-size: 16px; }
 /* 工具栏按钮 hover 与按下同色：点击不再闪一层更深底色（排除 disabled，避免禁用态被点亮） */

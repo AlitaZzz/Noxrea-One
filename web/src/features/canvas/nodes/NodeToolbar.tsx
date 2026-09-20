@@ -70,6 +70,8 @@ interface NodeToolbarProps {
   onOpenClipStrip: (nodeId: string) => void;
   /** 打开音频片段截取面板（同上，画布层挂载；与帧序列/片段截取互斥） */
   onOpenAudioClip: (nodeId: string) => void;
+  /** 打开图片打光面板（同上，画布层挂载；与帧序列/片段截取/音频截取互斥） */
+  onOpenLighting: (nodeId: string) => void;
 }
 
 function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
@@ -212,7 +214,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   );
 }
 
-function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip, onOpenAudioClip }: NodeToolbarProps) {
+function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip, onOpenAudioClip, onOpenLighting }: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
@@ -323,7 +325,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           <Tooltip title={t("lighting.title")}>
             <Button type="text" size="middle" style={{ padding: 8 }}
               icon={<LightingIcon />}
-              onClick={() => dispatchNodeAction(nodeId, "lighting")} disabled={!assetSrc} />
+              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} />
           </Tooltip>
           <MenuPopover
             open={creationOpen}

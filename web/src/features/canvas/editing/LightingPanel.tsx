@@ -1,35 +1,36 @@
 /**
- * 图片打光参数面板。
- * 通过三维球体控件设定光源方位角 / 仰角，并调节强度与色温色值（含六向快捷预设），
+ * 图片打光参数面板（悬浮于节点下方，不随画布缩放）。
+ * 左侧 three.js 三维预览（透视/正面双视角，拖拽调光源方位/仰角），
+ * 右侧亮度（档位滑杆 + 数值框联动）、颜色、主光源六向预设。
  * 输出的是打光描述参数而非像素结果，交由生成链路使用。
  */
 "use client";
 
-import { ColorPicker, Slider, Switch } from "antd";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, ColorPicker } from "antd";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppModal from "@/components/ui/AppModal";
-import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
-import WheelGuard from "@/components/ui/WheelGuard";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
+import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
+import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
 
+import LightingScene3D, { type LightViewMode } from "./LightingScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
 
 interface LightingState {
-  intensity: number;
+  intensity: number; // 10-100
   color: string;
-  azimuth: number;
-  elevation: number;
+  azimuth: number; // 0-359
+  elevation: number; // -90~90
 }
 
-const DIRECTIONS: Record<string, { azimuth: number; elevation: number; labelKey: string; icon: string }> = {
-  left:   { azimuth: 270, elevation: 0,   labelKey: "lighting.dir.left",   icon: "\u2190" },
-  top:    { azimuth: 0,   elevation: 90,  labelKey: "lighting.dir.top",    icon: "\u2191" },
-  right:  { azimuth: 90,  elevation: 0,   labelKey: "lighting.dir.right",  icon: "\u2192" },
-  front:  { azimuth: 0,   elevation: 0,   labelKey: "lighting.dir.front",  icon: "\u25CF" },
-  bottom: { azimuth: 0,   elevation: -90, labelKey: "lighting.dir.bottom", icon: "\u2193" },
-  back:   { azimuth: 180, elevation: 0,   labelKey: "lighting.dir.back",   icon: "\u25C7" },
+const DIRECTIONS: Record<string, { azimuth: number; elevation: number; labelKey: string }> = {
+  left:   { azimuth: 270, elevation: 0,   labelKey: "lighting.dir.left" },
+  top:    { azimuth: 0,   elevation: 90,  labelKey: "lighting.dir.top" },
+  right:  { azimuth: 90,  elevation: 0,   labelKey: "lighting.dir.right" },
+  front:  { azimuth: 0,   elevation: 0,   labelKey: "lighting.dir.front" },
+  bottom: { azimuth: 0,   elevation: -90, labelKey: "lighting.dir.bottom" },
+  back:   { azimuth: 180, elevation: 0,   labelKey: "lighting.dir.back" },
 };
 
 const DIRECTION_ORDER = ["left", "top", "right", "front", "bottom", "back"] as const;
@@ -41,9 +42,30 @@ const DEFAULT_STATE: LightingState = {
   elevation: 0,
 };
 
-const ORBIT_RADIUS = 120;
-const LATITUDES = [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75];
-const CONE_HEIGHT = 90;
+// 档位(0-4) ↔ 亮度百分比(10-100) 双向映射：10/33/55/78/100
+const levelToPct = (level: number) => Math.round(10 + level * 22.5);
+const pctToLevel = (pct: number) => Math.max(0, Math.min(4, Math.round(((pct - 10) / 90) * 4)));
+
+// 色温(K) → RGB hex：Tanner Helland 近似公式，2000K 暖橙 → 10000K 冷蓝
+function kelvinToHex(kelvin: number): string {
+  const t = kelvin / 100;
+  let r: number, g: number, b: number;
+  if (t <= 66) {
+    r = 255;
+    g = 99.47 * Math.log(t) - 161.12;
+  } else {
+    r = 329.7 * Math.pow(t - 60, -0.1332);
+    g = 288.12 * Math.pow(t - 60, -0.0755);
+  }
+  if (t >= 66) b = 255;
+  else if (t <= 19) b = 0;
+  else b = 138.52 * Math.log(t - 10) - 305.04;
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[r, g, b].map((v) => clamp(v).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+}
+
+const KELVIN_MIN = 1500;
+const KELVIN_MAX = 10000;
 
 interface Props {
   src: string;
@@ -52,464 +74,239 @@ interface Props {
 
 export default function LightingPanel({ src, onClose }: Props) {
   const { t } = useTranslation();
-  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);
+  const [viewMode, setViewMode] = useState<LightViewMode>("perspective");
+  const [colorTab, setColorTab] = useState<"temp" | "custom">("temp");
+  const [kelvin, setKelvin] = useState(6500);
 
-  // Drag state
-  const dragRef = useRef({ on: false, lastX: 0, lastY: 0 });
-  const azRef = useRef(state.azimuth);
-  const elRef = useRef(state.elevation);
+  // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
   useEffect(() => {
-    azRef.current = state.azimuth;
-    elRef.current = state.elevation;
-  }, [state.azimuth, state.elevation]);
-
-  useEffect(() => {
-    setModalOpen(true);
-    return () => setModalOpen(false);
-  }, [setModalOpen]);
-
-  // Global pointer handlers for dragging the light source
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      if (!dragRef.current.on) return;
-      const dx = e.clientX - dragRef.current.lastX;
-      const dy = e.clientY - dragRef.current.lastY;
-      dragRef.current.lastX = e.clientX;
-      dragRef.current.lastY = e.clientY;
-
-      let az = (azRef.current + dx * 0.8) % 360;
-      if (az < 0) az += 360;
-      let el = elRef.current - dy * 0.8;
-      el = Math.max(-90, Math.min(90, el));
-      setState((prev) => ({ ...prev, azimuth: Math.round(az), elevation: Math.round(el) }));
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
     };
-    const onUp = () => {
-      dragRef.current.on = false;
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, []);
-
-  const startDrag = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    dragRef.current = { on: true, lastX: e.clientX, lastY: e.clientY };
-  }, []);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   const update = <K extends keyof LightingState>(key: K, value: LightingState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));
   };
-  const handleReset = () => setState(DEFAULT_STATE);
+  const handleReset = () => {
+    setState(DEFAULT_STATE);
+    setColorTab("temp");
+    setKelvin(6500);
+  };
 
-  // ── Compute light position in 3D ──
-  const azRad = (state.azimuth * Math.PI) / 180;
-  const elRad = (state.elevation * Math.PI) / 180;
-  const r = ORBIT_RADIUS;
-  const lx = r * Math.cos(elRad) * Math.sin(azRad);
-  const ly = -r * Math.sin(elRad);
-  const lz = r * Math.cos(elRad) * Math.cos(azRad);
+  // 色温 ↔ 自定义切换：回到色温时把当前色温值写回 color
+  const switchColorTab = (tab: "temp" | "custom") => {
+    setColorTab(tab);
+    if (tab === "temp") update("color", kelvinToHex(kelvin));
+  };
+  const handleKelvin = (k: number) => {
+    setKelvin(k);
+    update("color", kelvinToHex(k));
+  };
 
-  // Light source transform: position on sphere + face center
-  const lightTransform = `translate3d(${lx}px, ${ly}px, ${lz}px)`;
+  // 3D 预览拖拽回调：delta 已由场景组件换算为角度增量
+  const handleSceneDrag = useCallback((dAz: number, dEl: number) => {
+    setState((prev) => {
+      let az = (prev.azimuth + dAz) % 360;
+      if (az < 0) az += 360;
+      const el = Math.max(-90, Math.min(90, prev.elevation + dEl));
+      return { ...prev, azimuth: Math.round(az), elevation: Math.round(el) };
+    });
+  }, []);
 
-  // CORRECT rotation: CSS applies right-to-left, so rotateZ first (tilt), then rotateY (azimuth)
-  // rotateY(az-90): az=0 -> point toward +Z (front), az=90 -> +X (right)
-  // rotateZ(-el): tilt up by elevation in XY plane
-  const rayRotation = `rotateY(${state.azimuth - 90}deg) rotateZ(${-state.elevation}deg)`;
-
-  // Brightness
-  const brightness = 0.3 + (state.intensity / 100) * 0.7;
-  const lightHex = state.color;
-
-  // Directional lighting gradient on image (2D projection of light dir)
-  const projX = Math.cos(elRad) * Math.sin(azRad);
-  const projY = -Math.sin(elRad);
-  // gradient direction: from dark side to light side
-  const gradientAngle = (Math.atan2(projY, projX) * 180) / Math.PI + 90;
-  const lightAlpha = Math.floor((state.intensity / 100) * 90).toString(16).padStart(2, "0");
-  const shadowAlpha = Math.floor((1 - state.intensity / 100) * 80).toString(16).padStart(2, "0");
-
-  // Is light in front?
-  const lightInFront = lz >= 0;
-
-  // Active preset
+  const level = pctToLevel(state.intensity);
   const activeDir = DIRECTION_ORDER.find(
     (d) =>
       Math.abs(DIRECTIONS[d].azimuth - state.azimuth) < 3 &&
       Math.abs(DIRECTIONS[d].elevation - state.elevation) < 3,
   );
 
-  // Pre-compute latitude rings
-  const rings = LATITUDES.map((lat) => {
-    const phi = ((90 - lat) * Math.PI) / 180;
-    const ringR = ORBIT_RADIUS * Math.sin(phi);
-    const yOffset = -ORBIT_RADIUS * Math.cos(phi);
-    return { lat, ringR, yOffset };
-  });
-
   return (
-    <AppModal
-      title={
-        <span className="inline-flex items-center gap-2">
-          <LightingIcon className="h-4 w-4" />
-          {t("lighting.title")}
-        </span>
-      }
-      open
-      onCancel={onClose}
-      width={780}
-      footer={null}
-      className="select-none"
-    >
-      <WheelGuard>
-        <div className="flex flex-col gap-3" style={{ minHeight: 400 }}>
-          <div className="flex gap-4" style={{ minHeight: 360 }}>
-            {/* Left: 3D Light visualization */}
-            <div
-              className="relative flex-1 rounded-lg overflow-hidden"
-              style={{
-                background: "var(--canvas-bg)",
-                minWidth: 280,
-                minHeight: 360,
-                perspective: "700px",
-                cursor: "grab",
-                touchAction: "none",
-                userSelect: "none",
-                WebkitUserSelect: "none",
-              }}
-              onPointerDown={startDrag}
-            >
-              {/* 3D World */}
-              <div
-                className="absolute"
-                style={{
-                  left: "50%",
-                  top: "50%",
-                  transformStyle: "preserve-3d",
-                }}
-              >
-                {/* Sphere fill (semi-transparent) */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: -ORBIT_RADIUS + "px",
-                    top: -ORBIT_RADIUS + "px",
-                    width: ORBIT_RADIUS * 2 + "px",
-                    height: ORBIT_RADIUS * 2 + "px",
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle, rgba(26,36,51,0.25) 0%, rgba(26,36,51,0.08) 70%, transparent 100%)",
-                    transformStyle: "preserve-3d",
-                  }}
-                />
+    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between">
+        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("lighting.title")}</span>
+        {/* 与资产弹窗关闭按钮同款：✕ 字形 + 次级文字色，悬停底色走 canvas-toolbar 按钮规则 */}
+        <Button
+          type="text"
+          aria-label="close"
+          onClick={onClose}
+          style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
+          icon={<span style={{ color: "var(--canvas-text-secondary)", fontSize: 12, lineHeight: 1 }}>✕</span>}
+        />
+      </div>
+      <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
 
-                {/* Latitude rings */}
-                {rings.map(({ lat, ringR, yOffset }) => (
-                  <div
-                    key={lat}
-                    style={{
-                      position: "absolute",
-                      left: -ringR + "px",
-                      top: yOffset - ringR + "px",
-                      width: ringR * 2 + "px",
-                      height: ringR * 2 + "px",
-                      borderRadius: "50%",
-                      border:
-                        lat === 0
-                          ? "1px solid rgba(255,255,255,0.7)"
-                          : "1px solid rgba(255,255,255,0.3)",
-                      transform: "rotateX(90deg)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                ))}
-
-                {/* Meridian lines */}
-                {[0, 30, 60, 90, 120, 150].map((meridian) => (
-                  <div
-                    key={meridian}
-                    style={{
-                      position: "absolute",
-                      left: -ORBIT_RADIUS + "px",
-                      top: -ORBIT_RADIUS + "px",
-                      width: ORBIT_RADIUS * 2 + "px",
-                      height: ORBIT_RADIUS * 2 + "px",
-                      borderRadius: "50%",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      transform: `rotateY(${meridian}deg)`,
-                      pointerEvents: "none",
-                    }}
-                  />
-                ))}
-
-                {/* Light cone (from light source projecting onto image) */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: -CONE_HEIGHT / 2 + "px",
-                    width: r + "px",
-                    height: CONE_HEIGHT + "px",
-                    transformOrigin: "0 50%",
-                    // Position at light source, rotate to point back toward center (image)
-                    // Reversed direction: azimuth + 180, elevation negated
-                    transform: `${lightTransform} rotateY(${state.azimuth + 90}deg) rotateZ(${state.elevation}deg)`,
-                    // Opaque at light source (left), transparent at image (right)
-                    background: `linear-gradient(to right, ${lightHex}${lightAlpha} 0%, ${lightHex}${lightAlpha} 30%, ${lightHex}00 100%)`,
-                    // Narrow at light source (left), wide at image (right)
-                    clipPath: "polygon(0 45%, 100% 0%, 100% 100%, 0 55%)",
-                    opacity: lightInFront ? 0.3 : 0.1,
-                    pointerEvents: "none",
-                    transition: "opacity 0.3s ease",
-                  }}
-                />
-
-                {/* Light ray line from center to light source */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    width: r + "px",
-                    height: "1.5px",
-                    background: `linear-gradient(to right, ${lightHex}00, ${lightHex}80, ${lightHex})`,
-                    transformOrigin: "0 50%",
-                    transform: rayRotation,
-                    pointerEvents: "none",
-                    opacity: lightInFront ? 0.6 : 0.3,
-                  }}
-                />
-
-                {/* Center image - inside 3D world so sphere wraps around it (like MultiAngleEditor) */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    transformStyle: "preserve-3d",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <img
-                    src={src}
-                    alt=""
-                    draggable={false}
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      transform: "translate(-50%, -50%)",
-                      display: "block",
-                      maxWidth: "130px",
-                      maxHeight: "130px",
-                      borderRadius: "6px",
-                      boxShadow: `0 4px 20px rgba(0,0,0,0.5), 0 0 ${brightness * 20}px ${lightHex}${lightAlpha}`,
-                      filter: `brightness(${0.5 + brightness * 0.5})`,
-                      transition: "box-shadow 0.3s ease, filter 0.3s ease",
-                    }}
-                  />
-                  {/* Directional lighting gradient overlay */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      width: "130px",
-                      height: "130px",
-                      maxWidth: "130px",
-                      maxHeight: "130px",
-                      transform: "translate(-50%, -50%)",
-                      borderRadius: "6px",
-                      background: `linear-gradient(${gradientAngle + 180}deg, ${lightHex}${lightAlpha} 0%, transparent 40%, rgba(0,0,0,${(1 - brightness) * 0.6}) 100%)`,
-                      mixBlendMode: "soft-light",
-                      pointerEvents: "none",
-                      transition: "background 0.3s ease",
-                    }}
-                  />
-                </div>
-
-                {/* Light source point */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    transformStyle: "preserve-3d",
-                    transform: lightTransform,
-                    pointerEvents: "none",
-                  }}
-                >
-                  {/* Glow halo */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "-20px",
-                      top: "-20px",
-                      width: "40px",
-                      height: "40px",
-                      borderRadius: "50%",
-                      background: `radial-gradient(circle, ${lightHex}60 0%, transparent 70%)`,
-                      filter: "blur(3px)",
-                      opacity: lightInFront ? 1 : 0.4,
-                      transition: "opacity 0.3s ease",
-                    }}
-                  />
-                  {/* Light core */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "-8px",
-                      top: "-8px",
-                      width: "16px",
-                      height: "16px",
-                      borderRadius: "50%",
-                      background: `radial-gradient(circle, ${lightHex} 0%, ${lightHex}cc 60%, ${lightHex}40 100%)`,
-                      boxShadow: `0 0 ${10 + state.intensity * 0.15}px ${lightHex}`,
-                      opacity: lightInFront ? 1 : 0.5,
-                      transition: "box-shadow 0.3s ease, opacity 0.3s ease",
-                    }}
-                  />
-                  {/* Inner white dot */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "-3px",
-                      top: "-3px",
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "50%",
-                      background: "#fff",
-                      opacity: lightInFront ? 0.9 : 0.4,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Overlay: direction label */}
-              <div
-                className="absolute top-2 right-2 text-[10px] pointer-events-none px-2 py-0.5 rounded"
-                style={{
-                  color: "var(--canvas-text-dim)",
-                  background: "rgba(0,0,0,0.4)",
-                  backdropFilter: "blur(4px)",
-                }}
-              >
-                {activeDir ? t(DIRECTIONS[activeDir].labelKey) : `${state.azimuth}\u00B0 / ${state.elevation}\u00B0`}
-              </div>
-
-              {/* Overlay: intensity */}
-              <div
-                className="absolute bottom-2 left-2 text-[10px] pointer-events-none px-2 py-0.5 rounded"
-                style={{
-                  color: "var(--canvas-text-dim)",
-                  background: "rgba(0,0,0,0.4)",
-                  backdropFilter: "blur(4px)",
-                }}
-              >
-                {t("lighting.intensity")}: {state.intensity}%
-              </div>
-
-              {/* Hint */}
-              <div
-                className="absolute bottom-2 right-2 text-[10px] pointer-events-none px-2 py-0.5 rounded"
-                style={{
-                  color: "var(--canvas-text-muted)",
-                  background: "rgba(0,0,0,0.4)",
-                  backdropFilter: "blur(4px)",
-                }}
-              >
-                {t("lighting.dragHint")}
-              </div>
-            </div>
-
-            {/* Right: Parameters */}
-            <div className="flex flex-col gap-4" style={{ width: 240 }}>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
-                  <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>{state.intensity}</span>
-                </div>
-                <Slider min={0} max={100} value={state.intensity} tooltip={{ open: false }} onChange={(v) => update("intensity", v as number)} />
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.color")}</span>
-                </div>
-                <ColorPicker
-                  value={state.color}
-                  onChangeComplete={(c) => update("color", c.toHexString())}
-                  size="small"
-                  showText
-                  format="hex"
-                />
-              </div>
-
-              {/* Azimuth slider */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.azimuth")}</span>
-                  <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>{state.azimuth}°</span>
-                </div>
-                <Slider min={0} max={359} value={state.azimuth} tooltip={{ open: false }} onChange={(v) => update("azimuth", v as number)} />
-              </div>
-
-              {/* Elevation slider */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.elevation")}</span>
-                  <span className="text-xs font-medium" style={{ color: "var(--canvas-text)" }}>{state.elevation}°</span>
-                </div>
-                <Slider min={-90} max={90} value={state.elevation} tooltip={{ open: false }} onChange={(v) => update("elevation", v as number)} />
-              </div>
-
-              <div>
-                <div className="text-xs mb-2" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.mainDirection")}</div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {DIRECTION_ORDER.map((dir) => {
-                    const d = DIRECTIONS[dir];
-                    const active = activeDir === dir;
-                    return (
-                      <button
-                        key={dir}
-                        type="button"
-                        onClick={() => setState((prev) => ({ ...prev, azimuth: d.azimuth, elevation: d.elevation }))}
-                        className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-md text-xs transition-all"
-                        style={{
-                          border: "1px solid var(--canvas-border)",
-                          background: active ? "var(--canvas-text)" : "transparent",
-                          color: active ? "var(--canvas-bg)" : "var(--canvas-text-dim)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <span style={{ fontSize: 14, lineHeight: 1 }}>{d.icon}</span>
-                        <span>{t(d.labelKey)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar */}
-          <div className="flex items-center justify-between">
+      <div className="flex gap-3">
+        {/* 左列：视角切换 + 3D 预览（高度撑满与右列对齐，画布填充剩余空间） */}
+        <div className="flex h-full w-[200px] shrink-0 flex-col gap-2">
+          <div className="light-panel-view-toggle">
             <button
               type="button"
-              onClick={handleReset}
-              className="panel-reset-btn px-4 py-1.5 rounded text-xs transition-all"
-              style={{ border: "1px solid var(--canvas-border)", cursor: "pointer" }}
+              className={`light-panel-view-opt${viewMode === "perspective" ? " active" : ""}`}
+              onClick={() => setViewMode("perspective")}
             >
-              {t("lighting.reset")}
+              {t("lighting.view.perspective")}
             </button>
-            <PrimaryActionButton />
+            <button
+              type="button"
+              className={`light-panel-view-opt${viewMode === "front" ? " active" : ""}`}
+              onClick={() => setViewMode("front")}
+            >
+              {t("lighting.view.front")}
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <LightingScene3D
+              src={src}
+              color={state.color}
+              intensity={state.intensity}
+              azimuth={state.azimuth}
+              elevation={state.elevation}
+              mode={viewMode}
+              onDrag={handleSceneDrag}
+            />
           </div>
         </div>
-      </WheelGuard>
-    </AppModal>
+
+        {/* 右列：参数 */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.global")}</div>
+
+          {/* 亮度：档位滑杆 + 数值框联动（与色温同款 h-9 组合框，保证三行控件等高） */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
+              <input
+                type="range"
+                min={0}
+                max={4}
+                step={1}
+                value={level}
+                className="light-panel-slider min-w-0 flex-1"
+                style={{
+                  background: `linear-gradient(to right, var(--canvas-text) 0%, var(--canvas-text) ${(level / 4) * 100}%, var(--canvas-bg) ${(level / 4) * 100}%)`,
+                }}
+                onChange={(e) => update("intensity", levelToPct(Number(e.target.value)))}
+              />
+              <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
+              <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--canvas-text-dim)" }} />
+              <input
+                type="number"
+                min={10}
+                max={100}
+                value={state.intensity}
+                className="light-panel-pct-input shrink-0"
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) update("intensity", Math.max(10, Math.min(100, Math.round(v))));
+                }}
+              />
+              <span className="shrink-0 text-[11px]" style={{ color: "var(--canvas-text-dim)" }}>%</span>
+            </div>
+          </div>
+
+          {/* 颜色：色温 / 颜色 双选项卡，共享同一个 color 参数；
+              控件行固定高度，两种模式切换不引起下方布局跳动 */}
+          <div className="flex flex-col gap-1.5">
+            <div className="light-panel-mini-tabs">
+              <button
+                type="button"
+                className={`light-panel-mini-tab${colorTab === "temp" ? " active" : ""}`}
+                onClick={() => switchColorTab("temp")}
+              >
+                {t("lighting.colorTemp")}
+              </button>
+              <button
+                type="button"
+                className={`light-panel-mini-tab${colorTab === "custom" ? " active" : ""}`}
+                onClick={() => switchColorTab("custom")}
+              >
+                {t("lighting.color")}
+              </button>
+            </div>
+            <div className="flex h-9 items-center">
+              {colorTab === "temp" ? (
+                <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
+                  <input
+                    type="range"
+                    min={KELVIN_MIN}
+                    max={KELVIN_MAX}
+                    step={100}
+                    value={kelvin}
+                    className="light-panel-slider min-w-0 flex-1"
+                    style={{ background: "linear-gradient(to right, #FFB253, #3499FF)" }}
+                    onChange={(e) => handleKelvin(Number(e.target.value))}
+                  />
+                  <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
+                  <ThermometerIcon className="size-4 shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
+                  <input
+                    type="number"
+                    min={KELVIN_MIN}
+                    max={KELVIN_MAX}
+                    value={kelvin}
+                    className="light-panel-temp-input shrink-0"
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isFinite(v)) handleKelvin(Math.max(KELVIN_MIN, Math.min(KELVIN_MAX, Math.round(v))));
+                    }}
+                  />
+                  <span className="shrink-0 text-[13px]" style={{ color: "var(--canvas-text-muted)" }}>K</span>
+                </div>
+              ) : (
+                <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
+                  <ColorPicker
+                    value={state.color}
+                    onChangeComplete={(c) => update("color", c.toHexString())}
+                    size="small"
+                    format="hex"
+                  />
+                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{state.color}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 主光源六向预设（收进同底色圆角容器，与上方组合框形成一致的分组感） */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.mainDirection")}</span>
+            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--canvas-bg-hover)" }}>
+              {DIRECTION_ORDER.map((dir) => {
+                const d = DIRECTIONS[dir];
+                const active = activeDir === dir;
+                return (
+                  <button
+                    key={dir}
+                    type="button"
+                    onClick={() => setState((prev) => ({ ...prev, azimuth: d.azimuth, elevation: d.elevation }))}
+                    className={`light-panel-dir-btn${active ? " active" : ""}`}
+                  >
+                    {t(d.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部：重置 + 确认（参数暂未接生成链路，与现有行为一致保持展示） */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="panel-reset-btn flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all"
+          style={{ border: "1px solid var(--canvas-border)", color: "var(--canvas-text-dim)" }}
+        >
+          <ResetIcon style={{ width: 13, height: 13 }} />
+          {t("lighting.reset")}
+        </button>
+        <PrimaryActionButton />
+      </div>
+    </div>
   );
 }
