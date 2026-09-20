@@ -40,7 +40,7 @@ function LanguageToggle() {
         type="text"
         className="canvas-ctrl-btn"
         onClick={() => { toggle(); useAuthStore.getState().savePreference("language", lang === "zh" ? "en" : "zh"); }}
-        style={{ fontSize: 11, fontWeight: 600, minWidth: 28 }}
+        style={{ fontSize: 12, fontWeight: 600, minWidth: 28 }}
       >
         {lang === "zh" ? "EN" : "中"}
       </Button>

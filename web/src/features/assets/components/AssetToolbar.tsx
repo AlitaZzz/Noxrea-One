@@ -81,7 +81,7 @@ export default function AssetToolbar({
 
   const filterContent = (
     <div className="menu-popover asset-filter-popover">
-      <div style={{ padding: "2px 12px 4px", fontSize: 11, color: "var(--canvas-text-muted)" }}>
+      <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>
         {t("asset.filter")}
       </div>
       {ASSET_CATEGORIES.filter(

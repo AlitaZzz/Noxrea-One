@@ -51,9 +51,9 @@ interface Props {
   onResetView: () => void;
 }
 
-const GROUP_LABEL_STYLE = { padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" } as const;
+const GROUP_LABEL_STYLE = { padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" } as const;
 /** 菜单项右侧的快捷键标注样式 */
-const SHORTCUT_STYLE = { fontSize: 11, color: "var(--canvas-text-muted)" } as const;
+const SHORTCUT_STYLE = { fontSize: 12, color: "var(--canvas-text-muted)" } as const;
 
 export default function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();

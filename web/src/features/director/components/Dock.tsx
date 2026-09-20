@@ -60,7 +60,7 @@ function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
 
   return (
     <div style={{ padding: 12, background: "var(--dir-panel)", borderRadius: 12, border: "1px solid var(--dir-line2)" }}>
-      <div style={{ fontSize: 11, color: "var(--dir-dim2)", marginBottom: 8 }}>
+      <div style={{ fontSize: 12, color: "var(--dir-dim2)", marginBottom: 8 }}>
         群众阵列 · 共{rows * cols}人
       </div>
       <div className="flex items-center gap-2 mb-2" style={{ fontSize: 12 }}>
@@ -202,7 +202,7 @@ export default function Dock() {
         content={menuContent(
         cameraPresets.map((g) => (
           <div key={g.name}>
-            <div style={{ fontSize: 11, color: "var(--dir-dim2)", padding: "8px 12px 4px", letterSpacing: ".4px" }}>{g.name}</div>
+            <div style={{ fontSize: 12, color: "var(--dir-dim2)", padding: "8px 12px 4px", letterSpacing: ".4px" }}>{g.name}</div>
             {g.items.map((p) => menuItem("video", p.label, () => { runtime?.addCamera?.(p.key); setCamMenuOpen(false); }, false))}
           </div>
         )), 184

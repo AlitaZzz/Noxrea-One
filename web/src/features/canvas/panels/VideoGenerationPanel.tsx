@@ -506,7 +506,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             }
             content={
               <>
-                <div style={{ padding: "2px 4px 0", fontSize: 11, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
+                <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
                 {refModeOptions.map((m: string) => {
                   const allowed = allowedRefModes.includes(m);
                   return (

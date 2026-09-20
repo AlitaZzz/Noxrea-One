@@ -57,6 +57,8 @@ export function directorTheme() {
   return {
     algorithm: antTheme.darkAlgorithm,
     token: {
+      // 与 globals.css 的 --font-ui 同源（var 引用），antd 组件与自绘 UI 字体一致
+      fontFamily: "var(--font-ui)",
       // 品牌色：青柠，与 canvas 的 accent / select / success 同值
       colorPrimary: COLOR_PRIMARY,
       colorPrimaryHover: COLOR_PRIMARY_HOVER,

@@ -242,7 +242,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 {t("modelConfig.providers")}
               </span>
               {providers.length > 0 && (
-                <span className="text-[11px]" style={{ color: "var(--canvas-text-muted)" }}>
+                <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>
                   {providers.length}
                 </span>
               )}
@@ -298,7 +298,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                         const enabled = c.models.filter((m) => (m.capabilities?.length ?? 0) > 0).length;
                         return (
                           <div
-                            className="text-[11px] mt-0.5 tabular-nums"
+                            className="text-xs mt-0.5 tabular-nums"
                             style={{ color: "var(--canvas-text-muted)" }}
                             aria-label={t("modelConfig.enabledCount", { enabled, total: c.models.length })}
                           >
@@ -337,7 +337,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                   </span>
                   {provider.protocol && (
                     <span
-                      className="shrink-0 text-[11px] leading-none px-1.5 py-1 rounded"
+                      className="shrink-0 text-xs leading-none px-1.5 py-1 rounded"
                       style={{ color: "var(--canvas-text-dim)", border: "1px solid var(--canvas-border)" }}
                     >
                       {t(`modelConfig.protocol.${provider.protocol}`)}

@@ -43,7 +43,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
       {/* 中组：0.1x — 滑杆 — 4.0x（固定宽度：外层工具栏宽度由内容撑开，
           flex-1 在自适应容器里会坍缩为 0，滑杆必须靠显式宽度撑起） */}
       <div className="flex h-8 w-[180px] shrink-0 items-center gap-2 px-2">
-        <span className="shrink-0 text-[11px] tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>0.1x</span>
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>0.1x</span>
         <Slider
           min={SPEED_MIN}
           max={SPEED_MAX}
@@ -53,7 +53,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
           onChange={(v) => onSpeedChange(Math.round(v * 100) / 100)}
           style={{ width: "100%", margin: 0 }}
         />
-        <span className="shrink-0 text-[11px] tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>4.0x</span>
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>4.0x</span>
       </div>
 
       {/* 右组：数字输入 + 上下步进 */}

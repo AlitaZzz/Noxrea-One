@@ -101,7 +101,7 @@ export default function ProjectPage() {
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
                 onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; i18n.changeLanguage(newLang); useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
-<span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
+<span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
               </button>
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
