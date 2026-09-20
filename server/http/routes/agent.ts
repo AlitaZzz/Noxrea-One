@@ -5,7 +5,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { failCode } from "@server/core/response";
 import { createSseResponse } from "@server/http/sse";
 import { listSkills, getSkill } from "@server/services/agent/skills/loader";

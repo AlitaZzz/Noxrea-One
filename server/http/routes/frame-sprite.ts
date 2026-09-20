@@ -13,7 +13,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { createFrameSprite, probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";

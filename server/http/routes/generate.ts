@@ -3,13 +3,13 @@
  * 处理生成任务的创建、查询、取消与结果回传等接口。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { taskCreateSchema } from "@server/schemas/task";
 import { createTask, getTask, cancelTask, getTaskTerminalByIds, isTerminalTaskStatus, toTerminalState } from "@server/crud/task";
-import type { TerminalTaskState } from "@server/core/events/task-watcher";
+import type { TerminalTaskState } from "@server/services/tasks/watcher";
 import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
-import { taskWatcher } from "@server/core/events/task-watcher";
+import { taskWatcher } from "@server/services/tasks/watcher";
 import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";

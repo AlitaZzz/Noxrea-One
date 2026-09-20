@@ -6,7 +6,7 @@
 import { logger } from "@server/core/logger";
 import { getTaskTerminalByIds, toTerminalState } from "@server/crud/task";
 
-import { onAnyTaskTerminal } from "./task-event-bus";
+import { onAnyTaskTerminal } from "./event-bus";
 
 export interface TerminalTaskState {
   taskId: string;

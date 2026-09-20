@@ -1,6 +1,6 @@
 /**
  * 请求鉴权中间件。
- * 解析访问令牌、构造鉴权用户对象，并提供管理员初始化与权限校验。
+ * 解析访问令牌、构造鉴权用户对象。JWT 签发/校验与密码哈希等纯逻辑在 core/auth。
  */
 import { prisma } from "@server/core/database/client";
 import { decodeAccessToken } from "@server/core/auth/jwt";
@@ -26,8 +26,6 @@ function toAuthUser(user: User): AuthUser {
     isActive: user.isActive,
   };
 }
-
-// withAuth 高阶函数（鉴权用户注入）
 
 /**
  * 从 Request 中解析 Bearer token 并注入当前用户。
@@ -60,42 +58,3 @@ export async function authenticateRequest(
 
   return { user: toAuthUser(dbUser) };
 }
-
-// 管理员自动创建
-
-export async function ensureAdminExists(
-  adminUsername: string,
-  adminPassword: string
-): Promise<void> {
-  const normalized = adminUsername.toLowerCase();
-  const existing = await prisma.user.findUnique({
-    where: { username: normalized },
-  });
-  if (existing) return;
-
-  const { hashPassword } = await import("@server/core/auth/password");
-  const hashed = await hashPassword(adminPassword);
-
-  try {
-    await prisma.user.create({
-      data: {
-        username: normalized,
-        hashedPassword: hashed,
-        isActive: true,
-        isSuperuser: true,
-      },
-    });
-  } catch (err: unknown) {
-    // 唯一约束冲突 → 其他进程已创建，忽略
-    const code = (err as Record<string, unknown>)?.code;
-    if (code === "P2002" || code === "SQLITE_CONSTRAINT" || code === "SQLITE_CONSTRAINT_UNIQUE") {
-      // 竞态条件：另一个进程已抢先创建了管理员，忽略即可
-      return;
-    }
-    throw err;
-  }
-}
-
-// 统一导出
-
-export { toAuthUser };

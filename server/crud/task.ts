@@ -1,8 +1,8 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonObject, parseJsonArray } from "./_json";
-import { publishTaskTerminal } from "@server/core/events/task-event-bus";
+import { stringifyJson, parseJsonObject, parseJsonArray } from "./json-column";
+import { publishTaskTerminal } from "@server/services/tasks/event-bus";
 import { logEvent, errText } from "@server/core/logger/utils";
-import type { TerminalTaskState } from "@server/core/events/task-watcher";
+import type { TerminalTaskState } from "@server/services/tasks/watcher";
 import crypto from "crypto";
 /**
  * 生成任务 CRUD。

@@ -1,3 +1,9 @@
+/**
+ * SSE 响应辅助。
+ * 把 ReadableStream 样板（事件帧编码、心跳保活、客户端断连联动上游取消、
+ * 任务异常转 error 事件）收拢为 createSseResponse 一个入口，供 SSE 路由复用。
+ */
+
 interface SseContext {
   emit: (event: string, data: unknown) => void;
   signal: AbortSignal;

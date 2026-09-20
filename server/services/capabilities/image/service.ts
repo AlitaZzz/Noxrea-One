@@ -13,7 +13,7 @@ import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
-import { GenerationFailureError } from "@server/core/errors/task-failure";
+import { GenerationFailureError } from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 class ImageCapabilityService implements CapabilityService {

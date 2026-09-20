@@ -3,7 +3,7 @@
  * 处理供应商、模型与能力配置的查询、创建、更新与删除等接口。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { providerCreateSchema, providerUpdateSchema, maskApiKey } from "@server/schemas/model-config";
 import { modelInfoCreateSchema, batchSetModelsSchema, updateCapabilitySchema } from "@server/schemas/provider-config";
 import {

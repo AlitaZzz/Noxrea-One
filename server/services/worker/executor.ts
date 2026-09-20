@@ -16,7 +16,7 @@ import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/ser
 import {
   GenerationFailureError,
   extractFailureCode,
-} from "@server/core/errors/task-failure";
+} from "@server/services/tasks/failure";
 import { buildContext } from "./context";
 import { resumeAsyncPolling } from "./resume-polling";
 import { downloadResultsWithHeartbeat } from "./download-results";

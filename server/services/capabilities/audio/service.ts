@@ -20,7 +20,7 @@ import { localStorage } from "@server/services/storage/backends/local";
 import {
   GenerationFailureError,
   extractUpstreamMessage,
-} from "@server/core/errors/task-failure";
+} from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 import path from "path";
 import fs from "fs/promises";

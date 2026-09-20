@@ -3,7 +3,7 @@
  * 处理画布工程的查询、创建、更新与删除等接口。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/core/auth/middleware";
+import { authenticateRequest } from "@server/http/middleware/auth";
 import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
 import {
   getProjects,
@@ -16,7 +16,7 @@ import {
 import { ok, failCode } from "@server/core/response";
 import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
-import { renderLightingTemplate } from "@server/services/lighting-prompt";
+import { renderLightingTemplate } from "@server/services/canvas/lighting-prompt";
 
 const router = new Hono();
 
@@ -28,7 +28,7 @@ function loadPromptTemplates(): Record<string, string> {
 // GET /api/canvas/prompt-template?type=reverse
 // 返回指定类型的提示词模板（模板库由后端下发，支持修改配置热更新）。
 // lighting 类型额外支持 {{占位符}}：按 query 参数（intensity/azimuth/elevation/kelvin/color）
-// 插值成成稿提示词，语义翻译见 services/lighting-prompt；其余类型为静态文案。
+// 插值成成稿提示词，语义翻译见 services/canvas/lighting-prompt；其余类型为静态文案。
 router.get("/api/canvas/prompt-template", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);

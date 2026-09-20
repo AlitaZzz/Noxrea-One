@@ -18,7 +18,7 @@ import { router as captureFrameRouter } from "./routes/capture-frame";
 import { router as videoProxyRouter } from "./routes/video-proxy";
 import { router as frameSpriteRouter } from "./routes/frame-sprite";
 import { router as detachAudioRouter } from "./routes/detach-audio";
-import { router as extractClipRouter } from "./routes/extract-clip";
+import { router as extractClipRouter } from "./routes/extract-video-clip";
 import { extractAudioClipRouter } from "./routes/extract-audio-clip";
 import { applyAudioSpeedRouter } from "./routes/apply-audio-speed";
 import { router as cropVideoRouter } from "./routes/crop-video";
