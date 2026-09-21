@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 
-import { fetchFrameSprite, type FrameSpriteInfo } from "@/features/canvas/api/file-api";
+import { fetchFrameSprite, type FrameSpriteInfo, toFileKey } from "@/features/canvas/api/file-api";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
     轨道容器宽度必须是它 + 24px（用 px 而非 rem，避免两边坐标系漂移） */
@@ -142,7 +142,7 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
     void (async () => {
       // 只有存储区里的文件才有 video_key，能请求服务端生成雪碧图；
       // 本地预览地址（blob 等）没有对应键，直接走兜底读时长
-      const videoKey = videoSrc.replace(/^\/api\/files\//, "").split("?")[0];
+      const videoKey = toFileKey(videoSrc);
       const managed = videoSrc.startsWith("/api/files/") && videoKey.length > 0;
 
       if (managed) {

@@ -1839,6 +1839,11 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   opacity: 0.35;
 }
 
+/* 音频截取面板轨道：同款降透明逻辑，但轨道放大后条形加粗，透明度略提保证可读 */
+.audio-waveform-panel > div::part(canvases) {
+  opacity: 0.5;
+}
+
 /* 检查器内联编辑框：与设置页 antd 输入框保持同一中性控件语言，
    常态中性描边，聚焦不出现主色描边或光晕（全局 controlOutlineWidth: 0）。 */
 .inspector-edit-input {

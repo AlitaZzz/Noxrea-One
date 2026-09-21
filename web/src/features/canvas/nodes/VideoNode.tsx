@@ -27,10 +27,12 @@ import {
   detachAudio as detachAudioApi,
   type DetachAudioResult,
   extractClip as extractClipApi,
+  toFileKey,
 } from "@/features/canvas/api/file-api";
 import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
 import { createEdge } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
+import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
@@ -50,11 +52,6 @@ import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
-
-/** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串） */
-function toFileKey(url: string): string {
-  return url.replace(/^\/api\/files\//, "").split("?")[0];
-}
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
@@ -263,8 +260,21 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const captureFrame = useCallback(async (time: number | null) => {
     const v = videoRef.current;
-    if (!v || !src || busy) return;
+    if (!v || !src) {
+      // 确认不自关契约的兜底：视频元素被生成态浮层换掉（videoRef 为空）或源
+      // 已失效时抽帧无从进行——关掉仍打开的帧截取面板，不留无响应的确认键
+      useCanvasStore.getState().setFrameCaptureNodeId(null);
+      return;
+    }
+    // 其他派生操作仍在服务端处理中：给出 busy 反馈而不是静默吞掉（与截取一致）
+    if (busy) {
+      notifyNodeBusy(notification, t, id);
+      return;
+    }
     setBusy({ kind: "capture", startedAt: Date.now() });
+    // 抽帧被接受：关闭帧截取面板（面板不在确认时自关——busy 守卫拒绝时面板
+    // 保持打开、播放位置原样保留可重试，与截取面板的「确认不自关」契约一致）
+    useCanvasStore.getState().setFrameCaptureNodeId(null);
     try {
       const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
       const videoKey = toFileKey(src);
@@ -272,19 +282,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (!res.ok) {
         // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案
         const errJson = await res.json().catch(() => null);
-        const code = errJson?.error as string | undefined;
-        notification.error({
-          title: code
-            ? t(`error.${code}`, { defaultValue: t("error.capture_frame.capture_failed") })
-            : t("error.capture_frame.capture_failed"),
-          placement: "bottomRight",
-        });
+        notifyActionFailed(notification, t, errJson?.error as string | undefined, "error.capture_frame.capture_failed", id);
         return;
       }
       const json = await res.json();
       const imgUrl = json.data?.url;
       if (!imgUrl) {
-        notification.error({ title: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+        notifyActionFailed(notification, t, undefined, "error.capture_frame.capture_failed", id);
         return;
       }
 
@@ -293,7 +297,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
     } catch (e) {
       console.error("Frame capture failed:", e);
-      notification.error({ title: t("error.capture_frame.capture_failed"), placement: "bottomRight" });
+      notifyActionFailed(notification, t, undefined, "error.capture_frame.capture_failed", id);
     } finally {
       setBusy(null);
     }
@@ -310,8 +314,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 撤销一次即整体删除两个派生节点及其连线。
    */
   const handleDetachAudio = useCallback(async () => {
-    if (!src || busy) return;
-    const videoKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+    if (!src) return;
+    // 其他派生操作仍在服务端处理中：给出 busy 反馈而不是静默吞掉（与截取一致）
+    if (busy) {
+      notifyNodeBusy(notification, t, id);
+      return;
+    }
+    const videoKey = toFileKey(src);
     setBusy({ kind: "detach", startedAt: Date.now() });
     try {
       const res = await detachAudioApi(videoKey);
@@ -320,11 +329,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (!res.ok || !json?.data) {
         // 后端按错误码给出确定结论（无音轨 / 组件缺失等），优先用其本地化文案
         const code = json?.error as string | undefined;
-        const fallback = t("detach.failed");
-        notification.error({
-          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
-          placement: "bottomRight",
-        });
+        notifyActionFailed(notification, t, code, "detach.failed", id);
         // 确认无音轨后同步禁用入口，避免用户反复点击撞同一个错误
         if (code === "detach_audio.no_audio_track") commitHasAudio(false);
         return;
@@ -380,7 +385,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Audio detach failed:", e);
-      notification.error({ title: t("detach.failed"), placement: "bottomRight" });
+      notifyActionFailed(notification, t, undefined, "detach.failed", id);
     } finally {
       setBusy(null);
     }
@@ -406,21 +411,24 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 同批写入，撤销一次即整体删除。
    */
   const handleExtractClip = useCallback(async (start: number, end: number) => {
-    if (!src || busy) return;
+    if (!src) return;
+    // 分离音频/裁剪/上一次截取仍在服务端处理中：面板保持打开、选区原样保留
+    // 可重试，这里给出 busy 反馈而不是静默吞掉（面板无法感知节点本地的 busy 态）
+    if (busy) {
+      notifyNodeBusy(notification, t, id);
+      return;
+    }
     const videoKey = toFileKey(src);
     setBusy({ kind: "clip", startedAt: Date.now() });
+    // 退出截取模式：选区已被接受，面板随之卸载（与音频截取确认同一约定）
+    useCanvasStore.getState().setClipCaptureNodeId(null);
     try {
       const res = await extractClipApi(videoKey, start, end);
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
         // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
-        const code = json?.error as string | undefined;
-        const fallback = t("error.clip.extract_failed");
-        notification.error({
-          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
-          placement: "bottomRight",
-        });
+        notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id);
         return;
       }
 
@@ -451,7 +459,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Clip extraction failed:", e);
-      notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
+      notifyActionFailed(notification, t, undefined, "error.clip.extract_failed", id);
     } finally {
       setBusy(null);
     }
@@ -462,20 +470,28 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 产物作为派生视频节点连回源节点（历史栈策略与片段截取一致）。
    */
   const handleCropVideoApply = useCallback(async (rect: CropRectPx) => {
-    if (!src || busy) return;
+    if (!src) {
+      // 源已失效（清除/撤销）：裁剪无从进行，关掉仍打开的裁剪面板而不是留一个
+      // 无响应的确认键（croppingNodeId 的宿主校验兜底见 InfiniteCanvas）
+      useCanvasStore.getState().setCroppingNodeId(null);
+      return;
+    }
+    // 其他派生操作仍在服务端处理中：给出 busy 反馈而不是静默吞掉（与截取一致）
+    if (busy) {
+      notifyNodeBusy(notification, t, id);
+      return;
+    }
     const videoKey = toFileKey(src);
     setBusy({ kind: "crop", startedAt: Date.now() });
+    // 裁剪被接受：关闭裁剪面板（面板不在确认时自关——busy 拒绝时面板保持
+    // 打开、选区原样保留可重试，与截取面板的「确认不自关」契约一致）
+    useCanvasStore.getState().setCroppingNodeId(null);
     try {
       const res = await cropVideoApi(videoKey, rect);
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
-        const code = json?.error as string | undefined;
-        const fallback = t("error.crop.failed");
-        notification.error({
-          title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
-          placement: "bottomRight",
-        });
+        notifyActionFailed(notification, t, json?.error as string | undefined, "error.crop.failed", id);
         return;
       }
 
@@ -502,7 +518,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       markDirtyImmediate();
     } catch (e) {
       console.error("Video crop failed:", e);
-      notification.error({ title: t("error.crop.failed"), placement: "bottomRight" });
+      notifyActionFailed(notification, t, undefined, "error.crop.failed", id);
     } finally {
       setBusy(null);
     }
@@ -622,6 +638,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const panelOpen = useCanvasStore(
     (s) => s.frameCaptureNodeId === id || s.clipCaptureNodeId === id,
   );
+  // 片段截取面板打开期间关闭原生 loop：区间循环由面板回跳控制，原生 loop 到头
+  // 会先跳回 0、再被拉回入点，每圈多两次 seek 且画面闪跳。帧截取面板不受此限——
+  // 它复用节点播放按钮「边听边看」，播放到末尾原生 loop 反而是期望行为
+  const clipOpen = useCanvasStore((s) => s.clipCaptureNodeId === id);
 
   // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
   // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，
@@ -717,11 +737,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasVideo ? (
           <div className="w-full h-full relative">
+            {/* 片段截取面板打开期间关闭原生 loop（见 clipOpen 定义处的说明）：
+                用响应式属性而非命令式改 DOM，元素重挂也自动带上 */}
             <video
               ref={setVideoRef}
               src={src}
               className="absolute inset-0 w-full h-full rounded-lg"
-              loop
+              loop={!clipOpen}
               muted={volume === 0 || autoplayMuted}
               playsInline
               preload="metadata"

@@ -15,7 +15,10 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
   extractAudioClip as extractAudioClipApi,
+  toFileKey,
 } from "@/features/canvas/api/file-api";
+import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
+import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromUrl } from "@/features/canvas/upload";
@@ -36,12 +39,19 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const [src, setSrc] = useState(data.src || "");
 
   const [duration, setDuration] = useState(data.duration || 0);
-  const [playing, setPlaying] = useState(false);
   // 本地处理忙浮层（音频片段截取：ffmpeg 流 copy，通常秒级完成）
   const [busy, setBusy] = useState<{ kind: string; startedAt: number } | null>(null);
-  // 片段截取模式：本节点进入区间选择（波形上叠加双手柄，键盘作用域归面板）；
-  // ✓/✗ 工具栏由 AudioWaveform 通过 RfNodeToolbar 自带渲染
+  // 片段截取模式：选区操作全部在节点下方的 AudioClipStripPanel 内进行。
+  // 打开瞬间的暂停由面板挂载 effect 经注册表执行；这里把 clipActive 下传给
+  // 波形组件锁住节点自身的播放按钮与进度拖动，避免与面板循环试听双声叠加
   const clipActive = useCanvasStore((s) => s.audioClipNodeId === id);
+
+  // 取消选中（点画布空白 / 点其他节点）即停止播放——这是取消选中暂停的唯一路径。
+  // 放在 effect 里而不是渲染阶段的 setState 调整块：pause() 是对外部媒体系统的
+  // 命令式副作用（相邻 prevDataSrc 块的渲染期调整只做 setState，是官方许可的形态）
+  useEffect(() => {
+    if (!selected) pauseAudio(id);
+  }, [selected, id]);
 
   // Sync local src/duration when data changes externally (e.g. from undo/clear),
   // adjusted during render to avoid cascading renders.
@@ -99,11 +109,18 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       连回源节点（历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
   const handleExtractAudioClip = useCallback(
     async (start: number, end: number) => {
-      if (!src || busy) return;
-      const audioKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+      if (!src) return;
+      // 变速/上一次截取仍在服务端处理中：面板保持打开、选区原样保留可重试，
+      // 这里给出 busy 反馈而不是静默吞掉（面板无法感知节点本地的 busy 态）
+      if (busy) {
+        notifyNodeBusy(notification, t, id);
+        return;
+      }
+      const audioKey = toFileKey(src);
       if (!audioKey) return;
       setBusy({ kind: "audio-clip", startedAt: Date.now() });
-      // 退出截取模式：选区叠层撤下、试听暂停（节点进入忙浮层状态）
+      // 退出截取模式：关闭选区面板（面板卸载即停试听；与 onClose 幂等），
+      // 节点进入忙浮层状态
       useCanvasStore.getState().setAudioClipNodeId(null);
       try {
         const res = await extractAudioClipApi(audioKey, start, end);
@@ -111,12 +128,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
 
         if (!res.ok || !json?.data) {
           // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
-          const code = json?.error as string | undefined;
-          const fallback = t("error.clip.extract_failed");
-          notification.error({
-            title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
-            placement: "bottomRight",
-          });
+          notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id);
           return;
         }
 
@@ -132,7 +144,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         markDirtyImmediate();
       } catch (e) {
         console.error("Audio clip extraction failed:", e);
-        notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
+        notifyActionFailed(notification, t, undefined, "error.clip.extract_failed", id);
       } finally {
         setBusy(null);
       }
@@ -143,8 +155,13 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   /** 变速：服务端 atempo 重编码（保留音调）生成变速产物，派生音频节点连回源节点 */
   const handleApplyAudioSpeed = useCallback(
     async (speed: number) => {
-      if (!src || busy) return;
-      const audioKey = src.replace(/^\/api\/files\//, "").split("?")[0];
+      if (!src) return;
+      // 截取/变速仍在服务端处理中：请求无法排队，必须给反馈而不是静默吞掉
+      if (busy) {
+        notifyNodeBusy(notification, t, id);
+        return;
+      }
+      const audioKey = toFileKey(src);
       if (!audioKey) return;
       setBusy({ kind: "audio-speed", startedAt: Date.now() });
       try {
@@ -152,12 +169,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         const json = await res.json();
 
         if (!res.ok || !json?.data) {
-          const code = json?.error as string | undefined;
-          const fallback = t("error.clip.extract_failed");
-          notification.error({
-            title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
-            placement: "bottomRight",
-          });
+          notifyActionFailed(notification, t, json?.error as string | undefined, "error.speed.failed", id);
           return;
         }
 
@@ -173,7 +185,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         markDirtyImmediate();
       } catch (e) {
         console.error("Audio speed change failed:", e);
-        notification.error({ title: t("error.clip.extract_failed"), placement: "bottomRight" });
+        notifyActionFailed(notification, t, undefined, "error.speed.failed", id);
       } finally {
         setBusy(null);
       }
@@ -196,11 +208,14 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         case "apply-audio-speed":
           void handleApplyAudioSpeed(detail.speed as number);
           break;
+        case "extract-audio-clip":
+          void handleExtractAudioClip(detail.start as number, detail.end as number);
+          break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleClear, handleApplyAudioSpeed]);
+  }, [id, handleDownload, handleClear, handleApplyAudioSpeed, handleExtractAudioClip]);
 
   const hasAudio = src && src.length > 0;
 
@@ -248,14 +263,10 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         ) : hasAudio ? (
           <AudioWaveform
             url={src}
-            duration={duration}
-            playing={playing}
-            onToggle={setPlaying}
-            onReady={handleAudioReady}
-            clipMode={clipActive}
             nodeId={id}
-            onClipConfirm={handleExtractAudioClip}
-            onClipCancel={() => useCanvasStore.getState().setAudioClipNodeId(null)}
+            clipActive={clipActive}
+            duration={duration}
+            onReady={handleAudioReady}
           />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">

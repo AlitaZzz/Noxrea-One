@@ -11,6 +11,7 @@ import {
   removeSourceFileRefsBatch,
 } from "@server/services/storage/file-ref-ledger";
 import { stringifyJson, parseJsonArray } from "./json-column";
+import { probeSourceDimensions } from "@server/services/storage/media";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -403,28 +404,51 @@ export async function createAssetsBatch(
     };
   }
 
+  // 去重不再整批失败：批内重复保留首条，库内已存在直接跳过，其余资产照常入库。
+  // 来源 URL 精确保存即可去重；不额外落一列哈希。（纯内存去重，放事务外）
+  const skipped: SkippedAssetSource[] = [];
+  const seenKeys = new Set<string>();
+  const candidates: typeof items = [];
+  for (const item of items) {
+    const scope = item.scope ?? "personal";
+    const sourceUrl = item.sourceUrl ?? null;
+    if (sourceUrl) {
+      const key = sourceKey(scope, sourceUrl);
+      if (seenKeys.has(key)) {
+        skipped.push({ sourceUrl, reason: "duplicate_in_batch" });
+        continue;
+      }
+      seenKeys.add(key);
+    }
+    candidates.push(item);
+  }
+
+  // 落库前由服务端探测真实宽高（sharp / ffmpeg 读源文件），请求回传值仅作
+  // 探测失败时的回落——尺寸以媒体文件本身为准，前端探针失败/缺失不得把 0
+  // 落库，否则资产插入画布时比例只能回落默认值。探测（进程级 spawn 开销）
+  // 只对真正要入库的条目做：先做一次只读的库内去重预查，已存在的来源直接
+  // 跳过——重复批量重传不再白付整轮探测的延迟；事务内还会再查一次兜底
+  // 并发写入，去重语义以事务内为准。探测在事务外并行，限并发避免大批量
+  // 上传时同时 spawn 大量 ffmpeg 进程。
+  const preExistingKeys = await findExistingSourceKeys(prisma, items[0].userId, candidates);
+  const dimsBySource = new Map<string, { width: number; height: number }>();
+  const PROBE_CONCURRENCY = 8;
+  const probeTargets = candidates.filter(
+    (item) =>
+      item.sourceUrl && !preExistingKeys.has(sourceKey(item.scope ?? "personal", item.sourceUrl)),
+  );
+  for (let i = 0; i < probeTargets.length; i += PROBE_CONCURRENCY) {
+    await Promise.all(
+      probeTargets.slice(i, i + PROBE_CONCURRENCY).map(async (item) => {
+        const dims = await probeSourceDimensions(item.sourceUrl!, item.mediaType ?? "");
+        if (dims) dimsBySource.set(sourceKey(item.scope ?? "personal", item.sourceUrl!), dims);
+      }),
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     const created: SerializedAssetItem[] = [];
-    const skipped: SkippedAssetSource[] = [];
     const uncategorizedByScope = new Map<string, number>();
-
-    // 去重不再整批失败：批内重复保留首条，库内已存在直接跳过，其余资产照常入库。
-    // 来源 URL 精确保存即可去重；不额外落一列哈希。
-    const seenKeys = new Set<string>();
-    const candidates: typeof items = [];
-    for (const item of items) {
-      const scope = item.scope ?? "personal";
-      const sourceUrl = item.sourceUrl ?? null;
-      if (sourceUrl) {
-        const key = sourceKey(scope, sourceUrl);
-        if (seenKeys.has(key)) {
-          skipped.push({ sourceUrl, reason: "duplicate_in_batch" });
-          continue;
-        }
-        seenKeys.add(key);
-      }
-      candidates.push(item);
-    }
 
     // 按 scope 分组查库内已存在来源；命中项跳过，不阻塞同批其他资产。
     const existingKeys = await findExistingSourceKeys(tx, items[0].userId, candidates);
@@ -453,14 +477,17 @@ export async function createAssetsBatch(
         if (folder.scope !== scope) throw new AssetOperationError("folder_not_found");
       }
 
+      const probed = item.sourceUrl
+        ? dimsBySource.get(sourceKey(scope, item.sourceUrl))
+        : undefined;
       const record = await tx.assetItem.create({
         data: {
           userId: item.userId,
           name: item.name ?? "Untitled",
           type: item.type ?? "other",
           mediaType: item.mediaType ?? "",
-          width: item.width ?? 0,
-          height: item.height ?? 0,
+          width: probed?.width ?? item.width ?? 0,
+          height: probed?.height ?? item.height ?? 0,
           description: item.description ?? "",
           tags: stringifyJson(item.tags ?? []),
           prompt: item.prompt ?? "",

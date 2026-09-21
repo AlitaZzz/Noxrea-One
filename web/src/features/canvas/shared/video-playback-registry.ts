@@ -6,6 +6,8 @@
  * 播放进度若写进 store 会随 updateNodeData 进入撤销栈，因此用模块级 Map 做
  * 轻量桥接：不参与渲染、不产生历史记录、节点卸载即注销。
  */
+import { SEEK_MARGIN_S } from "@/lib/constants";
+
 const registry = new Map<string, HTMLVideoElement>();
 
 /**
@@ -25,6 +27,9 @@ function warnUnregistered(nodeId: string, op: string): void {
 export function registerVideoElement(nodeId: string, el: HTMLVideoElement): () => void {
   registry.set(nodeId, el);
   unregisteredWarned.delete(nodeId);
+  // 元素可能在面板打开期间被重挂（条件渲染分支切换）：按登记表补挂面板已
+  // 注册的 ended 监听，否则监听留在游离元素上，ended 事件再也到不了面板
+  endedListeners.get(nodeId)?.forEach((h) => el.addEventListener("ended", h));
   return () => {
     // 仅在仍是同一元素时注销，避免新元素注册后被旧元素的清理误删
     if (registry.get(nodeId) === el) registry.delete(nodeId);
@@ -49,29 +54,59 @@ export function pauseVideo(nodeId: string): void {
   if (v && !v.paused) v.pause();
 }
 
-/** 播放节点视频——片段截取面板用它在所选区间内循环预览 */
-export function playVideo(nodeId: string): void {
+/** 播放节点视频——片段截取面板用它循环预览。返回 play() 的 promise（未注册时
+    为 undefined）；策略拒绝由调用方经 usePlaybackBlocked 转成恢复提示。
+    不加 paused 守卫：自然 ended 与 NotAllowedError 拒绝后 paused 都仍是 false
+    （规范只让 pause() 置位），守卫会把这两种状态的续播/重试短路成空操作——
+    元素停在「paused=false 却不推进」的死态，面板内再无恢复路径。
+    对已在播放的元素调用 play() 是规范定义的无操作（promise 直接 resolve） */
+export function playVideo(nodeId: string): Promise<void> | undefined {
   const v = registry.get(nodeId);
-  if (v && v.paused) void v.play().catch(() => undefined);
+  if (!v) return undefined;
+  return v.play();
 }
 
-/** 只改播放时间、不改变播放/暂停状态——循环回跳专用（seekVideo 会 pause，
-    用它做回跳会把循环播停成一圈就停） */
+/** 只改播放时间、不改变播放/暂停状态。两个用途：循环回跳（seekVideo 会
+    pause，用它做回跳会把循环播停成一圈就停）、键盘微调恢复播放后的重新定位
+    （seekVideo 的 pause 会把刚恢复的播放在下一帧按停）。
+    上钳 duration - SEEK_MARGIN_S（与 seekVideo 一致）：设到精确时长构成
+    ended playback，随后的 play() 会按规范跳回文件开头（开头闪帧） */
 export function setVideoTime(nodeId: string, time: number): void {
   const v = registry.get(nodeId);
-  if (v && Number.isFinite(time)) v.currentTime = Math.max(0, time);
+  if (!v || !Number.isFinite(time)) return;
+  const max = Number.isFinite(v.duration) && v.duration > 0 ? Math.max(0, v.duration - SEEK_MARGIN_S) : time;
+  v.currentTime = Math.min(Math.max(0, time), max);
 }
 
-/** 临时关闭节点 <video> 的原生循环，返回恢复函数。
-    片段截取面板的循环由区间回跳控制：原生 loop 到头会先跳回 0、再被面板拉回
-    入点，每圈多两次 seek 且画面闪跳，故面板打开期间必须关掉它 */
-export function suppressNativeLoop(nodeId: string): () => void {
+/**
+ * ended 监听器登记表：onVideoEnded 的监听必须跟着「当前注册的元素」走——
+ * video 元素在面板打开期间可能被重挂（同 nodeId 换新元素），快照式绑定会把
+ * 监听留在游离元素上导致 ended 永久丢失，元素注册时按此表补挂。
+ */
+const endedListeners = new Map<string, Set<() => void>>();
+
+/** 监听节点视频自然播完（ended）。截取面板的选区出点在文件末尾时，ended 置位
+    先于 rAF 观察到「播放位置越过出点」——isVideoPlaying 在 ended 瞬间已为
+    false，循环 tick 永远看不到越界，只能靠此事件把循环续上 */
+export function onVideoEnded(nodeId: string, handler: () => void): () => void {
+  let listeners = endedListeners.get(nodeId);
+  if (!listeners) {
+    listeners = new Set();
+    endedListeners.set(nodeId, listeners);
+  }
+  listeners.add(handler);
   const v = registry.get(nodeId);
-  if (!v) return () => {};
-  const prev = v.loop;
-  v.loop = false;
+  if (!v) {
+    // 静默空转会让出点在文件末尾的循环在 ended 后永久停住，必须留痕；
+    // 元素随后注册时 registerVideoElement 会按登记表补挂
+    warnUnregistered(nodeId, "onVideoEnded");
+  } else {
+    v.addEventListener("ended", handler);
+  }
   return () => {
-    v.loop = prev;
+    listeners.delete(handler);
+    if (listeners.size === 0) endedListeners.delete(nodeId);
+    registry.get(nodeId)?.removeEventListener("ended", handler);
   };
 }
 
@@ -104,16 +139,19 @@ function captureCurrentFrame(v: HTMLVideoElement): string | null {
  * resume：换源默认停在暂停态（帧序列面板本来就是暂停 scrub）；片段截取面板
  * 在循环预览中换源，需要元数据就绪后自动续播，由该开关控制。
  *
- * onReady：换入的代理达到可流畅播放（canplay）时回调一次——片段截取面板用
- * 它在缓冲就绪后再解锁交互（首次打开时代理刚生成、浏览器缓存全冷，立即
+ * onReady：换入的代理达到可流畅播放（canplay）时以 true 回调一次——片段截取
+ * 面板用它在缓冲就绪后再解锁交互（首次打开时代理刚生成、浏览器缓存全冷，立即
  * 拖动会触发一串 Range 拉取 + 解码，跟不上指针）。监听挂在本函数内部，
  * 保证等待的是换入的代理而不是换源前的旧元素（旧元素早已就绪，会造成
- * 闸门被立即满足、冷缓存保护失效）；代理加载失败也回调，避免面板永久冻结。
+ * 闸门被立即满足、冷缓存保护失效）；代理加载失败以 false 回调——既避免面板
+ * 永久冻结，也让调用方与请求期失败同样落入「面板禁用、重开重试」路径
+ * （浏览器解码不了代理文件时 error 与 canplay 一样不会来，只无条件解锁会
+ * 得到一个画面冻结但可操作的活死人面板）。
  */
 export function swapVideoSource(
   nodeId: string,
   proxySrc: string,
-  opts?: { resume?: boolean; onReady?: () => void },
+  opts?: { resume?: boolean; onReady?: (ok: boolean) => void },
 ): () => void {
   const v = registry.get(nodeId);
   if (!v) {
@@ -134,7 +172,7 @@ export function swapVideoSource(
    * shouldResume / readyCallback 只在换入代理时生效：恢复原视频（面板关闭）
    * 永远保持暂停、也不触发 onReady，否则会违背用户意图地自动播放。
    */
-  const apply = (src: string, time: number, shouldResume: boolean, readyCallback?: () => void) => {
+  const apply = (src: string, time: number, shouldResume: boolean, readyCallback?: (ok: boolean) => void) => {
     // 先把当前帧设成封面顶住画面，loadeddata（新视频已有可显示帧）后再撤掉，
     // 否则切换瞬间 video 没有内容可显示，看起来就是闪一下
     const poster = captureCurrentFrame(v);
@@ -144,8 +182,19 @@ export function swapVideoSource(
       if (shouldResume) void v.play().catch(() => undefined);
     };
     const onData = () => v.removeAttribute("poster");
-    const onCanPlay = () => readyCallback?.();
-    const onLoadError = () => readyCallback?.();
+    // onReady 只回调一次：canplay 与 error 都是 { once: true }，但两者互不摘除——
+    // 若不加 settled 门闩，canplay 解锁面板后残留的 error 监听会在会话中途
+    // （如代理文件被截断/损坏区域解码失败）触发 onReady(false)，把一个正在
+    // 正常工作的面板整体打成 failed 禁用态。晚到的致命错误按旧契约忽略：
+    // 抽帧/截取走的是服务端原视频，代理死掉只影响预览流畅度，不该禁用确认
+    let readySettled = false;
+    const fireReady = (ok: boolean) => {
+      if (readySettled) return;
+      readySettled = true;
+      readyCallback?.(ok);
+    };
+    const onCanPlay = () => fireReady(true);
+    const onLoadError = () => fireReady(false);
     const cleanup = () => {
       v.removeEventListener("loadedmetadata", onMeta);
       v.removeEventListener("loadeddata", onData);
@@ -154,7 +203,8 @@ export function swapVideoSource(
     };
     v.addEventListener("loadedmetadata", onMeta, { once: true });
     v.addEventListener("loadeddata", onData, { once: true });
-    // canplay / error 都触发 readyCallback：前者正常解锁，后者避免面板冻结
+    // canplay / error 都触发 readyCallback（ok 区分）：前者正常解锁，后者避免
+    // 面板冻结且让面板落到禁用态而不是解锁一个解码不了的死播放器
     if (readyCallback) {
       v.addEventListener("canplay", onCanPlay, { once: true });
       v.addEventListener("error", onLoadError, { once: true });
@@ -177,7 +227,7 @@ export function swapVideoSource(
 
 /**
  * 让节点播放器跳到指定时间，用于拖动播放头时的 scrubbing 预览。
- * 时间钳制在 [0, duration-0.05]，与面板截取时的取值保持一致。
+ * 时间钳制在 [0, duration-SEEK_MARGIN_S]，与面板截取时的取值保持一致。
  *
  * 这里刻意不等上一次 seek 完成：目标位置连续变化时，解码器会持续解码并呈现
  * 途经的帧，画面是流畅的擦洗效果；改成「等 seeked 再发下一个 seek」后中间
@@ -192,6 +242,8 @@ export function seekVideo(nodeId: string, time: number): void {
   if (!Number.isFinite(time)) return;
   // scrubbing 时画面必须静止：拖动途中播放器若被 hover 重新唤起，不能继续走
   if (!v.paused) v.pause();
-  const max = Number.isFinite(v.duration) ? Math.max(0, v.duration - 0.05) : time;
+  // duration>0 才上钳（与 setVideoTime 一致）：duration 为 0 时钳成 max(0, -margin)
+  // 会把任何目标时间都压到 0，scrub 全程停在开头
+  const max = Number.isFinite(v.duration) && v.duration > 0 ? Math.max(0, v.duration - SEEK_MARGIN_S) : time;
   v.currentTime = Math.min(Math.max(0, time), max);
 }

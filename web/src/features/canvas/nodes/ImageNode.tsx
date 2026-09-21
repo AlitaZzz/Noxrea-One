@@ -225,6 +225,32 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     });
   }, [id, setExpanded]);
 
+  /** 主图加载完成：校正历史坏记录节点（资产记录缺宽高、以默认尺寸落位并被置
+      pendingNaturalSize 标记）的比例——用图片自身的加载结果回写真实尺寸并按比例
+      重定节点尺寸，图片本来就在加载，无额外请求。正常资产无标记，直通返回。
+      加载期间用户已手动改过尺寸（style 与落位记录不符）则只清标记、尊重用户 */
+  const handleMainImgLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
+    const pending = (node?.data as ImageNodeData | undefined)?.pendingNaturalSize;
+    if (!node || !pending) return;
+    const st = node.style as { width?: number; height?: number } | undefined;
+    if (!st || st.width !== pending.width || st.height !== pending.height) {
+      useCanvasStore.getState().updateNodeData(id, { pendingNaturalSize: undefined }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      return;
+    }
+    const { width, height } = computeNodeSize(img.naturalWidth, img.naturalHeight);
+    useCanvasStore.getState().updateNodeData(
+      id,
+      { naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight, pendingNaturalSize: undefined },
+      { width, height },
+      { skipHistory: true },
+    );
+    markDirtyImmediate();
+  }, [id]);
+
   /** 多图模式：展开/收起——浮层展示，节点尺寸不变 */
   const toggleExpand = useCallback(() => {
     setExpanded(!expanded);
@@ -272,14 +298,23 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     if (!src) return;
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
+    // 节点缺真实尺寸时先探测再入库：记录存 0 会让之后从资产插入的节点
+    // 比例错误（只能落默认尺寸）
+    let nw = d?.naturalWidth || 0;
+    let nh = d?.naturalHeight || 0;
+    if (!nw || !nh) {
+      const dims = await loadMediaDimensions(src, false);
+      nw = dims.w;
+      nh = dims.h;
+    }
     await addAsset({
       name: data.label || t("node.image"),
       type: "other",
       mediaType: "image",
       sourceUrl: src,
       sourceType: d?.source,
-      width: d?.naturalWidth || 0,
-      height: d?.naturalHeight || 0,
+      width: nw,
+      height: nh,
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
     });
@@ -554,13 +589,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                     zIndex: 0,
                   }}
                 >
-                  <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full" draggable={false} />
+                  <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
                 </div>
               </div>
             )
           )
         : hasImage ? (
-          <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full" draggable={false} />
+          <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <PictureOutlined className="text-5xl" />

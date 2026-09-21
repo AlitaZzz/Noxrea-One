@@ -22,6 +22,7 @@ import {
   selectAllNodes,
   undoAction,
 } from "@/features/canvas/shared/canvas-edit-actions";
+import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EventNames } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
@@ -54,14 +55,8 @@ export function useCanvasKeyboard() {
     function onPaste(e: ClipboardEvent) {
       const state = useCanvasStore.getState();
       if (state.modalOpen || state.directorOverlayOpen) return;
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
+      if (isEditableTarget(e.target)) return;
+
       if (!e.clipboardData) return;
 
       // 粘贴落点：光标在画布上 → 光标处；不在（如悬停面板）或未捕获到光标 → 画布视口中心
@@ -95,15 +90,7 @@ export function useCanvasKeyboard() {
       // or when a media editor panel (标注/裁剪/选帧/片段截取) owns the keyboard
       const state = useCanvasStore.getState();
       if (state.modalOpen || state.directorOverlayOpen || isMediaEditorOpen()) return;
-
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
+      if (isEditableTarget(e.target)) return;
 
       const mod = e.ctrlKey || e.metaKey;
 

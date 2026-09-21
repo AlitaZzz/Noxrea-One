@@ -7,7 +7,7 @@
 "use client";
 
 import { App, Button, ColorPicker, Slider } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
@@ -21,6 +21,7 @@ import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
 
 import LightingScene3D, { type LightViewMode } from "./LightingScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
+import useEscapeToClose from "./use-escape-to-close";
 
 interface LightingState {
   intensity: number; // 10-100
@@ -85,14 +86,10 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
   const [kelvin, setKelvin] = useState(6500);
   const [submitting, setSubmitting] = useState(false);
 
-  // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径。
+  // 共用钩子带输入框焦点与弹窗层守卫：面板内的 number input 持有焦点时
+  // Esc 只退出输入，modal / 导演浮层打开时一层 Esc 不拆两层
+  useEscapeToClose(onClose);
 
   const update = <K extends keyof LightingState>(key: K, value: LightingState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));

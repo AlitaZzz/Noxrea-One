@@ -538,8 +538,11 @@
   },
   "clip": {
     "menu": "截取",
+    "busy": "当前节点正在处理中，请稍后再试",
+    "autoplayBlocked": "浏览器已拦截自动播放：点击轨道开始播放",
+    "loading": "正在加载音频...",
+    "unavailable": "音频加载失败",
     "processing": "正在截取片段...",
-    "confirm": "截取片段",
     "proxyLoading": "正在生成预览代理...",
     "proxyFailed": "预览代理生成失败，请关闭后重开面板重试",
     "buffering": "正在缓冲预览...",
@@ -716,6 +719,9 @@
       "invalid_rect": "裁剪区域无效：需落在画面范围内",
       "timeout": "视频裁剪超时，请稍后重试",
       "failed": "视频裁剪失败，请稍后重试"
+    },
+    "speed": {
+      "failed": "音频变速失败，请稍后重试"
     },
     "generate": {
       "body_too_large": "请求体过大",
