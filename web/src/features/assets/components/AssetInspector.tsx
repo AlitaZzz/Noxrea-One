@@ -545,9 +545,11 @@ export default function AssetInspector({
             className="flex-1 min-w-0 flex items-center rounded"
             style={{ ...renameBoxStyle, border: "1px solid transparent" }}
           >
-            <span className="truncate" style={{ userSelect: "none" }} title={single.name}>
-              {single.name}
-            </span>
+            <Tooltip title={single.name}>
+              <span className="truncate" style={{ userSelect: "none" }}>
+                {single.name}
+              </span>
+            </Tooltip>
           </div>
         )}
         {!renaming && (
