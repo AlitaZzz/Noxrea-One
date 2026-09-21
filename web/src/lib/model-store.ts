@@ -35,6 +35,17 @@ function hostFromBaseUrl(baseUrl: string): string {
   }
 }
 
+/** 通配符 → 正则（带缓存：findModelParams 每次渲染都会调用，避免重复编译） */
+const patternRegexCache = new Map<string, RegExp>();
+function patternToRegex(pattern: string): RegExp {
+  let re = patternRegexCache.get(pattern);
+  if (!re) {
+    re = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+    patternRegexCache.set(pattern, re);
+  }
+  return re;
+}
+
 interface RawModelEntry {
   id?: string;
   name?: string;
@@ -106,26 +117,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (host) {
       for (const [hostPattern, models] of Object.entries(cache)) {
         if (hostPattern === "_default" || !models) continue;
-        const hostRegex = new RegExp("^" + hostPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
-        if (hostRegex.test(host)) {
-          const modelMap = models as Record<string, Record<string, ModelParamConfig>>;
-          // 模型名精确优先。
-          // 仅接受结构完整的配置（含 fields）：部分条目只覆写 mapping / endpoints，
-          // 直接返回会让下游渲染器拿到 undefined 的 fields。
-          const exact = modelMap[modelName]?.[capability];
-          if (Array.isArray(exact?.fields)) return exact;
-          for (const [mPattern, caps] of Object.entries(modelMap)) {
-            if (mPattern === "_endpoints") continue;
-            if (mPattern.includes("*") || mPattern.includes("?")) {
-              const mRegex = new RegExp("^" + mPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
-              if (mRegex.test(modelName)) {
-                const match = caps[capability];
-                if (Array.isArray(match?.fields)) return match;
-              }
+        if (!patternToRegex(hostPattern).test(host)) continue;
+        const modelMap = models as Record<string, Record<string, ModelParamConfig>>;
+        // 模型名精确优先。
+        // 后端下发前已把各条目与 _default 按字段合并（fields 必完整），此处
+        // Array.isArray 校验仅作防御：下发链路异常时宁可回退 _default 也不渲染空字段。
+        const exact = modelMap[modelName]?.[capability];
+        if (Array.isArray(exact?.fields)) return exact;
+        for (const [mPattern, caps] of Object.entries(modelMap)) {
+          if (mPattern.includes("*") || mPattern.includes("?")) {
+            if (patternToRegex(mPattern).test(modelName)) {
+              const match = caps[capability];
+              if (Array.isArray(match?.fields)) return match;
             }
           }
-          break; // host 已命中，不再继续
         }
+        break; // host 已命中，不再继续
       }
     }
     // 2. _default 兜底（纯透传）
