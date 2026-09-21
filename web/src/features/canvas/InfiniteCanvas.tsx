@@ -1173,8 +1173,9 @@ export default function InfiniteCanvas() {
               <MiniMap
                 pannable
                 zoomable
-                // React Flow 会在小地图 SVG 里自动渲染 <title>（悬停出原生英文提示），置 null 去掉
-                ariaLabel={null}
+                // React Flow 会在小地图 SVG 里自动渲染 <title>（悬停出原生英文提示）；
+                // 该版本实现是 ariaLabel ?? 默认文案，传 null 会回落到默认，必须传空串才短路掉 <title>
+                ariaLabel=""
                 style={{
                   // Panel 默认 absolute + bottom/right 定位，改为 relative 才能排进下方的纵向 flex 流
                   position: "relative",
