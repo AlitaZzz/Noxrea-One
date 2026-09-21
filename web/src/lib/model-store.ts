@@ -35,12 +35,20 @@ function hostFromBaseUrl(baseUrl: string): string {
   }
 }
 
-/** 通配符 → 正则（带缓存：findModelParams 每次渲染都会调用，避免重复编译） */
+/** 通配符 → 正则（带缓存：findModelParams 每次渲染都会调用，避免重复编译）。
+ *  host 键支持 "|" 分隔多模式（如 "*apimart*|*exellome*"），与后端 matchHost 语义一致。 */
 const patternRegexCache = new Map<string, RegExp>();
 function patternToRegex(pattern: string): RegExp {
   let re = patternRegexCache.get(pattern);
   if (!re) {
-    re = new RegExp("^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+    const source = pattern
+      .split("|")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => "^" + p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$")
+      .join("|");
+    // 全空段（如键误写为 "|"）时无可匹配模式，用永不命中的正则与后端 matchPatternKey 对齐
+    re = new RegExp(source || "(?!)");
     patternRegexCache.set(pattern, re);
   }
   return re;
@@ -125,11 +133,9 @@ export const useModelStore = create<ModelState>((set, get) => ({
         const exact = modelMap[modelName]?.[capability];
         if (Array.isArray(exact?.fields)) return exact;
         for (const [mPattern, caps] of Object.entries(modelMap)) {
-          if (mPattern.includes("*") || mPattern.includes("?")) {
-            if (patternToRegex(mPattern).test(modelName)) {
-              const match = caps[capability];
-              if (Array.isArray(match?.fields)) return match;
-            }
+          if (patternToRegex(mPattern).test(modelName)) {
+            const match = caps[capability];
+            if (Array.isArray(match?.fields)) return match;
           }
         }
         break; // host 已命中，不再继续

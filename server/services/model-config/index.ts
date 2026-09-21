@@ -6,7 +6,7 @@
  *   {
  *     "_shared": { "<key>": <共享值> },                                    // $shared 引用源（加载后剥离）
  *     "_default": { <capability>: { fields, allowedFields, mapping } },    // 兜底（含基础映射，如参考图改名）
- *     "<host通配>": {                       // 如 "*apimart*" / "*fhl.mom*" / "*agnes*"
+ *     "<host通配>": {                       // 如 "*apimart*" / "*fhl.mom*"，可用 "|" 分隔多模式："*a*|*b*"
  *       "<模型名通配或精确>": {               // 精确优先，其次 * 通配
  *         "<capability>": { fields, mapping }   // 该上游下该模型的参数与字段映射
  *       }
@@ -14,7 +14,7 @@
  *   }
  *
  * 匹配规则：
- *   - host 通配第一个命中即返回（配置保证互斥，不出现多命中）。
+ *   - host 键任一模式命中即返回（配置保证互斥，不出现多命中）。
  *   - 模型名精确匹配优先于通配匹配。
  *   - 未命中任何 host 时回退 _default 兜底（fields/allowedFields/基础映射）。
  */
@@ -213,22 +213,33 @@ function wildcardToRegex(pattern: string): RegExp {
 }
 
 /**
+ * 单个键是否命中：键可写多个模式用 "|" 分隔（如 "*apimart*|*exellome*"），
+ * 任一模式（精确或通配）命中即算命中。"|" 不是合法域名/模型名字符，无歧义。
+ */
+function matchPatternKey(key: string, name: string): boolean {
+  for (const pattern of key.split("|")) {
+    const p = pattern.trim();
+    if (!p) continue;
+    if (p === name) return true;
+    if ((p.includes("*") || p.includes("?")) && wildcardToRegex(p).test(name)) return true;
+  }
+  return false;
+}
+
+/**
  * 在 host 层级匹配：遍历顶层 key（含通配），第一个命中即返回。
  * 返回 [命中的 hostKey, 其下的模型映射表]。
  */
 function matchHost(data: HostMap, host: string): [string, Record<string, Record<string, unknown>>] | null {
   for (const [key, models] of Object.entries(data)) {
     if (key === "_default") continue;
-    if (key === host) return [key, models];
-    if (key.includes("*") || key.includes("?")) {
-      if (wildcardToRegex(key).test(host)) return [key, models];
-    }
+    if (matchPatternKey(key, host)) return [key, models];
   }
   return null;
 }
 
 /**
- * 在模型层级匹配：精确优先，其次通配。
+ * 在模型层级匹配：精确优先，其次通配（键同样支持 "|" 分隔多模式）。
  * 返回 [命中的模型 key, 其下的能力表]。
  */
 function matchModel(models: Record<string, Record<string, unknown>>, modelName: string): [string, Record<string, unknown>] | null {
@@ -236,12 +247,10 @@ function matchModel(models: Record<string, Record<string, unknown>>, modelName: 
   const exact = models[modelName];
   if (exact) return [modelName, exact];
 
-  // 2. 通配匹配
+  // 2. 通配/组合模式匹配（含纯精确名组合如 "a|b"，无通配守卫由 matchPatternKey 统一判断）
   for (const [key, caps] of Object.entries(models)) {
     if (key === modelName) continue;
-    if (key.includes("*") || key.includes("?")) {
-      if (wildcardToRegex(key).test(modelName)) return [key, caps];
-    }
+    if (matchPatternKey(key, modelName)) return [key, caps];
   }
 
   return null;
