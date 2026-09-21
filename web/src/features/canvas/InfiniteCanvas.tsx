@@ -27,7 +27,7 @@ import {
   SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
-import { App, Tooltip } from "antd";
+import { App } from "antd";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -53,6 +53,7 @@ import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import SelectionFrameHandles from "@/features/canvas/controls/SelectionFrameHandles";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
+import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
@@ -82,12 +83,11 @@ import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import { findFreePosition, flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, EventNames, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
@@ -281,6 +281,8 @@ export default function InfiniteCanvas() {
     if (!frameCaptureNodeId) return null;
     const n = nodes.find((x) => x.id === frameCaptureNodeId);
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
+    // src 清空（清除/撤销）会让 <video> 卸载，面板必须随宿主一起关闭
+    if (!(n.data as VideoNodeData).src) return null;
     return n;
   }, [frameCaptureNodeId, nodes]);
 
@@ -289,6 +291,7 @@ export default function InfiniteCanvas() {
     if (!clipCaptureNodeId) return null;
     const n = nodes.find((x) => x.id === clipCaptureNodeId);
     if (!n || n.type !== NODE_TYPE.VIDEO || !n.selected) return null;
+    if (!(n.data as VideoNodeData).src) return null;
     return n;
   }, [clipCaptureNodeId, nodes]);
 
@@ -301,14 +304,57 @@ export default function InfiniteCanvas() {
     return n;
   }, [lightingNodeId, nodes]);
 
-  // 音频片段截取的宿主节点校验：类型不再是音频/已取消选中时退出截取模式
-  useEffect(() => {
-    if (!audioClipNodeId) return;
+  // 音频片段截取面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
+  const audioClipNode = useMemo(() => {
+    if (!audioClipNodeId) return null;
     const n = nodes.find((x) => x.id === audioClipNodeId);
-    if (!n || n.type !== NODE_TYPE.AUDIO || !n.selected) {
-      useCanvasStore.getState().setAudioClipNodeId(null);
-    }
+    if (!n || n.type !== NODE_TYPE.AUDIO || !n.selected) return null;
+    if (!(n.data as { src?: string }).src) return null;
+    return n;
   }, [audioClipNodeId, nodes]);
+
+  // 画面裁剪面板的宿主节点：面板本体挂在节点内部，但残留 id 的兜底
+  // 清理与其它编辑面板一致（裁剪确认不自关，关闭由节点侧/这里的校验驱动）。
+  // 注意 croppingNodeId 由视频与图片两个裁剪面板共用，两种宿主都要放行，
+  // 否则图片裁剪会在打开的同一帧被这里的校验清掉
+  const cropNode = useMemo(() => {
+    if (!croppingNodeId) return null;
+    const n = nodes.find((x) => x.id === croppingNodeId);
+    if (!n || !n.selected) return null;
+    if (n.type === NODE_TYPE.VIDEO) {
+      if (!(n.data as VideoNodeData).src) return null;
+    } else if (n.type === NODE_TYPE.IMAGE) {
+      if (!(n.data as ImageNodeData).src) return null;
+    } else {
+      return null;
+    }
+    return n;
+  }, [croppingNodeId, nodes]);
+
+  // 宿主校验兜底：右键菜单撤销 / 框选改选等路径不经过 pane 与节点点击，
+  // 必须在这里清掉残留的面板宿主 id，否则面板卸载后 id 悬空——
+  // isMediaEditorOpen 恒真导致全部画布快捷键失效，重选节点还会幽灵重开面板
+  useEffect(() => {
+    const st = useCanvasStore.getState();
+    if (frameCaptureNodeId && !frameStripNode) st.setFrameCaptureNodeId(null);
+    if (clipCaptureNodeId && !clipStripNode) st.setClipCaptureNodeId(null);
+    if (lightingNodeId && !lightingNode) st.setLightingNodeId(null);
+    if (audioClipNodeId && !audioClipNode) st.setAudioClipNodeId(null);
+    if (croppingNodeId && !cropNode) st.setCroppingNodeId(null);
+  }, [
+    frameCaptureNodeId, frameStripNode,
+    clipCaptureNodeId, clipStripNode,
+    lightingNodeId, lightingNode,
+    audioClipNodeId, audioClipNode,
+    croppingNodeId, cropNode,
+  ]);
+
+  // 面板 onClose 提升为稳定引用：InfiniteCanvas 拖动节点时每帧重渲染，
+  // 内联箭头会让各面板（useEscapeToClose deps [onClose]）每帧重挂 window 监听
+  const closeFrameStripPanel = useCallback(() => useCanvasStore.getState().setFrameCaptureNodeId(null), []);
+  const closeClipStripPanel = useCallback(() => useCanvasStore.getState().setClipCaptureNodeId(null), []);
+  const closeLightingPanel = useCallback(() => useCanvasStore.getState().setLightingNodeId(null), []);
+  const closeAudioClipPanel = useCallback(() => useCanvasStore.getState().setAudioClipNodeId(null), []);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
   const { animateTo, cancel: cancelTidy } = useTidyAnimation();
@@ -1237,10 +1283,12 @@ export default function InfiniteCanvas() {
         {frameStripNode && (
           <RfNodeToolbar nodeId={frameStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <FrameStripPanel
-              key={frameStripNode.id}
+              // key 带 src：换源（替换/生成回填）时面板整体重挂，播放头与
+              // 代理状态对新源重新初始化，而不是拿旧选区比例套新视频
+              key={`${frameStripNode.id}:${(frameStripNode.data as { src?: string }).src ?? ""}`}
               nodeId={frameStripNode.id}
               videoSrc={(frameStripNode.data as { src?: string }).src ?? ""}
-              onClose={() => useCanvasStore.getState().setFrameCaptureNodeId(null)}
+              onClose={closeFrameStripPanel}
             />
           </RfNodeToolbar>
         )}
@@ -1249,10 +1297,12 @@ export default function InfiniteCanvas() {
         {clipStripNode && (
           <RfNodeToolbar nodeId={clipStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <ClipStripPanel
-              key={clipStripNode.id}
+              // key 带 src（与音频截取面板一致）：换源时面板重挂，选区与代理
+              // 对新源重新初始化——否则旧区间比例会被静默套在新视频时长上
+              key={`${clipStripNode.id}:${(clipStripNode.data as { src?: string }).src ?? ""}`}
               nodeId={clipStripNode.id}
               videoSrc={(clipStripNode.data as { src?: string }).src ?? ""}
-              onClose={() => useCanvasStore.getState().setClipCaptureNodeId(null)}
+              onClose={closeClipStripPanel}
             />
           </RfNodeToolbar>
         )}
@@ -1264,13 +1314,22 @@ export default function InfiniteCanvas() {
               key={lightingNode.id}
               src={(lightingNode.data as ImageNodeData).src ?? ""}
               nodeId={lightingNode.id}
-              onClose={() => useCanvasStore.getState().setLightingNodeId(null)}
+              onClose={closeLightingPanel}
             />
           </RfNodeToolbar>
         )}
 
-        {/* 音频片段截取：选区直接叠加在音频节点自身的波形上（AudioWaveform clipMode），
-            无浮层面板；audioClipNodeId 仅承担互斥/键盘作用域/工具栏隐藏 */}
+        {/* 音频片段截取面板 — 与视频片段截取面板同构互斥：选区操作全部在下方悬浮面板内 */}
+        {audioClipNode && (
+          <RfNodeToolbar nodeId={audioClipNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+            <AudioClipStripPanel
+              key={`${audioClipNode.id}:${(audioClipNode.data as { src?: string }).src ?? ""}`}
+              nodeId={audioClipNode.id}
+              audioSrc={(audioClipNode.data as { src?: string }).src ?? ""}
+              onClose={closeAudioClipPanel}
+            />
+          </RfNodeToolbar>
+        )}
 
         {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
         {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {

@@ -23,6 +23,12 @@ export const DEFAULT_BACKGROUND: BackgroundType = "dots";
 export const DEFAULT_THEME: ThemeMode = "dark";
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 5;
+
+// Media seek margin
+/** seek 精度容差（s）：末尾钳制（seekVideo / clipSeek / 抽帧）、循环入点判定
+    共用同一值——循环判定容差必须 ≥ 末尾钳制余量，否则出点附近会来回折跳 */
+export const SEEK_MARGIN_S = 0.05;
+
 // History
 export const HISTORY_MAX_SIZE = 50;
 

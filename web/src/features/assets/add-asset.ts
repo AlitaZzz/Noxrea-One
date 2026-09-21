@@ -8,7 +8,7 @@
 import type { AssetItem } from "@/features/assets/types";
 import { createAudioNode, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import type { AnyNode } from "@/features/canvas/types";
-import { DEFAULT_NODE_CONTENT_HEIGHT, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { DEFAULT_NODE_CONTENT_HEIGHT, DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
 /** 位置计算函数签名（由调用方从 store 注入；center 为锚点中心点，必填） */
@@ -24,9 +24,14 @@ export type FindFreePosition = (
 export const ASSET_DRAG_TYPE = "application/x-asset";
 
 /**
- * 根据资产创建画布节点（纯函数，不直接操作 store）。
+ * 根据资产创建画布节点（纯函数，不直接操作 store，同步返回）。
  *
- * 以 AssetsModal 原有逻辑为准，统一处理图片/视频/音频节点创建、尺寸计算与字段填充。
+ * 资产记录的宽高是入库时（上传弹窗 / 收藏节点）探测好的真实值，直接据此
+ * 等比建节点——节点立即出现且比例正确，不做任何插入期探测（探测要等媒体
+ * 下载，弱网下节点迟迟不出现，超时后还会回落成错误比例）。
+ * 仅当记录缺宽高（历史坏数据或入库探测失败存了 0）时按默认尺寸落位并置 pendingNaturalSize，
+ * 由 ImageNode 在主图加载完成时按图片真实宽高校正——图片本来就在加载，
+ * 无需额外请求；源头（收藏/上传）已堵住，坏记录只会越来越少。
  * 调用方负责将返回的节点通过 store.addNodes 添加到画布。
  */
 export function createAssetNode(
@@ -50,13 +55,10 @@ export function createAssetNode(
   } else if (isVideo) {
     const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
-    node.data.naturalWidth = nw || 320;
-    node.data.naturalHeight = nh || 180;
+    node.data.naturalWidth = nw;
+    node.data.naturalHeight = nh;
     node.data.source = "upload";
-    node.style = {
-      width: dw || DEFAULT_NODE_WIDTH,
-      height: dh || DEFAULT_NODE_HEIGHT,
-    };
+    node.style = { width: dw, height: dh };
     return node;
   } else {
     const imgSrc = asset.sourceUrl as string;
@@ -66,6 +68,9 @@ export function createAssetNode(
     node.data.naturalHeight = nh;
     node.data.source = "upload";
     node.style = { width: dw, height: dh };
+    if (!asset.width || !asset.height) {
+      node.data.pendingNaturalSize = { width: dw, height: dh };
+    }
     return node;
   }
 }

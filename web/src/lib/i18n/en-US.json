@@ -539,8 +539,11 @@
   },
   "clip": {
     "menu": "Clip",
+    "busy": "This node is still processing. Please try again shortly.",
+    "autoplayBlocked": "Autoplay was blocked — click the track to start playback",
+    "loading": "Loading audio...",
+    "unavailable": "Audio preview unavailable",
     "processing": "Extracting clip...",
-    "confirm": "Extract clip",
     "proxyLoading": "Generating preview proxy...",
     "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
     "buffering": "Buffering preview...",
@@ -717,6 +720,9 @@
       "invalid_rect": "Invalid crop area: it must stay within the video frame",
       "timeout": "Video crop timed out, please retry",
       "failed": "Video crop failed, please retry"
+    },
+    "speed": {
+      "failed": "Audio speed change failed, please retry"
     },
     "generate": {
       "body_too_large": "Request body too large",

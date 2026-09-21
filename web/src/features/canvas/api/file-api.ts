@@ -3,6 +3,12 @@
  */
 import { apiRaw } from "@/lib/api/client";
 
+/** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
+    后端媒体接口的统一入参格式，抽帧/代理/雪碧图/截取等调用方共用 */
+export function toFileKey(url: string): string {
+  return url.replace(/^\/api\/files\//, "").split("?")[0];
+}
+
 /** 从视频指定时间抽帧，返回原始 Response（调用方解析 data.url）。 */
 export async function captureFrame(
   videoKey: string,

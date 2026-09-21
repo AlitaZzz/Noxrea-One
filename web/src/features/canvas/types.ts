@@ -137,6 +137,10 @@ export type ImageNodeData = GroupableData & {
   source?: "upload" | "generate" | "derived";
   /** 全景模式：为 true 时该节点进入全景模式渲染，false/缺省时普通模式（随节点 data 落库） */
   panorama?: boolean;
+  /** 待尺寸校正：资产记录缺宽高（入库时探针失败等历史坏数据存了 0）时由插入层置位，
+      值为落位时的初始节点尺寸。ImageNode 主图加载完成后按图片真实宽高校正比例并清除；
+      用户已手动改过尺寸（style 与记录不符）则只清标记。正常资产不会有此标记 */
+  pendingNaturalSize?: { width: number; height: number };
 };
 
 export type VideoNodeData = GroupableData & {

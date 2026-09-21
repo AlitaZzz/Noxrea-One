@@ -15,13 +15,18 @@ import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { fetchVideoProxy } from "@/features/canvas/api/file-api";
+import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
+import { isEditableTarget } from "@/features/canvas/shared/dom";
+import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
-import { EventNames } from "@/lib/constants";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { SEEK_MARGIN_S } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
+import { clamp01, ratioFromClientX } from "./clip-range";
 import PrimaryActionButton from "./PrimaryActionButton";
+import useEscapeToClose from "./use-escape-to-close";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -76,7 +81,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   // swapVideoSource 会把当前时间点写回，切换不跳位。
   useEffect(() => {
     let cancelled = false;
-    const videoKey = videoSrc.replace(/^\/api\/files\//, "").split("?")[0];
+    const videoKey = toFileKey(videoSrc);
     // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub
     const request = videoKey
       ? fetchVideoProxy(videoKey)
@@ -116,13 +121,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   }, [duration, setRatioByUser]);
 
   // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeToClose(onClose);
 
   // ← / → 按一帧步进：轨道像素密度不足以选中长视频的每一帧，用键盘补齐精度
   useEffect(() => {
@@ -130,8 +129,11 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // 面板打开时可能有输入框持有焦点，方向键要留给它们
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (isEditableTarget(e.target)) return;
+      // 上层弹窗打开时方向键归弹窗控件（与 useEscapeToClose 的 modalOpen 守卫一致），
+      // 否则隐藏面板会抢走方向键、把弹窗里的滑杆等控件卡住
+      const st = useCanvasStore.getState();
+      if (st.modalOpen || st.directorOverlayOpen) return;
       e.preventDefault();
       const step = fps && fps > 0 ? 1 / fps : FALLBACK_FRAME_STEP;
       userDrivenRef.current = true;
@@ -141,24 +143,15 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [duration, fps]);
 
-  const ratioFromClientX = useCallback((clientX: number) => {
-    const el = trackRef.current;
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    const inner = rect.width;
-    if (inner <= 0) return null;
-    return clamp01((clientX - rect.left) / inner);
-  }, []);
-
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const next = ratioFromClientX(e.clientX);
+      const next = ratioFromClientX(trackRef.current, e.clientX);
       if (next !== null) setRatioByUser(next);
       const onMove = (ev: PointerEvent) => {
         ev.preventDefault();
-        const r = ratioFromClientX(ev.clientX);
+        const r = ratioFromClientX(trackRef.current, ev.clientX);
         if (r !== null) setRatioByUser(r);
       };
       const cleanup = () => {
@@ -171,7 +164,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [ratioFromClientX, setRatioByUser],
+    [setRatioByUser],
   );
 
   // 时长是唯一的前置条件：拿不到雪碧图也要能定位与截取，只是轨道上没有画面
@@ -237,15 +230,12 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
   const handleCapture = useCallback(() => {
     if (!ready) return;
-    // 末帧留 0.05s 余量：贴着 duration 抽帧可能落到视频结尾之外
-    const time = Math.max(0, Math.min(currentTime, duration - 0.05));
-    window.dispatchEvent(
-      new CustomEvent(EventNames.CANVAS_NODE_ACTION, {
-        detail: { nodeId, action: "capture-frame", time },
-      }),
-    );
-    onClose();
-  }, [ready, currentTime, duration, nodeId, onClose]);
+    // 末帧留 SEEK_MARGIN_S 余量：贴着 duration 抽帧可能落到视频结尾之外
+    const time = Math.max(0, Math.min(currentTime, duration - SEEK_MARGIN_S));
+    // 不在这里关面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、播放
+    // 位置原样保留可重试；抽帧被接受后节点会清除 frameCaptureNodeId 关闭面板
+    dispatchNodeAction(nodeId, "capture-frame", { time });
+  }, [ready, currentTime, duration, nodeId]);
 
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
@@ -332,11 +322,6 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       <PrimaryActionButton onClick={handleCapture} disabled={!ready} />
     </div>
   );
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(1, Math.max(0, value));
 }
 
 export default FrameStripPanel;

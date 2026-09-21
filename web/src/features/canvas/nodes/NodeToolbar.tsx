@@ -8,7 +8,6 @@
 import {
   BgColorsOutlined,
   CheckOutlined,
-  CloseOutlined,
   CopyOutlined,
   DownloadOutlined,
   ExpandOutlined,
@@ -22,7 +21,7 @@ import {
   StepBackwardOutlined,
   StepForwardOutlined,
 } from "@ant-design/icons";
-import { Button, Popover, Slider, Tooltip } from "antd";
+import { Button, Popover, Tooltip } from "antd";
 import { Crop, Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,9 +47,9 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
+import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
-import { formatTime } from "@/lib/utils/format";
 
 const NODE_ACTIONS = {
   IMAGE: "image-node" as const,
@@ -72,12 +71,6 @@ interface NodeToolbarProps {
   onOpenAudioClip: (nodeId: string) => void;
   /** 打开图片打光面板（同上，画布层挂载；与帧序列/片段截取/音频截取互斥） */
   onOpenLighting: (nodeId: string) => void;
-}
-
-function dispatchNodeAction(nodeId: string, action: string, extra?: Record<string, unknown>) {
-  window.dispatchEvent(
-    new CustomEvent(EventNames.CANVAS_NODE_ACTION, { detail: { nodeId, action, ...extra } })
-  );
 }
 
 /** 宫格切分选择器 — 鼠标划过高亮行列数，点击确认 */
@@ -226,7 +219,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   // 变速调节模式：点变速按钮进入，滑杆调出目标倍率，✓ 交由服务端生成变速产物
   const [speedMode, setSpeedMode] = useState(false);
   const [speedDraft, setSpeedDraft] = useState(1);
-  // 本节点处于音频片段截取中：常规工具栏隐藏（✓/✗ 由 AudioWaveform 自带渲染）
+  // 本节点处于音频片段截取中：常规工具栏隐藏（✓/✗ 在节点下方的 AudioClipStripPanel 内）
   const audioClipActive = useCanvasStore((s) => s.audioClipNodeId === nodeId);
   // 状态卫生：进入截取模式 / 切换到其它节点时退出变速调节（渲染期派生调整）
   const [prevNodeId, setPrevNodeId] = useState(nodeId);
@@ -493,7 +486,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       )}
 
       {/* Audio node actions — 二态：变速调节 → 常规（片段截取/变速/下载/清除）；
-          音频片段截取中本工具栏整体隐藏（✓/✗ 由 AudioWaveform 自带渲染） */}
+          音频片段截取中本工具栏整体隐藏（✓/✗ 在节点下方的 AudioClipStripPanel 内） */}
       {nodeType === NODE_ACTIONS.AUDIO && (
         <>
           {speedMode ? (
@@ -501,11 +494,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               speed={speedDraft}
               onSpeedChange={(next) => setSpeedDraft(next)}
               onApply={() => {
-                window.dispatchEvent(
-                  new CustomEvent(EventNames.CANVAS_NODE_ACTION, {
-                    detail: { nodeId, action: "apply-audio-speed", speed: speedDraft },
-                  }),
-                );
+                dispatchNodeAction(nodeId, "apply-audio-speed", { speed: speedDraft });
                 setSpeedMode(false);
               }}
               onCancel={() => setSpeedMode(false)}

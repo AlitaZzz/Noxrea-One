@@ -86,7 +86,6 @@ function typeLabelKey(type: string): string | undefined {
 
 /** 单项预览：图片 / 视频抽帧 / 音频波形，音频支持就地试听。 */
 function Preview({ asset }: { asset: AssetItem }) {
-  const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
 
   const thumbUrl = asset.sourceUrl?.includes("/api/files/")
@@ -102,8 +101,6 @@ function Preview({ asset }: { asset: AssetItem }) {
         <AudioWaveform
           url={asset.sourceUrl}
           duration={audioDuration}
-          playing={audioPlaying}
-          onToggle={setAudioPlaying}
           onReady={setAudioDuration}
         />
       ) : asset.mediaType === "video" && asset.sourceUrl ? (

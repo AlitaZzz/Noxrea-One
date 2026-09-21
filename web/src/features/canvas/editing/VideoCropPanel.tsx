@@ -6,15 +6,16 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, UndoOutlined } from "@ant-design/icons";
+import { CloseOutlined, UndoOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import WheelGuard from "@/components/ui/WheelGuard";
+import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { EventNames, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 import PrimaryActionButton from "./PrimaryActionButton";
 
@@ -176,7 +177,9 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
   }, []);
 
   // 确认：比例 → 源像素矩形（宽高/偏移取偶，满足 yuv420p 色度采样要求），
-  // 派发给视频节点走服务端 ffmpeg 裁剪链路
+  // 派发给视频节点走服务端 ffmpeg 裁剪链路。
+  // 不在这里关闭面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、选区
+  // 原样保留可重试；裁剪被接受后节点会清除 croppingNodeId 关闭面板
   const handleConfirm = useCallback(() => {
     if (!snap || !imgLoaded || snap.w === 0) return;
     let x = Math.round(crop.x * snap.w);
@@ -193,13 +196,8 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     w = Math.max(2, Math.min(w, snap.w - x));
     h = Math.max(2, Math.min(h, snap.h - y));
 
-    window.dispatchEvent(
-      new CustomEvent(EventNames.CANVAS_NODE_ACTION, {
-        detail: { nodeId, action: "crop-video-apply", rect: { x, y, width: w, height: h } },
-      }),
-    );
-    onClose();
-  }, [snap, imgLoaded, crop, nodeId, onClose]);
+    dispatchNodeAction(nodeId, "crop-video-apply", { rect: { x, y, width: w, height: h } });
+  }, [snap, imgLoaded, crop, nodeId]);
 
   // 视频帧不可用（理论上不可达：入口已保证视频有画面）：不渲染面板
   if (!snap) return null;

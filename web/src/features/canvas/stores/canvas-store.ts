@@ -179,6 +179,7 @@ const NODE_UI_STATE_KEYS = [
   "editingTextNodeId",
   "frameCaptureNodeId",
   "clipCaptureNodeId",
+  "lightingNodeId",
   "audioClipNodeId",
 ] as const;
 
