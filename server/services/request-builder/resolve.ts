@@ -13,7 +13,7 @@
  *   - "slot:last"     尾帧单值：slots.lastFrame
  *
  * transform 值换算（声明式）：
- *   - "lookup"        多字段组合查表（composite + table）
+ *   - "lookup"        多字段组合查表（composite + table），未命中丢弃该字段
  *   - "map"           单字段查表（table）
  *   - "ratio"         像素尺寸反推比例（如 1024x1024 → 1:1）
  *   - "stringify"     转字符串（如 number 5 → "5"）
@@ -21,6 +21,7 @@
  */
 
 import type { FieldMapSpec, TransformSpec } from "@server/services/model-config";
+import { logEvent } from "@server/core/logger/utils";
 
 /** 参考模式：text（文生）/ image（图生）/ first-last / full */
 export type RefMode = "text" | "image" | "first-last" | "full";
@@ -133,9 +134,16 @@ export function applyTransform(
     case "lookup": {
       const table = transform.table ?? {};
       const composite = transform.composite ?? [];
-      const key = composite.map((f) => String(ctx[f] ?? "")).join("|");
-      const found = table[key];
-      if (found === undefined) return value;
+      // 选项大小写各供应商不一（1k/1K/2K），键值统一小写匹配
+      const norm = (s: string) => s.trim().toLowerCase();
+      const key = composite.map((f) => norm(String(ctx[f] ?? ""))).join("|");
+      const direct = table[key];
+      const found = direct !== undefined ? direct : Object.entries(table).find(([k]) => norm(k) === key)?.[1];
+      if (found === undefined) {
+        // 未命中：丢弃字段而非把语义值（如 "16:9"）当上游值发出，宁走上游默认也不发错值
+        logEvent("request-builder", { stage: "lookup-miss", key });
+        return undefined;
+      }
       return Array.isArray(found) ? found[0] : found;
     }
     case "map": {

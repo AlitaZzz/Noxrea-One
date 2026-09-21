@@ -1,5 +1,10 @@
 {
   "_comment": "model-ui.json 仅描述『参数结构 + 上游路径』，不绑定任何协议、不绑定任何供应商。协议由 provider.protocol 单独决定（当前仅实现 openai）。供应商识别靠 baseUrl 解析出的 host 与顶层 key 通配匹配；匹配不到时一律回退 _default（通用兜底模板，非 OpenAI 专属）。",
+  "_shared": {
+    "_comment": "共享值定义：字段处写 \"$shared:<key>\" 引用，加载时展开（见 model-config expandShared）。仅用于消除各供应商重复声明的比例 options 列表。",
+    "ratios-full": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"],
+    "ratios-nano": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"]
+  },
   "_default": {
     "_comment": "通用兜底模板：任何供应商/协议在下方匹配不到时，前端 UI 与后端构建参数统一使用此处定义。不绑定协议、不绑定供应商。",
     "image": {
@@ -7,7 +12,7 @@
       "fields": [
         { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
         { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-        { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "9:16" },
+        { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": "$shared:ratios-full", "default": "9:16" },
         { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
       ],
       "mapping": {
@@ -20,7 +25,7 @@
         "refMode": { "options": ["text", "image", "first-last", "full"] }
       },
       "fields": [
-        { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+        { "name": "ratio", "type": "select",  "order": 1, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" },
         { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
         { "name": "seconds", "type": "slider", "label": "param.duration", "order": 3, "min": 1, "max": 15, "step": 1, "default": 5 },
         { "name": "generateAudio", "type": "switch", "label": "param.audio", "order": 4, "default": true, "trueShort": "param.onShort", "falseShort": "param.offShort" }
@@ -49,7 +54,7 @@
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" },
           { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
@@ -114,7 +119,7 @@
         "allowedFields": ["resolution", "ratio", "n", "refImages"],
         "fields": [
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
-          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"], "default": "16:9" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": "$shared:ratios-nano", "default": "16:9" },
           { "name": "n", "type": "segmented", "order": 3, "options": [1], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
@@ -128,7 +133,7 @@
         "allowedFields": ["resolution", "ratio", "n", "refImages"],
         "fields": [
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K", "4K"], "default": "1K" },
-          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "21:9", "4:1", "1:4", "8:1", "1:8"], "default": "16:9" },
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": "$shared:ratios-nano", "default": "16:9" },
           { "name": "n", "type": "segmented", "order": 3, "options": [1], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
@@ -141,7 +146,7 @@
       "image": {
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
-          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" }
         ],
         "mapping": {
           "ratio": { "field": "size", "kind": "single" }
@@ -152,7 +157,7 @@
       "image": {
         "fields": [
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 1, "options": ["1K", "2K"], "default": "1K" },
-          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" }
+          { "name": "ratio", "type": "select",  "order": 2, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" }
         ]
       }
     }
@@ -168,7 +173,7 @@
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" },
           { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {
@@ -189,7 +194,7 @@
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
           { "name": "resolution", "type": "select", "label": "param.clarity", "order": 2, "options": ["1k", "2k", "4k"], "default": "1k" },
-          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": ["1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"], "default": "16:9" },
+          { "name": "ratio", "type": "select",  "order": 3, "ratio": true, "options": "$shared:ratios-full", "default": "16:9" },
           { "name": "n", "type": "segmented", "order": 4, "options": [1, 2, 4], "default": 1, "unit": "param.unit.n" }
         ],
         "mapping": {

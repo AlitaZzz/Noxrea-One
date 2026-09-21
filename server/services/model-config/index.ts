@@ -4,7 +4,8 @@
  *
  * model-ui.json 结构（v2）：
  *   {
- *     "_default": { <capability>: { fields, allowedFields, mapping } },   // 纯透传兜底
+ *     "_shared": { "<key>": <共享值> },                                    // $shared 引用源（加载后剥离）
+ *     "_default": { <capability>: { fields, allowedFields, mapping } },    // 兜底（含基础映射，如参考图改名）
  *     "<host通配>": {                       // 如 "*apimart*" / "*fhl.mom*" / "*agnes*"
  *       "<模型名通配或精确>": {               // 精确优先，其次 * 通配
  *         "<capability>": { fields, mapping }   // 该上游下该模型的参数与字段映射
@@ -15,7 +16,7 @@
  * 匹配规则：
  *   - host 通配第一个命中即返回（配置保证互斥，不出现多命中）。
  *   - 模型名精确匹配优先于通配匹配。
- *   - 未命中任何 host 时回退 _default（纯透传，不做任何字段改名/换算）。
+ *   - 未命中任何 host 时回退 _default 兜底（fields/allowedFields/基础映射）。
  */
 
 import { loadJson } from "@server/services/json-loader";
@@ -124,13 +125,82 @@ export interface ModelParamConfig {
 /** model-ui.json 顶层：host通配 → 模型名 → capability → 配置 */
 type HostMap = Record<string, Record<string, Record<string, unknown>>>;
 
-function loadRaw(): HostMap {
-  return loadJson<HostMap>("model-ui.json");
+const SHARED_PREFIX = "$shared:";
+
+/**
+ * 展开 "$shared:<key>" 引用：model-ui.json 顶层 `_shared` 节点存放共享值
+ * （如各供应商重复声明的 ratio options 列表），字段处写 "$shared:ratios-full" 即可引用。
+ * 未知引用原样保留字符串，配置笔误不会静默丢数据；命中值深拷贝，防止共享引用被下游改写。
+ * 仅 model-ui.json 使用该机制，json-loader 保持通用。
+ */
+function expandShared(data: HostMap): HostMap {
+  const shared = (data as Record<string, unknown>)["_shared"] as Record<string, unknown> | undefined;
+  if (!shared || typeof shared !== "object") return data;
+
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (k === "_shared") continue;
+        out[k] = walk(v);
+      }
+      return out;
+    }
+    if (typeof node === "string" && node.startsWith(SHARED_PREFIX)) {
+      const val = shared[node.slice(SHARED_PREFIX.length)];
+      if (val === undefined) return node;
+      return structuredClone(val);
+    }
+    return node;
+  };
+  return walk(data) as HostMap;
 }
 
-/** 返回完整 JSON（供前端 API 使用） */
-export function loadModelParams(): Record<string, Record<string, unknown>> {
-  return loadRaw();
+/**
+ * 展开结果按引用缓存：json-loader 在文件未变时返回同一对象，
+ * 热更新（mtime 变化）会换新对象、自动失效；避免每次 loadRaw 都全树遍历。
+ */
+const expandedCache = new WeakMap<object, HostMap>();
+
+function loadRaw(): HostMap {
+  const raw = loadJson<HostMap>("model-ui.json");
+  const cached = expandedCache.get(raw);
+  if (cached) return cached;
+  const expanded = expandShared(raw);
+  expandedCache.set(raw, expanded);
+  return expanded;
+}
+
+/**
+ * 构建下发前端的已解析配置树：
+ * 每个模型级条目的各能力先与 _default 同能力按字段合并（与 getModelParams 完全同源同语义），
+ * 前端不再各自实现合并——此前前端只认 fields 完整的条目，模型级只写
+ * capabilities/allowedFields 覆盖的条目会被整条跳过，与后端语义分叉。
+ * 内部键（_shared/_endpoints/_comment/_todo_vendors）不进入下发结果。
+ * 下发时仍由路由层剥离 mapping（含合并结果中的 mapping），不暴露给前端。
+ */
+export function buildResolvedClientTree(): Record<string, unknown> {
+  const data = loadRaw();
+  const defaults = data["_default"] ?? {};
+  const out: Record<string, unknown> = { _default: defaults };
+
+  for (const [hostKey, models] of Object.entries(data)) {
+    if (hostKey.startsWith("_")) continue;
+    const resolvedModels: Record<string, unknown> = {};
+    for (const [modelKey, caps] of Object.entries(models)) {
+      if (modelKey.startsWith("_")) continue;
+      const resolvedCaps: Record<string, unknown> = {};
+      for (const [capability, capRaw] of Object.entries(caps)) {
+        if (capability.startsWith("_")) continue;
+        const defaultCfg = defaults[capability] ? parseConfig(defaults[capability]) : null;
+        resolvedCaps[capability] = mergeConfig(parseConfig(capRaw), defaultCfg);
+      }
+      resolvedModels[modelKey] = resolvedCaps;
+    }
+    out[hostKey] = resolvedModels;
+  }
+  return out;
 }
 
 /**
@@ -195,8 +265,9 @@ function parseConfig(raw: unknown): ModelParamConfig {
  * 按 host + 模型名 + capability 查找参数配置。
  * 匹配优先级：
  *   1. host 通配第一个命中（配置互斥）→ 该 host 下模型名精确 > 通配
- *   2. 未命中 host → _default 对应 capability（纯透传兜底）
- * 字段缺失时继承 _default 同名 capability 的 fields/allowedFields（mapping 不继承）。
+ *   2. 未命中 host → _default 对应 capability（兜底配置）
+ * 模型级条目缺失的 fields/capabilities/allowedFields/mapping/derivedFields
+ * 按字段继承 _default 同名 capability（见 mergeConfig）。
  */
 export function getModelParams(host: string, modelName: string, capability: string): ModelParamConfig | null {
   const data = loadRaw();
