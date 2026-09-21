@@ -96,7 +96,7 @@
       "image.poll": "/tasks/{task_id}",
       "video.poll": "/tasks/{task_id}"
     },
-    "*gpt-image*": {
+    "*gpt-image-2*": {
       "image": {
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
@@ -215,7 +215,7 @@
     "_endpoints": {
       "image.edits": "/images/edits"
     },
-    "*gpt-image*": {
+    "*gpt-image-2*": {
       "image": {
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
@@ -236,7 +236,7 @@
     "_endpoints": {
       "image.edits": "/images/edits"
     },
-    "*gpt-image*": {
+    "*gpt-image-2*": {
       "image": {
         "fields": [
           { "name": "quality", "type": "segmented", "order": 1, "options": ["auto", "high", "medium", "low"], "default": "auto" },
