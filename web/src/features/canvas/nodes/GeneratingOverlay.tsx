@@ -1,6 +1,6 @@
 /**
  * 生成中占位浮层（GeneratingOverlay）。
- * 图片 / 文本 / 视频节点共用：暗色占位区内的三团青绿光斑缓慢飘动 + 实时耗时。
+ * 图片 / 文本 / 视频节点共用：极光带流转 + 两团呼吸柔光（紫蓝）+ 实时耗时。
  * 相位去同步：各光斑用 startedAt 对各自周期取模做负 animation-delay，
  * 多节点同时生成时不会齐刷刷同频齐动。
  * 通过 absolute / rounded 参数适配不同节点的容器布局。
@@ -54,17 +54,18 @@ function GeneratingOverlay({
         " gen-stage flex flex-col items-center justify-center gap-2.5 overflow-hidden"
       }
     >
-      {/* 飘动光斑：三团不同色相/周期的大半径渐变缓动漂移，glow 之上文字保持安静 */}
+      {/* 极光带：斜贯画面的紫蓝渐变缓慢流转 */}
+      <div className="gen-ribbon" style={{ animationDelay: `-${phaseMs % 13000}ms` }} aria-hidden />
+      {/* 呼吸柔光：光带上下两团错相位（周期与 globals.css 的 gen-drift-* 对应），glow 之上文字保持安静 */}
       <div className="gen-blob gen-blob-1" style={{ animationDelay: `-${phaseMs % 9000}ms` }} aria-hidden />
-      <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 12000}ms` }} aria-hidden />
-      <div className="gen-blob gen-blob-3" style={{ animationDelay: `-${phaseMs % 7500}ms` }} aria-hidden />
+      <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 7000}ms` }} aria-hidden />
       {/* 噪点抖动：打散渐变色带 */}
       <div className="gen-noise" aria-hidden />
-      {/* 中心：文案（暖白主文字 + 暖灰耗时，借 Claude 配色的 on-dark / on-dark-soft 层级） */}
-      <span className="text-xs" style={{ color: "rgba(250, 249, 245, 0.6)" }}>
+      {/* 中心：文案（冷白主文字 + 冷灰耗时，紫底上暖色会发脏） */}
+      <span className="text-xs" style={{ color: "rgba(231, 231, 236, 0.72)" }}>
         {text ?? t("common.generating")}
         {elapsedSeconds !== null && (
-          <span className="tabular-nums" style={{ color: "rgba(160, 157, 150, 0.7)" }}>
+          <span className="tabular-nums" style={{ color: "rgba(149, 149, 158, 0.75)" }}>
             {" · "}
             {formatElapsed(elapsedSeconds)}
           </span>
