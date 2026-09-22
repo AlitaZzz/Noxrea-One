@@ -8,6 +8,8 @@ import { getConfig } from "@server/core/config";
 export interface TokenPayload {
   sub: string; // user_id as string
   username: string;
+  /** 签发时的凭据版本号；与库中 tokenVersion 不一致即已吊销 */
+  ver?: number;
   exp?: number;
 }
 
@@ -16,10 +18,11 @@ function getSecret(): Uint8Array {
   return new TextEncoder().encode(cfg.JWT_SECRET_KEY);
 }
 
-/** 签发 access token */
+/** 签发 access token（ver 为签发时的凭据版本号） */
 export async function createAccessToken(
   userId: number,
-  username: string
+  username: string,
+  ver = 0
 ): Promise<string> {
   const cfg = getConfig();
   const secret = getSecret();
@@ -27,6 +30,7 @@ export async function createAccessToken(
   const token = await new jose.SignJWT({
     sub: String(userId),
     username,
+    ver,
   })
     .setProtectedHeader({ alg: cfg.JWT_ALGORITHM })
     .setIssuedAt()
@@ -53,6 +57,7 @@ export async function decodeAccessToken(
     return {
       sub: payload.sub,
       username: (payload.username as string) ?? "",
+      ver: typeof payload.ver === "number" ? payload.ver : 0,
       exp: payload.exp,
     };
   } catch {

@@ -32,14 +32,17 @@ import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 function LanguageToggle() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const toggle = () => i18n.changeLanguage(lang === "zh" ? "en" : "zh");
+  const toggle = () => {
+    const next = lang === "zh" ? "en" : "zh";
+    useAuthStore.getState().savePreference("language", next);
+  };
   return (
     <Tooltip title={t("common.switchLanguage")}>
       <Button
         size="small"
         type="text"
         className="canvas-ctrl-btn"
-        onClick={() => { toggle(); useAuthStore.getState().savePreference("language", lang === "zh" ? "en" : "zh"); }}
+        onClick={toggle}
         style={{ fontSize: 12, fontWeight: 600, minWidth: 28 }}
       >
         {lang === "zh" ? "EN" : "中"}

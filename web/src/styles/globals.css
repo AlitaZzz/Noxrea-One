@@ -514,9 +514,9 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   background: rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Base font size */
+/* Base font size；全站固定深色主题，body 直接给底色，避免 SSR 空壳 / 客户端接管前的白闪 */
 html, body { font-family: var(--font-ui); }
-body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease; }
+body { font-size: 14px; background: #151518; transition: background-color 0.3s ease, color 0.3s ease; }
 .react-flow__node { font-size: 14px; }
 .react-flow__node-image-node { overflow: visible !important; }
 .react-flow__node-audio-node { overflow: visible !important; }
@@ -1231,6 +1231,62 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
     animation: none;
   }
 }
+/* ===== 画布加载屏（/canvas/[projectId] 项目未恢复完成时的整页 Loading）=====
+   汇聚构图：两圈青柠光环由外向内收拢、融进中心光核，光核随光环到达同步内收呼吸；
+   加载是一次性短状态，动画只走 opacity/scale，不抢注意力。 */
+.canvas-loading-mark {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+.canvas-loading-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(199, 244, 61, 0.6);
+  animation: canvas-loading-converge 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.canvas-loading-ring-late {
+  animation-delay: 1.1s;
+}
+.canvas-loading-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--canvas-accent);
+  box-shadow: 0 0 4px rgba(199, 244, 61, 0.7), 0 0 12px rgba(199, 244, 61, 0.45);
+  animation: canvas-loading-core 2.2s ease-in-out infinite;
+}
+.canvas-loading-text {
+  animation: canvas-loading-breathe 2.2s ease-in-out infinite;
+}
+@keyframes canvas-loading-converge {
+  0% { transform: scale(1.6); opacity: 0; }
+  30% { opacity: 0.85; }
+  75%, 100% { transform: scale(0.3); opacity: 0; }
+}
+@keyframes canvas-loading-core {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  70% { transform: scale(0.72); opacity: 0.55; }
+}
+@keyframes canvas-loading-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-loading-ring {
+    display: none;
+  }
+  .canvas-loading-core,
+  .canvas-loading-text {
+    animation: none;
+  }
+}
+
 .canvas-agent-btn:hover {
   background: var(--canvas-bg-hover);
 }

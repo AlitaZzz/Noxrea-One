@@ -1,8 +1,8 @@
 /**
  * 前端 HTTP 请求统一底座。
- * 封装 token 读写与请求头注入、全局 401 处理、错误提示，
+ * 凭据由 httpOnly cookie 自动携带（服务端 Set-Cookie 下发），本模块不管理 token，
  * 提供通用 api（JSON 包裹）、apiUpload（表单）、apiUploadWithProgress（带进度）、
- * apiRaw（原始 Response）与 apiStream（流式）等底层能力。
+ * apiRaw（原始 Response）与 apiStream（流式）等底层能力与全局 401 处理。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
@@ -12,25 +12,9 @@ import i18n from "@/lib/i18n/config";
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
 export const BASE = "";
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("noxrea-auth-token");
-}
-
-export function setToken(token: string | null) {
-  if (!token) {
-    localStorage.removeItem("noxrea-auth-token");
-  } else {
-    localStorage.setItem("noxrea-auth-token", token);
-  }
-}
-
-export function getTokenHeader(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 // ── 全局 401 处理 ──
+// 凭据存于 httpOnly cookie（服务端登录/注册时 Set-Cookie 下发），
+// 请求自动携带，前端不再管理 token。
 // 循环依赖: auth-store → api/client，所以 useAuthStore 必须动态 import
 export class UnauthorizedError extends Error {
   constructor() {
@@ -48,16 +32,11 @@ export class UnauthorizedError extends Error {
  */
 let isHandlingUnauthorized = false;
 
-function handleUnauthorized() {
+/** 登出清凭据的最大等待时长由 store.logout() 内部兜底，此处只等待其完成 */
+
+async function handleUnauthorized() {
   if (isHandlingUnauthorized) return;
   isHandlingUnauthorized = true;
-
-  // 同步清除 localStorage token，不依赖异步 import，防止页面跳转后 token 未清除导致循环
-  setToken(null);
-
-  import("@/features/auth/store").then(({ useAuthStore }) => {
-    useAuthStore.getState().logout();
-  });
 
   // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不弹提示，避免重复提示
   if (window.location.pathname !== "/login") {
@@ -69,11 +48,23 @@ function handleUnauthorized() {
     });
   }
 
+  // 统一走 store.logout()：服务端过期 httpOnly cookie（JS 无法清除）+ 清用户态与本地缓存。
+  // 必须等 cookie 清除完成再跳转——middleware 凭 cookie 是否有效放行，
+  // 带着未清除的 cookie 跳 /login 会被弹回 /project。
+  try {
+    const { useAuthStore } = await import("@/features/auth/store");
+    await useAuthStore.getState().logout();
+  } catch {
+    // 登出清凭据失败不阻塞跳转
+  }
+
   // 延迟跳转，让 toast 可见
-  // TODO: 多 Tab 同步 — 监听 window "storage" 事件，token 被清除时同步 logout
   setTimeout(() => {
-    // 已在登录页则不再跳转，防止 token 清除前的并发 401 导致循环
-    if (window.location.pathname === "/login") return;
+    if (window.location.pathname === "/login") {
+      // 不会发生整页刷新，模块状态不会重置：复位标志，保证重新登录后的下一次 401 仍能触发
+      isHandlingUnauthorized = false;
+      return;
+    }
     window.location.href = "/login";
   }, 300);
 }
@@ -106,7 +97,6 @@ export async function api<T = unknown>(
       ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
-        ...getTokenHeader(),
         ...(fetchOptions.headers || {}),
       },
     });
@@ -142,7 +132,6 @@ export async function apiUpload<T = unknown>(
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
-      headers: getTokenHeader(),
       body: formData,
     });
     if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
@@ -204,11 +193,9 @@ export function apiUploadWithProgress<T = unknown>(
   formData: FormData,
   onProgress?: (pct: number) => void
 ): Promise<{ code: number; data: T; msg: string }> {
-  const token = getToken();
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
-    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     // 挂起检测：传输阶段看字节是否推进，等待响应阶段看服务端是否回应
     let lastActiveAt = Date.now();
@@ -289,7 +276,6 @@ export async function apiRaw(
     ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      ...getTokenHeader(),
       ...(fetchOptions.headers || {}),
     },
   });

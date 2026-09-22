@@ -13,7 +13,8 @@ import { useTranslation } from "react-i18next";
 import AppModal from "@/components/ui/AppModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
-import { useAuthStore, type UserInfo } from "@/features/auth/store";
+import { useAuthStore } from "@/features/auth/store";
+import { type UserInfo } from "@/features/auth/user-cache";
 import { api } from "@/lib/api/client";
 
 import AvatarCropModal from "./AvatarCropModal";

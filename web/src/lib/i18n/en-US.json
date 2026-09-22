@@ -1,5 +1,6 @@
 {
   "common": {
+    "loading": "Loading…",
     "switchLanguage": "Switch language",
     "copy": "Copy",
     "copied": "Copied to clipboard",
@@ -638,7 +639,6 @@
       "user_not_found": "User not found",
       "login_failed": "Login failed",
       "register_failed": "Registration failed",
-      "register_missing_credentials": "Account created but no credentials were returned",
       "username_required": "Please enter your username",
       "password_required": "Please enter your password",
       "username_length": "Username must be 3-50 characters",

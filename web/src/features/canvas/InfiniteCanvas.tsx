@@ -44,6 +44,7 @@ import AssetsModal from "@/features/assets/components/AssetsModal";
 import { useAssetsStore } from "@/features/assets/store";
 import type { AssetItem } from "@/features/assets/types";
 import { useAuthStore } from "@/features/auth/store";
+import { useCurrentUser } from "@/features/auth/UserContext";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
@@ -206,7 +207,7 @@ export default function InfiniteCanvas() {
   // When switching projects, load the new project's canvas
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
-  const authUser = useAuthStore((s) => s.user);
+  const authUser = useCurrentUser();
   const { t } = useTranslation();
 
   const [editName, setEditName] = useState(projectName);
@@ -1491,9 +1492,9 @@ export default function InfiniteCanvas() {
         okText={t("auth.logout")}
         cancelText={t("common.cancel")}
         onOk={() => {
-          useAuthStore.getState().logout();
           setLogoutConfirmOpen(false);
-          router.push("/");
+          // 等 cookie 清除完成再导航，否则 middleware 仍凭 cookie 放行并弹回应用
+          void useAuthStore.getState().logout().finally(() => router.push("/"));
         }}
         onCancel={() => setLogoutConfirmOpen(false)}
       />

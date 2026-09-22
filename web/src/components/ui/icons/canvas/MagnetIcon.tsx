@@ -21,15 +21,10 @@ export function MagnetIcon({ className, style }: IconProps) {
       style={{ display: "inline-block", verticalAlign: "-0.125em", width: "1em", height: "1em", ...style }}
       aria-hidden="true"
     >
-      {/* 马蹄磁铁 */}
-      <path d="M5 16V10a7 7 0 0 1 14 0v6" />
-      {/* 两极 */}
-      <rect x="3.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
-      <rect x="15.5" y="13.5" width="5" height="4" rx="1.2" fill="currentColor" stroke="none" />
-      {/* 被吸附的节点 */}
-      <circle cx="12" cy="20" r="1.8" fill="currentColor" stroke="none" />
-      <circle cx="6.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
-      <circle cx="17.5" cy="20" r="1" fill="currentColor" stroke="none" opacity="0.45" />
+      {/* U 形磁铁 + 两极横线（tabler magnet） */}
+      <path d="M4 13v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a2 2 0 0 0 6 0v-8a2 2 0 0 1 2 -2h1a2 2 0 0 1 2 2v8a8 8 0 0 1 -16 0" />
+      <path d="M4 8l5 0" />
+      <path d="M15 8l4 0" />
     </svg>
   );
 }

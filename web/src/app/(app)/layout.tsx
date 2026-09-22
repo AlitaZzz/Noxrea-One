@@ -1,68 +1,42 @@
 /**
- * (app) 路由组布局：统一鉴权守卫与全局初始化。
- * 未登录重定向到 /login，登录后预加载语言与项目列表，就绪前不渲染子页面。
+ * (app) 路由组布局：全局后台初始化。
+ * 路由级鉴权已由 middleware.ts（token cookie）在服务端完成，这里不设门：
+ * 会话恢复（/me）、主题 / 语言 / 项目列表在后台初始化，不阻塞首帧。
+ * token 失效由 401 全局拦截器统一提示并跳登录。
  */
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
-import i18n from "@/lib/i18n/config";
+import { setAppLanguage } from "@/lib/i18n/config";
 
-/**
- * (app) 路由组统一鉴权 + 全局初始化守卫。
- * 所有需要登录的应用内页面（canvas / project 等）都挂载于此，
- * 避免在每个页面中重复手写 window.location.href 跳转与初始化逻辑。
- */
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
-  const [authChecked, setAuthChecked] = useState(false);
-  const [projectsReady, setProjectsReady] = useState(false);
-
   useEffect(() => {
     let cancelled = false;
-
     const init = async () => {
       await useAuthStore.getState().initialize();
       if (cancelled) return;
-
       const user = useAuthStore.getState().user;
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
+      // 取不到用户不在此跳转：token 失效走 401 拦截器，网络故障由页面自行降级
+      if (!user) return;
       // 前端固定使用深色主题；旧用户偏好不再影响界面。
       useCanvasStore.getState().setTheme("dark");
-      i18n.changeLanguage(user.language || "zh");
-
-      await useProjectStore.getState().initialize();
-      if (!cancelled) {
-        setProjectsReady(true);
-        setAuthChecked(true);
-      }
+      // 账号语言是权威值：登录后覆盖本地 cookie 记录，下次进站首帧即对
+      setAppLanguage(user.language === "en" ? "en" : "zh");
+      void useProjectStore.getState().initialize();
     };
-
-    init();
+    void init();
     return () => {
       cancelled = true;
     };
-  }, [router]);
-
-  if (!authChecked) {
-    return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[#151518] text-white">
-        <div className="text-lg">Loading…</div>
-      </div>
-    );
-  }
+  }, []);
 
   return <>{children}</>;
 }
