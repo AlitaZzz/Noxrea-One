@@ -1343,6 +1343,7 @@ export default function InfiniteCanvas() {
           <RfNodeToolbar nodeId={angleEditorNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
             <MultiAngleEditor
               key={angleEditorNode.id}
+              nodeId={angleEditorNode.id}
               src={(angleEditorNode.data as ImageNodeData).src ?? ""}
               onClose={closeAngleEditorPanel}
             />

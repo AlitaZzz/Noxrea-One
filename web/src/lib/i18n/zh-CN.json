@@ -394,7 +394,8 @@
       "perspective": "透视",
       "front": "正面"
     },
-    "reset": "重置参数"
+    "reset": "重置参数",
+    "generateFailed": "生成提示词失败，请重试"
   },
   "lighting": {
     "title": "打光",

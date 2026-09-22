@@ -1,15 +1,19 @@
 /**
  * 多视角（相机机位）编辑器（悬浮于节点下方，布局与打光面板同构）。
  * 左列 3D 轨道球（共享 OrbitScene3D，相机标记 + 景别缩放），右列方位角 / 俯仰 / 景别 + 预设机位。
- * 确认按钮暂未接生成链路，仅作参数展示占位。
+ * 点生成后参数交由后端 angle 模板插值成提示词，派生图片节点预填（链路同打光面板）。
  */
 "use client";
 
-import { Button, Slider } from "antd";
+import { App, Button, Slider } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
+import { createImageNode } from "@/features/canvas/node-defaults";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { spawnPromptDerivedNode } from "@/features/canvas/upload";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
@@ -17,6 +21,7 @@ import useEscapeToClose from "./use-escape-to-close";
 
 interface Props {
   src: string;
+  nodeId: string;
   onClose: () => void;
 }
 
@@ -48,13 +53,15 @@ const DEFAULT_AZIMUTH = 0;
 const DEFAULT_ELEVATION = 0;
 const DEFAULT_ZOOM = 1;
 
-export default function MultiAngleEditor({ src, onClose }: Props) {
+export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
+  const { notification } = App.useApp();
 
   const [azimuth, setAzimuth] = useState(DEFAULT_AZIMUTH);
   const [elevation, setElevation] = useState(DEFAULT_ELEVATION);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [viewMode, setViewMode] = useState<OrbitViewMode>("perspective");
+  const [submitting, setSubmitting] = useState(false);
 
   // Esc 关闭：与打光面板同一退出路径（输入框焦点 / 弹窗层守卫由钩子统一处理）
   useEscapeToClose(onClose);
@@ -80,6 +87,25 @@ export default function MultiAngleEditor({ src, onClose }: Props) {
     setElevation(DEFAULT_ELEVATION);
     setZoom(DEFAULT_ZOOM);
   };
+
+  // 生成：参数交由后端 angle 模板插值成提示词，派生图片节点预填（链路同打光面板）
+  const handleGenerate = useCallback(async () => {
+    if (!src || submitting) return;
+    setSubmitting(true);
+    try {
+      const template = await getPromptTemplate("angle", { azimuth, elevation, zoom });
+      if (!template) {
+        notification.error({ title: t("angle.generateFailed"), placement: "bottomRight" });
+        return;
+      }
+      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
+      if (!node) return;
+      markDirtyImmediate();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  }, [src, nodeId, azimuth, elevation, zoom, submitting, notification, t, onClose]);
 
   // 预设高亮按当前数值反查（同打光面板的 activeDir）：手动改参一旦偏离即自动熄灭
   const activePreset = PRESETS.find(
@@ -272,7 +298,7 @@ export default function MultiAngleEditor({ src, onClose }: Props) {
         </div>
       </div>
 
-      {/* 底部：重置 + 确认（生成链路暂未接入，保持展示占位） */}
+      {/* 底部：重置 + 确认（确认即按当前机位派生图片节点，链路同打光） */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -282,7 +308,7 @@ export default function MultiAngleEditor({ src, onClose }: Props) {
         >
           {t("angle.reset")}
         </button>
-        <PrimaryActionButton />
+        <PrimaryActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
       </div>
     </div>
   );

@@ -14,10 +14,9 @@ import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
 import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
 import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
-import { createEdge, createImageNode } from "@/features/canvas/node-defaults";
+import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { ImageNodeData } from "@/features/canvas/types";
-import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { spawnPromptDerivedNode } from "@/features/canvas/upload";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
@@ -121,7 +120,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
   }, []);
 
   // 生成：参数交由后台提示词模板（type=lighting）插值成稿，派生图片节点预填 prompt，
-  // 链路与图片节点「创作」一致（createImageNode + createEdge，连线即参考图来源）。
+  // 链路与图片节点「创作」一致（spawnPromptDerivedNode，连线即参考图来源）。
   // 前端不做语义翻译，只传原始参数：intensity/azimuth/elevation + kelvin（色温）或 color（自定义色）。
   const handleGenerate = useCallback(async () => {
     if (!src || submitting) return;
@@ -137,19 +136,8 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
         notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight" });
         return;
       }
-      const source = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      if (!source) return;
-      const nodeWidth = (source.style?.width as number) || DEFAULT_NODE_WIDTH;
-      const position = { x: source.position.x + nodeWidth + 48, y: source.position.y };
-      const imageNode = createImageNode(position);
-      imageNode.data = {
-        ...imageNode.data,
-        genSettings: { ...(imageNode.data.genSettings || { prompt: "" }), prompt: template } as ImageNodeData["genSettings"],
-      };
-      const edge = createEdge(nodeId, imageNode.id);
-      const store = useCanvasStore.getState();
-      store.addNodes([imageNode]);
-      store.setEdges([...store.edges, edge]);
+      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
+      if (!node) return;
       markDirtyImmediate();
       onClose();
     } finally {
