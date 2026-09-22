@@ -23,7 +23,6 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
-import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
@@ -87,7 +86,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const cropOpen = croppingNodeId === id;
-  const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   // annotateOpen is driven by the store's annotatingNodeId so that clicking
   // other nodes or the pane can close annotation mode externally.
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
@@ -391,12 +389,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         s.setClipCaptureNodeId(null);
         s.setAudioClipNodeId(null);
         s.setLightingNodeId(null);
+        s.setAngleEditorNodeId(null);
       };
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
         case "crop-interactive": if (src) { closeOtherEditors(); setCroppingNodeId(id); } break;
-        case "angle-editor": if (src) { closeOtherEditors(); setAngleEditorOpen(true); } break;
+        case "angle-editor": if (src) { closeOtherEditors(); useCanvasStore.getState().setAngleEditorNodeId(id); } break;
         case "annotate": if (src) { closeOtherEditors(); setAnnotateOpen(true); } break;
         case "panorama": if (src) { closeOtherEditors(); setPanoramaOpen(true); } break;
         case "preview-fullscreen": a.openPreview(); break;
@@ -632,10 +631,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />}
       <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />
     </div>
-    {angleEditorOpen && src && createPortal(
-      <MultiAngleEditor src={src} sourceId={id} onClose={() => setAngleEditorOpen(false)} />,
-      document.body
-    )}
     {previewOpen && createPortal(
       <MediaPreviewOverlay
         items={previewList}

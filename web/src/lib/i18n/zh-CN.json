@@ -377,7 +377,6 @@
   "angle": {
     "editor": "多角度",
     "editorTitle": "多角度",
-    "custom": "自定义",
     "fisheye": "鱼眼视角",
     "tilt": "倾斜视角",
     "frontTop": "正面俯拍",
@@ -387,12 +386,14 @@
     "azimuth": "水平环绕",
     "elevation": "垂直俯仰",
     "zoom": "景别缩放",
-    "cameraPos": "镜头位置",
-    "dragHint": "拖动球体调整视角",
+    "presets": "预设机位",
     "zoomNear": "近景",
     "zoomMid": "中景",
     "zoomFar": "远景",
-    "prompt": "提示词",
+    "view": {
+      "perspective": "透视",
+      "front": "正面"
+    },
     "reset": "重置参数"
   },
   "lighting": {

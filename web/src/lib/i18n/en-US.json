@@ -378,7 +378,6 @@
   "angle": {
     "editor": "Multi-Angle",
     "editorTitle": "Multi-Angle",
-    "custom": "Custom",
     "fisheye": "Fisheye",
     "tilt": "Tilt",
     "frontTop": "Front Top",
@@ -388,12 +387,14 @@
     "azimuth": "Azimuth",
     "elevation": "Elevation",
     "zoom": "Zoom",
-    "cameraPos": "Camera Position",
-    "dragHint": "Drag sphere to adjust view",
+    "presets": "Camera Presets",
     "zoomNear": "Near",
     "zoomMid": "Mid",
     "zoomFar": "Far",
-    "prompt": "Prompt",
+    "view": {
+      "perspective": "Perspective",
+      "front": "Front"
+    },
     "reset": "Reset"
   },
   "lighting": {

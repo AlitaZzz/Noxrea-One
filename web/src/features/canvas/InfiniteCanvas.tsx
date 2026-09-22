@@ -57,6 +57,7 @@ import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
 import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
 import LightingPanel from "@/features/canvas/editing/LightingPanel";
+import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
@@ -130,6 +131,7 @@ export default function InfiniteCanvas() {
   const frameCaptureNodeId = useCanvasStore((s) => s.frameCaptureNodeId);
   const clipCaptureNodeId = useCanvasStore((s) => s.clipCaptureNodeId);
   const lightingNodeId = useCanvasStore((s) => s.lightingNodeId);
+  const angleEditorNodeId = useCanvasStore((s) => s.angleEditorNodeId);
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
@@ -228,9 +230,9 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId, setRfViewport]);
 
-  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光）激活的节点：生成面板必须让位，
+  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光 / 多视角）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId;
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId ?? angleEditorNodeId;
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -304,6 +306,15 @@ export default function InfiniteCanvas() {
     return n;
   }, [lightingNodeId, nodes]);
 
+  // 多视角面板的宿主节点：同打光面板
+  const angleEditorNode = useMemo(() => {
+    if (!angleEditorNodeId) return null;
+    const n = nodes.find((x) => x.id === angleEditorNodeId);
+    if (!n || n.type !== NODE_TYPE.IMAGE || !n.selected) return null;
+    if (!(n.data as ImageNodeData).src) return null;
+    return n;
+  }, [angleEditorNodeId, nodes]);
+
   // 音频片段截取面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
   const audioClipNode = useMemo(() => {
     if (!audioClipNodeId) return null;
@@ -339,12 +350,14 @@ export default function InfiniteCanvas() {
     if (frameCaptureNodeId && !frameStripNode) st.setFrameCaptureNodeId(null);
     if (clipCaptureNodeId && !clipStripNode) st.setClipCaptureNodeId(null);
     if (lightingNodeId && !lightingNode) st.setLightingNodeId(null);
+    if (angleEditorNodeId && !angleEditorNode) st.setAngleEditorNodeId(null);
     if (audioClipNodeId && !audioClipNode) st.setAudioClipNodeId(null);
     if (croppingNodeId && !cropNode) st.setCroppingNodeId(null);
   }, [
     frameCaptureNodeId, frameStripNode,
     clipCaptureNodeId, clipStripNode,
     lightingNodeId, lightingNode,
+    angleEditorNodeId, angleEditorNode,
     audioClipNodeId, audioClipNode,
     croppingNodeId, cropNode,
   ]);
@@ -354,6 +367,7 @@ export default function InfiniteCanvas() {
   const closeFrameStripPanel = useCallback(() => useCanvasStore.getState().setFrameCaptureNodeId(null), []);
   const closeClipStripPanel = useCallback(() => useCanvasStore.getState().setClipCaptureNodeId(null), []);
   const closeLightingPanel = useCallback(() => useCanvasStore.getState().setLightingNodeId(null), []);
+  const closeAngleEditorPanel = useCallback(() => useCanvasStore.getState().setAngleEditorNodeId(null), []);
   const closeAudioClipPanel = useCallback(() => useCanvasStore.getState().setAudioClipNodeId(null), []);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
@@ -818,6 +832,7 @@ export default function InfiniteCanvas() {
     useCanvasStore.getState().setClipCaptureNodeId(null);
     useCanvasStore.getState().setAudioClipNodeId(null);
     useCanvasStore.getState().setLightingNodeId(null);
+    useCanvasStore.getState().setAngleEditorNodeId(null);
     useCanvasStore.getState().setMultiExpandedNodeId(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
@@ -888,6 +903,10 @@ export default function InfiniteCanvas() {
       const currentLighting = useCanvasStore.getState().lightingNodeId;
       if (currentLighting && currentLighting !== nodeId) {
         useCanvasStore.getState().setLightingNodeId(null);
+      }
+      const currentAngleEditor = useCanvasStore.getState().angleEditorNodeId;
+      if (currentAngleEditor && currentAngleEditor !== nodeId) {
+        useCanvasStore.getState().setAngleEditorNodeId(null);
       }
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
@@ -1319,6 +1338,17 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
+        {/* 多视角编辑面板 — 与打光面板同形态，悬浮于选中图片节点下方 */}
+        {angleEditorNode && (
+          <RfNodeToolbar nodeId={angleEditorNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+            <MultiAngleEditor
+              key={angleEditorNode.id}
+              src={(angleEditorNode.data as ImageNodeData).src ?? ""}
+              onClose={closeAngleEditorPanel}
+            />
+          </RfNodeToolbar>
+        )}
+
         {/* 音频片段截取面板 — 与视频片段截取面板同构互斥：选区操作全部在下方悬浮面板内 */}
         {audioClipNode && (
           <RfNodeToolbar nodeId={audioClipNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
@@ -1336,7 +1366,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || lightingNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || lightingNodeId === nid || angleEditorNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
@@ -1348,6 +1378,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setClipCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
                   useCanvasStore.getState().setLightingNodeId(null);
+                  useCanvasStore.getState().setAngleEditorNodeId(null);
                   useCanvasStore.getState().setFrameCaptureNodeId(id);
                 }}
                 onOpenClipStrip={(id) => {
@@ -1356,6 +1387,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
                   useCanvasStore.getState().setLightingNodeId(null);
+                  useCanvasStore.getState().setAngleEditorNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(id);
                 }}
                 onOpenAudioClip={(id) => {
@@ -1364,6 +1396,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
                   useCanvasStore.getState().setLightingNodeId(null);
+                  useCanvasStore.getState().setAngleEditorNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(id);
                 }}
                 onOpenLighting={(id) => {
@@ -1372,6 +1405,7 @@ export default function InfiniteCanvas() {
                   useCanvasStore.getState().setFrameCaptureNodeId(null);
                   useCanvasStore.getState().setClipCaptureNodeId(null);
                   useCanvasStore.getState().setAudioClipNodeId(null);
+                  useCanvasStore.getState().setAngleEditorNodeId(null);
                   useCanvasStore.getState().setLightingNodeId(id);
                 }}
               />
