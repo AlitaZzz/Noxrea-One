@@ -89,6 +89,9 @@ export default function MultiAngleEditor({ src, onClose }: Props) {
   // Zoom scales the center image
   const zoomScale = [1.6, 1.0, 0.65][zoom];
 
+  // Elevation handle position in % of track（-90→0%、0→50%、90→100%），供中点填充段定位
+  const elevationPct = ((elevation + 90) / 180) * 100;
+
   return (
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
       {/* 标题栏（与打光面板同款） */}
@@ -181,16 +184,31 @@ export default function MultiAngleEditor({ src, onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.elevation")}</span>
             <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <Slider
-                min={-90}
-                max={90}
-                step={1}
-                value={elevation}
-                onChange={(v) => setElevation(Number(v))}
-                className="min-w-0 flex-1"
-                style={{ margin: 0 }}
-                tooltip={{ open: false }}
-              />
+              <div className="relative min-w-0 flex-1">
+                {/* 双向轴：填充从中间 0° 出发指向手柄。antd 只会从最小值填充，
+                    隐藏原生轨道填充，自绘一段 0 点→手柄的白条（层级在轨道上、手柄下） */}
+                <div
+                  className="pointer-events-none absolute h-1 -translate-y-1/2 rounded-full"
+                  style={{
+                    top: "50%",
+                    left: `${Math.min(50, elevationPct)}%`,
+                    width: `${Math.abs(elevationPct - 50)}%`,
+                    background: "#fff",
+                    zIndex: 1,
+                  }}
+                />
+                <Slider
+                  min={-90}
+                  max={90}
+                  step={1}
+                  value={elevation}
+                  onChange={(v) => setElevation(Number(v))}
+                  className="relative"
+                  style={{ margin: 0, width: "100%" }}
+                  tooltip={{ open: false }}
+                  styles={{ track: { background: "transparent" }, handle: { zIndex: 2 } }}
+                />
+              </div>
               <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
               <input
                 type="number"
