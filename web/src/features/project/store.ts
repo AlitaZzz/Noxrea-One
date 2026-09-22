@@ -158,8 +158,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   refreshProject: async (id) => {
     const fresh = await fetchProjectById(id);
     if (!fresh) return null;
+    // upsert：刷新画布时本方法与 initialize（全量列表）并行请求，若列表尚未
+    // 就绪，map 匹配不到会把刚拉到的项目整个丢掉，画布顶栏先闪一帧 Untitled
     set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? fresh : p)),
+      projects: s.projects.some((p) => p.id === id)
+        ? s.projects.map((p) => (p.id === id ? fresh : p))
+        : [...s.projects, fresh],
     }));
     return fresh;
   },
