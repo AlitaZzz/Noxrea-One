@@ -6,17 +6,7 @@
  * 模板文案本身可热更新（改 JSON 即生效），描述词分段规则改动需发版。
  */
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-const num = (value: string | undefined, fallback: number) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-// 方位角(0-359，0=前方，顺时针增) → 八方位词基座（去「方」字，供与上/下组合）
-const AZIMUTH_BASES = ["前", "右前", "右", "右后", "后", "左后", "左", "左前"];
-function azimuthBase(azimuth: number): string {
-  return AZIMUTH_BASES[Math.round(((((azimuth % 360) + 360) % 360) / 45)) % 8];
-}
+import { azimuthBase, clamp, num } from "./prompt-utils";
 
 // 方向主词：方位角与仰角融合成单一方向词，避免出现「正上方却斜射」的矛盾——
 // 平射区间用纯方位词；斜射区间用「左上方」式组合词；接近垂直时方位角失去意义才收敛为正上/正下

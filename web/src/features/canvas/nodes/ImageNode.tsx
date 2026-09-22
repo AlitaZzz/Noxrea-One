@@ -24,11 +24,11 @@ import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
-import { createEdge, createImageNode, createTextNode } from "@/features/canvas/node-defaults";
+import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { ImageNode as ImageNodeType, ImageNodeData, TextNodeData } from "@/features/canvas/types";
-import { runMediaUpload, useNodeUpload } from "@/features/canvas/upload";
+import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
+import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
 import {
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
@@ -325,38 +325,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const template = await getPromptTemplate(type);
     if (!template) return;
 
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
-    if (!node) return;
-    const nodeWidth = (node.style?.width as number) || DEFAULT_NODE_WIDTH;
-    const gap = 48;
-    const position = {
-      x: node.position.x + nodeWidth + gap,
-      y: node.position.y,
-    };
-
     // 反推提示词 -> 文本节点（承载可编辑的提示词文本）
     // 角色面部三视图 / 角色三视图 / 多机位九宫格 -> 图片节点（预填提示词，供图片生成面板使用）
-    if (type === "reverse") {
-      const textNode = createTextNode(position);
-      textNode.data = {
-        ...textNode.data,
-        genSettings: { ...(textNode.data.genSettings || { prompt: "" }), prompt: template } as TextNodeData["genSettings"],
-      };
-      const edge = createEdge(id, textNode.id);
-      const store = useCanvasStore.getState();
-      store.addNodes([textNode]);
-      store.setEdges([...store.edges, edge]);
-    } else {
-      const imageNode = createImageNode(position);
-      imageNode.data = {
-        ...imageNode.data,
-        genSettings: { ...(imageNode.data.genSettings || { prompt: "" }), prompt: template } as ImageNodeData["genSettings"],
-      };
-      const edge = createEdge(id, imageNode.id);
-      const store = useCanvasStore.getState();
-      store.addNodes([imageNode]);
-      store.setEdges([...store.edges, edge]);
-    }
+    if (!spawnPromptDerivedNode(id, template, type === "reverse" ? createTextNode : createImageNode, useCanvasStore.getState())) return;
     markDirtyImmediate();
   }, [id, src]);
 

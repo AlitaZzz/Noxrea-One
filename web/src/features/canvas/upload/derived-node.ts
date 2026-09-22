@@ -12,7 +12,7 @@ import {
   createImageNode,
   createVideoNode,
 } from "@/features/canvas/node-defaults";
-import type { AnyEdge, AnyNode } from "@/features/canvas/types";
+import type { AnyEdge, AnyNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
@@ -59,6 +59,28 @@ export function resolveDerivedPosition(
     x: (origNode?.position.x || 0) + ((origNode?.style?.width as number) || DEFAULT_NODE_WIDTH) + DERIVED_BASE_GAP_X,
     y: origNode?.position.y || 0,
   };
+}
+
+/**
+ * 提示词模板派生节点：在源节点右侧创建新节点、预填提示词、连线入库。
+ * 供打光 / 多角度面板与图片节点的模板工具条复用；nodeFactory 决定节点类型
+ * （createImageNode / createTextNode），两者的默认 genSettings 均含 prompt 字段。
+ * 返回创建的节点；源节点不存在时返回 null，提示方式由调用方决定。
+ */
+export function spawnPromptDerivedNode(
+  sourceId: string,
+  prompt: string,
+  nodeFactory: (position: { x: number; y: number }) => TextNode | ImageNode,
+  storeApi: CanvasStoreApi,
+): TextNode | ImageNode | null {
+  const source = storeApi.nodes.find((n) => n.id === sourceId);
+  if (!source) return null;
+  const node = nodeFactory(resolveDerivedPosition(source));
+  const gen = node.data.genSettings;
+  if (gen) gen.prompt = prompt;
+  storeApi.addNodes([node]);
+  storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
+  return node;
 }
 
 /**

@@ -395,7 +395,8 @@
       "perspective": "Perspective",
       "front": "Front"
     },
-    "reset": "Reset"
+    "reset": "Reset",
+    "generateFailed": "Failed to build prompt. Please retry."
   },
   "lighting": {
     "title": "Lighting",
