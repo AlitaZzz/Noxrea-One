@@ -41,7 +41,10 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ undoRedo: false, underline: false }),
-      Markdown,
+      // marked 默认按 CommonMark 把段内单换行当软换行（保留为文本 \n）：编辑器
+      // pre-wrap 下看起来正常，但 getHTML 存的裸 \n 在刷新后按 HTML 规则解析
+      // 会被折叠成空格，行结构丢失。breaks:true 让单换行直接变成 <br>，往返稳定。
+      Markdown.configure({ markedOptions: { breaks: true } }),
       Placeholder.configure({ placeholder: t("node.textPlaceholder"), showOnlyWhenEditable: false }),
     ],
     content,
