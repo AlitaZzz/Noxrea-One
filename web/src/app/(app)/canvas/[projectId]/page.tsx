@@ -13,8 +13,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
+import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import LoadingPing from "@/components/ui/LoadingPing";
 import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
@@ -108,7 +108,7 @@ export default function CanvasPage({
   }, [directorOverlayOpen, setModalOpen]);
 
   if (loadedProjectId !== projectId) {
-    return <LoadingPing />;
+    return <CanvasLoader />;
   }
 
   return (
