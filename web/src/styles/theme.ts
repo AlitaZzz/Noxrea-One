@@ -81,6 +81,13 @@ export function directorTheme() {
       colorTextTertiary: "#76767f",
       colorTextQuaternary: "#55555d",
       controlOutlineWidth: 0,
+      /* antd 内建 hover 统一进主语言，避免「自绘按钮 hover #26262b、antd 控件 hover 派生白」两套并存。
+         同 --canvas-bg-hover / --canvas-bg-active / --menu-item-hover（globals.css）。
+         菜单/下拉项沿用「比按钮淡半档」的既有语言，所以用 --menu-item-hover 而非按钮色。 */
+      colorBgTextHover: "#26262b",
+      colorBgTextActive: "#323238",
+      controlItemBgHover: "#2a2a2f",
+      controlItemBgActiveHover: "#2a2a2f",
       // 注意：这里刻意不覆写 colorTextLightSolid —— Tooltip 的文字也用它，
       // 改成深色会让深底 Tooltip 不可读；主色按钮的深色字由 Button.primaryColor 单独处理。
     },
@@ -89,6 +96,9 @@ export function directorTheme() {
         // 青柠填充 + 深色字。单独覆写而不是改 colorTextLightSolid，
         // 因为后者被 Tooltip 等共用，改成深色会让深底 Tooltip 不可读。
         primaryColor: ON_PRIMARY_TEXT,
+        // antd v6 文字态按钮的 hover 底色是组件 token textHoverBg（默认派生自
+        // colorFillTertiary 的白系 alpha），改这里把它并入主语言 #26262b
+        textHoverBg: "#26262b",
       },
       Select: {
         colorBgContainer: "#1d1d21",

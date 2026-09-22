@@ -125,7 +125,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
         }
       `}</style>
       <div
-        className="flex items-center gap-1 px-1.5 rounded-lg shadow-lg w-fit"
+        className="canvas-ctrl-bar flex items-center gap-1 px-1.5 rounded-lg shadow-lg w-fit"
         style={{
           height: 40,
           // 磨砂玻璃：背景 70% 不透明度 + 背景模糊，透出并柔化画布内容
