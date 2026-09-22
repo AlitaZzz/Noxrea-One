@@ -28,4 +28,7 @@ export const authApi = {
   /** 局部更新当前用户字段（如 lastName / displayName 等）。 */
   updateMe: (patch: Record<string, unknown>) =>
     api("/api/auth/me", { method: "PUT", body: JSON.stringify(patch) }),
+
+  /** 登出：服务端过期 httpOnly 鉴权 cookie（幂等）。 */
+  logout: () => api("/api/auth/logout", { method: "POST", skipUnauthorized: true }),
 };

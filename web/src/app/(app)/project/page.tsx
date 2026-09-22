@@ -18,6 +18,7 @@ import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
+import { useCurrentUser } from "@/features/auth/UserContext";
 import { flushAndWait, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
 import type { CanvasProject } from "@/features/project/types";
@@ -30,7 +31,7 @@ export default function ProjectPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const renameProject = useProjectStore((s) => s.renameProject);
-  const user = useAuthStore((s) => s.user);
+  const user = useCurrentUser();
   const { t, i18n } = useTranslation();
   const projects = useProjectStore((s) => s.projects);
   const createProject = useProjectStore((s) => s.createProject);
@@ -100,13 +101,13 @@ export default function ProjectPage() {
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
                 style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
-                onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; i18n.changeLanguage(newLang); useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
+                onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
 <span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
               </button>
               <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
               <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
                 style={{ color: "var(--canvas-text-dim)", border: "none", cursor: "pointer", background: "transparent" }}
-                onClick={() => { useAuthStore.getState().logout(); router.push("/login"); }}>
+                onClick={() => { setAvatarOpen(false); useAuthStore.getState().logout().finally(() => router.push("/login")); }}>
                 {t("auth.logout")}
               </button>
             </div>
@@ -116,6 +117,7 @@ export default function ProjectPage() {
           open={avatarOpen}
           onOpenChange={setAvatarOpen}
         >
+          {/* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */}
           <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--canvas-bg-elevated)" }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
               {user?.avatarUrl ? (

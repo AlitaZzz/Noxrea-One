@@ -1,5 +1,6 @@
 {
   "common": {
+    "loading": "加载中…",
     "switchLanguage": "切换语言",
     "copy": "复制",
     "copied": "已复制到剪贴板",
@@ -637,7 +638,6 @@
       "user_not_found": "用户不存在",
       "login_failed": "登录失败",
       "register_failed": "注册失败",
-      "register_missing_credentials": "注册成功但未返回登录凭证",
       "username_required": "请输入用户名",
       "password_required": "请输入密码",
       "username_length": "用户名需为 3-50 个字符",

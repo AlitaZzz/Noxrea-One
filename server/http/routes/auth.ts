@@ -3,9 +3,9 @@
  * 处理登录、注册、个人信息更新与登出等鉴权接口。
  */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/http/middleware/auth";
+import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
-import { getUserByUsername, getUserById, updateUser, createUser } from "@server/crud/user";
+import { getUserByUsername, getUserById, updateUser, createUser, setUserPassword, toPublicUser } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getConfig } from "@server/core/config";
@@ -49,10 +49,11 @@ router.post("/api/auth/login", async (c) => {
     return failCode(401, "auth.invalid_credentials");
   }
 
-  // 签发 JWT
-  const token = await createAccessToken(user.id, user.username);
+  // 签发 JWT 并下发 httpOnly cookie（浏览器端凭据载体；body 中的 access_token 供纯 API 客户端使用）
+  const token = await createAccessToken(user.id, user.username, user.tokenVersion);
+  setAuthCookie(c, token);
 
-  return c.json(ok({ access_token: token, token_type: "bearer", user }, "Login successful"));
+  return c.json(ok({ access_token: token, token_type: "bearer", user: toPublicUser(user) }, "Login successful"));
 });
 
 // POST /api/auth/register
@@ -98,10 +99,18 @@ router.post("/api/auth/register", async (c) => {
   // 创建用户
   const user = await createUser({ username, hashedPassword: hashed, email });
 
-  // 签发 JWT
-  const token = await createAccessToken(user.id, user.username);
+  // 签发 JWT 并下发 httpOnly cookie（同登录）
+  const token = await createAccessToken(user.id, user.username, user.tokenVersion);
+  setAuthCookie(c, token);
 
-  return c.json(ok({ access_token: token, token_type: "bearer", user }, "Registration successful"));
+  return c.json(ok({ access_token: token, token_type: "bearer", user: toPublicUser(user) }, "Registration successful"));
+});
+
+// POST /api/auth/logout
+// 登出：过期鉴权 cookie（httpOnly，只能由服务端清除）。幂等，无需鉴权。
+router.post("/api/auth/logout", (c) => {
+  setAuthCookie(c, "", 0);
+  return c.json(ok(null, "Logged out"));
 });
 
 // GET /api/auth/me
@@ -113,7 +122,7 @@ router.get("/api/auth/me", async (c) => {
   const user = await getUserById(auth.user.id);
   if (!user) return failCode(404, "auth.user_not_found");
 
-  return c.json(ok(user));
+  return c.json(ok(toPublicUser(user)));
 });
 
 // PUT /api/auth/me
@@ -141,6 +150,7 @@ router.put("/api/auth/me", async (c) => {
   if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
   if (parsed.data.language !== undefined) updates.language = parsed.data.language;
 
+  let passwordChanged = false;
   if (parsed.data.password !== undefined) {
     const user = await getUserById(auth.user.id);
     if (!user) return failCode(404, "auth.user_not_found");
@@ -150,10 +160,25 @@ router.put("/api/auth/me", async (c) => {
     if (!valid) {
       return failCode(400, "auth.current_password_incorrect");
     }
+
+    // 写入新哈希并递增凭据版本号（旧 JWT 全部失效）。此前只校验不落库，
+    // 改密码实际是空操作却提示成功。随后轮换当前会话：用新版本号重签，
+    // 否则本次修改会把自己的 token 也作废、被 401 拦截器踢回登录页
+    const hashed = await hashPassword(parsed.data.password);
+    await setUserPassword(auth.user.id, hashed);
+    passwordChanged = true;
   }
 
-  const updated = await updateUser(auth.user.id, updates);
-  return c.json(ok(updated));
+  await updateUser(auth.user.id, updates);
+  // 密码分支已改库，重新取一遍保证返回值与 cookie 中版本号一致
+  const fresh = await getUserById(auth.user.id);
+  if (!fresh) return failCode(404, "auth.user_not_found");
+
+  if (passwordChanged) {
+    const token = await createAccessToken(fresh.id, fresh.username, fresh.tokenVersion);
+    setAuthCookie(c, token);
+  }
+  return c.json(ok(toPublicUser(fresh)));
 });
 
 export { router };

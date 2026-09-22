@@ -3,6 +3,7 @@
  * 按 ID 与用户名查询用户信息，用户名匹配大小写不敏感。
  */
 import { prisma } from "@server/core/database/client";
+import type { User } from "@prisma/client";
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -34,6 +35,30 @@ type UpdatableUserFields = {
   language?: string;
   isActive?: boolean;
 };
+
+/**
+ * 对外安全的用户视图：剔除 hashedPassword / isSuperuser 等敏感字段。
+ * 所有返回给 HTTP 客户端的 user 对象都必须经此转换。
+ */
+export function toPublicUser(user: User) {
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    avatarUrl: user.avatarUrl,
+    theme: user.theme,
+    language: user.language,
+    isActive: user.isActive,
+  };
+}
+
+/** 修改密码的唯一入口：写入新哈希并递增凭据版本号，旧 JWT 立即失效 */
+export async function setUserPassword(id: number, hashedPassword: string) {
+  return prisma.user.update({
+    where: { id },
+    data: { hashedPassword, tokenVersion: { increment: 1 } },
+  });
+}
 
 export async function updateUser(
   id: number,
