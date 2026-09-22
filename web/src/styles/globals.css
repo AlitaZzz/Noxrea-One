@@ -1023,6 +1023,17 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: var(--canvas-bg-hover) !important;
   color: var(--canvas-text) !important;
 }
+/* 控制条（CanvasControls）是毛玻璃（70% 底色 + blur10px），上面的按钮不能
+   用实色 hover 块——实色不随背后内容变化，压在玻璃上像贴纸。
+   玻璃材质的 hover 是「把玻璃本身提亮一档」：白色低透明度叠加，无论背后
+   画布是亮是暗，色块与玻璃的材质关系始终一致（macOS 风格的 frost lift）。
+   只作用于毛玻璃条内；实色工具条（.canvas-toolbar-btn 等）仍用实色。 */
+.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text:hover,
+.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text:active,
+.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--canvas-text) !important;
+}
 .app-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 /* 尺寸：lg 用于工具条，md 用于面板内 */
 .app-icon-btn--lg { width: 40px; height: 38px; border-radius: 9px; }
@@ -1122,44 +1133,86 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ===== 生成中浮层动画（GeneratingOverlay）=====
-   克制路线：不加边框动画（避免多节点同时生成时互相抢注意），
-   只在暗色占位区内部做「显影扫光 + 静音脉冲点」，色彩全部取青柠语义。
-   相位去同步：动画 delay 由 startedAt 取模驱动（组件内联 style）。 */
-.gen-shimmer {
+   飘动路线：暗色占位区内几团大半径径向渐变光斑缓慢漂移。单色系品牌青柠
+   （--canvas-accent，靠透明度/尺寸/周期分层次——高饱和青柠与杂色相配
+   极易显脏，单色最干净），文字安静居中。相位去同步：动画 delay 由
+   startedAt 取模驱动（组件内联 style）。 */
+/* 舞台底色：借 Claude DESIGN.md 的「品牌体温的黑」思路——暗色表面染品牌
+   色温（Claude 暖棕黑 #181715 之于珊瑚，我们橄榄黑之于青柠），再加暗角。
+   黑要真的黑，亮光才有「从黑暗里浮现」的对比 */
+.gen-stage {
+  background: radial-gradient(140% 110% at 50% 44%, #171a0e 0%, #0a0b06 55%, #050503 100%);
+}
+.gen-blob {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 60%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.05) 45%,
-    color-mix(in srgb, var(--canvas-accent) 8%, transparent) 55%,
-    transparent
-  );
-  animation: gen-sweep 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-@keyframes gen-sweep {
-  /* 从左缘外扫到右缘外：位移 160% 容器宽 = 267% 光带自宽 */
-  from { transform: translateX(0); }
-  to { transform: translateX(267%); }
-}
-.gen-pulse {
-  width: 10px;
-  height: 10px;
   border-radius: 50%;
-  background: var(--canvas-accent);
-  animation: gen-pulse 1.6s ease-out infinite;
+  filter: blur(70px);
+  pointer-events: none;
 }
-@keyframes gen-pulse {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--canvas-accent) 45%, transparent); }
-  70% { box-shadow: 0 0 0 10px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+.gen-blob-1 {
+  width: 62%;
+  height: 62%;
+  left: 12%;
+  top: 4%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--canvas-accent) 36%, transparent) 0%,
+    color-mix(in srgb, var(--canvas-accent) 18%, transparent) 35%,
+    transparent 72%
+  );
+  animation: gen-drift-1 9s ease-in-out infinite;
+}
+.gen-blob-2 {
+  width: 85%;
+  height: 85%;
+  right: -30%;
+  bottom: -30%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--canvas-accent) 14%, transparent) 0%,
+    color-mix(in srgb, var(--canvas-accent) 7%, transparent) 35%,
+    transparent 72%
+  );
+  animation: gen-drift-2 12s ease-in-out infinite;
+}
+.gen-blob-3 {
+  width: 55%;
+  height: 55%;
+  left: 20%;
+  bottom: -30%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--canvas-accent) 10%, transparent) 0%,
+    color-mix(in srgb, var(--canvas-accent) 5%, transparent) 35%,
+    transparent 72%
+  );
+  animation: gen-drift-3 7.5s ease-in-out infinite;
+}
+@keyframes gen-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(18%, 12%) scale(1.15); }
+}
+@keyframes gen-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-15%, -10%) scale(1.1); }
+}
+@keyframes gen-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(10%, -14%) scale(1.2); }
+}
+/* 噪点抖动层：8-bit sRGB 渐变在暗底上会产生等高线状色带（banding），
+   叠一层极淡的 fractalNoise 把色阶差打散，光斑才显得平滑「矢量」 */
+.gen-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 @media (prefers-reduced-motion: reduce) {
-  .gen-shimmer,
-  .gen-pulse {
+  .gen-blob-1,
+  .gen-blob-2,
+  .gen-blob-3 {
     animation: none;
   }
 }
@@ -1695,6 +1748,37 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   transition: color .2s, background .2s;
 }
 .chat-header-btn:hover {
+  color: var(--canvas-text);
+  background: var(--canvas-bg-hover);
+}
+/* 抽屉头部统一规格：antd header + 内置 closable 关闭按钮，三个抽屉共用。
+   padding 12×16（原资产抽屉值）、标题 15px/600（原 API 设置抽屉值）。
+   title 内的自绘元素（如会话标题）自带字体样式，不受影响。 */
+.ant-drawer-header {
+  padding: 12px 16px;
+  background: var(--canvas-bg);
+  border-bottom: 1px solid var(--canvas-border);
+}
+.ant-drawer-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--canvas-text);
+}
+/* 抽屉关闭按钮统一走 antd 内置 closable（.ant-drawer-close），hover 只有图标变色、无底色块，
+   与全站「hover 出底色块」的按钮语言不一致；这里对齐成同款规格（默认色 --canvas-text-dim，
+   hover 底色 --canvas-bg-hover + 图标 --canvas-text）。全局生效：所有 Drawer 的关闭按钮一致。
+   不换自绘按钮：closable 的 aria / 键盘行为由 antd 维护。 */
+.ant-drawer-close {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--canvas-text-dim);
+  transition: color .2s, background .2s;
+}
+.ant-drawer-close:hover {
   color: var(--canvas-text);
   background: var(--canvas-bg-hover);
 }

@@ -8,7 +8,6 @@
 
 import {
   ApiOutlined,
-  CloseOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -209,28 +208,26 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         onClose={onClose}
         size={780}
         placement="right"
-        closable={false}
         destroyOnHidden
         className="api-drawer"
+        // 头部与其余抽屉统一：antd header（title + 内置 closable 关闭按钮），
+        // hover 规则见 globals.css 的 .ant-drawer-close，不再自绘头部
+        closable={{ placement: "end", "aria-label": t("common.close") }}
+        title={
+          <div className="flex items-center gap-2">
+            <ApiOutlined style={{ color: "var(--canvas-text-dim)" }} />
+            <span className="text-[15px] font-semibold" style={{ color: "var(--canvas-text)" }}>
+              {t("modelConfig.apiSettings")}
+            </span>
+          </div>
+        }
         styles={{
+          // header 规格走 globals.css 的 .ant-drawer-header 统一规则
           body: { background: "var(--canvas-bg)", padding: 0 },
           section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
         }}
       >
         <div className="flex h-full flex-col" style={{ color: "var(--canvas-text)" }}>
-          {/* 自绘头部：不用 antd 默认标题栏 */}
-          <div
-            className="flex items-center gap-2 px-5 py-3 border-b select-none"
-            style={{ borderColor: "var(--canvas-border)" }}
-          >
-            <ApiOutlined style={{ color: "var(--canvas-text-dim)" }} />
-            <span className="text-[15px] font-semibold" style={{ color: "var(--canvas-text)" }}>
-              {t("modelConfig.apiSettings")}
-            </span>
-            <AppButton size="sm" variant="ghost" iconOnly className="ml-auto" aria-label={t("common.close")} onClick={onClose}>
-              <CloseOutlined />
-            </AppButton>
-          </div>
           <div className="flex flex-1 min-h-0">
           {/* ===== 左栏：供应商轨道 ===== */}
           <div

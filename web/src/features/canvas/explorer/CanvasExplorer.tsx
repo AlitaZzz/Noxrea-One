@@ -9,7 +9,6 @@
 import {
   AppstoreOutlined,
   CaretRightOutlined,
-  CloseOutlined,
   DownOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
@@ -61,11 +60,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
       placement="left"
       size={DRAWER_WIDTH}
       styles={{
-        header: {
-          background: "var(--canvas-bg)",
-          borderBottom: "1px solid var(--canvas-border)",
-          padding: "12px 16px",
-        },
+        // header 规格走 globals.css 的 .ant-drawer-header 统一规则
         body: {
           background: "var(--canvas-bg)",
           padding: 0,
@@ -74,19 +69,12 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
           borderRight: "1px solid #2c2c31",
         } : undefined,
       }}
-      closable={false}
-      title={
-        // 原生 title 换成系统 Tooltip，样式与全站一致
-        <Tooltip title={t("common.close")}>
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-white/10 cursor-pointer"
-            style={{ color: "var(--canvas-text-dim)" }}
-          >
-            <CloseOutlined />
-          </button>
-        </Tooltip>
-      }
+      // 关闭按钮用 antd 内置（与 AgentDrawer 一致，hover 规则见 globals.css 的 .ant-drawer-close）
+      closable={{
+        placement: "start",
+        "aria-label": t("common.close"),
+      }}
+      title={null}
     >
       <style>{`
         .canvas-sidebar .ant-drawer-body { display:flex; flex-direction:column; height:100%; overflow:hidden; }

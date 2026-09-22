@@ -19,8 +19,8 @@ import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { clearDraft, type DraftRecord,loadDraft } from "@/features/project/draft-store";
-import { useProjectStore } from "@/features/project/store";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
+import { useProjectStore } from "@/features/project/store";
 
 const DirectorOverlay = dynamic(
   () => import("@/features/director/components/DirectorOverlay"),
