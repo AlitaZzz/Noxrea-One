@@ -8,7 +8,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
@@ -53,11 +53,12 @@ function SplitText({ text, delay = 0, stagger = 55, className, style }: {
 
 // ── 视频轮播 ──
 
-function VideoCarousel() {
+function VideoCarousel({ onReady }: { onReady: () => void }) {
   const [videos, setVideos] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
 
-  // 探测 bg-v1..v20 中实际存在的文件做轮播（编号允许断档，如 v1/v3/v4/v5）
+  // 探测 bg-v1..v4 中实际存在的文件做轮播（编号允许断档）；探测完才起播，
+  // 范围只到 4 个请求，避免拖慢首屏
   useEffect(() => {
     let cancelled = false;
     const probe = async (seq: number) => {
@@ -70,7 +71,7 @@ function VideoCarousel() {
     };
 
     (async () => {
-      const results = await Promise.all(Array.from({ length: 20 }, (_, i) => probe(i + 1)));
+      const results = await Promise.all(Array.from({ length: 4 }, (_, i) => probe(i + 1)));
       if (cancelled) return;
       const found = results.map((ok, i) => (ok ? `login-bg/bg-v${i + 1}` : "")).filter(Boolean);
       setVideos(found);
@@ -81,57 +82,73 @@ function VideoCarousel() {
 
   const prevVideo = videos.length > 0 ? videos[(current - 1 + videos.length) % videos.length] : "";
   const currVideo = videos.length > 0 ? videos[current] : "";
+  const nextVideo = videos.length > 0 ? videos[(current + 1) % videos.length] : "";
 
   if (videos.length === 0) {
-    return <div className="absolute inset-0 bg-black" />;
+    // 探测期间不渲染任何覆盖层：露出面板的点阵底，与右侧完全一致
+    return null;
   }
 
-  // 只有一个视频时无需交叉过渡，单视频循环即可（双层同 src 会触发 React 重复 key 告警）
-  if (videos.length === 1) {
-    return (
-      <video
-        key={videos[0]}
-        className="absolute inset-0 w-full h-full object-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        disablePictureInPicture
-        disableRemotePlayback
-        preload="auto"
-        src={`/${videos[0]}.mp4`}
-      />
-    );
-  }
-
+  // 视频先出：遮罩、极光与文字由 LeftPanel 在视频可播放（onReady）后才渲染
   return (
     <>
-      {/* 上一段视频（底层，循环常驻，做交叉过渡） */}
-      <video
-        key={`prev-${prevVideo}`}
-        className="absolute inset-0 w-full h-full object-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        disablePictureInPicture
-        disableRemotePlayback
-        preload="auto"
-        src={`/${prevVideo}.mp4`}
-      />
-      {/* 当前视频（顶层，播完即切下一段） */}
-      <video
-        key={`curr-${currVideo}`}
-        className="absolute inset-0 w-full h-full object-cover"
-        autoPlay
-        muted
-        playsInline
-        disablePictureInPicture
-        disableRemotePlayback
-        preload="auto"
-        src={`/${currVideo}.mp4`}
-        onEnded={() => setCurrent((c) => (c + 1) % videos.length)}
-      />
+      {videos.length === 1 ? (
+        <video
+          key={videos[0]}
+          className="login-anim absolute inset-0 w-full h-full object-cover opacity-0"
+          style={{ animation: "loginFadeIn 0.6s ease-out 0.1s forwards" }}
+          autoPlay
+          muted
+          loop
+          playsInline
+          disablePictureInPicture
+          disableRemotePlayback
+          preload="auto"
+          src={`/${videos[0]}.mp4`}
+          onCanPlay={onReady}
+        />
+      ) : (
+        <>
+          {/* 上一段视频（底层，循环常驻，做交叉过渡） */}
+          <video
+            key={`prev-${prevVideo}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            preload="auto"
+            src={`/${prevVideo}.mp4`}
+          />
+          {/* 当前视频（顶层，播完即切下一段） */}
+          <video
+            key={`curr-${currVideo}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            preload="auto"
+            src={`/${currVideo}.mp4`}
+            onCanPlay={onReady}
+            onEnded={() => setCurrent((c) => (c + 1) % videos.length)}
+          />
+        </>
+      )}
+      {/* 下一段预加载（隐藏不播放）：切段时数据已在缓存，避免卡顿黑屏 */}
+      {videos.length > 1 && (
+        <video
+          key={`next-${nextVideo}`}
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+          muted
+          playsInline
+          preload="auto"
+          src={`/${nextVideo}.mp4`}
+        />
+      )}
     </>
   );
 }
@@ -140,7 +157,10 @@ function VideoCarousel() {
 
 function AuroraLayer() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div
+      className="login-anim absolute inset-0 overflow-hidden pointer-events-none opacity-0"
+      style={{ animation: "loginFadeIn 0.6s ease-out 0.1s forwards" }}
+    >
       <div
         className="login-anim absolute rounded-full"
         style={{
@@ -166,46 +186,66 @@ function AuroraLayer() {
 // ── 左面板 ──
 
 function LeftPanel() {
+  const [videoReady, setVideoReady] = useState(false);
+
+  // 兜底：视频异常加载不出来时，3 秒后照常显示文字，避免左侧一直空白
+  useEffect(() => {
+    const t = setTimeout(() => setVideoReady(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
-    <div className="relative hidden lg:flex w-1/2 bg-black flex-col items-center justify-center overflow-hidden">
-      {/* 视频背景 */}
-      <VideoCarousel />
+    <div
+      className="relative hidden lg:flex w-1/2 flex-col items-center justify-center overflow-hidden"
+      style={{
+        backgroundColor: "#0c0c0e",
+        backgroundImage: "radial-gradient(rgba(231, 231, 236, 0.05) 1px, transparent 1px)",
+        backgroundSize: "26px 26px",
+      }}
+    >
+      {/* 先出视频，可播放后再依次出遮罩、极光与文字动画 */}
+      <VideoCarousel onReady={() => setVideoReady(true)} />
 
-      {/* 压暗遮罩：让极光与文字更突出 */}
-      <div className="absolute inset-0 bg-black/35" />
+      {videoReady && (
+        <>
+          {/* 压暗遮罩：让极光与文字更突出 */}
+          <div className="login-anim absolute inset-0 bg-black/35 opacity-0" style={{ animation: "loginFadeIn 0.6s ease-out 0.1s forwards" }} />
+          <AuroraLayer />
 
-      <AuroraLayer />
-
-      <div className="relative z-20 text-center px-12">
-        <h1 className="text-4xl font-bold text-white mb-4 tracking-tight login-anim"
-          style={{ textShadow: `0 0 24px ${LIME_SOFT}0.35)`, perspective: 600 }}>
-          <SplitText text={APP_NAME} />
-        </h1>
-        <p
-          className="login-anim relative inline-block text-xl font-semibold leading-relaxed opacity-0"
-          style={{
-            background: `linear-gradient(90deg, rgba(231,231,236,0.9), ${LIME}, #d8f77e)`,
-            backgroundClip: "text",
-            WebkitBackgroundClip: "text",
-            color: "transparent",
-            filter: `drop-shadow(0 0 14px ${LIME_SOFT}0.25))`,
-            animation: "loginFadeUp 0.7s ease-out 0.75s forwards",
-          }}
-        >
-          从灵感碎片，到完整世界
-          <span
-            className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-px w-3/4 login-anim"
-            style={{
-              background: `linear-gradient(90deg, transparent, ${LIME}, transparent)`,
-              backgroundSize: "200% 100%",
-              animation: "loginUnderlineFlow 3.5s linear infinite",
-            }}
-          />
-        </p>
-      </div>
+          <div className="relative z-20 text-center px-12">
+            <h1 className="text-4xl font-bold text-white mb-4 tracking-tight"
+              style={{ textShadow: `0 0 24px ${LIME_SOFT}0.35)`, perspective: 600 }}>
+              <SplitText text={APP_NAME} />
+            </h1>
+            <p
+              className="login-anim relative inline-block text-xl font-semibold leading-relaxed opacity-0"
+              style={{
+                background: `linear-gradient(90deg, rgba(231,231,236,0.9), ${LIME}, #d8f77e)`,
+                backgroundClip: "text",
+                WebkitBackgroundClip: "text",
+                color: "transparent",
+                filter: `drop-shadow(0 0 14px ${LIME_SOFT}0.25))`,
+                animation: "loginFadeUp 0.7s ease-out 0.75s forwards",
+              }}
+            >
+              从灵感碎片，到完整世界
+              <span
+                className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-px w-3/4 login-anim"
+                style={{
+                  background: `linear-gradient(90deg, transparent, ${LIME}, transparent)`,
+                  backgroundSize: "200% 100%",
+                  animation: "loginUnderlineFlow 3.5s linear infinite",
+                }}
+              />
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+// ── 整页鼠标跟随的青柠微光晕 ──
 
 // ── 右面板 ──
 
@@ -232,16 +272,6 @@ function RightPanel({
 }) {
   const isSignin = mode === "signin";
   const [showPw, setShowPw] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [spot, setSpot] = useState<{ x: string; y: string } | null>(null);
-
-  // 聚光效果作用于整个右半屏背景
-  const handlePanelMove = useCallback((e: React.MouseEvent) => {
-    const el = panelRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setSpot({ x: `${e.clientX - r.left}px`, y: `${e.clientY - r.top}px` });
-  }, []);
 
   const inputClass = (hasError?: string) =>
     `login-input w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 transition-all duration-200
@@ -249,8 +279,6 @@ function RightPanel({
 
   return (
     <div
-      ref={panelRef}
-      onMouseMove={handlePanelMove}
       // 垂直方向用固定 padding 定位而非 flex 居中：任何首帧与稳定态之间的
       // 内容高度差都会让居中布局整体上下回弹（顶栏对齐的页面则完全不可见），
       // 固定 padding 让标题/表单位置与内容高度彻底解耦
@@ -263,17 +291,6 @@ function RightPanel({
         backgroundSize: "26px 26px",
       }}
     >
-      {/* 整屏鼠标跟随的青柠微光晕 */}
-      <div
-        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        style={{
-          background: spot
-            ? `radial-gradient(420px circle at ${spot.x} ${spot.y}, ${LIME_SOFT}0.08), transparent 65%)`
-            : "none",
-          opacity: spot ? 1 : 0,
-        }}
-      />
-
       <div className="relative w-full max-w-[420px]">
         <div className="lg:hidden text-center mb-8">
           <h1 className="text-2xl font-bold" style={{ color: LIME }}>{APP_NAME}</h1>

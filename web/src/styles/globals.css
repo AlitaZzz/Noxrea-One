@@ -2199,6 +2199,10 @@ body > .ant-app { line-height: inherit !important; }
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
+@keyframes loginFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 @keyframes loginAuroraDrift1 {
   0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
   50%      { transform: translate3d(6vw, -4vh, 0) rotate(14deg) scale(1.08); }
