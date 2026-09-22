@@ -149,31 +149,36 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
 
 
+  /** 鼠标扫过一排视频节点时会连续误触播放，延迟 300ms 只对真正的停留作出响应 */
+  const HOVER_PLAY_DELAY = 300;
+
   const handleMouseEnter = useCallback(() => {
     if (capturingFrame() || busy) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
-    const v = videoRef.current;
-    if (v && v.paused) {
-      // 每次悬停都先尝试带声播放：浏览器对带声自动播放的放行条件是「页面有过任意交互」
-      // （粘性激活），交互过后重试即恢复有声；被拦截才降级为静音自动播放。
-      // 降级不做成粘性——否则首个节点会永久锁死在静音，直到用户手动碰音量。
-      v.muted = false;
-      setAutoplayMuted(false);
-      v.play().then(() => setPlaying(true)).catch(() => {
-        v.muted = true;
-        setAutoplayMuted(true);
-        v.play().then(() => setPlaying(true)).catch(() => {});
-      });
-    }
+    hoverTimerRef.current = setTimeout(() => {
+      hoverTimerRef.current = null;
+      // 延迟期间可能已打开选帧 / 截取面板
+      if (capturingFrame() || busy) return;
+      const v = videoRef.current;
+      if (v && v.paused) {
+        // 每次悬停都先尝试带声播放：浏览器对带声自动播放的放行条件是「页面有过任意交互」
+        // （粘性激活），交互过后重试即恢复有声；被拦截才降级为静音自动播放。
+        // 降级不做成粘性——否则首个节点会永久锁死在静音，直到用户手动碰音量。
+        v.muted = false;
+        setAutoplayMuted(false);
+        v.play().then(() => setPlaying(true)).catch(() => {
+          v.muted = true;
+          setAutoplayMuted(true);
+          v.play().then(() => setPlaying(true)).catch(() => {});
+        });
+      }
+    }, HOVER_PLAY_DELAY);
   }, [capturingFrame, busy]);
   const handleMouseLeave = useCallback(() => {
-    hoverTimerRef.current = setTimeout(() => {
-      // 延迟期间可能已经打开选帧面板：此时不能把画面拉回 0
-      if (capturingFrame() || busy) { hoverTimerRef.current = null; return; }
-      const v = videoRef.current;
-      if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
-      hoverTimerRef.current = null;
-    }, 150);
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    if (capturingFrame() || busy) return;
+    const v = videoRef.current;
+    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
   }, [capturingFrame, busy]);
 
   /**
