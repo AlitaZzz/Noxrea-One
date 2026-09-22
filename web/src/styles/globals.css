@@ -517,6 +517,10 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 /* Base font size；全站固定深色主题，body 直接给底色，避免 SSR 空壳 / 客户端接管前的白闪 */
 html, body { font-family: var(--font-ui); }
 body { font-size: 14px; background: #151518; transition: background-color 0.3s ease, color 0.3s ease; }
+/* antd 的 App 包裹层自带 lineHeight token（1.5714），且样式在 hydration 时才由 cssinjs
+   注入：首帧继承 body 的 1.5（21px），水合后跳 22px，全站文本高度抖 1px（垂直居中的
+   登录页表单最明显）。统一继承 body，首帧与水合后一致。 */
+body > .ant-app { line-height: inherit !important; }
 .react-flow__node { font-size: 14px; }
 .react-flow__node-image-node { overflow: visible !important; }
 .react-flow__node-audio-node { overflow: visible !important; }
@@ -2181,3 +2185,41 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .cap-pill[aria-pressed="true"]:hover {
   background: color-mix(in srgb, var(--canvas-accent) 26%, transparent);
 }
+
+/* ===== 登录页（(auth)/login）私有样式 =====
+   必须放在打包进 head 的全局 CSS 里：曾放 body 内联 <style>，首帧绘制时
+   尚未解析，输入框边框 0→1px 迟到导致表单区域刷新时上下抖动一次。
+   类名与 keyframes 均带 login 前缀，不影响其他页面。 */
+
+@keyframes loginCharIn {
+  from { opacity: 0; transform: translateY(0.5em) rotateX(35deg); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes loginFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes loginAuroraDrift1 {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50%      { transform: translate3d(6vw, -4vh, 0) rotate(14deg) scale(1.08); }
+}
+@keyframes loginAuroraDrift2 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-5vw, 4vh, 0) scale(1.15); }
+}
+@keyframes loginSheen {
+  0%, 55% { transform: translateX(-130%) skewX(-12deg); }
+  100%    { transform: translateX(230%) skewX(-12deg); }
+}
+@keyframes loginUnderlineFlow {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-anim, .login-anim * { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+}
+.login-input { background: #161619; border: 1px solid #2d2d33; }
+.login-input:focus { outline: none; border-color: #c7f43d; box-shadow: 0 0 0 3px rgba(199, 244, 61, 0.12); }
+.login-input-error { border-color: #ef4444 !important; }
+.login-input-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important; }
+

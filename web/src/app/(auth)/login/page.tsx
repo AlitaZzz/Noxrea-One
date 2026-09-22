@@ -22,42 +22,6 @@ const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 const LIME = "#c7f43d";
 const LIME_SOFT = "rgba(199, 244, 61, ";
 
-// ── 动效 keyframes（页面私有，避免污染全局） ──
-
-const LOGIN_STYLES = `
-@keyframes loginCharIn {
-  from { opacity: 0; transform: translateY(0.5em) rotateX(35deg); filter: blur(6px); }
-  to   { opacity: 1; transform: none; filter: blur(0); }
-}
-@keyframes loginFadeUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes loginAuroraDrift1 {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-  50%      { transform: translate3d(6vw, -4vh, 0) rotate(14deg) scale(1.08); }
-}
-@keyframes loginAuroraDrift2 {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50%      { transform: translate3d(-5vw, 4vh, 0) scale(1.15); }
-}
-@keyframes loginSheen {
-  0%, 55% { transform: translateX(-130%) skewX(-12deg); }
-  100%    { transform: translateX(230%) skewX(-12deg); }
-}
-@keyframes loginUnderlineFlow {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .login-anim, .login-anim * { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
-}
-.login-input { background: #161619; border: 1px solid #2d2d33; }
-.login-input:focus { outline: none; border-color: #c7f43d; box-shadow: 0 0 0 3px rgba(199, 244, 61, 0.12); }
-.login-input-error { border-color: #ef4444 !important; }
-.login-input-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important; }
-`;
-
 // ── Types ──
 
 type AuthMode = "signin" | "signup";
@@ -204,8 +168,6 @@ function AuroraLayer() {
 function LeftPanel() {
   return (
     <div className="relative hidden lg:flex w-1/2 bg-black flex-col items-center justify-center overflow-hidden">
-      <style>{LOGIN_STYLES}</style>
-
       {/* 视频背景 */}
       <VideoCarousel />
 
@@ -289,15 +251,18 @@ function RightPanel({
     <div
       ref={panelRef}
       onMouseMove={handlePanelMove}
-      className="relative w-full lg:w-1/2 flex items-center justify-center p-8 overflow-hidden"
+      // 垂直方向用固定 padding 定位而非 flex 居中：任何首帧与稳定态之间的
+      // 内容高度差都会让居中布局整体上下回弹（顶栏对齐的页面则完全不可见），
+      // 固定 padding 让标题/表单位置与内容高度彻底解耦
+      className="relative w-full lg:w-1/2 flex justify-center px-8 overflow-hidden"
       style={{
+        paddingTop: "max(96px, calc(50vh - 200px))",
+        paddingBottom: "48px",
         backgroundColor: "#0c0c0e",
         backgroundImage: "radial-gradient(rgba(231, 231, 236, 0.05) 1px, transparent 1px)",
         backgroundSize: "26px 26px",
       }}
     >
-      <style>{LOGIN_STYLES}</style>
-
       {/* 整屏鼠标跟随的青柠微光晕 */}
       <div
         className="absolute inset-0 pointer-events-none transition-opacity duration-300"
@@ -314,7 +279,10 @@ function RightPanel({
           <h1 className="text-2xl font-bold" style={{ color: LIME }}>{APP_NAME}</h1>
         </div>
 
-        <div className="mb-8 login-anim" style={{ animation: "loginFadeUp 0.6s ease-out 0.15s backwards" }}>
+        <div
+          className="mb-8 login-anim opacity-0"
+          style={{ animation: "loginFadeUp 0.7s ease-out 0.3s forwards" }}
+        >
           <h2 className="text-2xl font-bold text-white mb-1">
             {isSignin ? "登录" : "创建账号"}
           </h2>
