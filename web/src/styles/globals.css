@@ -1133,20 +1133,20 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ===== 生成中浮层动画（GeneratingOverlay）=====
-   「黑暗中浮现」构图：一条紫蓝渐变光带斜贯画面缓慢流转（大模糊让它读作
-   极光而非图形），辅以两团低幅呼吸柔光。冷色贴石墨冷底；青柠大色块会与
-   选中/进度语义抢眼。文字安静居中。相位去同步：动画 delay 由 startedAt
-   取模驱动（组件内联 style）。 */
-/* 舞台底色：紫黑基底 + 极淡静态辉光兜底（减弱动态降级时也有完整观感） */
+   「黑暗中浮现」构图：一条青柠×深青渐变光带斜贯画面缓慢流转（大模糊让它读作
+   极光而非图形），辅以两团低幅呼吸柔光。青柠与画布强调色（波形进度/选中态）同源；
+   饱和度高，各层透明度相应压低，靠大模糊晕开避免刺眼。文字安静居中。
+   相位去同步：动画 delay 由 startedAt 取模驱动（组件内联 style）。 */
+/* 舞台底色：石墨黑基底（微绿冷调）+ 极淡静态辉光兜底（减弱动态降级时也有完整观感） */
 .gen-stage {
   background:
     radial-gradient(
       70% 52% at 50% 46%,
-      rgba(139, 92, 246, 0.1) 0%,
-      rgba(139, 92, 246, 0.045) 45%,
+      rgba(199, 244, 61, 0.07) 0%,
+      rgba(199, 244, 61, 0.03) 45%,
       transparent 72%
     ),
-    radial-gradient(140% 110% at 50% 44%, #191327 0%, #0c0916 55%, #050308 100%);
+    radial-gradient(140% 110% at 50% 44%, #11150f 0%, #090b08 55%, #040503 100%);
 }
 /* 极光带：横贯画面的长椭圆渐变，斜置 + 大模糊，两端隐入黑暗。
    流转 = 缓慢平移 + 角度微摆 + 明暗起伏，连贯无折返感 */
@@ -1161,9 +1161,9 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(139, 92, 246, 0.17) 26%,
-    rgba(96, 165, 250, 0.21) 50%,
-    rgba(139, 92, 246, 0.17) 74%,
+    rgba(199, 244, 61, 0.13) 26%,
+    rgba(45, 212, 191, 0.16) 50%,
+    rgba(199, 244, 61, 0.13) 74%,
     transparent 100%
   );
   filter: blur(42px);
@@ -1179,7 +1179,7 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   filter: blur(70px);
   pointer-events: none;
 }
-/* 紫团：辉光中心上方呼吸，托住光带 */
+/* 青柠团：辉光中心上方呼吸，托住光带 */
 .gen-blob-1 {
   width: 55%;
   height: 42%;
@@ -1187,13 +1187,13 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   top: 12%;
   background: radial-gradient(
     ellipse,
-    rgba(139, 92, 246, 0.14) 0%,
-    rgba(139, 92, 246, 0.06) 45%,
+    rgba(199, 244, 61, 0.1) 0%,
+    rgba(199, 244, 61, 0.045) 45%,
     transparent 72%
   );
   animation: gen-drift-1 9s ease-in-out infinite;
 }
-/* 蓝团：光带下方反向呼吸，拉开纵深 */
+/* 深青团：光带下方反向呼吸，拉开纵深 */
 .gen-blob-2 {
   width: 48%;
   height: 40%;
@@ -1201,8 +1201,8 @@ body { font-size: 14px; transition: background-color 0.3s ease, color 0.3s ease;
   top: 56%;
   background: radial-gradient(
     ellipse,
-    rgba(96, 165, 250, 0.1) 0%,
-    rgba(96, 165, 250, 0.045) 45%,
+    rgba(45, 212, 191, 0.08) 0%,
+    rgba(45, 212, 191, 0.035) 45%,
     transparent 72%
   );
   animation: gen-drift-2 7s ease-in-out infinite;
