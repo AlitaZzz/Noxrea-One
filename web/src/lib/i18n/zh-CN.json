@@ -397,7 +397,7 @@
     "reset": "重置参数"
   },
   "lighting": {
-    "title": "打光效果",
+    "title": "打光",
     "global": "全局",
     "intensity": "亮度",
     "color": "颜色",
