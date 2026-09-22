@@ -19,7 +19,7 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import type { ImageNodeData } from "@/features/canvas/types";
 import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
 
-import LightingScene3D, { type LightViewMode } from "./LightingScene3D";
+import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 
@@ -81,7 +81,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
   const { notification } = App.useApp();
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);
-  const [viewMode, setViewMode] = useState<LightViewMode>("perspective");
+  const [viewMode, setViewMode] = useState<OrbitViewMode>("perspective");
   const [colorTab, setColorTab] = useState<"temp" | "custom">("temp");
   const [kelvin, setKelvin] = useState(6500);
   const [submitting, setSubmitting] = useState(false);
@@ -167,7 +167,10 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
       {/* 标题栏 */}
       <div className="flex items-center justify-between">
-        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("lighting.title")}</span>
+        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--canvas-text)" }}>
+          <SunIcon className="h-4 w-4" />
+          {t("lighting.title")}
+        </span>
         {/* 与资产弹窗关闭按钮同款：✕ 字形 + 次级文字色，悬停底色走 canvas-toolbar 按钮规则 */}
         <Button
           type="text"
@@ -199,7 +202,8 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <LightingScene3D
+            <OrbitScene3D
+              variant="light"
               src={src}
               color={state.color}
               intensity={state.intensity}

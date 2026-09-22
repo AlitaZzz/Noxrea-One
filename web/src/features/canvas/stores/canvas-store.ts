@@ -146,6 +146,9 @@ interface CanvasState {
   // 图片打光模式（hides node toolbar；面板经 RfNodeToolbar 悬浮于节点下方）
   lightingNodeId: string | null;
   setLightingNodeId: (id: string | null) => void;
+  // 多视角编辑模式（hides node toolbar；面板经 RfNodeToolbar 悬浮于节点下方，形态同打光面板）
+  angleEditorNodeId: string | null;
+  setAngleEditorNodeId: (id: string | null) => void;
 
   // Director overlay
   directorOverlayOpen: boolean;
@@ -181,6 +184,7 @@ const NODE_UI_STATE_KEYS = [
   "clipCaptureNodeId",
   "lightingNodeId",
   "audioClipNodeId",
+  "angleEditorNodeId",
 ] as const;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -296,6 +300,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
   lightingNodeId: null,
   setLightingNodeId: (id) => set({ lightingNodeId: id }),
+  angleEditorNodeId: null,
+  setAngleEditorNodeId: (id) => set({ angleEditorNodeId: id }),
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
