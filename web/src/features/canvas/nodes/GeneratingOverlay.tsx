@@ -1,6 +1,6 @@
 /**
  * 生成中占位浮层（GeneratingOverlay）。
- * 图片 / 文本 / 视频节点共用：极光带流转 + 两团呼吸柔光（紫蓝）+ 实时耗时。
+ * 图片 / 文本 / 视频节点共用：极光带流转 + 两团呼吸柔光（青柠×深青）+ 实时耗时。
  * 相位去同步：各光斑用 startedAt 对各自周期取模做负 animation-delay，
  * 多节点同时生成时不会齐刷刷同频齐动。
  * 通过 absolute / rounded 参数适配不同节点的容器布局。
@@ -61,7 +61,7 @@ function GeneratingOverlay({
       <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 7000}ms` }} aria-hidden />
       {/* 噪点抖动：打散渐变色带 */}
       <div className="gen-noise" aria-hidden />
-      {/* 中心：文案（冷白主文字 + 冷灰耗时，紫底上暖色会发脏） */}
+      {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
       <span className="text-xs" style={{ color: "rgba(231, 231, 236, 0.72)" }}>
         {text ?? t("common.generating")}
         {elapsedSeconds !== null && (
