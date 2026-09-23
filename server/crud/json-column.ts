@@ -42,6 +42,11 @@ export function parseJsonArray(raw: unknown): string[] {
   return parseJson<string[]>(raw, []);
 }
 
+/** 从存储字符串解析对象数组 */
+export function parseJsonObjectArray<T>(raw: unknown): T[] {
+  return parseJson<T[]>(raw, []);
+}
+
 /** 从存储字符串解析 JSON 对象 */
 export function parseJsonObject(raw: unknown): Record<string, unknown> {
   return parseJson<Record<string, unknown>>(raw, {});

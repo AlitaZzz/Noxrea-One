@@ -10,16 +10,32 @@
  */
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /** 是否正在播放整理动画（供画布交互判断是否需要让路） */
 let _animating = false;
 
+/** 当前活动动画的 rAF 句柄（模块级：同一时刻至多一个动画在跑，animateTo 会先取消上一个） */
+let _activeRaf: number | null = null;
+
 /** 读取动画进行中标志 */
 export function isTidyAnimating(): boolean {
   return _animating;
+}
+
+/**
+ * 停掉进行中的整理动画，节点停在当前插值位置。
+ * 撤销/重做恢复快照前必须调用：动画每帧都在写节点位置，
+ * 不停掉的话下一帧会把恢复出来的位置直接覆盖。
+ */
+export function cancelTidyAnimation(): void {
+  if (_activeRaf !== null) {
+    cancelAnimationFrame(_activeRaf);
+    _activeRaf = null;
+  }
+  _animating = false;
 }
 
 /** easeOutCubic：起步快、收尾稳，位移类动画的常用曲线 */
@@ -38,15 +54,10 @@ export interface AnimateNodesOptions {
  * 返回节点位移动画控制器（须在 ReactFlowProvider 内使用，实测不依赖但保持上下文一致）。
  */
 export function useTidyAnimation() {
-  const rafRef = useRef<number | null>(null);
 
   /** 取消进行中的动画，节点停在当前插值位置 */
   const cancel = useCallback(() => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    _animating = false;
+    cancelTidyAnimation();
   }, []);
 
   useEffect(() => cancel, [cancel]);
@@ -94,15 +105,15 @@ export function useTidyAnimation() {
         useCanvasStore.getState().setNodes(next);
 
         if (raw < 1) {
-          rafRef.current = requestAnimationFrame(step);
+          _activeRaf = requestAnimationFrame(step);
         } else {
-          rafRef.current = null;
+          _activeRaf = null;
           _animating = false;
           onDone?.();
         }
       };
 
-      rafRef.current = requestAnimationFrame(step);
+      _activeRaf = requestAnimationFrame(step);
     },
     [cancel],
   );

@@ -38,13 +38,14 @@ import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import AgentDrawer from "@/features/agent/components/AgentDrawer";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import { useAssetsStore } from "@/features/assets/store";
 import type { AssetItem } from "@/features/assets/types";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
+import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
+import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
@@ -1509,7 +1510,10 @@ export default function InfiniteCanvas() {
         onClose={() => setCanvasExplorerOpen(false)}
       />
 
-      <AgentDrawer
+      {/* Agent 运行时桥：把 React Flow 实例能力注册给工具执行器 */}
+      <CanvasAgentRuntimeBridge />
+
+      <CanvasAgentDrawer
         open={chatOpen}
         onClose={() => setChatOpen(false)}
         projectId={activeProjectId ?? undefined}

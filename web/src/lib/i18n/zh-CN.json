@@ -577,8 +577,7 @@
     "mediaTruncated": "视频文件疑似不完整：标称 {{declared}}，实际仅 {{actual}} 可解码"
   },
   "agent": {
-    "title": "Agent",
-    "chat": "打开 Agent 对话"
+    "title": "Agent"
   },
   "video": {
     "refModeTitle": "视频生成模式",

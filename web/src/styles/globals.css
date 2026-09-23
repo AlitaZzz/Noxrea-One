@@ -1654,11 +1654,6 @@ body > .ant-app { line-height: inherit !important; }
   word-break: break-all;
 }
 .chat-tool-result { font-size: 13px; }
-.chat-error {
-  margin-top: 8px;
-  color: #ff7875;
-  font-size: 13px;
-}
 .chat-input-bar {
   background: var(--canvas-bg);
   padding: 10px;
@@ -1694,68 +1689,6 @@ body > .ant-app { line-height: inherit !important; }
   content: attr(data-placeholder);
   color: var(--canvas-text-muted);
   pointer-events: none;
-}
-/* 技能 chip：选中技能后以标签形式显示在输入框内，样式对齐生成面板 */
-.chat-skill-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 2px 4px 2px 8px;
-  margin-bottom: 8px;
-  border-radius: 5px;
-  background: transparent;
-  border: 1px solid var(--canvas-border, #3a3a3a);
-  color: var(--canvas-text);
-  font-size: 13px;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-  vertical-align: middle;
-}
-.chat-skill-chip-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--canvas-text-dim);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background .2s, color .2s;
-}
-.chat-skill-chip-x:hover {
-  background: color-mix(in srgb, var(--canvas-text) 16%, transparent);
-  color: var(--canvas-text);
-}
-/* 对话流中用户消息携带的 skill：图标 + name，呈现为浅色胶囊标签 */
-.chat-msg-skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.chat-msg-skill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  line-height: normal;
-  color: var(--canvas-accent, #7c5cff);
-  background: color-mix(in srgb, var(--canvas-accent, #7c5cff) 16%, transparent);
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-.chat-msg-skill .anticon {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
 }
 .chat-composer-actions {
   display: flex;
@@ -1888,13 +1821,6 @@ body > .ant-app { line-height: inherit !important; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* SkillPanel 技能按钮：与上传按钮一致，避免 antd Button 过渡闪烁 */
-.chat-composer .chat-skill-btn {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  font-size: 16px;
 }
 
 /* markdown 渲染容器 */
