@@ -52,7 +52,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
       };
       return selector ? selector(state) : state;
     },
-    { getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }) },
+    { getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }), subscribe: vi.fn() },
   ),
   markDirty: vi.fn(),
   markDirtyImmediate: vi.fn(),

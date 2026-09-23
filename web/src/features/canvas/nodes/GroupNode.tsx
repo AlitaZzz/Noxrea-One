@@ -15,11 +15,14 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TYPE } from "@/lib/constants";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
 import ResizeHandle from "./ResizeHandle";
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   // Dynamic min size + member count.
   // 只派生 GroupNode 真正依赖的原始值（自身位置、成员外接矩形、成员数），
   // 用 useShallow 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
@@ -80,6 +83,8 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
         `}
         style={{ background: colorPreset.fill }}
       />
+
+      {agentGhost && <AgentGhostOverlay />}
 
       {/* Resize — same as ImageNode */}
       {selected && (

@@ -53,6 +53,7 @@ export async function streamAgent(opts: StreamAgentOptions): Promise<Response> {
   const body: Record<string, unknown> = { content: opts.content };
   if (opts.refImages?.length) body.refImages = opts.refImages;
   if (opts.canvasState !== undefined) body.canvasState = opts.canvasState;
+  if (opts.userActions !== undefined) body.userActions = opts.userActions;
   return apiStream(`/api/agent/sessions/${opts.sessionId}/stream?${params.toString()}`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -70,7 +71,11 @@ export async function submitToolResults(opts: ToolResultOptions): Promise<Respon
     `/api/agent/sessions/${opts.sessionId}/tool-result?${params.toString()}`,
     {
       method: "POST",
-      body: JSON.stringify({ results: opts.results }),
+      body: JSON.stringify({
+        results: opts.results,
+        ...(opts.canvasState !== undefined ? { canvasState: opts.canvasState } : {}),
+        ...(opts.userActions !== undefined ? { userActions: opts.userActions } : {}),
+      }),
       signal: opts.signal,
     },
   );

@@ -2,21 +2,28 @@
  * 画布 AI 对话抽屉。
  * 提供多轮会话（新建 / 历史切换）、模型选择，
  * 流式接收回复并以 Markdown 渲染（经 sanitize 白名单放宽后允许有限 HTML）。
- * 工具调用以状态 chip 展示（如「创建节点…」），执行结果由模型经 message_user 汇报。
+ * 消息按回合分组渲染：工具调用以「图标 + intent 一句话」操作行展示，
+ * 删除类/整理画布操作先经确认卡批准，回合结束后可在末尾「撤销此轮」。
  */
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
 import { Drawer, Tooltip } from "antd";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-import Markdown from "@/features/canvas/agent/components/Markdown";
+import ChatSectionView from "@/features/canvas/agent/components/ChatSectionView";
+import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
 import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
+import { groupSections } from "@/features/canvas/agent/utils/group-sections";
+import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-edit-actions";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
 interface Props {
@@ -43,17 +50,36 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const {
     messages, isStreaming, sendChat, stopStream, newChat,
     chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat,
+    pendingConfirm, respondToConfirm, lastTurnUndo,
   } = useCanvasAgentStream(activeOption?.name ?? "", projectId, activeOption?.providerId);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
+  const historyVersion = useHistoryStore((s) => s.version);
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
 
-  // message_user 的本质是回复本身而非画布操作：调用 chip 与执行回执都不展示，
-  // 其文案已作为助手气泡渲染（行业惯例：终端性回复工具对用户不可见）
-  const messageUserCallIds = new Set(
-    messages.flatMap((m) => (m.toolCalls ?? []).filter((t) => t.name === "message_user").map((t) => t.id)),
+  const sections = useMemo(() => groupSections(messages), [messages]);
+
+  // 「撤销此轮」仅在最后一个回合且其历史记录仍然有效（版本号未变）时可用
+  const lastSectionIndex = sections.length - 1;
+  const canUndoSection = useCallback(
+    (index: number, turnId: string | null) =>
+      index === lastSectionIndex &&
+      !!turnId &&
+      turnId === lastTurnUndo?.turnId &&
+      historyVersion === lastTurnUndo.version,
+    [lastSectionIndex, lastTurnUndo, historyVersion]
   );
+
+  const handleUndoTurn = useCallback(() => {
+    if (hasGeneratingNode()) {
+      showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+      return;
+    }
+    if (undoAction()) {
+      showGlobalMessage().success("已撤销本轮操作");
+    }
+  }, []);
 
   useEffect(() => {
     void initialize();
@@ -68,7 +94,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, pendingConfirm]);
 
   const syncDraft = useCallback(() => {
     setDraft(composerRef.current?.innerText ?? "");
@@ -220,46 +246,18 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             <div className="chat-empty-subtitle">从灵感碎片，到完整世界</div>
           </div>
         ) : (
-          messages.map((m) => {
-            if (m.role === "tool" && m.toolCallId && messageUserCallIds.has(m.toolCallId)) return null;
-            const visibleToolCalls = m.toolCalls?.filter((t) => t.name !== "message_user");
-            return (
-            <div
-              key={m.id}
-              className={`chat-msg chat-msg-${m.role}`}
-              style={{ marginBottom: 12, display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}
-            >
-              <div className={`chat-bubble chat-bubble-${m.role}${m.error ? " chat-bubble-error" : ""}`}>
-                {m.role === "assistant" ? (
-                  <>
-                    {visibleToolCalls?.length ? (
-                      <div className="chat-tool-calls">
-                        {visibleToolCalls.map((t) => (
-                          <div key={t.id} className="chat-tool-call">
-                            {t.label ?? t.name}
-                            {t.args && <div className="chat-tool-args">{t.args}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {m.content ? (
-                      <Markdown>{m.content}</Markdown>
-                    ) : !visibleToolCalls?.length ? (
-                      <span className="chat-thinking">思考中…</span>
-                    ) : null}
-                  </>
-                ) : m.role === "tool" ? (
-                  <span className="chat-tool-result">{m.content}</span>
-                ) : (
-                  <div className="cortex-markdown">
-                    {m.content ? <Markdown>{m.content}</Markdown> : null}
-                  </div>
-                )}
-              </div>
-            </div>
-            );
-          })
+          sections.map((section, index) => (
+            <ChatSectionView
+              key={section.key}
+              section={section}
+              isStreaming={isStreaming}
+              canUndo={canUndoSection(index, section.turnId)}
+              onUndo={handleUndoTurn}
+            />
+          ))
         )}
+
+        {pendingConfirm && <ConfirmCard pending={pendingConfirm} onResolve={respondToConfirm} />}
       </div>
 
       <div className="chat-input-bar">

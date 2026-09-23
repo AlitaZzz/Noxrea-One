@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect } from "react";
 
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /** 是否正在播放整理动画（供画布交互判断是否需要让路） */
@@ -48,6 +49,11 @@ export interface AnimateNodesOptions {
   duration?: number;
   /** 动画正常结束后的回调（被 cancel 时不会触发） */
   onDone?: () => void;
+  /**
+   * 程序化整理（agent 的 arrange_canvas）置 true：逐帧写入不进用户操作历史。
+   * 动画可能被拖拽中途取消（onDone 不触发），因此按帧包裹而非整段包裹。
+   */
+  suppressTracking?: boolean;
 }
 
 /**
@@ -102,7 +108,11 @@ export function useTidyAnimation() {
           };
         });
 
-        useCanvasStore.getState().setNodes(next);
+        if (options.suppressTracking) {
+          runSuppressed(() => useCanvasStore.getState().setNodes(next));
+        } else {
+          useCanvasStore.getState().setNodes(next);
+        }
 
         if (raw < 1) {
           _activeRaf = requestAnimationFrame(step);

@@ -158,6 +158,11 @@ interface CanvasState {
   agentModel: string | null;
   setAgentModel: (model: string) => void;
 
+  // Agent 提议-确认的幻影预览：待确认操作的目标节点 id（红蒙层；不入持久化）
+  agentPreviewNodeIds: string[];
+  setAgentPreview: (ids: string[]) => void;
+  clearAgentPreview: () => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -310,6 +315,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setAgentModel: (model) => {
     set({ agentModel: model });
     saveManager.markDirtyImmediate();
+  },
+
+  agentPreviewNodeIds: [],
+  setAgentPreview: (ids) => {
+    set({ agentPreviewNodeIds: ids });
+  },
+  clearAgentPreview: () => {
+    set((s) => (s.agentPreviewNodeIds.length ? { agentPreviewNodeIds: [] } : s));
   },
 
   snapToGrid: false,

@@ -39,6 +39,7 @@ import { isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
@@ -71,6 +72,8 @@ function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t } = useTranslation();
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选。
   // 返回布尔原语，Zustand 默认 Object.is 比较，仅在选择数跨过阈值时才重渲染；
   // 用循环累加避免每次 nodes 变更都分配 filter 临时数组。
@@ -413,6 +416,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         `}
         style={{ background: hasImage ? "transparent" : "var(--canvas-bg, #262626)" }}
       >
+        {agentGhost && <AgentGhostOverlay />}
         {isMulti && !expanded && (
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip title={t("common.expand")}>

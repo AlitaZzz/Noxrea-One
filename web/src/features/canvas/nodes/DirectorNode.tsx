@@ -15,10 +15,13 @@ import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@
 import { useDirectorStore } from "@/features/director/director-store";
 import { NODE_HANDLE_TOP } from "@/lib/constants";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
 
 function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   const { t } = useTranslation();
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
@@ -33,6 +36,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
       <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
         ${selected ? "node-selected" : ""}`}
         style={{ background: "var(--canvas-bg)" }}>
+        {agentGhost && <AgentGhostOverlay />}
         <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
           <PartitionOutlined className="text-5xl" />
           <span className="text-base text-center">{t("node.directorDesc")}</span>

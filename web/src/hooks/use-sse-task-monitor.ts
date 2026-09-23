@@ -8,6 +8,7 @@
 
 import { createElement, useEffect, useRef } from "react";
 
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
 import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -118,11 +119,13 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
       // LLM 文本结果：从 resultText 更新 content
       if (evt.status === "completed" && evt.resultText) {
-        useCanvasStore.getState().updateNodeData(nodeId, {
-          content: textToHtml(evt.resultText),
-          plainText: evt.resultText,
+        const resultText = evt.resultText;
+        // 生成结果回填是程序化写回，不算用户操作（用户操作感知不应记录）
+        runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
+          content: textToHtml(resultText),
+          plainText: resultText,
           taskBinding: undefined,
-        }, undefined, { skipHistory: true });
+        }, undefined, { skipHistory: true }));
         markDirtyImmediate();
         notifyOnce("success", { title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
         return;
@@ -150,7 +153,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         // 一次性回填：图片 + 多图列表 + 清除生成中状态（遮罩此时才消失）。
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
-        useCanvasStore.getState().updateNodeData(nodeId, {
+        runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
           src: firstUrl,
           naturalWidth: 0, naturalHeight: 0,
           lockAspectRatio: true, taskBinding: undefined,
@@ -159,7 +162,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
           // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
           multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,
           multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
-        }, undefined, { skipHistory: true });
+        }, undefined, { skipHistory: true }));
         markDirtyImmediate();
         notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
 
@@ -176,7 +179,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
           if ((n.data as { src?: string }).src !== firstUrl) return;
           const natural = { naturalWidth: dims.w, naturalHeight: dims.h };
           const { width, height } = computeNodeSize(dims.w, dims.h);
-          s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true });
+          runSuppressed(() => s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true }));
           markDirtyImmediate();
         });
         return;

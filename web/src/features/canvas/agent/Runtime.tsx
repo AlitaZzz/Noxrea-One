@@ -89,6 +89,8 @@ export default function CanvasAgentRuntimeBridge() {
 
         animateTo(result.positions, {
           duration: TIDY_ANIMATION_DURATION,
+          // agent 触发的整理：动画帧是 agent 写回，不进用户操作历史
+          suppressTracking: !!opts?.skipHistory,
           onDone: () => {
             markDirtyImmediate();
             void rf.fitView({ duration: 300 });

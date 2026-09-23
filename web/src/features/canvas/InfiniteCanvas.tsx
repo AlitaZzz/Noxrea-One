@@ -46,6 +46,7 @@ import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
@@ -221,7 +222,8 @@ export default function InfiniteCanvas() {
   useEffect(() => {
     const project = useProjectStore.getState().activeProject();
     if (project) {
-      useCanvasStore.getState().restoreFromProject(project);
+      // 项目恢复是程序化写入，不算用户操作，不进动作历史
+      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project));
       // defaultViewport 仅首次挂载生效，切换项目需手动同步 React Flow 内部 viewport
       const vp = useCanvasStore.getState().viewport;
       setRfViewport(vp, { duration: 0 });
@@ -1183,7 +1185,7 @@ export default function InfiniteCanvas() {
                         await flushAndWait();
                         const proj = await useProjectStore.getState().createProject();
                         useProjectStore.getState().setActiveProject(proj.id);
-                        useCanvasStore.getState().restoreFromProject(proj);
+                        runSuppressed(() => useCanvasStore.getState().restoreFromProject(proj));
                         // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）
                         router.replace(`/canvas/${proj.id}`);
                         setTimeout(() => fitView({ duration: 300 }), 50);

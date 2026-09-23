@@ -27,6 +27,7 @@ import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HAN
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import AudioWaveform from "./AudioWaveform";
 import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
@@ -35,6 +36,8 @@ import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
 
@@ -241,6 +244,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         style={{ background: "var(--canvas-bg, #262626)" }}
         onContextMenu={(e) => e.preventDefault()}
       >
+        {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
           <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--canvas-bg)", borderRadius: 8 }}>
             {data.upload?.progress != null ? (
