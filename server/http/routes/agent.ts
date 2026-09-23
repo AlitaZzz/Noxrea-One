@@ -210,14 +210,25 @@ async function finishTurn(opts: {
     for (const call of enriched) {
       emit("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
     }
+    // message_user 是回复本身：把其 text 提升为 assistant 消息 content，
+    // 历史会话（UI 与上游）都能看到模型实际说了什么
+    const replyText = enriched.find((c) => c.name === "message_user")?.args?.text;
     // 落库 assistant 消息（含 tool_calls，续流时需回填给上游）
-    await createMessage({ sessionId, role: "assistant", content: text || "", toolCalls: enriched });
+    await createMessage({
+      sessionId,
+      role: "assistant",
+      content: text || (typeof replyText === "string" ? replyText : "") || "",
+      toolCalls: enriched,
+    });
     await touchSession(sessionId);
     emit("done", { text, toolCalls: enriched });
     return;
   }
 
-  await createMessage({ sessionId, role: "assistant", content: text });
+  // 纯文本轮：空回复不落库，避免历史会话渲染出永远的"思考中…"占位
+  if (text) {
+    await createMessage({ sessionId, role: "assistant", content: text });
+  }
   await touchSession(sessionId);
   emit("done", { text });
 }
@@ -357,11 +368,9 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   const model = c.req.query("model");
 
   return createSseResponse(c.req.raw, async ({ emit, signal }) => {
-      // ★ 立即 flush thinking，前端马上显示"思考中…"
-      emit("thinking", {});
-
-      // 先读历史（不含即将落库的 tool 消息），再落库 tool 消息
       const history: HistoryMessage[] = await listMessages(sessionId);
+
+      // 先落库 tool 消息（终止轮也要落，保证上游历史里 tool_calls 都有对应结果）
       for (const r of parsed.results) {
         await createMessage({
           sessionId,
@@ -370,6 +379,19 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
           toolCallId: r.toolCallId,
         });
       }
+
+      // message_user 是终止性工具：本轮工具调用包含它即视为回合结束，
+      // 不再续轮调 LLM，避免产生与 message_user 重复的收尾文本
+      const resultIds = new Set(parsed.results.map((r) => r.toolCallId));
+      const lastAssistantCalls = [...history].reverse().find((m) => m.role === "assistant" && m.toolCalls)?.toolCalls ?? [];
+      const isTerminal = lastAssistantCalls.some((tc) => tc.name === "message_user" && resultIds.has(tc.id));
+      if (isTerminal) {
+        await touchSession(sessionId);
+        emit("done", {});
+        return;
+      }
+
+      emit("thinking", {});
 
       const incoming: IncomingMessage[] = parsed.results.map((r) => ({
         role: "tool",
