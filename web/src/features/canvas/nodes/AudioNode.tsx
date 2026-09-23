@@ -39,9 +39,10 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const { notification } = App.useApp();
-  const [src, setSrc] = useState(data.src || "");
+  // src / duration 唯一真相是 data（撤销/清除整体替换 data，无需本地镜像与对账）
+  const src = data.src || "";
+  const duration = data.duration || 0;
 
-  const [duration, setDuration] = useState(data.duration || 0);
   // 本地处理忙浮层（音频片段截取：ffmpeg 流 copy，通常秒级完成）
   const [busy, setBusy] = useState<{ kind: string; startedAt: number } | null>(null);
   // 片段截取模式：选区操作全部在节点下方的 AudioClipStripPanel 内进行。
@@ -56,18 +57,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     if (!selected) pauseAudio(id);
   }, [selected, id]);
 
-  // Sync local src/duration when data changes externally (e.g. from undo/clear),
-  // adjusted during render to avoid cascading renders.
-  const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
-  if (data.src !== prevDataSrc) {
-    setPrevDataSrc(data.src);
-    setSrc(data.src || "");
-    setDuration(data.duration || 0);
-  }
-
+  // 波形就绪：回填 duration 到节点数据（唯一真相），供标题栏与进度显示
   const handleAudioReady = useCallback((d: number) => {
-    setDuration(d || 0);
-    // 回填 duration 到节点数据，供标题栏显示
     useCanvasStore.getState().updateNodeData(
       id,
       { duration: d || 0 } as Partial<AudioNodeData>,
@@ -93,8 +84,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   }, [src, data.label]);
 
   const handleClear = useCallback(() => {
-    setSrc("");
-    setDuration(0);
     useCanvasStore.getState().updateNodeData(
       id,
       {

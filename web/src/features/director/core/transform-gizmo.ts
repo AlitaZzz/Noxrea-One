@@ -26,15 +26,13 @@ export class TransformGizmo {
     this.control.setSpace("local");
     this.control.setSize(0.85);
 
-    const ctrl = this.control as unknown as { getHelper?: () => THREE.Object3D };
-    this._helper = ctrl.getHelper?.() ?? new THREE.Object3D();
+    this._helper = this.control.getHelper();
     scene.add(this._helper);
     this.control.enabled = false;
     this._setHelperVisible(false);
 
     this.control.addEventListener("dragging-changed", (e) => {
-      const ev = e as unknown as { value: boolean };
-      orbit.enabled = !ev.value && orbitAllowed();
+      orbit.enabled = !e.value && orbitAllowed();
     });
 
     this.control.addEventListener("objectChange", () => {
@@ -51,11 +49,11 @@ export class TransformGizmo {
   }
 
   get dragging(): boolean {
-    return (this.control as unknown as { dragging: boolean }).dragging;
+    return this.control.dragging;
   }
 
   get overAxis(): boolean {
-    return (this.control as unknown as { axis: unknown }).axis != null;
+    return this.control.axis != null;
   }
 
   setMode(mode: string) {

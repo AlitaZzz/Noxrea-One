@@ -342,7 +342,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
         </div>
       </div>
 
-      {/* 底部：重置 + 确认（参数暂未接生成链路，与现有行为一致保持展示） */}
+      {/* 底部：重置 + 确认（点生成走后端 lighting 模板插值，链路同文件头说明） */}
       <div className="flex items-center justify-between">
         <button
           type="button"

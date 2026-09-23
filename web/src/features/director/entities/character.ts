@@ -35,6 +35,8 @@ export class Character extends Entity {
   /** 身体组摆姿枢轴(绕脚底),与角色变换 root 分离,避免 gizmo 冲突 + 躺地补偿。 */
   pivot: THREE.Group;
   color: number = DEFAULT_COLOR;
+  /** 素体型号键（BODY_TYPES 的键），随 captureState 序列化，不做魔数反推 */
+  bodyType: string = "standard";
   private _mats: THREE.MeshStandardMaterial[] = [];
   private _targetHeight: number;
   private _girth: number;
@@ -247,7 +249,7 @@ export class Character extends Entity {
       if (!rest) continue;
       bone.quaternion.copy(rest);
       for (const j of joints) {
-        if (j.group === "身体") {
+        if (j.group === "body") {
           const a = THREE.MathUtils.degToRad((this.values[j.key] || 0) * (j.sign ?? 1));
           if (a === 0) continue;
           const ax = new THREE.Vector3(j.axis === "x" ? 1 : 0, j.axis === "y" ? 1 : 0, j.axis === "z" ? 1 : 0);

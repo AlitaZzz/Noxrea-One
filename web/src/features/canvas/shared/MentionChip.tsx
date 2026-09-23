@@ -8,10 +8,10 @@ import { type NodeViewProps,NodeViewWrapper } from "@tiptap/react";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-import { type ReferenceItem,refLabel } from "./reference";
+import { type ReferenceItemAttrs, refLabel } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
-  const item = node.attrs as unknown as ReferenceItem;
+  const item = node.attrs as ReferenceItemAttrs;
 
   return (
     <NodeViewWrapper as="span" className="mention-chip">

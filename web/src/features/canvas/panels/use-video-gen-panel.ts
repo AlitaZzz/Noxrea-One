@@ -22,14 +22,6 @@ import type { ReferenceItem } from "../shared/reference";
 export interface VideoGenPanelInput {
   nodeId: string;
   prompt: string;
-  modelKey: string;
-  resolution: string;
-  ratio: string;
-  seconds: number;
-  generateAudio: boolean;
-  n: number;
-  /** 参考方式：text（文生）/image（图生）/first-last/full，text = 文生视频 */
-  refMode: string;
 }
 
 export interface VideoGenPanelDerived {

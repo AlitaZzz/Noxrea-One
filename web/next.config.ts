@@ -29,7 +29,8 @@ if (rootEnv.APP_NAME) publicEnv["NEXT_PUBLIC_APP_NAME"] = rootEnv.APP_NAME;
 const maxUploadMB = Number(rootEnv.MAX_UPLOAD_SIZE_MB) || 30;
 
 const nextConfig: NextConfig = {
-  reactStrictMode: false,
+  // 保持 React 默认的双挂载检查：组件 effect 必须写成幂等（挂载两次不产生重复副作用）
+  reactStrictMode: true,
   env: publicEnv,
   transpilePackages: ["antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
   outputFileTracingRoot: path.join(__dirname, ".."),

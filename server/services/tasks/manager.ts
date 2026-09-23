@@ -12,12 +12,12 @@ import {
   markTaskProcessing,
   isTaskCancelled,
   touchTaskHeartbeat,
-  TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
-import type { ProtocolService, PollResult } from "@server/services/protocols/base";
+import type { ProtocolService } from "@server/services/protocols/base";
+import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 
 export interface SubmitAndWaitResult {
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "cancelled";
   urls: string[];
   text?: string;
   error?: string;
@@ -118,12 +118,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       if (extractedId) {
         // 检查是否已被取消
         if (await isTaskCancelled(taskId)) {
-          return {
-            status: "failed",
-            urls: [],
-            error: "Cancelled",
-            errorCode: "generation.cancelled",
-          };
+          return { status: "cancelled", urls: [] };
         }
         return await _poll({
           taskId, startedAt: input.startedAt,
@@ -213,7 +208,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       pollUrl: pollUrlPreview,
     });
     if (await isTaskCancelled(taskId)) {
-      return { status: "failed", urls: [], error: "Cancelled" };
+      return { status: "cancelled", urls: [] };
     }
     return await _poll({
       taskId, startedAt: input.startedAt,
@@ -275,7 +270,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       stage: "poll_no_support",
       taskId,
       upstreamTaskId,
-      protocol: (protocol as unknown as Record<string, unknown>).name,
+      protocol: protocol.name,
     });
     return {
       status: "failed",
@@ -350,125 +345,64 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     logEvent("taskmgr", { level: "warn", stage: "processing_persist_deferred", taskId });
   }
 
-  // 初始等待
-  if (initialDelay > 0) {
-    await new Promise((r) => setTimeout(r, initialDelay * 1000));
-  }
-
-  let lastPollData: unknown;
-
-  let lastHeartbeatAt = Date.now();
-
-  for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
-    // 心跳：僵尸清理以 updatedAt 判定任务卡死，而视频生成的轮询常持续十几分钟。
-    // 不持续推进 updatedAt，长任务就会被误判为僵尸、重置重跑并再次提交到上游，
-    // 造成重复生成与重复计费
-    if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
-      lastHeartbeatAt = Date.now();
-      // persistPending 时由下方重试推进 updatedAt（仅重试成功时；重试也失败则
-      // 由 catch 里的裸心跳兜底再试一次，避免 updatedAt 冻结被清理误重置）
-      if (!persistPending) void touchTaskHeartbeat(taskId, startedAt);
-      // 落盘被推迟的补投递：与心跳同周期重试（重试失败不影响主轮询）。
-      // 守卫拒绝 = 任务已离开本次认领，同 persist 首次写入的处理
-      if (persistPending) {
-        try {
-          if (await markTaskProcessing(taskId, upstreamTaskId, startedAt)) {
-            persistPending = false;
-            logEvent("taskmgr", { stage: "processing_persist_recovered", taskId });
-          } else {
-            logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
-            return ownershipLost();
-          }
-        } catch (err: unknown) {
-          logWriteFailed("heartbeat", err);
-          void touchTaskHeartbeat(taskId, startedAt);
-        }
+  // 初始等待在 pollUpstreamTask 内进行；心跳、取消检查、轮询节奏、4xx 判定与
+  // 协议解析统一由共享轮询核心处理，这里只保留本执行者特有的持久化语义
+  const outcome = await pollUpstreamTask({
+    taskId,
+    upstreamTaskId,
+    pollUrl,
+    headers,
+    protocol,
+    pollInterval,
+    maxPollAttempts,
+    initialDelay,
+    logChannel: "taskmgr",
+    onHeartbeat: async () => {
+      if (!persistPending) {
+        void touchTaskHeartbeat(taskId, startedAt);
+        return true;
       }
-    }
-
-    // 每次轮询前都检查取消状态（isTaskCancelled 自身吞 DB 错误视为未取消）
-    if (await isTaskCancelled(taskId)) {
-      logEvent("taskmgr", { stage: "poll_cancelled", taskId, attempt: attempt + 1 });
-      return { status: "failed", urls: [], error: "Cancelled" };
-    }
-
-    // 第一次不延迟，后续按 pollInterval 间隔
-    if (attempt > 0) {
-      const delay = attempt >= 60 ? pollInterval * 2 : pollInterval;
-      await new Promise((r) => setTimeout(r, delay * 1000));
-    }
-
-    try {
-      logEvent("taskmgr", { level: "debug", stage: "poll_attempt", taskId, attempt: attempt + 1, pollUrl });
-      const pollResp = await fetchWithTimeout(pollUrl, {
-        headers,
-        scene: "poll",
-      });
-      logEvent("taskmgr", { level: "debug", stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
-
-      if (!pollResp.ok) {
-        // 永久性 4xx（除 408/425/429 外）：重试无意义，直接失败
-        const permanent = pollResp.status >= 400 && pollResp.status < 500 &&
-          ![408, 425, 429].includes(pollResp.status);
-        if (permanent) {
-          logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll permanent error");
-          return { status: "failed", urls: [], error: `轮询失败（HTTP ${pollResp.status}），upstream_task_id=${upstreamTaskId}` };
+      // 落盘被推迟的补投递：与心跳同周期重试（重试失败不影响主轮询）
+      try {
+        if (await markTaskProcessing(taskId, upstreamTaskId, startedAt)) {
+          persistPending = false;
+          logEvent("taskmgr", { stage: "processing_persist_recovered", taskId });
+          return true;
         }
-        logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll bad status");
-        continue;
+        // 守卫拒绝 = 任务已离开本次认领，同 persist 首次写入的处理
+        logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
+        return false;
+      } catch (err: unknown) {
+        logWriteFailed("heartbeat", err);
+        void touchTaskHeartbeat(taskId, startedAt);
+        return true;
       }
+    },
+    shouldStop: async () => {
+      // isTaskCancelled 自身吞 DB 错误视为未取消
+      if (await isTaskCancelled(taskId)) {
+        logEvent("taskmgr", { stage: "poll_cancelled", taskId });
+        return true;
+      }
+      return false;
+    },
+  });
 
-      const pollData = await pollResp.json();
-      logEvent("taskmgr", { level: "debug", stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(pollData) });
-      lastPollData = pollData;
-
-      const parsed: PollResult = protocol.parsePollResponse?.(pollData)
-        ?? { status: "pending", urls: [] };
+  switch (outcome.kind) {
+    case "completed":
       logEvent("taskmgr", {
         level: "debug",
-        stage: "poll_parsed",
+        stage: "poll_completed",
         taskId,
-        attempt: attempt + 1,
-        status: parsed.status,
-        urls: parsed.urls.length,
-        error: parsed.error,
+        urls: outcome.urls,
+        text: outcome.text,
       });
-
-      if (parsed.status === "completed") {
-        logEvent("taskmgr", {
-          level: "debug",
-          stage: "poll_completed",
-          taskId,
-          attempt: attempt + 1,
-          urls: parsed.urls,
-          text: parsed.text,
-        });
-        return { status: "completed", urls: parsed.urls, text: parsed.text };
-      }
-
-      if (parsed.status === "failed") {
-        logEvent("taskmgr", {
-          stage: "poll_upstream_failed",
-          taskId,
-          attempt: attempt + 1,
-          error: parsed.error,
-        });
-        return { status: "failed", urls: [], error: parsed.error ?? "Upstream task failed" };
-      }
-
-      // pending: continue
-    } catch (err: unknown) {
-      logger.warn({ taskId, attempt: attempt + 1, err: errText(err) }, "poll error");
-    }
+      return { status: "completed", urls: outcome.urls, text: outcome.text };
+    case "failed":
+      return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
+    case "stopped":
+      return { status: "cancelled", urls: [] };
+    case "lost":
+      return ownershipLost();
   }
-
-  // 超时
-  const lastInfo = lastPollData ? ` - 上游最后返回: ${JSON.stringify(lastPollData)}` : "";
-  return {
-    status: "failed",
-    urls: [],
-    error: `异步轮询超时（upstream_task_id=${upstreamTaskId}）${lastInfo}`,
-    // 超时 ≠ 上游失败：上游可能仍在生成。给专门错误码，前端据此提示用户
-    errorCode: "generation.poll_timeout",
-  };
 }

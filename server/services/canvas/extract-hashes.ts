@@ -22,26 +22,6 @@ export function extractHashFromUrl(url: string): string | null {
 }
 
 /**
- * 从存储 key 中提取 64 位 hash。
- * 存储 key 格式为 {userId}/{hash[:2]}/{hash}{ext}，
- * generation_tasks 等表落库的是这种形式（而非 /api/files/ 开头的 URL）。
- */
-export function extractHashFromStorageKey(key: string): string | null {
-  if (!key || typeof key !== "string") return null;
-  const parts = key.split("/");
-  if (parts.length !== 3) return null;
-  const fn = parts[2];
-  const dot = fn.lastIndexOf(".");
-  const h = dot > 0 ? fn.slice(0, dot) : fn;
-  return h.length === 64 ? h : null;
-}
-
-/** 从文件 URL 或存储 key 中提取 hash（两种落库格式都兼容） */
-export function extractHashFromUrlOrKey(value: string): string | null {
-  return extractHashFromUrl(value) ?? extractHashFromStorageKey(value);
-}
-
-/**
  * 从画布节点数组提取文件 hash 数量。
  * 计数粒度是节点：同一节点内的同一文件只计一次，不同节点分别累加。
  */

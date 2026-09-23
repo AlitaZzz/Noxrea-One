@@ -9,7 +9,7 @@
  */
 import { type DBSchema, type IDBPDatabase,openDB } from "idb";
 
-import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
+import type { AnyEdge, BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 
 /** 草稿的画布数据，字段与 restoreFromProject 入参一致，便于直接恢复 */
@@ -18,7 +18,6 @@ export interface DraftCanvasData {
   edges: AnyEdge[];
   viewport: ViewportState;
   background: BackgroundType;
-  theme: ThemeMode;
   minimapVisible: boolean;
   snapToGrid: boolean;
   agentModel?: string;

@@ -14,6 +14,17 @@ import { persistFileObject } from "./persist";
 import { localStorage } from "./backends/local";
 
 /**
+ * 解析 base64 data: URL 为原始字节。
+ * mime 部分不做校验（真实类型由 sniffMime 从 magic bytes 探测），
+ * 仅要求 `data:<任意 mime>;base64,<payload>` 结构；非 base64 data: URL 返回 null。
+ */
+export function decodeDataUrl(url: string): Buffer | null {
+  const match = url.match(/^data:[^,]*;base64,(.+)$/);
+  if (!match) return null;
+  return Buffer.from(match[1], "base64");
+}
+
+/**
  * 下载 + 落盘 + 去重（对齐 Python download_and_save）。
  *
  * 流程：
@@ -35,12 +46,12 @@ export async function downloadAndSave(
 
     // data: URL
     if (cdnUrl.startsWith("data:")) {
-      const match = cdnUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-      if (!match) {
+      const decoded = decodeDataUrl(cdnUrl);
+      if (!decoded) {
         logger.warn({ taskId }, "Invalid data: URL format");
         return null;
       }
-      buffer = Buffer.from(match[2], "base64");
+      buffer = decoded;
       logEvent("storage.download", { stage: "decoded_data_url", taskId, size: buffer.length });
     }
     // 远端下载

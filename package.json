@@ -17,6 +17,7 @@
     "lint:server": "eslint server",
     "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.json",
     "test": "npm -w web run test",
+    "test:server": "vitest run --config vitest.config.ts",
     "test:watch": "npm -w web run test:watch",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",

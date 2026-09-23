@@ -2,7 +2,7 @@
  * 项目与历史相关类型定义。
  * 包含画布项目结构 CanvasProject、历史快照与剪贴板数据类型。
  */
-import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
+import type { AnyEdge, BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 
 // ============================================================
@@ -13,11 +13,9 @@ export interface CanvasProject {
   id: string;
   name: string;
   revision: number;
-  createdAt: number;
   updatedAt: number;
   viewport: ViewportState;
   background: BackgroundType;
-  theme: ThemeMode;
   minimapVisible?: boolean;
   snapToGrid?: boolean;
   agentModel?: string;
@@ -34,7 +32,6 @@ export interface HistorySnapshot {
   edges: AnyEdge[];
   viewport: ViewportState;
   background: BackgroundType;
-  theme: ThemeMode;
   minimapVisible: boolean;
   snapToGrid: boolean;
 }

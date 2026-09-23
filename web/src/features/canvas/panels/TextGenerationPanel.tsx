@@ -28,7 +28,7 @@ import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
-import { readLastModel, recordLastModel } from "../shared/last-model";
+import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
@@ -66,7 +66,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // 编辑经 writeGenSettings 立即写回（skipHistory，保存由 SaveManager 合并）。
   const genSettings = useGenSettings(nodeId) as Partial<TextGenSettings> | undefined;
   const prompt = genSettings?.prompt ?? "";
-  const modelKey = genSettings?.modelKey || readLastModel("text", allModels) || allModels[0]?.value || "";
+  const modelKey = resolveModelKey(genSettings?.modelKey, "text", allModels);
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
@@ -74,13 +74,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // 悬空模型键纠偏（同 ImageGenerationPanel）：持久化的 modelKey 已不存在时回退第一个可用模型并写回；
-  // 未持久化时不写，避免覆盖 readLastModel 的「记住上次使用的模型」回退
+  // 悬空模型键纠偏（同 ImageGenerationPanel）：持久化的 modelKey 已不存在时，
+  // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
+  // 未持久化时不写：展示层由 resolveModelKey 回退，避免固化「记住上次使用的模型」。
   useEffect(() => {
     if (allModels.length === 0) return;
     const persisted = genSettings?.modelKey;
     if (!persisted || allModels.some((m) => m.value === persisted)) return;
-    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+    writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "text", allModels) });
   }, [allModels, genSettings?.modelKey, nodeId]);
 
   // Upstream reference images - derived live from current edges
@@ -227,14 +228,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     }));
     return [...audios, ...images, ...videos];
   }, [audioOrder, refOrder, refVideoOrder, upstreamAudio, upstreamVideos]);
-
-  const is: React.CSSProperties = {
-    background: "transparent",
-    border: "none",
-    color: "var(--canvas-text)",
-    borderRadius: 4,
-    fontSize: 13,
-  };
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
@@ -386,7 +379,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
 
   return (
     <>
-      <style>{`.gen-textarea:focus, .gen-textarea-focused { border: none !important; box-shadow: none !important; outline: none !important; }`}</style>
       <WheelGuard
         className="nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
         style={{ background: "var(--canvas-bg, #262626)", border: "1px solid var(--canvas-border, #3a3a3a)", width: 580 }}

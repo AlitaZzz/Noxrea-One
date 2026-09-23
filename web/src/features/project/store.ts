@@ -5,13 +5,13 @@
  */
 import { create } from "zustand";
 
-import type { AnyEdge, BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
+import type { AnyEdge, BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { saveMutex } from "@/features/project/save-mutex";
 import type { CanvasProject } from "@/features/project/types";
 import { resolveResultError } from "@/lib/api/error-message";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME, DEFAULT_VIEWPORT } from "@/lib/constants";
+import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
 
 // ===== localStorage helpers (active project only) =====
@@ -32,7 +32,6 @@ function saveLocalActiveId(id: string | null) {
 interface CanvasData {
   viewport?: ViewportState;
   background?: BackgroundType;
-  theme?: ThemeMode;
   minimapVisible?: boolean;
   snapToGrid?: boolean;
   agentModel?: string;
@@ -53,11 +52,9 @@ function mapServerProject(p: ServerProject): CanvasProject {
     id: p.id,
     name: p.name,
     revision: p.revision ?? 1,
-    createdAt: Date.now(),
     updatedAt: new Date(p.updatedAt).getTime(),
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
     background: p.canvasData?.background || DEFAULT_BACKGROUND,
-    theme: p.canvasData?.theme || DEFAULT_THEME,
     minimapVisible: p.canvasData?.minimapVisible ?? true,
     snapToGrid: p.canvasData?.snapToGrid || false,
     agentModel: p.canvasData?.agentModel,
@@ -93,17 +90,15 @@ async function fetchProjectById(id: string): Promise<CanvasProject | null> {
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
-    const res = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, theme: DEFAULT_THEME, nodes: [], edges: [] });
+    const res = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
     if (res.code === 200 && res.data) {
       return {
         id: String(res.data.id),
         name: res.data.name,
         revision: res.data.revision ?? 1,
-        createdAt: Date.now(),
         updatedAt: Date.now(),
         viewport: DEFAULT_VIEWPORT,
         background: DEFAULT_BACKGROUND,
-        theme: DEFAULT_THEME,
         nodes: [],
         edges: [],
       };
@@ -141,7 +136,7 @@ interface ProjectState {
   deleteProjects: (ids: string[]) => void;
   updateProjectRevision: (id: string, revision: number) => void;
   setActiveProject: (id: string) => void;
-  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, theme: ThemeMode, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
+  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
   refreshProjects: () => Promise<void>;
   initialize: () => Promise<void>;
 }
@@ -284,10 +279,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     saveLocalActiveId(id);
   },
 
-  syncCanvasState: (id, nodes, edges, viewport, background, theme, minimapVisible, snapToGrid, agentModel) => {
+  syncCanvasState: (id, nodes, edges, viewport, background, minimapVisible, snapToGrid, agentModel) => {
     set((s) => ({
       projects: s.projects.map((p) =>
-        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, theme, minimapVisible, snapToGrid, agentModel: agentModel ?? undefined, updatedAt: Date.now() } : p
+        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, minimapVisible, snapToGrid, agentModel: agentModel ?? undefined, updatedAt: Date.now() } : p
       ),
     }));
   },

@@ -7,7 +7,6 @@ import { create } from "zustand";
 
 import { modelApi } from "@/features/settings/api";
 import {
-  type ApiErrorBody,
   isRecord,
   parseErrorBody,
   resolveApiError,
@@ -70,7 +69,10 @@ interface ModelState {
   providers: ModelProvider[];
   presets: ProviderPreset[];
   modelParamsCache: ModelParamsMap;
+  /** 拉取成功（含空列表）为 true；失败保持 false 以允许后续调用重试 */
   initialized: boolean;
+  /** 首次拉取失败标记，供 UI 展示重试入口 */
+  initializeFailed: boolean;
   initialize: () => Promise<void>;
   findModelParams: (providerId: string, modelName: string, capability: string) => ModelParamConfig | null;
 
@@ -92,6 +94,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   presets: [],
   modelParamsCache: {},
   initialized: false,
+  initializeFailed: false,
 
   initialize: async () => {
     if (get().initialized) return;
@@ -99,7 +102,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const res = await modelApi.fetchProviders<ModelProvider[]>();
       if (res.code === 200 && res.data) {
         // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
-        set({ providers: res.data, initialized: true });
+        set({ providers: res.data, initialized: true, initializeFailed: false });
         await get().fetchPresets();
         // 拉取模型参数配置（fields 为唯一数据源）
         try {
@@ -113,7 +116,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
         return;
       }
     } catch {}
-    set({ initialized: true });
+    // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
+    set({ initializeFailed: true });
   },
 
   findModelParams: (providerId: string, modelName: string, capability: string) => {
@@ -202,11 +206,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       return res.data.apiKey;
     }
     throw new Error(
-      resolveApiError(
-        res as unknown as ApiErrorBody,
-        undefined,
-        "model_config.api_key_fetch_failed"
-      )
+      resolveApiError(res, undefined, "model_config.api_key_fetch_failed")
     );
   },
 

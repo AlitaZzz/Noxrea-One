@@ -26,7 +26,6 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
-import { apiRaw } from "@/lib/api/client";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
@@ -36,12 +35,11 @@ import { type ModelOption } from "@/lib/types/models";
 
 import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
-import { readLastModel, recordLastModel } from "../shared/last-model";
+import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
-import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
-import type { ReferenceItem } from "../shared/reference";
+import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
@@ -62,7 +60,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 编辑经 writeGenSettings 立即写回（skipHistory：连续编辑不压 undo 栈，保存由 SaveManager 合并）。
   // 未持久化的字段回退到当前模型的默认值。
   const genSettings = useGenSettings(nodeId) as Partial<VideoGenSettings> | undefined;
-  const modelKey = genSettings?.modelKey || readLastModel("video", allModels) || allModels[0]?.value || "";
+  const modelKey = resolveModelKey(genSettings?.modelKey, "video", allModels);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
@@ -76,11 +74,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     [modelParams]
   );
   const prompt = genSettings?.prompt ?? "";
-  const resolution = genSettings?.resolution || (defaults.resolution as string) || "1K";
-  const ratio = genSettings?.ratio || (defaults.ratio as string) || "16:9";
-  const seconds = genSettings?.seconds ?? (defaults.seconds as number) ?? 5;
-  const generateAudio = genSettings?.generateAudio ?? (defaults.generateAudio as boolean) ?? true;
-  const n = genSettings?.n || (defaults.n as number) || 1;
+  // 未就绪不落值：params 缓存未到达时 defaults 为空、fields 为空（参数区本就不渲染），
+  // 字段保持 undefined，等缓存到达后由 defaults 物化——不硬编码兜底值，杜绝
+  // 「错误兜底值被渲染一瞬再被纠偏 effect 改写」的双写与闪烁
+  const resolution = genSettings?.resolution ?? (defaults.resolution as string | undefined);
+  const ratio = genSettings?.ratio ?? (defaults.ratio as string | undefined);
+  const seconds = genSettings?.seconds ?? (defaults.seconds as number | undefined);
+  const generateAudio = genSettings?.generateAudio ?? (defaults.generateAudio as boolean | undefined);
+  const n = genSettings?.n ?? (defaults.n as number | undefined);
 
   // write-through setters：保持旧签名，编辑立即落 store
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
@@ -91,13 +92,15 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时回退第一个可用模型并写回；
-  // 未持久化（modelKey 为空）时不写，避免覆盖 readLastModel 的「记住上次使用的模型」回退
+  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时，
+  // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
+  // 未持久化（modelKey 为空）时不写：展示层由 resolveModelKey 回退，
+  // 一旦写回会把「记住上次使用的模型」永久固化到节点数据。
   useEffect(() => {
     if (allModels.length === 0) return;
     const persisted = genSettings?.modelKey;
     if (!persisted || allModels.some((m) => m.value === persisted)) return;
-    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+    writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "video", allModels) });
   }, [allModels, genSettings?.modelKey, nodeId]);
 
   // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
@@ -118,9 +121,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     else if (name === "n") writeGenSettings(nodeId, { n: value });
   };
 
-  // 模型切换 / fields 异步到达时：重置不在当前模型 options 中的参数
-  // （modelParamsCache 晚于组件挂载到达时，初始值可能来自 _default 兜底或硬编码回退，
-  //   如 "1K" 不在 agnes-video 的 ["720P","960P","2K"] 中，需回退到字段默认值）。
+  // 模型切换 / 持久化值不属于当前模型 options 时：纠偏到字段默认值。
+  // 缓存未就绪时字段值为 undefined，由 cur !== undefined 守卫跳过，不落任何兜底值。
   // correctedFor 守卫保证同一份 fields 只纠偏一次；受控模式下经 writeGenSettings 写回 store。
   const correctedForRef = useRef<unknown>(null);
   useEffect(() => {
@@ -137,14 +139,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   }, [modelParams]);
 
   const selectModel = (value: string) => {
-    const entry = allModels.find((model) => model.value === value);
-    const params = entry ? findModelParams(entry.providerId, entry.name, "video") : null;
-    for (const field of params?.fields ?? []) {
-      const current = fieldValues[field.name] as string | number | undefined;
-      if (field.options?.length && current !== undefined && !field.options.includes(current)) {
-        setField(field.name, field.default);
-      }
-    }
+    // 字段纠偏由上方 modelParams effect 统一处理：切换模型必然更换 fields 引用，
+    // effect 会把不属于新模型 options 的持久化值重置为默认值，这里不再重复一份
     setModelKey(value);
     recordLastModel("video", value);
     setModelOpen(false);
@@ -161,9 +157,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     refOrder, audioOrder, refVideoOrder,
     upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
     elapsed, error, setElapsed, setError, timerRef,
-  } = useVideoGenPanel({
-    nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode,
-  });
+  } = useVideoGenPanel({ nodeId, prompt });
 
   // 同类内拖拽排序（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
   const handleAudioReorder = useCallback((dragged: string, target: string) => {
@@ -218,7 +212,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return i18n.exists(key) ? i18n.t(key) : undefined;
   };
 
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution: string; ratio: string; seconds: number; generateAudio: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: true, refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", n: 1, entry: null, provider: null });
+  // 参数值在 params 缓存未就绪时为 undefined，由 submitTask 的 hasField 守卫决定是否上报
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution?: string; ratio?: string; seconds?: number; generateAudio?: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n?: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", entry: null, provider: null });
   const { notification } = App.useApp();
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
@@ -283,10 +278,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       )),
     });
   }
-
-  const is: React.CSSProperties = {
-    background: "transparent", border: "none", color: "var(--canvas-text)", borderRadius: 4, fontSize: 13,
-  };
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
   const submitTask = async (): Promise<string | null> => {
@@ -397,7 +388,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-    <style>{`.gen-textarea:focus, .gen-textarea-focused { border: none !important; box-shadow: none !important; outline: none !important; }`}</style>
     <WheelGuard
       className="nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
       style={{

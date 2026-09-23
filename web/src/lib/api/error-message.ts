@@ -1,14 +1,13 @@
 /**
  * 服务端错误响应本地化。
- * 服务端以 { error, ctx } 返回结构化错误码，此处按 error 查 i18n 得到展示文案；
- * 未迁移的旧接口仍返回 { detail } 纯英文文案，原样透出以免丢失信息。
+ * 服务端以 { error, ctx } 返回结构化错误码，此处按 error 查 i18n 得到展示文案。
  */
 import i18n from "@/lib/i18n/config";
 
 /** 错误文案在 i18n 中的命名空间 */
 const ERROR_NS = "error";
 
-/** 服务端错误响应体（failCode 新格式 / 旧版 fail 格式） */
+/** 服务端错误响应体的错误相关字段（请求结果类型只需具备这几个可选字段即可直接传入） */
 export interface ApiErrorBody {
   /** 机器可读错误码，对应 i18n 中 error 命名空间下的文案 */
   error?: string;
@@ -16,8 +15,6 @@ export interface ApiErrorBody {
   ctx?: Record<string, string | number>;
   /** 请求 ID，对应服务端日志，报障时回传 */
   requestId?: string;
-  /** 旧格式纯文案，仅未迁移接口返回 */
-  detail?: string;
 }
 
 /** 判断值是否为对象类型（排除 null），用于响应体结构校验。 */
@@ -59,7 +56,10 @@ export async function resolveResponseError(
  * @returns 失败文案；code === 200 时返回空串
  */
 export function resolveResultError(
-  res: { code: number; msg?: string } | null | undefined,
+  res:
+    | { code: number; msg?: string; error?: string; ctx?: Record<string, string | number>; requestId?: string }
+    | null
+    | undefined,
   fallbackKey: string,
 ): string {
   if (!res) return resolveApiError(null, undefined, fallbackKey);
@@ -67,7 +67,7 @@ export function resolveResultError(
   // 网络层 / HTTP 层失败：client 已生成文案，直接用，避免二次翻译丢失细节
   if (res.code === 0 && res.msg) return res.msg;
   return resolveApiError(
-    res as unknown as ApiErrorBody,
+    { error: res.error, ctx: res.ctx, requestId: res.requestId },
     res.code >= 400 ? res.code : undefined,
     fallbackKey,
   );
@@ -100,21 +100,17 @@ export function resolveApiError(
     });
   };
 
-  // ① 结构化错误码
+  // ② 结构化错误码存在但未登记翻译：退回通用文案，开发环境下提示补齐，避免把裸错误码展示给用户
   if (body?.error) {
     const key = `${ERROR_NS}.${body.error}`;
     if (i18n.exists(key)) {
       return withRequestId(i18n.t(key, { ...(body.ctx ?? {}), defaultValue: fallback }));
     }
-    // 错误码未登记翻译时退回通用文案，开发环境下提示补齐，避免把裸错误码展示给用户
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[i18n] 错误码缺少翻译: ${body.error}`);
     }
     return withRequestId(fallback);
   }
-
-  // ② 旧格式：未迁移接口回传的英文文案
-  if (body?.detail) return withRequestId(body.detail);
 
   const message =
     status !== undefined

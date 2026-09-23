@@ -14,6 +14,7 @@ import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
 import { useAuthStore } from "@/features/auth/store";
+import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 
@@ -228,7 +229,7 @@ function LeftPanel() {
                 animation: "loginFadeUp 0.7s ease-out 0.75s forwards",
               }}
             >
-              从灵感碎片，到完整世界
+              {i18n.t("auth.login.tagline")}
               <span
                 className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-px w-3/4 login-anim"
                 style={{
@@ -301,21 +302,21 @@ function RightPanel({
           style={{ animation: "loginFadeUp 0.7s ease-out 0.3s forwards" }}
         >
           <h2 className="text-2xl font-bold text-white mb-1">
-            {isSignin ? "登录" : "创建账号"}
+            {isSignin ? i18n.t("auth.login.title") : i18n.t("auth.login.createAccount")}
           </h2>
           <p className="text-sm" style={{ color: "#9b9ba3" }}>
-            {isSignin ? `欢迎回到 ${APP_NAME}` : "开启你的创作之旅"}
+            {isSignin ? i18n.t("auth.login.subtitle", { name: APP_NAME }) : i18n.t("auth.login.createSubtitle")}
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-5" noValidate>
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "#b8b8c0" }}>用户名</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: "#b8b8c0" }}>{i18n.t("auth.login.username")}</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="请输入用户名"
+              placeholder={i18n.t("auth.login.usernamePlaceholder")}
               aria-invalid={!!errors.username}
               className={inputClass(errors.username)}
             />
@@ -325,20 +326,20 @@ function RightPanel({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "#b8b8c0" }}>密码</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: "#b8b8c0" }}>{i18n.t("auth.login.password")}</label>
             <div className="relative">
               <input
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入密码"
+                placeholder={i18n.t("auth.login.passwordPlaceholder")}
                 aria-invalid={!!errors.password}
                 className={`${inputClass(errors.password)} pr-11`}
               />
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? "隐藏密码" : "显示密码"}
+                aria-label={showPw ? i18n.t("auth.login.hidePassword") : i18n.t("auth.login.showPassword")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
               >
                 {showPw ? (
@@ -377,12 +378,12 @@ function RightPanel({
               {loading ? (
                 <>
                   <SpinnerIcon className="animate-spin h-4 w-4" />
-                  处理中...
+                  {i18n.t("common.processing")}
                 </>
               ) : isSignin ? (
-                "登录"
+                i18n.t("auth.login.signIn")
               ) : (
-                "注册"
+                i18n.t("auth.login.signUp")
               )}
             </span>
           </button>
@@ -390,13 +391,13 @@ function RightPanel({
 
         <div className="mt-8 text-center">
           <p className="text-sm" style={{ color: "#9b9ba3" }}>
-            {isSignin ? "还没有账号？" : "已有账号？"}{" "}
+            {isSignin ? i18n.t("auth.login.noAccount") : i18n.t("auth.login.hasAccount")}{" "}
             <button
               onClick={onToggle}
               className="font-medium transition-colors hover:opacity-80 cursor-pointer"
               style={{ color: LIME }}
             >
-              {isSignin ? "立即注册" : "立即登录"}
+              {isSignin ? i18n.t("auth.login.registerNow") : i18n.t("auth.login.loginNow")}
             </button>
           </p>
         </div>
@@ -410,6 +411,15 @@ function RightPanel({
 export default function LoginPage() {
   const router = useRouter();
   const authStore = useAuthStore();
+
+  // 全局 401 登出跳转而来：读取 client.ts 留下的标记，展示一次性「会话过期」提示
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_FLAG) !== "1") return;
+      sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+      showGlobalMessage().error(i18n.t("error.session_expired"));
+    } catch { /* sessionStorage 不可用时跳过 */ }
+  }, []);
 
   const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");

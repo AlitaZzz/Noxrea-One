@@ -17,7 +17,6 @@ import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 // ── Mock @/lib/api/client（upload-pipeline 的传递依赖，防测试环境加载真实客户端）──
 vi.mock("@/lib/api/client", () => ({
-  apiUpload: vi.fn(),
   apiUploadWithProgress: vi.fn(),
   UnauthorizedError: class UnauthorizedError extends Error {},
   BASE: "http://test",

@@ -30,7 +30,7 @@ import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
 
 import ImageRefCard from "../shared/ImageRefCard";
-import { readLastModel, recordLastModel } from "../shared/last-model";
+import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
@@ -55,7 +55,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 未持久化的字段回退到当前模型的默认值。
   const genSettings = useGenSettings(nodeId) as Partial<ImageGenSettings> | undefined;
   const prompt = genSettings?.prompt ?? "";
-  const modelKey = genSettings?.modelKey || readLastModel("image", allModels) || allModels[0]?.value || "";
+  const modelKey = resolveModelKey(genSettings?.modelKey, "image", allModels);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
   // 订阅 modelParamsCache：缓存晚于挂载到达时能触发重算
@@ -69,10 +69,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     () => (Array.isArray(modelParams?.fields) ? fieldDefaults(modelParams.fields) : {}),
     [modelParams]
   );
-  const quality = genSettings?.quality || (defaults.quality as string) || "auto";
-  const resolution = genSettings?.resolution || (defaults.resolution as string) || "1K";
-  const ratio = genSettings?.ratio || (defaults.ratio as string) || "1:1";
-  const n = genSettings?.n || (defaults.n as number) || 1;
+  // 未就绪不落值：params 缓存未到达时字段保持 undefined（fields 为空、参数区不渲染），
+  // 等缓存到达后由 defaults 物化——不硬编码兜底值，杜绝错误兜底值的渲染闪烁与误持久化
+  const quality = genSettings?.quality ?? (defaults.quality as string | undefined);
+  const resolution = genSettings?.resolution ?? (defaults.resolution as string | undefined);
+  const ratio = genSettings?.ratio ?? (defaults.ratio as string | undefined);
+  const n = genSettings?.n ?? (defaults.n as number | undefined);
 
   // write-through setters：保持旧签名，编辑立即落 store
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
@@ -82,14 +84,15 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时回退第一个可用模型并写回。
-  // 未持久化（modelKey 为空）时不写：显示层回退链（readLastModel → 第一个可用）负责展示，
-  // 一旦写入 allModels[0] 会把「记住上次使用的模型」永久覆盖。
+  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时，
+  // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
+  // 未持久化（modelKey 为空）时不写：展示层由 resolveModelKey 回退，
+  // 一旦写回会把「记住上次使用的模型」永久固化到节点数据。
   useEffect(() => {
     if (allModels.length === 0) return;
     const persisted = genSettings?.modelKey;
     if (!persisted || allModels.some((m) => m.value === persisted)) return;
-    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+    writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "image", allModels) });
   }, [allModels, genSettings?.modelKey, nodeId]);
 
   // fields 为唯一数据源：渲染控件 + 默认值
@@ -177,7 +180,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
 
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, provider: null });
+  // 参数值在 params 缓存未就绪时为 undefined，由 submitTask 的 hasField 守卫决定是否上报
+  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality?: string; resolution?: string; ratio?: string; refImages: string[]; n?: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", refImages: [] as string[], entry: null, provider: null });
 
   /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
   const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
@@ -304,7 +308,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-    <style>{`.gen-textarea:focus, .gen-textarea-focused { border: none !important; box-shadow: none !important; outline: none !important; }`}</style>
     <WheelGuard
       className="nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
       style={{

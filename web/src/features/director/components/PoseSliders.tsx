@@ -7,8 +7,9 @@
 
 import { Slider } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-import { groupJoints, type Joint } from "@/features/director/entities/joint-config";
+import { groupJoints } from "@/features/director/entities/joint-config";
 
 interface Props {
   characterId: string;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function PoseSliders({ characterId: _characterId, values, onChange, syncRef }: Props) {
+  const { t } = useTranslation();
   const groups = groupJoints();
   const [localVals, setLocalVals] = useState<Record<string, number>>({ ...values });
   const [prevValues, setPrevValues] = useState(values);
@@ -33,16 +35,16 @@ export default function PoseSliders({ characterId: _characterId, values, onChang
     <div id="pose-sliders-wrap">
       {groups.map((g) => (
         <div key={g.group}>
-          <h4 className="pose-h4">{g.group}</h4>
+          <h4 className="pose-h4">{t(`director.joint.group.${g.group}`)}</h4>
           {g.sides.map((s) => (
             <div key={s.side || g.group}>
-              {s.side && <div className="pose-side">{s.side}</div>}
+              {s.side && <div className="pose-side">{t(`director.joint.side.${s.side}`)}</div>}
               {s.joints.map((j) => {
                 const val = localVals[j.key] ?? values[j.key] ?? 0;
                 return (
                   <div key={j.key} className="pose-sld">
                     <div className="pose-sld-lab">
-                      <b>{j.label}</b>
+                      <b>{t(`director.joint.label.${j.label}`)}</b>
                       <span className="pose-sld-val">{Math.round(val)}°</span>
                     </div>
                     <Slider min={j.min} max={j.max} step={1} value={val}

@@ -7,6 +7,7 @@
 
 import { CloseOutlined } from "@ant-design/icons";
 import dynamic from "next/dynamic";
+import { useTranslation } from "react-i18next";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import Dock from "@/features/director/components/Dock";
@@ -15,9 +16,14 @@ import Outliner from "@/features/director/components/Outliner";
 import ScenePanel from "@/features/director/components/ScenePanel";
 import { useDirectorStore } from "@/features/director/director-store";
 
+function ViewportLoading() {
+  const { t } = useTranslation();
+  return <div className="flex items-center justify-center h-full text-white/50 text-sm">{t("director.loadingViewport")}</div>;
+}
+
 const DirectorViewport = dynamic(() => import("@/features/director/components/DirectorViewport"), {
   ssr: false,
-  loading: () => <div className="flex items-center justify-center h-full text-white/50 text-sm">加载 3D 视口...</div>,
+  loading: () => <ViewportLoading />,
 });
 
 interface Props {
@@ -25,6 +31,7 @@ interface Props {
 }
 
 export default function DirectorOverlay({ onClose }: Props) {
+  const { t } = useTranslation();
   const runtime = useDirectorStore((s) => s.runtime);
   const selectedId = useDirectorStore((s) => s.selectedId);
   const transformMode = useDirectorStore((s) => s.transformMode);
@@ -32,7 +39,7 @@ export default function DirectorOverlay({ onClose }: Props) {
   const entities = useDirectorStore((s) => s.entities);
   const entityName = entities.find((e) => e.id === selectedId)?.name || "";
 
-  const tfLabel = { translate: "V移动", rotate: "R旋转", scale: "S缩放" }[transformMode] || "";
+  const tfLabel = { translate: t("director.tf.move"), rotate: t("director.tf.rotate"), scale: t("director.tf.scale") }[transformMode] || "";
 
   return (
     <div id="director-page" className="fixed inset-0 z-[100] flex flex-col bg-[var(--dir-bg)] text-white overflow-hidden"
@@ -42,19 +49,19 @@ export default function DirectorOverlay({ onClose }: Props) {
         style={{ height: 56, background: "var(--dir-panel)" }}>
         {/* Logo + info */}
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-[17px] tracking-wide">导演台</span>
+          <span className="font-semibold text-[17px] tracking-wide">{t("director.title")}</span>
           <span className="text-[13px] text-white/30">
-            {entities.length} 项{selectedId ? ` · 选中: ${entityName}` : ""} {tfLabel && `· ${tfLabel}`}
+            {t("director.itemCount", { count: entities.length })}{selectedId ? ` · ${t("director.selectedLabel", { name: entityName })}` : ""} {tfLabel && `· ${tfLabel}`}
           </span>
         </div>
 
         {/* 视角切换标签(居中) */}
         <div className="absolute left-1/2 -translate-x-1/2 flex rounded-[10px] p-[3px]" style={{ background: "var(--dir-panel2)" }}>
           <button onClick={() => runtime?.setCameraView(false)} className="dir-viewtab" data-active={!cameraView}>
-            导演视角
+            {t("director.directorView")}
           </button>
           <button onClick={() => runtime?.setCameraView(true)} className="dir-viewtab" data-active={cameraView}>
-            机位视角
+            {t("director.cameraView")}
           </button>
         </div>
 
@@ -82,7 +89,7 @@ export default function DirectorOverlay({ onClose }: Props) {
         {/* 左:场景清单 — 232px, panel bg */}
         <aside className="w-[232px] shrink-0 border-r border-[var(--dir-line)] overflow-hidden"
           style={{ background: "var(--dir-panel)", padding: "18px 14px" }}>
-          <h3 className="text-sm font-semibold text-white mb-[14px]">场景</h3>
+          <h3 className="text-sm font-semibold text-white mb-[14px]">{t("director.scene")}</h3>
           <Outliner />
         </aside>
 

@@ -32,7 +32,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  apiUpload: vi.fn(),
   BASE: "http://test",
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));

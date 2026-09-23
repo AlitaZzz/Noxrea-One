@@ -828,16 +828,8 @@ export default function InfiniteCanvas() {
   const handlePaneClick = useCallback(() => {
     // 点击空白：视为「点击选中」语义，恢复选中态 UI
     canvasInteraction.onClick();
-    // Exit annotation and crop mode when clicking the canvas pane
-    useCanvasStore.getState().setAnnotatingNodeId(null);
-    useCanvasStore.getState().setCroppingNodeId(null);
-    useCanvasStore.getState().setEditingTextNodeId(null);
-    useCanvasStore.getState().setFrameCaptureNodeId(null);
-    useCanvasStore.getState().setClipCaptureNodeId(null);
-    useCanvasStore.getState().setAudioClipNodeId(null);
-    useCanvasStore.getState().setLightingNodeId(null);
-    useCanvasStore.getState().setAngleEditorNodeId(null);
-    useCanvasStore.getState().setMultiExpandedNodeId(null);
+    // Exit all node editor modes when clicking the canvas pane
+    useCanvasStore.getState().closeForeignNodeEditors(null);
     // Deselect all nodes and edges。
     // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
     // 触发下游 useMemo（如 highlightedEdgeIds）与 React Flow 的无谓重算。
@@ -879,39 +871,8 @@ export default function InfiniteCanvas() {
       const nodeId = node.id as string;
       // 单击节点（含修饰键点击）属于点击选择，恢复选中态 UI
       canvasInteraction.onClick();
-      // Exit annotation and crop mode when clicking a different node
-      const currentAnnotating = useCanvasStore.getState().annotatingNodeId;
-      if (currentAnnotating && currentAnnotating !== nodeId) {
-        useCanvasStore.getState().setAnnotatingNodeId(null);
-      }
-      const currentCropping = useCanvasStore.getState().croppingNodeId;
-      if (currentCropping && currentCropping !== nodeId) {
-        useCanvasStore.getState().setCroppingNodeId(null);
-      }
-      const currentEditing = useCanvasStore.getState().editingTextNodeId;
-      if (currentEditing && currentEditing !== nodeId) {
-        useCanvasStore.getState().setEditingTextNodeId(null);
-      }
-      const currentFrameCapture = useCanvasStore.getState().frameCaptureNodeId;
-      if (currentFrameCapture && currentFrameCapture !== nodeId) {
-        useCanvasStore.getState().setFrameCaptureNodeId(null);
-      }
-      const currentClipCapture = useCanvasStore.getState().clipCaptureNodeId;
-      if (currentClipCapture && currentClipCapture !== nodeId) {
-        useCanvasStore.getState().setClipCaptureNodeId(null);
-      }
-      const currentAudioClip = useCanvasStore.getState().audioClipNodeId;
-      if (currentAudioClip && currentAudioClip !== nodeId) {
-        useCanvasStore.getState().setAudioClipNodeId(null);
-      }
-      const currentLighting = useCanvasStore.getState().lightingNodeId;
-      if (currentLighting && currentLighting !== nodeId) {
-        useCanvasStore.getState().setLightingNodeId(null);
-      }
-      const currentAngleEditor = useCanvasStore.getState().angleEditorNodeId;
-      if (currentAngleEditor && currentAngleEditor !== nodeId) {
-        useCanvasStore.getState().setAngleEditorNodeId(null);
-      }
+      // Exit editor modes opened on other nodes
+      useCanvasStore.getState().closeForeignNodeEditors(nodeId);
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
       if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
 
@@ -1186,9 +1147,9 @@ export default function InfiniteCanvas() {
                         const proj = await useProjectStore.getState().createProject();
                         useProjectStore.getState().setActiveProject(proj.id);
                         runSuppressed(() => useCanvasStore.getState().restoreFromProject(proj));
-                        // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）
+                        // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）；
+                        // 视口同步由 activeProjectId effect 完成（restoreFromProject 置默认视口 → setRfViewport）
                         router.replace(`/canvas/${proj.id}`);
-                        setTimeout(() => fitView({ duration: 300 }), 50);
                       }}>{t("project.new")}</MenuItem>
                     <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
                     <MenuDivider />
@@ -1376,43 +1337,10 @@ export default function InfiniteCanvas() {
                 nodeId={nid}
                 nodeType={n?.type}
                 onShowInspector={(id) => setInspectedNodeId(id)}
-                onOpenFrameStrip={(id) => {
-                  // 编辑面板全局互斥：任一入口进入编辑，先关闭其它所有编辑态
-                  useCanvasStore.getState().setAnnotatingNodeId(null);
-                  useCanvasStore.getState().setCroppingNodeId(null);
-                  useCanvasStore.getState().setClipCaptureNodeId(null);
-                  useCanvasStore.getState().setAudioClipNodeId(null);
-                  useCanvasStore.getState().setLightingNodeId(null);
-                  useCanvasStore.getState().setAngleEditorNodeId(null);
-                  useCanvasStore.getState().setFrameCaptureNodeId(id);
-                }}
-                onOpenClipStrip={(id) => {
-                  useCanvasStore.getState().setAnnotatingNodeId(null);
-                  useCanvasStore.getState().setCroppingNodeId(null);
-                  useCanvasStore.getState().setFrameCaptureNodeId(null);
-                  useCanvasStore.getState().setAudioClipNodeId(null);
-                  useCanvasStore.getState().setLightingNodeId(null);
-                  useCanvasStore.getState().setAngleEditorNodeId(null);
-                  useCanvasStore.getState().setClipCaptureNodeId(id);
-                }}
-                onOpenAudioClip={(id) => {
-                  useCanvasStore.getState().setAnnotatingNodeId(null);
-                  useCanvasStore.getState().setCroppingNodeId(null);
-                  useCanvasStore.getState().setFrameCaptureNodeId(null);
-                  useCanvasStore.getState().setClipCaptureNodeId(null);
-                  useCanvasStore.getState().setLightingNodeId(null);
-                  useCanvasStore.getState().setAngleEditorNodeId(null);
-                  useCanvasStore.getState().setAudioClipNodeId(id);
-                }}
-                onOpenLighting={(id) => {
-                  useCanvasStore.getState().setAnnotatingNodeId(null);
-                  useCanvasStore.getState().setCroppingNodeId(null);
-                  useCanvasStore.getState().setFrameCaptureNodeId(null);
-                  useCanvasStore.getState().setClipCaptureNodeId(null);
-                  useCanvasStore.getState().setAudioClipNodeId(null);
-                  useCanvasStore.getState().setAngleEditorNodeId(null);
-                  useCanvasStore.getState().setLightingNodeId(id);
-                }}
+                onOpenFrameStrip={(id) => useCanvasStore.getState().setFrameCaptureNodeId(id)}
+                onOpenClipStrip={(id) => useCanvasStore.getState().setClipCaptureNodeId(id)}
+                onOpenAudioClip={(id) => useCanvasStore.getState().setAudioClipNodeId(id)}
+                onOpenLighting={(id) => useCanvasStore.getState().setLightingNodeId(id)}
               />
             )}
           </RfNodeToolbar>
@@ -1496,7 +1424,7 @@ export default function InfiniteCanvas() {
         cancelText={t("common.cancel")}
         onOk={() => {
           setLogoutConfirmOpen(false);
-          // 等 cookie 清除完成再导航，否则 middleware 仍凭 cookie 放行并弹回应用
+          // 等 cookie 清除完成再导航，否则 proxy.ts 仍凭 cookie 放行并弹回应用
           void useAuthStore.getState().logout().finally(() => router.push("/"));
         }}
         onCancel={() => setLogoutConfirmOpen(false)}

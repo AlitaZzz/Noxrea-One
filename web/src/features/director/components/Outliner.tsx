@@ -55,12 +55,10 @@ export default function Outliner() {
       setCtxMenu(null);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCtxMenu(null); };
-    const id = setTimeout(() => {
-      window.addEventListener("pointerdown", close, true);
-      window.addEventListener("keydown", onKey);
-    }, 0);
+    // 菜单由 contextmenu 事件打开（晚于本次右键的 pointerdown），同步注册不会立即自关
+    window.addEventListener("pointerdown", close, true);
+    window.addEventListener("keydown", onKey);
     return () => {
-      clearTimeout(id);
       window.removeEventListener("pointerdown", close, true);
       window.removeEventListener("keydown", onKey);
     };
@@ -85,7 +83,7 @@ export default function Outliner() {
       {/* 树 */}
       <div className="flex flex-col gap-0.5 select-none flex-1 dir-outliner-list">
         {filtered.length === 0 && (
-          <div className="text-center text-xs py-[22px] px-1.5" style={{ color: "var(--dir-dim2)" }}>场景为空</div>
+          <div className="text-center text-xs py-[22px] px-1.5" style={{ color: "var(--dir-dim2)" }}>{t("director.emptyScene")}</div>
         )}
         {filtered.map((ent) => {
           const sel = selectedIds.includes(ent.id);
@@ -226,7 +224,7 @@ export default function Outliner() {
             style={{ color: "var(--dir-accent)" }}
             onClick={() => { ctxMenu.ids.forEach((id) => runtime?.remove(id)); setCtxMenu(null); }}>
             <span className="w-[18px] flex items-center justify-center" style={{ color: "var(--dir-dim)" }}>🗑</span>
-            <span className="flex-1">删除</span>
+            <span className="flex-1">{t("common.delete")}</span>
           </button>
         </div>,
         document.body

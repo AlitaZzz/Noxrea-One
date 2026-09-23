@@ -49,7 +49,6 @@ interface CanvasExplorerProps {
 export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<string>("elements");
-  const isDark = useCanvasStore((s) => s.theme) === "dark";
 
   return (
     <Drawer
@@ -65,9 +64,9 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
           background: "var(--canvas-bg)",
           padding: 0,
         },
-        section: isDark ? {
+        section: {
           borderRight: "1px solid #2c2c31",
-        } : undefined,
+        },
       }}
       // 关闭按钮用 antd 内置（与 AgentDrawer 一致，hover 规则见 globals.css 的 .ant-drawer-close）
       closable={{

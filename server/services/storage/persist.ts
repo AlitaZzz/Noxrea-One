@@ -18,6 +18,9 @@ export interface FilePersistenceInput {
 /**
  * 去重 + 写 file_objects 表。
  * 对齐 Python save_upload_bytes 的 INSERT + IntegrityError 去重逻辑。
+ * DB 写入失败时向上抛错，调用方据此让本次请求/任务失败；
+ * 刚落盘的文件不删除——DB 不可用时无法确认该 hash 是否已被其他记录引用，
+ * 误删会破坏已有对象，孤儿文件交由 GC 对账清理。
  */
 export async function persistFileObject(data: FilePersistenceInput) {
   try {
@@ -52,5 +55,6 @@ export async function persistFileObject(data: FilePersistenceInput) {
       ...details,
       code,
     });
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }

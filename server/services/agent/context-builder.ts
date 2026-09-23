@@ -169,19 +169,23 @@ export function buildCanvasSystem(canvasState: unknown): string | null {
 /** 用户操作 system 消息的最大长度（超出截断，防 token 爆炸） */
 const USER_ACTIONS_MAX_CHARS = 6_000;
 
+/** 递归判空：数组/对象每一层都为空即视为无有效变更（不依赖前端 diff 的具体键名） */
+function isEmptyValue(v: unknown): boolean {
+  if (Array.isArray(v)) return v.length === 0;
+  if (v !== null && typeof v === "object") return Object.values(v).every(isEmptyValue);
+  return false;
+}
+
 /**
  * 把前端上报的用户操作 diff 包装为 system 消息（仅在有变更时注入）。
  * 描述两次请求之间用户对画布做的增量操作；与画布状态快照冲突时以快照为准。
  */
 export function buildUserActionSystem(userActions: unknown): string | null {
-  if (userActions == null) return null;
+  if (userActions == null || isEmptyValue(userActions)) return null;
   let json: string;
   try {
     json = JSON.stringify(userActions);
   } catch {
-    return null;
-  }
-  if (!json || json === "{}" || json === '{"added":[],"removed":[],"updated":[],"edges":{"added":[],"removed":[]}}') {
     return null;
   }
   if (json.length > USER_ACTIONS_MAX_CHARS) {

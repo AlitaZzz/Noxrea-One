@@ -217,11 +217,6 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     cursor: "pointer",
   };
 
-  if (!snap) {
-    // 视频帧不可用（理论上不可达：入口已保证视频有画面）：不渲染面板
-    return null;
-  }
-
   return (
     <>
       {/* Toolbar - RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}

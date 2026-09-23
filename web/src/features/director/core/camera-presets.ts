@@ -20,7 +20,9 @@ export interface CameraPresetCtx {
 
 export interface CameraPreset {
   key: string;
+  /** i18n key 后缀（渲染处用 t(`director.${label}`) 翻译） */
   label: string;
+  /** i18n key 后缀（渲染处用 t(`director.${group}`) 翻译），同时作为分组标识 */
   group: string;
   fov: number | null;
   build: (c: CameraPresetCtx) => {
@@ -34,8 +36,8 @@ export interface CameraPreset {
 export const CAMERA_PRESETS: CameraPreset[] = [
   {
     key: "current",
-    label: "当前视角",
-    group: "视角",
+    label: "cam.current",
+    group: "camGroup.view",
     fov: null,
     build: (c) => {
       const pos = c.directorCamera.position.clone();
@@ -48,8 +50,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "front_mid",
-    label: "正面中景",
-    group: "正面",
+    label: "cam.front_mid",
+    group: "camGroup.front",
     fov: 40,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 0.05, c.subjectHeight * 2.2)),
@@ -58,8 +60,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "front_closeup",
-    label: "正面特写",
-    group: "正面",
+    label: "cam.front_closeup",
+    group: "camGroup.front",
     fov: 34,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 0.18, c.subjectHeight * 1.05)),
@@ -68,8 +70,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "front_full",
-    label: "正面全景",
-    group: "正面",
+    label: "cam.front_full",
+    group: "camGroup.front",
     fov: 46,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 0.02, c.subjectHeight * 3.4)),
@@ -78,8 +80,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "side_track",
-    label: "侧面跟拍",
-    group: "侧/背",
+    label: "cam.side_track",
+    group: "camGroup.sideBack",
     fov: 42,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(c.subjectHeight * 1.8, c.subjectHeight * 0.06, c.subjectHeight * 0.9)),
@@ -88,8 +90,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "side_close",
-    label: "侧面近景",
-    group: "侧/背",
+    label: "cam.side_close",
+    group: "camGroup.sideBack",
     fov: 38,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(c.subjectHeight * 1.15, c.subjectHeight * 0.12, 0)),
@@ -98,8 +100,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "back_mid",
-    label: "背面中景",
-    group: "侧/背",
+    label: "cam.back_mid",
+    group: "camGroup.sideBack",
     fov: 40,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 0.05, -c.subjectHeight * 2.2)),
@@ -108,8 +110,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "high_full",
-    label: "俯拍全景",
-    group: "俯仰",
+    label: "cam.high_full",
+    group: "camGroup.highLow",
     fov: 48,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 2.6, c.subjectHeight * 2.2)),
@@ -118,8 +120,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "high_45",
-    label: "45°俯拍",
-    group: "俯仰",
+    label: "cam.high_45",
+    group: "camGroup.highLow",
     fov: 44,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 1.8, c.subjectHeight * 1.8)),
@@ -128,8 +130,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "low_up",
-    label: "低角度仰拍",
-    group: "俯仰",
+    label: "cam.low_up",
+    group: "camGroup.highLow",
     fov: 50,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, -c.subjectHeight * 0.28, c.subjectHeight * 1.6)),
@@ -138,8 +140,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "low_wide",
-    label: "低角度广角",
-    group: "俯仰",
+    label: "cam.low_wide",
+    group: "camGroup.highLow",
     fov: 72,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, -c.subjectHeight * 0.22, c.subjectHeight * 1.25)),
@@ -148,8 +150,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "ots_left",
-    label: "过肩镜头",
-    group: "特殊",
+    label: "cam.ots_left",
+    group: "camGroup.special",
     fov: 40,
     build: (c) => ({
       position: c.subjectCenter
@@ -160,8 +162,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "ots_right",
-    label: "过肩镜头（右）",
-    group: "特殊",
+    label: "cam.ots_right",
+    group: "camGroup.special",
     fov: 40,
     build: (c) => ({
       position: c.subjectCenter
@@ -172,8 +174,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "birdseye",
-    label: "鸟瞰",
-    group: "特殊",
+    label: "cam.birdseye",
+    group: "camGroup.special",
     fov: 55,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(0, c.subjectHeight * 4.5, c.subjectHeight * 0.001)),
@@ -182,8 +184,8 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   },
   {
     key: "dutch",
-    label: "荷兰角",
-    group: "特殊",
+    label: "cam.dutch",
+    group: "camGroup.special",
     fov: 42,
     build: (c) => ({
       position: c.subjectCenter.clone().add(V(c.subjectHeight * 0.6, c.subjectHeight * 0.15, c.subjectHeight * 1.9)),

@@ -8,7 +8,7 @@ import {
   type UploadErrorKind,
   UploadTransportError,
 } from "@/lib/api/client";
-import { type ApiErrorBody,resolveApiError } from "@/lib/api/error-message";
+import { resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 
 /** 上传默认并发数 */
@@ -138,7 +138,7 @@ export async function uploadWithRetry(
       if (res.code !== 200 || !res.data?.url) {
         // 服务端返回错误（非网络问题），不重试；文案按错误码本地化
         throw new UploadBusinessError(
-          resolveApiError(res as unknown as ApiErrorBody, undefined, "upload.upload_failed")
+          resolveApiError(res, undefined, "upload.upload_failed")
         );
       }
 

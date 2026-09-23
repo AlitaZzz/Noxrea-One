@@ -1,12 +1,11 @@
 /**
  * 前端 HTTP 请求统一底座。
  * 凭据由 httpOnly cookie 自动携带（服务端 Set-Cookie 下发），本模块不管理 token，
- * 提供通用 api（JSON 包裹）、apiUpload（表单）、apiUploadWithProgress（带进度）、
+ * 提供通用 api（JSON 包裹）、apiUploadWithProgress（带进度）、
  * apiRaw（原始 Response）与 apiStream（流式）等底层能力与全局 401 处理。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
-import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
@@ -20,9 +19,6 @@ export class UnauthorizedError extends Error {
   constructor() {
     super("Unauthorized");
     this.name = "UnauthorizedError";
-    // ES2015 以下目标需显式设置原型链，当前 Next.js/swc 编译目标为现代浏览器，
-    // 此行保留作为防御性编程，对目标环境无害。
-    Object.setPrototypeOf(this, UnauthorizedError.prototype);
   }
 }
 
@@ -32,25 +28,21 @@ export class UnauthorizedError extends Error {
  */
 let isHandlingUnauthorized = false;
 
-/** 登出清凭据的最大等待时长由 store.logout() 内部兜底，此处只等待其完成 */
+/** 会话过期跳转登录页的一次性提示标记：模块状态不跨整页导航存活，经 sessionStorage 传递 */
+export const SESSION_EXPIRED_FLAG = "session_expired";
 
 async function handleUnauthorized() {
   if (isHandlingUnauthorized) return;
   isHandlingUnauthorized = true;
 
-  // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不弹提示，避免重复提示
-  if (window.location.pathname !== "/login") {
-    showGlobalNotification().error({
-      title: i18n.t("error.session_expired"),
-      description: i18n.t("error.session_expired_desc"),
-      placement: "bottomRight",
-      duration: 5,
-    });
+  // 已在登录页（如整页 reload 后 /api/auth/me 再次 401）则不提示不跳转，避免重复
+  if (window.location.pathname === "/login") {
+    isHandlingUnauthorized = false;
+    return;
   }
 
   // 统一走 store.logout()：服务端过期 httpOnly cookie（JS 无法清除）+ 清用户态与本地缓存。
-  // 必须等 cookie 清除完成再跳转——middleware 凭 cookie 是否有效放行，
-  // 带着未清除的 cookie 跳 /login 会被弹回 /project。
+  // 必须等 cookie 清除完成再跳转：带着残留 cookie 进入受保护页会再次触发 401，形成跳转循环。
   try {
     const { useAuthStore } = await import("@/features/auth/store");
     await useAuthStore.getState().logout();
@@ -58,15 +50,11 @@ async function handleUnauthorized() {
     // 登出清凭据失败不阻塞跳转
   }
 
-  // 延迟跳转，让 toast 可见
-  setTimeout(() => {
-    if (window.location.pathname === "/login") {
-      // 不会发生整页刷新，模块状态不会重置：复位标志，保证重新登录后的下一次 401 仍能触发
-      isHandlingUnauthorized = false;
-      return;
-    }
-    window.location.href = "/login";
-  }, 300);
+  // 提示由登录页挂载时读取标记展示一次性「会话过期」，跳转本身立即执行
+  try {
+    sessionStorage.setItem(SESSION_EXPIRED_FLAG, "1");
+  } catch { /* sessionStorage 不可用（隐私模式等）时静默跳过提示 */ }
+  window.location.href = "/login";
 }
 
 /** 检查 HTTP 状态码，401 时触发全局登出流程。返回 true 表示已处理。 */
@@ -124,24 +112,6 @@ export async function api<T = unknown>(
   }
 }
 
-export async function apiUpload<T = unknown>(
-  path: string,
-  formData: FormData,
-  skipUnauthorized = false
-): Promise<{ code: number; data: T; msg: string }> {
-  try {
-    const res = await fetch(`${BASE}${path}`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
-    return await res.json();
-  } catch (e) {
-    if (e instanceof UnauthorizedError) throw e;
-    return { code: 0, data: null as T, msg: i18n.t("error.network_unreachable") };
-  }
-}
-
 /**
  * 上传超时常量。
  * XHR 无法区分「慢」与「死」，因此按「空闲时长」判定：只要还有字节在推进，
@@ -179,7 +149,6 @@ export class UploadTransportError extends Error {
     this.kind = kind;
     this.status = status;
     this.retryable = kind === "network" || kind === "timeout" || (kind === "http" && isRetryableStatus(status));
-    Object.setPrototypeOf(this, UploadTransportError.prototype);
   }
 }
 
@@ -192,7 +161,7 @@ export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
   onProgress?: (pct: number) => void
-): Promise<{ code: number; data: T; msg: string }> {
+): Promise<ApiResult<T>> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
@@ -257,7 +226,7 @@ export function apiUploadWithProgress<T = unknown>(
           reject(new UploadTransportError("http", message, xhr.status));
           return;
         }
-        try { resolve(JSON.parse(xhr.responseText)); }
+        try { resolve(JSON.parse(xhr.responseText) as ApiResult<T>); }
         catch { reject(new UploadTransportError("http", i18n.t("error.parse_failed"), xhr.status)); }
       });
     };

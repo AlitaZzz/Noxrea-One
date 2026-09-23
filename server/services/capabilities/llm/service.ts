@@ -25,8 +25,7 @@ import type { GenerationResult } from "@server/schemas/result";
  * 解析参考图引用后组装消息上下文。
  */
 async function resolveMessageImages(
-  messages: unknown,
-  userId: number
+  messages: unknown
 ): Promise<void> {
   if (!Array.isArray(messages)) return;
 
@@ -54,7 +53,7 @@ async function resolveMessageImages(
     if (urls.length === 0) continue;
 
     // 批量解析
-    const resolved = await resolveRefImages(urls, userId);
+    const resolved = await resolveRefImages(urls);
 
     for (let i = 0; i < urls.length; i++) {
       urlMap.get(urls[i])!.imageUrl.url = resolved[i];
@@ -127,7 +126,7 @@ class LlmCapabilityService implements CapabilityService {
 
     // messages 中的 image_url 转为 base64（对齐 Python 逻辑）
     if (params.messages) {
-      await resolveMessageImages(params.messages, ctx.userId);
+      await resolveMessageImages(params.messages);
     }
 
     // 管线构建请求体

@@ -36,6 +36,7 @@ interface Props {
 export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
+  const initializeFailed = useModelStore((s) => s.initializeFailed);
   // 稳定键 providerId/modelName，与生成面板的 ModelOption 约定一致，
   // 避免同名模型在不同供应商间选错渠道
   const modelOptions = providers.flatMap((c) =>
@@ -52,7 +53,6 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
     chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat,
     pendingConfirm, respondToConfirm, lastTurnUndo,
   } = useCanvasAgentStream(activeOption?.name ?? "", projectId, activeOption?.providerId);
-  const isDark = useCanvasStore((s) => s.theme) === "dark";
   const historyVersion = useHistoryStore((s) => s.version);
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -236,7 +236,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
       styles={{
         header: { borderBottom: "none", padding: "12px 16px" },
         body: { padding: 0, display: "flex", flexDirection: "column" },
-        section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
+        section: { borderLeft: "1px solid #2c2c31" },
       }}
     >
       <div ref={listRef} className="chat-scroll" style={{ flex: 1, overflowY: "auto", padding: 12 }}>
@@ -305,29 +305,39 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
           <div className="chat-composer-actions">
             <div className="chat-composer-left" />
             <div className="chat-composer-right">
-              <MenuPopover
-                open={modelOpen}
-                onOpenChange={setModelOpen}
-                placement="topRight"
-                trigger={
-                  <button type="button" className="chat-composer-model" aria-label="选择模型">
-                    <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
-                    <ChevronDownIcon />
-                  </button>
-                }
-                content={modelOptions.map((m) => (
-                  <MenuItem
-                    key={m.value}
-                    selected={activeOption?.value === m.value}
-                    onClick={() => {
-                      setAgentModel(m.value);
-                      setModelOpen(false);
-                    }}
-                  >
-                    {m.label}
-                  </MenuItem>
-                ))}
-              />
+              {initializeFailed && !modelOptions.length ? (
+                <button
+                  type="button"
+                  className="chat-composer-model"
+                  onClick={() => void initialize()}
+                >
+                  <span className="chat-composer-model-label">模型列表加载失败，点击重试</span>
+                </button>
+              ) : (
+                <MenuPopover
+                  open={modelOpen}
+                  onOpenChange={setModelOpen}
+                  placement="topRight"
+                  trigger={
+                    <button type="button" className="chat-composer-model" aria-label="选择模型">
+                      <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
+                      <ChevronDownIcon />
+                    </button>
+                  }
+                  content={modelOptions.map((m) => (
+                    <MenuItem
+                      key={m.value}
+                      selected={activeOption?.value === m.value}
+                      onClick={() => {
+                        setAgentModel(m.value);
+                        setModelOpen(false);
+                      }}
+                    >
+                      {m.label}
+                    </MenuItem>
+                  ))}
+                />
+              )}
               <button
                 type="button"
                 aria-label={isStreaming ? "停止" : "发送"}
