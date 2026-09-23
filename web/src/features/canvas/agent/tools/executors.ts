@@ -196,9 +196,10 @@ function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
   const patch: Record<string, unknown> = {};
   const content = str(args.content);
   const prompt = str(args.prompt);
-  const title = str(args.title);
+  // title 与其他字段不同：空字符串是合法值（清除标题），不能经 str() 的非空过滤丢弃
+  const title = typeof args.title === "string" ? args.title.trim() : undefined;
 
-  if (title) patch.label = title;
+  if (title !== undefined) patch.label = title;
   if (content && node.type === NODE_TYPE.TEXT) {
     patch.content = textToHtml(content);
     patch.plainText = content;

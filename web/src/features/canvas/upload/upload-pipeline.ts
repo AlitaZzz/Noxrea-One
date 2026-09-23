@@ -31,6 +31,7 @@ import {
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
+import { stripMediaExtension } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
@@ -211,7 +212,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       item,
       kind,
       file: toFile(item),
-      label: item.label ?? item.filename,
+      label: item.label ?? stripMediaExtension(item.filename),
       nw,
       nh,
       version: nextVersion(),

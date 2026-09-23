@@ -59,12 +59,12 @@ const UPDATE_NODE_TOOL: AgentToolDefinition = {
   name: "update_node",
   description:
     "更新一个已存在节点的内容。优先于「删了重建」：修改文本正文、修改生成提示词、改标题都应使用本工具。\n" +
-    "text 节点用 content 更新正文；image/video 节点用 prompt 更新生成提示词；title 更新标题。",
+    "text 节点用 content 更新正文；image/video 节点用 prompt 更新生成提示词；title 更新标题（传空字符串清除标题）。",
   parameters: {
     nodeId: { type: "string", description: "目标节点 id" },
     content: { type: "string", description: "text 节点的新正文" },
     prompt: { type: "string", description: "image/video 节点的新生成提示词" },
-    title: { type: "string", description: "新标题" },
+    title: { type: "string", description: "新标题；空字符串 = 清除标题" },
   },
   required: ["nodeId"],
   execute: "client",

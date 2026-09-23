@@ -14,6 +14,7 @@ import {
 } from "@/features/canvas/node-defaults";
 import type { AnyEdge, AnyNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { stripMediaExtension } from "@/lib/utils/file-name";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
 /** 派生节点相对源节点的水平基准间隙（px） */
@@ -31,7 +32,7 @@ export interface CanvasStoreApi {
 }
 
 /**
- * 派生节点标题：默认「原图名 + 后缀」并保留扩展名，labelOverride 优先。
+ * 派生节点标题：默认「源节点名（去扩展名）+ 后缀」，labelOverride 优先。
  */
 export function resolveDerivedLabel(
   origNode: AnyNode | undefined,
@@ -41,10 +42,7 @@ export function resolveDerivedLabel(
   if (labelOverride !== undefined) return labelOverride;
   const origData = origNode?.data as { label?: string } | undefined;
   const origName = origData?.label || "image";
-  const dotIdx = origName.lastIndexOf(".");
-  const base = dotIdx > 0 ? origName.slice(0, dotIdx) : origName;
-  const ext = dotIdx > 0 ? origName.slice(dotIdx) : "";
-  return `${base}${labelSuffix}${ext}`;
+  return stripMediaExtension(origName) + labelSuffix;
 }
 
 /**

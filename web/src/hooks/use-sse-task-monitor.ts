@@ -132,7 +132,6 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       if (evt.status === "completed" && completedUrls.length) {
         const prompt = evt.prompt || "";
 
-        const label = prompt.slice(0, 20);
         // 【测试用 TODO】多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
         // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
         // 上游正式支持多图后，删除这段 mock 补齐逻辑。
@@ -152,7 +151,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
         useCanvasStore.getState().updateNodeData(nodeId, {
-          src: firstUrl, label,
+          src: firstUrl,
           naturalWidth: 0, naturalHeight: 0,
           lockAspectRatio: true, taskBinding: undefined,
           source: "generate",

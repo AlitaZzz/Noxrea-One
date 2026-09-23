@@ -32,8 +32,11 @@ export function useEditableTitle(nodeId: string, currentTitle: string) {
       cancelledRef.current = false;
       return;
     }
-    if (!draft || draft === currentTitle) return;
-    const data: Record<string, string> = { label: draft };
+    // 空值也允许保存：清空输入 = 清除标题（label 写空串），头部显示回退到类型名；
+    // trim 防止纯空格被当成有效标题（空格串是真值，显示层回退会失效）
+    const next = draft.trim();
+    if (next === currentTitle) return;
+    const data: Record<string, string> = { label: next };
     window.dispatchEvent(
       new CustomEvent(EventNames.NODE_UPDATE_DATA, {
         detail: { nodeId, data },

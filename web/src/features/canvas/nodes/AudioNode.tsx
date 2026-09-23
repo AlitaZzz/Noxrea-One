@@ -228,7 +228,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       <NodeTitle
         nodeId={id}
         icon={<WaveIcon className="shrink-0" />}
-        title={data.label || t("node.audio")}
+        title={data.label}
+        display={data.label || t("node.audio")}
         trailing={hasAudio && duration > 0 ? formatTime(duration) : null}
       />
 

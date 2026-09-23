@@ -398,7 +398,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       <NodeTitle
         nodeId={id}
         icon={<PictureOutlined className="shrink-0" />}
-        title={data.label || t("node.image")}
+        title={data.label}
+        display={data.label || t("node.image")}
         trailing={hasImage && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
       />
 
