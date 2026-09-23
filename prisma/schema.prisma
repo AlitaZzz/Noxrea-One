@@ -248,8 +248,6 @@ model AgentSession {
   // 关联画布项目的短 ID（与 CanvasProject.id 同为字符串）
   projectId   String?  @map("project_id")
   title       String   @default("New Chat") @map("title")
-  activeSkill String?  @map("active_skill")
-  skillStatus String   @default("idle") @map("skill_status")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -271,6 +269,7 @@ model AgentMessage {
   content    String   @default("") @map("content")
   toolCallId String?  @map("tool_call_id")
   toolName   String?  @map("tool_name")
+  toolCalls  String?  @map("tool_calls") // JSON TEXT：assistant 消息的工具调用数组
   refImages  String?  @map("ref_images") // JSON TEXT：参考图 URL 数组
   createdAt  DateTime @default(now()) @map("created_at")
 

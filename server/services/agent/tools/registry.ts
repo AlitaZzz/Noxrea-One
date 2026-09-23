@@ -1,7 +1,7 @@
 /**
  * Agent 工具中央注册器。
  * 统一注册供 LLM function-calling 使用的工具，新增工具只需调用 register()。
- * 工具执行位置分 client（后端透传、前端建节点）与 server（预留后端执行）两类。
+ * 工具执行位置分 client（后端透传、前端执行）与 server（后端执行）两类。
  *
  * 本文件属于 agent 模块，与 capabilities/llm（前端 text 节点纯文本能力）完全解耦。
  */
@@ -10,14 +10,22 @@ import { z } from "zod";
 /** JSON Schema 基础类型（受控字面量，避免手写拼错 type） */
 export type AgentToolParamType = "string" | "number" | "boolean" | "array" | "object";
 
+/**
+ * 工具参数描述（JSON Schema 子集，递归结构支持数组元素与对象属性）。
+ * 序列化由 serializeParam 完成，保证嵌套 schema 输出正确。
+ */
 export interface AgentToolParam {
   type: AgentToolParamType;
-  description: string;
-  /** 数组元素类型（type 为 "array" 时可选） */
-  items?: AgentToolParamType;
-  /** 数值下界（type 为 "number" 时可选） */
+  description?: string;
+  /** type 为 "array" 时的元素 schema */
+  items?: AgentToolParam;
+  /** type 为 "object" 时的属性 schema */
+  properties?: Record<string, AgentToolParam>;
+  /** type 为 "object" 时的必填属性名 */
+  required?: string[];
+  /** 枚举值（字符串/数值） */
+  enum?: Array<string | number>;
   minimum?: number;
-  /** 数值上界（type 为 "number" 时可选） */
   maximum?: number;
 }
 
@@ -26,12 +34,29 @@ export interface AgentToolDefinition {
   description: string;
   parameters: Record<string, AgentToolParam>;
   required: string[];
-  /** 执行位置标记，见上 */
+  /** 执行位置标记：client 由前端执行，server 由后端处理 */
   execute: "client" | "server";
-  /** 对话气泡中展示的中文名（如 generate_image → 生成图片），由后台统一定义 */
+  /** 对话气泡中展示的中文名（如 create_node → 创建节点），由后台统一定义 */
   label: string;
   /** 运行时校验 schema（校验 LLM 返回的工具参数），未提供时跳过校验 */
   zodSchema?: z.ZodType;
+}
+
+/** 把参数描述序列化为 JSON Schema 节点（递归） */
+function serializeParam(p: AgentToolParam): Record<string, unknown> {
+  const out: Record<string, unknown> = { type: p.type };
+  if (p.description) out.description = p.description;
+  if (p.enum) out.enum = p.enum;
+  if (typeof p.minimum === "number") out.minimum = p.minimum;
+  if (typeof p.maximum === "number") out.maximum = p.maximum;
+  if (p.items) out.items = serializeParam(p.items);
+  if (p.properties) {
+    const props: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(p.properties)) props[k] = serializeParam(v);
+    out.properties = props;
+  }
+  if (p.required?.length) out.required = p.required;
+  return out;
 }
 
 class ToolRegistry {
@@ -74,7 +99,9 @@ class ToolRegistry {
         description: d.description,
         parameters: {
           type: "object",
-          properties: d.parameters,
+          properties: Object.fromEntries(
+            Object.entries(d.parameters).map(([k, v]) => [k, serializeParam(v)])
+          ),
           required: d.required,
         },
       },

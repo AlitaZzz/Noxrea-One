@@ -69,6 +69,13 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     [categoriesKey],
   );
   // 生效搜索词：清空瞬间即取新值（不等防抖），输入时仍沿用防抖值。
+  // 清空分支在渲染期同步 state（React 官方的 props 派生 state 模式，立即生效）；
+  // 若放进 effect 同步 setState 会触发级联渲染（set-state-in-effect 规则禁止）。
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (prevSearch !== search) {
+    setPrevSearch(search);
+    if (!search.trim()) setDebouncedSearch(search);
+  }
   const appliedSearch = search.trim() ? debouncedSearch : "";
   const isRootBrowse = folderId === null && !appliedSearch.trim() && categories.length === 0;
   const queryKey = useMemo(
@@ -86,12 +93,9 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
   );
 
   // 搜索输入先防抖再进入 query key；输入期间沿用旧结果，不打断浏览。
-  // 清空立即生效（回到根目录浏览无需等待），否则旧搜索结果会与文件夹网格短暂叠加。
+  // 清空已在渲染期同步生效，这里只负责输入方向的防抖。
   useEffect(() => {
-    if (!search.trim()) {
-      setDebouncedSearch(search);
-      return;
-    }
+    if (!search.trim()) return;
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [search]);

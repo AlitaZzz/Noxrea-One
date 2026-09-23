@@ -1,8 +1,8 @@
 /**
- * Agent 相关 API 封装：会话管理、技能绑定、流式对话与工具结果回传。
- * 前端只需选技能 + 发消息 + 回传工具结果，不关心后端状态管理。
+ * 画布 Agent API 封装：会话管理、流式对话与工具结果回传。
+ * 前端只需发消息 + 执行工具回传结果，不关心后端状态管理。
  */
-import type { StreamAgentOptions, ToolResultOptions } from "@/features/agent/types";
+import type { StreamAgentOptions, ToolResultOptions } from "@/features/canvas/agent/types";
 import { apiRaw, apiStream } from "@/lib/api/client";
 
 // ── 会话 CRUD ──
@@ -26,12 +26,7 @@ export async function listSessions(projectId?: string): Promise<Response> {
   return apiRaw(url);
 }
 
-/** 获取会话详情（含 activeSkill / skillStatus）。 */
-export async function getSession(sessionId: string): Promise<Response> {
-  return apiRaw(`/api/agent/sessions/${sessionId}`);
-}
-
-/** 加载会话历史消息。 */
+/** 获取会话历史消息。 */
 export async function getSessionMessages(sessionId: string): Promise<Response> {
   return apiRaw(`/api/agent/sessions/${sessionId}/messages`);
 }
@@ -49,36 +44,15 @@ export async function renameSession(sessionId: string, title: string): Promise<R
   });
 }
 
-// ── 技能管理 ──
-
-/** 绑定/切换技能到会话。 */
-export async function setSkill(sessionId: string, skillName: string): Promise<Response> {
-  return apiRaw(`/api/agent/sessions/${sessionId}/skill`, {
-    method: "POST",
-    body: JSON.stringify({ skillName }),
-  });
-}
-
-/** 清除技能（回到普通对话模式）。 */
-export async function clearSkill(sessionId: string): Promise<Response> {
-  return apiRaw(`/api/agent/sessions/${sessionId}/skill`, { method: "DELETE" });
-}
-
-/** 拉取可用技能列表。 */
-export async function listSkills(): Promise<Response> {
-  return apiRaw("/api/agent/skills");
-}
-
 // ── 流式对话 ──
 
 /** 发起流式对话，返回原始 Response。 */
 export async function streamAgent(opts: StreamAgentOptions): Promise<Response> {
-  const params = new URLSearchParams({
-    model: opts.modelId,
-  });
+  const params = new URLSearchParams({ model: opts.modelId });
+  if (opts.providerId) params.set("providerId", opts.providerId);
   const body: Record<string, unknown> = { content: opts.content };
   if (opts.refImages?.length) body.refImages = opts.refImages;
-  if (opts.skillName) body.skillName = opts.skillName;
+  if (opts.canvasState !== undefined) body.canvasState = opts.canvasState;
   return apiStream(`/api/agent/sessions/${opts.sessionId}/stream?${params.toString()}`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -88,14 +62,15 @@ export async function streamAgent(opts: StreamAgentOptions): Promise<Response> {
 
 // ── 工具结果回传 ──
 
-/** 提交工具执行结果，后端自动续轮调 LLM。返回 SSE 流。 */
-export async function submitToolResult(opts: ToolResultOptions): Promise<Response> {
+/** 提交本轮全部工具执行结果，后端自动续轮调 LLM。返回 SSE 流。 */
+export async function submitToolResults(opts: ToolResultOptions): Promise<Response> {
   const params = new URLSearchParams({ model: opts.modelId });
+  if (opts.providerId) params.set("providerId", opts.providerId);
   return apiStream(
     `/api/agent/sessions/${opts.sessionId}/tool-result?${params.toString()}`,
     {
       method: "POST",
-      body: JSON.stringify({ toolCallId: opts.toolCallId, result: opts.result }),
+      body: JSON.stringify({ results: opts.results }),
       signal: opts.signal,
     },
   );
@@ -105,13 +80,9 @@ export async function submitToolResult(opts: ToolResultOptions): Promise<Respons
 export const agentApi = {
   createSession,
   listSessions,
-  getSession,
   getSessionMessages,
   deleteSession,
   renameSession,
-  setSkill,
-  clearSkill,
-  listSkills,
   streamAgent,
-  submitToolResult,
+  submitToolResults,
 };

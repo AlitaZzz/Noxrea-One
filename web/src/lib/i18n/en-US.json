@@ -578,8 +578,7 @@
     "mediaTruncated": "Video file looks incomplete: claims {{declared}} but only {{actual}} is decodable"
   },
   "agent": {
-    "title": "Agent",
-    "chat": "Open Agent Chat"
+    "title": "Agent"
   },
   "video": {
     "refModeTitle": "Video Mode",

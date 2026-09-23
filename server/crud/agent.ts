@@ -1,13 +1,20 @@
 import { prisma } from "@server/core/database/client";
-import { stringifyJson, parseJsonArray } from "./json-column";
+import { stringifyJson, parseJsonArray, parseJsonObjectArray } from "./json-column";
 /**
  * Agent 会话 CRUD。
  * 管理按画布工程隔离的 Agent 会话与消息的创建与读取。
- * 技能绑定在 session 级别，消息不再携带 skills 字段。
+ * assistant 消息的工具调用（toolCalls）以 JSON 持久化，续流时原样回填上游。
  */
 import type { AgentSession, AgentMessage } from "@prisma/client";
 
 export type AgentRole = "user" | "assistant" | "tool";
+
+/** 持久化的工具调用（assistant 消息） */
+export interface PersistedToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
 
 // ── Session ──
 
@@ -62,31 +69,6 @@ export async function touchSession(id: number) {
   });
 }
 
-// ── Skill 管理 ──
-
-export async function setSkill(id: number, userId: number, skillName: string) {
-  const session = await prisma.agentSession.updateMany({
-    where: { id, userId },
-    data: { activeSkill: skillName, skillStatus: "active", updatedAt: new Date() },
-  });
-  return session.count === 1;
-}
-
-export async function clearSkill(id: number, userId: number) {
-  const session = await prisma.agentSession.updateMany({
-    where: { id, userId },
-    data: { activeSkill: null, skillStatus: "idle", updatedAt: new Date() },
-  });
-  return session.count === 1;
-}
-
-export async function completeSkill(id: number) {
-  await prisma.agentSession.update({
-    where: { id },
-    data: { activeSkill: null, skillStatus: "completed", updatedAt: new Date() },
-  });
-}
-
 // ── Message ──
 
 export async function createMessage(data: {
@@ -96,6 +78,8 @@ export async function createMessage(data: {
   refImages?: string[];
   toolCallId?: string | null;
   toolName?: string | null;
+  /** assistant 消息携带的工具调用，JSON 持久化 */
+  toolCalls?: PersistedToolCall[];
 }) {
   const msg = await prisma.agentMessage.create({
     data: {
@@ -105,6 +89,7 @@ export async function createMessage(data: {
       refImages: data.refImages?.length ? stringifyJson(data.refImages) : null,
       toolCallId: data.toolCallId ?? null,
       toolName: data.toolName ?? null,
+      toolCalls: data.toolCalls?.length ? stringifyJson(data.toolCalls) : null,
     },
   });
   return deserializeMessage(msg);
@@ -113,7 +98,9 @@ export async function createMessage(data: {
 export async function listMessages(sessionId: number) {
   const messages = await prisma.agentMessage.findMany({
     where: { sessionId },
-    orderBy: { createdAt: "asc" },
+    // 按自增 id 排序保证严格插入序；createdAt 只有毫秒精度，
+    // 同一毫秒落库的多条 tool 结果会乱序
+    orderBy: { id: "asc" },
   });
   return messages.map(deserializeMessage);
 }
@@ -128,5 +115,6 @@ function deserializeMessage(message: AgentMessage) {
   return {
     ...message,
     refImages: parseJsonArray(message.refImages),
+    toolCalls: parseJsonObjectArray<PersistedToolCall>(message.toolCalls),
   };
 }

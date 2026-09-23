@@ -1,49 +1,21 @@
 /**
  * 画布 AI 对话抽屉。
- * 提供多轮会话（新建 / 历史切换）、附件上传、技能调用与模型选择，
+ * 提供多轮会话（新建 / 历史切换）、模型选择，
  * 流式接收回复并以 Markdown 渲染（经 sanitize 白名单放宽后允许有限 HTML）。
- * 技能绑定在 session 级别，前端只需选择技能一次，后续消息自动沿用。
+ * 工具调用以状态 chip 展示（如「创建节点…」），执行结果由模型经 message_user 汇报。
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { Button, Drawer, Tooltip } from "antd";
+import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
+import { Drawer, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
 
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
-
-/** 允许 AI 输出中嵌入的 HTML 标签与属性，在 defaultSchema 基础上放宽 */
-const sanitizeSchema = {
-  ...defaultSchema,
-  attributes: {
-    ...defaultSchema.attributes,
-    "*": [...(defaultSchema.attributes?.["*"] ?? []), "style", "className", "class"],
-    div: ["style", "className", "class"],
-    span: ["style", "className", "class"],
-    table: ["style", "className", "class"],
-    td: ["colspan", "rowspan", "style", "class"],
-    th: ["colspan", "rowspan", "style", "class"],
-    img: ["src", "alt", "width", "height", "style", "class"],
-    a: ["href", "target", "rel", "style", "class"],
-  },
-  tagNames: [
-    ...(defaultSchema.tagNames ?? []),
-    "div", "span", "table", "thead", "tbody", "tr", "td", "th",
-    "details", "summary", "figure", "figcaption",
-  ],
-};
-
-import { AttachIcon } from "@/components/ui/icons/agent/AttachIcon";
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { agentApi } from "@/features/agent/api";
-import SkillPanel from "@/features/agent/components/SkillPanel";
-import { useAgentStream } from "@/features/agent/hooks/use-agent-stream";
+import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
+import Markdown from "@/features/canvas/agent/components/Markdown";
+import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useModelStore } from "@/lib/model-store";
 
@@ -53,47 +25,33 @@ interface Props {
   projectId?: string;
 }
 
-/** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 技能面板 + 工具续轮） */
-export default function AgentDrawer({ open, onClose, projectId }: Props) {
+/** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 工具续轮） */
+export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
+  // 稳定键 providerId/modelName，与生成面板的 ModelOption 约定一致，
+  // 避免同名模型在不同供应商间选错渠道
   const modelOptions = providers.flatMap((c) =>
     c.models
       .filter((m) => m.capabilities?.includes("text"))
-      .map((m) => ({ value: `${c.name}/${m.name}`, name: m.name }))
+      .map((m) => ({ value: `${c.id}/${m.name}`, label: `${c.name}/${m.name}`, providerId: c.id, name: m.name }))
   );
 
   const agentModel = useCanvasStore((s) => s.agentModel);
   const setAgentModel = useCanvasStore((s) => s.setAgentModel);
-  const activeModel = agentModel ?? modelOptions[0]?.value ?? "gpt-4o";
-  const activeModelName = activeModel.includes("/") ? activeModel.split("/").pop()! : activeModel;
+  const activeOption = modelOptions.find((o) => o.value === agentModel) ?? modelOptions[0];
   const {
-    messages, isStreaming, error, sendChat, stopStream, newChat,
+    messages, isStreaming, sendChat, stopStream, newChat,
     chatTitle, renameChat, sessions, loadSessions, loadHistory, deleteChat,
-    activeSkill, skillStatus, bindSkill, removeSkill,
-  } = useAgentStream(activeModelName, projectId);
+  } = useCanvasAgentStream(activeOption?.name ?? "", projectId, activeOption?.providerId);
   const isDark = useCanvasStore((s) => s.theme) === "dark";
   const listRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
-  const [skillNames, setSkillNames] = useState<{ name: string; displayTitle?: string }[]>([]);
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
-
-  // 拉取技能列表，供 chip 展示标题
-  useEffect(() => {
-    let alive = true;
-    agentApi.listSkills()
-      .then((r) => (r.ok ? r.json() : []))
-      .then((list: { name: string; displayTitle?: string }[]) => {
-        if (alive && Array.isArray(list)) setSkillNames(list);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     if (modelOptions.length && !modelOptions.some((m) => m.value === agentModel)) {
@@ -110,33 +68,15 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
     setDraft(composerRef.current?.innerText ?? "");
   }, []);
 
-  // 输入框技能 chip：本地存技能名，不依赖异步的 activeSkill
-  const [chipSkill, setChipSkill] = useState<string | null>(null);
-
-  const canSend = !!draft.trim() || !!chipSkill;
+  const canSend = !!draft.trim();
 
   const handleSend = useCallback(() => {
     const text = composerRef.current?.innerText ?? "";
-    if ((!text.trim() && !chipSkill) || isStreaming) return;
-    const displayTitle = chipSkill
-      ? skillNames.find((s) => s.name === chipSkill)?.displayTitle
-      : undefined;
-    void sendChat(text, chipSkill ?? undefined, displayTitle);
+    if (!text.trim() || isStreaming) return;
+    void sendChat(text);
     if (composerRef.current) composerRef.current.innerText = "";
     setDraft("");
-    setChipSkill(null);
-  }, [isStreaming, sendChat, chipSkill, skillNames]);
-
-  const handleSkillSelect = useCallback((skillName: string) => {
-    void bindSkill(skillName);
-    setChipSkill(skillName);
-    if (composerRef.current) composerRef.current.focus();
-  }, [bindSkill]);
-
-  const handleRemoveSkill = useCallback(() => {
-    void removeSkill();
-    setChipSkill(null);
-  }, [removeSkill]);
+  }, [isStreaming, sendChat]);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -183,6 +123,7 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={commitRename}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") setEditing(false);
             }}
@@ -286,21 +227,14 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
                       <div className="chat-tool-calls">
                         {m.toolCalls.map((t) => (
                           <div key={t.id} className="chat-tool-call">
-                            调用工具：<code>{t.label ?? t.name}</code>
+                            {t.label ?? t.name}
                             {t.args && <div className="chat-tool-args">{t.args}</div>}
                           </div>
                         ))}
                       </div>
                     ) : null}
                     {m.content ? (
-                      <div className="cortex-markdown">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
-                        >
-                          {m.content}
-                        </ReactMarkdown>
-                      </div>
+                      <Markdown>{m.content}</Markdown>
                     ) : !m.toolCalls?.length ? (
                       <span className="chat-thinking">思考中…</span>
                     ) : null}
@@ -309,59 +243,23 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
                   <span className="chat-tool-result">{m.content}</span>
                 ) : (
                   <div className="cortex-markdown">
-                    {m.skill ? (
-                      <div className="chat-msg-skills">
-                        <span className="chat-msg-skill">
-                          <ThunderboltOutlined /> {skillNames.find((s) => s.name === m.skill)?.displayTitle ?? m.skill}
-                        </span>
-                      </div>
-                    ) : null}
-                    {m.content ? (
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
-                      >
-                        {m.content}
-                      </ReactMarkdown>
-                    ) : null}
+                    {m.content ? <Markdown>{m.content}</Markdown> : null}
                   </div>
                 )}
               </div>
             </div>
           ))
         )}
-        {error ? <div className="chat-error">{error}</div> : null}
       </div>
 
       <div className="chat-input-bar">
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".docx,.txt,.pdf,.jpg,.jpeg,.png,.mp4,.mov,.wav,.mp3"
-          multiple
-          hidden
-          onChange={() => { /* 附件上传：后端未提供接口，先占位 */ }}
-        />
         <div className="chat-composer">
-          {chipSkill ? (
-            <span className="chat-skill-chip">
-              {skillNames.find((s) => s.name === chipSkill)?.displayTitle ?? chipSkill}
-              <button
-                type="button"
-                className="chat-skill-chip-x"
-                aria-label="移除技能"
-                onClick={handleRemoveSkill}
-              >
-                ×
-              </button>
-            </span>
-          ) : null}
           <div
             ref={composerRef}
             className="chat-composer-input"
             contentEditable
             suppressContentEditableWarning
-            data-placeholder={chipSkill ? "补充指令，后端自动沿用当前技能" : '描述你的想法，点击闪电选择 Skill'}
+            data-placeholder="描述你的想法，例如「画布上建三个文本节点连起来」"
             onInput={(e) => {
               const el = e.currentTarget;
               if (!el.textContent?.trim()) el.innerHTML = "";
@@ -388,6 +286,8 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
               syncDraft();
             }}
             onKeyDown={(e) => {
+              // 输入法组合态的 Enter（确认候选词）不触发发送
+              if (e.nativeEvent.isComposing) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
@@ -395,41 +295,28 @@ export default function AgentDrawer({ open, onClose, projectId }: Props) {
             }}
           />
           <div className="chat-composer-actions">
-            <div className="chat-composer-left">
-              <Tooltip title="添加附件" placement="top">
-                <button
-                  type="button"
-                  className="chat-composer-icon"
-                  aria-label="添加附件或画布引用"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <AttachIcon />
-                </button>
-              </Tooltip>
-              <SkillPanel onSelect={handleSkillSelect} />
-            </div>
+            <div className="chat-composer-left" />
             <div className="chat-composer-right">
               <MenuPopover
                 open={modelOpen}
                 onOpenChange={setModelOpen}
                 placement="topRight"
                 trigger={
-                  // 按钮上已显示模型名，再挂同名 tooltip 是重复提示，去掉
                   <button type="button" className="chat-composer-model" aria-label="选择模型">
-                    <span className="chat-composer-model-label">{activeModel}</span>
+                    <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
                     <ChevronDownIcon />
                   </button>
                 }
                 content={modelOptions.map((m) => (
                   <MenuItem
                     key={m.value}
-                    selected={activeModel === m.value}
+                    selected={activeOption?.value === m.value}
                     onClick={() => {
                       setAgentModel(m.value);
                       setModelOpen(false);
                     }}
                   >
-                    {m.value}
+                    {m.label}
                   </MenuItem>
                 ))}
               />

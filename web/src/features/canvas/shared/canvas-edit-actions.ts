@@ -12,6 +12,7 @@
  */
 "use client";
 
+import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -353,6 +354,8 @@ export function hasGeneratingNode(): boolean {
 
 /** 把历史快照恢复为画布当前状态（节点/边去选中，避免遗留悬空选区） */
 function restoreSnapshot(snapshot: HistorySnapshot): void {
+  // 整理动画每帧都在写节点位置，先停掉，否则下一帧会覆盖恢复出的布局
+  cancelTidyAnimation();
   const s = useCanvasStore.getState();
   s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
   s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });

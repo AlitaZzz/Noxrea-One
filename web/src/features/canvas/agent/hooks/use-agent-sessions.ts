@@ -4,10 +4,10 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { agentApi } from "@/features/agent/api";
-import type { ChatMessage, ChatRole, SessionListItem } from "@/features/agent/types";
+import { agentApi } from "@/features/canvas/agent/api";
+import type { ChatMessage, ChatRole, SessionListItem } from "@/features/canvas/agent/types";
 import { resolveResponseError } from "@/lib/api/error-message";
 import { showGlobalMessage } from "@/lib/global-message";
 
@@ -19,7 +19,6 @@ function uid() {
 
 /**
  * 会话管理层：管理 chatId / chatTitle / sessions 列表 + CRUD 操作。
- *
  * 消息状态的清空 / 加载由回调注入，避免双向耦合。
  */
 export function useAgentSessions(opts: {
@@ -34,30 +33,33 @@ export function useAgentSessions(opts: {
 }) {
   const [chatId, setChatId] = useState<string | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<string | null>(null);
-  const [skillStatus, setSkillStatus] = useState<string>("idle");
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  // chatId 的同步镜像：ensureSession 异步等待期间可能被 newChat / 项目切换重置，
+  // ref 用于在 await 之后判断当前会话是否仍然有效
+  const chatIdRef = useRef<string | null>(null);
 
   // 切换项目时自动重置对话，避免旧项目的会话串到新项目
   useEffect(() => {
     opts.onStopStream();
     opts.onClearMessages();
+    chatIdRef.current = null;
     queueMicrotask(() => {
       setChatId(null);
       setChatTitle(null);
-      setActiveSkill(null);
-      setSkillStatus("idle");
     });
   }, [opts.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 创建新会话（首条消息前调用），可选传入初始标题 */
   const ensureSession = useCallback(
     async (initialTitle?: string): Promise<string | null> => {
-      if (chatId) return chatId;
+      if (chatIdRef.current) return chatIdRef.current;
       try {
         const res = await agentApi.createSession(initialTitle, opts.projectId);
         if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
         const data = (await res.json()) as { id: string; title?: string };
+        // 等待期间被 newChat / 项目切换重置则放弃该会话，避免串到旧对话
+        if (chatIdRef.current) return chatIdRef.current;
+        chatIdRef.current = data.id;
         setChatId(data.id);
         if (data.title) setChatTitle(data.title);
         return data.id;
@@ -66,39 +68,46 @@ export function useAgentSessions(opts: {
         return null;
       }
     },
-    [chatId]
+    [opts.projectId]
   );
 
   /** 加载历史消息（切换会话时调用） */
   const loadHistory = useCallback(
     async (sessionId: string) => {
+      // 先停掉当前会话的流式回合，避免回复继续追加进即将加载的另一份消息列表
+      opts.onStopStream();
       try {
-        const [msgRes, sessRes] = await Promise.all([
-          agentApi.getSessionMessages(sessionId),
-          agentApi.getSession(sessionId),
-        ]);
+        const msgRes = await agentApi.getSessionMessages(sessionId);
         if (!msgRes.ok) throw new Error(await resolveResponseError(msgRes, "agent.request_failed"));
         const data = (await msgRes.json()) as Array<{
           role: string;
           content: string;
           toolCallId?: string;
           toolName?: string;
+          toolCalls?: Array<{ id: string; name: string; label?: string }>;
         }>;
-        const loaded: ChatMessage[] = (data ?? []).map((m) => ({
-          id: uid(),
-          role: m.role as ChatRole,
-          content: m.content,
-          ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
-        }));
+        const loaded: ChatMessage[] = (data ?? []).map((m) => {
+          const msg: ChatMessage = {
+            id: uid(),
+            role: m.role as ChatRole,
+            content: m.content,
+          };
+          if (m.toolCallId) msg.toolCallId = m.toolCallId;
+          if (m.role === "assistant" && Array.isArray(m.toolCalls) && m.toolCalls.length > 0) {
+            msg.toolCalls = m.toolCalls.map((t) => ({
+              id: t.id,
+              name: t.name,
+              args: "",
+              ...(t.label ? { label: t.label } : {}),
+            }));
+          }
+          return msg;
+        });
         opts.onLoadMessages(loaded);
+        chatIdRef.current = sessionId;
         setChatId(sessionId);
         const found = sessions.find((s) => String(s.id) === String(sessionId));
         setChatTitle(found?.title ?? null);
-        if (sessRes.ok) {
-          const sess = (await sessRes.json()) as { activeSkill?: string | null; skillStatus?: string };
-          setActiveSkill(sess.activeSkill ?? null);
-          setSkillStatus(sess.skillStatus ?? "idle");
-        }
       } catch {
         showGlobalMessage().error("加载历史失败");
       }
@@ -110,10 +119,9 @@ export function useAgentSessions(opts: {
   const newChat = useCallback(() => {
     opts.onStopStream();
     opts.onClearMessages();
+    chatIdRef.current = null;
     setChatId(null);
     setChatTitle(null);
-    setActiveSkill(null);
-    setSkillStatus("idle");
   }, [opts]);
 
   /** 拉取历史会话列表（按 updatedAt 倒序） */
@@ -159,46 +167,10 @@ export function useAgentSessions(opts: {
     [chatId]
   );
 
-  /** 绑定/切换技能 */
-  const bindSkill = useCallback(
-    async (skillName: string) => {
-      if (!chatId) return;
-      try {
-        const res = await agentApi.setSkill(chatId, skillName);
-        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
-        setActiveSkill(skillName);
-        setSkillStatus("active");
-      } catch {
-        showGlobalMessage().error("技能绑定失败");
-      }
-    },
-    [chatId]
-  );
-
-  /** 清除技能 */
-  const removeSkill = useCallback(
-    async () => {
-      if (!chatId) return;
-      try {
-        const res = await agentApi.clearSkill(chatId);
-        if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
-        setActiveSkill(null);
-        setSkillStatus("idle");
-      } catch {
-        showGlobalMessage().error("技能清除失败");
-      }
-    },
-    [chatId]
-  );
-
   return {
     chatId,
     chatTitle,
     setChatTitle,
-    activeSkill,
-    skillStatus,
-    setActiveSkill,
-    setSkillStatus,
     sessions,
     ensureSession,
     loadHistory,
@@ -206,7 +178,5 @@ export function useAgentSessions(opts: {
     deleteChat,
     renameChat,
     newChat,
-    bindSkill,
-    removeSkill,
   };
 }

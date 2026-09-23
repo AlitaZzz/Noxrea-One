@@ -38,6 +38,10 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const editorRef = useRef<Editor | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // 编辑器初始化（含内容规范化事务）不算用户编辑：不回写数据、不压历史，
+  // 否则节点挂载会幽灵压栈把 redo 栈清空，表现为撤销「按了一下没反应」
+  const editorReadyRef = useRef(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ undoRedo: false, underline: false }),
@@ -65,7 +69,11 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         return true;
       },
     },
+    onCreate: () => {
+      editorReadyRef.current = true;
+    },
     onUpdate: ({ editor }) => {
+      if (!editorReadyRef.current) return;
       // 空文档（仅剩一个空段落 <p></p>）时存空串，避免把无意义的空段落写进数据
       const html = editor.isEmpty ? "" : editor.getHTML();
       window.dispatchEvent(
@@ -84,12 +92,15 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     editorRef.current = editor;
   }, [editor]);
 
-  // 外部修改 content（如 AI 生成回填）时同步到编辑器，否则编辑器不会自动刷新
+  // 外部修改 content（如 AI 生成回填）时同步到编辑器，否则编辑器不会自动刷新。
+  // emitUpdate:false——这是程序化回显而非用户编辑，若触发 onUpdate 会经
+  // NODE_UPDATE_DATA → updateNodeData 走一次历史压栈，把 redo 栈清空
+  // （撤销恢复节点 → 重挂回填 → 幽灵压栈，Ctrl+Z 看似失效）。
   useEffect(() => {
     if (!editor || editingContent) return;
     const html = content || "";
     const current = editor.isEmpty ? "" : editor.getHTML();
-    if (html !== current) editor.commands.setContent(html);
+    if (html !== current) editor.commands.setContent(html, { emitUpdate: false });
   }, [editor, content, editingContent]);
 
   // 编辑态切换：setEditable + 聚焦到末尾
@@ -117,7 +128,9 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
     markDirtyImmediate();
-    editor?.commands.setContent("");
+    // emitUpdate:false——updateNodeData 已压过历史， setContent 回显再触发一次
+    // onUpdate 会经 NODE_UPDATE_DATA 重复压栈，清空后 Ctrl+Z 看似失灵
+    editor?.commands.setContent("", { emitUpdate: false });
   }, [id, editor]);
 
   // 导出为 Markdown：保留标题、列表、加粗等富文本结构，供复制 / 下载复用

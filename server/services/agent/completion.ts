@@ -8,7 +8,7 @@ import type { ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { getProvider, getProviders } from "@server/crud/model-config";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
-import { resolveSkillTools } from "@server/services/agent/tools/filter";
+import { agentToolRegistry } from "@server/services/agent/tools/registry";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
 import { logEvent } from "@server/core/logger/utils";
@@ -40,8 +40,6 @@ export async function buildUpstream(args: {
   userId: number;
   /** 是否注入 Agent 工具（仅 openai 协议支持） */
   agent?: boolean;
-  /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
-  activeSkill?: string | null;
 }): Promise<BuildResult> {
   const provider = await resolveProvider(args.userId, args.providerId, args.model);
   if (!provider) return { ok: false, error: "no available provider" };
@@ -94,7 +92,7 @@ export async function buildUpstream(args: {
   };
 
   if (args.agent && provider.protocol === "openai") {
-    body.tools = resolveSkillTools(args.activeSkill ?? null);
+    body.tools = agentToolRegistry.getOpenAiTools();
     body.tool_choice = "auto";
     body.parallel_tool_calls = false;
   }
@@ -168,8 +166,6 @@ export async function runCompletionStream(args: {
   model?: string;
   userId: number;
   agent?: boolean;
-  /** session 级激活的技能名，用于过滤注入给 LLM 的 tools */
-  activeSkill?: string | null;
   signal?: AbortSignal;
   onDelta: (delta: string) => void;
 }): Promise<RunResult> {
