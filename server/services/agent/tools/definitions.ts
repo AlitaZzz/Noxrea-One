@@ -26,6 +26,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
   name: "create_node",
   description:
     "在画布上创建一个或多个节点（单次最多 6 个）。\n" +
+    "用户未指定数量时默认创建 1 个节点。\n" +
     "kind 语义：text=文本便签（content 为正文）；image=图片节点（prompt 为生成提示词）；" +
     "video=视频节点（prompt 为生成提示词）；audio=音频节点（prompt 预留）；director=导演台；group=编组容器（title 为组名）。\n" +
     "image/video 节点只预填提示词，不会自动生成内容，用户会自行点击生成——不要在文字里复述提示词。\n" +
@@ -185,7 +186,8 @@ const MESSAGE_USER_TOOL: AgentToolDefinition = {
   name: "message_user",
   description:
     "把一段总结消息展示给用户。每次完成画布操作后，必须调用本工具简要说明做了什么（创建了哪些节点、id 是什么、下一步建议）。\n" +
-    "调用本工具后本轮任务即视为完成，不要再继续调用其他工具。",
+    "本工具的内容就是给用户的最终回复：不超过 3 句，不要复述 prompt/content，不要罗列提示词要点。\n" +
+    "调用本工具后本轮任务即视为完成，不要再调用其他工具，也不要再输出额外文字。",
   parameters: {
     text: { type: "string", description: "要展示给用户的消息（markdown）" },
   },

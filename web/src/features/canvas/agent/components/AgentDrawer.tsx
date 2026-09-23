@@ -49,6 +49,12 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
 
+  // message_user 的本质是回复本身而非画布操作：调用 chip 与执行回执都不展示，
+  // 其文案已作为助手气泡渲染（行业惯例：终端性回复工具对用户不可见）
+  const messageUserCallIds = new Set(
+    messages.flatMap((m) => (m.toolCalls ?? []).filter((t) => t.name === "message_user").map((t) => t.id)),
+  );
+
   useEffect(() => {
     void initialize();
   }, [initialize]);
@@ -214,7 +220,10 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             <div className="chat-empty-subtitle">从灵感碎片，到完整世界</div>
           </div>
         ) : (
-          messages.map((m) => (
+          messages.map((m) => {
+            if (m.role === "tool" && m.toolCallId && messageUserCallIds.has(m.toolCallId)) return null;
+            const visibleToolCalls = m.toolCalls?.filter((t) => t.name !== "message_user");
+            return (
             <div
               key={m.id}
               className={`chat-msg chat-msg-${m.role}`}
@@ -223,9 +232,9 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               <div className={`chat-bubble chat-bubble-${m.role}${m.error ? " chat-bubble-error" : ""}`}>
                 {m.role === "assistant" ? (
                   <>
-                    {m.toolCalls?.length ? (
+                    {visibleToolCalls?.length ? (
                       <div className="chat-tool-calls">
-                        {m.toolCalls.map((t) => (
+                        {visibleToolCalls.map((t) => (
                           <div key={t.id} className="chat-tool-call">
                             {t.label ?? t.name}
                             {t.args && <div className="chat-tool-args">{t.args}</div>}
@@ -235,7 +244,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                     ) : null}
                     {m.content ? (
                       <Markdown>{m.content}</Markdown>
-                    ) : !m.toolCalls?.length ? (
+                    ) : !visibleToolCalls?.length ? (
                       <span className="chat-thinking">思考中…</span>
                     ) : null}
                   </>
@@ -248,7 +257,8 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                 )}
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

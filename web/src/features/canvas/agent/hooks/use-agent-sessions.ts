@@ -84,24 +84,37 @@ export function useAgentSessions(opts: {
           content: string;
           toolCallId?: string;
           toolName?: string;
-          toolCalls?: Array<{ id: string; name: string; label?: string }>;
+          toolCalls?: Array<{ id: string; name: string; label?: string; args?: Record<string, unknown> }>;
         }>;
-        const loaded: ChatMessage[] = (data ?? []).map((m) => {
+        // ghost 清理：message_user 的回执行与"内容为空且无可见工具调用"的 assistant 消息
+        // （历史遗留的空占位，渲染时会永远显示"思考中…"）不进入 UI
+        const messageUserCallIds = new Set(
+          (data ?? []).flatMap((m) => (m.toolCalls ?? []).filter((t) => t.name === "message_user").map((t) => t.id)),
+        );
+        const loaded: ChatMessage[] = (data ?? []).flatMap((m) => {
+          if (m.role === "tool" && m.toolCallId && messageUserCallIds.has(m.toolCallId)) return [];
+          const messageUserCalls = (m.toolCalls ?? []).filter((t) => t.name === "message_user");
+          const visibleToolCalls = (m.toolCalls ?? []).filter((t) => t.name !== "message_user");
+          // 旧数据回复文本存在 message_user 的 args.text 里而非 content，回退取用
+          const legacyReply = messageUserCalls.find((t) => typeof t.args?.text === "string" && t.args.text)?.args?.text;
+          const content = m.content || (typeof legacyReply === "string" ? legacyReply : "");
+          if (m.role === "assistant" && !content && !(visibleToolCalls.length > 0)) return [];
+
           const msg: ChatMessage = {
             id: uid(),
             role: m.role as ChatRole,
-            content: m.content,
+            content,
           };
           if (m.toolCallId) msg.toolCallId = m.toolCallId;
-          if (m.role === "assistant" && Array.isArray(m.toolCalls) && m.toolCalls.length > 0) {
-            msg.toolCalls = m.toolCalls.map((t) => ({
+          if (m.role === "assistant" && visibleToolCalls.length > 0) {
+            msg.toolCalls = visibleToolCalls.map((t) => ({
               id: t.id,
               name: t.name,
               args: "",
               ...(t.label ? { label: t.label } : {}),
             }));
           }
-          return msg;
+          return [msg];
         });
         opts.onLoadMessages(loaded);
         chatIdRef.current = sessionId;
