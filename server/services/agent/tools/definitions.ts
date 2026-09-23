@@ -26,15 +26,15 @@ const createNodeItemSchema = z.object({
 const CREATE_NODE_TOOL: AgentToolDefinition = {
   name: "create_node",
   description:
-    "在画布上创建一个或多个节点（单次最多 6 个）。\n" +
-    "用户未指定数量时默认创建 1 个节点。\n" +
+    "在画布上创建一个或多个节点。\n" +
+    "用户未指定数量时默认创建 1 个节点；需要的节点数量不受限制，全部放在一次调用中传入即可（不要分批）。\n" +
     "kind 语义：text=文本便签（content 为正文）；image=图片节点（prompt 为生成提示词）；" +
     "video=视频节点（prompt 为生成提示词）；audio=音频节点（prompt 预留）；director=导演台；group=编组容器（title 为组名）。\n" +
     "image/video 节点只预填提示词，不会自动生成内容，用户会自行点击生成——不要在文字里复述提示词。\n" +
     "用户提到生成参数（比例、分辨率、时长、张数等）时，image/video 节点必须在创建时通过 params 传入（如 {\"ratio\":\"9:16\"}），" +
     "不要把参数写进提示词文本，也不要只口头声称已设置。参数按当前模型配置校验：不支持的值自动取最接近档位（ratio）或默认值，结果中会逐项说明。\n" +
     "connectTo：创建后要与哪些节点连线，值为已存在节点的 id，或同批次节点的序号（\"1\" 表示本批次第 1 个）。\n" +
-    "连线方向即数据流向，须符合画布规则（不合法的连线会被拒绝）：text→任意；image→text/image/video；video→text/video；audio→text/audio/video。\n" +
+    "连线方向即数据流向，须符合画布规则（不合法的连线会被拒绝）：text→text/image/video/audio；image→text/image/video；video→text/video；audio→text/audio/video。\n" +
     "返回结果会给出每个新节点分配到的 id，后续更新/连线必须引用这些 id。",
   parameters: {
     nodes: {
@@ -48,7 +48,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
           prompt: { type: "string", description: "image/video/audio 节点的生成提示词" },
           title: { type: "string", description: "节点标题（group 为组名）" },
           params: { type: "object", description: "image/video 节点的生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
-          connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）。方向须符合连线规则（text→任意；image→text/image/video；video→text/video；audio→text/audio/video）", items: { type: "string" } },
+          connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）。方向须符合连线规则（text→text/image/video/audio；image→text/image/video；video→text/video；audio→text/audio/video）", items: { type: "string" } },
         },
         required: ["kind"],
       },
@@ -57,7 +57,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
   required: ["nodes"],
   execute: "client",
   label: "创建节点",
-  zodSchema: z.object({ nodes: z.array(createNodeItemSchema).min(1).max(6) }),
+  zodSchema: z.object({ nodes: z.array(createNodeItemSchema).min(1) }),
 };
 
 const UPDATE_NODE_TOOL: AgentToolDefinition = {
@@ -150,7 +150,7 @@ const MOVE_NODE_TOOL: AgentToolDefinition = {
 
 const ARRANGE_CANVAS_TOOL: AgentToolDefinition = {
   name: "arrange_canvas",
-  description: "整理画布：把所有节点重排为整齐网格（有连线时按流向排序）并自适应缩放。不要自己计算节点坐标，需要排版时调用本工具。",
+  description: "整理画布：把画布上已有的全部节点重排为整齐网格（有连线时按流向排序）并自适应缩放。create_node 已自动排布新建节点，创建节点后无需调用本工具；仅当需要重排画布上已有内容时使用，不要自己计算节点坐标。",
   parameters: {},
   required: [],
   execute: "client",

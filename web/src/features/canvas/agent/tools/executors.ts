@@ -19,13 +19,14 @@ import {
 } from "@/features/canvas/node-defaults";
 import { readLastModel } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
+import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import {
   findFreePosition,
   getViewportCenter,
   markDirtyImmediate,
   useCanvasStore,
 } from "@/features/canvas/stores/canvas-store";
-import type { AnyNode, ImageGenSettings, TextNodeData, VideoGenSettings } from "@/features/canvas/types";
+import type { AnyNode, ImageGenSettings, TextGenSettings, TextNodeData, VideoGenSettings } from "@/features/canvas/types";
 import { canConnect, NODE_TYPE, VALID_CONNECTION_OUTPUTS } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability } from "@/lib/types/models";
@@ -83,6 +84,12 @@ function fillNodeData(node: AnyNode, item: { kind: CanvasNodeType; content?: str
     (data as Partial<TextNodeData>).content = textToHtml(item.content);
     (data as Partial<TextNodeData>).plainText = item.content;
   }
+  if (item.kind === NODE_TYPE.TEXT && item.prompt) {
+    (data as { genSettings: TextGenSettings }).genSettings = {
+      ...(node.data as { genSettings: TextGenSettings }).genSettings,
+      prompt: item.prompt,
+    };
+  }
   if (item.kind === NODE_TYPE.IMAGE && item.prompt) {
     (data as { genSettings: ImageGenSettings }).genSettings = {
       ...(node.data as { genSettings: ImageGenSettings }).genSettings,
@@ -123,23 +130,30 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-/** create_node：批量创建节点（≤6），支持 content/prompt/title 预填、params 生成参数与 connectTo 连线 */
+/** create_node：批量创建节点，支持 content/prompt/title 预填、params 生成参数与 connectTo 连线 */
 function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
   const items = Array.isArray(args.nodes) ? args.nodes : [];
   if (items.length === 0) return { content: "未提供 nodes 参数，已忽略。", mutated: false };
 
   const store = useCanvasStore.getState();
   const created: AnyNode[] = [];
-  const batchIdByIndex = new Map<number, string>();
+  const batchNodeByIndex = new Map<number, AnyNode>();
+  // connectTo 跟随各自节点收集：条目被跳过时 created 与 items 不再按序对齐，
+  // 事后用 items[i] 反查会把连线接到错误的节点上
+  const pendingConnects: Array<{ source: AnyNode; targets: string[] }> = [];
   const anchor = getViewportCenter();
   const lines: string[] = [];
   const degraded: string[] = [];
 
-  for (let i = 0; i < Math.min(items.length, 6); i++) {
+  for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
-    // 严格校验 kind：未知值不兜底放行，把可选值回传给模型让其自行纠正
+    // 严格校验 kind：缺失/未知值都不兜底放行，把原因回传给模型让其自行纠正
     // （后端 zod 校验失败时只记日志仍原样透传，此处是最后一道防线）
-    const rawKind = str(item.kind) ?? "text";
+    const rawKind = str(item.kind);
+    if (!rawKind) {
+      lines.push(`${i + 1}. 缺少 kind，已跳过`);
+      continue;
+    }
     // 用 includes 而非 in：in 会查原型链，"toString"/"constructor" 之类值会漏过守卫
     if (!(TOOL_NODE_KINDS as readonly string[]).includes(rawKind)) {
       lines.push(`${i + 1}. kind「${rawKind}」不支持（可选：${TOOL_NODE_KINDS.join("/")}），已跳过`);
@@ -147,12 +161,17 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
     }
     const kind = KIND_TO_NODE_TYPE[rawKind as ToolNodeKind];
     const node = NODE_FACTORIES[kind]({ x: 0, y: 0 });
+    const content = str(item.content);
+    const prompt = str(item.prompt);
     const filled = fillNodeData(node, {
       kind,
-      content: str(item.content),
-      prompt: str(item.prompt),
+      content,
+      prompt,
       title: str(item.title),
     });
+    // 与 update_node 同款守卫：放错节点类型的字段不静默丢弃，回传原因供模型自纠
+    if (content && kind !== NODE_TYPE.TEXT) degraded.push(`${i + 1}. content 仅对 text 节点生效，已忽略`);
+    if (prompt && !PROMPT_NODE_TYPES.has(kind)) degraded.push(`${i + 1}. 该节点类型不支持设置提示词，已忽略`);
     // params：创建时直接落生成参数，避免「创建后再 update_node」的二次往返
     const rawParams = item.params != null && typeof item.params === "object" && !Array.isArray(item.params)
       ? (item.params as Record<string, unknown>)
@@ -173,49 +192,106 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
       }
       degraded.push(...pLines);
     }
-    // 位置按最终尺寸寻找空位（params 可能已改变占位框尺寸）
-    filled.position = findFreePosition(nodeSize(filled), anchor);
     created.push(filled);
-    batchIdByIndex.set(i + 1, filled.id);
-    const desc = kind === NODE_TYPE.TEXT ? (str(item.content)?.slice(0, 40) ?? "") : (str(item.prompt)?.slice(0, 40) ?? "");
+    batchNodeByIndex.set(i + 1, filled);
+    const connectTo = strArray(item.connectTo);
+    if (connectTo.length > 0) pendingConnects.push({ source: filled, targets: connectTo });
+    const desc = (kind === NODE_TYPE.TEXT ? content : prompt)?.slice(0, 40) ?? "";
     lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}${paramNote}`);
   }
 
   if (created.length === 0) return { content: lines.join("\n") || "没有可创建的节点。", mutated: false };
 
-  store.addNodes(created, { skipHistory: true });
-
-  // connectTo：已存在节点 id 或同批次序号（"1" → 本批次第 1 个节点），方向须符合连线规则
+  // connectTo：已存在节点 id 或同批次序号（"1" → 本批次第 1 个节点），方向须符合连线规则。
+  // 先建边表再布局：批次内连线参与分层布局，配对节点（如 text→image）左右相邻
   const newEdges = [];
   const skipped: string[] = [];
-  for (let i = 0; i < created.length; i++) {
-    const item = items[i] as Record<string, unknown> | undefined;
-    for (const raw of strArray(item?.connectTo)) {
-      const byIndex = batchIdByIndex.get(Number(raw));
-      const targetId = byIndex ?? raw;
-      if (targetId === created[i].id) continue;
-      const targetNode = byIndex
-        ? created.find((n) => n.id === targetId)
-        : useCanvasStore.getState().nodes.find((n) => n.id === targetId);
+  const nodesById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+  const seenPairs = new Set<string>();
+  for (const { source, targets } of pendingConnects) {
+    for (const raw of targets) {
+      const byIndex = batchNodeByIndex.get(Number(raw));
+      const targetNode = byIndex ?? nodesById.get(raw);
       if (!targetNode) {
-        skipped.push(raw);
+        // 纯数字且落在批次序号范围内但查不到：多半是该条目本身被跳过了
+        const asIndex = /^\d+$/.test(raw) ? Number(raw) : 0;
+        skipped.push(
+          asIndex >= 1 && asIndex <= items.length
+            ? `${raw}（同批次序号对应的节点未创建）`
+            : `${raw}（目标不存在）`,
+        );
         continue;
       }
-      if (!canConnect(created[i].type, targetNode.type)) {
-        skipped.push(`${raw}（${created[i].type} → ${targetNode.type} 不符合连线规则）`);
+      if (targetNode.id === source.id) {
+        skipped.push(`${raw}（不能连接自身）`);
         continue;
       }
-      newEdges.push(createEdge(created[i].id, targetId));
+      // 与 connect_nodes 同款校验：重复对、画布已有边（仅指向已有节点时可能）、连线规则；
+      // seenPairs 只在成功后写入，失败对的重复项会重新校验并给出真实原因
+      const pairKey = `${source.id}→${targetNode.id}`;
+      if (seenPairs.has(pairKey)) {
+        skipped.push(`${raw}（重复连线）`);
+        continue;
+      }
+      if (!byIndex && store.edges.some((x) => x.source === source.id && x.target === targetNode.id)) {
+        skipped.push(`${raw}（已有连线）`);
+        continue;
+      }
+      if (!canConnect(source.type, targetNode.type)) {
+        skipped.push(`${raw}（${source.type} → ${targetNode.type} 不符合连线规则）`);
+        continue;
+      }
+      seenPairs.add(pairKey);
+      newEdges.push(createEdge(source.id, targetNode.id));
     }
   }
+
+  // 批量布局：复用整理布局纯函数（有连线 → 分层，无连线 → 网格），批次内互不重叠；
+  // 整批作为一块经 findFreePosition 放到锚点附近（与画布已有内容错开），无需再 arrange_canvas
+  // 网格吸附与画布其余入口一致（Runtime.tidyCanvas / handleTidyCanvas 同款取值）：
+  // 单节点与批量路径都吸附，避免同一设置下行为随批量大小变化
+  const snapSize = store.snapToGrid ? store.snapGridSize : 0;
+  const snap = (v: number) => (snapSize > 0 ? Math.round(v / snapSize) * snapSize : v);
+  if (created.length === 1) {
+    const p = findFreePosition(nodeSize(created[0]), anchor);
+    created[0].position = { x: snap(p.x), y: snap(p.y) };
+  } else {
+    // 仅批次内连线参与布局：指向已有节点的连线会被布局函数按悬空边忽略，
+    // 却会把 auto 模式误切到分层，让无内部连线的批次全部塌进最右侧单列
+    const intraEdges = newEdges.filter((e) => created.some((n) => n.id === e.target));
+    const { positions } = computeTidyLayout(created, intraEdges, { mode: "auto", snapSize });
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of created) {
+      const p = positions.get(n.id);
+      if (!p) continue; // 布局函数保证 units ≥ 2 时全部产出，此处只为类型收窄
+      const s = nodeSize(n);
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + s.width);
+      maxY = Math.max(maxY, p.y + s.height);
+    }
+    const origin = findFreePosition({ width: maxX - minX, height: maxY - minY }, anchor);
+    // 平移增量也吸附到网格步长的整数倍：已吸附的布局坐标加上增量后仍落在网格上
+    const dx = snap(origin.x - minX);
+    const dy = snap(origin.y - minY);
+    for (const n of created) {
+      const p = positions.get(n.id);
+      n.position = p
+        ? { x: p.x + dx, y: p.y + dy }
+        : findFreePosition(nodeSize(n), anchor);
+    }
+  }
+
+  store.addNodes(created, { skipHistory: true });
+
   if (newEdges.length > 0) {
     useCanvasStore.getState().setEdges([...useCanvasStore.getState().edges, ...newEdges], { skipHistory: true });
   }
 
   let content = `已创建 ${created.length} 个节点：\n${lines.join("\n")}`;
-  if (degraded.length > 0) content += `\n参数降级说明：\n${degraded.join("\n")}`;
+  if (degraded.length > 0) content += `\n降级说明：\n${degraded.join("\n")}`;
   if (newEdges.length) content += `\n已创建 ${newEdges.length} 条连线。`;
-  if (skipped.length) content += `\n以下连线目标不存在，已跳过：${[...new Set(skipped)].join(", ")}`;
+  if (skipped.length) content += `\n以下连线已跳过：${[...new Set(skipped)].join(", ")}`;
   return { content, mutated: true };
 }
 
@@ -431,32 +507,42 @@ function execConnectNodes(args: ToolArgs): { content: string; mutated: boolean }
   if (items.length === 0) return { content: "未提供 edges。", mutated: false };
 
   const state = useCanvasStore.getState();
+  const nodesById = new Map(state.nodes.map((n) => [n.id, n]));
   const newEdges = [];
   const errors: string[] = [];
+  const seenPairs = new Set<string>();
   for (const raw of items) {
     const e = raw as Record<string, unknown>;
     const source = str(e.source);
     const target = str(e.target);
     if (!source || !target) { errors.push("缺少 source/target"); continue; }
-    const sourceNode = state.nodes.find((n) => n.id === source);
-    const targetNode = state.nodes.find((n) => n.id === target);
+    const sourceNode = nodesById.get(source);
+    const targetNode = nodesById.get(target);
     if (!sourceNode) { errors.push(`source ${source} 不存在`); continue; }
     if (!targetNode) { errors.push(`target ${target} 不存在`); continue; }
     if (source === target) { errors.push("不能连接节点自身"); continue; }
-    if (state.edges.some((x) => x.source === source && x.target === target)) { errors.push(`${source} → ${target} 已有连线`); continue; }
+    const pairKey = `${source}→${target}`;
+    // 本调用内新建的边要到最后才落库，仅查 store 会放行同批重复项；
+    // seenPairs 只在成功后写入，失败对的重复项会重新校验并给出真实原因
+    if (seenPairs.has(pairKey)) { errors.push(`${source} → ${target} 重复连线`); continue; }
+    if (state.edges.some((x) => x.source === source && x.target === target)) {
+      errors.push(`${source} → ${target} 已有连线`);
+      continue;
+    }
     // 与画布交互（isValidConnection）同一套规则：连线方向即数据流向
     if (!canConnect(sourceNode.type, targetNode.type)) {
       const allowed = VALID_CONNECTION_OUTPUTS[sourceNode.type ?? ""] ?? [];
       errors.push(`${source} → ${target} 不符合连线规则（${sourceNode.type} 可连出：${allowed.join("/")}）`);
       continue;
     }
+    seenPairs.add(pairKey);
     newEdges.push(createEdge(source, target));
   }
   if (newEdges.length > 0) {
     useCanvasStore.getState().setEdges([...useCanvasStore.getState().edges, ...newEdges], { skipHistory: true });
   }
   let content = newEdges.length ? `已创建 ${newEdges.length} 条连线。` : "没有可创建的连线。";
-  if (errors.length) content += `\n跳过：${errors.join("；")}`;
+  if (errors.length) content += `\n跳过：${[...new Set(errors)].join("；")}`;
   return { content, mutated: newEdges.length > 0 };
 }
 
