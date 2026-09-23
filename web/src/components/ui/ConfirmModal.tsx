@@ -33,7 +33,8 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
   const lang = i18n.language;
   const okRef = useRef<HTMLButtonElement>(null);
 
-  // antd 打开动画结束默认聚焦关闭按钮，这里把焦点交回「确定」按钮
+  // 焦点必须等 antd 打开动画结束、rc-dialog 的焦点管理收尾后再交回「确定」，
+  // 挂载期 autoFocus 会被 rc-dialog 抢走，故只在 afterOpenChange 里显式聚焦
   const handleAfterOpenChange = (nextOpen: boolean) => {
     if (nextOpen) setTimeout(() => okRef.current?.focus(), 0);
   };
@@ -52,7 +53,7 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       footer={
         <div className="app-dialog-footer">
           {!hideCancel && <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText || (lang === "zh" ? "取消" : "Cancel")}</AppButton>}
-          <AppButton variant="primary" loading={confirmLoading} onClick={onOk} autoFocus ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
+          <AppButton variant="primary" loading={confirmLoading} onClick={onOk} ref={okRef}>{okText || (lang === "zh" ? "确定" : "OK")}</AppButton>
         </div>
       }
     >

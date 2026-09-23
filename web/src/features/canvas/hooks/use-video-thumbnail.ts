@@ -49,7 +49,10 @@ export function useVideoThumbnail(src: string | undefined) {
         }
         videoThumbCache.set(src, url);
         setThumb(url);
-      } catch { /* noop */ }
+      } catch (e) {
+        // 缩略图生成失败（画布污染 / 视频尺寸为 0 等）不影响节点本体，降级为无缩略图并留痕
+        console.warn("[video-thumbnail] generate failed:", e);
+      }
       setLoading(false);
       video.remove();
     };

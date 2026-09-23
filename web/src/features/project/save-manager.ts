@@ -241,7 +241,6 @@ class SaveManager {
       edges: clean.edges as AnyEdge[],
       viewport: clean.viewport,
       background: clean.background,
-      theme: clean.theme,
       minimapVisible: clean.minimapVisible,
       snapToGrid: clean.snapToGrid,
       agentModel: s.agentModel ?? undefined,
@@ -399,7 +398,7 @@ class SaveManager {
         const s = useCanvasStore.getState();
         useProjectStore.getState().syncCanvasState(
           activeId, s.nodes, s.edges, getLiveViewport(),
-          s.background, s.theme, s.minimapVisible, s.snapToGrid, s.agentModel,
+          s.background, s.minimapVisible, s.snapToGrid, s.agentModel,
         );
 
         const snapshot = takeCanvasSnapshot();
@@ -461,7 +460,6 @@ class SaveManager {
         edges: clean.edges,
         viewport: snapshot.viewport,
         background: snapshot.background,
-        theme: snapshot.theme,
         minimapVisible: snapshot.minimapVisible,
         snapToGrid: snapshot.snapToGrid,
         agentModel: useCanvasStore.getState().agentModel ?? undefined,

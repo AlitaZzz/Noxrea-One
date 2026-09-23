@@ -18,6 +18,8 @@
 
 import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from "react";
 
+import i18n from "@/lib/i18n/config";
+
 export type AppButtonVariant = "primary" | "default" | "ghost" | "danger";
 export type AppButtonSize = "sm" | "md";
 
@@ -58,7 +60,7 @@ const AppButton = forwardRef<HTMLButtonElement, Props>(function AppButton(
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading && !iconOnly ? "处理中..." : children}
+      {loading && !iconOnly ? i18n.t("common.processing") : children}
     </button>
   );
 });

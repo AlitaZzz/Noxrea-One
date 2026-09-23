@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { type ReactNode,useState } from "react";
+import { type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -14,16 +14,12 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-/** 导航/选择类按钮 — 默认透明底，active 时 var(--canvas-bg-elevated)，hover 时 var(--canvas-bg-hover)。 */
+/** 导航/选择类按钮 — 默认透明底，active 时 var(--nav-active-bg)，hover 时 var(--nav-hover-bg)。 */
 export default function NavButton({ children, onClick, active, className = "", style }: Props) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className={className}
+      className={`nav-btn${active ? " nav-btn-active" : ""}${className ? ` ${className}` : ""}`}
       style={{
         cursor: "pointer",
         outline: "none",
@@ -36,8 +32,6 @@ export default function NavButton({ children, onClick, active, className = "", s
         padding: "9px 10px",
         fontSize: 13,
         borderRadius: 8,
-        transition: "background 0.15s",
-        background: active ? "var(--nav-active-bg)" : hovered ? "var(--nav-hover-bg)" : "transparent",
         color: active ? "var(--canvas-text)" : "var(--canvas-text-dim)",
         ...style,
       }}

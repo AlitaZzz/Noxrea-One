@@ -8,11 +8,11 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { BackgroundType, ThemeMode, ViewportState } from "@/features/canvas/types";
+import type { BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { DEFAULT_BACKGROUND, DEFAULT_THEME, DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
+import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
 const HISTORY_THROTTLE = 300;
@@ -104,10 +104,6 @@ interface CanvasState {
   background: BackgroundType;
   setBackground: (bg: BackgroundType) => void;
 
-  // Theme
-  theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
-
   // Minimap visibility
   minimapVisible: boolean;
   toggleMinimap: () => void;
@@ -150,6 +146,9 @@ interface CanvasState {
   angleEditorNodeId: string | null;
   setAngleEditorNodeId: (id: string | null) => void;
 
+  /** 关闭不属于 nodeId 的编辑态（nodeId 传 null 即全部关闭） */
+  closeForeignNodeEditors: (nodeId: string | null) => void;
+
   // Director overlay
   directorOverlayOpen: boolean;
   setDirectorOverlayOpen: (v: boolean) => void;
@@ -171,14 +170,16 @@ interface CanvasState {
   snapThreshold: number;
 
   // Persistence
-  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
+  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
 }
 
 /**
  * 节点级 UI 态字段名（值为节点 id 或 null）：
- * 目标节点被删除时需在 removeNodes 中同步清空——
- * 残留 id 本身无害（uid 会话内永不复用），但撤销会以同一 id 复活节点，
- * 不清空就会带着对应模式（展开/标注/裁剪/文本编辑/选帧）回来。
+ * - 目标节点被删除时需在 removeNodes 中同步清空——
+ *   残留 id 本身无害（uid 会话内永不复用），但撤销会以同一 id 复活节点，
+ *   不清空就会带着对应模式（展开/标注/裁剪/文本编辑/选帧）回来。
+ * - 九个编辑态全局互斥（同一时刻只允许一个编辑浮层），由 applyNodeUiState
+ *   统一收口，调用方不再各自手工罗列关闭清单。
  */
 const NODE_UI_STATE_KEYS = [
   "multiExpandedNodeId",
@@ -191,6 +192,18 @@ const NODE_UI_STATE_KEYS = [
   "audioClipNodeId",
   "angleEditorNodeId",
 ] as const;
+
+type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
+
+/** 互斥写入口：id 非空时清空其余编辑态；id 为空时仅清自身（避免误关别处刚打开的面板） */
+function applyNodeUiState(s: CanvasState, key: NodeUiStateKey, id: string | null): Partial<CanvasState> {
+  if (id === null) return { [key]: null } as Partial<CanvasState>;
+  const patch: Partial<CanvasState> = {};
+  for (const k of NODE_UI_STATE_KEYS) {
+    (patch as Record<string, unknown>)[k] = k === key ? id : null;
+  }
+  return patch;
+}
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   viewport: DEFAULT_VIEWPORT,
@@ -266,12 +279,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     saveManager.markDirtyImmediate();
   },
 
-  theme: DEFAULT_THEME,
-  setTheme: () => {
-    // 兼容历史项目和撤销快照中的 theme 字段，但界面始终保持深色。
-    set({ theme: "dark" });
-  },
-
   minimapVisible: true,
   toggleMinimap: () => {
     set((s) => ({ minimapVisible: !s.minimapVisible }));
@@ -290,23 +297,38 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setModalOpen: (v) => set({ modalOpen: v }),
 
   annotatingNodeId: null,
-  setAnnotatingNodeId: (id) => set({ annotatingNodeId: id }),
+  setAnnotatingNodeId: (id) => set((s) => applyNodeUiState(s, "annotatingNodeId", id)),
   croppingNodeId: null,
-  setCroppingNodeId: (id) => set({ croppingNodeId: id }),
+  setCroppingNodeId: (id) => set((s) => applyNodeUiState(s, "croppingNodeId", id)),
   editingTextNodeId: null,
-  setEditingTextNodeId: (id) => set({ editingTextNodeId: id }),
+  setEditingTextNodeId: (id) => set((s) => applyNodeUiState(s, "editingTextNodeId", id)),
   frameCaptureNodeId: null,
-  setFrameCaptureNodeId: (id) => set({ frameCaptureNodeId: id }),
+  setFrameCaptureNodeId: (id) => set((s) => applyNodeUiState(s, "frameCaptureNodeId", id)),
   clipCaptureNodeId: null,
-  setClipCaptureNodeId: (id) => set({ clipCaptureNodeId: id }),
+  setClipCaptureNodeId: (id) => set((s) => applyNodeUiState(s, "clipCaptureNodeId", id)),
   audioClipNodeId: null,
-  setAudioClipNodeId: (id) => set({ audioClipNodeId: id }),
+  setAudioClipNodeId: (id) => set((s) => applyNodeUiState(s, "audioClipNodeId", id)),
   multiExpandedNodeId: null,
-  setMultiExpandedNodeId: (id) => set({ multiExpandedNodeId: id }),
+  setMultiExpandedNodeId: (id) => set((s) => applyNodeUiState(s, "multiExpandedNodeId", id)),
   lightingNodeId: null,
-  setLightingNodeId: (id) => set({ lightingNodeId: id }),
+  setLightingNodeId: (id) => set((s) => applyNodeUiState(s, "lightingNodeId", id)),
   angleEditorNodeId: null,
-  setAngleEditorNodeId: (id) => set({ angleEditorNodeId: id }),
+  setAngleEditorNodeId: (id) => set((s) => applyNodeUiState(s, "angleEditorNodeId", id)),
+
+  closeForeignNodeEditors: (nodeId) => {
+    set((s) => {
+      const patch: Partial<CanvasState> = {};
+      let changed = false;
+      for (const k of NODE_UI_STATE_KEYS) {
+        const id = s[k];
+        if (id && id !== nodeId) {
+          (patch as Record<string, unknown>)[k] = null;
+          changed = true;
+        }
+      }
+      return changed ? patch : s;
+    });
+  },
 
   directorOverlayOpen: false,
   setDirectorOverlayOpen: (v) => set({ directorOverlayOpen: v }),
@@ -334,7 +356,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   snapThreshold: 5,
 
   /** 从项目恢复画布状态 */
-  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; theme?: ThemeMode; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
+  restoreFromProject: (project: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
     const vp = project.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
     set({
@@ -342,7 +364,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       edges: (project.edges || []) as Edge[],
       viewport: vp,
       background: project.background || DEFAULT_BACKGROUND,
-      theme: "dark",
       minimapVisible: project.minimapVisible !== false,
       snapToGrid: project.snapToGrid || false,
       agentModel: project.agentModel ?? null,
@@ -360,7 +381,6 @@ export function takeCanvasSnapshot(): HistorySnapshot {
     edges: structuredClone(s.edges),
     viewport: { ..._liveViewport },
     background: s.background,
-    theme: s.theme,
     minimapVisible: s.minimapVisible,
     snapToGrid: s.snapToGrid,
   };

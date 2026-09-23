@@ -45,10 +45,8 @@ export function useAgentSessions(opts: {
     opts.onClearMessages();
     clearUserActions();
     chatIdRef.current = null;
-    queueMicrotask(() => {
-      setChatId(null);
-      setChatTitle(null);
-    });
+    setChatId(null);
+    setChatTitle(null);
   }, [opts.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 创建新会话（首条消息前调用），可选传入初始标题 */
@@ -97,11 +95,9 @@ export function useAgentSessions(opts: {
         );
         const loaded: ChatMessage[] = (data ?? []).flatMap((m) => {
           if (m.role === "tool" && m.toolCallId && messageUserCallIds.has(m.toolCallId)) return [];
-          const messageUserCalls = (m.toolCalls ?? []).filter((t) => t.name === "message_user");
+          // message_user 的回执行与纯 message_user 调用不进入 UI（回复文本已在 assistant content 里）
           const visibleToolCalls = (m.toolCalls ?? []).filter((t) => t.name !== "message_user");
-          // 旧数据回复文本存在 message_user 的 args.text 里而非 content，回退取用
-          const legacyReply = messageUserCalls.find((t) => typeof t.args?.text === "string" && t.args.text)?.args?.text;
-          const content = m.content || (typeof legacyReply === "string" ? legacyReply : "");
+          const content = m.content;
           if (m.role === "assistant" && !content && !(visibleToolCalls.length > 0)) return [];
 
           const msg: ChatMessage = {

@@ -131,9 +131,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [expanded, setExpanded]);
 
   // 主图真相统一为 data.src（不再有本地 src state / 渲染期 setState hack）。
-  // 多图模式约定：src 必为 multiResultUrls 的成员；撤销会把整个 data 快照替换，故无需额外同步。
-  // Fallback: if src is missing but multiResultUrls exists, use first URL
-  const src = data.src || (Array.isArray(data.multiResultUrls) && data.multiResultUrls.length > 0 ? data.multiResultUrls[0] : "") || "";
+  // 多图模式约定（写侧保证）：src 必为 multiResultUrls 的成员；
+  // 撤销会把整个 data 快照替换，故无需额外同步。
+  const src = data.src || "";
 
   // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
   const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
@@ -354,24 +354,17 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       const detail = (e as CustomEvent).detail;
       if (detail.nodeId !== id) return;
       const a = actionRefs.current;
-      // 编辑面板全局互斥：任一入口进入编辑，先关闭其它所有编辑态
-      const closeOtherEditors = () => {
-        const s = useCanvasStore.getState();
-        s.setAnnotatingNodeId(null);
-        s.setCroppingNodeId(null);
-        s.setFrameCaptureNodeId(null);
-        s.setClipCaptureNodeId(null);
-        s.setAudioClipNodeId(null);
-        s.setLightingNodeId(null);
-        s.setAngleEditorNodeId(null);
-      };
       switch (detail.action) {
         case "download": a.handleDownload(); break;
         case "save-asset": a.handleSaveToAssets(); break;
-        case "crop-interactive": if (src) { closeOtherEditors(); setCroppingNodeId(id); } break;
-        case "angle-editor": if (src) { closeOtherEditors(); useCanvasStore.getState().setAngleEditorNodeId(id); } break;
-        case "annotate": if (src) { closeOtherEditors(); setAnnotateOpen(true); } break;
-        case "panorama": if (src) { closeOtherEditors(); setPanoramaOpen(true); } break;
+        // 编辑面板互斥由 store 的 setter 统一收口（激活即清空其余编辑态）
+        case "crop-interactive": if (src) setCroppingNodeId(id); break;
+        case "angle-editor": if (src) useCanvasStore.getState().setAngleEditorNodeId(id); break;
+        case "annotate": if (src) setAnnotateOpen(true); break;
+        case "panorama":
+          // 全景不是 store 互斥键（随节点 data 落库、可多节点并存），需显式关闭其它编辑态
+          if (src) { useCanvasStore.getState().closeForeignNodeEditors(null); setPanoramaOpen(true); }
+          break;
         case "preview-fullscreen": a.openPreview(); break;
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
@@ -388,7 +381,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, setCroppingNodeId, setAnnotateOpen, handleApplyTemplate]);
+  }, [id, src, setCroppingNodeId, setAnnotateOpen, setPanoramaOpen, handleApplyTemplate]);
 
   const hasImage = src && src.length > 0;
 

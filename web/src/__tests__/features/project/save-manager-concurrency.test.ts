@@ -46,7 +46,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
     edges: [],
     viewport: { x: 0, y: 0, zoom: 1 },
     background: "dots" as const,
-    theme: "dark" as const,
     minimapVisible: true,
     snapToGrid: false,
   };
@@ -58,7 +57,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
         nodes: snapshot.nodes,
         edges: [],
         background: snapshot.background,
-        theme: snapshot.theme,
         minimapVisible: true,
         snapToGrid: false,
         agentModel: undefined,

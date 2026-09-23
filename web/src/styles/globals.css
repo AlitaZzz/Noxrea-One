@@ -2319,3 +2319,22 @@ body > .ant-app { line-height: inherit !important; }
 .login-input-error { border-color: #ef4444 !important; }
 .login-input-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important; }
 
+
+/* ===== 生成面板文本域（gen-textarea）=====
+   去除 antd TextArea 聚焦态描边；原先三面板各自内联 <style> 重复定义，收口至此。 */
+.gen-textarea:focus,
+.gen-textarea-focused {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* ===== 导航列表按钮（NavButton）=====
+   hover 态由 CSS :hover 承担，不用 JS state 模拟（触屏设备无 hover，CSS 也不会误保持）。 */
+.nav-btn {
+  background: transparent;
+  transition: background 0.15s;
+}
+.nav-btn:hover { background: var(--nav-hover-bg); }
+.nav-btn-active,
+.nav-btn-active:hover { background: var(--nav-active-bg); }

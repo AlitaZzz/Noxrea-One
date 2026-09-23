@@ -8,15 +8,14 @@ import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
-import type { PollResult } from "@server/services/protocols/base";
+import type { PollOutcome } from "@server/services/tasks/poll-loop";
+import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
-import { fetchWithTimeout } from "@server/core/http-client";
 import {
   safeCompleteTask,
   safeFailTask,
   isTaskCancelled,
   touchTaskHeartbeat,
-  TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
 import { downloadResultsWithHeartbeat } from "./download-results";
 import type { HydratedGenerationTask } from "@server/crud/task";
@@ -70,8 +69,9 @@ async function _doResumePoll(
 
     apiKey = provider.apiKey;
     const protoName = task.protocol ?? provider.protocol ?? "openai";
-    protocol = getProtocol(protoName);
-    if (!protocol?.buildPollUrl) throw new Error("Protocol does not support polling");
+    const proto = getProtocol(protoName);
+    if (!proto?.buildPollUrl) throw new Error("Protocol does not support polling");
+    protocol = proto;
 
     const baseUrl = provider.baseUrl.replace(/\/+$/, "");
     const model = task.model ?? "";
@@ -79,11 +79,13 @@ async function _doResumePoll(
       ? resolveProviderEndpoints(hostFromBaseUrl(baseUrl), model, task.type)
       : undefined;
     const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
-    pollUrl = protocol.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type, model);
+    pollUrl = proto.buildPollUrl(baseUrl, upstreamTaskId, endpointCfg, task.type, model);
   } catch (err: unknown) {
     await _failTask(task, `Failed to resume polling: ${errText(err)}`);
     return;
   }
+  // try 内已对 buildPollUrl 做过守卫，运行时不可达；仅为类型收窄
+  if (!protocol) return;
 
   const maxAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS;
   const pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL;
@@ -97,90 +99,57 @@ async function _doResumePoll(
     interval: pollInterval,
   });
 
-  let lastHeartbeatAt = Date.now();
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // 心跳：与 manager 的 _poll 同理——僵尸清理以 updatedAt 判定卡死，
-    // 恢复的长任务若不心跳，会再次被误判并重新提交到上游
-    if (Date.now() - lastHeartbeatAt >= TASK_HEARTBEAT_INTERVAL_MS) {
-      lastHeartbeatAt = Date.now();
+  // 心跳、取消/停机检查、轮询节奏、4xx 判定与协议解析统一走共享轮询核心
+  const outcome: PollOutcome = await pollUpstreamTask({
+    taskId,
+    upstreamTaskId,
+    pollUrl,
+    headers: {
+      "Content-Type": "application/json",
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    },
+    protocol,
+    pollInterval,
+    maxPollAttempts: maxAttempts,
+    initialDelay: 0,
+    logChannel: "resume_poll",
+    onHeartbeat: async () => {
       void touchTaskHeartbeat(taskId, task.startedAt);
-    }
+      return true;
+    },
+    shouldStop: async () => stopSignal.stopped || (await isTaskCancelled(taskId)),
+  });
 
-    if (stopSignal.stopped) {
-      logEvent("resume_poll", { stage: "stopped_by_signal", taskId, attempt });
+  if (outcome.kind === "completed") {
+    logEvent("resume_poll", { stage: "completed", taskId, urls: outcome.urls.length });
+
+    // 下载落盘并保持心跳（与 executor 同理，防止僵尸清理误判重跑）
+    const resultUrls = await downloadResultsWithHeartbeat(
+      taskId,
+      task.userId,
+      outcome.urls,
+      "Resume poll download failed",
+      task.startedAt
+    );
+
+    // 上游有产物但全部下载失败：显式失败，不能空结果标记 completed
+    if (outcome.urls.length > 0 && resultUrls.length === 0) {
+      await _failTask(task, "生成结果下载失败", "generation.download_failed");
       return;
     }
 
-    // 检查取消（isTaskCancelled 自身吞 DB 错误视为未取消，防止抖动杀死整个恢复轮询）
-    if (await isTaskCancelled(taskId)) {
-      logEvent("resume_poll", { stage: "cancelled", taskId, attempt });
-      return;
-    }
-
-    // 延迟（第一次不延迟）
-    if (attempt > 0) {
-      const delay = attempt >= 60 ? pollInterval * 2 : pollInterval;
-      await new Promise((r) => setTimeout(r, delay * 1000));
-    }
-
-    try {
-      logEvent("resume_poll", { stage: "poll_attempt", taskId, attempt: attempt + 1, pollUrl });
-      const pollResp = await fetchWithTimeout(pollUrl, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        },
-        scene: "poll",
-      });
-      logEvent("resume_poll", { stage: "poll_response", taskId, attempt: attempt + 1, status: pollResp.status });
-
-      if (!pollResp.ok) {
-        logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "resume poll bad status");
-        continue;
-      }
-
-      const raw = await pollResp.json();
-      logEvent("resume_poll", { stage: "poll_body", taskId, attempt: attempt + 1, body: JSON.stringify(raw) });
-      const parsed: PollResult = protocol?.parsePollResponse
-        ? protocol.parsePollResponse(raw)
-        : { status: "pending", urls: [] };
-
-      if (parsed.status === "completed") {
-        logEvent("resume_poll", { stage: "completed", taskId, attempt: attempt + 1, urls: parsed.urls.length });
-
-        // 下载落盘并保持心跳（与 executor 同理，防止僵尸清理误判重跑）
-        const resultUrls = await downloadResultsWithHeartbeat(
-          taskId,
-          task.userId,
-          parsed.urls,
-          "Resume poll download failed",
-          task.startedAt
-        );
-
-        // safeCompleteTask 自身不抛：守卫拒绝/写库失败均已记日志，任务交由
-        // 僵尸清理兜底，不会让 DB 错误冒充生成失败
-        await safeCompleteTask(taskId, { resultUrls }, { startedAt: task.startedAt });
-        return;
-      }
-
-      if (parsed.status === "failed") {
-        await _failTask(task, parsed.error ?? "Upstream task failed");
-        return;
-      }
-
-      // pending: continue
-    } catch (err: unknown) {
-      logger.warn({ taskId, attempt: attempt + 1, err: errText(err) }, "resume poll error");
-    }
+    // safeCompleteTask 自身不抛：守卫拒绝/写库失败均已记日志，任务交由
+    // 僵尸清理兜底，不会让 DB 错误冒充生成失败
+    await safeCompleteTask(taskId, { resultUrls }, { startedAt: task.startedAt });
+    return;
   }
 
-  // 超时：与首次提交轮询超时同码，前端据此提示用户
-  await _failTask(
-    task,
-    `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,
-    "generation.poll_timeout",
-  );
+  if (outcome.kind === "failed") {
+    await _failTask(task, outcome.error, outcome.errorCode);
+    return;
+  }
+
+  // stopped / lost：任务已取消或停机，终态由取消方/僵尸清理负责，无需写入
 }
 
 function _failTask(

@@ -8,9 +8,12 @@
 import type { SemToken } from "../util/rig-axis-table";
 
 export interface Joint {
+  /** i18n key 后缀（渲染处用 t(`director.joint.group.${group}`) 翻译），同时作为分组标识 */
   group: string;
+  /** i18n key 后缀（渲染处用 t(`director.joint.side.${side}`) 翻译），"" 表示无左右之分 */
   side: string;
   key: string;
+  /** i18n key 后缀（渲染处用 t(`director.joint.label.${label}`) 翻译） */
   label: string;
   bone: SemToken;
   axis: "x" | "y" | "z";
@@ -21,43 +24,43 @@ export interface Joint {
 
 export const JOINTS: Joint[] = [
   // 身体（根 Hips：整体朝向）
-  { group: "身体", side: "", key: "bodyX", label: "前倾", bone: "Hips", axis: "x", min: -90, max: 90 },
-  { group: "身体", side: "", key: "bodyY", label: "转身", bone: "Hips", axis: "y", min: -90, max: 90 },
-  { group: "身体", side: "", key: "bodyZ", label: "侧倾", bone: "Hips", axis: "z", min: -90, max: 90 },
+  { group: "body", side: "", key: "bodyX", label: "leanFwd", bone: "Hips", axis: "x", min: -90, max: 90 },
+  { group: "body", side: "", key: "bodyY", label: "turn", bone: "Hips", axis: "y", min: -90, max: 90 },
+  { group: "body", side: "", key: "bodyZ", label: "leanSide", bone: "Hips", axis: "z", min: -90, max: 90 },
   // 躯干（Spine1）
-  { group: "躯干", side: "", key: "spineX", label: "前倾(弯腰)", bone: "Spine1", axis: "x", min: -90, max: 90 },
-  { group: "躯干", side: "", key: "spineY", label: "扭转", bone: "Spine1", axis: "y", min: -45, max: 45 },
-  { group: "躯干", side: "", key: "spineZ", label: "侧倾", bone: "Spine1", axis: "z", min: -30, max: 30 },
+  { group: "torso", side: "", key: "spineX", label: "bendFwd", bone: "Spine1", axis: "x", min: -90, max: 90 },
+  { group: "torso", side: "", key: "spineY", label: "twist", bone: "Spine1", axis: "y", min: -45, max: 45 },
+  { group: "torso", side: "", key: "spineZ", label: "leanSide", bone: "Spine1", axis: "z", min: -30, max: 30 },
   // 头部（Head）
-  { group: "头部", side: "", key: "headX", label: "点头", bone: "Head", axis: "x", min: -60, max: 60 },
-  { group: "头部", side: "", key: "headY", label: "转头", bone: "Head", axis: "y", min: -80, max: 80 },
-  { group: "头部", side: "", key: "headZ", label: "歪头", bone: "Head", axis: "z", min: -45, max: 45 },
+  { group: "head", side: "", key: "headX", label: "nod", bone: "Head", axis: "x", min: -60, max: 60 },
+  { group: "head", side: "", key: "headY", label: "headTurn", bone: "Head", axis: "y", min: -80, max: 80 },
+  { group: "head", side: "", key: "headZ", label: "headTilt", bone: "Head", axis: "z", min: -45, max: 45 },
   // 手臂-肩 · 左 / 右（Arm）
-  { group: "手臂-肩", side: "左", key: "lArmFwd", label: "前举", bone: "LeftArm", axis: "y", min: -50, max: 180, sign: -1 },
-  { group: "手臂-肩", side: "左", key: "lArmAbd", label: "外展", bone: "LeftArm", axis: "z", min: -90, max: 90 },
-  { group: "手臂-肩", side: "左", key: "lArmTwist", label: "扭转", bone: "LeftArm", axis: "x", min: -90, max: 90 },
-  { group: "手臂-肩", side: "右", key: "rArmFwd", label: "前举", bone: "RightArm", axis: "y", min: -50, max: 180 },
-  { group: "手臂-肩", side: "右", key: "rArmAbd", label: "外展", bone: "RightArm", axis: "z", min: -90, max: 90, sign: -1 },
-  { group: "手臂-肩", side: "右", key: "rArmTwist", label: "扭转", bone: "RightArm", axis: "x", min: -90, max: 90 },
+  { group: "armShoulder", side: "left", key: "lArmFwd", label: "raiseFwd", bone: "LeftArm", axis: "y", min: -50, max: 180, sign: -1 },
+  { group: "armShoulder", side: "left", key: "lArmAbd", label: "abduct", bone: "LeftArm", axis: "z", min: -90, max: 90 },
+  { group: "armShoulder", side: "left", key: "lArmTwist", label: "twist", bone: "LeftArm", axis: "x", min: -90, max: 90 },
+  { group: "armShoulder", side: "right", key: "rArmFwd", label: "raiseFwd", bone: "RightArm", axis: "y", min: -50, max: 180 },
+  { group: "armShoulder", side: "right", key: "rArmAbd", label: "abduct", bone: "RightArm", axis: "z", min: -90, max: 90, sign: -1 },
+  { group: "armShoulder", side: "right", key: "rArmTwist", label: "twist", bone: "RightArm", axis: "x", min: -90, max: 90 },
   // 肘部（ForeArm）
-  { group: "肘部", side: "左", key: "lFore", label: "弯曲", bone: "LeftForeArm", axis: "y", min: 0, max: 150, sign: -1 },
-  { group: "肘部", side: "右", key: "rFore", label: "弯曲", bone: "RightForeArm", axis: "y", min: 0, max: 150 },
+  { group: "elbow", side: "left", key: "lFore", label: "bend", bone: "LeftForeArm", axis: "y", min: 0, max: 150, sign: -1 },
+  { group: "elbow", side: "right", key: "rFore", label: "bend", bone: "RightForeArm", axis: "y", min: 0, max: 150 },
   // 手腕（Hand，可选）
-  { group: "手腕", side: "左", key: "lHand", label: "弯曲", bone: "LeftHand", axis: "x", min: -80, max: 80 },
-  { group: "手腕", side: "右", key: "rHand", label: "弯曲", bone: "RightHand", axis: "x", min: -80, max: 80 },
+  { group: "wrist", side: "left", key: "lHand", label: "bend", bone: "LeftHand", axis: "x", min: -80, max: 80 },
+  { group: "wrist", side: "right", key: "rHand", label: "bend", bone: "RightHand", axis: "x", min: -80, max: 80 },
   // 腿部-髋 · 左 / 右（UpLeg）— lLegFwd/rLegFwd 正=向前（见 Character._inferAxisOverrides 抬腿修正）
-  { group: "腿部-髋", side: "左", key: "lLegFwd", label: "抬腿", bone: "LeftUpLeg", axis: "x", min: -30, max: 120 },
-  { group: "腿部-髋", side: "左", key: "lLegAbd", label: "外展", bone: "LeftUpLeg", axis: "z", min: -30, max: 45 },
-  { group: "腿部-髋", side: "左", key: "lLegTwist", label: "扭转", bone: "LeftUpLeg", axis: "y", min: -90, max: 90 },
-  { group: "腿部-髋", side: "右", key: "rLegFwd", label: "抬腿", bone: "RightUpLeg", axis: "x", min: -30, max: 120 },
-  { group: "腿部-髋", side: "右", key: "rLegAbd", label: "外展", bone: "RightUpLeg", axis: "z", min: -30, max: 45, sign: -1 },
-  { group: "腿部-髋", side: "右", key: "rLegTwist", label: "扭转", bone: "RightUpLeg", axis: "y", min: -90, max: 90 },
+  { group: "legHip", side: "left", key: "lLegFwd", label: "legLift", bone: "LeftUpLeg", axis: "x", min: -30, max: 120 },
+  { group: "legHip", side: "left", key: "lLegAbd", label: "abduct", bone: "LeftUpLeg", axis: "z", min: -30, max: 45 },
+  { group: "legHip", side: "left", key: "lLegTwist", label: "twist", bone: "LeftUpLeg", axis: "y", min: -90, max: 90 },
+  { group: "legHip", side: "right", key: "rLegFwd", label: "legLift", bone: "RightUpLeg", axis: "x", min: -30, max: 120 },
+  { group: "legHip", side: "right", key: "rLegAbd", label: "abduct", bone: "RightUpLeg", axis: "z", min: -30, max: 45, sign: -1 },
+  { group: "legHip", side: "right", key: "rLegTwist", label: "twist", bone: "RightUpLeg", axis: "y", min: -90, max: 90 },
   // 膝（Leg）
-  { group: "膝", side: "左", key: "lKnee", label: "弯曲", bone: "LeftLeg", axis: "x", min: 0, max: 130 },
-  { group: "膝", side: "右", key: "rKnee", label: "弯曲", bone: "RightLeg", axis: "x", min: 0, max: 130 },
+  { group: "knee", side: "left", key: "lKnee", label: "bend", bone: "LeftLeg", axis: "x", min: 0, max: 130 },
+  { group: "knee", side: "right", key: "rKnee", label: "bend", bone: "RightLeg", axis: "x", min: 0, max: 130 },
   // 踝（Foot）
-  { group: "踝", side: "左", key: "lFoot", label: "勾绷", bone: "LeftFoot", axis: "x", min: -40, max: 40 },
-  { group: "踝", side: "右", key: "rFoot", label: "勾绷", bone: "RightFoot", axis: "x", min: -40, max: 40 },
+  { group: "ankle", side: "left", key: "lFoot", label: "footFlex", bone: "LeftFoot", axis: "x", min: -40, max: 40 },
+  { group: "ankle", side: "right", key: "rFoot", label: "footFlex", bone: "RightFoot", axis: "x", min: -40, max: 40 },
 ];
 
 export interface SideGroup {

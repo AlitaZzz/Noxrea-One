@@ -12,6 +12,9 @@ export interface ReferenceItem {
   label?: string; // audio/video label (filename), unused for images
 }
 
+/** mention 节点 attrs 的存储形态：ReferenceItem 去掉 label（attrs 由 Tiptap addAttributes 声明，无 label 字段） */
+export type ReferenceItemAttrs = Omit<ReferenceItem, 'label'>;
+
 /** 引用项 chip 标签：图片N / 音频N / 视频N（同时作为提示词存储格式） */
 export function refLabel(item: ReferenceItem): string {
   const prefix = item.kind === "audio" ? "音频" : item.kind === "video" ? "视频" : "图片";

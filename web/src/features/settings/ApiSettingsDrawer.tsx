@@ -132,7 +132,6 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
 export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const isDark = useCanvasStore((s) => s.theme) === "dark";
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const providers = useModelStore((s) => s.providers);
   const presets = useModelStore((s) => s.presets);
@@ -224,7 +223,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         styles={{
           // header 规格走 globals.css 的 .ant-drawer-header 统一规则
           body: { background: "var(--canvas-bg)", padding: 0 },
-          section: isDark ? { borderLeft: "1px solid #2c2c31" } : undefined,
+          section: { borderLeft: "1px solid #2c2c31" },
         }}
       >
         <div className="flex h-full flex-col" style={{ color: "var(--canvas-text)" }}>

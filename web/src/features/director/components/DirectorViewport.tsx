@@ -30,38 +30,19 @@ import { Prop } from "@/features/director/entities/prop";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
 
-type _SceneSnapshot = {
-  scale?: number;
-  pos?: { x: number; y: number; z: number };
-  rot?: { x: number; y: number; z: number };
-  sky?: string;
-  labels?: boolean;
-  ground?: { visible?: boolean; opacity?: number; height?: number };
-};
 const XBOT = "/assets/Xbot.glb";
-const BODY_TYPES: Record<string, { url: string; label: string; height: number; girth: number }> = {
-  standard: { url: XBOT, label: "标准素体", height: 1.75, girth: 1.0 },
-  tall: { url: XBOT, label: "高大素体", height: 2.05, girth: 1.06 },
-  small: { url: XBOT, label: "矮小素体", height: 1.25, girth: 0.94 },
-  broad: { url: XBOT, label: "宽厚素体", height: 1.7, girth: 1.3 },
-  slim: { url: XBOT, label: "纤细素体", height: 1.78, girth: 0.8 },
+const BODY_TYPES: Record<string, { url: string; height: number; girth: number }> = {
+  standard: { url: XBOT, height: 1.75, girth: 1.0 },
+  tall: { url: XBOT, height: 2.05, girth: 1.06 },
+  small: { url: XBOT, height: 1.25, girth: 0.94 },
+  broad: { url: XBOT, height: 1.7, girth: 1.3 },
+  slim: { url: XBOT, height: 1.78, girth: 0.8 },
 };
-const PROP_LABEL: Record<string, string> = { box: "方块", cylinder: "圆柱", sphere: "球体", mannequin: "人体素模" };
+const PROP_KINDS = ["box", "cylinder", "sphere", "mannequin"] as const;
 
 let _propCount: Record<string, number> = {};
 let _camCount = 0;
 let _cameraAttrChangeCb: (() => void) | null = null;
-let _syncInspectorCb: (() => void) | null = null;
-
-function getBodyType(ent: DirectorEntity): string {
-  if (!(ent instanceof Character)) return "standard";
-  const h = ent._opts?.height, g = ent._opts?.girth;
-  if (h === 2.05 && g === 1.06) return "tall";
-  if (h === 1.25 && g === 0.94) return "small";
-  if (h === 1.7 && g === 1.3) return "broad";
-  if (h === 1.78 && g === 0.8) return "slim";
-  return "standard";
-}
 
 function setTransform(root: THREE.Object3D, pos: [number, number, number], rot: [number, number, number, number], scale: [number, number, number]) {
   root.position.set(...pos);
@@ -157,17 +138,18 @@ export default function DirectorViewport() {
 
     // 推算下一个可用角色名（角色A..角色Z），跳过现有角色名与本次已分配字母
     const _nextCharName = (reserved: Set<string> = new Set()) => {
+      const prefix = t("director.characterNamePrefix");
       _forEachEntity((e: DirectorEntity) => {
-        if (e.type === "character" && typeof e.name === "string" && e.name.startsWith("角色")) {
-          const letter = e.name.slice(2);
+        if (e.type === "character" && typeof e.name === "string" && e.name.startsWith(prefix)) {
+          const letter = e.name.slice(prefix.length);
           if (letter.length === 1 && letter >= "A" && letter <= "Z") reserved.add(letter);
         }
       });
       for (let i = 0; i < 26; i++) {
         const ch = String.fromCharCode(65 + i);
-        if (!reserved.has(ch)) { reserved.add(ch); return "角色" + ch; }
+        if (!reserved.has(ch)) { reserved.add(ch); return prefix + ch; }
       }
-      return "角色" + (reserved.size + 1);
+      return prefix + (reserved.size + 1);
     };
 
     // 序列化实体（顶层与 crowd 成员共用）
@@ -178,7 +160,7 @@ export default function DirectorViewport() {
         rot: ent.root.quaternion.toArray() as [number, number, number, number],
         scale: ent.root.scale.toArray() as [number, number, number],
       };
-      if (ent instanceof Character) return { ...base, type: "character", bodyType: getBodyType(ent), color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
+      if (ent instanceof Character) return { ...base, type: "character", bodyType: ent.bodyType, color: "#" + ent.color.toString(16).padStart(6, "0"), srcUrl: ent._srcUrl, pose: { mode: ent.poseMode, preset: ent.currentPreset, values: ent.poseMode === "manual" ? { ...ent.values } : undefined } };
       if (ent instanceof Prop) return { ...base, type: "prop", kind: ent.kind, color: "#" + ent.color.toString(16).padStart(6, "0") };
       if (ent instanceof CameraEntity) return { ...base, type: "camera", fov: ent.fov, roll: ent._roll || 0 };
       return base;
@@ -192,6 +174,7 @@ export default function DirectorViewport() {
         const ch = await Character.load(e.name, e.srcUrl || b.url, { height: b.height, girth: b.girth });
         if (_cancelled) { ch.dispose(); return null; }
         ch._srcUrl = e.srcUrl || b.url; ch._opts = { height: b.height, girth: b.girth };
+        ch.bodyType = bodyType;
         ch.id = e.id;
         if (e.color) ch.setColor(parseInt(e.color.slice(1), 16));
         setTransform(ch.root, e.pos, e.rot, e.scale);
@@ -262,7 +245,7 @@ export default function DirectorViewport() {
       selection.highlight(_cameraView ? null : ent);
     });
     selection.setSkipPredicate(() => gizmo.dragging || gizmo.overAxis);
-    gizmo.onObjectChange(() => { _syncInspectorCb?.(); _cameraAttrChangeCb?.(); });
+    gizmo.onObjectChange(() => { useDirectorStore.getState().bumpInspector(); _cameraAttrChangeCb?.(); });
 
     // Nav gizmo
     const navSvg = viewport.parentElement?.querySelector<SVGElement>("#navsvg");
@@ -283,6 +266,7 @@ export default function DirectorViewport() {
           const c = await Character.load(name, b.url, { height: b.height, girth: b.girth });
           if (_cancelled) { c.dispose(); return null; }
           c._srcUrl = b.url; c._opts = { height: b.height, girth: b.girth };
+          c.bodyType = BODY_TYPES[bodyType] ? bodyType : "standard";
           _placeNew(c.root); stage.add(c.root); entities.push(c);
           c.applyPosePreset("stand"); _sync(); _registerEntity(c);
           selection.onSelect(c.id); rig.focus(c);
@@ -292,14 +276,14 @@ export default function DirectorViewport() {
       addProp: (kind = "box") => {
         const pk = kind as "box"|"cylinder"|"sphere"|"mannequin";
         _propCount[kind] = (_propCount[kind] || 0) + 1;
-        const name = (PROP_LABEL[kind] || "道具") + _propCount[kind];
+        const name = (PROP_KINDS as readonly string[]).includes(kind) ? t(`director.prop.${kind}`) : t("director.propFallback");
         const prop = new Prop(pk, name);
         _placeNew(prop.root); stage.add(prop.root); entities.push(prop);
         _sync(); selection.onSelect(prop.id);
         return prop;
       },
       addCamera: (presetKey = "front_mid") => {
-        const name = "机位" + ++_camCount;
+        const name = t("director.cameraNamePrefix") + ++_camCount;
         const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
         const preset = CAMERA_PRESETS.find((p) => p.key === presetKey) || CAMERA_PRESETS[1]; // 默认正面中景
 
@@ -350,6 +334,7 @@ export default function DirectorViewport() {
               ch = await Character.load(_nextCharName(usedLetters), b.url, b);
             } catch (err) { console.error("addCrowd char", err); continue; }
             if (_cancelled) { ch.dispose(); return null; }
+            ch.bodyType = "standard";
             ch.setColor(PALETTE[idx % PALETTE.length]);
             ch.root.position.set(c * spacing - w / 2, 0, r * spacing - d / 2);
             ch.applyPosePreset("stand");
@@ -359,7 +344,7 @@ export default function DirectorViewport() {
           }
         }
         if (!members.length) return null;
-        const crowd = new Crowd(`群众 (${rows}x${cols})`, group, members, { rows, cols, spacing });
+        const crowd = new Crowd(t("director.crowdName", { r: rows, c: cols }), group, members, { rows, cols, spacing });
         for (const m of members) m.root.userData.entityId = crowd.id;
         stage.add(group);
         entities.push(crowd);
@@ -551,7 +536,7 @@ export default function DirectorViewport() {
             n[camEnt.id] = (n[camEnt.id] || 0) + 1;
             resolve({
               url,
-              name: `${camEnt.name}-截图${String(n[camEnt.id]).padStart(2, "0")}`,
+              name: t("director.shotName", { camera: camEnt.name, n: String(n[camEnt.id]).padStart(2, "0") }),
               cameraId: camEnt.id,
             });
           }).catch((err: unknown) => {
@@ -634,7 +619,6 @@ export default function DirectorViewport() {
         const ent = entities.find((e: DirectorEntity) => e.id === id);
         return ent instanceof Character ? { ...ent.values } : {};
       },
-      _setSyncInspector: (cb: (() => void) | null) => { _syncInspectorCb = cb; },
       _setCameraAttrChange: (cb: (() => void) | null) => { _cameraAttrChangeCb = cb; },
       rename: (id: string, name: string) => {
         const ent = entities.find((e: DirectorEntity) => e.id === id || (e instanceof Crowd && e.members.some((m: Character) => m.id === id)));
@@ -715,6 +699,7 @@ export default function DirectorViewport() {
             catch { continue; }
             if (_cancelled) { c.dispose(); return; }
             c._srcUrl = ent._srcUrl; c._opts = ent._opts;
+            c.bodyType = ent.bodyType;
             c.root.position.copy(ent.root.position).add(OFF);
             c.root.quaternion.copy(ent.root.quaternion);
             c.root.scale.copy(ent.root.scale);
@@ -768,7 +753,7 @@ export default function DirectorViewport() {
       restoreState: async (data: DirectorStateData) => {
         // 先恢复世界变换，再恢复实体（实体位置依赖 world scale/pos/rot）
         if (data.sceneState) {
-          const ss = data.sceneState as unknown as _SceneSnapshot;
+          const ss = data.sceneState;
           if (ss.scale != null) stage.setWorldScale(ss.scale);
           if (ss.pos) stage.setWorldPos(ss.pos.x, ss.pos.y, ss.pos.z);
           if (ss.rot) stage.setWorldRot(ss.rot.x * D2R, ss.rot.y * D2R, ss.rot.z * D2R);
@@ -804,7 +789,7 @@ export default function DirectorViewport() {
         }
         _sync();
         if (data.sceneState) {
-          const ss = data.sceneState as unknown as _SceneSnapshot;
+          const ss = data.sceneState;
           if (ss.sky) stage.setSkyColor(ss.sky);
           if (ss.ground) {
             if (ss.ground.visible != null) stage.setGroundVisible(ss.ground.visible);
@@ -815,18 +800,19 @@ export default function DirectorViewport() {
             const layer = document.getElementById("dirLabelLayer");
             if (layer) layer.style.display = ss.labels ? "block" : "none";
           }
-          useDirectorStore.getState().setSceneState(ss as unknown as Partial<import("@/features/director/types").SceneState>);
+          useDirectorStore.getState().setSceneState(ss);
         }
         if (data.ratio) { rig.setRatio(data.ratio); useDirectorStore.getState().setRatio(data.ratio); }
         if (data.shots) {
-          let firstCam: CameraEntity | null = null; _forEachEntity((e: DirectorEntity) => { if (!firstCam && e.type === "camera") firstCam = e as CameraEntity; });
           data.shots.forEach((s) => {
-            const shot = { ...s };
-            // 修正 orphan cameraId：restore 后实体 ID 可能变化
-            if (!_findById(shot.cameraId) && firstCam) {
-              shot.cameraId = firstCam.id;
+            // restore 已严格复现实体 ID，cameraId 仍悬空说明快照保存前相机已被删除；
+            // 挂回第一个相机会把截图错记到别的机位名下，直接丢弃
+            if (!_findById(s.cameraId)) {
+              console.warn("[director] restoreState: drop shot with orphan cameraId", s.id, s.cameraId);
+              return;
             }
-            useDirectorStore.getState().addShot(shot);
+            // 克隆一份，避免 store 与节点 data 共享同一引用
+            useDirectorStore.getState().addShot({ ...s });
           });
         }
         rig.frameAll(entities);
@@ -840,12 +826,9 @@ export default function DirectorViewport() {
         if (ent instanceof Character) ent.update(dt);
         else if (ent instanceof CameraEntity) ent.update();
         else if (ent instanceof Crowd) {
-          // 按实际类型分派：Crowd.members 声明为 Character[]，历史数据或异常路径
-          // 可能混入相机 / 道具，它们没有 update()，直接调用会每帧抛错
-          for (const m of ent.members as unknown as DirectorEntity[]) {
-            if (m instanceof Character) m.update(dt);
-            else if (m instanceof CameraEntity) m.update();
-          }
+          // Crowd.members 契约是 Character（groupCharacters 入队时已过滤），
+          // 直接多态分发；混入相机/道具会在打组前被拒
+          for (const m of ent.members) m.update(dt);
         }
       }
       rig.update(); selection.update(); navGizmo?.update();
@@ -864,6 +847,7 @@ export default function DirectorViewport() {
         const c = await Character.load(t("director.defaultCharacter"), XBOT, { height: 1.75, girth: 1.0 });
         if (_cancelled) { c.dispose(); return; }
         c._srcUrl = XBOT; c._opts = { height: 1.75, girth: 1.0 };
+        c.bodyType = "standard";
         c.applyPosePreset("stand"); stage.add(c.root); entities.push(c); _registerEntity(c);
         rig.frameAll(entities); _sync();
       })();
@@ -907,7 +891,7 @@ export default function DirectorViewport() {
         <NavSvg>
           <circle cx="37" cy="37" r="3" fill="var(--dir-dim2)" />
         </NavSvg>
-        <div className="text-[11.5px] mt-1.5" style={{ color: "var(--dir-dim)" }}>重置视角</div>
+        <div className="text-[11.5px] mt-1.5" style={{ color: "var(--dir-dim)" }}>{t("director.resetView")}</div>
       </div>
     </div>
   );

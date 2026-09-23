@@ -15,6 +15,7 @@ import { resolveAndValidate } from "@server/core/ssrf";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
 import {
   GenerationFailureError,
+  GenerationCancelledError,
   extractFailureCode,
 } from "@server/services/tasks/failure";
 import { buildContext } from "./context";
@@ -74,13 +75,13 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
     }
 
     // 2. 解析参考图
-    const resolvedImages = await resolveRefImages(ctx.refImages, task.userId);
+    const resolvedImages = await resolveRefImages(ctx.refImages);
 
     // 2.5 解析参考音频
-    const resolvedAudio = await resolveRefAudio(ctx.refAudios, task.userId);
+    const resolvedAudio = await resolveRefAudio(ctx.refAudios);
 
     // 2.6 解析参考视频
-    const resolvedVideo = await resolveRefVideo(ctx.refVideos, task.userId);
+    const resolvedVideo = await resolveRefVideo(ctx.refVideos);
 
     // 3. 基础参数
     const capability = task.type ?? "image";
@@ -167,6 +168,11 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       task.startedAt
     );
 
+    // 上游有产物但全部下载失败：显式失败，不能空结果标记 completed
+    if ((result?.urls?.length ?? 0) > 0 && resultUrls.length === 0) {
+      throw new GenerationFailureError("生成结果下载失败", "generation.download_failed");
+    }
+
     // 更新任务状态（终态守卫：期间被取消的话写入会被丢弃，保留 cancelled）
     const finalized = await safeCompleteTask(task.id, {
       resultUrls,
@@ -187,6 +193,12 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       text: result?.text,
     });
   } catch (err: unknown) {
+    // 任务已被取消（DB 中已是 cancelled 终态）：终态守卫会拒绝任何写入，
+    // 直接结束本次执行，不把取消冒充为生成失败
+    if (err instanceof GenerationCancelledError) {
+      logEvent("executor", { stage: "cancelled", taskId: task.id });
+      return;
+    }
     const errorMsg = (err as Error)?.message ?? "Unknown error";
     const [errorClass, retryable] = classifyError(errorMsg);
     const { code } = extractFailureCode(err);

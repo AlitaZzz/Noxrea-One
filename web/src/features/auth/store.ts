@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { authApi } from "@/features/auth/api";
-import { type ApiErrorBody, resolveApiError, resolveResultError } from "@/lib/api/error-message";
+import { resolveApiError, resolveResultError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { setAppLanguage } from "@/lib/i18n/config";
 
@@ -80,7 +80,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: res.data.user });
     } else {
       throw new Error(
-        resolveApiError(res as unknown as ApiErrorBody, undefined, "auth.login_failed")
+        resolveApiError(res, undefined, "auth.login_failed")
       );
     }
   },
@@ -93,18 +93,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: res.data.user });
     } else {
       throw new Error(
-        resolveApiError(res as unknown as ApiErrorBody, undefined, "auth.register_failed")
+        resolveApiError(res, undefined, "auth.register_failed")
       );
     }
   },
 
   logout: () => {
     // 服务端过期 httpOnly cookie（JS 无法清除）；本地同步清用户态与缓存。
-    // 返回 promise 供调用方等待：cookie 未清除前导航，middleware 会按 cookie 有效性放行/拦截。
+    // 返回 promise 供调用方等待：cookie 未清除前导航，proxy.ts 会按 cookie 有效性放行/拦截。
     const done = authApi.logout();
     set({ user: null });
     // 请求挂起时超时放行（api() 永不 reject，超时是唯一退出路径）；
-    // 残留 cookie 若已过期，middleware 的 exp 检查会按未登录处理，不会弹回
+    // 残留 cookie 若已过期，proxy.ts 的 exp 检查会按未登录处理，不会弹回
     return Promise.race([
       done,
       new Promise<never>((resolve) => setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS)),

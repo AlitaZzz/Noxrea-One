@@ -8,6 +8,7 @@
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button, ColorPicker, Input, InputNumber,Select, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
 import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
@@ -28,7 +29,6 @@ import PoseSliders from "./PoseSliders";
 
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
-const FOV_TIP = "控制镜头视野范围。数值越小，画面越近、越聚焦；数值越大，画面越广、能看到更多环境。";
 
 function TripleRow({ label, keys, step = 0.01, deg = false }: {
   label: string; keys: { k: string; get: () => number; set: (v: number) => void; step?: number }[];
@@ -60,6 +60,7 @@ interface CameraAttrProps {
 }
 
 function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
+  const { t } = useTranslation();
   const [previewUrl, setPreviewUrl] = useState("");
   const [modalUrl, setModalUrl] = useState("");
   const [aimMode, setAimMode] = useState("manual");
@@ -91,15 +92,15 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
 
   const crowdMembers = entities.flatMap((e) => e._members || []);
   const targets = [...entities, ...crowdMembers].filter((e) => e.type === "character" || e.type === "prop");
-  const aimOpts = [{ value: "manual", label: "手动坐标" }, ...targets.map((t) => ({ value: t.id, label: t.name }))];
+  const aimOpts = [{ value: "manual", label: t("director.manualCoords") }, ...targets.map((t) => ({ value: t.id, label: t.name }))];
 
   return (
     <div>
       <div className="dir-cam-preview">
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
-        {/* 原生 title 换成系统 Tooltip；本文件文案为硬编码中文（历史遗留），暂未接入 i18n */}
-        <Tooltip title="全屏扩大">
+        {/* 原生 title 换成系统 Tooltip */}
+        <Tooltip title={t("director.fullscreenExpand")}>
         <button className="dir-cam-expand" onClick={() => {
           const stage = runtime._getStage();
           if (!stage) return;
@@ -112,22 +113,22 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
         </Tooltip>
       </div>
       <div className="dir-field">
-        <label className="dir-label">名称</label>
+        <label className="dir-label">{t("common.name")}</label>
         <div className="dir-namefld">
           <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename(entity.id, e.target.value)} />
         </div>
       </div>
       {entities.filter((e) => e.type === "camera").length > 1 && (
         <div className="dir-field">
-          <label className="dir-label">切换机位</label>
+          <label className="dir-label">{t("director.switchCamera")}</label>
           <Select size="small" className="w-full dir-select" value={entity.id}
             options={entities.filter((e) => e.type === "camera").map((c) => ({ value: c.id, label: c.name }))}
             onChange={(id: string) => runtime.select(id)} />
         </div>
       )}
-      <TripleRow label="位置" step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); refreshPreview(); } }))} />
+      <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); refreshPreview(); } }))} />
       <div className="dir-field">
-        <label className="dir-label">注视目标</label>
+        <label className="dir-label">{t("director.aimTarget")}</label>
         <Select size="small" className="w-full dir-select" value={aimMode}
           options={aimOpts}
           onChange={(val) => {
@@ -143,9 +144,9 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
             }
           }} />
       </div>
-      <TripleRow label="注视坐标" step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); refreshPreview(); } }))} />
+      <TripleRow label={t("director.aimCoords")} step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); refreshPreview(); } }))} />
       <div className="dir-field">
-        <div className="flex justify-between items-center dir-label"><span>视野角度 <Tooltip title={FOV_TIP}><span className="text-white/25 cursor-help">ⓘ</span></Tooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
+        <div className="flex justify-between items-center dir-label"><span>{t("director.fovAngle")} <Tooltip title={t("director.fovTip")}><span className="text-white/25 cursor-help">ⓘ</span></Tooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
           <Slider min={20} max={90} step={1} style={{ flex: 1, margin: 0 }} value={ent.cam?.fov || 40} tooltip={{ formatter: (v) => `${v}°` }}
             onChange={(v) => { ent.setFov(v); refreshPreview(); }} />
@@ -159,7 +160,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
             <button className="dir-modal-close" onClick={() => setModalUrl("")}>×</button>
             <img src={modalUrl} className="dir-modal-img" alt="POV" />
             <div className="dir-modal-bar">
-              <span className="dir-modal-title">{ent.name}：FOV {Math.round(ent.cam?.fov || 40)}°</span>
+              <span className="dir-modal-title">{t("director.fovModalTitle", { name: ent.name, fov: Math.round(ent.cam?.fov || 40) })}</span>
             </div>
           </div>
         </div>
@@ -170,6 +171,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
 
 /** 相机截图缩略图面板 */
 function CameraShots({ cameraId }: { cameraId: string }) {
+  const { t } = useTranslation();
   const allShots = useDirectorStore((s) => s.shots);
   const toggleShotSelected = useDirectorStore((s) => s.toggleShotSelected);
   const removeShot = useDirectorStore((s) => s.removeShot);
@@ -183,9 +185,9 @@ function CameraShots({ cameraId }: { cameraId: string }) {
 
   return (
     <div className="dir-field" style={{ marginTop: 8 }}>
-      <div className="dir-sec-title" style={{ marginBottom: 8 }}>相机截图 ({shots.length})</div>
+      <div className="dir-sec-title" style={{ marginBottom: 8 }}>{t("director.cameraShots", { count: shots.length })}</div>
       {shots.length === 0 ? (
-        <div className="dir-placeholder" style={{ marginBottom: 0 }}>点击底部「截图」按钮捕获该相机画面</div>
+        <div className="dir-placeholder" style={{ marginBottom: 0 }}>{t("director.captureHint")}</div>
       ) : (
         <div className="dir-shot-grid">
           {shots.map((shot) => (
@@ -199,17 +201,17 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                 <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
                 <span className="dir-shot-label">{shot.name}</span>
                 <div className="dir-shot-actions">
-                  <Tooltip title="发送到画布">
+                  <Tooltip title={t("director.sendToCanvasTip")}>
                     <button onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
                       <DirSendIcon style={{ width: 14, height: 14 }} />
                     </button>
                   </Tooltip>
-                  <Tooltip title="删除">
+                  <Tooltip title={t("common.delete")}>
                     <button onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
                       <DirTrashIcon style={{ width: 14, height: 14 }} />
                     </button>
                   </Tooltip>
-                  <Tooltip title="放大预览">
+                  <Tooltip title={t("director.enlargePreview")}>
                     <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
                       <DirExpandIcon style={{ width: 14, height: 14 }} />
                     </button>
@@ -225,7 +227,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
         <div className="dir-modal-overlay" onClick={() => setPreviewUrl("")}>
           <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
             <button className="dir-modal-close" onClick={() => setPreviewUrl("")}>×</button>
-            <img src={previewUrl} className="dir-modal-img" alt="预览" />
+            <img src={previewUrl} className="dir-modal-img" alt={t("director.preview")} />
           </div>
         </div>
       )}
@@ -234,6 +236,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
 }
 
 export default function Inspector() {
+  const { t } = useTranslation();
   const runtime = useDirectorStore((s) => s.runtime);
   const selectedId = useDirectorStore((s) => s.selectedId);
   const entities = useDirectorStore((s) => s.entities);
@@ -244,14 +247,12 @@ export default function Inspector() {
   const [activeTab, setActiveTab] = useState("attr");
   const [posePresetKey, setPosePresetKey] = useState<string | null>(null);
   const poseSyncRef = useRef<(() => void) | null>(null);
-  const [, forceUpdate] = useState(0);
   const [entityColor, setEntityColor] = useState("");
-  const syncFromObject = useCallback(() => forceUpdate((n) => n + 1), []);
-
-  useEffect(() => {
-    runtime?._setSyncInspector(() => syncFromObject());
-    return () => { runtime?._setSyncInspector(null); };
-  }, [runtime, syncFromObject]);
+  // Three.js 实体属性是可变对象不进 store；gizmo 拖拽 / 统一缩放等外部变更
+  // 通过 bumpInspector 递增 tick 触发重渲染，渲染期直读 ent.root 拿到的即最新值。
+  // tick 值本身不参与渲染，仅订阅
+  useDirectorStore((s) => s.inspectorTick);
+  const bumpInspector = useCallback(() => useDirectorStore.getState().bumpInspector(), []);
   const [prevEntityId, setPrevEntityId] = useState(entity?.id);
   if (entity?.id !== prevEntityId) {
     setPrevEntityId(entity?.id);
@@ -265,13 +266,13 @@ export default function Inspector() {
     setPrevColorKey(colorKey);
     setEntityColor(colorKey);
   }
-  if (!entity || !runtime) return <div className="px-4 py-3 text-white/30 text-sm">未选中实体</div>;
+  if (!entity || !runtime) return <div className="px-4 py-3 text-white/30 text-sm">{t("director.noEntity")}</div>;
   const ent = runtime._getEntity(entity.id) || null;
-  if (!ent) return <div className="px-4 py-3 text-white/30 text-sm">加载中...</div>;
+  if (!ent) return <div className="px-4 py-3 text-white/30 text-sm">{t("director.loading")}</div>;
 
   const isCharacter = ent.type === "character", isCamera = ent.type === "camera", isCrowd = ent.type === "crowd";
-  const typeLabel = isCharacter ? "角色" : isCamera ? "摄像机" : isCrowd ? "群众" : "道具";
-  const tabItems = [{ key: "attr", label: "属性" }, ...(isCharacter || isCrowd ? [{ key: "pose", label: "姿势" }] : [])];
+  const typeLabel = isCharacter ? t("director.type.character") : isCamera ? t("director.type.camera") : isCrowd ? t("director.type.crowd") : t("director.type.prop");
+  const tabItems = [{ key: "attr", label: t("director.tabAttr") }, ...(isCharacter || isCrowd ? [{ key: "pose", label: t("director.tabPose") }] : [])];
   const entBaseScale = (ent as { baseScale?: number }).baseScale;
 
   return (
@@ -279,7 +280,7 @@ export default function Inspector() {
       <div className="dir-rp-pad">
         <div className="flex items-center justify-between mb-1">
           <div><span className="text-[10px] text-white/35">{typeLabel}</span><h3 className="text-sm font-medium text-white/80 truncate">{entity.name}</h3></div>
-          <Tooltip title="删除"><Button type="text" size="small" icon={<DeleteOutlined />} style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} /></Tooltip>
+          <Tooltip title={t("common.delete")}><Button type="text" size="small" icon={<DeleteOutlined />} style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} /></Tooltip>
         </div>
       </div>
       <div className="dir-ptabs">
@@ -291,34 +292,34 @@ export default function Inspector() {
 
       {activeTab === "attr" && !isCamera && (isCrowd ? (
         <div className="flex-1 overflow-auto px-4 pb-3">
-          <div className="dir-multi-note">已选中 {(ent as Crowd).members?.length || 0} 个角色，修改将同步应用到全部选中对象</div>
-          <button className="dir-minibtn" onClick={() => runtime.ungroupCrowd(entity.id)}>⊟ 解组（拆为独立角色）</button>
+          <div className="dir-multi-note">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>
+          <button className="dir-minibtn" onClick={() => runtime.ungroupCrowd(entity.id)}>⊟ {t("director.ungroupDetail")}</button>
           <div className="dir-field">
-            <label className="dir-label">名称</label>
+            <label className="dir-label">{t("common.name")}</label>
             <div className="dir-namefld">
               <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
-          <TripleRow label="位置" step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
-          <TripleRow label="旋转" step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
-          <TripleRow label="缩放" step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
+          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
+          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
+          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
           <div className="dir-field">
-            <label className="dir-label">统一缩放</label>
+            <label className="dir-label">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
                 value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
                 tooltip={{ formatter: (v) => (v as number).toFixed(1) }}
-                onChange={(v) => { const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s, s, s); syncFromObject(); }} />
+                onChange={(v) => { const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s, s, s); bumpInspector(); }} />
               <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
           <div className="dir-field">
-            <label className="dir-label">颜色</label>
+            <label className="dir-label">{t("director.color")}</label>
             <ColorPicker size="small" value={entityColor}
               onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
-            <span>可见</span>
+            <span>{t("director.visible")}</span>
             <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
               {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
             </span>
@@ -327,31 +328,31 @@ export default function Inspector() {
       ) : (
         <div className="flex-1 overflow-auto px-4 pb-3">
           <div className="dir-field">
-            <label className="dir-label">名称</label>
+            <label className="dir-label">{t("common.name")}</label>
             <div className="dir-namefld">
               <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
-          <TripleRow label="位置" step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
-          <TripleRow label="旋转" step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
-          <TripleRow label="缩放" step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
+          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
+          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
+          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
           <div className="dir-field">
-            <label className="dir-label">统一缩放</label>
+            <label className="dir-label">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
                 value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
                 tooltip={{ formatter: (v) => (v as number).toFixed(1) }}
-                onChange={(v) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s * girth, s, s * girth); syncFromObject(); }} />
+                onChange={(v) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
               <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
           <div className="dir-field">
-            <label className="dir-label">颜色</label>
+            <label className="dir-label">{t("director.color")}</label>
             <ColorPicker size="small" value={entityColor}
               onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
-            <span>可见</span>
+            <span>{t("director.visible")}</span>
             <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
               {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
             </span>
@@ -368,16 +369,16 @@ export default function Inspector() {
 
       {activeTab === "pose" && (isCharacter || isCrowd) && (
         <div className="flex-1 overflow-auto px-4 pb-3">
-          {isCrowd && <div className="dir-multi-note mb-3">已选中 {(ent as Crowd).members?.length || 0} 个角色，修改将同步应用到全部选中对象</div>}
-          <div className="dir-sec-title">姿势预设</div>
+          {isCrowd && <div className="dir-multi-note mb-3">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>}
+          <div className="dir-sec-title">{t("director.posePresets")}</div>
           <div className="dir-pose-grid">
             {POSE_PRESETS.map((p) => (
               <button key={p.key} className={`dir-posebtn ${posePresetKey === p.key ? "on" : ""}`}
-                onClick={() => { isCrowd ? runtime._broadcastPosePreset(entity.id, p.key) : runtime.applyPosePreset(entity.id, p.key); setPosePresetKey(p.key); poseSyncRef.current?.(); }}>{p.label}</button>
+                onClick={() => { isCrowd ? runtime._broadcastPosePreset(entity.id, p.key) : runtime.applyPosePreset(entity.id, p.key); setPosePresetKey(p.key); poseSyncRef.current?.(); }}>{t(`director.${p.label}`)}</button>
             ))}
           </div>
-          <button className="dir-minibtn" onClick={() => { isCrowd ? runtime._broadcastResetPose(entity.id) : (ent instanceof Character ? ent.resetPose() : undefined); setPosePresetKey(null); poseSyncRef.current?.(); }}>⟲ 复位姿势</button>
-          <div className="dir-sec-title">姿势调节</div>
+          <button className="dir-minibtn" onClick={() => { isCrowd ? runtime._broadcastResetPose(entity.id) : (ent instanceof Character ? ent.resetPose() : undefined); setPosePresetKey(null); poseSyncRef.current?.(); }}>⟲ {t("director.resetPose")}</button>
+          <div className="dir-sec-title">{t("director.poseAdjust")}</div>
           {isCrowd ? (
             <PoseSliders characterId={entity.id} values={(ent as Crowd).members?.[0]?.values || {}} syncRef={poseSyncRef}
               onChange={(key, v) => { setPosePresetKey(null); (ent as Crowd).members?.forEach((m: DirectorEntityMeta) => runtime.setJointValue(m.id, key, v)); }} />

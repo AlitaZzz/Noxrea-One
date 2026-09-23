@@ -33,7 +33,6 @@ function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unkn
     edges,
     viewport: { x: 0, y: 0, zoom: 1 },
     background: "dots" as const,
-    theme: "dark" as const,
     minimapVisible: true,
     snapToGrid: false,
   } as HistorySnapshot;
@@ -344,5 +343,74 @@ describe("删除节点时同步清空节点级 UI 态", () => {
     expect(s.nodes.map((n) => n.id)).toEqual(["keep"]);
     expect(s.multiExpandedNodeId).toBe("keep");
     expect(s.annotatingNodeId).toBe("keep");
+  });
+});
+
+describe("节点级编辑态全局互斥（store 收口）", () => {
+  beforeEach(() => {
+    useCanvasStore.setState({
+      multiExpandedNodeId: null,
+      annotatingNodeId: null,
+      croppingNodeId: null,
+      editingTextNodeId: null,
+      frameCaptureNodeId: null,
+      clipCaptureNodeId: null,
+      audioClipNodeId: null,
+      lightingNodeId: null,
+      angleEditorNodeId: null,
+    });
+  });
+
+  it("激活任一编辑态时自动清空其余编辑态", () => {
+    useCanvasStore.setState({ annotatingNodeId: "n1", frameCaptureNodeId: "n1", multiExpandedNodeId: "n2" });
+
+    useCanvasStore.getState().setCroppingNodeId("n1");
+
+    const s = useCanvasStore.getState();
+    expect(s.croppingNodeId).toBe("n1");
+    expect(s.annotatingNodeId).toBeNull();
+    expect(s.frameCaptureNodeId).toBeNull();
+    expect(s.multiExpandedNodeId).toBeNull();
+  });
+
+  it("置 null 只清自身，不误关其他编辑态", () => {
+    useCanvasStore.setState({ croppingNodeId: null, lightingNodeId: "n1" });
+
+    useCanvasStore.getState().setCroppingNodeId(null);
+
+    expect(useCanvasStore.getState().croppingNodeId).toBeNull();
+    expect(useCanvasStore.getState().lightingNodeId).toBe("n1");
+  });
+
+  it("closeForeignNodeEditors(nodeId) 只清不属于该节点的编辑态", () => {
+    useCanvasStore.setState({
+      annotatingNodeId: "n1",
+      croppingNodeId: "n2",
+      lightingNodeId: "n1",
+      multiExpandedNodeId: "n2",
+    });
+
+    useCanvasStore.getState().closeForeignNodeEditors("n1");
+
+    const s = useCanvasStore.getState();
+    expect(s.annotatingNodeId).toBe("n1");
+    expect(s.lightingNodeId).toBe("n1");
+    expect(s.croppingNodeId).toBeNull();
+    expect(s.multiExpandedNodeId).toBeNull();
+  });
+
+  it("closeForeignNodeEditors(null) 全部关闭", () => {
+    useCanvasStore.setState({
+      annotatingNodeId: "n1",
+      frameCaptureNodeId: "n2",
+      editingTextNodeId: "n3",
+    });
+
+    useCanvasStore.getState().closeForeignNodeEditors(null);
+
+    const s = useCanvasStore.getState();
+    expect(s.annotatingNodeId).toBeNull();
+    expect(s.frameCaptureNodeId).toBeNull();
+    expect(s.editingTextNodeId).toBeNull();
   });
 });

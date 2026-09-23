@@ -20,7 +20,7 @@ import {
   directorNode as createDirectorNode,
   duplicateNode,
 } from "@/features/canvas/node-defaults";
-import { readLastModel } from "@/features/canvas/shared/last-model";
+import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
@@ -380,9 +380,7 @@ function applyAgentParams(
     .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
   if (allModels.length === 0) return [{}, ["没有可用的生成模型，未设置参数"]];
 
-  const key = (gs?.modelKey && allModels.some((m) => m.value === gs.modelKey) ? gs.modelKey : "")
-    || readLastModel(capability, allModels)
-    || allModels[0].value;
+  const key = resolveModelKey(gs?.modelKey, capability, allModels);
   const entry = allModels.find((m) => m.value === key) ?? allModels[0];
   const modelParams = findModelParams(entry.providerId, entry.name, capability);
   const fields = modelParams?.fields ?? [];

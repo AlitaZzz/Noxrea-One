@@ -128,8 +128,10 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
     const v = videoRef.current;
     if (!v || !autoPlay) return;
     void v.play().catch(() => {
+      // 直接同步置 DOM muted 再重试：走 setState 等 React 提交会晚一拍，不可靠
+      v.muted = true;
       setVolume(0);
-      setTimeout(() => { void videoRef.current?.play().catch(() => {}); }, 0);
+      void v.play().catch(() => {});
     });
   }, [autoPlay, src]);
 

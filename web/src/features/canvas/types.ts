@@ -7,6 +7,7 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 
+import type { SceneState } from "@/features/director/types";
 import type { NODE_TYPE } from "@/lib/constants";
 import type { TaskBinding, UploadState } from "@/lib/types/canvas";
 
@@ -17,7 +18,6 @@ export type {
   BackgroundType,
   TaskBinding,
   TaskStatus,
-  ThemeMode,
   UploadState,
   ViewportState,
 } from "@/lib/types/canvas";
@@ -210,7 +210,7 @@ export interface DirectorEntityState {
 
 export interface DirectorStateData {
   entities: DirectorEntityState[];
-  sceneState: Record<string, unknown>;
+  sceneState: Partial<SceneState>;
   ratio: string;
   cameraView: boolean;
   transformMode: string;

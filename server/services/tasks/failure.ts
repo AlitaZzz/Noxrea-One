@@ -68,3 +68,17 @@ export function extractFailureCode(err: unknown): { code?: string } {
   }
   return {};
 }
+
+/**
+ * 任务已被用户取消（DB 中任务已是 cancelled 终态）。
+ * 能力服务收到上游返回的取消信号时抛出；executor 捕获后直接结束本次执行，
+ * 不写任何终态——失败终态守卫本会拒绝 cancelled 行，显式抛错让「无需写入」
+ * 成为意图而非碰巧。
+ */
+export class GenerationCancelledError extends Error {
+  constructor() {
+    super("Task cancelled by user");
+    this.name = "GenerationCancelledError";
+    Object.setPrototypeOf(this, GenerationCancelledError.prototype);
+  }
+}

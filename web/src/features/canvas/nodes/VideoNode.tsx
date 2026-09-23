@@ -59,7 +59,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const { notification } = App.useApp();
-  const [src, setSrc] = useState(data.src || "");
+  // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）
+  const src = data.src || "";
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
   // 同一时刻只跑一个），startedAt 驱动忙浮层的实时耗时
   const [busy, setBusy] = useState<{
@@ -87,13 +88,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  // Sync local src when data.src changes externally (e.g. from undo/clear),
-  // adjusted during render to avoid cascading renders.
-  const [prevDataSrc, setPrevDataSrc] = useState(data.src || "");
-  if (data.src !== prevDataSrc) {
-    setPrevDataSrc(data.src);
-    setSrc(data.src || "");
-  }
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -566,7 +560,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [src, data.label, id, addAsset, t]);
 
   const handleClear = useCallback(() => {
-    setSrc("");
     useCanvasStore.getState().updateNodeData(id, {
       src: "", label: "", naturalWidth: 0, naturalHeight: 0,
       upload: undefined, source: undefined,
@@ -601,17 +594,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           break;
         case "crop-video":
           // 打开画面裁剪面板（复用 croppingNodeId，与图片裁剪互斥天然成立）；
-          // 编辑面板全局互斥：先关闭其它所有编辑态
-          if (src) {
-            const s = useCanvasStore.getState();
-            s.setAnnotatingNodeId(null);
-            s.setFrameCaptureNodeId(null);
-            s.setClipCaptureNodeId(null);
-            s.setAudioClipNodeId(null);
-            s.setLightingNodeId(null);
-            s.setAngleEditorNodeId(null);
-            s.setCroppingNodeId(id);
-          }
+          // 编辑面板互斥由 store 的 setter 统一收口
+          if (src) useCanvasStore.getState().setCroppingNodeId(id);
           break;
         case "crop-video-apply":
           void handleCropVideoApply(detail.rect as CropRectPx);

@@ -11,7 +11,6 @@
 import type { UploadErrorInfo } from "@/lib/utils/upload";
 
 export type BackgroundType = "dots" | "grid" | "blank";
-export type ThemeMode = "light" | "dark";
 
 export interface ViewportState {
   x: number;

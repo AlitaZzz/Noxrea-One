@@ -67,15 +67,15 @@ export async function getTaskStatus(id: string): Promise<string | null> {
   return task?.status ?? null;
 }
 
-/** 判断任务是否已取消（cancelled 终态，或 failed 且 error 标记为 Cancelled） */
+/** 判断任务是否已取消（cancelled 终态） */
 export async function isTaskCancelled(id: string): Promise<boolean> {
   try {
     const task = await prisma.generationTask.findUnique({
       where: { id },
-      select: { status: true, error: true },
+      select: { status: true },
     });
     if (!task) return false;
-    return task.status === "cancelled" || (task.status === "failed" && task.error === "Cancelled");
+    return task.status === "cancelled";
   } catch (err: unknown) {
     // DB 抖动时视为未取消：取消检查抛错会让轮询循环整体死亡、心跳停止，
     // 僵尸清理随后重置并重复提交上游（重复计费）。DB 恢复后下一次检查

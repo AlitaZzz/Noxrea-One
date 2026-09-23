@@ -63,7 +63,6 @@ export interface DirectorRuntime {
   _getPoseValues: (id: string) => Record<string, number>;
   _beginCleanRender: () => void;
   _endCleanRender: () => void;
-  _setSyncInspector: (cb: (() => void) | null) => void;
   _setCameraAttrChange: (cb: (() => void) | null) => void;
   _broadcastPosePreset: (crowdId: string, presetKey: string) => void;
   _broadcastResetPose: (crowdId: string) => void;
@@ -83,6 +82,9 @@ interface DirectorState {
   ratio: string;
   sceneState: SceneState;
   shots: Shot[];
+  /** 递增计数：Three.js 实体属性可变且不在 store 中，gizmo 拖拽等外部变更
+   *  通过 bumpInspector 递增此值触发 Inspector 重渲染读取最新值 */
+  inspectorTick: number;
 
   // Three.js runtime handle (set by DirectorViewport on mount)
   runtime: DirectorRuntime | null;
@@ -107,6 +109,7 @@ interface DirectorState {
   removeShot: (id: string) => void;
   toggleShotSelected: (id: string) => void;
   clearShots: () => void;
+  bumpInspector: () => void;
 }
 
 export const useDirectorStore = create<DirectorState>((set) => ({
@@ -130,6 +133,7 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   },
   shots: [],
   runtime: null,
+  inspectorTick: 0,
   openingNodeId: null,
   restoreState: null,
 
@@ -168,4 +172,5 @@ export const useDirectorStore = create<DirectorState>((set) => ({
       ),
     })),
   clearShots: () => set({ shots: [] }),
+  bumpInspector: () => set((s) => ({ inspectorTick: s.inspectorTick + 1 })),
 }));

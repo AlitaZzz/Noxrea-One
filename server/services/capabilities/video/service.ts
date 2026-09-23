@@ -14,7 +14,7 @@ import { build } from "@server/services/request-builder/engine";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
 import { logEvent } from "@server/core/logger/utils";
-import { GenerationFailureError } from "@server/services/tasks/failure";
+import { GenerationCancelledError, GenerationFailureError } from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 class VideoCapabilityService implements CapabilityService {
@@ -73,6 +73,10 @@ class VideoCapabilityService implements CapabilityService {
         return parsed;
       },
     });
+
+    if (result.status === "cancelled") {
+      throw new GenerationCancelledError();
+    }
 
     if (result.status === "failed") {
       throw new GenerationFailureError(

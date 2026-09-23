@@ -9,7 +9,6 @@
 import type { AssetType } from "@/lib/types/assets";
 import type {
   BackgroundType,
-  ThemeMode,
   ViewportState,
 } from "@/lib/types/canvas";
 import type {
@@ -20,7 +19,6 @@ import type {
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };
 export const DEFAULT_BACKGROUND: BackgroundType = "dots";
-export const DEFAULT_THEME: ThemeMode = "dark";
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 5;
 

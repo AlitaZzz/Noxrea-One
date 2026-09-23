@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 
 import MentionChip from "./MentionChip";
 import MentionDropdown from "./MentionDropdown";
-import { type ReferenceItem, refLabel, refLabelKey } from "./reference";
+import { type ReferenceItem, type ReferenceItemAttrs, refLabel, refLabelKey } from "./reference";
 
 interface Props {
   references: ReferenceItem[];
@@ -202,8 +202,8 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
       }).configure({
         HTMLAttributes: { class: "mention-chip" },
         // 纯文本化：chip 输出为「图片N / 音频N / 视频N」
-        renderText: ({ node }) => refLabel(node.attrs as unknown as ReferenceItem),
-        renderHTML: ({ options, node }) => ["span", options.HTMLAttributes, refLabel(node.attrs as unknown as ReferenceItem)],
+        renderText: ({ node }) => refLabel(node.attrs as ReferenceItemAttrs),
+        renderHTML: ({ options, node }) => ["span", options.HTMLAttributes, refLabel(node.attrs as ReferenceItemAttrs)],
         // 退格直接整体删除 @ 触发符与 chip
         deleteTriggerWithBackspace: true,
         suggestion: {

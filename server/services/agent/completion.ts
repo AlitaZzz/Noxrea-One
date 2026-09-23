@@ -4,7 +4,7 @@
  * 执行非流式与流式补全，并累积 tool_call 结果。
  */
 
-import type { ProtocolToolCall } from "@server/services/protocols/base";
+import type { ProtocolService, ProtocolToolCall } from "@server/services/protocols/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { getProvider, getProviders } from "@server/crud/model-config";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
@@ -29,7 +29,7 @@ export async function resolveProvider(userId: number, providerId?: number, model
 }
 
 type BuildResult =
-  | { ok: true; url: string; method: string; headers: Record<string, string>; body: unknown }
+  | { ok: true; url: string; method: string; headers: Record<string, string>; body: unknown; protocol: ProtocolService }
   | { ok: false; error: string };
 
 /** 构造上游请求：解析参考图、注入 stream:true、按协议组装 body */
@@ -74,7 +74,7 @@ export async function buildUpstream(args: {
     }
 
     if (m.images && m.images.length > 0 && provider.protocol === "openai") {
-      const resolved = await resolveRefImages(m.images, args.userId);
+      const resolved = await resolveRefImages(m.images);
       const content: Array<Record<string, unknown>> = [{ type: "text", text: m.content }];
       for (const url of resolved) {
         content.push({ type: "image_url", image_url: { url } });
@@ -98,7 +98,7 @@ export async function buildUpstream(args: {
   }
 
   const req = protocol.buildLlmRequest(provider.baseUrl, provider.apiKey, body);
-  return { ok: true, url: req.url, method: req.method, headers: req.headers, body: req.body };
+  return { ok: true, url: req.url, method: req.method, headers: req.headers, body: req.body, protocol };
 }
 
 export type RunResult =
@@ -128,9 +128,12 @@ export async function runCompletion(args: {
       return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
     }
     const data = await resp.json();
-    const provider = await resolveProvider(args.userId, args.providerId, args.model);
-    const protocol = provider ? getProtocol(provider.protocol) : undefined;
-    const text = protocol?.parseLlmResponse ? protocol.parseLlmResponse(data).text ?? "" : "";
+    // 协议解析为空或协议不支持解析都按错误处理：调用方（报告生成等）拿空文本无意义
+    const parsed = built.protocol.parseLlmResponse?.(data);
+    const text = parsed?.text ?? "";
+    if (!text) {
+      return { ok: false, error: `upstream returned no text (protocol ${built.protocol.name})` };
+    }
     return { ok: true, text };
   } catch (e) {
     return { ok: false, error: String(e) };

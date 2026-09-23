@@ -32,7 +32,6 @@ export type {
   TextGenSettings,
   TextNode,
   TextNodeData,
-  ThemeMode,
   UploadState,
   VideoGenSettings,
   VideoNode,

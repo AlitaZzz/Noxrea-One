@@ -27,3 +27,17 @@ export function recordLastModel(kind: string, modelKey: string): void {
     // 写入失败不阻塞：仅影响新节点默认值
   }
 }
+
+/**
+ * 模型键统一回退链（面板展示与悬空纠偏共用）：
+ * 持久化值（已失效视同未持久化）→ 该能力上次使用的模型 → 第一个可用模型。
+ * persisted 传 undefined 即得到「悬空纠偏」的目标值。
+ */
+export function resolveModelKey(
+  persisted: string | undefined | null,
+  kind: string,
+  allModels: { value: string }[],
+): string {
+  if (persisted && allModels.some((m) => m.value === persisted)) return persisted;
+  return readLastModel(kind, allModels) || allModels[0]?.value || "";
+}
