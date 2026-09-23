@@ -690,7 +690,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       <NodeTitle
         nodeId={id}
         icon={<VideoCameraOutlined className="shrink-0" />}
-        title={data.label || t("node.video")}
+        title={data.label}
+        display={data.label || t("node.video")}
         trailing={hasVideo && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
       />
 

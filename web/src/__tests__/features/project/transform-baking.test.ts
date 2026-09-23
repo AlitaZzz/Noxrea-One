@@ -125,11 +125,11 @@ describe("P0-4: CSS transform baking flow", () => {
       expect(h).toBe(450 + NODE_TITLE_HEIGHT);
     });
 
-    it("should append label suffix before extension", () => {
+    it("should append label suffix after extension-stripped source label", () => {
       const node = createNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)", mockStoreApi);
       const label = node.data.label as string;
       expect(label).toContain(" (baked)");
-      expect(label.endsWith(".jpg")).toBe(true);
+      expect(label.endsWith(".jpg")).toBe(false);
     });
 
     it("should merge extraNodeData", () => {

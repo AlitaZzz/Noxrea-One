@@ -64,7 +64,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
       <NodeTitle
         nodeId={id}
         icon={<GroupOutlined className="shrink-0" style={{ color: "#ffffff" }} />}
-        title={data.label || t("node.group")}
+        title={data.label}
         display={
           data.label
             ? t("node.groupNamedWithCount", { label: data.label, count: memberCount })

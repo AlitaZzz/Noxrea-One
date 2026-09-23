@@ -25,7 +25,8 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
       <NodeTitle
         nodeId={id}
         icon={<PartitionOutlined className="shrink-0" />}
-        title={data.label || t("node.director")}
+        title={data.label}
+        display={data.label || t("node.director")}
       />
 
       {/* Body */}

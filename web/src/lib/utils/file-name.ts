@@ -44,3 +44,12 @@ export function sanitizeFileName(name: string): string {
 
   return `${base}${ext}`;
 }
+
+/** 常见媒体扩展名白名单：label 去扩展名只认真媒体扩展，避免误伤含小数点的普通文案（如 "Scene 2.5 草稿"） */
+const MEDIA_EXTENSIONS =
+  /\.(png|jpe?g|gif|webp|bmp|svg|avif|tiff?|ico|mp4|webm|mov|avi|mkv|m4v|mp3|wav|ogg|flac|m4a|aac)$/i;
+
+/** 去掉文件名末尾的媒体扩展名（仅命中白名单时），用于节点标题等展示场景 */
+export function stripMediaExtension(name: string): string {
+  return name.replace(MEDIA_EXTENSIONS, "");
+}

@@ -37,15 +37,24 @@ import {
 import { NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 
-let _idCounter = 0;
+// id 形如 "t-3xK9qP2mAbZc1"：单字母类型前缀便于一眼识别归属，
+// 随机段不泄露创建时间；会话内去重守卫兜底极小概率的随机碰撞。
+const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const usedIds = new Set<string>();
 function uid(prefix: string) {
-  _idCounter++;
-  return `${prefix}_${Date.now()}_${_idCounter}`;
+  const bytes = new Uint8Array(13);
+  let id: string;
+  do {
+    crypto.getRandomValues(bytes);
+    id = `${prefix}-${Array.from(bytes, (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("")}`;
+  } while (usedIds.has(id));
+  usedIds.add(id);
+  return id;
 }
 
 export function createTextNode(position: { x: number; y: number }): TextNode {
   return {
-    id: uid("text"),
+    id: uid("t"),
     type: NODE_TYPE.TEXT,
     position,
     data: {
@@ -68,7 +77,7 @@ export function createImageNode(
   src?: string
 ): ImageNode {
   return {
-    id: uid("img"),
+    id: uid("i"),
     type: NODE_TYPE.IMAGE,
     position,
     data: {
@@ -88,7 +97,7 @@ export function createVideoNode(
   src?: string
 ): VideoNode {
   return {
-    id: uid("vid"),
+    id: uid("v"),
     type: NODE_TYPE.VIDEO,
     position,
     data: {
@@ -107,7 +116,7 @@ export function createAudioNode(
   src?: string
 ): AudioNode {
   return {
-    id: uid("aud"),
+    id: uid("a"),
     type: NODE_TYPE.AUDIO,
     position,
     data: {
@@ -120,7 +129,7 @@ export function createAudioNode(
 
 export function directorNode(position: { x: number; y: number }): DirectorNode {
   return {
-    id: uid("dir"),
+    id: uid("d"),
     type: NODE_TYPE.DIRECTOR,
     position,
     data: { label: "" },
@@ -134,7 +143,7 @@ export function createGroupNode(
   label?: string
 ): GroupNode {
   return {
-    id: uid("group"),
+    id: uid("g"),
     type: NODE_TYPE.GROUP,
     position,
     data: { label: label || "" } as GroupNodeData,
@@ -143,14 +152,14 @@ export function createGroupNode(
   };
 }
 
-// 复制节点时复用新建节点的 id 前缀约定，避免 image 节点复制后变成 "image-node_" 前缀
+// 复制节点时复用新建节点的 id 前缀约定，保持副本与原节点同一类型字母
 const NODE_ID_PREFIX: Record<string, string> = {
-  [NODE_TYPE.IMAGE]: "img",
-  [NODE_TYPE.VIDEO]: "vid",
-  [NODE_TYPE.AUDIO]: "aud",
-  [NODE_TYPE.TEXT]: "text",
-  [NODE_TYPE.GROUP]: "group",
-  [NODE_TYPE.DIRECTOR]: "dir",
+  [NODE_TYPE.IMAGE]: "i",
+  [NODE_TYPE.VIDEO]: "v",
+  [NODE_TYPE.AUDIO]: "a",
+  [NODE_TYPE.TEXT]: "t",
+  [NODE_TYPE.GROUP]: "g",
+  [NODE_TYPE.DIRECTOR]: "d",
 };
 
 export function duplicateNode(
@@ -197,7 +206,7 @@ export function createEdge(
   target: string,
   options?: { id?: string; type?: string; style?: Record<string, unknown> }
 ) {
-  const edgeId = options?.id || `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const edgeId = options?.id || uid("e");
   return {
     id: edgeId,
     source,
