@@ -12,6 +12,7 @@
  */
 "use client";
 
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -356,14 +357,17 @@ export function hasGeneratingNode(): boolean {
 function restoreSnapshot(snapshot: HistorySnapshot): void {
   // 整理动画每帧都在写节点位置，先停掉，否则下一帧会覆盖恢复出的布局
   cancelTidyAnimation();
-  const s = useCanvasStore.getState();
-  s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
-  s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
-  s.setViewport(snapshot.viewport);
-  s.setBackground(snapshot.background);
-  s.setTheme(snapshot.theme);
-  if (snapshot.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: snapshot.minimapVisible });
-  if (snapshot.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: snapshot.snapToGrid });
+  // 撤销/重做是程序化恢复，不算用户对画布内容做的增量修改，不进动作历史
+  runSuppressed(() => {
+    const s = useCanvasStore.getState();
+    s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
+    s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
+    s.setViewport(snapshot.viewport);
+    s.setBackground(snapshot.background);
+    s.setTheme(snapshot.theme);
+    if (snapshot.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: snapshot.minimapVisible });
+    if (snapshot.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: snapshot.snapToGrid });
+  });
   markDirtyUndo();
 }
 

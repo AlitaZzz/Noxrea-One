@@ -24,6 +24,7 @@ import { showGlobalMessage } from "@/lib/global-message";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { copyText, downloadTextFile } from "@/lib/utils/text-export";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import ResizeHandle from "./ResizeHandle";
@@ -34,6 +35,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const plainText = data.plainText || "";
   // 编辑态由 store 全局驱动（与裁剪/标注模式一致），进入编辑时隐藏节点工具条
   const editingContent = useCanvasStore((s) => s.editingTextNodeId) === id;
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
 
   const editorRef = useRef<Editor | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -216,6 +219,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
           useCanvasStore.getState().setEditingTextNodeId(id);
         }}
       >
+        {agentGhost && <AgentGhostOverlay />}
         <div
           ref={scrollRef}
           className={`flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}

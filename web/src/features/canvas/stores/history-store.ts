@@ -10,6 +10,12 @@ import { HISTORY_MAX_SIZE } from "@/lib/constants";
 interface HistoryState {
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
+  /**
+   * 单调递增的版本号：push/undo/redo/popIfTop/clear 任一改动栈的动作都 +1。
+   * 供「回合撤销」按钮判定记录是否仍然有效（popIfTop 补偿式回滚不改变栈顶内容
+   * 却改变可用性，仅靠栈内容比对会误判，故用版本号兜底）。
+   */
+  version: number;
 
   /** Push current state before making a change */
   push: (snapshot: HistorySnapshot) => void;
@@ -40,12 +46,13 @@ interface HistoryState {
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   undoStack: [],
   redoStack: [],
+  version: 0,
 
   push: (snapshot) =>
     set((s) => {
       const newUndo = [...s.undoStack, snapshot];
       if (newUndo.length > HISTORY_MAX_SIZE) newUndo.shift();
-      return { undoStack: newUndo, redoStack: [] };
+      return { undoStack: newUndo, redoStack: [], version: s.version + 1 };
     }),
 
   undo: (current) => {
@@ -55,6 +62,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     set((s) => ({
       undoStack: s.undoStack.slice(0, -1),
       redoStack: [...s.redoStack, current],
+      version: s.version + 1,
     }));
     return target;
   },
@@ -66,6 +74,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     set((s) => ({
       redoStack: s.redoStack.slice(0, -1),
       undoStack: [...s.undoStack, current],
+      version: s.version + 1,
     }));
     return target;
   },
@@ -73,11 +82,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   popIfTop: (snapshot) => {
     const { undoStack } = get();
     if (undoStack.length === 0 || undoStack[undoStack.length - 1] !== snapshot) return false;
-    set((s) => ({ undoStack: s.undoStack.slice(0, -1) }));
+    set((s) => ({ undoStack: s.undoStack.slice(0, -1), version: s.version + 1 }));
     return true;
   },
 
   canUndo: () => get().undoStack.length > 0,
   canRedo: () => get().redoStack.length > 0,
-  clear: () => set({ undoStack: [], redoStack: [] }),
+  clear: () => set((s) => ({ undoStack: [], redoStack: [], version: s.version + 1 })),
 }));

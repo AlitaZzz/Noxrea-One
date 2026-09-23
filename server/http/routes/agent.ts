@@ -22,7 +22,7 @@ import {
   touchSession,
   type PersistedToolCall,
 } from "@server/crud/agent";
-import { buildAgentMessages, buildCanvasSystem } from "@server/services/agent/context-builder";
+import { buildAgentMessages, buildCanvasSystem, buildUserActionSystem } from "@server/services/agent/context-builder";
 import type { IncomingMessage, HistoryMessage } from "@server/services/agent/context-builder";
 import { runCompletion, runCompletionStream } from "@server/services/agent/completion";
 
@@ -238,8 +238,10 @@ async function finishTurn(opts: {
 const streamSchema = z.object({
   content: z.string().default(""),
   refImages: z.array(z.string()).optional(),
-  /** 前端序列化的画布状态快照（仅随用户消息发送，续流轮不重发） */
+  /** 前端序列化的画布状态快照（随用户消息与工具结果续轮发送，始终为最新状态） */
   canvasState: z.unknown().optional(),
+  /** 自上一条消息以来用户在画布上的操作 diff */
+  userActions: z.unknown().optional(),
 });
 
 router.post("/api/agent/sessions/:id/stream", async (c) => {
@@ -304,6 +306,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         history,
         incoming,
         canvasSystem: buildCanvasSystem(parsed.canvasState),
+        userActionSystem: buildUserActionSystem(parsed.userActions),
       });
 
       const result = await runCompletionStream({
@@ -343,6 +346,10 @@ const toolResultSchema = z.object({
     toolCallId: z.string().min(1),
     result: z.string(),
   })).min(1),
+  /** 前端序列化的画布状态快照（续轮重发，模型始终看到执行后的最新状态） */
+  canvasState: z.unknown().optional(),
+  /** 工具续轮等待期间用户对画布的增量操作 */
+  userActions: z.unknown().optional(),
 });
 
 router.post("/api/agent/sessions/:id/tool-result", async (c) => {
@@ -399,7 +406,12 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
         toolCallId: r.toolCallId,
       }));
 
-      const messages = buildAgentMessages({ history, incoming });
+      const messages = buildAgentMessages({
+        history,
+        incoming,
+        canvasSystem: buildCanvasSystem(parsed.canvasState),
+        userActionSystem: buildUserActionSystem(parsed.userActions),
+      });
 
       const result = await runCompletionStream({
         messages,

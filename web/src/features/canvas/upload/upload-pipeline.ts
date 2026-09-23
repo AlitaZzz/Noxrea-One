@@ -19,6 +19,7 @@
  */
 "use client";
 
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { createAudioNode, createEdge, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
@@ -253,73 +254,76 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
 
   const sourceNode = sink.kind === "derived-node" ? store.getNodes().find((n) => n.id === sink.sourceId) : undefined;
 
-  for (const p of prepared) {
-    const upload: UploadState = { uploading: true, progress: 0, version: p.version, previewUrl: p.previewUrl };
+  // 上传管道是程序化写回：占位节点 / 进度 / 结果都不算用户操作，不进动作历史
+  runSuppressed(() => {
+    for (const p of prepared) {
+      const upload: UploadState = { uploading: true, progress: 0, version: p.version, previewUrl: p.previewUrl };
 
-    if (sink.kind === "replace-node") {
-      const target = store.getNodes().find((n) => n.id === sink.nodeId);
-      if (!target) {
-        p.replaceId = undefined;
+      if (sink.kind === "replace-node") {
+        const target = store.getNodes().find((n) => n.id === sink.nodeId);
+        if (!target) {
+          p.replaceId = undefined;
+          continue;
+        }
+        p.snapshot = { data: { ...target.data }, style: { ...(target.style ?? {}) } };
+        const data: Record<string, unknown> = { upload, source };
+        if (p.kind !== "audio") {
+          data.naturalWidth = p.nw;
+          data.naturalHeight = p.nh;
+        }
+        store.updateNodeData(
+          sink.nodeId,
+          data,
+          p.kind === "audio"
+            ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
+            : computeNodeSize(p.nw, p.nh),
+          { skipHistory: true },
+        );
         continue;
       }
-      p.snapshot = { data: { ...target.data }, style: { ...(target.style ?? {}) } };
-      const data: Record<string, unknown> = { upload, source };
-      if (p.kind !== "audio") {
-        data.naturalWidth = p.nw;
-        data.naturalHeight = p.nh;
+
+      // raw：只上传拿远程地址，不创建任何画布节点
+      if (sink.kind === "raw") continue;
+
+      const node = createPlaceholderNode(p.kind, resolvePosition(p, sink, cursor, sourceNode));
+
+      if (sink.kind === "derived-node") {
+        p.label = p.item.label ?? resolveDerivedLabel(sourceNode, p.item.labelSuffix ?? "");
       }
-      store.updateNodeData(
-        sink.nodeId,
-        data,
-        p.kind === "audio"
-          ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
-          : computeNodeSize(p.nw, p.nh),
-        { skipHistory: true },
-      );
-      continue;
+
+      if (p.kind === "audio") {
+        Object.assign(node.data, { label: p.label, source, upload, ...(p.item.extraData ?? {}) });
+        node.style = { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT };
+      } else {
+        Object.assign(node.data, {
+          label: p.label,
+          source,
+          upload,
+          naturalWidth: p.nw,
+          naturalHeight: p.nh,
+          ...(p.item.extraData ?? {}),
+        });
+        node.style = computeNodeSize(p.nw, p.nh);
+      }
+
+      p.node = node;
+      newNodes.push(node);
+
+      if (sink.kind === "derived-node") {
+        if (sink.connect !== false && sourceNode) newEdges.push(createEdge(sink.sourceId, node.id));
+      } else if (sink.kind === "create-node" && sink.connectTo) {
+        newEdges.push(
+          sink.connectDir === "in"
+            ? createEdge(sink.connectTo, node.id)
+            : createEdge(node.id, sink.connectTo),
+        );
+      }
     }
 
-    // raw：只上传拿远程地址，不创建任何画布节点
-    if (sink.kind === "raw") continue;
-
-    const node = createPlaceholderNode(p.kind, resolvePosition(p, sink, cursor, sourceNode));
-
-    if (sink.kind === "derived-node") {
-      p.label = p.item.label ?? resolveDerivedLabel(sourceNode, p.item.labelSuffix ?? "");
-    }
-
-    if (p.kind === "audio") {
-      Object.assign(node.data, { label: p.label, source, upload, ...(p.item.extraData ?? {}) });
-      node.style = { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT };
-    } else {
-      Object.assign(node.data, {
-        label: p.label,
-        source,
-        upload,
-        naturalWidth: p.nw,
-        naturalHeight: p.nh,
-        ...(p.item.extraData ?? {}),
-      });
-      node.style = computeNodeSize(p.nw, p.nh);
-    }
-
-    p.node = node;
-    newNodes.push(node);
-
-    if (sink.kind === "derived-node") {
-      if (sink.connect !== false && sourceNode) newEdges.push(createEdge(sink.sourceId, node.id));
-    } else if (sink.kind === "create-node" && sink.connectTo) {
-      newEdges.push(
-        sink.connectDir === "in"
-          ? createEdge(sink.connectTo, node.id)
-          : createEdge(node.id, sink.connectTo),
-      );
-    }
-  }
-
-  // 占位节点与连线同批写入，只产生一条历史记录
-  if (newNodes.length > 0) store.addNodes(newNodes);
-  if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+    // 占位节点与连线同批写入，只产生一条历史记录
+    if (newNodes.length > 0) store.addNodes(newNodes);
+    if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+  });
 
   // ── 3) 并发上传（失败自动重试，业务错误不重试）──
   return { nodeIds: newNodes.map((n) => n.id), settled: runUploads(plan, prepared, source) };
@@ -379,12 +383,12 @@ function retryContextOf(p: Prepared, source: "upload" | "derived"): RetryContext
 
 /** 把节点标记为上传失败：保留本地预览，UI 依此渲染失败遮罩与重试入口 */
 function markUploadFailed(nodeId: string, version: number, error: UploadErrorInfo, previewUrl?: string) {
-  useCanvasStore.getState().updateNodeData(
+  runSuppressed(() => useCanvasStore.getState().updateNodeData(
     nodeId,
     { upload: { uploading: false, progress: 0, version, previewUrl, error } },
     undefined,
     { skipHistory: true },
-  );
+  ));
 }
 
 /** 上传成功落库：写入远端地址并清除上传态，同时释放本地预览 */
@@ -399,7 +403,7 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
     data.naturalWidth = ctx.nw;
     data.naturalHeight = ctx.nh;
   }
-  useCanvasStore.getState().updateNodeData(nodeId, data, undefined, { skipHistory: true });
+  runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, data, undefined, { skipHistory: true }));
   if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
 }
 
@@ -489,7 +493,8 @@ async function runUploads(
           data.naturalWidth = p.nw;
           data.naturalHeight = p.nh;
         }
-        window.dispatchEvent(
+        // NODE_UPDATE_DATA 监听器同步执行，包裹 dispatch 即可覆盖监听器内的 store 写入
+        runSuppressed(() => window.dispatchEvent(
           new CustomEvent(EventNames.NODE_UPDATE_DATA, {
             detail: {
               nodeId: targetId,
@@ -500,7 +505,7 @@ async function runUploads(
               immediate: true,
             },
           }),
-        );
+        ));
         releasePreview();
       }
       return;
@@ -517,13 +522,14 @@ async function runUploads(
       markUploadFailed(p.node.id, p.version, info, p.previewUrl);
       retained++;
     } else if (p.replaceId && p.snapshot) {
+      const { snapshot } = p;
       // 替换失败：回滚到上传前的 data / style，避免节点尺寸停留在待上传文件的值
-      useCanvasStore.getState().updateNodeData(
+      runSuppressed(() => useCanvasStore.getState().updateNodeData(
         targetId,
-        { ...p.snapshot.data, upload: undefined },
-        p.snapshot.style,
+        { ...snapshot.data, upload: undefined },
+        snapshot.style,
         { skipHistory: true },
-      );
+      ));
       releasePreview();
     } else {
       releasePreview();
@@ -540,12 +546,12 @@ async function runUploads(
             const targetId = p.node?.id ?? p.replaceId;
             if (!targetId) return;
             if (!isCurrentUpload(findNode(targetId), p.version)) return;
-            useCanvasStore.getState().updateNodeData(
+            runSuppressed(() => useCanvasStore.getState().updateNodeData(
               targetId,
               { upload: { uploading: true, progress: pct, version: p.version, previewUrl: p.previewUrl } },
               undefined,
               { skipHistory: true },
-            );
+            ));
           },
           UPLOAD_MAX_RETRIES,
           source,
@@ -615,24 +621,24 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
   }
 
   const version = nextVersion();
-  useCanvasStore.getState().updateNodeData(
+  runSuppressed(() => useCanvasStore.getState().updateNodeData(
     nodeId,
     { upload: { uploading: true, progress: 0, version, previewUrl: ctx.previewUrl } },
     undefined,
     { skipHistory: true },
-  );
+  ));
 
   try {
     const result = await uploadWithRetry(
       toFile(ctx.item),
       (pct) => {
         if (!isCurrentUpload(findNode(nodeId), version)) return;
-        useCanvasStore.getState().updateNodeData(
+        runSuppressed(() => useCanvasStore.getState().updateNodeData(
           nodeId,
           { upload: { uploading: true, progress: pct, version, previewUrl: ctx.previewUrl } },
           undefined,
           { skipHistory: true },
-        );
+        ));
       },
       UPLOAD_MAX_RETRIES,
       ctx.source,
@@ -665,7 +671,7 @@ export function discardNodeUpload(nodeId: string): void {
   if (nodePreview && nodePreview !== ctx?.previewUrl) URL.revokeObjectURL(nodePreview);
   retryStore.delete(nodeId);
   if (findNode(nodeId)) {
-    useCanvasStore.getState().removeNodes([nodeId], { skipHistory: true });
+    runSuppressed(() => useCanvasStore.getState().removeNodes([nodeId], { skipHistory: true }));
     markDirtyImmediate();
   }
 }

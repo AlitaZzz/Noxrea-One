@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { agentApi } from "@/features/canvas/agent/api";
 import type { ChatMessage, ChatRole, SessionListItem } from "@/features/canvas/agent/types";
+import { clearUserActions } from "@/features/canvas/agent/user-action-tracker";
 import { resolveResponseError } from "@/lib/api/error-message";
 import { showGlobalMessage } from "@/lib/global-message";
 
@@ -42,6 +43,7 @@ export function useAgentSessions(opts: {
   useEffect(() => {
     opts.onStopStream();
     opts.onClearMessages();
+    clearUserActions();
     chatIdRef.current = null;
     queueMicrotask(() => {
       setChatId(null);
@@ -76,6 +78,8 @@ export function useAgentSessions(opts: {
     async (sessionId: string) => {
       // 先停掉当前会话的流式回合，避免回复继续追加进即将加载的另一份消息列表
       opts.onStopStream();
+      // 切会话后旧会话期间积累的用户操作不应带进新会话
+      clearUserActions();
       try {
         const msgRes = await agentApi.getSessionMessages(sessionId);
         if (!msgRes.ok) throw new Error(await resolveResponseError(msgRes, "agent.request_failed"));
@@ -132,6 +136,7 @@ export function useAgentSessions(opts: {
   const newChat = useCallback(() => {
     opts.onStopStream();
     opts.onClearMessages();
+    clearUserActions();
     chatIdRef.current = null;
     setChatId(null);
     setChatTitle(null);

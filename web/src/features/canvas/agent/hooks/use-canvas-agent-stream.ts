@@ -3,7 +3,7 @@
  * 负责发起流式请求、增量拼接回复、解析并执行工具调用、
  * 回传本轮全部工具结果并继续流式接收，直到无工具调用为止。
  * 前端不管理消息历史，后端全权负责上下文构建；
- * 画布状态快照仅在用户消息时随请求上传。
+ * 画布状态快照随用户消息与工具续轮上传，模型在任何一轮看到的都是画布最新状态。
  */
 "use client";
 
@@ -11,15 +11,34 @@ import { useCallback, useRef, useState } from "react";
 
 import { agentApi } from "@/features/canvas/agent/api";
 import { useAgentSessions } from "@/features/canvas/agent/hooks/use-agent-sessions";
+import { getCanvasAgentRuntime } from "@/features/canvas/agent/Runtime";
 import { serializeCanvasState } from "@/features/canvas/agent/tools/canvas-state";
 import { executeCanvasToolCall } from "@/features/canvas/agent/tools/executors";
-import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
-import { takeCanvasSnapshot } from "@/features/canvas/stores/canvas-store";
+import type {
+  AgentToolCall,
+  ChatMessage,
+  ConfirmDecision,
+  PendingConfirmation,
+  ToolCallView,
+} from "@/features/canvas/agent/types";
+import { drainUserActions } from "@/features/canvas/agent/user-action-tracker";
+import { applyConfirmSelections, collectConfirmTargetNodeIds } from "@/features/canvas/agent/utils/confirm-selection";
+import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { resolveResponseError } from "@/lib/api/error-message";
 
 /** 工具续轮上限：防止模型反复调用失败工具造成死循环 */
 const MAX_TOOL_ROUNDS = 12;
+
+/** 需要用户确认后才执行的工具（提议-确认流程）：破坏性删除类与全画布重排 */
+const CONFIRM_REQUIRED_TOOLS = new Set(["delete_nodes", "delete_edges", "arrange_canvas"]);
+
+/** 回合撤销记录：回合推送历史快照成功后登记，供末尾 section 渲染「撤销此轮」按钮 */
+interface TurnUndoRecord {
+  turnId: string;
+  snapshot: ReturnType<typeof takeCanvasSnapshot>;
+  version: number;
+}
 
 let _seq = 0;
 function uid() {
@@ -93,6 +112,43 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
     setMessages((prev) => prev.filter((m) => !(m.role === "assistant" && !m.content && !m.toolCalls)));
   }, []);
 
+  // ── 提议-确认：删除类/整理画布工具先等用户确认再执行 ──
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmation | null>(null);
+  const confirmResolveRef = useRef<((decision: ConfirmDecision) => void) | null>(null);
+
+  // ── 回合撤销：最近一次成功入栈的回合记录（末尾 section 的「撤销此轮」按钮） ──
+  const [lastTurnUndo, setLastTurnUndo] = useState<TurnUndoRecord | null>(null);
+
+  /** 用户在确认卡片上提交决定；停止对话/新对话/切会话也走此兜底（视为拒绝） */
+  const respondToConfirm = useCallback((decision: ConfirmDecision) => {
+    const resolve = confirmResolveRef.current;
+    confirmResolveRef.current = null;
+    setPendingConfirm(null);
+    // 蒙层清理唯一收口：批准/取消/停止/新对话/切会话都经过这里（幂等）
+    useCanvasStore.getState().clearAgentPreview();
+    resolve?.(decision);
+  }, []);
+
+  /** 挂起确认卡片并等待用户决定：设置画布幻影蒙层并聚焦目标节点 */
+  const requestConfirmation = useCallback((calls: AgentToolCall[]) => {
+    return new Promise<ConfirmDecision>((resolve) => {
+      const targetNodeIds = collectConfirmTargetNodeIds(
+        calls,
+        useCanvasStore.getState().nodes.map((n) => n.id)
+      );
+      if (targetNodeIds.length > 0) {
+        useCanvasStore.getState().setAgentPreview(targetNodeIds);
+        getCanvasAgentRuntime()?.focusNodes(targetNodeIds);
+      }
+      confirmResolveRef.current = resolve;
+      setPendingConfirm({
+        id: uid(),
+        calls: calls.map((c) => ({ id: c.id, name: c.name, args: JSON.stringify(c.args) })),
+        targetNodeIds,
+      });
+    });
+  }, []);
+
   const sessions = useAgentSessions({
     onClearMessages: () => setMessages([]),
     onStopStream: () => {
@@ -100,6 +156,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       streamingRef.current = false;
       setIsStreaming(false);
       clearPendingPlaceholders();
+      respondToConfirm({ approved: false });
     },
     onLoadMessages: (loaded: ChatMessage[]) => setMessages(loaded),
     projectId,
@@ -190,7 +247,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
     streamingRef.current = false;
     setIsStreaming(false);
     clearPendingPlaceholders();
-  }, [clearPendingPlaceholders]);
+    respondToConfirm({ approved: false });
+  }, [clearPendingPlaceholders, respondToConfirm]);
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
   const sendChat = useCallback(
@@ -198,7 +256,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       const trimmed = text.trim();
       if (!trimmed || streamingRef.current) return;
 
-      appendMessage({ id: uid(), role: "user", content: trimmed });
+      const turnId = uid();
+      appendMessage({ id: uid(), role: "user", content: trimmed, turnId });
 
       // 先置 streaming，防止 ensureSession 等待期间重复发送或再次进入
       streamingRef.current = true;
@@ -214,7 +273,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
 
       // ★ 提前创建 assistant 占位，"思考中…" 立即出现
       const placeholderId = uid();
-      appendMessage({ id: placeholderId, role: "assistant", content: "" });
+      appendMessage({ id: placeholderId, role: "assistant", content: "", turnId });
 
       // 整个回合的画布变更合并为一次历史快照（agent 一批操作 = 用户一次撤销）。
       // 历史栈存「改动前」状态：首次要执行画布工具时拍快照，回合结束（含中途出错）统一入栈。
@@ -226,6 +285,11 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         if (turn.snapshot && turn.mutated && !turn.pushed) {
           turn.pushed = true;
           useHistoryStore.getState().push(turn.snapshot);
+          setLastTurnUndo({
+            turnId,
+            snapshot: turn.snapshot,
+            version: useHistoryStore.getState().version,
+          });
         }
       };
 
@@ -239,6 +303,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           providerId,
           content: trimmed,
           canvasState: serializeCanvasState(),
+          // 自上一条消息以来用户在画布上的操作 diff（取走即清空）
+          userActions: drainUserActions(),
           signal: ctrl.signal,
         });
 
@@ -280,11 +346,53 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
             }
           }
 
-          // 执行画布工具（message_user 之外）
+          // 执行画布工具（message_user 之外）；删除类/整理画布操作先请求用户确认（提议-确认）
           const preSnapshot = displayCalls.length > 0;
           if (preSnapshot) ensureTurnSnapshot();
-          const results = displayCalls.map(executeCanvasToolCall);
+          const autoCalls = displayCalls.filter((c) => !CONFIRM_REQUIRED_TOOLS.has(c.name));
+          const confirmCalls = displayCalls.filter((c) => CONFIRM_REQUIRED_TOOLS.has(c.name));
+          const results = autoCalls.map(executeCanvasToolCall);
           if (results.some((r) => r.mutated)) turn.mutated = true;
+          if (confirmCalls.length > 0) {
+            const decision = await requestConfirmation(confirmCalls);
+            // 等待确认期间被 新对话/停止/切换 会话终止则不再续轮
+            if (!streamingRef.current) break;
+            if (decision.approved) {
+              const { calls: execCalls, skipped, dropped } = applyConfirmSelections(confirmCalls, decision.selections);
+              const confirmedResults = execCalls.map(executeCanvasToolCall);
+              // 被勾掉的子项在结果文本里说明，供模型了解只执行了勾选部分
+              for (const r of confirmedResults) {
+                const n = skipped[r.toolCallId] ?? 0;
+                results.push(n > 0 ? { ...r, content: `用户跳过了其中 ${n} 项，仅执行勾选部分。\n${r.content}` } : r);
+              }
+              for (const id of dropped) {
+                results.push({ toolCallId: id, content: "用户取消了此操作的全部勾选项，未执行。", mutated: false, skipped: true });
+              }
+              if (confirmedResults.some((r) => r.mutated)) turn.mutated = true;
+              appendMessage({
+                id: uid(),
+                role: "system",
+                content: "",
+                turnId,
+                confirmResult: {
+                  approved: true,
+                  executedCount: confirmedResults.length,
+                  skippedCount: Object.values(skipped).reduce((a, b) => a + b, 0),
+                },
+              });
+            } else {
+              for (const c of confirmCalls) {
+                results.push({ toolCallId: c.id, content: "用户拒绝了此操作，未执行。", mutated: false, skipped: true });
+              }
+              appendMessage({
+                id: uid(),
+                role: "system",
+                content: "",
+                turnId,
+                confirmResult: { approved: false, executedCount: 0, skippedCount: 0 },
+              });
+            }
+          }
           // message_user 的结果单独回传（text 为空时如实告知模型）
           for (const c of messageUserCalls) {
             const text0 = typeof c.args.text === "string" ? c.args.text.trim() : "";
@@ -298,12 +406,20 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
 
           // 展示 tool 结果消息
           for (const r of results) {
-            appendMessage({ id: uid(), role: "tool", content: r.content, toolCallId: r.toolCallId });
+            appendMessage({
+              id: uid(),
+              role: "tool",
+              content: r.content,
+              toolCallId: r.toolCallId,
+              failed: r.failed,
+              skipped: r.skipped,
+              turnId,
+            });
           }
 
           // 回传本轮全部工具结果，后端自动续轮
           const nextPlaceholderId = uid();
-          appendMessage({ id: nextPlaceholderId, role: "assistant", content: "" });
+          appendMessage({ id: nextPlaceholderId, role: "assistant", content: "", turnId });
 
           const ctrl2 = new AbortController();
           abortRef.current = ctrl2;
@@ -312,6 +428,10 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
             modelId,
             providerId,
             results: results.map((r) => ({ toolCallId: r.toolCallId, result: r.content })),
+            // 续轮重发最新快照：工具刚改过画布，模型必须基于执行后的状态续做
+            canvasState: serializeCanvasState(),
+            // 续轮等待期间用户的增量操作（对齐 tldraw：agent 多轮期间改动可见）
+            userActions: drainUserActions(),
             signal: ctrl2.signal,
           });
 
@@ -347,7 +467,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         );
       }
     },
-    [appendMessage, patchNote, sessions, runStream, modelId, providerId]
+    [appendMessage, patchNote, sessions, runStream, modelId, providerId, requestConfirmation]
   );
 
   return {
@@ -363,5 +483,10 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
     sessions: sessions.sessions,
     loadSessions: sessions.loadSessions,
     deleteChat: sessions.deleteChat,
+    /** 提议-确认：待用户确认的删除类工具调用 */
+    pendingConfirm,
+    respondToConfirm,
+    /** 回合撤销：最近一次成功入栈的回合记录 */
+    lastTurnUndo,
   };
 }

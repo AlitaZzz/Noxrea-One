@@ -48,6 +48,7 @@ import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
 
+import AgentGhostOverlay from "./AgentGhostOverlay";
 import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
@@ -55,6 +56,8 @@ import UploadFailedOverlay from "./UploadFailedOverlay";
 
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
+  // Agent 提议-确认的幻影蒙层（删除/整理预览）
+  const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const { notification } = App.useApp();
   const [src, setSrc] = useState(data.src || "");
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
@@ -705,6 +708,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        {agentGhost && <AgentGhostOverlay />}
         {data.source === "upload" && hasVideo && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip title={t("common.replace")}>

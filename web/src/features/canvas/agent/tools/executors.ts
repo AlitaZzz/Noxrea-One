@@ -7,7 +7,9 @@
 "use client";
 
 import { getCanvasAgentRuntime } from "@/features/canvas/agent/Runtime";
+import { serializeCanvasState } from "@/features/canvas/agent/tools/canvas-state";
 import type { AgentToolCall, AgentToolResult } from "@/features/canvas/agent/types";
+import { beginAgentActing, endAgentActing } from "@/features/canvas/agent/user-action-tracker";
 import {
   createAudioNode,
   createEdge,
@@ -128,6 +130,13 @@ interface ToolArgs {
   [key: string]: unknown;
 }
 
+/** 单个工具执行的返回：content 回传模型，mutated 参与回合快照，failed 驱动操作行红叉 */
+interface ExecOutcome {
+  content: string;
+  mutated: boolean;
+  failed?: boolean;
+}
+
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
@@ -141,9 +150,9 @@ function strArray(v: unknown): string[] {
 }
 
 /** create_node：批量创建节点，支持 content/prompt/title 预填、params 生成参数与 connectTo 连线 */
-function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
+function execCreateNode(args: ToolArgs): ExecOutcome {
   const items = Array.isArray(args.nodes) ? args.nodes : [];
-  if (items.length === 0) return { content: "未提供 nodes 参数，已忽略。", mutated: false };
+  if (items.length === 0) return { content: "未提供 nodes 参数，已忽略。", mutated: false, failed: true };
 
   const store = useCanvasStore.getState();
   const created: AnyNode[] = [];
@@ -210,7 +219,7 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
     lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}${paramNote}`);
   }
 
-  if (created.length === 0) return { content: lines.join("\n") || "没有可创建的节点。", mutated: false };
+  if (created.length === 0) return { content: lines.join("\n") || "没有可创建的节点。", mutated: false, failed: true };
 
   // connectTo：已存在节点 id 或同批次序号（"1" → 本批次第 1 个节点），方向须符合连线规则。
   // 先建边表再布局：批次内连线参与分层布局，配对节点（如 text→image）左右相邻
@@ -434,12 +443,12 @@ function applyAgentParams(node: AnyNode, params: Record<string, unknown>): [Reco
 }
 
 /** update_node：更新文本正文 / 生成提示词 / 标题 / 生成参数 */
-function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
+function execUpdateNode(args: ToolArgs): ExecOutcome {
   const nodeId = str(args.nodeId);
-  if (!nodeId) return { content: "缺少 nodeId。", mutated: false };
+  if (!nodeId) return { content: "缺少 nodeId。", mutated: false, failed: true };
 
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-  if (!node) return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false };
+  if (!node) return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false, failed: true };
 
   const patch: Record<string, unknown> = {};
   const lines: string[] = [];
@@ -486,6 +495,7 @@ function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
     return {
       content: `没有可应用的更新（text 节点用 content，生成节点用 prompt，参数用 params）。${allLines.length > 0 ? `\n${allLines.join("\n")}` : ""}`,
       mutated: false,
+      failed: true,
     };
   }
 
@@ -496,14 +506,14 @@ function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
 }
 
 /** delete_nodes：删除节点（级联清边） */
-function execDeleteNodes(args: ToolArgs): { content: string; mutated: boolean } {
+function execDeleteNodes(args: ToolArgs): ExecOutcome {
   const ids = strArray(args.nodeIds);
-  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false };
+  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false, failed: true };
 
   const existing = useCanvasStore.getState().nodes;
   const found = ids.filter((id) => existing.some((n) => n.id === id));
   const missing = ids.filter((id) => !found.includes(id));
-  if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false };
+  if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false, failed: true };
 
   useCanvasStore.getState().removeNodes(found, { skipHistory: true });
   let content = `已删除 ${found.length} 个节点。`;
@@ -512,9 +522,9 @@ function execDeleteNodes(args: ToolArgs): { content: string; mutated: boolean } 
 }
 
 /** connect_nodes：在已有节点间连线 */
-function execConnectNodes(args: ToolArgs): { content: string; mutated: boolean } {
+function execConnectNodes(args: ToolArgs): ExecOutcome {
   const items = Array.isArray(args.edges) ? args.edges : [];
-  if (items.length === 0) return { content: "未提供 edges。", mutated: false };
+  if (items.length === 0) return { content: "未提供 edges。", mutated: false, failed: true };
 
   const state = useCanvasStore.getState();
   const nodesById = new Map(state.nodes.map((n) => [n.id, n]));
@@ -553,13 +563,13 @@ function execConnectNodes(args: ToolArgs): { content: string; mutated: boolean }
   }
   let content = newEdges.length ? `已创建 ${newEdges.length} 条连线。` : "没有可创建的连线。";
   if (errors.length) content += `\n跳过：${[...new Set(errors)].join("；")}`;
-  return { content, mutated: newEdges.length > 0 };
+  return { content, failed: newEdges.length === 0, mutated: newEdges.length > 0 };
 }
 
 /** delete_edges：按 source→target 删除连线（方向敏感，同名反向线不受影响） */
-function execDeleteEdges(args: ToolArgs): { content: string; mutated: boolean } {
+function execDeleteEdges(args: ToolArgs): ExecOutcome {
   const items = Array.isArray(args.edges) ? args.edges : [];
-  if (items.length === 0) return { content: "未提供 edges。", mutated: false };
+  if (items.length === 0) return { content: "未提供 edges。", mutated: false, failed: true };
 
   const state = useCanvasStore.getState();
   const edgeIds: string[] = [];
@@ -577,7 +587,7 @@ function execDeleteEdges(args: ToolArgs): { content: string; mutated: boolean } 
     if (matched.length === 0) { skipped.push(`${source} → ${target} 连线不存在`); continue; }
     edgeIds.push(...matched.map((x) => x.id));
   }
-  if (edgeIds.length === 0) return { content: "没有匹配的连线可删。", mutated: false };
+  if (edgeIds.length === 0) return { content: "没有匹配的连线可删。", mutated: false, failed: true };
 
   useCanvasStore.getState().removeEdges(edgeIds, { skipHistory: true });
   let content = `已删除 ${edgeIds.length} 条连线。`;
@@ -586,18 +596,19 @@ function execDeleteEdges(args: ToolArgs): { content: string; mutated: boolean } 
 }
 
 /** duplicate_node：复制节点（含提示词/参数/已生成内容；不复制连线） */
-function execDuplicateNode(args: ToolArgs): { content: string; mutated: boolean } {
+function execDuplicateNode(args: ToolArgs): ExecOutcome {
   const nodeId = str(args.nodeId);
-  if (!nodeId) return { content: "缺少 nodeId。", mutated: false };
+  if (!nodeId) return { content: "缺少 nodeId。", mutated: false, failed: true };
 
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   if (!node) {
-    return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false };
+    return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false, failed: true };
   }
   if (node.type === NODE_TYPE.GROUP) {
     return {
       content: `group 节点 ${nodeId} 不支持复制（成员节点不会跟着复制，会得到一个空组框）。如需复制内容，请对组内各成员节点分别调用 duplicate_node。`,
       mutated: false,
+      failed: true,
     };
   }
 
@@ -621,13 +632,13 @@ function execDuplicateNode(args: ToolArgs): { content: string; mutated: boolean 
 }
 
 /** move_node：移动节点到坐标 / 视口中心 / 参照节点旁 */
-function execMoveNode(args: ToolArgs): { content: string; mutated: boolean } {
+function execMoveNode(args: ToolArgs): ExecOutcome {
   const nodeId = str(args.nodeId);
-  if (!nodeId) return { content: "缺少 nodeId。", mutated: false };
+  if (!nodeId) return { content: "缺少 nodeId。", mutated: false, failed: true };
 
   const nodes = useCanvasStore.getState().nodes;
   const node = nodes.find((n) => n.id === nodeId);
-  if (!node) return { content: `节点 ${nodeId} 不存在。`, mutated: false };
+  if (!node) return { content: `节点 ${nodeId} 不存在。`, mutated: false, failed: true };
 
   const size = nodeSize(node);
   const alignTo = str(args.alignTo);
@@ -642,12 +653,12 @@ function execMoveNode(args: ToolArgs): { content: string; mutated: boolean } {
     target = { x: c.x - size.width / 2, y: c.y - size.height / 2 };
   } else if (alignTo) {
     const ref = nodes.find((n) => n.id === alignTo);
-    if (!ref) return { content: `对齐目标节点 ${alignTo} 不存在。`, mutated: false };
+    if (!ref) return { content: `对齐目标节点 ${alignTo} 不存在。`, mutated: false, failed: true };
     const rs = nodeSize(ref);
     target = { x: ref.position.x + rs.width + 60, y: ref.position.y };
   }
 
-  if (!target) return { content: "请提供 x/y 或 alignTo。", mutated: false };
+  if (!target) return { content: "请提供 x/y 或 alignTo。", mutated: false, failed: true };
 
   useCanvasStore.getState().setNodes(
     nodes.map((n) => (n.id === nodeId ? { ...n, position: target! } : n)),
@@ -657,9 +668,9 @@ function execMoveNode(args: ToolArgs): { content: string; mutated: boolean } {
 }
 
 /** arrange_canvas：整理布局（并入 agent 回合的一次撤销，不自压快照） */
-function execArrangeCanvas(): { content: string; mutated: boolean } {
+function execArrangeCanvas(): ExecOutcome {
   const rt = getCanvasAgentRuntime();
-  if (!rt) return { content: "画布尚未就绪，无法整理。", mutated: false };
+  if (!rt) return { content: "画布尚未就绪，无法整理。", mutated: false, failed: true };
   const moved = rt.tidyCanvas({ skipHistory: true });
   return moved
     ? { content: "已整理画布布局。", mutated: true }
@@ -667,14 +678,14 @@ function execArrangeCanvas(): { content: string; mutated: boolean } {
 }
 
 /** set_viewport：聚焦节点或跳转坐标 */
-function execSetViewport(args: ToolArgs): { content: string; mutated: boolean } {
+function execSetViewport(args: ToolArgs): ExecOutcome {
   const rt = getCanvasAgentRuntime();
-  if (!rt) return { content: "画布尚未就绪。", mutated: false };
+  if (!rt) return { content: "画布尚未就绪。", mutated: false, failed: true };
 
   const nodeId = str(args.nodeId);
   if (nodeId) {
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    if (!node) return { content: `节点 ${nodeId} 不存在。`, mutated: false };
+    if (!node) return { content: `节点 ${nodeId} 不存在。`, mutated: false, failed: true };
     rt.focusNode(node);
     return { content: `视口已聚焦到节点 ${nodeId}。`, mutated: false };
   }
@@ -685,18 +696,153 @@ function execSetViewport(args: ToolArgs): { content: string; mutated: boolean } 
     rt.setCenter(x, y, num(args.zoom));
     return { content: `视口已移动到 (${Math.round(x)}, ${Math.round(y)})。`, mutated: false };
   }
-  return { content: "请提供 nodeId 或 x/y。", mutated: false };
+  return { content: "请提供 nodeId 或 x/y。", mutated: false, failed: true };
+}
+
+/** get_canvas_state 单次回传配额：超大画布按整条截断并附计数，防止一次性灌爆上下文 */
+const CANVAS_STATE_MAX_NODES = 500;
+const CANVAS_STATE_MAX_EDGES = 2000;
+
+/** 解析 region 参数（四边齐全且 maxX>minX、maxY>minY 才生效） */
+function parseRegion(raw: unknown): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const minX = num(r.minX);
+  const maxX = num(r.maxX);
+  const minY = num(r.minY);
+  const maxY = num(r.maxY);
+  if (minX == null || maxX == null || minY == null || maxY == null) return null;
+  if (maxX <= minX || maxY <= minY) return null;
+  return { minX, maxX, minY, maxY };
+}
+
+/** get_canvas_state：读取画布最新名册（只读），可选按坐标范围分段读取超大画布 */
+function execGetCanvasState(args: ToolArgs): ExecOutcome {
+  const state = serializeCanvasState();
+  const region = parseRegion(args.region);
+
+  let nodes = state.nodes;
+  let edges = state.edges;
+  let regionNote = "";
+  if (region) {
+    // 与矩形相交（含边界）的节点保留；连线只留两端都在范围内的
+    nodes = nodes.filter(
+      (n) => n.x + n.w >= region.minX && n.x <= region.maxX && n.y + n.h >= region.minY && n.y <= region.maxY,
+    );
+    const idSet = new Set(nodes.map((n) => n.id));
+    edges = edges.filter((e) => idSet.has(e.source) && idSet.has(e.target));
+    regionNote = `（已按坐标范围过滤：只含 (${Math.round(region.minX)}, ${Math.round(region.minY)}) ~ (${Math.round(region.maxX)}, ${Math.round(region.maxY)}) 区域内的 ${nodes.length} 个节点）`;
+  }
+
+  const nodeCut = Math.max(0, nodes.length - CANVAS_STATE_MAX_NODES);
+  const edgeCut = Math.max(0, edges.length - CANVAS_STATE_MAX_EDGES);
+  if (nodeCut === 0 && edgeCut === 0) {
+    return { content: JSON.stringify({ ...state, nodes, edges, ...(region ? { regionFiltered: regionNote.slice(1, -1) } : {}) }), mutated: false };
+  }
+  const parts = [
+    ...(nodeCut > 0 ? [`${nodeCut} 个节点未列出`] : []),
+    ...(edgeCut > 0 ? [`${edgeCut} 条连线未列出`] : []),
+  ];
+  const trimmed = {
+    ...state,
+    nodes: nodes.slice(0, CANVAS_STATE_MAX_NODES),
+    edges: edges.slice(0, CANVAS_STATE_MAX_EDGES),
+    truncated: `画布过大，已截断：${parts.join("，")}。请用 region 参数按坐标范围分段多次调用核实。`,
+  };
+  return { content: JSON.stringify(trimmed), mutated: false };
+}
+
+/** get_node_detail 单次调用的内容总量上限（字符） */
+const NODE_DETAIL_TOTAL_MAX_CHARS = 12_000;
+
+/** 提取节点完整内容（正文/提示词/参数），供 get_node_detail 回传模型 */
+function serializeNodeDetail(node: AnyNode): Record<string, unknown> {
+  const data = node.data as Record<string, unknown>;
+  const out: Record<string, unknown> = {
+    id: node.id,
+    type: node.type,
+    title: typeof data.label === "string" ? data.label : "",
+  };
+  if (node.type === NODE_TYPE.TEXT) {
+    const plain = typeof data.plainText === "string" ? data.plainText : "";
+    if (plain) out.content = plain;
+  }
+  // prompt 提到顶层：fitNodeDetail 的截断循环按顶层 content/prompt 字段工作
+  const gs = data.genSettings as Record<string, unknown> | undefined;
+  if (gs != null && typeof gs === "object") {
+    const { prompt, ...rest } = gs;
+    if (typeof prompt === "string" && prompt) out.prompt = prompt;
+    if (Object.keys(rest).length > 0) out.genSettings = rest;
+  }
+  if (typeof data.src === "string" && data.src) out.hasSrc = true;
+  const directorState = data.directorState as { entities?: Array<{ type: string; name: string }> } | undefined;
+  const entities = directorState?.entities;
+  if (Array.isArray(entities) && entities.length > 0) {
+    out.entities = entities.map((e) => `${e.type}:${e.name}`);
+  }
+  return out;
+}
+
+/** 单节点内容超预算时截断超长字符串字段并附注（只在异常超大时触发） */
+function fitNodeDetail(detail: Record<string, unknown>, maxChars: number): string {
+  let json = JSON.stringify(detail);
+  if (json.length <= maxChars) return json;
+  const trimmed: Record<string, unknown> = { ...detail };
+  for (const key of ["content", "prompt"]) {
+    const v = trimmed[key];
+    if (typeof v !== "string") continue;
+    const keep = Math.max(0, maxChars - (json.length - v.length) - 200);
+    if (keep <= 0) continue;
+    trimmed[key] = `${v.slice(0, keep)}…(内容过长已截断，共 ${v.length} 字符)`;
+    json = JSON.stringify(trimmed);
+    if (json.length <= maxChars) return json;
+  }
+  return json.slice(0, maxChars) + "…(已截断)";
+}
+
+/** get_node_detail：批量读取节点完整内容（只读），快照名册不含内容，模型按需拉取 */
+function execGetNodeDetail(args: ToolArgs): ExecOutcome {
+  const ids = strArray(args.nodeIds);
+  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false, failed: true };
+
+  const nodes = useCanvasStore.getState().nodes;
+  const results: string[] = [];
+  const missing: string[] = [];
+  let total = 0;
+  let hitLimit = false;
+  for (const id of ids) {
+    const node = nodes.find((n) => n.id === id);
+    if (!node) {
+      missing.push(id);
+      continue;
+    }
+    if (total >= NODE_DETAIL_TOTAL_MAX_CHARS) {
+      hitLimit = true;
+      break;
+    }
+    const json = fitNodeDetail(serializeNodeDetail(node), NODE_DETAIL_TOTAL_MAX_CHARS - total);
+    total += json.length;
+    results.push(json);
+  }
+
+  if (results.length === 0) {
+    return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false, failed: true };
+  }
+  const lines = [results.join("\n")];
+  if (missing.length > 0) lines.push(`以下节点不存在：${missing.join(", ")}`);
+  if (hitLimit) lines.push(`单次读取总量已达上限（${NODE_DETAIL_TOTAL_MAX_CHARS} 字符），其余节点请再次调用 get_node_detail。`);
+  return { content: lines.join("\n"), mutated: false, failed: missing.length === ids.length };
 }
 
 /** select_nodes：选中节点，可选聚焦 */
-function execSelectNodes(args: ToolArgs): { content: string; mutated: boolean } {
+function execSelectNodes(args: ToolArgs): ExecOutcome {
   const ids = strArray(args.nodeIds);
-  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false };
+  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false, failed: true };
 
   const idSet = new Set(ids);
   const nodes = useCanvasStore.getState().nodes;
   const found = ids.filter((id) => nodes.some((n) => n.id === id));
-  if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false };
+  if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false, failed: true };
 
   useCanvasStore.getState().setNodes(
     nodes.map((n) => ({ ...n, selected: idSet.has(n.id) })),
@@ -711,7 +857,9 @@ function execSelectNodes(args: ToolArgs): { content: string; mutated: boolean } 
 
 /** 分发执行一个工具调用 */
 export function executeCanvasToolCall(call: AgentToolCall): AgentToolResult {
-  let out: { content: string; mutated: boolean };
+  let out: ExecOutcome;
+  // agent 自己的写回不进用户操作历史（防双计），操作期间 subscription 直接跳过
+  beginAgentActing();
   try {
     switch (call.name) {
       case "create_node": out = execCreateNode(call.args); break;
@@ -724,11 +872,15 @@ export function executeCanvasToolCall(call: AgentToolCall): AgentToolResult {
       case "arrange_canvas": out = execArrangeCanvas(); break;
       case "set_viewport": out = execSetViewport(call.args); break;
       case "select_nodes": out = execSelectNodes(call.args); break;
+      case "get_canvas_state": out = execGetCanvasState(call.args); break;
+      case "get_node_detail": out = execGetNodeDetail(call.args); break;
       default:
-        out = { content: `工具「${call.name}」不支持。`, mutated: false };
+        out = { content: `工具「${call.name}」不支持。`, mutated: false, failed: true };
     }
   } catch (err) {
-    out = { content: `工具执行出错：${String(err)}`, mutated: false };
+    out = { content: `工具执行出错：${String(err)}`, mutated: false, failed: true };
+  } finally {
+    endAgentActing();
   }
-  return { toolCallId: call.id, content: out.content, mutated: out.mutated };
+  return { toolCallId: call.id, content: out.content, mutated: out.mutated, failed: out.failed };
 }

@@ -24,7 +24,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
       const state = { nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn(), getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }) };
       return selector ? selector(state) : state;
     },
-    { getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }) },
+    { getState: () => ({ nodes: mockNodes, edges: [], addNodes: vi.fn(), setEdges: vi.fn() }), subscribe: vi.fn() },
   ),
   takeCanvasSnapshot: vi.fn(),
   markDirty: vi.fn(),
