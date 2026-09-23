@@ -29,7 +29,6 @@
     "pasteUnsupported": "This clipboard content cannot be pasted onto the canvas.",
     "undo": "Undo",
     "redo": "Redo",
-    "deselectAll": "Deselect All",
     "name": "Name",
     "generate": "Generate",
     "model": "Model",
@@ -327,8 +326,6 @@
     "filter": "Filter",
     "filterClear": "Clear filter",
     "retry": "Failed to load, click to retry",
-    "added": "Added to canvas",
-    "addedCount": "Added {{count}} items to canvas",
     "addToCanvas": "Add to canvas",
     "selectedN": "{{count}} items selected",
     "noDetail": "No details",
@@ -343,7 +340,6 @@
     "updatedAtLabel": "Updated",
     "tagsLabel": "Tags",
     "addTag": "Add tag",
-    "removeTag": "Remove tag",
     "tagPlaceholder": "Type and press Enter",
     "tagLimit": "Up to {{max}} tags",
     "promptLabel": "Prompt",
@@ -373,7 +369,9 @@
       "delete": "Delete Folder",
       "rename": "Rename Folder",
       "deleteWarn": "This will permanently delete the folder and all its subfolders and assets, and cannot be undone."
-    }
+    },
+    "added": "Added to canvas",
+    "addedCount": "Added {{count}} items to canvas"
   },
   "angle": {
     "editor": "Multi-Angle",
