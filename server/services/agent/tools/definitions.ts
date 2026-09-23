@@ -19,6 +19,7 @@ const createNodeItemSchema = z.object({
   content: z.string().optional(),
   prompt: z.string().optional(),
   title: z.string().optional(),
+  params: z.record(z.unknown()).optional(),
   connectTo: z.array(z.string()).optional(),
 });
 
@@ -30,6 +31,8 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
     "kind 语义：text=文本便签（content 为正文）；image=图片节点（prompt 为生成提示词）；" +
     "video=视频节点（prompt 为生成提示词）；audio=音频节点（prompt 预留）；director=导演台；group=编组容器（title 为组名）。\n" +
     "image/video 节点只预填提示词，不会自动生成内容，用户会自行点击生成——不要在文字里复述提示词。\n" +
+    "用户提到生成参数（比例、分辨率、时长、张数等）时，image/video 节点必须在创建时通过 params 传入（如 {\"ratio\":\"9:16\"}），" +
+    "不要把参数写进提示词文本，也不要只口头声称已设置。参数按当前模型配置校验：不支持的值自动取最接近档位（ratio）或默认值，结果中会逐项说明。\n" +
     "connectTo：创建后要与哪些节点连线，值为已存在节点的 id，或同批次节点的序号（\"1\" 表示本批次第 1 个）。\n" +
     "返回结果会给出每个新节点分配到的 id，后续更新/连线必须引用这些 id。",
   parameters: {
@@ -43,6 +46,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
           content: { type: "string", description: "text 节点的正文内容" },
           prompt: { type: "string", description: "image/video/audio 节点的生成提示词" },
           title: { type: "string", description: "节点标题（group 为组名）" },
+          params: { type: "object", description: "image/video 节点的生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
           connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）", items: { type: "string" } },
         },
         required: ["kind"],
@@ -58,13 +62,16 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
 const UPDATE_NODE_TOOL: AgentToolDefinition = {
   name: "update_node",
   description:
-    "更新一个已存在节点的内容。优先于「删了重建」：修改文本正文、修改生成提示词、改标题都应使用本工具。\n" +
-    "text 节点用 content 更新正文；image/video 节点用 prompt 更新生成提示词；title 更新标题（传空字符串清除标题）。",
+    "更新一个已存在节点的内容。优先于「删了重建」：修改文本正文、修改生成提示词、改标题、设置生成参数都应使用本工具。\n" +
+    "text 节点用 content 更新正文；image/video 节点用 prompt 更新生成提示词；title 更新标题（传空字符串清除标题）；\n" +
+    "params 设置生成参数（如 {\"ratio\":\"9:16\"}，image 支持 quality/resolution/ratio/n，video 支持 resolution/ratio/seconds/generateAudio/n，以实际模型配置为准）。\n" +
+    "参数会按当前模型可用选项校验：不支持的值自动取最接近档位（ratio）或默认值，结果中会逐项说明。",
   parameters: {
     nodeId: { type: "string", description: "目标节点 id" },
     content: { type: "string", description: "text 节点的新正文" },
     prompt: { type: "string", description: "image/video 节点的新生成提示词" },
     title: { type: "string", description: "新标题；空字符串 = 清除标题" },
+    params: { type: "object", description: "生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
   },
   required: ["nodeId"],
   execute: "client",
@@ -74,6 +81,7 @@ const UPDATE_NODE_TOOL: AgentToolDefinition = {
     content: z.string().optional(),
     prompt: z.string().optional(),
     title: z.string().optional(),
+    params: z.record(z.unknown()).optional(),
   }),
 };
 

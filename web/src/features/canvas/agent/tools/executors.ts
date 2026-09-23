@@ -17,6 +17,8 @@ import {
   createVideoNode,
   directorNode as createDirectorNode,
 } from "@/features/canvas/node-defaults";
+import { readLastModel } from "@/features/canvas/shared/last-model";
+import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import {
   findFreePosition,
   getViewportCenter,
@@ -25,6 +27,8 @@ import {
 } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, ImageGenSettings, TextNodeData, VideoGenSettings } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
+import { useModelStore } from "@/lib/model-store";
+import type { ModelCapability } from "@/lib/types/models";
 
 // ── 工厂表 ──
 
@@ -119,7 +123,7 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-/** create_node：批量创建节点（≤6），支持 content/prompt/title 预填与 connectTo 连线 */
+/** create_node：批量创建节点（≤6），支持 content/prompt/title 预填、params 生成参数与 connectTo 连线 */
 function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
   const items = Array.isArray(args.nodes) ? args.nodes : [];
   if (items.length === 0) return { content: "未提供 nodes 参数，已忽略。", mutated: false };
@@ -129,6 +133,7 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
   const batchIdByIndex = new Map<number, string>();
   const anchor = getViewportCenter();
   const lines: string[] = [];
+  const degraded: string[] = [];
 
   for (let i = 0; i < Math.min(items.length, 6); i++) {
     const item = items[i] as Record<string, unknown>;
@@ -142,17 +147,38 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
     }
     const kind = KIND_TO_NODE_TYPE[rawKind as ToolNodeKind];
     const node = NODE_FACTORIES[kind]({ x: 0, y: 0 });
-    node.position = findFreePosition(nodeSize(node), anchor);
     const filled = fillNodeData(node, {
       kind,
       content: str(item.content),
       prompt: str(item.prompt),
       title: str(item.title),
     });
+    // params：创建时直接落生成参数，避免「创建后再 update_node」的二次往返
+    const rawParams = item.params != null && typeof item.params === "object" && !Array.isArray(item.params)
+      ? (item.params as Record<string, unknown>)
+      : undefined;
+    let paramNote = "";
+    if (rawParams && Object.keys(rawParams).length > 0) {
+      const [paramPatch, pLines] = applyAgentParams(filled, rawParams);
+      if (Object.keys(paramPatch).length > 0) {
+        const gs = ((filled.data as { genSettings?: Record<string, unknown> }).genSettings) ?? {};
+        (filled.data as { genSettings?: Record<string, unknown> }).genSettings = { ...gs, ...paramPatch };
+        // 新节点必然无 src：占位框直接按比例落尺寸（applyRatioToNode 需节点已入 store，此处提前手写）
+        const ratio = paramPatch.ratio;
+        if (typeof ratio === "string") {
+          const size = ratioToNodeSize(ratio);
+          if (size) filled.style = { ...(filled.style ?? {}), width: size.width, height: size.height };
+        }
+        paramNote = `，参数：${Object.entries(paramPatch).map(([k, v]) => `${k}=${String(v)}`).join(", ")}`;
+      }
+      degraded.push(...pLines);
+    }
+    // 位置按最终尺寸寻找空位（params 可能已改变占位框尺寸）
+    filled.position = findFreePosition(nodeSize(filled), anchor);
     created.push(filled);
     batchIdByIndex.set(i + 1, filled.id);
     const desc = kind === NODE_TYPE.TEXT ? (str(item.content)?.slice(0, 40) ?? "") : (str(item.prompt)?.slice(0, 40) ?? "");
-    lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}`);
+    lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}${paramNote}`);
   }
 
   if (created.length === 0) return { content: lines.join("\n") || "没有可创建的节点。", mutated: false };
@@ -180,12 +206,141 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
   }
 
   let content = `已创建 ${created.length} 个节点：\n${lines.join("\n")}`;
+  if (degraded.length > 0) content += `\n参数降级说明：\n${degraded.join("\n")}`;
   if (newEdges.length) content += `\n已创建 ${newEdges.length} 条连线。`;
   if (skipped.length) content += `\n以下连线目标不存在，已跳过：${[...new Set(skipped)].join(", ")}`;
   return { content, mutated: true };
 }
 
-/** update_node：更新文本正文 / 生成提示词 / 标题 */
+// ── agent 参数写入校验 ──
+
+/** 节点类型 → 模型参数 capability（与生成面板 findModelParams 取参一致） */
+const NODE_PARAM_CAPABILITY: Partial<Record<CanvasNodeType, ModelCapability>> = {
+  [NODE_TYPE.IMAGE]: "image",
+  [NODE_TYPE.VIDEO]: "video",
+};
+
+/** 支持预填 prompt 的节点类型（text/image/video 各自的生成面板都读 genSettings.prompt） */
+const PROMPT_NODE_TYPES = new Set<CanvasNodeType>([
+  NODE_TYPE.TEXT,
+  NODE_TYPE.IMAGE,
+  NODE_TYPE.VIDEO,
+  NODE_TYPE.AUDIO,
+]);
+
+/** 解析 "W:H" 为宽高比数值；"adaptive" 等非比例串返回 null */
+function parseRatioValue(v: string): number | null {
+  const m = /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.exec(v);
+  return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : null;
+}
+
+/**
+ * 校验 agent 传入的 params，返回 [可写入 genSettings 的字段, 给模型的提示行]。
+ * 以当前生效模型（与面板同一回退链：modelKey → 最近使用 → 该能力第一个可用）的
+ * 字段配置为唯一依据：有 options 的字段只接受合法档位，ratio 不匹配时选宽高比
+ * 最接近的档位；无 options 的数值字段按 min/max 收敛；其余直接写入。
+ * 校验不可进行（类型不支持 / 无模型 / 无参数配置）时返回空 patch 与说明行。
+ */
+function applyAgentParams(node: AnyNode, params: Record<string, unknown>): [Record<string, unknown>, string[]] {
+  const capability = NODE_PARAM_CAPABILITY[node.type];
+  if (!capability) return [{}, ["该节点类型不支持设置生成参数"]];
+  const gs = (node.data as { genSettings?: { modelKey?: string } } | undefined)?.genSettings;
+
+  const { providers, findModelParams } = useModelStore.getState();
+  const allModels = providers
+    .flatMap((c) =>
+      c.models
+        .filter((m) => m.capabilities?.includes(capability))
+        .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, name: m.name })),
+    )
+    .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
+  if (allModels.length === 0) return [{}, ["没有可用的生成模型，未设置参数"]];
+
+  const key = (gs?.modelKey && allModels.some((m) => m.value === gs.modelKey) ? gs.modelKey : "")
+    || readLastModel(capability, allModels)
+    || allModels[0].value;
+  const entry = allModels.find((m) => m.value === key) ?? allModels[0];
+  const fields = findModelParams(entry.providerId, entry.name, capability)?.fields ?? [];
+  if (fields.length === 0) return [{}, [`模型 ${entry.name} 无参数配置，未设置参数`]];
+
+  const patch: Record<string, unknown> = {};
+  const lines: string[] = [];
+  for (const [name, raw] of Object.entries(params)) {
+    const field = fields.find((f) => f.name === name);
+    if (!field) {
+      lines.push(`参数 ${name}：当前模型不支持，已跳过`);
+      continue;
+    }
+    const options = Array.isArray(field.options) ? field.options : [];
+    if (options.length > 0) {
+      // 命中选项时写入选项原值（而非 raw）：数字/布尔选项不会被 LLM 的字符串形式污染
+      const matched = options.find((o) => String(o) === String(raw));
+      if (matched !== undefined) {
+        patch[name] = matched;
+        continue;
+      }
+      // ratio 特例：不匹配时选宽高比最接近的档位（对数距离保证 16:9 的近邻是 9:21 而非 1:1）
+      if (name === "ratio" && typeof raw === "string") {
+        const target = parseRatioValue(raw);
+        const candidates = options
+          .map((o) => ({ opt: String(o), r: typeof o === "string" ? parseRatioValue(o) : null }))
+          .filter((x): x is { opt: string; r: number } => x.r !== null);
+        const hit = target !== null && candidates.length > 0
+          ? candidates.reduce((best, x) =>
+              Math.abs(Math.log(x.r / target)) < Math.abs(Math.log(best.r / target)) ? x : best)
+          : null;
+        if (hit) {
+          patch[name] = hit.opt;
+          lines.push(`参数 ratio：${raw} 不支持，已选最接近的 ${hit.opt}`);
+          continue;
+        }
+      }
+      const fallback = field.default != null && options.some((o) => String(o) === String(field.default))
+        ? field.default
+        : options[0];
+      patch[name] = fallback;
+      lines.push(`参数 ${name}：值 ${String(raw)} 不支持（可选：${options.join("/")}），已用 ${String(fallback)}`);
+      continue;
+    }
+    // 无 options 的字段按控件类型收敛：switch 收敛为布尔，slider/number 收敛为数字并夹取范围
+    // （LLM 输出是系统边界，字符串 "8"/"true" 必须在写入前转为面板/后端期望的类型）
+    if (field.type === "switch") {
+      const b = raw === true || raw === 1 || raw === "1" || raw === "true"
+        ? true
+        : raw === false || raw === 0 || raw === "0" || raw === "false" ? false : null;
+      if (b === null) {
+        lines.push(`参数 ${name}：需要布尔值（true/false），已跳过`);
+        continue;
+      }
+      patch[name] = b;
+      continue;
+    }
+    if (field.type === "slider" || field.type === "number") {
+      const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+      if (!Number.isFinite(n)) {
+        lines.push(`参数 ${name}：需要数字，已跳过`);
+        continue;
+      }
+      if (field.min == null && field.max == null) {
+        patch[name] = n;
+        continue;
+      }
+      const clamped = Math.min(Math.max(n, field.min ?? -Infinity), field.max ?? Infinity);
+      patch[name] = clamped;
+      if (clamped !== n) lines.push(`参数 ${name}：已收敛到 ${clamped}（范围 ${field.min ?? "-∞"}~${field.max ?? "∞"}）`);
+      continue;
+    }
+    // 选项缺失的 segmented/select 属配置异常：仅放行原始类型，对象/数组等一律跳过
+    if (typeof raw !== "string" && typeof raw !== "number" && typeof raw !== "boolean") {
+      lines.push(`参数 ${name}：不支持的值类型，已跳过`);
+      continue;
+    }
+    patch[name] = raw;
+  }
+  return [patch, lines];
+}
+
+/** update_node：更新文本正文 / 生成提示词 / 标题 / 生成参数 */
 function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
   const nodeId = str(args.nodeId);
   if (!nodeId) return { content: "缺少 nodeId。", mutated: false };
@@ -194,29 +349,57 @@ function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
   if (!node) return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false };
 
   const patch: Record<string, unknown> = {};
+  const lines: string[] = [];
   const content = str(args.content);
   const prompt = str(args.prompt);
   // title 与其他字段不同：空字符串是合法值（清除标题），不能经 str() 的非空过滤丢弃
   const title = typeof args.title === "string" ? args.title.trim() : undefined;
+  const params = args.params != null && typeof args.params === "object" && !Array.isArray(args.params)
+    ? (args.params as Record<string, unknown>)
+    : undefined;
 
   if (title !== undefined) patch.label = title;
   if (content && node.type === NODE_TYPE.TEXT) {
     patch.content = textToHtml(content);
     patch.plainText = content;
-  }
-  if (prompt) {
-    // genSettings 缺失（旧项目节点 / 尚未被面板初始化）时也要落 prompt，
-    // 否则 agent 报告已更新但受控面板读不到任何变化
-    const data = node.data as { genSettings?: Record<string, unknown> } | undefined;
-    patch.genSettings = { ...(data?.genSettings ?? {}), prompt };
+  } else if (content) {
+    lines.push("content 仅对 text 节点生效，已忽略");
   }
 
+  // prompt 与 params 合并写 genSettings（单次 updateNodeData，保持与面板一致的受控写入）
+  const gsBase = ((node.data as { genSettings?: Record<string, unknown> } | undefined)?.genSettings) ?? {};
+  const gsPatch: Record<string, unknown> = {};
+  if (prompt) {
+    if (PROMPT_NODE_TYPES.has(node.type)) gsPatch.prompt = prompt;
+    else lines.push("该节点类型不支持设置提示词，已忽略");
+  }
+  let paramLines: string[] = [];
+  if (params && Object.keys(params).length > 0) {
+    const [paramPatch, pLines] = applyAgentParams(node, params);
+    if (Object.keys(paramPatch).length > 0) {
+      Object.assign(gsPatch, paramPatch);
+      const written = Object.entries(paramPatch).map(([k, v]) => `${k}=${String(v)}`);
+      paramLines = [`参数已写入：${written.join(", ")}`, ...pLines];
+      const ratio = paramPatch.ratio;
+      if (typeof ratio === "string") applyRatioToNode(nodeId, ratio); // 空节点占位框跟随比例（与面板一致）
+    } else {
+      paramLines = pLines;
+    }
+  }
+  if (Object.keys(gsPatch).length > 0) patch.genSettings = { ...gsBase, ...gsPatch };
+
+  const allLines = [...lines, ...paramLines];
   if (Object.keys(patch).length === 0) {
-    return { content: `没有可应用的更新（text 节点用 content，生成节点用 prompt）。`, mutated: false };
+    return {
+      content: `没有可应用的更新（text 节点用 content，生成节点用 prompt，参数用 params）。${allLines.length > 0 ? `\n${allLines.join("\n")}` : ""}`,
+      mutated: false,
+    };
   }
 
   useCanvasStore.getState().updateNodeData(nodeId, patch, undefined, { skipHistory: true });
-  return { content: `已更新节点 ${nodeId}。`, mutated: true };
+  let result = `已更新节点 ${nodeId}。`;
+  if (allLines.length > 0) result += `\n${allLines.join("\n")}`;
+  return { content: result, mutated: true };
 }
 
 /** delete_nodes：删除节点（级联清边） */
