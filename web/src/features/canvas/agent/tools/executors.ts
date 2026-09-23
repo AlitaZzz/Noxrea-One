@@ -26,7 +26,7 @@ import {
   useCanvasStore,
 } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, ImageGenSettings, TextNodeData, VideoGenSettings } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
+import { canConnect, NODE_TYPE, VALID_CONNECTION_OUTPUTS } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability } from "@/lib/types/models";
 
@@ -185,7 +185,7 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
 
   store.addNodes(created, { skipHistory: true });
 
-  // connectTo：已存在节点 id 或同批次序号（"1" → 本批次第 1 个节点）
+  // connectTo：已存在节点 id 或同批次序号（"1" → 本批次第 1 个节点），方向须符合连线规则
   const newEdges = [];
   const skipped: string[] = [];
   for (let i = 0; i < created.length; i++) {
@@ -194,8 +194,15 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
       const byIndex = batchIdByIndex.get(Number(raw));
       const targetId = byIndex ?? raw;
       if (targetId === created[i].id) continue;
-      if (!byIndex && !useCanvasStore.getState().nodes.some((n) => n.id === targetId)) {
+      const targetNode = byIndex
+        ? created.find((n) => n.id === targetId)
+        : useCanvasStore.getState().nodes.find((n) => n.id === targetId);
+      if (!targetNode) {
         skipped.push(raw);
+        continue;
+      }
+      if (!canConnect(created[i].type, targetNode.type)) {
+        skipped.push(`${raw}（${created[i].type} → ${targetNode.type} 不符合连线规则）`);
         continue;
       }
       newEdges.push(createEdge(created[i].id, targetId));
@@ -431,10 +438,18 @@ function execConnectNodes(args: ToolArgs): { content: string; mutated: boolean }
     const source = str(e.source);
     const target = str(e.target);
     if (!source || !target) { errors.push("缺少 source/target"); continue; }
-    if (!state.nodes.some((n) => n.id === source)) { errors.push(`source ${source} 不存在`); continue; }
-    if (!state.nodes.some((n) => n.id === target)) { errors.push(`target ${target} 不存在`); continue; }
+    const sourceNode = state.nodes.find((n) => n.id === source);
+    const targetNode = state.nodes.find((n) => n.id === target);
+    if (!sourceNode) { errors.push(`source ${source} 不存在`); continue; }
+    if (!targetNode) { errors.push(`target ${target} 不存在`); continue; }
     if (source === target) { errors.push("不能连接节点自身"); continue; }
     if (state.edges.some((x) => x.source === source && x.target === target)) { errors.push(`${source} → ${target} 已有连线`); continue; }
+    // 与画布交互（isValidConnection）同一套规则：连线方向即数据流向
+    if (!canConnect(sourceNode.type, targetNode.type)) {
+      const allowed = VALID_CONNECTION_OUTPUTS[sourceNode.type ?? ""] ?? [];
+      errors.push(`${source} → ${target} 不符合连线规则（${sourceNode.type} 可连出：${allowed.join("/")}）`);
+      continue;
+    }
     newEdges.push(createEdge(source, target));
   }
   if (newEdges.length > 0) {

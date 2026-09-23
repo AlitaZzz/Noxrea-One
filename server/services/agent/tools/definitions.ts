@@ -34,6 +34,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
     "用户提到生成参数（比例、分辨率、时长、张数等）时，image/video 节点必须在创建时通过 params 传入（如 {\"ratio\":\"9:16\"}），" +
     "不要把参数写进提示词文本，也不要只口头声称已设置。参数按当前模型配置校验：不支持的值自动取最接近档位（ratio）或默认值，结果中会逐项说明。\n" +
     "connectTo：创建后要与哪些节点连线，值为已存在节点的 id，或同批次节点的序号（\"1\" 表示本批次第 1 个）。\n" +
+    "连线方向即数据流向，须符合画布规则（不合法的连线会被拒绝）：text→任意；image→text/image/video；video→text/video；audio→text/audio/video。\n" +
     "返回结果会给出每个新节点分配到的 id，后续更新/连线必须引用这些 id。",
   parameters: {
     nodes: {
@@ -47,7 +48,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
           prompt: { type: "string", description: "image/video/audio 节点的生成提示词" },
           title: { type: "string", description: "节点标题（group 为组名）" },
           params: { type: "object", description: "image/video 节点的生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
-          connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）", items: { type: "string" } },
+          connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）。方向须符合连线规则（text→任意；image→text/image/video；video→text/video；audio→text/audio/video）", items: { type: "string" } },
         },
         required: ["kind"],
       },
@@ -99,7 +100,10 @@ const DELETE_NODES_TOOL: AgentToolDefinition = {
 
 const CONNECT_NODES_TOOL: AgentToolDefinition = {
   name: "connect_nodes",
-  description: "在两个或多个已存在节点之间创建连线（source → target 方向）。",
+  description:
+    "在两个或多个已存在节点之间创建连线（source → target 方向，即数据流向）。\n" +
+    "方向须符合画布规则，不合法的连线会被拒绝：text→text/audio/image/video；image→text/image/video；video→text/video；audio→text/audio/video。\n" +
+    "典型用法：图片是视频的上游（image→video，图生视频）；反向 video→image 不允许。",
   parameters: {
     edges: {
       type: "array",
