@@ -22,6 +22,7 @@ import {
 } from "@/features/canvas/node-defaults";
 import { readLastModel } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
+import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import {
   findFreePosition,
@@ -160,6 +161,8 @@ function execCreateNode(args: ToolArgs): ExecOutcome {
   // connectTo 跟随各自节点收集：条目被跳过时 created 与 items 不再按序对齐，
   // 事后用 items[i] 反查会把连线接到错误的节点上
   const pendingConnects: Array<{ source: AnyNode; targets: string[] }> = [];
+  // params 同样延后处理：refMode 的合法范围取决于上游参考，须在连线表确定后统一应用
+  const pendingParams: Array<{ node: AnyNode; rawParams: Record<string, unknown>; index: number }> = [];
   const anchor = getViewportCenter();
   const lines: string[] = [];
   const degraded: string[] = [];
@@ -191,32 +194,19 @@ function execCreateNode(args: ToolArgs): ExecOutcome {
     // 与 update_node 同款守卫：放错节点类型的字段不静默丢弃，回传原因供模型自纠
     if (content && kind !== NODE_TYPE.TEXT) degraded.push(`${i + 1}. content 仅对 text 节点生效，已忽略`);
     if (prompt && !PROMPT_NODE_TYPES.has(kind)) degraded.push(`${i + 1}. 该节点类型不支持设置提示词，已忽略`);
-    // params：创建时直接落生成参数，避免「创建后再 update_node」的二次往返
+    // params 延后到连线表确定后统一应用（见下方 pendingParams 处理）
     const rawParams = item.params != null && typeof item.params === "object" && !Array.isArray(item.params)
       ? (item.params as Record<string, unknown>)
       : undefined;
-    let paramNote = "";
     if (rawParams && Object.keys(rawParams).length > 0) {
-      const [paramPatch, pLines] = applyAgentParams(filled, rawParams);
-      if (Object.keys(paramPatch).length > 0) {
-        const gs = ((filled.data as { genSettings?: Record<string, unknown> }).genSettings) ?? {};
-        (filled.data as { genSettings?: Record<string, unknown> }).genSettings = { ...gs, ...paramPatch };
-        // 新节点必然无 src：占位框直接按比例落尺寸（applyRatioToNode 需节点已入 store，此处提前手写）
-        const ratio = paramPatch.ratio;
-        if (typeof ratio === "string") {
-          const size = ratioToNodeSize(ratio);
-          if (size) filled.style = { ...(filled.style ?? {}), width: size.width, height: size.height };
-        }
-        paramNote = `，参数：${Object.entries(paramPatch).map(([k, v]) => `${k}=${String(v)}`).join(", ")}`;
-      }
-      degraded.push(...pLines);
+      pendingParams.push({ node: filled, rawParams, index: i });
     }
     created.push(filled);
     batchNodeByIndex.set(i + 1, filled);
     const connectTo = strArray(item.connectTo);
     if (connectTo.length > 0) pendingConnects.push({ source: filled, targets: connectTo });
     const desc = (kind === NODE_TYPE.TEXT ? content : prompt)?.slice(0, 40) ?? "";
-    lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}${paramNote}`);
+    lines.push(`${i + 1}. ${kind} → id=${filled.id}${desc ? `（${desc}…）` : ""}`);
   }
 
   if (created.length === 0) return { content: lines.join("\n") || "没有可创建的节点。", mutated: false, failed: true };
@@ -262,6 +252,29 @@ function execCreateNode(args: ToolArgs): ExecOutcome {
       }
       seenPairs.add(pairKey);
       newEdges.push(createEdge(source.id, targetNode.id));
+    }
+  }
+
+  // params 统一应用（连线表确定后）：refMode 合法范围取决于上游参考，
+  // 同批次 connectTo 产生的连线以 ctx 传入参与推导；ratio 占位尺寸在此落定，供后续布局取 nodeSize
+  if (pendingParams.length > 0) {
+    const storeNow = useCanvasStore.getState();
+    const ctxNodes = [...storeNow.nodes, ...created];
+    const ctxEdges = [...storeNow.edges, ...newEdges];
+    for (const { node: filled, rawParams, index } of pendingParams) {
+      const [paramPatch, pLines] = applyAgentParams(filled, rawParams, { nodes: ctxNodes, edges: ctxEdges });
+      if (Object.keys(paramPatch).length > 0) {
+        const gs = ((filled.data as { genSettings?: Record<string, unknown> }).genSettings) ?? {};
+        (filled.data as { genSettings?: Record<string, unknown> }).genSettings = { ...gs, ...paramPatch };
+        // 新节点必然无 src：占位框直接按比例落尺寸（applyRatioToNode 需节点已入 store，此处提前手写）
+        const ratio = paramPatch.ratio;
+        if (typeof ratio === "string") {
+          const size = ratioToNodeSize(ratio);
+          if (size) filled.style = { ...(filled.style ?? {}), width: size.width, height: size.height };
+        }
+        lines[index] += `，参数：${Object.entries(paramPatch).map(([k, v]) => `${k}=${String(v)}`).join(", ")}`;
+      }
+      degraded.push(...pLines);
     }
   }
 
@@ -339,11 +352,20 @@ function parseRatioValue(v: string): number | null {
 /**
  * 校验 agent 传入的 params，返回 [可写入 genSettings 的字段, 给模型的提示行]。
  * 以当前生效模型（与面板同一回退链：modelKey → 最近使用 → 该能力第一个可用）的
- * 字段配置为唯一依据：有 options 的字段只接受合法档位，ratio 不匹配时选宽高比
- * 最接近的档位；无 options 的数值字段按 min/max 收敛；其余直接写入。
+ * 模型配置为唯一依据，两类参数：
+ * - fields 白名单参数：有 options 的字段只接受合法档位，ratio 不匹配时选宽高比
+ *   最接近的档位；无 options 的数值字段按 min/max 收敛；其余直接写入。
+ * - capabilities 能力声明参数（当前仅 video 的 refMode）：合法值 = 模型声明选项
+ *   ∩ 上游参考推导范围，收敛规则与视频面板共用 shared/ref-modes。
  * 校验不可进行（类型不支持 / 无模型 / 无参数配置）时返回空 patch 与说明行。
+ * ctx 供 create_node 传入尚未落库的批次节点与连线（refMode 依赖同批次连线的上游参考）；
+ * 缺省时读当前画布状态。
  */
-function applyAgentParams(node: AnyNode, params: Record<string, unknown>): [Record<string, unknown>, string[]] {
+function applyAgentParams(
+  node: AnyNode,
+  params: Record<string, unknown>,
+  ctx?: { nodes: AnyNode[]; edges: Array<{ source: string; target: string }> },
+): [Record<string, unknown>, string[]] {
   const capability = NODE_PARAM_CAPABILITY[node.type];
   if (!capability) return [{}, ["该节点类型不支持设置生成参数"]];
   const gs = (node.data as { genSettings?: { modelKey?: string } } | undefined)?.genSettings;
@@ -362,12 +384,30 @@ function applyAgentParams(node: AnyNode, params: Record<string, unknown>): [Reco
     || readLastModel(capability, allModels)
     || allModels[0].value;
   const entry = allModels.find((m) => m.value === key) ?? allModels[0];
-  const fields = findModelParams(entry.providerId, entry.name, capability)?.fields ?? [];
-  if (fields.length === 0) return [{}, [`模型 ${entry.name} 无参数配置，未设置参数`]];
+  const modelParams = findModelParams(entry.providerId, entry.name, capability);
+  const fields = modelParams?.fields ?? [];
+  const refModeOptions = modelParams?.capabilities?.refMode?.options;
+  const hasRefMode = refModeOptions != null && refModeOptions.length > 0;
+  if (fields.length === 0 && !hasRefMode) return [{}, [`模型 ${entry.name} 无参数配置，未设置参数`]];
 
   const patch: Record<string, unknown> = {};
   const lines: string[] = [];
   for (const [name, raw] of Object.entries(params)) {
+    // 能力声明型参数：不在 fields 白名单，选项来自模型 capabilities 并结合上游参考收敛
+    if (name === "refMode") {
+      if (capability !== "video" || !hasRefMode) {
+        lines.push(`参数 ${name}：当前模型不支持，已跳过`);
+        continue;
+      }
+      const refs = ctx ?? useCanvasStore.getState();
+      const allowed = allowedRefModesFor(node.id, refs.nodes, refs.edges);
+      const desired = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : undefined;
+      const { value, note } = resolveRefMode(desired, refModeOptions, allowed);
+      patch[name] = value;
+      if (note) lines.push(`参数 ${name}：${note}`);
+      else if (!desired) lines.push(`参数 ${name}：需要字符串，已用 ${value}`);
+      continue;
+    }
     const field = fields.find((f) => f.name === name);
     if (!field) {
       lines.push(`参数 ${name}：当前模型不支持，已跳过`);
@@ -802,8 +842,24 @@ function fitNodeDetail(detail: Record<string, unknown>, maxChars: number): strin
 
 /** get_node_detail：批量读取节点完整内容（只读），快照名册不含内容，模型按需拉取 */
 function execGetNodeDetail(args: ToolArgs): ExecOutcome {
-  const ids = strArray(args.nodeIds);
-  if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false, failed: true };
+  // LLM 输出是系统边界：常见误传形状（单数 nodeId / 字符串形式的 nodeIds）宽容收下
+  let ids = strArray(args.nodeIds);
+  if (ids.length === 0) {
+    const single = str(args.nodeId);
+    if (single) ids = [single];
+  }
+  if (ids.length === 0 && typeof args.nodeIds === "string" && args.nodeIds.trim()) {
+    ids = [args.nodeIds.trim()];
+  }
+  if (ids.length === 0) {
+    return {
+      content:
+        '缺少 nodeIds：需传节点 id 数组，例如 {"nodeIds":["v-abc123"]}。' +
+        "当前选中节点的 id 可从注入快照的 selection 数组里取。",
+      mutated: false,
+      failed: true,
+    };
+  }
 
   const nodes = useCanvasStore.getState().nodes;
   const results: string[] = [];

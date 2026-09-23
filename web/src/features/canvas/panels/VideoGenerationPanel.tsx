@@ -40,6 +40,7 @@ import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
+import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
@@ -195,24 +196,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     writeOrderPref(nodeId, { refVideoOrder: list });
   }, [refVideoOrder, nodeId]);
 
-  // 参考模式可用范围：
+  // 参考模式可用范围（与画布 Agent 参数校验共用 shared/ref-modes 的推导规则）：
   //   视频或音频 → 仅全能参考；1 张图 → 图生/全能；2 张图 → 首尾帧/全能；≥3 张图 → 仅全能参考；无图/视频/音频（仅文本或空）→ 只能文生视频
-  const allowedRefModes = useMemo(() => {
-    if (refVideoOrder.length > 0 || audioOrder.length > 0) return ["full"];
-    if (refOrder.length === 1) return ["image", "full"]; // 1 张图：图生视频/全能参考
-    if (refOrder.length === 2) return ["first-last", "full"]; // 2 张图：首尾帧/全能参考
-    if (refOrder.length >= 3) return ["full"]; // ≥3 张图：仅全能参考
-    return ["text"]; // 无图片/视频/音频参考（含只有文本上游）→ 只能文生视频
-  }, [refVideoOrder, audioOrder, refOrder]);
+  const allowedRefModes = useMemo(
+    () => deriveAllowedRefModes({ refOrder, refAudioOrder: audioOrder, refVideoOrder }),
+    [refOrder, audioOrder, refVideoOrder],
+  );
 
-  // 当前模式不在可用范围时按默认回退：能全引用用全能参考，否则只能文生视频。
-  // 回退值必属 allowedRefModes（含 full 取 full，否则 text 分支只在 allowedRefModes=["text"] 时命中），
-  // 因此条件会自行收敛，不会死循环；受控模式下经 setRefMode 写回 store。
+  // 当前模式不在合法范围（上游参考推导 ∩ 模型能力声明）时按共享规则回退：
+  // 回退值幂等可收敛，不会死循环；受控模式下经 setRefMode 写回 store。
   useEffect(() => {
-    if (!allowedRefModes.includes(refMode)) {
-      setRefMode(allowedRefModes.includes("full") ? "full" : "text");
-    }
-  }, [allowedRefModes, refMode, setRefMode]);
+    const { value } = resolveRefMode(refMode, refModeOptions, allowedRefModes);
+    if (value !== refMode) setRefMode(value);
+  }, [allowedRefModes, refMode, refModeOptions, setRefMode]);
 
   /** 模式不可用时的禁用原因（挂菜单项 Tooltip）：按模式本身的要求给静态文案。
       refModeOptions 来自模型能力声明，可能出现四个标准模式之外的自定义值——

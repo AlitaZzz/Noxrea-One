@@ -57,7 +57,7 @@ const CREATE_NODE_TOOL: AgentToolDefinition = {
           content: { type: "string", description: "text 节点的正文内容" },
           prompt: { type: "string", description: "image/video/audio 节点的生成提示词" },
           title: { type: "string", description: "节点标题（group 为组名）" },
-          params: { type: "object", description: "image/video 节点的生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
+          params: { type: "object", description: "image/video 节点的生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n/refMode，refMode 取 text/image/first-last/full 须与上游连线相符），如 {\"ratio\":\"9:16\"}" },
           connectTo: { type: "array", description: "要连线的目标：已存在节点 id 或同批次序号（\"1\"）。方向须符合连线规则（text→text/image/video/audio；image→text/image/video；video→text/video；audio→text/audio/video）", items: { type: "string" } },
         },
         required: ["kind"],
@@ -75,7 +75,10 @@ const UPDATE_NODE_TOOL: AgentToolDefinition = {
   description:
     "更新一个已存在节点的内容。优先于「删了重建」：修改文本正文、修改生成提示词、改标题、设置生成参数都应使用本工具。\n" +
     "text 节点用 content 更新正文；image/video 节点用 prompt 更新生成提示词；title 更新标题（传空字符串清除标题）；\n" +
-    "params 设置生成参数（如 {\"ratio\":\"9:16\"}，image 支持 quality/resolution/ratio/n，video 支持 resolution/ratio/seconds/generateAudio/n，以实际模型配置为准）。\n" +
+    "params 设置生成参数（如 {\"ratio\":\"9:16\"}，image 支持 quality/resolution/ratio/n，" +
+    "video 支持 resolution/ratio/seconds/generateAudio/n/refMode，以实际模型配置为准）。\n" +
+    "video 的 refMode 为参考方式：text=文生视频、image=图生视频、first-last=首尾帧、full=全能参考；" +
+    "须与上游连线和模型能力相符（如无任何图片上游时不能指定 image/first-last），不符时自动收敛到最近可用值并在结果中说明。\n" +
     "参数会按当前模型可用选项校验：不支持的值自动取最接近档位（ratio）或默认值，结果中会逐项说明。",
   parameters: {
     intent: INTENT_PARAM.intent,
@@ -83,7 +86,7 @@ const UPDATE_NODE_TOOL: AgentToolDefinition = {
     content: { type: "string", description: "text 节点的新正文" },
     prompt: { type: "string", description: "image/video 节点的新生成提示词" },
     title: { type: "string", description: "新标题；空字符串 = 清除标题" },
-    params: { type: "object", description: "生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n），如 {\"ratio\":\"9:16\"}" },
+    params: { type: "object", description: "生成参数键值对（image: quality/resolution/ratio/n；video: resolution/ratio/seconds/generateAudio/n/refMode，refMode 取 text/image/first-last/full 须与上游连线相符），如 {\"ratio\":\"9:16\"}" },
   },
   required: ["nodeId"],
   execute: "client",
@@ -305,7 +308,11 @@ const GET_NODE_DETAIL_TOOL: AgentToolDefinition = {
     "不要凭节点标题猜测内容。可一次传多个 nodeIds 批量读取。",
   parameters: {
     intent: INTENT_PARAM.intent,
-    nodeIds: { type: "array", description: "要读取的节点 id 列表（支持批量）", items: { type: "string" } },
+    nodeIds: {
+      type: "array",
+      description: '要读取的节点 id 列表（支持批量），例如 ["v-abc123"]；当前选中节点 id 在快照 selection 里',
+      items: { type: "string" },
+    },
   },
   required: ["nodeIds"],
   execute: "client",
