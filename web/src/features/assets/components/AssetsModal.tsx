@@ -620,21 +620,19 @@ export default function AssetsModal({ open, onClose }: Props) {
               <div inert={bulkOpen ? undefined : true}>
                 <div className="bulk-bar">
                   {/* 计数即全选开关：白框对勾=已全选当前列表，横杠=部分选中，点击在两者间切换 */}
-                  <Tooltip title={allSelected ? t("common.deselectAll") : t("common.selectAll")}>
-                    <button
-                      type="button"
-                      className="bulk-select-btn"
-                      onClick={handleSelectAll}
-                      aria-pressed={allSelected}
-                    >
-                      <span className="bulk-check">
-                        {allSelected
-                          ? <CheckOutlined style={{ fontSize: 11, fontWeight: 700 }} />
-                          : <MinusOutlined style={{ fontSize: 10, fontWeight: 700 }} />}
-                      </span>
-                      <span className="bulk-select-label">{t("asset.selectedN", { count: selectedIds.size })}</span>
-                    </button>
-                  </Tooltip>
+                  <button
+                    type="button"
+                    className="bulk-select-btn"
+                    onClick={handleSelectAll}
+                    aria-pressed={allSelected}
+                  >
+                    <span className="bulk-check">
+                      {allSelected
+                        ? <CheckOutlined style={{ fontSize: 11, fontWeight: 700 }} />
+                        : <MinusOutlined style={{ fontSize: 10, fontWeight: 700 }} />}
+                    </span>
+                    <span className="bulk-select-label">{t("asset.selectedN", { count: selectedIds.size })}</span>
+                  </button>
                   <Tooltip title={t("asset.clearSelection")}>
                     <AppButton
                       size="sm"

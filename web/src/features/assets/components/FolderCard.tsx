@@ -6,7 +6,7 @@
 "use client";
 
 import { DeleteOutlined, EditOutlined, FolderOutlined } from "@ant-design/icons";
-import { Button, Tooltip } from "antd";
+import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 
 import type { AssetFolder } from "@/features/assets/types";
@@ -36,26 +36,22 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
       {(onDelete || onRename) && (
         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           {onRename && (
-            <Tooltip title={t("common.edit")}>
-              <Button
-                type="text"
-                size="small"
-                className="app-icon-btn"
-                icon={<EditOutlined />}
-                onClick={stop(onRename)}
-              />
-            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              className="app-icon-btn"
+              icon={<EditOutlined />}
+              onClick={stop(onRename)}
+            />
           )}
           {onDelete && (
-            <Tooltip title={t("common.delete")}>
-              <Button
-                type="text"
-                size="small"
-                className="app-icon-btn"
-                icon={<DeleteOutlined />}
-                onClick={stop(onDelete)}
-              />
-            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              className="app-icon-btn"
+              icon={<DeleteOutlined />}
+              onClick={stop(onDelete)}
+            />
           )}
         </div>
       )}

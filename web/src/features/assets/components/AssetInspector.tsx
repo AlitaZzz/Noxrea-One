@@ -136,14 +136,12 @@ function TagEditor({
   label,
   addLabel,
   placeholder,
-  removeTitle,
   onUpdateTags,
 }: {
   asset: AssetItem;
   label: string;
   addLabel: string;
   placeholder: string;
-  removeTitle: string;
   onUpdateTags: Props["onUpdateTags"];
 }) {
   const { t } = useTranslation();
@@ -205,18 +203,16 @@ function TagEditor({
             }}
           >
             <span className="max-w-[150px] truncate">{tag}</span>
-            <Tooltip title={removeTitle}>
-              <button
-                type="button"
-                onClick={() => remove(tag)}
-                className="flex items-center justify-center w-4 h-4 rounded transition-colors cursor-pointer"
+            <button
+              type="button"
+              onClick={() => remove(tag)}
+              className="flex items-center justify-center w-4 h-4 rounded transition-colors cursor-pointer"
               style={{ color: "var(--canvas-text-muted)" }}
               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
             >
               <CloseOutlined style={{ fontSize: 9 }} />
             </button>
-            </Tooltip>
           </span>
         ))}
         {busy && <LoadingOutlined style={{ fontSize: 12, color: "var(--canvas-accent)" }} />}
@@ -344,30 +340,26 @@ function PromptEditor({
         <div className="flex items-center gap-3">
           {editing ? (
             <>
-              <Tooltip title={t("common.save")}>
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={busy}
-                  className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                  style={{ color: "var(--canvas-accent)" }}
-                >
-                  {busy ? <LoadingOutlined style={{ fontSize: 11 }} /> : <CheckOutlined style={{ fontSize: 12 }} />}
-                </button>
-              </Tooltip>
-              <Tooltip title={t("common.cancel")}>
-                <button
-                  type="button"
-                  onClick={cancel}
-                  disabled={busy}
-                  className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                  style={{ color: "var(--canvas-text-muted)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-                >
-                  <CloseOutlined style={{ fontSize: 11 }} />
-                </button>
-              </Tooltip>
+              <button
+                type="button"
+                onClick={save}
+                disabled={busy}
+                className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                style={{ color: "var(--canvas-accent)" }}
+              >
+                {busy ? <LoadingOutlined style={{ fontSize: 11 }} /> : <CheckOutlined style={{ fontSize: 12 }} />}
+              </button>
+              <button
+                type="button"
+                onClick={cancel}
+                disabled={busy}
+                className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                style={{ color: "var(--canvas-text-muted)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+              >
+                <CloseOutlined style={{ fontSize: 11 }} />
+              </button>
             </>
           ) : (
             <>
@@ -548,18 +540,16 @@ export default function AssetInspector({
           </div>
         )}
         {!renaming && (
-          <Tooltip title={t("asset.rename")}>
-            <button
-              type="button"
-              onClick={startRename}
-              className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
-              style={{ color: "var(--canvas-text-muted)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-            >
-              <EditOutlined style={{ fontSize: 13 }} />
-            </button>
-          </Tooltip>
+          <button
+            type="button"
+            onClick={startRename}
+            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
+            style={{ color: "var(--canvas-text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+          >
+            <EditOutlined style={{ fontSize: 13 }} />
+          </button>
         )}
       </div>
       )}
@@ -598,7 +588,6 @@ export default function AssetInspector({
               label={t("asset.tagsLabel")}
               addLabel={t("asset.addTag")}
               placeholder={t("asset.tagPlaceholder")}
-              removeTitle={t("asset.removeTag")}
               onUpdateTags={onUpdateTags}
             />
             <PromptEditor

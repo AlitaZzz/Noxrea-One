@@ -29,7 +29,6 @@
     "pasteUnsupported": "该剪贴板内容无法粘贴到画布",
     "undo": "撤销",
     "redo": "重做",
-    "deselectAll": "取消全选",
     "name": "名称",
     "generate": "生成",
     "model": "模型",
@@ -327,8 +326,6 @@
     "filter": "筛选",
     "filterClear": "清除筛选",
     "retry": "加载失败，点击重试",
-    "added": "已添加到画布",
-    "addedCount": "已添加 {{count}} 项到画布",
     "addToCanvas": "添加到画布",
     "selectedN": "已选择 {{count}} 项",
     "noDetail": "暂无详细信息",
@@ -343,7 +340,6 @@
     "updatedAtLabel": "更新于",
     "tagsLabel": "标签",
     "addTag": "添加标签",
-    "removeTag": "移除标签",
     "tagPlaceholder": "输入后回车",
     "tagLimit": "最多添加 {{max}} 个标签",
     "promptLabel": "提示词",
@@ -373,7 +369,9 @@
       "delete": "删除文件夹",
       "rename": "重命名文件夹",
       "deleteWarn": "此操作将永久删除该文件夹及其所有子文件夹与资产，且不可恢复。"
-    }
+    },
+    "added": "已添加到画布",
+    "addedCount": "已添加 {{count}} 项到画布"
   },
   "angle": {
     "editor": "多角度",
