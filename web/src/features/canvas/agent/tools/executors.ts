@@ -16,6 +16,7 @@ import {
   createTextNode,
   createVideoNode,
   directorNode as createDirectorNode,
+  duplicateNode,
 } from "@/features/canvas/node-defaults";
 import { readLastModel } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
@@ -63,6 +64,15 @@ function nodeSize(n: AnyNode): { width: number; height: number } {
     width: (n.style?.width as number) ?? 300,
     height: (n.style?.height as number) ?? 200,
   };
+}
+
+/** 网格吸附取值与画布其余入口一致（Runtime.tidyCanvas / handleTidyCanvas 同款） */
+function getSnapSize(state: { snapToGrid: boolean; snapGridSize: number }): number {
+  return state.snapToGrid ? state.snapGridSize : 0;
+}
+
+function snapValue(v: number, snapSize: number): number {
+  return snapSize > 0 ? Math.round(v / snapSize) * snapSize : v;
 }
 
 /** 纯文本 → 段落化富文本 HTML（供 Tiptap 编辑，语义同 canvas-edit-actions 的粘贴分支） */
@@ -248,10 +258,10 @@ function execCreateNode(args: ToolArgs): { content: string; mutated: boolean } {
 
   // 批量布局：复用整理布局纯函数（有连线 → 分层，无连线 → 网格），批次内互不重叠；
   // 整批作为一块经 findFreePosition 放到锚点附近（与画布已有内容错开），无需再 arrange_canvas
-  // 网格吸附与画布其余入口一致（Runtime.tidyCanvas / handleTidyCanvas 同款取值）：
+  // 网格吸附与画布其余入口一致：
   // 单节点与批量路径都吸附，避免同一设置下行为随批量大小变化
-  const snapSize = store.snapToGrid ? store.snapGridSize : 0;
-  const snap = (v: number) => (snapSize > 0 ? Math.round(v / snapSize) * snapSize : v);
+  const snapSize = getSnapSize(store);
+  const snap = (v: number) => snapValue(v, snapSize);
   if (created.length === 1) {
     const p = findFreePosition(nodeSize(created[0]), anchor);
     created[0].position = { x: snap(p.x), y: snap(p.y) };
@@ -546,6 +556,70 @@ function execConnectNodes(args: ToolArgs): { content: string; mutated: boolean }
   return { content, mutated: newEdges.length > 0 };
 }
 
+/** delete_edges：按 source→target 删除连线（方向敏感，同名反向线不受影响） */
+function execDeleteEdges(args: ToolArgs): { content: string; mutated: boolean } {
+  const items = Array.isArray(args.edges) ? args.edges : [];
+  if (items.length === 0) return { content: "未提供 edges。", mutated: false };
+
+  const state = useCanvasStore.getState();
+  const edgeIds: string[] = [];
+  const skipped: string[] = [];
+  const seenPairs = new Set<string>();
+  for (const raw of items) {
+    const e = raw as Record<string, unknown>;
+    const source = str(e.source);
+    const target = str(e.target);
+    if (!source || !target) { skipped.push("缺少 source/target"); continue; }
+    const pairKey = `${source}→${target}`;
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
+    const matched = state.edges.filter((x) => x.source === source && x.target === target);
+    if (matched.length === 0) { skipped.push(`${source} → ${target} 连线不存在`); continue; }
+    edgeIds.push(...matched.map((x) => x.id));
+  }
+  if (edgeIds.length === 0) return { content: "没有匹配的连线可删。", mutated: false };
+
+  useCanvasStore.getState().removeEdges(edgeIds, { skipHistory: true });
+  let content = `已删除 ${edgeIds.length} 条连线。`;
+  if (skipped.length) content += `\n跳过：${[...new Set(skipped)].join("；")}`;
+  return { content, mutated: true };
+}
+
+/** duplicate_node：复制节点（含提示词/参数/已生成内容；不复制连线） */
+function execDuplicateNode(args: ToolArgs): { content: string; mutated: boolean } {
+  const nodeId = str(args.nodeId);
+  if (!nodeId) return { content: "缺少 nodeId。", mutated: false };
+
+  const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+  if (!node) {
+    return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false };
+  }
+  if (node.type === NODE_TYPE.GROUP) {
+    return {
+      content: `group 节点 ${nodeId} 不支持复制（成员节点不会跟着复制，会得到一个空组框）。如需复制内容，请对组内各成员节点分别调用 duplicate_node。`,
+      mutated: false,
+    };
+  }
+
+  const store = useCanvasStore.getState();
+  const snapSize = getSnapSize(store);
+  const s = nodeSize(node);
+  // 以原节点中心为锚找空位，吸附后换算为相对原节点的偏移（duplicateNode 按 offset 平移）
+  const p = findFreePosition(s, {
+    x: node.position.x + s.width / 2,
+    y: node.position.y + s.height / 2,
+  });
+  const copy = duplicateNode(node, {
+    x: snapValue(p.x, snapSize) - node.position.x,
+    y: snapValue(p.y, snapSize) - node.position.y,
+  });
+  // 与画布复制粘贴同款语义：单节点副本不继承组归属，否则会「串」到原组
+  delete (copy.data as Record<string, unknown>).groupId;
+  store.addNodes([copy], { skipHistory: true });
+
+  return { content: `已复制节点 ${nodeId} → ${copy.id}（位于原节点旁）。`, mutated: true };
+}
+
 /** move_node：移动节点到坐标 / 视口中心 / 参照节点旁 */
 function execMoveNode(args: ToolArgs): { content: string; mutated: boolean } {
   const nodeId = str(args.nodeId);
@@ -644,6 +718,8 @@ export function executeCanvasToolCall(call: AgentToolCall): AgentToolResult {
       case "update_node": out = execUpdateNode(call.args); break;
       case "delete_nodes": out = execDeleteNodes(call.args); break;
       case "connect_nodes": out = execConnectNodes(call.args); break;
+      case "delete_edges": out = execDeleteEdges(call.args); break;
+      case "duplicate_node": out = execDuplicateNode(call.args); break;
       case "move_node": out = execMoveNode(call.args); break;
       case "arrange_canvas": out = execArrangeCanvas(); break;
       case "set_viewport": out = execSetViewport(call.args); break;

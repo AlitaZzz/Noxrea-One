@@ -126,6 +126,47 @@ const CONNECT_NODES_TOOL: AgentToolDefinition = {
   }),
 };
 
+const DELETE_EDGES_TOOL: AgentToolDefinition = {
+  name: "delete_edges",
+  description:
+    "删除两个节点之间的连线（source → target 方向，同名反向的连线不受影响）。" +
+    "仅用于移除连线；删除节点请用 delete_nodes。",
+  parameters: {
+    edges: {
+      type: "array",
+      description: "要删除的连线列表",
+      items: {
+        type: "object",
+        properties: {
+          source: { type: "string", description: "起点节点 id" },
+          target: { type: "string", description: "终点节点 id" },
+        },
+        required: ["source", "target"],
+      },
+    },
+  },
+  required: ["edges"],
+  execute: "client",
+  label: "删除连线",
+  zodSchema: z.object({
+    edges: z.array(z.object({ source: z.string().min(1), target: z.string().min(1) })).min(1),
+  }),
+};
+
+const DUPLICATE_NODE_TOOL: AgentToolDefinition = {
+  name: "duplicate_node",
+  description:
+    "复制一个已存在节点到原节点旁，新节点保留原节点的提示词、生成参数和已生成内容，不复制连线" +
+    "（需要同样连线时用 connect_nodes），也不继承组归属。group 节点不支持复制。用户说「再做一个一样的」「复制这个」时使用。",
+  parameters: {
+    nodeId: { type: "string", description: "要复制的节点 id" },
+  },
+  required: ["nodeId"],
+  execute: "client",
+  label: "复制节点",
+  zodSchema: z.object({ nodeId: z.string().min(1) }),
+};
+
 const MOVE_NODE_TOOL: AgentToolDefinition = {
   name: "move_node",
   description:
@@ -214,6 +255,8 @@ for (const tool of [
   UPDATE_NODE_TOOL,
   DELETE_NODES_TOOL,
   CONNECT_NODES_TOOL,
+  DELETE_EDGES_TOOL,
+  DUPLICATE_NODE_TOOL,
   MOVE_NODE_TOOL,
   ARRANGE_CANVAS_TOOL,
   SET_VIEWPORT_TOOL,
