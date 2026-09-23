@@ -5,6 +5,7 @@
 import { RobotOutlined } from "@ant-design/icons";
 import type { ComponentType, CSSProperties } from "react";
 
+import { AgnesIcon } from "@/components/ui/icons/models/AgnesIcon";
 import { ClaudeIcon } from "@/components/ui/icons/models/ClaudeIcon";
 import { DeepSeekIcon } from "@/components/ui/icons/models/DeepSeekIcon";
 import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
@@ -25,6 +26,7 @@ import { ViduIcon } from "@/components/ui/icons/models/ViduIcon";
 type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 
 const ICON_MAP: { test: RegExp; Icon: ModelIconType }[] = [
+  { test: /agnes/i, Icon: AgnesIcon },
   { test: /claude|anthropic/i, Icon: ClaudeIcon },
   { test: /gpt|openai|dall|sora|chatgpt/i, Icon: OpenAIIcon },
   { test: /gemini|google|veo|nano-?banana/i, Icon: GeminiIcon },
