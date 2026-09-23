@@ -39,7 +39,7 @@ import ImageRefCard from "../shared/ImageRefCard";
 import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
-import { writeOrderPref } from "../shared/ref-order";
+import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
@@ -56,57 +56,48 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
-  // Read persisted settings from node data
-  const saved = useMemo(() => {
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<VideoGenSettings>;
-    const mk = s.modelKey || readLastModel("video", allModels) || allModels[0]?.value || "";
-    const entry = allModels.find((m) => m.value === mk);
-    const mp = entry ? findModelParams(entry.providerId, entry.name, "video") : null;
-    const d = mp ? fieldDefaults(mp.fields) : {};
-    return {
-      prompt: s.prompt || "",
-      modelKey: mk,
-      resolution: s.resolution || (d.resolution as string) || "1K",
-      ratio: s.ratio || (d.ratio as string) || "16:9",
-      seconds: s.seconds ?? (d.seconds as number) ?? 5,
-      generateAudio: s.generateAudio ?? (d.generateAudio as boolean) ?? true,
-      refMode: s.refMode || "full",
-      n: s.n || (d.n as number) || 1,
-    };
-  // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
-  // 「providers 为空」时算出的结果（modelKey 为空）。
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeId, allModels]);
-  const [prompt, setPrompt] = useState(saved.prompt);
-  // draft 是用户显式选择的模型；模型列表异步到达前它可能为空，
-  // 因此用派生值兜底（saved.modelKey 已含「持久化值 → 首个可用模型」回退），
-  // 而不是在 effect 里 setState 去补，避免级联渲染。
-  const [modelKeyDraft, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
-  const modelKey = modelKeyDraft || saved.modelKey;
-  // modelKey 悬空兜底：重新拉取后端整表重建 model 行（ID 变化）或模型被移除时，
-  // 持久化键失效会一直显示占位且参数查不到——回退到持久化值若仍有效，否则第一个可用模型
-  useEffect(() => {
-    if (allModels.length === 0) return;
-    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
-    setModelKey(allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value);
-  }, [allModels, modelKey, saved.modelKey]);
-  const [resolution, setResolution] = useState(saved.resolution);
-  const [ratio, setRatio] = useState(saved.ratio);
-  const [seconds, setSeconds] = useState(saved.seconds);
-  const [generateAudio, setGenerateAudio] = useState(saved.generateAudio);
-  const [n, setN] = useState(saved.n);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [refModeOpen, setRefModeOpen] = useState(false);
-  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
-  const [isRefDragging, setIsRefDragging] = useState(false);
+  // ── 受控模式：genSettings 是唯一数据源 ──
+  // useGenSettings 反应式读取，外部写入（画布 Agent update_node 等）即时可见；
+  // 编辑经 writeGenSettings 立即写回（skipHistory：连续编辑不压 undo 栈，保存由 SaveManager 合并）。
+  // 未持久化的字段回退到当前模型的默认值。
+  const genSettings = useGenSettings(nodeId) as Partial<VideoGenSettings> | undefined;
+  const modelKey = genSettings?.modelKey || readLastModel("video", allModels) || allModels[0]?.value || "";
 
-  // 查找当前模型的参数配置（订阅 modelParamsCache：缓存晚于挂载到达时能触发重算）
+  // 查找当前模型的参数配置（params + defaults + constraints）
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const modelParams = useMemo(() => {
     const entry = allModels.find((m) => m.value === modelKey);
     return entry ? findModelParams(entry.providerId, entry.name, "video") : null;
   }, [modelKey, allModels, findModelParams, modelParamsCache]);
+
+  const defaults = useMemo(
+    () => (Array.isArray(modelParams?.fields) ? fieldDefaults(modelParams.fields) : {}),
+    [modelParams]
+  );
+  const prompt = genSettings?.prompt ?? "";
+  const resolution = genSettings?.resolution || (defaults.resolution as string) || "1K";
+  const ratio = genSettings?.ratio || (defaults.ratio as string) || "16:9";
+  const seconds = genSettings?.seconds ?? (defaults.seconds as number) ?? 5;
+  const generateAudio = genSettings?.generateAudio ?? (defaults.generateAudio as boolean) ?? true;
+  const n = genSettings?.n || (defaults.n as number) || 1;
+
+  // write-through setters：保持旧签名，编辑立即落 store
+  const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
+  const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
+
+  const [modelOpen, setModelOpen] = useState(false);
+  const [refModeOpen, setRefModeOpen] = useState(false);
+  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
+  const [isRefDragging, setIsRefDragging] = useState(false);
+
+  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时回退第一个可用模型并写回；
+  // 未持久化（modelKey 为空）时不写，避免覆盖 readLastModel 的「记住上次使用的模型」回退
+  useEffect(() => {
+    if (allModels.length === 0) return;
+    const persisted = genSettings?.modelKey;
+    if (!persisted || allModels.some((m) => m.value === persisted)) return;
+    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+  }, [allModels, genSettings?.modelKey, nodeId]);
 
   // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
   const refModeOptions = modelParams?.capabilities?.refMode?.options ?? [];
@@ -115,35 +106,34 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const fields = modelParams?.fields ?? [];
   const fieldValues: Record<string, unknown> = { resolution, ratio, seconds, generateAudio, n };
   const setField = (name: string, value: unknown) => {
-    if (name === "resolution") setResolution(value as string);
+    if (name === "resolution") writeGenSettings(nodeId, { resolution: value });
     else if (name === "ratio") {
-      setRatio(value as string);
+      writeGenSettings(nodeId, { ratio: value });
       // 空节点占位框跟随所选比例（已有内容 / adaptive 跳过）
       applyRatioToNode(nodeId, value as string);
     }
-    else if (name === "seconds") setSeconds(value as number);
-    else if (name === "generateAudio") setGenerateAudio(value as boolean);
-    else if (name === "n") setN(value as number);
+    else if (name === "seconds") writeGenSettings(nodeId, { seconds: value });
+    else if (name === "generateAudio") writeGenSettings(nodeId, { generateAudio: value });
+    else if (name === "n") writeGenSettings(nodeId, { n: value });
   };
 
   // 模型切换 / fields 异步到达时：重置不在当前模型 options 中的参数
   // （modelParamsCache 晚于组件挂载到达时，初始值可能来自 _default 兜底或硬编码回退，
-  //   如 "1K" 不在 agnes-video 的 ["720P","960P","2K"] 中，需回退到字段默认值）
-  //
-  // 用「渲染期调整 state」替代 effect：effect 内 setState 会触发级联渲染。
-  // correctedFor 守卫保证同一份 fields 只纠偏一次，行为与原 effect([modelParams]) 一致，
-  // 也避免默认值本身不合法时陷入死循环。
-  const [correctedFor, setCorrectedFor] = useState<unknown>(null);
-  const currentFields = Array.isArray(modelParams?.fields) ? modelParams.fields : null;
-  if (currentFields && currentFields !== correctedFor) {
-    setCorrectedFor(currentFields);
+  //   如 "1K" 不在 agnes-video 的 ["720P","960P","2K"] 中，需回退到字段默认值）。
+  // correctedFor 守卫保证同一份 fields 只纠偏一次；受控模式下经 writeGenSettings 写回 store。
+  const correctedForRef = useRef<unknown>(null);
+  useEffect(() => {
+    const currentFields = Array.isArray(modelParams?.fields) ? modelParams.fields : null;
+    if (!currentFields || currentFields === correctedForRef.current) return;
+    correctedForRef.current = currentFields;
     for (const f of currentFields) {
       const cur = fieldValues[f.name] as string | number | undefined;
       if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
         setField(f.name, f.default);
       }
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelParams]);
 
   const selectModel = (value: string) => {
     const entry = allModels.find((model) => model.value === value);
@@ -159,8 +149,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     setModelOpen(false);
   };
 
-  // 参考方式（text = 文生视频）。可用范围由 hook 派生的参考列表决定（见下）。
-  const [refMode, setRefMode] = useState<string>(saved.refMode || "full");
+  // 参考方式（text = 文生视频）：同样受控于 genSettings。可用范围由 hook 派生的参考列表决定（见下）。
+  const refMode = genSettings?.refMode || "full";
+  const setRefMode = useCallback((v: string) => writeGenSettings(nodeId, { refMode: v }), [nodeId]);
 
   // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
   // 参考存在性与显示顺序均为纯派生：存在性来自连线，顺序 = 排序偏好(genSettings) + 连线合并，
@@ -168,7 +159,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const {
     refOrder, audioOrder, refVideoOrder,
     upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
-    elapsed, error, setElapsed, setError, latestSettingsRef, timerRef,
+    elapsed, error, setElapsed, setError, timerRef,
   } = useVideoGenPanel({
     nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode,
   });
@@ -215,12 +206,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   }, [refVideoOrder, audioOrder, refOrder]);
 
   // 当前模式不在可用范围时按默认回退：能全引用用全能参考，否则只能文生视频。
-  // 同上，用渲染期调整 state 替代 effect 内 setState。
   // 回退值必属 allowedRefModes（含 full 取 full，否则 text 分支只在 allowedRefModes=["text"] 时命中），
-  // 因此条件会自行收敛，不会死循环。
-  if (!allowedRefModes.includes(refMode)) {
-    setRefMode(allowedRefModes.includes("full") ? "full" : "text");
-  }
+  // 因此条件会自行收敛，不会死循环；受控模式下经 setRefMode 写回 store。
+  useEffect(() => {
+    if (!allowedRefModes.includes(refMode)) {
+      setRefMode(allowedRefModes.includes("full") ? "full" : "text");
+    }
+  }, [allowedRefModes, refMode, setRefMode]);
 
   /** 模式不可用时的禁用原因（挂菜单项 Tooltip）：按模式本身的要求给静态文案。
       refModeOptions 来自模型能力声明，可能出现四个标准模式之外的自定义值——

@@ -76,6 +76,19 @@ export function writeOrderPref(
   markDirtyImmediate();
 }
 
+/**
+ * 受控写入口：合并 patch 后整体写回 genSettings（skipHistory，连续编辑不压栈）。
+ * 生成面板的提示词/模型/参数编辑统一走此函数——store 是唯一数据源，
+ * 外部通道（如画布 Agent update_node）的写入经由 useGenSettings 反应式透出。
+ */
+export function writeGenSettings(nodeId: string, patch: Record<string, unknown>): void {
+  const store = useCanvasStore.getState();
+  const node = store.nodes.find((n) => n.id === nodeId);
+  const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Record<string, unknown>;
+  store.updateNodeData(nodeId, { genSettings: { ...cur, ...patch } }, undefined, { skipHistory: true });
+  markDirtyImmediate();
+}
+
 /** 响应式读取节点 genSettings（引用稳定：仅在 genSettings 整体被替换时变化） */
 export function useGenSettings(nodeId: string) {
   return useCanvasStore((s) => {
