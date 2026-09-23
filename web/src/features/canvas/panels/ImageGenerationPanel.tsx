@@ -33,7 +33,7 @@ import ImageRefCard from "../shared/ImageRefCard";
 import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
-import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
+import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
@@ -49,64 +49,61 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
-  // Read persisted settings from node data
-  const saved = useMemo(() => {
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as MediaGenFields)?.genSettings ?? {}) as Partial<ImageGenSettings>;
-    const mp = allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value)) ?
-      findModelParams(allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.providerId, allModels.find((m) => m.value === (s.modelKey || allModels[0]?.value))!.name, "image") : null;
-    const d = mp ? fieldDefaults(mp.fields) : {};
-    return {
-      prompt: s.prompt || "",
-      modelKey: s.modelKey || readLastModel("image", allModels) || allModels[0]?.value || "",
-      quality: s.quality || (d.quality as string) || "auto",
-      resolution: s.resolution || (d.resolution as string) || "1K",
-      ratio: s.ratio || (d.ratio as string) || "1:1",
-      n: s.n || (d.n as number) || 1,
-    };
-  // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
-  // 「providers 为空」时算出的结果（modelKey 为空）。
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeId, allModels]);
-  const [prompt, setPrompt] = useState(saved.prompt);
-  const [modelKey, setModelKey] = useState(saved.modelKey || allModels[0]?.value || "");
-  const [quality, setQuality] = useState(saved.quality);
-  const [resolution, setResolution] = useState(saved.resolution);
-  const [ratio, setRatio] = useState(saved.ratio);
-  const [n, setN] = useState(saved.n);
+  // ── 受控模式：genSettings 是唯一数据源 ──
+  // useGenSettings 反应式读取，外部写入（画布 Agent update_node 等）即时可见；
+  // 编辑经 writeGenSettings 立即写回（skipHistory：连续编辑不压 undo 栈，保存由 SaveManager 合并）。
+  // 未持久化的字段回退到当前模型的默认值。
+  const genSettings = useGenSettings(nodeId) as Partial<ImageGenSettings> | undefined;
+  const prompt = genSettings?.prompt ?? "";
+  const modelKey = genSettings?.modelKey || readLastModel("image", allModels) || allModels[0]?.value || "";
+
+  // 查找当前模型的参数配置（params + defaults + constraints）
+  // 订阅 modelParamsCache：缓存晚于挂载到达时能触发重算
+  const modelParams = useMemo(() => {
+    const entry = allModels.find((m) => m.value === modelKey);
+    return entry ? findModelParams(entry.providerId, entry.name, "image") : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelKey, allModels, findModelParams, modelParamsCache]);
+
+  const defaults = useMemo(
+    () => (Array.isArray(modelParams?.fields) ? fieldDefaults(modelParams.fields) : {}),
+    [modelParams]
+  );
+  const quality = genSettings?.quality || (defaults.quality as string) || "auto";
+  const resolution = genSettings?.resolution || (defaults.resolution as string) || "1K";
+  const ratio = genSettings?.ratio || (defaults.ratio as string) || "1:1";
+  const n = genSettings?.n || (defaults.n as number) || 1;
+
+  // write-through setters：保持旧签名，编辑立即落 store
+  const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
+  const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
+
   const [modelOpen, setModelOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // modelKey 兜底：列表异步到达时补空值；持久化值悬空（后端 batchSetModels
-  // 整表重建导致 model 行 ID 变化、或模型被上游移除）时回退到持久化值若仍有效，
-  // 否则第一个可用模型。否则悬空键会一直显示占位且参数查不到。
+  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时回退第一个可用模型并写回。
+  // 未持久化（modelKey 为空）时不写：显示层回退链（readLastModel → 第一个可用）负责展示，
+  // 一旦写入 allModels[0] 会把「记住上次使用的模型」永久覆盖。
   useEffect(() => {
     if (allModels.length === 0) return;
-    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
-    const fallback = allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value;
-    setModelKey(fallback);
-  }, [allModels, modelKey, saved.modelKey]);
-
-  // 查找当前模型的参数配置（params + defaults + constraints）
-  const modelParams = useMemo(() => {
-    const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.providerId, entry.name, "image") : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelKey, allModels, findModelParams, modelParamsCache]);
+    const persisted = genSettings?.modelKey;
+    if (!persisted || allModels.some((m) => m.value === persisted)) return;
+    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+  }, [allModels, genSettings?.modelKey, nodeId]);
 
   // fields 为唯一数据源：渲染控件 + 默认值
   const fields = Array.isArray(modelParams?.fields) ? modelParams.fields : [];
   const fieldValues: Record<string, unknown> = { quality, resolution, ratio, n };
   const setField = (name: string, value: unknown) => {
-    if (name === "quality") setQuality(value as string);
-    else if (name === "resolution") setResolution(value as string);
+    if (name === "quality") writeGenSettings(nodeId, { quality: value });
+    else if (name === "resolution") writeGenSettings(nodeId, { resolution: value });
     else if (name === "ratio") {
-      setRatio(value as string);
+      writeGenSettings(nodeId, { ratio: value });
       // 空节点占位框跟随所选比例（已有内容 / adaptive 跳过）
       applyRatioToNode(nodeId, value as string);
     }
-    else if (name === "n") setN(value as number);
+    else if (name === "n") writeGenSettings(nodeId, { n: value });
   };
 
   // 模型切换时：重置不在新模型 options 中的参数
@@ -145,8 +142,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 图片节点上游只有文本与图片；排序只在同类型内生效（文本参考不可拖动）。
-  const genSettings = useGenSettings(nodeId);
-  const orderPref = (genSettings as Partial<ImageGenSettings> | undefined)?.refOrder ?? EMPTY_ORDER;
+  const orderPref = genSettings?.refOrder ?? EMPTY_ORDER;
   const refOrder = useMemo(() => mergeOrder(orderPref, refImages), [orderPref, refImages]);
 
   // 最终 prompt = 上游文本内容（按连线顺序）+ 面板输入
@@ -182,41 +178,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, [canvasNodes, nodeId]);
 
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality: string; resolution: string; ratio: string; refImages: string[]; n: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refImages: [] as string[], n: 1, entry: null, provider: null });
-  const latestSettingsRef = useRef({ kind: "image" as const, prompt, modelKey, quality, resolution, ratio, n });
-  useEffect(() => {
-    latestSettingsRef.current = { kind: "image", prompt, modelKey, quality, resolution, ratio, n };
-  }, [prompt, modelKey, quality, resolution, ratio, n]);
-  // Persist settings to node data on change (debounced)。
-  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
-  useEffect(() => {
-    // modelKey 为空说明模型列表尚未加载完成，此时写回会用空值覆盖节点上已持久化的模型
-    if (!modelKey) return;
-    const timer = setTimeout(() => {
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Partial<ImageGenSettings>;
-      useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: { kind: "image", prompt, modelKey, quality, resolution, ratio, refOrder: cur.refOrder ?? [], n },
-      }, undefined, { skipHistory: true });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [prompt, modelKey, quality, resolution, ratio, n, nodeId]);
-
-  // Flush pending settings on component unmount (not on dep changes)
-  useEffect(() => {
-    return () => {
-      const latest = latestSettingsRef.current;
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<ImageGenSettings> | undefined;
-      if (saved &&
-          saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
-          saved.quality === latest.quality && saved.resolution === latest.resolution &&
-          saved.ratio === latest.ratio && saved.n === latest.n) return;
-      const cur = saved ?? {};
-      useCanvasStore.getState().updateNodeData(nodeId, { genSettings: { ...latest, refOrder: cur.refOrder ?? [] } }, undefined, { skipHistory: true });
-      markDirtyImmediate();
-    };
-  }, []);
-
 
   /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
   const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);

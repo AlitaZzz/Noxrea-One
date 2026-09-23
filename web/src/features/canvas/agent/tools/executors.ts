@@ -204,10 +204,10 @@ function execUpdateNode(args: ToolArgs): { content: string; mutated: boolean } {
     patch.plainText = content;
   }
   if (prompt) {
+    // genSettings 缺失（旧项目节点 / 尚未被面板初始化）时也要落 prompt，
+    // 否则 agent 报告已更新但受控面板读不到任何变化
     const data = node.data as { genSettings?: Record<string, unknown> } | undefined;
-    if (data?.genSettings) {
-      patch.genSettings = { ...data.genSettings, prompt };
-    }
+    patch.genSettings = { ...(data?.genSettings ?? {}), prompt };
   }
 
   if (Object.keys(patch).length === 0) {

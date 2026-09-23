@@ -30,7 +30,7 @@ import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
 import { readLastModel, recordLastModel } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
-import { EMPTY_ORDER, mergeOrder, useGenSettings, writeOrderPref } from "../shared/ref-order";
+import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
@@ -61,33 +61,27 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     )
     .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
 
-  // Read persisted settings from node data
-  const saved = useMemo(() => {
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const s = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
-    return {
-      prompt: s.prompt || "",
-      modelKey: s.modelKey || readLastModel("text", allModels) || allModels[0]?.value || "",
-    };
-  // allModels 必须在依赖里：模型列表是异步到达的，否则 saved 会永远停留在
-  // 「providers 为空」时算出的结果（modelKey 为空）。
-  }, [nodeId, allModels]);
+  // ── 受控模式：genSettings 是唯一数据源 ──
+  // useGenSettings 反应式读取，外部写入（画布 Agent update_node 等）即时可见；
+  // 编辑经 writeGenSettings 立即写回（skipHistory，保存由 SaveManager 合并）。
+  const genSettings = useGenSettings(nodeId) as Partial<TextGenSettings> | undefined;
+  const prompt = genSettings?.prompt ?? "";
+  const modelKey = genSettings?.modelKey || readLastModel("text", allModels) || allModels[0]?.value || "";
+  const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
+  const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
-  const [prompt, setPrompt] = useState(saved.prompt);
-  const [modelKey, setModelKey] = useState(saved.modelKey);
   const [modelOpen, setModelOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
-  // modelKey 兜底（同 ImageGenerationPanel）：列表异步到达时补空值；持久化值悬空
-  // （重新拉取时后端整表重建、model 行 ID 变化，或模型被上游移除）时回退到
-  // 持久化值若仍有效，否则第一个可用模型。
+  // 悬空模型键纠偏（同 ImageGenerationPanel）：持久化的 modelKey 已不存在时回退第一个可用模型并写回；
+  // 未持久化时不写，避免覆盖 readLastModel 的「记住上次使用的模型」回退
   useEffect(() => {
     if (allModels.length === 0) return;
-    if (modelKey && allModels.some((m) => m.value === modelKey)) return;
-    const fallback = allModels.find((m) => m.value === saved.modelKey)?.value ?? allModels[0].value;
-    setModelKey(fallback);
-  }, [allModels, modelKey, saved.modelKey]);
+    const persisted = genSettings?.modelKey;
+    if (!persisted || allModels.some((m) => m.value === persisted)) return;
+    writeGenSettings(nodeId, { modelKey: allModels[0].value });
+  }, [allModels, genSettings?.modelKey, nodeId]);
 
   // Upstream reference images - derived live from current edges
   const canvasNodes = useCanvasStore((s) => s.nodes);
@@ -161,8 +155,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。
-  const genSettings = useGenSettings(nodeId);
-  const prefs = genSettings as Partial<TextGenSettings> | undefined;
+  const prefs = genSettings;
   const orderPref = prefs?.refOrder ?? EMPTY_ORDER;
   const audioOrderPref = prefs?.refAudioOrder ?? EMPTY_ORDER;
   const refVideoOrderPref = prefs?.refVideoOrder ?? EMPTY_ORDER;
@@ -234,70 +227,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     }));
     return [...audios, ...images, ...videos];
   }, [audioOrder, refOrder, refVideoOrder, upstreamAudio, upstreamVideos]);
-
-  const latestSettingsRef = useRef({ prompt, modelKey });
-  useEffect(() => {
-    latestSettingsRef.current = { prompt, modelKey };
-  }, [prompt, modelKey]);
-
-  // Persist settings to node data (debounced)。
-  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
-  useEffect(() => {
-    // modelKey 为空说明模型列表尚未加载完成，此时写回会用空值覆盖节点上已持久化的模型
-    if (!modelKey) return;
-    const timer = setTimeout(() => {
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const cur = ((node?.data as { genSettings?: Partial<TextGenSettings> })?.genSettings ?? {}) as Partial<TextGenSettings>;
-      useCanvasStore.getState().updateNodeData(
-        nodeId,
-        {
-          genSettings: {
-            kind: "text",
-            prompt,
-            modelKey,
-            refOrder: cur.refOrder ?? [],
-            refAudioOrder: cur.refAudioOrder ?? [],
-            refVideoOrder: cur.refVideoOrder ?? [],
-          },
-        },
-        undefined,
-        { skipHistory: true },
-      );
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [prompt, modelKey, nodeId]);
-
-  // Flush pending settings on unmount
-  useEffect(() => {
-    return () => {
-      const latest = latestSettingsRef.current;
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const savedGen = (node?.data as { genSettings?: TextGenSettings })?.genSettings;
-      if (
-        savedGen &&
-        savedGen.prompt === latest.prompt &&
-        savedGen.modelKey === latest.modelKey
-      )
-        return;
-      const cur: Partial<TextGenSettings> = savedGen ?? {};
-      useCanvasStore.getState().updateNodeData(
-        nodeId,
-        {
-          genSettings: {
-            kind: "text",
-            prompt: latest.prompt,
-            modelKey: latest.modelKey,
-            refOrder: cur.refOrder ?? [],
-            refAudioOrder: cur.refAudioOrder ?? [],
-            refVideoOrder: cur.refVideoOrder ?? [],
-          },
-        },
-        undefined,
-        { skipHistory: true },
-      );
-      markDirtyImmediate();
-    };
-  }, []);
 
   const is: React.CSSProperties = {
     background: "transparent",

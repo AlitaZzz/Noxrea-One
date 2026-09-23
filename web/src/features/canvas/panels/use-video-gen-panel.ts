@@ -1,8 +1,8 @@
 /**
  * 视频生成面板的派生数据与副作用逻辑。
- * 负责根据当前画布连接关系计算上游参考（图片 / 文本 / 音频 / 视频）、最终 prompt、
- * 生成中状态，以及把面板参数持久化到节点数据与组件卸载时的清理计时。
- * 纯 UI 状态（prompt / 模型选择等）仍由面板组件持有，本 hook 仅消费这些输入。
+ * 根据当前画布连接关系计算上游参考（图片 / 文本 / 音频 / 视频）、最终 prompt、
+ * 生成中状态与计时清理。面板参数（prompt / 模型等）为受控模式：
+ * 唯一数据源是节点 genSettings（由面板 writeGenSettings 写入），本 hook 仅消费只读输入。
  *
  * 参考排序架构（单一数据源 + 派生合并）：
  * - 存在性：refImages / upstreamAudio / upstreamVideos 全部实时派生自 edges，不落本地状态；
@@ -12,8 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 
@@ -53,15 +52,11 @@ export interface VideoGenPanelDerived {
   error: string;
   setElapsed: React.Dispatch<React.SetStateAction<number>>;
   setError: React.Dispatch<React.SetStateAction<string>>;
-  latestSettingsRef: React.MutableRefObject<{
-    prompt: string; modelKey: string; resolution: string; ratio: string;
-    seconds: number; generateAudio: boolean; refMode: string; n: number;
-  }>;
   timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
 export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerived {
-  const { nodeId, prompt, modelKey, resolution, ratio, seconds, generateAudio, n, refMode } = input;
+  const { nodeId, prompt } = input;
 
   const canvasNodes = useCanvasStore((s) => s.nodes);
   const canvasEdges = useCanvasStore((s) => s.edges);
@@ -197,53 +192,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
   const [error, setError] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const latestSettingsRef = useRef({
-    kind: "video" as const, prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n,
-  });
-  useEffect(() => {
-    latestSettingsRef.current = { kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n };
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n]);
-
-  // Persist settings to node data on change (debounced)。
-  // 参考排序偏好不经过此通道：它在排序事件时已即时写入，此处从 store 透传，避免双写。
-  useEffect(() => {
-    // modelKey 为空说明模型列表尚未加载完成，此时写回会用空值覆盖节点上已持久化的模型
-    if (!modelKey) return;
-    const timer = setTimeout(() => {
-      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-      const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Partial<VideoGenSettings>;
-      useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: {
-          kind: "video", prompt, modelKey, resolution, ratio, seconds, generateAudio,
-          refOrder: cur.refOrder ?? [], refAudioOrder: cur.refAudioOrder ?? [], refVideoOrder: cur.refVideoOrder ?? [],
-          refMode, n,
-        },
-      }, undefined, { skipHistory: true });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [prompt, modelKey, resolution, ratio, seconds, generateAudio, refMode, n, nodeId]);
-
-  // Flush pending settings on component unmount (not on dep changes)。
-  useEffect(() => {
-    return () => {
-      const latest = latestSettingsRef.current;
-      const node = useCanvasStore.getState().nodes.find((node) => node.id === nodeId);
-      const saved = (node?.data as MediaGenFields)?.genSettings as Partial<VideoGenSettings> | undefined;
-      if (saved &&
-          saved.prompt === latest.prompt && saved.modelKey === latest.modelKey &&
-          saved.resolution === latest.resolution && saved.ratio === latest.ratio &&
-          saved.seconds === latest.seconds && saved.generateAudio === latest.generateAudio &&
-          saved.refMode === latest.refMode && saved.n === latest.n) return;
-      const cur = saved ?? {};
-      useCanvasStore.getState().updateNodeData(nodeId, {
-        genSettings: {
-          ...latest,
-          refOrder: cur.refOrder ?? [], refAudioOrder: cur.refAudioOrder ?? [], refVideoOrder: cur.refVideoOrder ?? [],
-        },
-      }, undefined, { skipHistory: true });
-      markDirtyImmediate();
-    };
-  }, []);
 
   // Cleanup timer on unmount。
   useEffect(() => {
@@ -251,10 +199,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
-
-  // 暴露 flushAndWait 给提交逻辑使用（保持与原组件一致的行为）。
-  void flushAndWait;
-  void useHistoryStore;
 
   return {
     refImages,
@@ -271,7 +215,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     error,
     setElapsed,
     setError,
-    latestSettingsRef,
     timerRef,
   };
 }
