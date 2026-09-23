@@ -97,8 +97,9 @@ export function useGenSettings(nodeId: string) {
   });
 }
 
-/** 从当前 nodes/edges 派生某节点的三类实时参考 src 列表（与面板派生逻辑一致，含 src 去重） */
-function collectLiveRefs(nodes: AnyNode[], edges: { source: string; target: string }[], targetId: string): Record<OrderField, string[]> {
+/** 从当前 nodes/edges 派生某节点的三类实时参考 src 列表（与面板派生逻辑一致，含 src 去重）。
+ *  供参考方式（refMode）可用范围推导等下游共享（见 shared/ref-modes） */
+export function collectLiveRefs(nodes: AnyNode[], edges: { source: string; target: string }[], targetId: string): Record<OrderField, string[]> {
   const live: Record<OrderField, string[]> = { refOrder: [], refAudioOrder: [], refVideoOrder: [] };
   const upstreamIds = new Set(edges.filter((e) => e.target === targetId).map((e) => e.source));
   for (const n of nodes) {
