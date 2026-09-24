@@ -11,15 +11,16 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
 import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Handle, type NodeProps, Position } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
-import { EventNames, isGenerating, NODE_HANDLE_TOP, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
+import { EventNames, isGenerating, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { copyText, downloadTextFile } from "@/lib/utils/text-export";
@@ -248,8 +249,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
       )}
 
-      <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />
-      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />
+      <ConnectionSideRail side="left" type="target" />
+      <ConnectionSideRail side="right" type="source" />
     </div>
   );
 }

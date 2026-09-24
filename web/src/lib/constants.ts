@@ -41,9 +41,6 @@ export const NODE_TITLE_HEIGHT = 28;
 /** 媒体节点默认整体高度（px）：内容区 + 标题栏，与 computeNodeSize 口径一致。
  *  创建空节点 / 清空回退 / 面板选比例 / 生成落地四处统一，避免节点尺寸跳变 */
 export const DEFAULT_NODE_HEIGHT = DEFAULT_NODE_CONTENT_HEIGHT + NODE_TITLE_HEIGHT;
-// 输入/输出连接点垂直原点：去掉标题栏高度后内容区正中
-// 内容区中心相对节点顶部 = 总高/2 + 标题栏/2，故 top = 50% + NODE_TITLE_HEIGHT/2
-export const NODE_HANDLE_TOP = `calc(50% + ${NODE_TITLE_HEIGHT / 2}px)`;
 
 // 文本节点：无媒体内容区压缩问题，保持 16:9 内容区口径（不含标题栏补偿），不跟随媒体节点
 export const TEXT_NODE_DEFAULT_WIDTH = DEFAULT_NODE_WIDTH;
@@ -129,16 +126,28 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
   [NODE_TYPE.DIRECTOR]: "#a78bfa",
 };
 
-// ── Handle 悬浮按钮与连线端点 ──
-// handle 按钮悬浮于节点外侧（见 globals.css：直径 24px + 间隙 6px），
-// 而 React Flow 的连线端点落在 handle 上而非节点边缘，需要按 handle 方位把端点
-// 向节点方向收回，线才会从节点边缘出发/抵达。
-// 注意：不同端点语义下 xyflow 给出的坐标基准不同，收回距离也不同：
-//   - 已建立连线：getHandlePosition(center=false) → handle 外侧边缘 → 收回 直径+间隙
-//   - 拖拽预览线：getHandlePosition(center=true)  → handle 中心    → 收回 半径+间隙
-// 调整 handle 尺寸或间隙时需同步 HANDLE_SIZE / HANDLE_GAP。
+// ── 连接轨道（Handle）与连线端点 ──
+// 连接轨道悬浮于节点边缘外侧：宽 RAIL_WIDTH、高 min(节点高, RAIL_HEIGHT)，
+// 圆点（直径 RAIL_DOT）静止于贴节点边缘的偏移位（RAIL_REST_OFFSET），hover 时
+// 在 ±RAIL_FOLLOW_LIMIT 屏幕像素内二维跟随鼠标——纯视觉反馈，连线锚点恒为
+// 节点边缘垂直正中（参考 open-ai-canvas：按鼠标落点比例取 Y 会让多线沿边散开，
+// 视觉上像节点长出很多“伪端口”）。见 controls/ConnectionSideRail.tsx 与 globals.css。
+// React Flow 的连线端点落在轨道上而非节点边缘，需要按方位把端点向节点方向收回：
+//   - 已建立连线：getHandlePosition(center=false) → 轨道外侧边缘 → 收回 轨道宽
+//   - 拖拽预览线：getHandlePosition(center=true)  → 轨道中心      → 收回 半轨道宽
+export const RAIL_WIDTH = 80;
+export const RAIL_HEIGHT = 80;
+export const RAIL_DOT = 20;
+export const RAIL_FOLLOW_LIMIT = 30;
+export const RAIL_REST_OFFSET = 25;
+
+/** 拖线吸附半径（React Flow connectionRadius）。xyflow 默认 20px 是按老式小圆点设计的；
+ *  吸附判定取「指针到 Handle 中心」的距离，而 Handle 中心在轨道正中，要整条轨道
+ *  （最远到四角）都能吸附落线，需取轨道的外接圆半径 */
+export const RAIL_CONNECT_RADIUS = Math.hypot(RAIL_WIDTH, RAIL_HEIGHT) / 2;
+
+/** 通用 Handle（非轨道，如框选外框 Handle）直径，经 --handle-size 注入 CSS */
 export const HANDLE_SIZE = 24;
-export const HANDLE_GAP = 6;
 
 function insetBy(
   position: string | undefined,
@@ -161,13 +170,13 @@ function insetBy(
   }
 }
 
-/** 已建立连线（Edge）的端点：基准为 handle 外侧边缘，收回 直径 + 间隙 */
+/** 已建立连线（Edge）的端点：基准为轨道外侧边缘，收回 轨道宽 */
 export const insetEdgeAnchor = (position: string | undefined, x: number, y: number) =>
-  insetBy(position, x, y, HANDLE_SIZE + HANDLE_GAP);
+  insetBy(position, x, y, RAIL_WIDTH);
 
-/** 拖拽预览线的端点：基准为 handle 中心，收回 半径 + 间隙 */
+/** 拖拽预览线的端点：基准为轨道中心，收回 半轨道宽 */
 export const insetHandleCenter = (position: string | undefined, x: number, y: number) =>
-  insetBy(position, x, y, HANDLE_SIZE / 2 + HANDLE_GAP);
+  insetBy(position, x, y, RAIL_WIDTH / 2);
 
 /** 未知节点类型的兜底色：直接用品牌青柠，避免再出现第二种强调色 */
 export const DEFAULT_NODE_COLOR = "#c7f43d";

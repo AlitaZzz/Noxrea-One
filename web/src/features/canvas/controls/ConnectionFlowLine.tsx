@@ -19,8 +19,8 @@ export default function ConnectionFlowLine({
   toPosition,
   connectionStatus,
 }: ConnectionLineComponentProps) {
-  // 起点为源 handle 中心，收回节点边缘；
-  // 终点：吸附到目标 handle 时（connectionStatus === 'valid'）toX/toY 为 handle 中心，同样收回贴到节点边缘；
+  // 起点为源轨道中心，收回节点边缘（连线锚点恒为节点边缘垂直正中，圆点跟随只是视觉反馈）；
+  // 终点：吸附到目标轨道时（connectionStatus === 'valid'）toX/toY 为轨道中心，同样收回贴到节点边缘；
   // 否则是鼠标实时位置，保持不动
   const source = insetHandleCenter(fromPosition, fromX, fromY);
   const target = connectionStatus === "valid" ? insetHandleCenter(toPosition ?? undefined, toX, toY) : { x: toX, y: toY };

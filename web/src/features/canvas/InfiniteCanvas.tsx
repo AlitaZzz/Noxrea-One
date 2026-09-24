@@ -91,7 +91,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_GAP, HANDLE_SIZE, LAYOUT_GAP, NODE_TITLE_HEIGHT, NODE_TYPE, NODE_TYPE_COLOR, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, NODE_TYPE_COLOR, RAIL_CONNECT_RADIUS, RAIL_DOT, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
@@ -616,13 +616,6 @@ export default function InfiniteCanvas() {
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       // 连接结束（成功或取消）复位交互状态
       canvasInteraction.onConnectEnd();
-      // 仅在连接未落到目标节点（空白画布）上时弹出菜单
-      const toNode = "toNode" in connectionState ? connectionState.toNode : null;
-      if (toNode) return;
-
-      const sourceNode = "fromNode" in connectionState ? connectionState.fromNode : null;
-      if (!sourceNode) return;
-
       // 由起始 Handle 的 type 判断连接方向：
       //   source = 从右侧输出 Handle 拖出 → 新节点为下游（output）
       //   target = 从左侧输入 Handle 拉入 → 新节点为上游（input）
@@ -630,6 +623,12 @@ export default function InfiniteCanvas() {
       const direction: "input" | "output" =
         connectStartHandleTypeRef.current === "target" ? "input" : "output";
       connectStartHandleTypeRef.current = null;
+      // 仅在连接未落到目标节点（空白画布）上时弹出菜单
+      const toNode = "toNode" in connectionState ? connectionState.toNode : null;
+      if (toNode) return;
+
+      const sourceNode = "fromNode" in connectionState ? connectionState.fromNode : null;
+      if (!sourceNode) return;
 
       // 取鼠标/触摸的屏幕坐标
       let clientX = 0, clientY = 0;
@@ -643,14 +642,15 @@ export default function InfiniteCanvas() {
 
       const canvasPosition = screenToFlowPosition({ x: clientX, y: clientY });
 
-      // 计算发起端 Handle 锚点在画布坐标系中的坐标，供菜单期间持续渲染预览线。
-      // source Handle 在节点右侧、target Handle 在节点左侧，纵向均取节点中心。
+      // 计算发起端连线锚点在画布坐标系中的坐标，供菜单期间持续渲染预览线。
+      // 锚点恒为节点边缘垂直正中（圆点跟随只是视觉反馈，见 ConnectionSideRail）：
+      // source Handle 在节点右侧、target Handle 在节点左侧
       const sourceWidth = sourceNode.measured?.width ?? sourceNode.width ?? 0;
       const sourceHeight = sourceNode.measured?.height ?? sourceNode.height ?? 0;
       const sourceAnchor: { x: number; y: number } =
         direction === "output"
-          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 + NODE_TITLE_HEIGHT / 2 }
-          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 + NODE_TITLE_HEIGHT / 2 };
+          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 }
+          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 };
 
       setPendingConnectionCreate({
         sourceNodeIds: [sourceNode.id],
@@ -697,7 +697,11 @@ export default function InfiniteCanvas() {
         .flatMap((n) => {
           const ok = direction === "output" ? canConnect(n.type, newNode.type) : canConnect(newNode.type, n.type);
           if (!ok) return [];
-          return [direction === "output" ? { source: n.id, target: newNode.id } : { source: newNode.id, target: n.id }];
+          return [
+            direction === "output"
+              ? { source: n.id, target: newNode.id }
+              : { source: newNode.id, target: n.id },
+          ];
         });
       batchConnect(pairs);
     },
@@ -1022,7 +1026,7 @@ export default function InfiniteCanvas() {
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <ReactFlow
         data-interaction={canvasInteraction.mode}
-        style={{ "--handle-size": `${HANDLE_SIZE}px`, "--handle-gap": `${HANDLE_GAP}px` } as CSSProperties}
+        style={{ "--handle-size": `${HANDLE_SIZE}px`, "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties}
         nodes={nodes}
         edges={edges}
         nodeTypes={RF_NODE_TYPES}
@@ -1068,10 +1072,10 @@ export default function InfiniteCanvas() {
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
-        // 连线吸附半径（画布坐标，默认 20 偏小）：Handle 直径 24px，20 只在 Handle 外
-        // 留约 8px 容错，且缩放变小时该半径会等比缩水、更难吸附。
-        // 放大是安全的——React Flow 在半径内取「最近」的 Handle，不会明显增加误吸附
-        connectionRadius={40}
+        // 连线吸附半径：xyflow 的吸附判定取「指针到 Handle 中心」的距离，Handle 中心
+        // 在轨道正中（离节点边缘 RAIL_WIDTH/2），要整条轨道（最远到四角）都能吸附落线，
+        // 取轨道外接圆半径。放大是安全的——React Flow 在半径内取「最近」的 Handle
+        connectionRadius={RAIL_CONNECT_RADIUS}
         connectionLineComponent={ConnectionFlowLine}
         defaultEdgeOptions={{
           type: "deletable",

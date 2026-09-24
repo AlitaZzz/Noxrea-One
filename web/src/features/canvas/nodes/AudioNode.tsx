@@ -6,7 +6,7 @@
 "use client";
 
 import { UploadOutlined } from "@ant-design/icons";
-import { Handle, type NodeProps, Position } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import { App } from "antd";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,13 +17,14 @@ import {
   extractAudioClip as extractAudioClipApi,
   toFileKey,
 } from "@/features/canvas/api/file-api";
+import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
 import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromUrl } from "@/features/canvas/upload";
 import { useNodeUpload } from "@/features/canvas/upload";
-import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating, NODE_HANDLE_TOP } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
@@ -214,8 +215,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   return (
     <div className="group relative w-full h-full flex flex-col" style={{ width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }}>
       {/* 拖入连接点 */}
-      <Handle id="in" type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
-      <Handle id="out" type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
+      <ConnectionSideRail side="left" type="target" zIndex={10} />
+      <ConnectionSideRail side="right" type="source" zIndex={10} />
 
       <NodeTitle
         nodeId={id}

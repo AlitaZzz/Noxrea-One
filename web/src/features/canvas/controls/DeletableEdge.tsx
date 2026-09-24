@@ -1,29 +1,32 @@
 /**
  * 自定义连线组件（贝塞尔曲线）。
- * 生成连线会渲染管道流光动画。删除连线使用键盘 Delete 键（见 use-canvas-keyboard）。
+ * 连线端点恒落在节点边缘垂直正中：xyflow 给出的坐标在轨道上，按方位收回轨道宽
+ * 即达节点边缘（见 constants.ts 的注释）。生成连线会渲染管道流光动画。
+ * 删除连线使用键盘 Delete 键（见 use-canvas-keyboard）。
  */
 "use client";
 
-import { BaseEdge, type EdgeProps,getBezierPath } from "@xyflow/react";
+import { BaseEdge, type EdgeProps, getBezierPath } from "@xyflow/react";
 
 import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
 
 import { DOT_COLOR, FlowLines } from "./EdgeFlow";
 
-export default function DeletableEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  selected,
-  style = {},
-}: EdgeProps) {
-  // handle 按钮悬浮在节点外侧，连线端点取 handle 中心会悬空；
-  // 把两端端点收回节点边缘，使线从节点到节点连接
+export default function DeletableEdge(props: EdgeProps) {
+  const {
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    selected,
+    style = {},
+  } = props;
+
+  // 端点从轨道收回节点边缘
   const source = insetEdgeAnchor(sourcePosition, sourceX, sourceY);
   const target = insetEdgeAnchor(targetPosition, targetX, targetY);
 

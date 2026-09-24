@@ -12,7 +12,7 @@ import {
   PictureOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import { Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAssetsStore } from "@/features/assets/store";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
+import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
@@ -33,7 +34,6 @@ import {
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_WIDTH,
   EventNames,
-  NODE_HANDLE_TOP,
 } from "@/lib/constants";
 import { isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
@@ -586,8 +586,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />}
-      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 999 }} />
+      {data.source !== "upload" && <ConnectionSideRail side="left" type="target" zIndex={999} />}
+      <ConnectionSideRail side="right" type="source" zIndex={999} />
     </div>
     {previewOpen && createPortal(
       <MediaPreviewOverlay
