@@ -32,6 +32,10 @@ export interface AssetItemDto {
   mediaType: string;
   width: number;
   height: number;
+  /** 源文件大小（字节），服务端按 hash 关联 file_objects 得出；缺失为 0 */
+  size: number;
+  /** 媒体时长（秒），同出自 file_objects 的落盘探测；缺失为 0 */
+  duration: number;
   description: string;
   tags: string[];
   prompt: string;
@@ -97,7 +101,6 @@ export const assetApi = {
   createAsset: (data: {
     name: string; type: string; mediaType?: string;
     sourceUrl?: string; sourceType?: string;
-    width?: number; height?: number;
     description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }) =>
     api<{ item: AssetItemDto; counters: AssetCountersDto }>("/api/assets/items", {
@@ -108,7 +111,6 @@ export const assetApi = {
   createAssetsBatch: (items: Array<{
     name: string; type: string; mediaType?: string;
     sourceUrl?: string; sourceType?: string;
-    width?: number; height?: number;
     description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }>) =>
     api<{ items: AssetItemDto[]; counters: AssetCountersDto; skipped: AssetSkippedDto[] }>("/api/assets/items/batch", {

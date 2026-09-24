@@ -49,7 +49,8 @@
     "zoom": "缩放",
     "fit": "适应屏幕",
     "noData": "暂无数据",
-    "processing": "处理中..."
+    "processing": "处理中...",
+    "statusFailed": "失败"
   },
   "param": {
     "quality": "质量",
@@ -335,6 +336,8 @@
     "exitManage": "退出管理",
     "typeLabel": "类型",
     "dimensionsLabel": "尺寸",
+    "sizeLabel": "文件大小",
+    "durationLabel": "时长",
     "locationLabel": "位置",
     "createdAtLabel": "创建于",
     "updatedAtLabel": "更新于",

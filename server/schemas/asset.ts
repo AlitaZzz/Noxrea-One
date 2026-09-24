@@ -40,8 +40,6 @@ export const assetCreateSchema = z.object({
   mediaType: z.enum(["image", "video", "audio", ""]).optional(),
   sourceUrl: z.string().min(1).optional(),
   sourceType: z.string().max(20).optional(),
-  width: z.number().int().min(0).optional(),
-  height: z.number().int().min(0).optional(),
   description: z.string().optional(),
   tags: tagsSchema.optional(),
   prompt: z.string().max(10000).optional(),
@@ -57,8 +55,6 @@ export const assetBatchCreateSchema = z.array(assetCreateSchema).min(1).max(ASSE
 export const assetUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.string().min(1).max(20).optional(),
-  width: z.number().int().min(0).optional(),
-  height: z.number().int().min(0).optional(),
   description: z.string().optional(),
   folderId: z.number().int().positive().nullable().optional(),
   tags: tagsSchema.optional(),
@@ -94,6 +90,10 @@ export const assetOutSchema = z.object({
   mediaType: z.string(),
   width: z.number(),
   height: z.number(),
+  /** 源文件大小（字节），按 sourceUrl 的内容 hash 关联 file_objects 得出；缺失为 0 */
+  size: z.number(),
+  /** 媒体元数据（宽高 / 时长）同出自 file_objects 的落盘探测；缺失为 0 */
+  duration: z.number(),
   description: z.string(),
   tags: z.array(z.string()),
   prompt: z.string(),

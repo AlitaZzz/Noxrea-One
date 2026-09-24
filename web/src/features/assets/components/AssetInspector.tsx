@@ -31,6 +31,7 @@ import { copyText } from "@/lib/utils/text-export";
 
 import { downloadAsset } from "../download";
 import type { AssetItem } from "../types";
+import { formatBytes, formatTime } from "@/lib/utils/format";
 
 interface Props {
   /** 当前选中且仍在列表中的素材；1 项为详情态，多项时检查器留空（批量操作在网格上方批量条）。 */
@@ -576,6 +577,12 @@ export default function AssetInspector({
               <MetaRow label={t("asset.typeLabel")} value={typeKey ? t(typeKey) : single.type} />
               {(single.mediaType === "image" || single.mediaType === "video") && single.width > 0 && single.height > 0 && (
                 <MetaRow label={t("asset.dimensionsLabel")} value={`${single.width} × ${single.height}`} />
+              )}
+              {single.size > 0 && (
+                <MetaRow label={t("asset.sizeLabel")} value={formatBytes(single.size)} />
+              )}
+              {(single.mediaType === "video" || single.mediaType === "audio") && single.duration > 0 && (
+                <MetaRow label={t("asset.durationLabel")} value={formatTime(single.duration)} />
               )}
               {folderPath && (
                 <MetaRow label={t("asset.locationLabel")} value={folderPath} />

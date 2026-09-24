@@ -1,7 +1,7 @@
 /**
  * 资产上传弹窗。
  * 支持多文件选择与拖入，限并发上传并展示单文件进度，
- * 自动提取图片 / 视频尺寸与视频封面，最后按所选分类与文件夹批量创建资产。
+ * 宽高 / 时长等元数据由服务端落盘时探测入库，这里只负责上传与批量创建资产。
  */
 "use client";
 
@@ -37,8 +37,6 @@ interface UploadFile {
   url: string | null;
   uploadProgress: number;
   status: "ready" | "uploading" | "done" | "error";
-  width: number;
-  height: number;
 }
 
 const MAX_CONCURRENCY = 3;
@@ -109,7 +107,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
     for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     objectUrlsRef.current.clear();
   }, []);
-  /** 单次使用后即可回收（如尺寸探测），重复 revoke 无害 */
+  /** 单次使用后即可回收，重复 revoke 无害 */
   const revokeUrl = useCallback((url: string) => {
     URL.revokeObjectURL(url);
     objectUrlsRef.current.delete(url);
@@ -122,40 +120,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const pendingRef = useRef(0);
   const resolveAllRef = useRef<() => void>(() => {});
   const allDoneRef = useRef<Promise<void>>(Promise.resolve());
-
-  /** 获取图片/视频自然尺寸（Promise.race 包 5s 超时，不阻塞上传） */
-  const measureDims = useCallback((file: File): Promise<{ w: number; h: number }> => {
-    const dimPromise = (async () => {
-      try {
-        if (isImage(file)) {
-          return await new Promise<{ w: number; h: number }>((resolve) => {
-            const url = trackUrl(URL.createObjectURL(file));
-            const img = new Image();
-            // 尺寸拿到即用完，立刻回收；超时分支由 releaseUrls 兜底
-            img.onload = () => { revokeUrl(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }); };
-            img.onerror = () => { revokeUrl(url); resolve({ w: 0, h: 0 }); };
-            img.src = url;
-          });
-        }
-        if (isVideo(file)) {
-          return await new Promise<{ w: number; h: number }>((resolve) => {
-            const url = trackUrl(URL.createObjectURL(file));
-            const v = document.createElement("video");
-            v.preload = "metadata";
-            v.onloadedmetadata = () => { revokeUrl(url); resolve({ w: v.videoWidth, h: v.videoHeight }); };
-            v.onerror = () => { revokeUrl(url); resolve({ w: 0, h: 0 }); };
-            v.src = url;
-          });
-        }
-      } catch { /* ignore */ }
-      return { w: 0, h: 0 };
-    })();
-
-    const timeoutPromise = new Promise<{ w: number; h: number }>((resolve) =>
-      setTimeout(() => resolve({ w: 0, h: 0 }), 5000),
-    );
-    return Promise.race([dimPromise, timeoutPromise]);
-  }, [trackUrl, revokeUrl]);
 
   const waitAllDone = useCallback((): Promise<void> => {
     if (pendingRef.current > 0) return allDoneRef.current;
@@ -193,8 +157,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       url: null,
       uploadProgress: 0,
       status: "ready",
-      width: 0,
-      height: 0,
     }));
 
     // 立即渲染卡片
@@ -214,14 +176,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       allDoneRef.current = new Promise((r) => { resolveAllRef.current = r; });
     }
     pendingRef.current += 1;
-
-    // 尺寸探测与上传并行：尺寸只更新 width/height，不阻塞上传
-    const dims = uploadable.map((e) => measureDims(e.file));
-    dims.forEach((d, i) => {
-      d.then(({ w, h }) => {
-        if (w > 0) updateFile(uploadable[i].id, { width: w, height: h });
-      });
-    });
 
     // 上传交给管道（raw sink：只上传拿 URL，不碰画布；silent 由本组件自行标红/标失败）
     const { settled } = await runMediaUpload({
@@ -244,9 +198,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
             updateFile(entry.id, { status: "error" });
             continue;
           }
-          // 等尺寸收尾（≤5s），保证保存时 width/height 已就绪
-          const { w, h } = await dims[i];
-          if (w > 0) updateFile(entry.id, { width: w, height: h });
           updateFile(entry.id, { url: result.url, status: "done", uploadProgress: 100 });
         }
       })
@@ -254,7 +205,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         pendingRef.current -= 1;
         if (pendingRef.current === 0) resolveAllRef.current();
       });
-  }, [measureDims, updateFile, message, t, trackUrl]);
+  }, [updateFile, message, t, trackUrl]);
 
   const removeFile = useCallback((id: string) => {
     const target = files.find((f) => f.id === id);
@@ -304,8 +255,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       name: deriveAssetName(f.file.name),
       type: category,
       mediaType: isVideo(f.file) ? "video" : isAudio(f.file) ? "audio" : "image",
-      width: f.width,
-      height: f.height,
       description: "",
       sourceUrl: f.url || undefined,
       folderId: saveFolderId,

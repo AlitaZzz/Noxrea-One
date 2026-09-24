@@ -14,18 +14,25 @@ import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
 import { buildFileUrl } from "@server/services/storage/service";
+import { localStorage } from "@server/services/storage/backends/local";
 
 const router = new Hono();
 
 /**
  * 终态回填 payload 的统一映射：SSE 快照、SSE 推送与 batch-status 对账三处共用，
  * 保证同一任务的字段形状不会随入口漂移。
+ * 产物大小由服务端 stat 落盘文件直接给出（与 resultUrls 逐位对齐，缺失为 null），
+ * 前端据此回填节点 data.fileSize，无需二次探测。
  */
-function toTaskPayload(state: TerminalTaskState) {
+async function toTaskPayload(state: TerminalTaskState) {
+  const resultSizes = state.resultUrls
+    ? await Promise.all(state.resultUrls.map(async (key) => (await localStorage.stat(key))?.size ?? null))
+    : undefined;
   return {
     taskId: state.taskId,
     status: state.status,
     resultUrls: state.resultUrls?.map(buildFileUrl),
+    resultSizes,
     resultText: state.resultText,
     error: state.error,
     errorCode: state.errorCode,
@@ -212,7 +219,7 @@ router.post("/api/generate/tasks/batch-status", async (c) => {
   // 归属过滤下推 SQL：只查当前用户的终态行，非本人/非终态行不再拉取+反序列化后丢弃
   const tasks = await getTaskTerminalByIds(ids, { userId: auth.user.id });
 
-  return c.json(ok(tasks.map((t) => toTaskPayload(toTerminalState(t)))));
+  return c.json(ok(await Promise.all(tasks.map((t) => toTaskPayload(toTerminalState(t))))));
 });
 
 // GET /api/generate/task/:id/stream (SSE)
@@ -230,7 +237,7 @@ router.get("/api/generate/task/:id/stream", async (c) => {
 
   // 如果已经是终态，直接返回一次性快照（走 createSseResponse 保证响应头一致）
   if (isTerminalTaskStatus(task.status)) {
-    const snapshot = { type: "status", ...toTaskPayload(toTerminalState(task)) };
+    const snapshot = { type: "status", ...(await toTaskPayload(toTerminalState(task))) };
     return createSseResponse(request, async ({ emit }) => {
       emit("status", snapshot);
     });
@@ -249,7 +256,7 @@ router.get("/api/generate/task/:id/stream", async (c) => {
       }
       nullResolves = 0;
 
-      const payload = { type: "status", ...toTaskPayload(state) };
+      const payload = { type: "status", ...(await toTaskPayload(state)) };
       emit("status", payload);
 
       // 终态：推完即关流

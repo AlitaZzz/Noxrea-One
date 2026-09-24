@@ -61,6 +61,7 @@ export function createTextNode(position: { x: number; y: number }): TextNode {
       label: "",
       content: "",
       plainText: "",
+      createdAt: Date.now(),
       genSettings: { kind: "text", prompt: "", modelKey: "", refOrder: [], refAudioOrder: [], refVideoOrder: [] } satisfies TextGenSettings,
     } as TextNodeData,
     style: {
@@ -86,6 +87,7 @@ export function createImageNode(
       lockAspectRatio: true,
       naturalWidth: DEFAULT_NODE_WIDTH,
       naturalHeight: DEFAULT_NODE_CONTENT_HEIGHT,
+      createdAt: Date.now(),
       genSettings: { kind: "image", prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refOrder: [], n: 1 } satisfies ImageGenSettings,
     } as ImageNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
@@ -105,6 +107,7 @@ export function createVideoNode(
       src: src || "",
       naturalWidth: 320,
       naturalHeight: 180,
+      createdAt: Date.now(),
       genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], refVideoOrder: [], n: 1 } satisfies VideoGenSettings,
     } as VideoNodeData,
     style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
@@ -122,6 +125,7 @@ export function createAudioNode(
     data: {
       label: "",
       src: src || "",
+      createdAt: Date.now(),
     } as AudioNodeData,
     style: { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT },
   };
@@ -132,7 +136,7 @@ export function directorNode(position: { x: number; y: number }): DirectorNode {
     id: uid("d"),
     type: NODE_TYPE.DIRECTOR,
     position,
-    data: { label: "" },
+    data: { label: "", createdAt: Date.now() },
     style: { width: DIRECTOR_NODE_DEFAULT_WIDTH, height: DIRECTOR_NODE_DEFAULT_HEIGHT },
   };
 }

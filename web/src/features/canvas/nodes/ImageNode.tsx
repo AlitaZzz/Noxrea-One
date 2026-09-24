@@ -299,23 +299,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     if (!src) return;
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
-    // 节点缺真实尺寸时先探测再入库：记录存 0 会让之后从资产插入的节点
-    // 比例错误（只能落默认尺寸）
-    let nw = d?.naturalWidth || 0;
-    let nh = d?.naturalHeight || 0;
-    if (!nw || !nh) {
-      const dims = await loadMediaDimensions(src, false);
-      nw = dims.w;
-      nh = dims.h;
-    }
     await addAsset({
       name: data.label || t("node.image"),
       type: "other",
       mediaType: "image",
       sourceUrl: src,
       sourceType: d?.source,
-      width: nw,
-      height: nh,
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
     });

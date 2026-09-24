@@ -2338,3 +2338,19 @@ body > .ant-app { line-height: inherit !important; }
 .nav-btn:hover { background: var(--nav-hover-bg); }
 .nav-btn-active,
 .nav-btn-active:hover { background: var(--nav-active-bg); }
+
+/* ===== 画布资源管理器行（CanvasExplorer）=====
+   hover 仅整行背景变色，文字颜色不变；标题常亮（层级：白标题 / 灰元数据），
+   选中态与画布节点选中同色系：hover 底色 + 左侧 --canvas-select 青柠竖条。 */
+.canvas-explorer-row {
+  background: transparent;
+  color: var(--canvas-text);
+}
+.canvas-explorer-row:hover {
+  background: var(--canvas-bg-hover);
+}
+.canvas-explorer-row.is-selected,
+.canvas-explorer-row.is-selected:hover {
+  background: var(--canvas-bg-hover);
+}
+.canvas-explorer-row .explorer-row-sub { color: var(--canvas-text-muted); }

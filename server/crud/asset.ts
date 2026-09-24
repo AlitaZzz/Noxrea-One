@@ -11,7 +11,6 @@ import {
   removeSourceFileRefsBatch,
 } from "@server/services/storage/file-ref-ledger";
 import { stringifyJson, parseJsonArray } from "./json-column";
-import { probeSourceDimensions } from "@server/services/storage/media";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -85,6 +84,59 @@ function deserializeAsset<T extends { tags: unknown }>(item: T) {
   return {
     ...item,
     tags: parseJsonArray(item.tags),
+  };
+}
+
+/** 探测出的媒体元数据快照；拿不到的维度以 0 兜底（与前端「0 = 未知」口径一致） */
+export interface AssetMediaMeta {
+  size: number;
+  width: number;
+  height: number;
+  /** 时长（秒），仅视频 / 音频有值，缺省为 0 */
+  duration: number;
+}
+
+/**
+ * 批量取资产源文件的媒体元数据：从 sourceUrl 提取内容 hash，查 file_objects
+ * （元数据由服务端落盘时统一探测入库）。返回 hash → 元数据映射，
+ * 供各序列化出口经 withMediaMeta 附加 size / width / height / duration。
+ */
+async function mediaMetaMapFor(
+  db: Pick<Prisma.TransactionClient, "fileObject">,
+  userId: number,
+  items: Array<{ sourceUrl?: string | null }>,
+): Promise<Map<string, AssetMediaMeta>> {
+  const hashes = new Set<string>();
+  for (const item of items) {
+    const hash = item.sourceUrl ? extractHashFromUrl(item.sourceUrl) : null;
+    if (hash) hashes.add(hash);
+  }
+  if (hashes.size === 0) return new Map();
+  const rows = await db.fileObject.findMany({
+    where: { userId, hash: { in: [...hashes] } },
+    select: { hash: true, size: true, width: true, height: true, duration: true },
+  });
+  return new Map(rows.map((row) => [row.hash, {
+    size: Number(row.size),
+    width: row.width ?? 0,
+    height: row.height ?? 0,
+    duration: row.duration ?? 0,
+  }]));
+}
+
+/** 附加媒体元数据（源文件字节数与宽高时长；无 hash 或无对应文件记录时为 0） */
+function withMediaMeta<T extends { sourceUrl?: string | null }>(
+  item: T,
+  metas: Map<string, AssetMediaMeta>,
+): T & AssetMediaMeta {
+  const hash = item.sourceUrl ? extractHashFromUrl(item.sourceUrl) : null;
+  const meta = hash ? metas.get(hash) : undefined;
+  return {
+    ...item,
+    size: meta?.size ?? 0,
+    width: meta?.width ?? 0,
+    height: meta?.height ?? 0,
+    duration: meta?.duration ?? 0,
   };
 }
 
@@ -370,13 +422,16 @@ export async function getAssets(params: {
   const hasMore = rows.length > take;
   const page = rows.slice(0, take);
   const nextCursor = hasMore && page.length > 0 ? encodeAssetCursor(page[page.length - 1]) : null;
+  const metas = await mediaMetaMapFor(prisma, params.userId, page);
 
-  return { items: page.map(deserializeAsset), total, nextCursor };
+  return { items: page.map((row) => withMediaMeta(deserializeAsset(row), metas)), total, nextCursor };
 }
 
 export async function getAsset(userId: number, id: number) {
   const item = await prisma.assetItem.findFirst({ where: { id, userId } });
-  return item ? deserializeAsset(item) : null;
+  if (!item) return null;
+  const metas = await mediaMetaMapFor(prisma, userId, [item]);
+  return withMediaMeta(deserializeAsset(item), metas);
 }
 
 export async function createAssetsBatch(
@@ -387,8 +442,6 @@ export async function createAssetsBatch(
     mediaType?: string;
     sourceUrl?: string | null;
     sourceType?: string;
-    width?: number;
-    height?: number;
     description?: string;
     tags?: string[];
     prompt?: string;
@@ -423,29 +476,6 @@ export async function createAssetsBatch(
     candidates.push(item);
   }
 
-  // 落库前由服务端探测真实宽高（sharp / ffmpeg 读源文件），请求回传值仅作
-  // 探测失败时的回落——尺寸以媒体文件本身为准，前端探针失败/缺失不得把 0
-  // 落库，否则资产插入画布时比例只能回落默认值。探测（进程级 spawn 开销）
-  // 只对真正要入库的条目做：先做一次只读的库内去重预查，已存在的来源直接
-  // 跳过——重复批量重传不再白付整轮探测的延迟；事务内还会再查一次兜底
-  // 并发写入，去重语义以事务内为准。探测在事务外并行，限并发避免大批量
-  // 上传时同时 spawn 大量 ffmpeg 进程。
-  const preExistingKeys = await findExistingSourceKeys(prisma, items[0].userId, candidates);
-  const dimsBySource = new Map<string, { width: number; height: number }>();
-  const PROBE_CONCURRENCY = 8;
-  const probeTargets = candidates.filter(
-    (item) =>
-      item.sourceUrl && !preExistingKeys.has(sourceKey(item.scope ?? "personal", item.sourceUrl)),
-  );
-  for (let i = 0; i < probeTargets.length; i += PROBE_CONCURRENCY) {
-    await Promise.all(
-      probeTargets.slice(i, i + PROBE_CONCURRENCY).map(async (item) => {
-        const dims = await probeSourceDimensions(item.sourceUrl!, item.mediaType ?? "");
-        if (dims) dimsBySource.set(sourceKey(item.scope ?? "personal", item.sourceUrl!), dims);
-      }),
-    );
-  }
-
   return prisma.$transaction(async (tx) => {
     const created: SerializedAssetItem[] = [];
     const uncategorizedByScope = new Map<string, number>();
@@ -477,17 +507,12 @@ export async function createAssetsBatch(
         if (folder.scope !== scope) throw new AssetOperationError("folder_not_found");
       }
 
-      const probed = item.sourceUrl
-        ? dimsBySource.get(sourceKey(scope, item.sourceUrl))
-        : undefined;
       const record = await tx.assetItem.create({
         data: {
           userId: item.userId,
           name: item.name ?? "Untitled",
           type: item.type ?? "other",
           mediaType: item.mediaType ?? "",
-          width: probed?.width ?? item.width ?? 0,
-          height: probed?.height ?? item.height ?? 0,
           description: item.description ?? "",
           tags: stringifyJson(item.tags ?? []),
           prompt: item.prompt ?? "",
@@ -514,8 +539,9 @@ export async function createAssetsBatch(
       }
     }
 
+    const createdMetas = await mediaMetaMapFor(tx, items[0].userId, created);
     return {
-      items: created,
+      items: created.map((item) => withMediaMeta(item, createdMetas)),
       counters: await readCounters(tx, items[0].userId, items[0].scope ?? "personal"),
       skipped,
     };
@@ -528,8 +554,6 @@ export async function updateAsset(
   updates: {
     name?: string;
     type?: string;
-    width?: number;
-    height?: number;
     description?: string;
     folderId?: number | null;
     tags?: string[];
@@ -543,8 +567,6 @@ export async function updateAsset(
     const data: Prisma.AssetItemUpdateInput = { updatedAt: new Date() };
     if (updates.name !== undefined) data.name = updates.name;
     if (updates.type !== undefined) data.type = updates.type;
-    if (updates.width !== undefined) data.width = updates.width;
-    if (updates.height !== undefined) data.height = updates.height;
     if (updates.description !== undefined) data.description = updates.description;
     if (updates.tags !== undefined) data.tags = stringifyJson(updates.tags);
     if (updates.prompt !== undefined) data.prompt = updates.prompt;
@@ -573,7 +595,7 @@ export async function updateAsset(
     }
 
     return {
-      item: deserializeAsset(updated),
+      item: withMediaMeta(deserializeAsset(updated), await mediaMetaMapFor(tx, userId, [updated])),
       counters: await readCounters(tx, userId, current.scope),
     };
   });
@@ -651,7 +673,7 @@ export async function deleteAsset(userId: number, id: number) {
     });
 
     return {
-      item: deserializeAsset(current),
+      item: withMediaMeta(deserializeAsset(current), await mediaMetaMapFor(tx, userId, [current])),
       counters: await readCounters(tx, userId, current.scope),
     };
   });

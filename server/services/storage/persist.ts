@@ -4,6 +4,8 @@
  */
 
 import { upsertFileObject } from "@server/crud/file";
+import { buildStorageKey } from "./service";
+import { probePersistedMediaMeta } from "./media";
 import { logEvent } from "@server/core/logger/utils";
 
 export interface FilePersistenceInput {
@@ -18,12 +20,19 @@ export interface FilePersistenceInput {
 /**
  * 去重 + 写 file_objects 表。
  * 对齐 Python save_upload_bytes 的 INSERT + IntegrityError 去重逻辑。
+ * 媒体元数据（宽高 / 时长）在落盘点一次性探测入库，下游统一读 DB，不再各自探测；
+ * 探测是 best-effort，失败留 null，不阻塞落盘。
  * DB 写入失败时向上抛错，调用方据此让本次请求/任务失败；
  * 刚落盘的文件不删除——DB 不可用时无法确认该 hash 是否已被其他记录引用，
  * 误删会破坏已有对象，孤儿文件交由 GC 对账清理。
  */
 export async function persistFileObject(data: FilePersistenceInput) {
   try {
+    const meta = await probePersistedMediaMeta(
+      buildStorageKey(data.userId, data.hash, data.ext),
+      data.mimeType,
+    ).catch(() => null);
+
     await upsertFileObject({
       userId: data.userId,
       hash: data.hash,
@@ -31,6 +40,9 @@ export async function persistFileObject(data: FilePersistenceInput) {
       mimeType: data.mimeType,
       ext: data.ext,
       source: data.source ?? "generated",
+      width: meta?.width ?? null,
+      height: meta?.height ?? null,
+      duration: meta?.duration ?? null,
     });
 
     logEvent("storage", {
