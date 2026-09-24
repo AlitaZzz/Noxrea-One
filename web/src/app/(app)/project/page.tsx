@@ -74,7 +74,7 @@ export default function ProjectPage() {
 
   return (
     <AppShell>
-      <div className="h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--canvas-text)" }}>
+      <div className="ui-select-none h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--canvas-text)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">

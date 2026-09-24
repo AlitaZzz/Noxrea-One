@@ -42,7 +42,7 @@ export default function NodeTitle({
 
   return (
     <div
-      className={`group/title flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
+      className={`ui-select-none group/title flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
       style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}
     >
       {editing ? (
