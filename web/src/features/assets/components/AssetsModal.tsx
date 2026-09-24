@@ -474,44 +474,16 @@ export default function AssetsModal({ open, onClose }: Props) {
         flush
         className="asset-library-modal select-none"
         styles={{
-          // antd v6 的 .ant-modal-container 默认带 20px 24px 内边距；资产弹窗三栏要贴边，
-          // 外层清零，标题栏内边距在下方作用域 <style> 中覆盖（全局样式用了 !important）。
-          container: { padding: 0, background: "var(--canvas-bg)" },
-          header: { background: "var(--canvas-bg)" },
+          // 内边距节奏已由 theme.ts Modal token 统一（contentPadding 0），三栏贴边即默认；
+          // header 差异（16px 底边距 + 分隔横线）经 styles.header 内联声明
+          container: { background: "var(--canvas-bg)" },
+          header: { background: "var(--canvas-bg)", padding: "16px 56px 16px 24px", borderBottom: "1px solid var(--canvas-border)" },
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
         }}
         style={{ maxWidth: 1600 }}
       >
         <style>{`
-          /* 覆盖全局 .ant-modal-header 的 !important 规则：标题栏保留 24px 左右内边距
-             （右侧 56px 避让关闭按钮）和 16px 上下内边距，横线不再与 × 按钮重叠。 */
-          .asset-library-modal .ant-modal-header {
-            padding: 16px 56px 16px 24px !important;
-          }
           .menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }
-          .asset-library-modal .ant-input:hover,
-          .asset-library-modal .ant-input:focus,
-          .asset-library-modal .ant-input-focused,
-          .asset-library-modal .ant-input-affix-wrapper:hover,
-          .asset-library-modal .ant-input-affix-wrapper:focus,
-          .asset-library-modal .ant-input-affix-wrapper-focused,
-          .asset-library-modal .ant-select-selector:hover,
-          .asset-library-modal .ant-select-focused .ant-select-selector {
-            border-color: var(--canvas-border) !important;
-            box-shadow: none !important;
-          }
-          .asset-library-modal .ant-select.ant-select { height: 36px !important; }
-          .asset-library-modal .ant-select-selector.ant-select-selector {
-            background: var(--canvas-bg) !important;
-            border-color: var(--canvas-border) !important;
-            color: var(--canvas-text) !important;
-            border-radius: 8px !important;
-            font-size: 13px !important;
-            height: 36px !important;
-          }
-          .ant-modal-confirm .ant-modal-mask {
-            background: rgba(0,0,0,0.6) !important;
-          }
         `}</style>
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
           {/* Main content：面包屑/工具条、批量条与网格 */}

@@ -351,7 +351,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
       centered
       global
       flush
-      className="asset-upload-dialog ui-select-none"
+      className="ui-select-none"
+      styles={{ header: { padding: "16px 56px 16px 24px", borderBottom: "1px solid var(--canvas-border)" } }}
       destroyOnHidden
       width={920}
       footer={

@@ -19,8 +19,9 @@ import { theme as antTheme } from "antd";
 const COLOR_PRIMARY = "#c7f43d";
 const COLOR_PRIMARY_HOVER = "#d6f86a";
 const COLOR_PRIMARY_ACTIVE = "#aede2b";
-/** 主色填充上的文字色：青柠是浅色，必须配深色字，否则对比度不足 */
-const ON_PRIMARY_TEXT = "#141509";
+/** 主色填充上的文字色：实心按钮填充为无彩白（CSS 覆写对齐 --canvas-solid），
+ * 必须配深色字；同 --canvas-app-bg */
+const ON_PRIMARY_TEXT = "#0c0c0e";
 /** 警示色：同 --canvas-warning，用橙与青柠拉开色相 */
 const COLOR_WARNING = "#ffb020";
 /** 错误色：青柠主题下红仍是唯一的「危险」语义，保持原值 */
@@ -99,13 +100,27 @@ export function directorTheme() {
         // antd v6 文字态按钮的 hover 底色是组件 token textHoverBg（默认派生自
         // colorFillTertiary 的白系 alpha），改这里把它并入主语言 #26262b
         textHoverBg: "#26262b",
+        // 小号按钮字号：v6 默认取 fontSize(14)，设计语言统一 13
+        contentFontSizeSM: 13,
+      },
+      Input: {
+        // 小号输入框字号：v6 默认继承 fontSize(14)，设计语言统一 13
+        inputFontSizeSM: 13,
       },
       Select: {
         colorBgContainer: "#1d1d21",
+        // 控件高度 36（v6 默认取 controlHeight 32），选中项底色并入 hover 语言 #26262b
+        selectHeight: 36,
+        optionSelectedBg: "#26262b",
         activeBorderColor: NEUTRAL_BORDER,
         hoverBorderColor: NEUTRAL_BORDER,
         ...NEUTRAL_OUTLINE,
       },
+      // Tag 字号在 v6 内部由 fontSizeSM 派生（tagFontSize = fontSizeSM），设 13 对齐设计语言
+      Tag: { fontSizeSM: 13 },
+      Tree: { nodeSelectedBg: "#26262b" },
+      // 注意：Modal 的 padding 类（contentPadding/headerPadding…）是 v6 内部 token，
+      // 无法在组件层配置；全站弹窗壳语言统一在 AppModal 的默认 styles 里声明。
       Slider: {
         // 实心白柄：lineWidth 0 去掉描边圈，内芯填白由 globals.css 的 ant-slider 覆盖补齐
         trackBg: NEUTRAL_FILL, trackHoverBg: NEUTRAL_FILL, railBg: "#3b3b42", railHoverBg: "#474750",

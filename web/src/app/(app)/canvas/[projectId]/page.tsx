@@ -13,9 +13,9 @@ import { use, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
+import AppModal from "@/components/ui/AppModal";
 import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { LayerModal } from "@/components/ui/modal/LayerModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -118,12 +118,13 @@ export default function CanvasPage({
       </AppShell>
 
       {/* Shortcuts help modal */}
-      <LayerModal
+      <AppModal
         title={<span style={{ color: "var(--canvas-text)" }}>{t("shortcuts.title")}</span>}
         open={shortcutsVisible}
         onCancel={() => setShortcutsVisible(false)}
         footer={null}
         width={620}
+        styles={{ body: { padding: "16px 24px 24px" } }}
       >
         {(() => {
           const kb = (v: string) => <kbd className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">{v}</kbd>;
@@ -165,7 +166,7 @@ export default function CanvasPage({
             </div>
           );
         })()}
-      </LayerModal>
+      </AppModal>
 
       {/* Director fullscreen overlay */}
       {directorOverlayOpen && (
