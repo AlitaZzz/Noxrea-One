@@ -685,7 +685,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [id]);
 
   return (
-    <div className="group relative w-full h-full flex flex-col">
+    <div className="group relative w-full h-full flex flex-col node-tilt">
       <NodeTitle
         nodeId={id}
         icon={<VideoCameraOutlined className="shrink-0" />}

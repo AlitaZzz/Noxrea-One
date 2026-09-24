@@ -196,7 +196,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const charCount = plainText.length;
 
   return (
-    <div className="group relative w-full h-full flex flex-col">
+    <div className="group relative w-full h-full flex flex-col node-tilt">
       {/* Title tab */}
       <NodeTitle
         nodeId={id}

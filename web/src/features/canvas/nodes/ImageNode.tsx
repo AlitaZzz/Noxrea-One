@@ -378,7 +378,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   return (
     <>
-    <div ref={nodeRef} className="group relative w-full h-full flex flex-col">
+    <div ref={nodeRef} className="group relative w-full h-full flex flex-col node-tilt">
       {/* Title */}
       <NodeTitle
         nodeId={id}
