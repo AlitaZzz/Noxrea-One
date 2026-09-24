@@ -11,8 +11,8 @@
  * 未注册为 video/*，只写 "video/*" 会让这些文件在对话框里选不到，故补上扩展名。
  */
 const EXT_FALLBACK: Record<string, string> = {
-  "image/*": ".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.avif",
-  "video/*": ".mp4,.webm,.mov,.avi,.mkv,.m4v",
+  "image/*": ".png,.jpg,.jpeg,.gif,.webp,.svg,.avif",
+  "video/*": ".mp4,.webm,.mov,.avi,.mkv",
   "audio/*": ".mp3,.wav,.ogg,.m4a,.aac,.flac",
 };
 

@@ -5,18 +5,20 @@
  */
 "use client";
 
-import { CloseOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Progress, Select, TreeSelect } from "antd";
+import { CloseOutlined, InfoCircleOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { App, Progress, Select, Tooltip, TreeSelect } from "antd";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
 import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
+import { fetchUploadLimits, type UploadLimits } from "@/features/canvas/api/file-api";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { expandAccept } from "@/features/canvas/upload/pick-files";
 import { isOffline } from "@/lib/utils/upload";
@@ -52,11 +54,11 @@ function extOf(name: string) {
 
 function isImage(file: File) {
   if (file.type.startsWith("image/")) return true;
-  return ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(extOf(file.name));
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extOf(file.name));
 }
 function isVideo(file: File) {
   if (file.type.startsWith("video/")) return true;
-  return ["mp4", "webm", "mov", "avi", "mkv", "m4v"].includes(extOf(file.name));
+  return ["mp4", "webm", "mov", "avi", "mkv"].includes(extOf(file.name));
 }
 function isAudio(file: File) {
   if (file.type.startsWith("audio/")) return true;
@@ -87,6 +89,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const [category, setCategory] = useState<AssetType>("other");
   const [saveFolderId, setSaveFolderId] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  const [limits, setLimits] = useState<UploadLimits | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 保存位置文件夹树的搜索态（命中片段高亮，逻辑见 use-tree-match）
   const { query: folderTreeQuery, onSearch: onTreeSearch, reset: resetTreeSearch } = useTreeMatchTitle();
@@ -115,6 +118,18 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
   // 弹窗关闭（destroyOnHidden 会卸载）或组件卸载时兜底回收
   useEffect(() => () => releaseUrls(), [releaseUrls]);
+
+  // 格式/体积说明的数据源在服务端（白名单 + MAX_UPLOAD_SIZE_MB），弹窗打开时拉取；
+  // 拉取失败只是隐藏说明，不影响上传功能
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    fetchUploadLimits(ctrl.signal)
+      .then((d) => { if (!cancelled) setLimits(d); })
+      .catch(() => { /* 隐藏说明即可 */ });
+    return () => { cancelled = true; ctrl.abort(); };
+  }, [open]);
 
   // ---- 上传：统一走画布上传管道（raw sink，复用并发 / 重试 / 离线判定 / 错误分类）----
   const pendingRef = useRef(0);
@@ -288,6 +303,34 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
   const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "uploading");
   const saveDisabled = files.length === 0 || hasActiveWork;
 
+  // 文件选择器的 accept 直接用服务端白名单扩展名，让选文件阶段就拦住服务端会拒的类型；
+  // 约束未加载完成前回退到 MIME 通配 + 常见扩展名兜底
+  const fileAccept = useMemo(
+    () => limits
+      ? Object.values(limits.formats).flat().map((e) => `.${e}`).join(",")
+      : expandAccept("image/*,video/*,audio/*"),
+    [limits],
+  );
+
+  // 格式说明：footer 放一行短提示，完整白名单收进 Tooltip。
+  // 图标与画布节点标题一致（图 PictureOutlined / 视频 VideoCameraOutlined / 音频 WaveIcon），
+  // 对齐方式同 NodeTitle：flex items-center + shrink-0 图标
+  const formatTooltip = limits && (
+    <div className="flex flex-col gap-2 py-0.5 text-xs whitespace-nowrap">
+      {([
+        { icon: <PictureOutlined />, label: t("asset.formatGroupImage"), exts: limits.formats.image },
+        { icon: <VideoCameraOutlined />, label: t("asset.formatGroupVideo"), exts: limits.formats.video },
+        { icon: <WaveIcon />, label: t("asset.formatGroupAudio"), exts: limits.formats.audio },
+      ]).map((g) => (
+        <div key={g.label} className="flex items-center gap-2">
+          <span className="shrink-0" style={{ color: "var(--canvas-text-muted)", fontSize: 13 }}>{g.icon}</span>
+          <span style={{ color: "var(--canvas-text)" }}>{g.label}</span>
+          <span style={{ color: "var(--canvas-text-muted)" }}>{g.exts.join(" / ")}</span>
+        </div>
+      ))}
+    </div>
+  );
+
   // 保存位置树：个人空间为根（选根 = 不入文件夹），普通文件夹递归构建；
   // 与移动弹窗同一套可搜索折叠 TreeSelect，目录增长后仍可定位。
   // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
@@ -320,21 +363,40 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
 
   return (
     <AppModal
-      title={t("asset.uploadTitle")}
+      title={
+        <div className="flex items-center gap-2">
+          <AssetsIcon style={{ color: "var(--canvas-text-secondary)", fontSize: 18 }} />
+          <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.uploadTitle")}</span>
+        </div>
+      }
       open={open}
       onCancel={() => { reset(); onClose(); }}
       centered
       global
       flush
-      className="app-dialog"
+      className="asset-upload-dialog"
       destroyOnHidden
       width={780}
       footer={
-        <div className="app-dialog-footer">
-          <AppButton onClick={() => { reset(); onClose(); }}>{t("common.cancel")}</AppButton>
-          <AppButton variant="primary" loading={saving} disabled={saveDisabled} onClick={handleSave}>
-            {t("common.save")}
-          </AppButton>
+        <div className="flex items-center justify-between gap-4">
+          {/* 左：格式/体积短提示，悬停查看完整白名单 */}
+          {limits ? (
+            <Tooltip title={formatTooltip} placement="topLeft" styles={{ root: { maxWidth: 460 } }}>
+              <span className="flex items-center gap-1.5 text-xs text-white/40 cursor-default">
+                <InfoCircleOutlined style={{ fontSize: 13 }} />
+                {t("asset.formatShort", { limit: limits.maxSizeMb })}
+              </span>
+            </Tooltip>
+          ) : (
+            <span />
+          )}
+          {/* 右：操作按钮 */}
+          <div className="app-dialog-footer">
+            <AppButton onClick={() => { reset(); onClose(); }}>{t("common.cancel")}</AppButton>
+            <AppButton variant="primary" loading={saving} disabled={saveDisabled} onClick={handleSave}>
+              {t("common.save")}
+            </AppButton>
+          </div>
         </div>
       }
     >
@@ -343,7 +405,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
         ref={fileInputRef}
         type="file"
         multiple
-        accept={expandAccept("image/*,video/*,audio/*")}
+        accept={fileAccept}
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) addFiles(e.target.files);

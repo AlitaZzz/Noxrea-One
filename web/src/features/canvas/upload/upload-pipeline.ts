@@ -49,8 +49,8 @@ import {
 import { resolveDerivedLabel, resolveDerivedPosition } from "./derived-node";
 import type { MediaKind, UploadHandle, UploadItem, UploadPlan, UploadSummary } from "./types";
 
-const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
-const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "mkv", "m4v"];
+const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"];
+const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "mkv"];
 const AUDIO_EXTS = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
 
 /** 版本号序列：防异步回调竞态（撤销 / 重置后旧回调自动失效） */

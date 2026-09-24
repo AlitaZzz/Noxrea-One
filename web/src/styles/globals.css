@@ -710,6 +710,15 @@ body > .ant-app { line-height: inherit !important; }
   margin-bottom: 0 !important;
 }
 
+/* Select/TreeSelect：点击即弹下拉的控件，指针统一手型。
+   antd v6 对 show-search 变体会显式设 cursor: text（收起状态下悬停是 I-beam），需覆盖。 */
+.ant-select:not(.ant-select-disabled) {
+  cursor: pointer !important;
+}
+.ant-select-disabled {
+  cursor: not-allowed !important;
+}
+
 /* Restore pointer-events on antd elements rendered inside overlay-roots */
 [data-layer-overlay-root] .ant-select-dropdown,
 [data-layer-overlay-root] .ant-dropdown,
@@ -2354,3 +2363,26 @@ body > .ant-app { line-height: inherit !important; }
   background: var(--canvas-bg-hover);
 }
 .canvas-explorer-row .explorer-row-sub { color: var(--canvas-text-muted); }
+
+/* ===== 资产上传弹窗（AssetCreateDialog）=====
+   外观对齐资产库主弹窗：标题带图标、header 保留分隔横线；
+   内边距节奏与 app-dialog 相同（container 清零，header/body/footer 分段控制）。 */
+.asset-upload-dialog .ant-modal-container {
+  padding: 0 !important;
+}
+.asset-upload-dialog .ant-modal-header {
+  padding: 16px 56px 16px 24px !important;
+  margin-bottom: 0 !important;
+}
+.asset-upload-dialog .ant-modal-body {
+  padding: 16px 24px 0 !important;
+}
+.asset-upload-dialog .ant-modal-footer {
+  padding: 16px 24px 20px !important;
+  margin: 0 !important;
+}
+.asset-upload-dialog .ant-modal-close {
+  color: var(--canvas-text-secondary);
+  top: 18px;
+  inset-inline-end: 24px;
+}
