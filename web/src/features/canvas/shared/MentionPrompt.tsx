@@ -165,7 +165,9 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
 
   const editor = useEditor({
     extensions: [
-      // prompt 保持纯文本语义：仅保留文档 / 段落 / 文本 / 撤销重做，关闭全部富文本格式
+      // prompt 保持纯文本语义：仅保留文档 / 段落 / 文本 / 换行 / 撤销重做，关闭全部富文本格式。
+      // hardBreak 必须开启——聊天窗口/网页复制的剪贴板 HTML 用 <br> 表达换行，
+      // 关掉它解析时 <br> 被丢弃、多段文本黏成一段；开启后 <br> 转换行节点并序列化回 \n
       StarterKit.configure({
         blockquote: false,
         bold: false,
@@ -174,7 +176,6 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
         codeBlock: false,
         dropcursor: false,
         gapcursor: false,
-        hardBreak: false,
         heading: false,
         horizontalRule: false,
         italic: false,
