@@ -91,7 +91,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, DEFAULT_NODE_COLOR, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, NODE_TYPE_COLOR, RAIL_CONNECT_RADIUS, RAIL_DOT, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
@@ -1213,13 +1213,12 @@ export default function InfiniteCanvas() {
                 style={{
                   // Panel 默认 absolute + bottom/right 定位，改为 relative 才能排进下方的纵向 flex 流
                   position: "relative",
-                  background: "var(--canvas-bg, #262626)",
                   border: "1px solid var(--canvas-border, #3a3a3a)",
                   width: 180,
                   height: 120,
                   pointerEvents: "auto",
                 }}
-                nodeColor={(n) => NODE_TYPE_COLOR[n.type ?? ""] ?? DEFAULT_NODE_COLOR}
+                // 小地图不按类型着色，用库默认节点色（类型区分由画布本体的图标/颜色承担）
                 maskColor="rgba(255,255,255,0.08)"
               />
             )}

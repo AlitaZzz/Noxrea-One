@@ -113,9 +113,9 @@ export const UPLOAD_KEY = "upload" as const;
 export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
 
 // ── Node colors（原 node-colors.ts，合并至此） ──
-// 节点类型对应的语义色，用于小地图 minimap 节点着色与类型图标着色。
+// 节点类型对应的语义色，用于类型图标与 handle 着色（小地图不再按类型区分颜色）。
 // 取值属于「分类色板」：与青柠主题同屏和谐（明度接近、饱和度克制），
-// 但彼此色相拉开，保证小地图上一眼能区分类型。
+// 但彼此色相拉开，保证一眼能区分类型。
 // 文本节点直接复用品牌青柠，因为它是画布里最常出现的类型。
 export const NODE_TYPE_COLOR: Record<string, string> = {
   [NODE_TYPE.TEXT]: "#c7f43d",
