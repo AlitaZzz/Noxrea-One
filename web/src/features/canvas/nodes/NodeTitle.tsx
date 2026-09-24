@@ -1,13 +1,14 @@
 /**
  * 节点标题栏（各节点共用）。
- * 统一「图标 + 标题 + 右侧附加信息」的排版、双击进入编辑、Enter 保存 / Esc 放弃。
+ * 统一「图标 + 标题 + 编辑铅笔 + 右侧附加信息」的排版、双击标题或点铅笔进入编辑、Enter 保存 / Esc 放弃。
  *
- * 约定：title 既是标题栏显示文案，也是双击进入编辑时的初值 —— 两者同源，
+ * 约定：title 既是标题栏显示文案，也是进入编辑时的初值 —— 两者同源，
  * 避免出现「点开后输入框里的初值和标题栏显示不一致」。
  * 需要「显示带派生信息、编辑纯名字」的场景（如分组节点的成员数）用 display 覆盖显示文案。
  */
 "use client";
 
+import { EditOutlined } from "@ant-design/icons";
 import { Input } from "antd";
 import type { ReactNode } from "react";
 
@@ -36,12 +37,12 @@ export default function NodeTitle({
   trailing,
   className,
 }: NodeTitleProps) {
-  const { editing, draft, setDraft, handleDblClick, handleSave, handleKeyDown } =
+  const { editing, draft, setDraft, startEdit, handleSave, handleKeyDown } =
     useEditableTitle(nodeId, title);
 
   return (
     <div
-      className={`flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
+      className={`group/title flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
       style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}
     >
       {editing ? (
@@ -69,9 +70,20 @@ export default function NodeTitle({
           />
         </span>
       ) : (
-        <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={handleDblClick}>
+        <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={startEdit}>
           {icon}
-          <span className="truncate">{display ?? title}</span>
+          {/* 盒模型与编辑态 Input 一致（1px 边框 + 1px 4px 内边距），进入编辑时文字原点不跳动 */}
+          <span
+            className="truncate"
+            style={{ padding: "1px 4px", border: "1px solid transparent", borderRadius: 4 }}
+          >
+            {display ?? title}
+          </span>
+          <EditOutlined
+            className="nodrag shrink-0 text-white/30 transition-colors group-hover/title:text-white/70"
+            style={{ fontSize: 10 }}
+            onClick={startEdit}
+          />
         </span>
       )}
       {trailing != null && trailing !== false && (

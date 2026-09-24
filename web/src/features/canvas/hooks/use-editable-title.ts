@@ -1,5 +1,5 @@
 /**
- * 节点标题就地编辑 hook：封装双击进入编辑、回车 / 失焦保存、Esc 放弃的通用逻辑。
+ * 节点标题就地编辑 hook：封装进入编辑（双击标题 / 点铅笔）、回车 / 失焦保存、Esc 放弃的通用逻辑。
  */
 "use client";
 
@@ -10,7 +10,7 @@ import { EventNames } from "@/lib/constants";
 /**
  * 节点标题编辑 hook。
  *
- * 封装了「双击进入编辑 → Input 修改 → 失焦/回车保存 / Esc 放弃」的通用逻辑。
+ * 封装了「进入编辑 → Input 修改 → 失焦/回车保存 / Esc 放弃」的通用逻辑。
  * currentTitle 同时作为编辑初值：调用方必须传入与标题栏显示一致的文案，
  * 否则会出现「点开后输入框初值与标题栏不符」。保存时写入 label。
  */
@@ -20,7 +20,7 @@ export function useEditableTitle(nodeId: string, currentTitle: string) {
   // Esc 放弃后，输入框卸载可能触发 blur → handleSave；用标记拦掉这次保存
   const cancelledRef = useRef(false);
 
-  const handleDblClick = useCallback(() => {
+  const startEdit = useCallback(() => {
     cancelledRef.current = false;
     setDraft(currentTitle);
     setEditing(true);
@@ -66,5 +66,5 @@ export function useEditableTitle(nodeId: string, currentTitle: string) {
     [handleSave, handleCancel]
   );
 
-  return { editing, draft, setDraft, handleDblClick, handleSave, handleCancel, handleKeyDown };
+  return { editing, draft, setDraft, startEdit, handleSave, handleCancel, handleKeyDown };
 }
