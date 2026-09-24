@@ -28,6 +28,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { App } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -1182,16 +1183,29 @@ export default function InfiniteCanvas() {
                     }
                   }}
                   onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return;
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Escape") { setIsEditingName(false); setEditName(projectName); }
                   }}
                 />
               ) : (
+                /* 编辑入口对齐节点标题：双击文字或点悬停铅笔（样式见 NodeTitle） */
                 <div
-                  className="text-sm flex-1 min-w-0 truncate"
-                  style={{ color: "var(--canvas-text)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
-                  onDoubleClick={() => setIsEditingName(true)}
+                  className="flex items-center flex-1 min-w-0 group/name"
+                  style={{ height: 24 }}
                 >
-                  {editName || "Untitled"}
+                  <div
+                    className="text-sm min-w-0 truncate"
+                    style={{ color: "var(--canvas-text)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
+                    onDoubleClick={() => setIsEditingName(true)}
+                  >
+                    {editName || "Untitled"}
+                  </div>
+                  <EditOutlined
+                    className="shrink-0 ml-1.5 opacity-0 transition-opacity group-hover/name:opacity-100"
+                    style={{ fontSize: 13, color: "var(--canvas-text-dim)" }}
+                    onClick={() => setIsEditingName(true)}
+                  />
                 </div>
               )}
             </div>
