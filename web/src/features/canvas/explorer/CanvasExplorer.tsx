@@ -691,8 +691,10 @@ function AssetsView() {
         </Popover>
       </div>
 
-      {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」） */}
-      <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap">
+      {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。
+          text-xs 提到行容器：否则 "/" 与层级包装 span 继承 14px 行高(21px)，
+          比根视图的 12px 文字(20px)高 1px，进入文件夹后下方网格整体偏移 */}
+      <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap text-xs">
         {/* 根：个人资产库（根视图为当前项，进入文件夹后可点击返回，位置保持一致不加箭头） */}
         {activeFolderId === null ? (
           <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
