@@ -389,7 +389,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   return (
     <>
     <WheelGuard
-      className="nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
+      className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
       style={{
         background: "var(--canvas-bg, #262626)",
         border: "1px solid var(--canvas-border, #3a3a3a)",

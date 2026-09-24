@@ -309,7 +309,7 @@ function RightPanel({
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+        <form onSubmit={onSubmit} className="ui-select-none space-y-5" noValidate>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: "#b8b8c0" }}>{i18n.t("auth.login.username")}</label>
             <input

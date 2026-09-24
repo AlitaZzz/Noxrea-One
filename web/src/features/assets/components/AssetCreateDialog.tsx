@@ -374,7 +374,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders }: 
       centered
       global
       flush
-      className="asset-upload-dialog"
+      className="asset-upload-dialog ui-select-none"
       destroyOnHidden
       width={780}
       footer={
