@@ -461,7 +461,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       <AppModal
         title={
           <div className="flex items-center gap-2">
-            <AssetsIcon style={{ color: "var(--canvas-text-secondary)", fontSize: 18 }} />
+            <AssetsIcon style={{ color: "var(--canvas-text-dim)", fontSize: 18 }} />
             <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.title")}</span>
           </div>
         }
@@ -481,7 +481,6 @@ export default function AssetsModal({ open, onClose }: Props) {
           body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
         }}
         style={{ maxWidth: 1600 }}
-        closeIcon={<span style={{ color: "var(--canvas-text-secondary)" }}>✕</span>}
       >
         <style>{`
           /* 覆盖全局 .ant-modal-header 的 !important 规则：标题栏保留 24px 左右内边距

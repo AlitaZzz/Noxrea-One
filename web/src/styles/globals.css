@@ -353,7 +353,9 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 }
 .app-dialog .ant-modal-header {
   border-bottom: none !important;
-  padding: 20px 56px 0 24px !important;
+  /* 上内边距 16px 与资产库/上传弹窗（flush，header 16px）及 antd 默认 container
+     contentPadding（16px）对齐：所有弹窗标题行中心统一在 28px，关闭按钮得以一条规则定位 */
+  padding: 16px 56px 0 24px !important;
   margin-bottom: 0 !important;
 }
 .app-dialog .ant-modal-title {
@@ -372,12 +374,6 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 .app-dialog .ant-modal-footer {
   padding: 16px 24px 20px !important;
   margin: 0 !important;
-}
-.app-dialog .ant-modal-close {
-  color: var(--canvas-text-secondary);
-  /* 与标题行垂直居中对齐，右缘对齐 24px 水平留白（× 按钮 22px） */
-  top: 21px;
-  inset-inline-end: 24px;
 }
 /* 底部按钮行：右对齐、8px 间距 */
 .app-dialog-footer {
@@ -2022,23 +2018,38 @@ body > .ant-app { line-height: inherit !important; }
   font-weight: 600;
   color: var(--canvas-text);
 }
-/* 抽屉关闭按钮统一走 antd 内置 closable（.ant-drawer-close），hover 只有图标变色、无底色块，
-   与全站「hover 出底色块」的按钮语言不一致；这里对齐成同款规格（默认色 --canvas-text-dim，
-   hover 底色 --canvas-bg-hover + 图标 --canvas-text）。全局生效：所有 Drawer 的关闭按钮一致。
+/* 弹窗与抽屉的关闭按钮统一规格，与 header 自绘按钮（.chat-header-btn）三方对齐：
+   30×30 点击区、圆角 8、图标 16px、默认色 --canvas-text-dim、hover 底色 --canvas-bg-hover。
+   选择器必须带父级前缀提优先级：antd 运行时后注入的同优先级（0,1,0）规则会赢得平局，
+   不提优先级覆盖全部失效（实测抽屉按钮回落为 antd 默认 24px、弹窗 32px）。
    不换自绘按钮：closable 的 aria / 键盘行为由 antd 维护。 */
-.ant-drawer-close {
+.ant-modal .ant-modal-close,
+.ant-drawer .ant-drawer-close {
   width: 30px;
   height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 8px;
   color: var(--canvas-text-dim);
+  font-size: 16px;
   transition: color .2s, background .2s;
 }
-.ant-drawer-close:hover {
+/* 弹窗关闭按钮定位：标题行中心统一为 28px（各弹窗 header 上内边距均为 16px），
+   盒 30px → top = 28 − 15；右缘对齐 24px 内容边距 */
+.ant-modal .ant-modal-close {
+  top: 13px;
+  inset-inline-end: 24px;
+}
+.ant-modal .ant-modal-close:hover,
+.ant-drawer .ant-drawer-close:hover {
   color: var(--canvas-text);
   background: var(--canvas-bg-hover);
+}
+.ant-modal .ant-modal-close:active,
+.ant-drawer .ant-drawer-close:active {
+  background: var(--canvas-bg-active);
+}
+/* antd 弹窗内层 -x 的行高取自内部 token(32px)，30px 盒内会使图标偏 1px，改回同高 */
+.ant-modal .ant-modal-close-x {
+  line-height: 30px;
 }
 /* Agent 抽屉 header 左侧会话标题（点击重命名） */
 .chat-title {
@@ -2221,7 +2232,7 @@ body > .ant-app { line-height: inherit !important; }
   padding: 0 10px;
   border-radius: 7px;
   font-size: 12.5px;
-  color: var(--canvas-text-secondary);
+  color: var(--canvas-text-dim);
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -2456,11 +2467,6 @@ body > .ant-app { line-height: inherit !important; }
 .asset-upload-dialog .ant-modal-footer {
   padding: 16px 24px 20px !important;
   margin: 0 !important;
-}
-.asset-upload-dialog .ant-modal-close {
-  color: var(--canvas-text-secondary);
-  top: 18px;
-  inset-inline-end: 24px;
 }
 
 /* ===== 连线拖动目标节点反馈（connection-tilt）=====

@@ -342,7 +342,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     <AppModal
       title={
         <div className="flex items-center gap-2">
-          <AssetsIcon style={{ color: "var(--canvas-text-secondary)", fontSize: 18 }} />
+          <AssetsIcon style={{ color: "var(--canvas-text-dim)", fontSize: 18 }} />
           <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.uploadTitle")}</span>
         </div>
       }
