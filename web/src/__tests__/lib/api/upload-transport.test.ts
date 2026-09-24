@@ -81,7 +81,8 @@ describe("apiUploadWithProgress 的失败语义", () => {
     xhr.responseText = JSON.stringify({ code: 200, data: { url: "u", key: "k" }, msg: "" });
     xhr.onload?.();
 
-    await expect(promise).resolves.toEqual({ code: 200, data: { url: "u", key: "k" }, msg: "" });
+    // 响应体按统一包裹格式解包，成功直接拿到 data
+    await expect(promise).resolves.toEqual({ url: "u", key: "k" });
     expect(listeners.offline?.length).toBe(0);
   });
 });

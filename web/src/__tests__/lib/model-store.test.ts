@@ -1,11 +1,10 @@
 /**
- * 模型配置写操作回归测试：写请求失败时不得修改本地状态。
- *
- * 覆盖此前的问题：updateProvider / deleteProvider / toggleModelCapability
- * 不校验业务码，UI 已经提示成功，刷新后配置又回到原样。
+ * 模型配置写操作回归测试：写请求失败时不得修改本地状态（fail-throw 契约）。
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ApiError } from "@/lib/api/client";
 
 const mocks = vi.hoisted(() => ({
   updateProvider: vi.fn(),
@@ -27,8 +26,10 @@ vi.mock("@/features/settings/api", () => ({
     createProvider: (...args: unknown[]) => mocks.createProvider(...args),
     setProviderModels: (...args: unknown[]) => mocks.setProviderModels(...args),
     fetchProviders: (...args: unknown[]) => mocks.fetchProviders(...args),
-    fetchPresets: vi.fn(async () => ({ code: 200, data: [], msg: "" })),
-    fetchModelParams: vi.fn(async () => ({ code: 200, data: {}, msg: "" })),
+    fetchProviderApiKey: vi.fn(),
+    fetchModelsList: vi.fn(),
+    fetchPresets: vi.fn(async () => []),
+    fetchModelParams: vi.fn(async () => ({})),
   },
 }));
 
@@ -59,13 +60,13 @@ describe("model-store 写操作", () => {
     mocks.createProvider.mockReset();
     mocks.setProviderModels.mockReset();
     mocks.fetchProviders.mockReset();
-    mocks.fetchProviders.mockResolvedValue({ code: 200, data: [structuredClone(PROVIDER)], msg: "" });
+    mocks.fetchProviders.mockResolvedValue([structuredClone(PROVIDER)]);
     mocks.notify.error.mockReset();
     useModelStore.setState({ providers: [structuredClone(PROVIDER)] });
   });
 
   it("更新供应商失败时不改本地状态并提示", async () => {
-    mocks.updateProvider.mockResolvedValue({ code: 500, data: null, msg: "服务内部错误" });
+    mocks.updateProvider.mockRejectedValue(new ApiError(500, "服务内部错误"));
 
     const ok = await useModelStore.getState().updateProvider("p1", { name: "新名称" });
 
@@ -75,7 +76,7 @@ describe("model-store 写操作", () => {
   });
 
   it("更新供应商成功时合并本地状态", async () => {
-    mocks.updateProvider.mockResolvedValue({ code: 200, data: null, msg: "" });
+    mocks.updateProvider.mockResolvedValue(undefined);
 
     const ok = await useModelStore.getState().updateProvider("p1", { name: "新名称" });
 
@@ -85,7 +86,7 @@ describe("model-store 写操作", () => {
   });
 
   it("删除供应商失败时保留该供应商", async () => {
-    mocks.deleteProvider.mockResolvedValue({ code: 403, data: null, msg: "无权访问" });
+    mocks.deleteProvider.mockRejectedValue(new ApiError(403, "无权访问"));
 
     const ok = await useModelStore.getState().deleteProvider("p1");
 
@@ -95,7 +96,7 @@ describe("model-store 写操作", () => {
   });
 
   it("能力勾选失败时不写入本地", async () => {
-    mocks.setModelCapability.mockResolvedValue({ code: 500, data: null, msg: "服务内部错误" });
+    mocks.setModelCapability.mockRejectedValue(new ApiError(500, "服务内部错误"));
 
     const ok = await useModelStore.getState().toggleModelCapability("p1", "m1", "image");
 
@@ -105,7 +106,7 @@ describe("model-store 写操作", () => {
   });
 
   it("能力勾选成功时写入本地", async () => {
-    mocks.setModelCapability.mockResolvedValue({ code: 200, data: null, msg: "" });
+    mocks.setModelCapability.mockResolvedValue(undefined);
 
     const ok = await useModelStore.getState().toggleModelCapability("p1", "m1", "image");
 
@@ -114,7 +115,7 @@ describe("model-store 写操作", () => {
   });
 
   it("新增模型失败时不写入本地", async () => {
-    mocks.addModel.mockResolvedValue({ code: 400, data: null, msg: "模型名重复" });
+    mocks.addModel.mockRejectedValue(new ApiError(400, "模型名重复"));
 
     const ok = await useModelStore.getState().addModel("p1", "gpt-y");
 
@@ -124,7 +125,7 @@ describe("model-store 写操作", () => {
   });
 
   it("批量写入失败时不改本地能力", async () => {
-    mocks.setProviderModels.mockResolvedValue({ code: 500, data: null, msg: "服务内部错误" });
+    mocks.setProviderModels.mockRejectedValue(new ApiError(500, "服务内部错误"));
 
     const ok = await useModelStore.getState().setProviderModels("p1", [
       { name: "gpt-x", capabilities: ["image"] },
@@ -136,8 +137,8 @@ describe("model-store 写操作", () => {
   });
 
   it("写入成功但重新拉取失败时仍算成功，并按入参就地更新本地", async () => {
-    mocks.setProviderModels.mockResolvedValue({ code: 200, data: null, msg: "" });
-    mocks.fetchProviders.mockResolvedValue({ code: 500, data: null, msg: "服务内部错误" });
+    mocks.setProviderModels.mockResolvedValue(undefined);
+    mocks.fetchProviders.mockRejectedValue(new ApiError(500, "服务内部错误"));
 
     const ok = await useModelStore.getState().setProviderModels("p1", [
       { name: "gpt-x", capabilities: ["image"] },
@@ -149,7 +150,7 @@ describe("model-store 写操作", () => {
   });
 
   it("新增供应商失败时不写入本地", async () => {
-    mocks.createProvider.mockResolvedValue({ code: 0, data: null, msg: "无法连接服务器" });
+    mocks.createProvider.mockRejectedValue(new ApiError(0, "无法连接服务器"));
 
     const ok = await useModelStore.getState().addProvider("p2", "https://x.com/v1", "sk");
 

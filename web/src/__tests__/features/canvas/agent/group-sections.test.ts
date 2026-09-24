@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { groupSections } from "@/features/canvas/agent/utils/group-sections";
 import type { ChatMessage } from "@/features/canvas/agent/types";
+import { groupSections } from "@/features/canvas/agent/utils/group-sections";
 
 function user(id: string, content: string, turnId?: string): ChatMessage {
   return { id, role: "user", content, ...(turnId ? { turnId } : {}) };

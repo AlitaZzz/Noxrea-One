@@ -2,7 +2,6 @@
  * 生成任务（视频 / 文本 / 图片）相关 API 封装。
  * 提交、取消与流式监听共用 /api/generate/task 端点，按 type 区分业务。
  */
-import type { ApiResult } from "@/lib/api/client";
 import { api, apiRaw, apiStream } from "@/lib/api/client";
 import type { TaskStatus } from "@/lib/types/canvas";
 
@@ -70,8 +69,8 @@ export function isTerminalTaskStatus(status: TaskStatus): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
-/** 批量查询任务状态（对账兜底：页面重新可见 / 网络恢复时调用）。 */
-export async function fetchTasksStatus(taskIds: string[]): Promise<ApiResult<TaskStatusEvent[]>> {
+/** 批量查询任务状态（对账兜底：页面重新可见 / 网络恢复时调用）。失败时抛 ApiError。 */
+export async function fetchTasksStatus(taskIds: string[]): Promise<TaskStatusEvent[]> {
   return api<TaskStatusEvent[]>("/api/generate/tasks/batch-status", {
     method: "POST",
     body: JSON.stringify({ ids: taskIds }),

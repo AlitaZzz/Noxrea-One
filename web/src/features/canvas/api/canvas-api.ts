@@ -19,10 +19,13 @@ export async function getPromptTemplate(
 ): Promise<string | null> {
   const search = new URLSearchParams({ type });
   for (const [key, value] of Object.entries(params ?? {})) search.set(key, String(value));
-  const res = await api<PromptTemplateResult>(
-    `/api/canvas/prompt-template?${search.toString()}`,
-    { method: "GET" }
-  );
-  if (res.code !== 200 || !res.data) return null;
-  return res.data.template;
+  try {
+    const data = await api<PromptTemplateResult>(
+      `/api/canvas/prompt-template?${search.toString()}`,
+      { method: "GET" }
+    );
+    return data?.template ?? null;
+  } catch {
+    return null;
+  }
 }

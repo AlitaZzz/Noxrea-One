@@ -23,7 +23,10 @@
     "backfill:file-meta": "tsx --env-file=.env server/scripts/backfill-file-meta.ts",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
-    "postinstall": "prisma generate && node -e \"const fs=require('fs'),p='node_modules/@xyflow/react/node_modules/zustand';fs.rmSync(p,{recursive:true,force:true})\""
+    "postinstall": "prisma generate"
+  },
+  "overrides": {
+    "zustand": "^5.0.14"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
@@ -31,6 +34,7 @@
     "bcryptjs": "^2.4.3",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.33",
+    "ipaddr.js": "^2.5.0",
     "jose": "^5.9.0",
     "p-limit": "^6.1.0",
     "pino": "^9.5.0",

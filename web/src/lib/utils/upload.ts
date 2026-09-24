@@ -8,7 +8,6 @@ import {
   type UploadErrorKind,
   UploadTransportError,
 } from "@/lib/api/client";
-import { resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 
 /** 上传默认并发数 */
@@ -129,20 +128,18 @@ export async function uploadWithRetry(
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await apiUploadWithProgress<UploadResult>(
+      const data = await apiUploadWithProgress<UploadResult>(
         `/api/files/upload${sourceQuery}`,
         formData,
         onProgress,
       );
 
-      if (res.code !== 200 || !res.data?.url) {
-        // 服务端返回错误（非网络问题），不重试；文案按错误码本地化
-        throw new UploadBusinessError(
-          resolveApiError(res, undefined, "upload.upload_failed")
-        );
+      if (!data?.url) {
+        // 2xx 但响应缺少 url 字段：结构异常，不重试
+        throw new UploadBusinessError(i18n.t("error.upload.upload_failed"));
       }
 
-      return res.data;
+      return data;
     } catch (err) {
       // 业务错误和鉴权错误不重试，直接抛出
       if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) {

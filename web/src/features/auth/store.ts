@@ -6,7 +6,8 @@
 import { create } from "zustand";
 
 import { authApi } from "@/features/auth/api";
-import { resolveApiError, resolveResultError } from "@/lib/api/error-message";
+import { ApiError } from "@/lib/api/client";
+import { resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { setAppLanguage } from "@/lib/i18n/config";
 
@@ -60,9 +61,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().initialized) return;
     set({ loading: true });
     try {
-      const res = await authApi.me<UserInfo>();
-      if (res.code === 200 && res.data) {
-        set({ user: res.data });
+      const user = await authApi.me<UserInfo>();
+      if (user) {
+        set({ user });
       }
     } catch {
       // Not logged in — guest mode
@@ -75,26 +76,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // 密码不做 trim：空格是合法密码字符，静默裁剪会让「注册时按裁剪值存储、
     // 登录时按原值提交」产生不一致
     // 凭据由服务端登录接口 Set-Cookie 下发（httpOnly），前端不再保存 token
-    const res = await authApi.login<{ user: UserInfo }>(username, rawPassword);
-    if (res.code === 200 && res.data?.user) {
-      set({ user: res.data.user });
-    } else {
+    let data: { user: UserInfo };
+    try {
+      data = await authApi.login<{ user: UserInfo }>(username, rawPassword);
+    } catch (e) {
       throw new Error(
-        resolveApiError(res, undefined, "auth.login_failed")
+        e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.login_failed")
       );
+    }
+    if (data?.user) {
+      set({ user: data.user });
+    } else {
+      throw new Error(resolveApiError(null, undefined, "auth.login_failed"));
     }
   },
 
   register: async (rawUsername, rawPassword) => {
     const username = rawUsername.trim().toLowerCase();
     // 同 login：密码不裁剪
-    const res = await authApi.register<{ user: UserInfo }>(username, rawPassword);
-    if (res.code === 200 && res.data?.user) {
-      set({ user: res.data.user });
-    } else {
+    let data: { user: UserInfo };
+    try {
+      data = await authApi.register<{ user: UserInfo }>(username, rawPassword);
+    } catch (e) {
       throw new Error(
-        resolveApiError(res, undefined, "auth.register_failed")
+        e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.register_failed")
       );
+    }
+    if (data?.user) {
+      set({ user: data.user });
+    } else {
+      throw new Error(resolveApiError(null, undefined, "auth.register_failed"));
     }
   },
 
@@ -103,10 +114,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // 返回 promise 供调用方等待：cookie 未清除前导航，proxy.ts 会按 cookie 有效性放行/拦截。
     const done = authApi.logout();
     set({ user: null });
-    // 请求挂起时超时放行（api() 永不 reject，超时是唯一退出路径）；
-    // 残留 cookie 若已过期，proxy.ts 的 exp 检查会按未登录处理，不会弹回
+    // 请求挂起时超时放行；登出失败（网络错误等）不影响本地清态，静默吞掉
     return Promise.race([
-      done,
+      done.catch(() => undefined),
       new Promise<never>((resolve) => setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS)),
     ]).then(() => undefined);
   },
@@ -123,9 +133,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: { ...user, [key]: value } });
     try {
       // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
-      const res = await authApi.updateMe({ [key]: value });
-      // 校验业务码：此前无论成败都保留本地值，刷新后偏好会静默回退
-      if (res.code !== 200) throw new Error(resolveResultError(res, "auth.preference_failed"));
+      // 校验结果：此前无论成败都保留本地值，刷新后偏好会静默回退
+      await authApi.updateMe({ [key]: value });
     } catch (e) {
       // 仅当失败的是最新一次修改时才回滚：并发保存（如双击切换）后，
       // 旧请求迟到失败不能覆盖新值
@@ -135,7 +144,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (key === "language") setAppLanguage(prev === "en" ? "en" : "zh");
       }
       showGlobalNotification().error({
-        title: e instanceof Error ? e.message : resolveResultError(null, "auth.preference_failed"),
+        title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.preference_failed"),
         placement: "bottomRight",
         duration: 6,
       });

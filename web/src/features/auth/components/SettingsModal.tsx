@@ -67,13 +67,10 @@ export default function SettingsModal({ open, onClose }: Props) {
         body.oldPassword = oldPw;
       }
       if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); setSaving(false); return; }
-      const res = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
-      // 此前未校验业务码：保存失败也会提示成功并关闭弹窗
-      if (res.code !== 200 || !res.data) {
-        message.error(res.msg || t("auth.saveFailed"));
-        return;
-      }
-      useAuthStore.setState({ user: res.data }); // immediate update, no refetch needed
+      const updated = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
+      // 保存失败时 api() 抛 ApiError，由外层 catch 提示且不关弹窗
+      if (!updated) { message.error(t("auth.saveFailed")); return; }
+      useAuthStore.setState({ user: updated }); // immediate update, no refetch needed
       message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }

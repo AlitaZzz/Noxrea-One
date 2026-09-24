@@ -31,3 +31,14 @@ function findProjectRoot(): string {
 export function resolveFromRoot(rel: string): string {
   return path.isAbsolute(rel) ? rel : path.resolve(findProjectRoot(), rel);
 }
+
+/**
+ * 路径穿越守卫：target 解析后的绝对路径是否位于 baseDir（或其子目录）内。
+ * 全仓唯一的路径包含判定入口——startsWith 前缀比对会被兄弟目录绕过
+ * （baseDir ".../storage/files" 恰是 ".../storage/filesPrivate" 的前缀），
+ * 必须用 path.relative 判定。target 等于 baseDir 本身不算在内。
+ */
+export function isPathWithinBase(baseDir: string, target: string): boolean {
+  const rel = path.relative(path.resolve(baseDir), path.resolve(target));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}

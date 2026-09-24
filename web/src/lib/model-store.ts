@@ -6,23 +6,29 @@
 import { create } from "zustand";
 
 import { modelApi } from "@/features/settings/api";
+import { ApiError } from "@/lib/api/client";
 import {
   isRecord,
   parseErrorBody,
   resolveApiError,
-  resolveResultError,
 } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";
 
-/** 写操作失败提示（store 层统一负责，UI 只处理成功分支） */
-function notifyFailure(res: { code: number; msg?: string }, fallbackKey: string) {
+/** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
+function notifyFailure(e: unknown, fallbackKey: string) {
   showGlobalNotification().error({
-    title: resolveResultError(res, fallbackKey),
+    title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
     placement: "bottomRight",
     duration: 6,
   });
+}
+
+/** 拉取远端模型列表失败：toast 统一在此弹出，调用方只处理成功分支 */
+function fetchModelsFailure(msg: string): { success: false; error: string } {
+  showGlobalNotification().error({ title: msg, placement: "bottomRight", duration: 6 });
+  return { success: false, error: msg };
 }
 
 /** 从 baseUrl 解析 host（供上游通配匹配用） */
@@ -99,25 +105,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const res = await modelApi.fetchProviders<ModelProvider[]>();
-      if (res.code === 200 && res.data) {
-        // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
-        set({ providers: res.data, initialized: true, initializeFailed: false });
-        await get().fetchPresets();
-        // 拉取模型参数配置（fields 为唯一数据源）
-        try {
-          const mpRes = await modelApi.fetchModelParams<ModelParamsMap>();
-          if (mpRes.code === 200 && mpRes.data) {
-            set({ modelParamsCache: mpRes.data });
-          }
-        } catch {
-          // 模型参数拉取失败不阻塞
-        }
-        return;
+      const providers = await modelApi.fetchProviders<ModelProvider[]>();
+      if (!Array.isArray(providers)) throw new Error("unexpected providers payload");
+      // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
+      set({ providers, initialized: true, initializeFailed: false });
+      await get().fetchPresets();
+      // 拉取模型参数配置（fields 为唯一数据源）
+      try {
+        const params = await modelApi.fetchModelParams<ModelParamsMap>();
+        if (isRecord(params)) set({ modelParamsCache: params });
+      } catch {
+        // 模型参数拉取失败不阻塞
       }
-    } catch {}
-    // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
-    set({ initializeFailed: true });
+    } catch {
+      // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
+      set({ initializeFailed: true });
+    }
   },
 
   findModelParams: (providerId: string, modelName: string, capability: string) => {
@@ -153,25 +156,25 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
   fetchPresets: async () => {
     try {
-      const res = await modelApi.fetchPresets<ProviderPreset[]>();
-      if (res.code === 200 && res.data) {
-        set({ presets: res.data });
-      }
+      const presets = await modelApi.fetchPresets<ProviderPreset[]>();
+      if (Array.isArray(presets)) set({ presets });
     } catch {
       // 预设拉取失败不阻塞：下拉为空，用户手敲 base_url
     }
   },
 
   addProvider: async (name, baseUrl, apiKey, protocol) => {
-    const res = await modelApi.createProvider(name, baseUrl, apiKey, protocol);
-    if (res.code === 200 && res.data) {
-      const provider: ModelProvider = { id: res.data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
-      if (protocol) provider.protocol = protocol;
-      set((s) => ({ providers: [...s.providers, provider] }));
-      return true;
+    let data: { id: string };
+    try {
+      data = await modelApi.createProvider(name, baseUrl, apiKey, protocol);
+    } catch (e) {
+      notifyFailure(e, "model_config.provider_add_failed");
+      return false;
     }
-    notifyFailure(res, "model_config.provider_add_failed");
-    return false;
+    const provider: ModelProvider = { id: data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
+    if (protocol) provider.protocol = protocol;
+    set((s) => ({ providers: [...s.providers, provider] }));
+    return true;
   },
 
   updateProvider: async (id, patch) => {
@@ -180,10 +183,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
     if (patch.apiKey !== undefined) body.apiKey = patch.apiKey;
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
-    const res = await modelApi.updateProvider(id, body);
-    // 校验业务码：此前无论成败都合并本地状态，UI 还提示「已更新」
-    if (res.code !== 200) {
-      notifyFailure(res, "model_config.provider_update_failed");
+    // 校验业务结果：此前无论成败都合并本地状态，UI 还提示「已更新」
+    try {
+      await modelApi.updateProvider(id, body);
+    } catch (e) {
+      notifyFailure(e, "model_config.provider_update_failed");
       return false;
     }
     // 只合并非 undefined 的字段，避免 undefined 覆盖原有值
@@ -201,19 +205,23 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   fetchProviderApiKey: async (id) => {
-    const res = await modelApi.fetchProviderApiKey(id);
-    if (res.code === 200 && res.data) {
-      return res.data.apiKey;
+    try {
+      const data = await modelApi.fetchProviderApiKey(id);
+      return data.apiKey;
+    } catch (e) {
+      throw new Error(
+        e instanceof ApiError
+          ? e.message
+          : resolveApiError(null, undefined, "model_config.api_key_fetch_failed")
+      );
     }
-    throw new Error(
-      resolveApiError(res, undefined, "model_config.api_key_fetch_failed")
-    );
   },
 
   deleteProvider: async (id) => {
-    const res = await modelApi.deleteProvider(id);
-    if (res.code !== 200) {
-      notifyFailure(res, "model_config.provider_delete_failed");
+    try {
+      await modelApi.deleteProvider(id);
+    } catch (e) {
+      notifyFailure(e, "model_config.provider_delete_failed");
       return false;
     }
     set((s) => ({ providers: s.providers.filter((c) => c.id !== id) }));
@@ -221,24 +229,27 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   addModel: async (providerId, name) => {
-    const res = await modelApi.addModel(providerId, name);
-    if (res.code === 200 && res.data) {
-      set((s) => ({
-        providers: s.providers.map((c) =>
-          c.id === providerId ? { ...c, models: [...c.models, { id: res.data.id, name, capabilities: [] }] } : c
-        ),
-      }));
-      return true;
+    let data: { id: string };
+    try {
+      data = await modelApi.addModel(providerId, name);
+    } catch (e) {
+      notifyFailure(e, "model_config.model_add_failed");
+      return false;
     }
-    notifyFailure(res, "model_config.model_add_failed");
-    return false;
+    set((s) => ({
+      providers: s.providers.map((c) =>
+        c.id === providerId ? { ...c, models: [...c.models, { id: data.id, name, capabilities: [] }] } : c
+      ),
+    }));
+    return true;
   },
 
   deleteModel: async (providerId, modelId) => {
-    const res = await modelApi.deleteModel(providerId, modelId);
     // 失败不动本地：行还在列表里，用户可重试（失败原因由 store 统一提示）
-    if (res.code !== 200) {
-      notifyFailure(res, "model_config.model_delete_failed");
+    try {
+      await modelApi.deleteModel(providerId, modelId);
+    } catch (e) {
+      notifyFailure(e, "model_config.model_delete_failed");
       return false;
     }
     set((s) => ({
@@ -258,10 +269,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const has = model.capabilities?.includes(cap);
     const caps = has ? (model.capabilities || []).filter((x) => x !== cap) : [...(model.capabilities || []), cap];
 
-    const res = await modelApi.setModelCapability(providerId, modelId, caps);
     // 失败不动本地：此前先写后忘，勾选看起来生效、刷新就回滚
-    if (res.code !== 200) {
-      notifyFailure(res, "model_config.model_capability_failed");
+    try {
+      await modelApi.setModelCapability(providerId, modelId, caps);
+    } catch (e) {
+      notifyFailure(e, "model_config.model_capability_failed");
       return false;
     }
     set((s) => ({
@@ -276,44 +288,52 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   setProviderModels: async (providerId, models) => {
-    const res = await modelApi.setProviderModels(providerId, models);
-    if (res.code !== 200) {
-      notifyFailure(res, "model_config.models_set_failed");
+    try {
+      await modelApi.setProviderModels(providerId, models);
+    } catch (e) {
+      notifyFailure(e, "model_config.models_set_failed");
       return false;
     }
-    const reload = await modelApi.fetchProviders<ModelProvider[]>();
-    if (reload.code === 200 && reload.data) {
-      set({ providers: reload.data });
+    // 就地更新本地：写入成功但重拉列表失败时，保证勾选结果与服务端一致
+    const applyLocally = () => {
+      set((s) => ({
+        providers: s.providers.map((c) => {
+          if (c.id !== providerId) return c;
+          const idByName = new Map(c.models.map((m) => [m.name, m.id]));
+          return {
+            ...c,
+            models: models.map((m) => ({
+              id: idByName.get(m.name) ?? m.name,
+              name: m.name,
+              capabilities: m.capabilities,
+            })),
+          };
+        }),
+      }));
+    };
+    let reload: ModelProvider[];
+    try {
+      reload = await modelApi.fetchProviders<ModelProvider[]>();
+    } catch {
+      // 写入已成功，只是重新拉取列表失败：不能算写失败（那会让 UI 提示与事实相反）
+      applyLocally();
       return true;
     }
-    // 写入已成功，只是重新拉取列表失败：不能算写失败（那会让 UI 提示与事实相反），
-    // 改为按入参就地更新本地，保证勾选结果与服务端一致
-    set((s) => ({
-      providers: s.providers.map((c) => {
-        if (c.id !== providerId) return c;
-        const idByName = new Map(c.models.map((m) => [m.name, m.id]));
-        return {
-          ...c,
-          models: models.map((m) => ({
-            id: idByName.get(m.name) ?? m.name,
-            name: m.name,
-            capabilities: m.capabilities,
-          })),
-        };
-      }),
-    }));
+    if (Array.isArray(reload)) {
+      set({ providers: reload });
+      return true;
+    }
+    applyLocally();
     return true;
   },
 
   fetchModels: async (providerId) => {
-      const ch = get().providers.find((c) => c.id === providerId);
+    const ch = get().providers.find((c) => c.id === providerId);
     if (!ch) {
-      console.error("Provider not found in store", providerId);
-      return { success: false, error: i18n.t("error.models.provider_not_found_in_store") };
+      return fetchModelsFailure(i18n.t("error.models.provider_not_found_in_store"));
     }
     if (!ch.baseUrl) {
-      console.error("Provider has no baseUrl configured", providerId);
-      return { success: false, error: i18n.t("error.models.provider_no_base_url") };
+      return fetchModelsFailure(i18n.t("error.models.provider_no_base_url"));
     }
     try {
       const res = await modelApi.fetchModelsList(providerId);
@@ -329,7 +349,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
       // ① HTTP 非 2xx：按服务端错误码取本地化文案，拿不到再退回状态码
       if (!res.ok) {
-        // 弹窗展示，附带请求 ID 便于报障时定位服务端日志
+        // 文案附带请求 ID，便于报障时定位服务端日志
         const msg = resolveApiError(errorBody, res.status, "models.fetch_failed", {
           withRequestId: true,
         });
@@ -339,21 +359,19 @@ export const useModelStore = create<ModelState>((set, get) => ({
           body: json,
           msg,
         });
-        return { success: false, error: msg };
+        return fetchModelsFailure(msg);
       }
 
       // ② 空响应
       if (json === null) {
-        const msg = i18n.t("error.common.empty_response");
-        console.error("Fetch models failed:", { status: res.status, body: json, msg });
-        return { success: false, error: msg };
+        return fetchModelsFailure(i18n.t("error.common.empty_response"));
       }
 
       // ③ 结构异常或业务码非 200
       if (!isRecord(json) || (json as { code?: number }).code !== 200) {
         const msg = resolveApiError(errorBody, undefined, "common.unexpected_response");
         console.error("Fetch models failed:", { status: res.status, body: json, msg });
-        return { success: false, error: msg };
+        return fetchModelsFailure(msg);
       }
 
       const data = (json as { data?: unknown }).data;
@@ -376,15 +394,12 @@ export const useModelStore = create<ModelState>((set, get) => ({
       const applied = await get().setProviderModels(providerId, merged);
       // setProviderModels 内部已提示失败原因，这里只把结果透传给调用方
       if (!applied) {
-        return { success: false, error: i18n.t("error.model_config.models_set_failed") };
+        return fetchModelsFailure(i18n.t("error.model_config.models_set_failed"));
       }
       return { success: true };
     } catch (e: unknown) {
       console.error("Fetch models failed:", e);
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : i18n.t("error.unknown"),
-      };
+      return fetchModelsFailure(e instanceof Error ? e.message : i18n.t("error.unknown"));
     }
   },
 }));

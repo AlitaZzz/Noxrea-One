@@ -1,11 +1,12 @@
 /**
  * 前端 HTTP 请求统一底座。
  * 凭据由 httpOnly cookie 自动携带（服务端 Set-Cookie 下发），本模块不管理 token，
- * 提供通用 api（JSON 包裹）、apiUploadWithProgress（带进度）、
+ * 提供通用 api（成功返回数据、失败抛 ApiError）、apiUploadWithProgress（带进度）、
  * apiRaw（原始 Response）与 apiStream（流式）等底层能力与全局 401 处理。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
-import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
+import type { ApiErrorBody } from "@/lib/api/error-message";
+import { isRecord, parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
@@ -66,50 +67,58 @@ export function checkUnauthorized(status: number): boolean {
   return false;
 }
 
-/** 统一 API 结果；错误响应保留机器可读错误码与上下文，供业务侧做自愈处理。 */
-export interface ApiResult<T = unknown> {
-  code: number;
-  data: T;
-  msg: string;
-  error?: string;
-  ctx?: Record<string, string | number>;
+/**
+ * API 请求失败：HTTP 非 2xx（status 为实际状态码）或网络层失败（status = 0）。
+ * message 已是本地化文案；error/ctx/requestId 为服务端结构化错误信息，
+ * 供业务侧做自愈处理（如按 ctx.revision 处理冲突）与展示细节。
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly error?: string;
+  readonly ctx?: Record<string, string | number>;
+  readonly requestId?: string;
+
+  constructor(status: number, message: string, body: ApiErrorBody | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.error = body?.error;
+    this.ctx = body?.ctx;
+    this.requestId = body?.requestId;
+  }
+}
+
+/** 2xx 响应体解包：统一包裹格式 { code, data, msg } 取 data，裸 JSON（agent 会话等）原样返回 */
+function unwrapBody<T>(body: unknown): T {
+  if (isRecord(body) && "code" in body && "data" in body) return body.data as T;
+  return body as T;
 }
 
 export async function api<T = unknown>(
   path: string,
   options: RequestInit & { skipUnauthorized?: boolean } = {}
-): Promise<ApiResult<T>> {
+): Promise<T> {
   const { skipUnauthorized, ...fetchOptions } = options;
+  let res: Response;
   try {
-    const res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${BASE}${path}`, {
       ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
         ...(fetchOptions.headers || {}),
       },
     });
-    if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
-    // 响应体可能为空（204）或是网关返回的 HTML，解析失败按 null 处理，不要抛错
-    const body = (await res.json().catch(() => null)) as ApiResult<T> | null;
-    // 非 2xx 不能再当作正常结果透出：此前 code 为 undefined，调用方无法区分
-    // 「成功但无数据」与「请求失败」。这里统一按 HTTP 状态码 + 服务端错误码生成
-    // 本地化文案。仍然保持「api() 不 reject」的既有契约——大量调用方依赖这一点，
-    // 改为 throw 会产生未处理的 Promise rejection。
-    if (!res.ok) {
-      const errorBody = parseErrorBody(body);
-      return {
-        code: res.status,
-        data: null as T,
-        msg: resolveApiError(errorBody, res.status),
-        error: errorBody?.error,
-        ctx: errorBody?.ctx,
-      };
-    }
-    return body ?? { code: res.status, data: null as T, msg: "" };
-  } catch (e) {
-    if (e instanceof UnauthorizedError) throw e;
-    return { code: 0, data: null as T, msg: i18n.t("error.network_unreachable") };
+  } catch {
+    throw new ApiError(0, i18n.t("error.network_unreachable"));
   }
+  if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
+  // 响应体可能为空（204）或是网关返回的 HTML，解析失败按 null 处理，不要抛错
+  const body = (await res.json().catch(() => null)) as unknown;
+  if (!res.ok) {
+    const errorBody = parseErrorBody(body);
+    throw new ApiError(res.status, resolveApiError(errorBody, res.status), errorBody);
+  }
+  return unwrapBody<T>(body);
 }
 
 /**
@@ -161,7 +170,7 @@ export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
   onProgress?: (pct: number) => void
-): Promise<ApiResult<T>> {
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
@@ -226,7 +235,7 @@ export function apiUploadWithProgress<T = unknown>(
           reject(new UploadTransportError("http", message, xhr.status));
           return;
         }
-        try { resolve(JSON.parse(xhr.responseText) as ApiResult<T>); }
+        try { resolve(unwrapBody<T>(JSON.parse(xhr.responseText))); }
         catch { reject(new UploadTransportError("http", i18n.t("error.parse_failed"), xhr.status)); }
       });
     };

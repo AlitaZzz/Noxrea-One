@@ -11,7 +11,7 @@ import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
 import { localStorage } from "./backends/local";
 import { getConfig } from "@server/core/config";
-import { resolveFromRoot } from "@server/core/paths";
+import { isPathWithinBase, resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
 import { withRetry } from "./fs-utils";
 
@@ -143,10 +143,7 @@ export async function probePersistedMediaMeta(
   const isAudio = mimeType.startsWith("audio/");
   if (!isImage && !isVideo && !isAudio) return empty;
   const filePath = path.resolve(path.join(localStorage.baseDir, storageKey));
-  // 包含关系用 path.relative 判定：startsWith 前缀比对会被兄弟目录绕过
-  // （baseDir ".../storage/files" 恰是 ".../storage/filesPrivate" 的前缀）
-  const rel = path.relative(path.resolve(localStorage.baseDir), filePath);
-  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return empty;
+  if (!isPathWithinBase(localStorage.baseDir, filePath)) return empty;
   try {
     if (isImage) {
       const dims = await probeImageMeta(filePath);
@@ -1299,19 +1296,11 @@ export async function cropVideoRegion(
 }
 
 /**
- * 路径穿越防护：校验用户文件访问
- * 校验用户文件合法性
+ * 路径穿越防护：校验用户文件访问是否位于存储根目录内。
  */
 export function validateUserFile(
   filePath: string,
   baseDir: string
 ): boolean {
-  const resolved = path.resolve(filePath);
-  const base = path.resolve(baseDir);
-
-  // 用前缀比对替代 startswith，防止 uploads/1x 绕过 uploads/1
-  const normalized = resolved.replace(/\\/g, "/");
-  const normalizedBase = base.replace(/\\/g, "/");
-
-  return normalized.startsWith(normalizedBase + "/") || normalized === normalizedBase;
+  return isPathWithinBase(baseDir, filePath);
 }
