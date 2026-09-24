@@ -1,7 +1,7 @@
 /**
  * 拖拽连接时的自定义预览线组件。
  * 渲染中性灰贝塞尔预览线（与已建立连线同色），并叠加绿色管道流光动画；
- * 同时驱动「指针在节点区域内跟随倾斜」的反馈（见 ./connection-tilt.ts）。
+ * 同时驱动目标节点的倾斜/可行性反馈（流动描边 = 可连，毛玻璃 = 不可连，见 ./connection-tilt.ts）。
  */
 "use client";
 
@@ -41,12 +41,13 @@ export default function ConnectionFlowLine({
     targetPosition: toPosition ?? (fromPosition === Position.Right ? Position.Left : Position.Right),
   });
 
-  // 连线拖动中，目标节点跟随鼠标连续倾斜（命令式写 DOM，不触发 React 渲染，
-  // 见 ./connection-tilt.ts）。两个触发条件，磁吸优先：
+  // 连线拖动中，目标节点给出正交于倾斜方向的可行性反馈（命令式写 DOM/classList，
+  // 不触发 React 渲染，见 ./connection-tilt.ts）。磁吸优先：
   // 1. 线已磁吸到某节点轨道（connectionStatus === 'valid'）——意图已锁定，
   //    即使指针在节点外侧，目标节点也朝指针方位倾斜（偏移钳到边缘取最大角）；
-  // 2. 指针落在节点区域内——只认指针正下方最上层的节点，且连线合法（canConnect）。
-  // 不可连的节点保持平整避免误导；两者皆不满足即复位。
+  // 2. 指针落在节点区域内——只认指针正下方最上层的节点：可连则倾斜+流动描边，
+  //    不可连则覆盖毛玻璃蒙层（两者互斥，状态见 ./connection-tilt.ts）。
+  // 两者皆不满足即复位。
   const fromNodeId = fromNode?.id;
   const toNodeId = toNode?.id;
   const pointerX = pointer.x;
@@ -72,12 +73,13 @@ export default function ConnectionFlowLine({
       if (n && width > 0 && height > 0) {
         applyConnectionTilt(
           { id: n.id, box: { x: n.position.x, y: n.position.y, width, height } },
-          { x: flowX, y: flowY }
+          { x: flowX, y: flowY },
+          "ok"
         );
         return;
       }
     }
-    // 未磁吸：指针进入节点区域时倾斜，数组靠后的节点绘制在上层，自上而下找第一个命中
+    // 未磁吸：指针进入节点区域时反馈，数组靠后的节点绘制在上层，自上而下找第一个命中
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
       if (n.id === fromNodeId) continue;
@@ -88,14 +90,11 @@ export default function ConnectionFlowLine({
         flowX < n.position.x || flowX > n.position.x + width ||
         flowY < n.position.y || flowY > n.position.y + height
       ) continue;
-      if (canConnect(sourceType, n.type)) {
-        applyConnectionTilt(
-          { id: n.id, box: { x: n.position.x, y: n.position.y, width, height } },
-          { x: flowX, y: flowY }
-        );
-      } else {
-        clearConnectionTilt();
-      }
+      applyConnectionTilt(
+        { id: n.id, box: { x: n.position.x, y: n.position.y, width, height } },
+        { x: flowX, y: flowY },
+        canConnect(sourceType, n.type) ? "ok" : "blocked"
+      );
       return;
     }
     clearConnectionTilt();
