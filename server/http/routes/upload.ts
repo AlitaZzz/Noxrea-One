@@ -24,19 +24,22 @@ const router = new Hono();
  */
 const ALLOWED_MIME = new Set([
   "image/jpeg", "image/png", "image/gif", "image/webp",
-  "image/bmp", "image/x-ms-bmp", "image/svg+xml", "image/avif",
+  "image/svg+xml", "image/avif",
   "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
-  "video/x-matroska", "video/x-m4v", "video/mpeg",
+  "video/x-matroska",
   "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg",
   "audio/flac", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/x-aac", "audio/webm",
 ]);
 
-/** 允许的扩展名白名单：MIME 缺失或不常见时（如 mkv 被上报为 octet-stream）按扩展名兜底 */
-const ALLOWED_EXT = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif",
-  "mp4", "webm", "mov", "avi", "mkv", "m4v", "mpg", "mpeg",
-  "mp3", "wav", "ogg", "m4a", "aac", "flac",
-]);
+/** 允许的扩展名白名单（按媒体类型分组）：单一数据源，上传校验与前端格式提示共用 */
+const ALLOWED_FORMATS: Record<"image" | "video" | "audio", string[]> = {
+  image: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"],
+  video: ["mp4", "webm", "mov", "avi", "mkv"],
+  audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac"],
+};
+
+/** 扁平白名单：MIME 缺失或不常见时（如 mkv 被上报为 octet-stream）按扩展名兜底 */
+const ALLOWED_EXT = new Set<string>(Object.values(ALLOWED_FORMATS).flat());
 
 /** 扩展名 → MIME：浏览器未提供 MIME 时据此定档，避免 mkv / m4a 落库成 octet-stream */
 const MIME_BY_EXT: Record<string, string> = {
@@ -45,7 +48,6 @@ const MIME_BY_EXT: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
-  ".bmp": "image/bmp",
   ".svg": "image/svg+xml",
   ".avif": "image/avif",
   ".mp4": "video/mp4",
@@ -53,9 +55,6 @@ const MIME_BY_EXT: Record<string, string> = {
   ".mov": "video/quicktime",
   ".avi": "video/x-msvideo",
   ".mkv": "video/x-matroska",
-  ".m4v": "video/x-m4v",
-  ".mpg": "video/mpeg",
-  ".mpeg": "video/mpeg",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".ogg": "audio/ogg",
@@ -69,6 +68,18 @@ function extOfName(name: string): string {
   const m = name.match(/\.([a-z0-9]+)$/i);
   return m ? `.${m[1].toLowerCase()}` : "";
 }
+
+/** 上传约束：体积上限与格式白名单，供前端上传 UI 展示说明（避免前端硬编码与服务端漂移） */
+router.get("/api/files/upload-limits", async (c) => {
+  const auth = await authenticateRequest(c.req.raw);
+  if ("error" in auth) return auth.error;
+
+  const cfg = getConfig();
+  return c.json(ok({
+    maxSizeMb: cfg.MAX_UPLOAD_SIZE_MB,
+    formats: ALLOWED_FORMATS,
+  }));
+});
 
 router.post("/api/files/upload", async (c) => {
   const request = c.req.raw;

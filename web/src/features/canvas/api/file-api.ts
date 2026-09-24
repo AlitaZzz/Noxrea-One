@@ -1,7 +1,18 @@
 /**
- * 文件（Files）相关 API 封装：抽帧、音视频分离等媒体处理接口。
+ * 文件（Files）相关 API 封装：上传约束、抽帧、音视频分离等媒体处理接口。
  */
-import { apiRaw } from "@/lib/api/client";
+import { api, apiRaw } from "@/lib/api/client";
+
+/** 服务端上传约束：体积上限与格式白名单的唯一事实来源 */
+export interface UploadLimits {
+  maxSizeMb: number;
+  formats: { image: string[]; video: string[]; audio: string[] };
+}
+
+/** 拉取上传约束，供上传 UI 展示格式/体积说明（避免前端硬编码与服务端漂移） */
+export function fetchUploadLimits(signal?: AbortSignal): Promise<UploadLimits> {
+  return api<UploadLimits>("/api/files/upload-limits", { signal });
+}
 
 /** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
     后端媒体接口的统一入参格式，抽帧/代理/雪碧图/截取等调用方共用 */
