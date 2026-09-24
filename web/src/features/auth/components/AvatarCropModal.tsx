@@ -9,7 +9,7 @@ import { App,Button } from "antd";
 import { useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { LayerModal } from "@/components/ui/modal/LayerModal";
+import AppModal from "@/components/ui/AppModal";
 import { uploadOne } from "@/features/canvas/upload";
 import { canvasToBlob } from "@/lib/utils/image-utils";
 
@@ -122,7 +122,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
   };
 
   return (
-    <LayerModal
+    <AppModal
       title={<span style={{ color: "var(--canvas-text)" }}>{t("auth.cropAvatar")}</span>}
       open={open}
       onCancel={onClose}
@@ -154,6 +154,6 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
           <Button type="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</Button>
         </div>
       </div>
-    </LayerModal>
+    </AppModal>
   );
 }

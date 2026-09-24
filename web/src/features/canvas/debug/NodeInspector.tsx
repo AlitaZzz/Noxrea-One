@@ -33,6 +33,7 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
       onCancel={onClose}
       footer={null}
       width={520}
+      styles={{ body: { padding: "16px 24px 24px" } }}
     >
       <Descriptions column={1} size="small" bordered className="mb-3">
         <Descriptions.Item label="ID">{node.id}</Descriptions.Item>

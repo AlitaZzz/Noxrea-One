@@ -333,47 +333,19 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 .react-flow__node-group .react-flow__resize-control {
   z-index: 10;
 }
-/* Modal header: border + spacing */
-.ant-modal-header {
-  border-bottom: 1px solid var(--canvas-border) !important;
-  padding: 0 0 16px 0 !important;
-  margin-bottom: 0 !important;
-}
-/* Modal footer: no extra top gap */
-.ant-modal-footer {
-  margin-top: 0 !important;
-}
+/* ============================================================
+   antd 覆写约定（v6 cssinjs 运行时注入晚于本文件，同特异性必输）：
+   1. 能用 token 表达的覆写一律进 src/styles/theme.ts（组件 token，无特异性问题）；
+   2. 弹窗壳内边距走 AppModal 的默认 styles（padding 类为 v6 Modal 内部 token，
+      ConfigProvider 配不了）；
+   3. 其余 token 表达不了的留下时必须二选一提权：父容器前缀（.ant-drawer .ant-drawer-header）
+      或同类名翻倍（.ant-tag 已删，token 化），禁止裸单类名；
+   4. !important 仅用于「同特异性竞速」且无法提权的少数场景（见各处注释）。
+   ============================================================ */
 
-/* 紧凑功能弹窗（二次确认、文件夹命名等）：不带分隔横线。
-   antd v6 的 .ant-modal-container 自带 contentPadding（16px 24px），这里清零后由
-   header/body/footer 三段统一控制 24px 水平留白与纵向节奏，
-   避免双重 padding；配合 AppModal 的 flush 使用。 */
-.app-dialog .ant-modal-container {
-  padding: 0 !important;
-}
-.app-dialog .ant-modal-header {
-  border-bottom: none !important;
-  /* 上内边距 16px 与资产库/上传弹窗（flush，header 16px）及 antd 默认 container
-     contentPadding（16px）对齐：所有弹窗标题行中心统一在 28px，关闭按钮得以一条规则定位 */
-  padding: 16px 56px 0 24px !important;
-  margin-bottom: 0 !important;
-}
-.app-dialog .ant-modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-  color: var(--canvas-text);
-}
 /* 弹窗标题是纯展示文本，禁止选中拖蓝 */
 .ant-modal-title {
   user-select: none;
-}
-.app-dialog .ant-modal-body {
-  padding: 16px 24px 0 !important;
-}
-.app-dialog .ant-modal-footer {
-  padding: 16px 24px 20px !important;
-  margin: 0 !important;
 }
 /* 底部按钮行：右对齐、8px 间距 */
 .app-dialog-footer {
@@ -395,7 +367,8 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 }
 /* 弹窗内输入框：与中性设计语言一致，hover/focus 不出现主色描边或光晕。
    v6 普通输入框类为 .ant-input.ant-input-outlined；带前缀/后缀时外层是
-   .ant-input-affix-wrapper。:not(.…-status-error) 保留校验失败时的红框。 */
+   .ant-input-affix-wrapper。:not(.…-status-error) 保留校验失败时的红框。
+   （弹窗外输入框保持 antd 默认容器色，故这里按弹窗语境收窄） */
 .app-dialog .ant-input:not(.ant-input-status-error),
 .app-dialog .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-status-error) {
   background: var(--canvas-bg-elevated);
@@ -413,24 +386,8 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 .app-dialog .ant-input-data-count {
   color: var(--canvas-text-muted);
 }
-/* 弹窗内下拉：与输入框同一中性控件语言，36px 高、8px 圆角、聚焦无主色描边 */
-.app-dialog .ant-select .ant-select-selector {
-  background: var(--canvas-bg-elevated) !important;
-  border-color: var(--canvas-border) !important;
-  color: var(--canvas-text) !important;
-  border-radius: 8px !important;
-  font-size: 13px !important;
-  height: 36px !important;
-}
-.app-dialog .ant-select:hover .ant-select-selector,
-.app-dialog .ant-select-focused .ant-select-selector {
-  border-color: var(--canvas-border) !important;
-  box-shadow: none !important;
-}
-.app-dialog .ant-select .ant-select-selection-item,
-.app-dialog .ant-select .ant-select-selection-placeholder {
-  line-height: 34px !important;
-}
+/* 弹窗内下拉的占位文字色：antd 默认占位色偏灰，这里对齐 muted 语境
+   （控件高度/底色/描边/选中项已由 theme.ts Select token 统一） */
 .app-dialog .ant-select .ant-select-selection-placeholder {
   color: var(--canvas-text-muted);
 }
@@ -487,11 +444,8 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: var(--canvas-bg-elevated);
 }
-/* 暗色算法下 filter-node 标题与选中节点底色都由主色派生（青柠），统一改回中性 */
-.ant-select-tree .ant-select-tree-node-content-wrapper.ant-select-tree-node-selected {
-  background-color: var(--canvas-bg-hover) !important;
-  color: var(--canvas-text) !important;
-}
+/* 暗色算法下 filter-node 标题由主色派生（青柠），压回中性正文色
+   （选中节点底色已由 theme.ts Tree token 统一） */
 .ant-select-tree-treenode:not(.ant-select-tree-treenode-disabled).filter-node .ant-select-tree-title {
   color: var(--canvas-text) !important;
   font-weight: 400 !important;
@@ -682,7 +636,6 @@ body > .ant-app { line-height: inherit !important; }
   opacity: 1 !important;
   pointer-events: auto;
 }
-.ant-btn-sm { font-size: 13px; }
 
 /* ===== 统一按钮（components/ui/AppButton）=====
    全站按钮共用的视觉基线。原来散落在各处的「36px 高 / 8px 圆角 / 手写 hover」
@@ -765,12 +718,7 @@ body > .ant-app { line-height: inherit !important; }
 }
 .app-btn--danger:not(:disabled):hover { background: var(--canvas-bg-hover); }
 
-/* Select dropdown: selected item same as hover */
-.ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
-  background: var(--canvas-bg-hover) !important;
-}
-
-/* Select dropdown: 全局选项间距（!important 覆盖 antd cssinjs） */
+/* Select dropdown: 全局选项间距（!important 覆盖 antd cssinjs；间距/圆角无组件 token） */
 .ant-select-dropdown .ant-select-item-option {
   margin-bottom: 2px !important;
   border-radius: 6px !important;
@@ -784,7 +732,7 @@ body > .ant-app { line-height: inherit !important; }
 .ant-select:not(.ant-select-disabled) {
   cursor: pointer !important;
 }
-.ant-select-disabled {
+.ant-select.ant-select-disabled {
   cursor: not-allowed !important;
 }
 
@@ -798,28 +746,17 @@ body > .ant-app { line-height: inherit !important; }
 [data-layer-overlay-root] .ant-modal-wrap {
   pointer-events: auto;
 }
-.ant-input-sm { font-size: 13px; }
-.ant-select-sm { font-size: 13px; }
 
 /* antd Empty 的默认图标是内嵌 SVG，内部 <title> 会被浏览器渲染成悬停原生提示
    （未配置 antd locale 时文案为英文 "No data"）。图标本身无任何交互，
    禁掉指针事件让提示不再出现；资产管理 / 技能面板 / 画布大纲的空态一并生效。 */
 .ant-empty-image svg { pointer-events: none; }
 
-
-/* Select 全局统一样式（双类名提特异性，压过 antd cssinjs） */
-.ant-select.ant-select { height: 36px !important; }
+/* Select 触发器字号 13（antd 直接在 selector 元素上写 font-size var，同特异性竞速
+   必须靠 !important；控件高度/底色/选中项已由 theme.ts Select token 统一） */
 .ant-select-selector.ant-select-selector {
-  background: var(--canvas-bg) !important;
-  border-color: var(--canvas-border) !important;
-  color: var(--canvas-text) !important;
-  border-radius: 8px !important;
   font-size: 13px !important;
-  height: 36px !important;
 }
-.ant-select-selector.ant-select-selector:hover { border-color: var(--canvas-border) !important; }
-.ant-select-focused .ant-select-selector.ant-select-selector { border-color: var(--canvas-border) !important; box-shadow: none !important; }
-.ant-tag { font-size: 13px; }
 
 /* Tech grid animations */
 @keyframes grid-scan {
@@ -2008,12 +1945,12 @@ body > .ant-app { line-height: inherit !important; }
 /* 抽屉头部统一规格：antd header + 内置 closable 关闭按钮，三个抽屉共用。
    padding 12×16（原资产抽屉值）、标题 15px/600（原 API 设置抽屉值）。
    title 内的自绘元素（如会话标题）自带字体样式，不受影响。 */
-.ant-drawer-header {
+.ant-drawer .ant-drawer-header {
   padding: 12px 16px;
   background: var(--canvas-bg);
   border-bottom: 1px solid var(--canvas-border);
 }
-.ant-drawer-title {
+.ant-drawer .ant-drawer-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--canvas-text);
@@ -2449,25 +2386,6 @@ body > .ant-app { line-height: inherit !important; }
   background: var(--canvas-bg-hover);
 }
 .canvas-explorer-row .explorer-row-sub { color: var(--canvas-text-muted); }
-
-/* ===== 资产上传弹窗（AssetCreateDialog）=====
-   外观对齐资产库主弹窗：标题带图标、header 保留分隔横线；
-   内边距节奏与 app-dialog 相同（container 清零，header/body/footer 分段控制）。
-   文本禁选由共享的 .ui-select-none（见文件末尾分区）承担。 */
-.asset-upload-dialog .ant-modal-container {
-  padding: 0 !important;
-}
-.asset-upload-dialog .ant-modal-header {
-  padding: 16px 56px 16px 24px !important;
-  margin-bottom: 0 !important;
-}
-.asset-upload-dialog .ant-modal-body {
-  padding: 16px 24px 0 !important;
-}
-.asset-upload-dialog .ant-modal-footer {
-  padding: 16px 24px 20px !important;
-  margin: 0 !important;
-}
 
 /* ===== 连线拖动目标节点反馈（connection-tilt）=====
    状态类由 controls/connection-tilt.ts 命令式写在与维护，只加在节点 body 上
