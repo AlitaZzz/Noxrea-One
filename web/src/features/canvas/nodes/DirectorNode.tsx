@@ -6,14 +6,14 @@
 "use client";
 
 import { PartitionOutlined } from "@ant-design/icons";
-import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
+import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
 import { useDirectorStore } from "@/features/director/director-store";
-import { NODE_HANDLE_TOP } from "@/lib/constants";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
@@ -56,7 +56,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP, zIndex: 10 }} />
+      <ConnectionSideRail side="right" type="source" zIndex={10} />
     </div>
   );
 }

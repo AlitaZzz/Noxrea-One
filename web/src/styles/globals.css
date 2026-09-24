@@ -528,11 +528,77 @@ body > .ant-app { line-height: inherit !important; }
 .react-flow__node-video-node { overflow: visible !important; }
 .react-flow__node-text-node { overflow: visible !important; }
 
-/* 节点连接点（Handle）：圆形「+」按钮，默认隐藏，显示由下方规则与交互状态决定；
-   背景镂空（画布底色），统一中性色（不随节点类型变化，类型区分交给标题图标与连线色）。
-   尺寸与间隙取自画布容器注入的 CSS 变量（InfiniteCanvas 注入 HANDLE_SIZE / HANDLE_GAP），
-   几何参数的唯一真相源是 constants.ts——调尺寸只改那两个常量即可同步 CSS 与连线端点 */
-.react-flow__handle {
+/* ── 节点连接轨道（ConnectionSideRail）──
+   轨道本体是 React Flow 的 Handle：透明的命中区贴在节点边缘外侧（宽 80px、
+   高 min(节点高, 80px)），圆点是轨道内的子元素，静止于贴节点边缘的偏移位，
+   hover 轨道时在 ±30px 内二维跟随鼠标（纯视觉反馈，连线锚点恒为节点边缘垂直
+   正中，见 ConnectionSideRail.tsx 与 constants.ts）。transform 由 JS 内联驱动
+   （跟随位移 + focus 缩放），CSS 不参与定位。圆点直径取 --rail-dot-size（RAIL_DOT）。 */
+.react-flow__handle.connection-rail {
+  width: 80px !important;
+  height: min(100%, 80px) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  cursor: crosshair;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+/* 轨道完全覆盖节点边缘外侧（无间隙），统一覆盖默认定位 */
+.react-flow__handle-left.connection-rail {
+  left: 0 !important;
+  transform: translate(-100%, -50%) !important;
+}
+.react-flow__handle-right.connection-rail {
+  right: 0 !important;
+  transform: translate(100%, -50%) !important;
+}
+/* 圆点：圆形「+」按钮，背景镂空（画布底色），统一中性色
+  （不随节点类型变化，类型区分交给标题图标与连线色）。
+  用负 margin 居中（不用 translate），transform 完全交给 JS 做跟随与缩放，
+  初始内联样式为静止位（贴节点边缘偏移 RAIL_REST_OFFSET） */
+.connection-rail-dot {
+  --handle-color: rgba(255, 255, 255, 0.55);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--rail-dot-size, 20px);
+  height: var(--rail-dot-size, 20px);
+  margin: calc(var(--rail-dot-size, 20px) / -2) 0 0 calc(var(--rail-dot-size, 20px) / -2);
+  border-radius: 50%;
+  border: 1.5px solid var(--handle-color);
+  background: var(--canvas-bg);
+  transition: transform 80ms ease-out, filter 0.15s ease;
+  will-change: transform;
+}
+/* 悬停轨道时圆点提亮（与参考实现的 brightness 反馈一致） */
+.connection-rail:hover .connection-rail-dot { filter: brightness(1.25); }
+/* 「+」图标用横竖两条线几何绘制，保证绝对居中 */
+.connection-rail-dot::before,
+.connection-rail-dot::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: var(--handle-color);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.connection-rail-dot::before {
+  width: 10px;
+  height: 1.5px;
+  transform: translate(-50%, -50%);
+}
+.connection-rail-dot::after {
+  width: 1.5px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+}
+
+/* 通用 Handle 兜底样式（框选外框 Handle 等非轨道 Handle 仍在用）：
+   圆形「+」按钮，默认隐藏，显示由下方规则与交互状态决定 */
+.react-flow__handle:not(.connection-rail) {
   --handle-color: rgba(255, 255, 255, 0.55);
   width: var(--handle-size, 24px) !important;
   height: var(--handle-size, 24px) !important;
@@ -543,18 +609,23 @@ body > .ant-app { line-height: inherit !important; }
   pointer-events: none;
   transition: opacity 0.15s ease, width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
 }
-/* 完全悬浮于节点外侧（与节点边缘留出间隙），统一覆盖默认定位与各节点内联 transform */
-.react-flow__handle-left {
+/* 非轨道 Handle 悬浮于节点外侧（与节点边缘留 6px 间隙） */
+.react-flow__handle-left:not(.connection-rail) {
   left: 0 !important;
-  transform: translate(calc(-100% - var(--handle-gap, 6px)), -50%) !important;
+  transform: translate(calc(-100% - 6px), -50%) !important;
 }
-.react-flow__handle-right {
+.react-flow__handle-right:not(.connection-rail) {
   right: 0 !important;
-  transform: translate(calc(100% + var(--handle-gap, 6px)), -50%) !important;
+  transform: translate(calc(100% + 6px), -50%) !important;
 }
-/* 「+」图标用横竖两条线几何绘制，保证绝对居中，颜色为统一中性色 */
-.react-flow__handle::before,
-.react-flow__handle::after {
+/* 悬停 handle 本体时进一步放大（尺寸变化即反馈，不再叠加彩色光晕） */
+.react-flow__handle:not(.connection-rail):hover {
+  width: calc(var(--handle-size, 24px) + 4px) !important;
+  height: calc(var(--handle-size, 24px) + 4px) !important;
+}
+/* 非轨道 Handle 的「+」图标 */
+.react-flow__handle:not(.connection-rail)::before,
+.react-flow__handle:not(.connection-rail)::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -563,18 +634,18 @@ body > .ant-app { line-height: inherit !important; }
   border-radius: 1px;
   pointer-events: none;
 }
-.react-flow__handle::before {
+.react-flow__handle:not(.connection-rail)::before {
   width: 10px;
   height: 1.5px;
   transform: translate(-50%, -50%);
 }
-.react-flow__handle::after {
+.react-flow__handle:not(.connection-rail)::after {
   width: 1.5px;
   height: 10px;
   transform: translate(-50%, -50%);
 }
 
-/* ── Handle 显示规则 ──
+/* ── Handle / 轨道显示规则 ──
    唯一开关是画布容器的 data-interaction（由 use-canvas-interaction 状态机驱动）：
    1) hover 节点 → 无条件显示（即时反馈：框选后仍可直接拖线）
    2) 空闲 / 点击选中态（idle）→ 选中节点的 handle 常驻显示
@@ -586,11 +657,6 @@ body > .ant-app { line-height: inherit !important; }
 .react-flow__handle:active {
   opacity: 1;
   pointer-events: auto;
-}
-/* 悬停 handle 本体时进一步放大（尺寸变化即反馈，不再叠加彩色光晕） */
-.react-flow__handle:hover {
-  width: calc(var(--handle-size, 24px) + 4px) !important;
-  height: calc(var(--handle-size, 24px) + 4px) !important;
 }
 
 /* ── 光标 ──

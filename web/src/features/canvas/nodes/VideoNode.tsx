@@ -11,7 +11,7 @@ import {
   UploadOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { Handle, type NodeProps,Position } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import { App, Tooltip } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -29,6 +29,7 @@ import {
   extractClip as extractClipApi,
   toFileKey,
 } from "@/features/canvas/api/file-api";
+import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
 import { createEdge } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
@@ -43,7 +44,7 @@ import {
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating,NODE_HANDLE_TOP } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
@@ -868,8 +869,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         </div>
       )}
 
-      {data.source !== "upload" && <Handle type="target" position={Position.Left} style={{ top: NODE_HANDLE_TOP }} />}
-      <Handle type="source" position={Position.Right} style={{ top: NODE_HANDLE_TOP }} />
+      {data.source !== "upload" && <ConnectionSideRail side="left" type="target" />}
+      <ConnectionSideRail side="right" type="source" />
       {previewOpen && src && createPortal(
         <MediaPreviewOverlay
           items={[{ url: src, mediaType: "video" }]}
