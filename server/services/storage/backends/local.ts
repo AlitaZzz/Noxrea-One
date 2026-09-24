@@ -16,7 +16,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
 import { getConfig } from "@server/core/config";
-import { resolveFromRoot } from "@server/core/paths";
+import { isPathWithinBase, resolveFromRoot } from "@server/core/paths";
 import { isTransientFileError, withRetry } from "@server/services/storage/fs-utils";
 import type { StorageBackend } from "@server/services/storage/backend";
 
@@ -40,8 +40,7 @@ export class LocalStorageBackend implements StorageBackend {
 
   private resolveKey(key: string): string {
     const resolved = path.resolve(path.join(this.baseDir, key));
-    // 路径穿越防护
-    if (!resolved.startsWith(this.baseDir)) {
+    if (!isPathWithinBase(this.baseDir, resolved)) {
       throw new Error(`Path traversal detected: ${key}`);
     }
     return resolved;

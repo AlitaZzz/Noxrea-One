@@ -4,6 +4,7 @@
  */
 import { ProxyAgent } from "undici";
 import { getConfig } from "@server/core/config";
+import { getSsrfAgent } from "@server/core/ssrf";
 
 export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
 
@@ -41,15 +42,19 @@ export async function fetchWithTimeout(
 
   const effectiveTimeout = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
 
-  // 透传连接超时给 undici（仅作用于 TCP 握手阶段，与响应超时相互独立）
-  if (connectTimeoutMs && connectTimeoutMs > 0) {
-    (fetchOptions as Record<string, unknown>).connect = { timeout: connectTimeoutMs };
-  }
-
-  // 代理：优先使用调用方传入的 dispatcher，其次使用系统代理
+  // 代理模式：DNS 由代理解析，SSRF 靠调用方预检兜底；
+  // 直连模式：默认走 SSRF 校验型 Agent，建连 lookup 阶段校验并 pinning 校验通过的 IP，
+  // 覆盖重定向后的每一跳
   const proxyDispatcher = dispatcher ?? getProxyDispatcher();
   if (proxyDispatcher) {
     (fetchOptions as Record<string, unknown>).dispatcher = proxyDispatcher;
+    if (connectTimeoutMs && connectTimeoutMs > 0) {
+      (fetchOptions as Record<string, unknown>).connect = { timeout: connectTimeoutMs };
+    }
+  } else {
+    (fetchOptions as Record<string, unknown>).dispatcher = getSsrfAgent(
+      connectTimeoutMs && connectTimeoutMs > 0 ? connectTimeoutMs : undefined
+    );
   }
 
   if (effectiveTimeout > 0) {

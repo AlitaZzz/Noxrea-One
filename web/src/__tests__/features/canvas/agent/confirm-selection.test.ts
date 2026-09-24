@@ -3,11 +3,11 @@
  */
 import { describe, expect, it } from "vitest";
 
+import type { AgentToolCall } from "@/features/canvas/agent/types";
 import {
   applyConfirmSelections,
   collectConfirmTargetNodeIds,
 } from "@/features/canvas/agent/utils/confirm-selection";
-import type { AgentToolCall } from "@/features/canvas/agent/types";
 
 describe("applyConfirmSelections", () => {
   it("无 selections 时原样返回", () => {

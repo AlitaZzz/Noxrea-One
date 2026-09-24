@@ -10,9 +10,11 @@ import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { saveMutex } from "@/features/project/save-mutex";
 import type { CanvasProject } from "@/features/project/types";
-import { resolveResultError } from "@/lib/api/error-message";
+import { ApiError } from "@/lib/api/client";
+import { resolveApiError } from "@/lib/api/error-message";
 import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
+import { isOffline } from "@/lib/utils/upload";
 
 // ===== localStorage helpers (active project only) =====
 
@@ -70,32 +72,28 @@ function mapServerProject(p: ServerProject): CanvasProject {
  */
 async function fetchProjects(): Promise<CanvasProject[] | null> {
   try {
-    const res = await projectApi.listProjects<ServerProject[]>();
-    if (res.code === 200 && res.data) {
-      return res.data.map(mapServerProject);
-    }
+    const data = await projectApi.listProjects<ServerProject[]>();
+    return Array.isArray(data) ? data.map(mapServerProject) : null;
   } catch { /* offline or error */ }
   return null;
 }
 
 async function fetchProjectById(id: string): Promise<CanvasProject | null> {
   try {
-    const res = await projectApi.getProject<ServerProject>(id);
-    if (res.code === 200 && res.data) {
-      return mapServerProject(res.data);
-    }
+    const data = await projectApi.getProject<ServerProject>(id);
+    return data ? mapServerProject(data) : null;
   } catch { /* offline or error */ }
   return null;
 }
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
-    const res = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
-    if (res.code === 200 && res.data) {
+    const data = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
+    if (data) {
       return {
-        id: String(res.data.id),
-        name: res.data.name,
-        revision: res.data.revision ?? 1,
+        id: String(data.id),
+        name: data.name,
+        revision: data.revision ?? 1,
         updatedAt: Date.now(),
         viewport: DEFAULT_VIEWPORT,
         background: DEFAULT_BACKGROUND,
@@ -110,16 +108,26 @@ async function apiCreateProject(name: string): Promise<CanvasProject | null> {
 /** 删除项目；返回是否成功与失败文案（供调用方回滚与提示） */
 async function apiDeleteProject(projectId: string): Promise<{ ok: boolean; message?: string }> {
   try {
-    const res = await projectApi.deleteProject(projectId);
-    if (res.code === 200) return { ok: true };
-    return { ok: false, message: resolveResultError(res, "project.delete_failed") };
-  } catch { /* offline or error */ }
-  return { ok: false, message: resolveResultError(null, "project.delete_failed") };
+    await projectApi.deleteProject(projectId);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof ApiError ? e.message : resolveApiError(null, undefined, "project.delete_failed"),
+    };
+  }
 }
 
 /** 失败提示（store 层统一负责，UI 无需各自处理） */
 function notifyError(message: string) {
   showGlobalNotification().error({ title: message, placement: "bottomRight", duration: 6 });
+}
+
+/** 离线时写请求必败：直接提示，跳过乐观更新，避免「删了又闪回来」的回滚闪烁 */
+function rejectOffline(): boolean {
+  if (!isOffline()) return false;
+  notifyError(resolveApiError(null, undefined, "network_unreachable"));
+  return true;
 }
 
 // ===== Store =====
@@ -175,6 +183,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   renameProject: (id, name) => {
+    if (rejectOffline()) return;
     const prevName = get().projects.find((p) => p.id === id)?.name;
     // 乐观更新，失败回滚：此前无论响应码如何都留在本地，刷新后名称又变回去
     set((s) => ({
@@ -184,30 +193,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       try {
         // 与画布保存共用同一条写互斥锁。改名是纯元数据：服务端不做版本校验也不递增
         // revision，因此不存在改名引发的版本冲突（409 只属于画布内容保存）。
-        const res = await saveMutex.runExclusive(() =>
+        const updated = await saveMutex.runExclusive(() =>
           projectApi.updateProject(id, {
             name,
             baseRevision: get().projects.find((p) => p.id === id)?.revision ?? 1,
           }),
         );
 
-        if (res.code === 200 && typeof res.data?.revision === "number") {
-          get().updateProjectRevision(id, res.data.revision);
+        if (typeof updated?.revision === "number") {
+          get().updateProjectRevision(id, updated.revision);
           return;
         }
-        throw new Error(resolveResultError(res, "project.rename_failed"));
+        throw new Error(resolveApiError(null, undefined, "project.rename_failed"));
       } catch (e) {
         if (prevName !== undefined) {
           set((s) => ({
             projects: s.projects.map((p) => (p.id === id ? { ...p, name: prevName } : p)),
           }));
         }
-        notifyError(e instanceof Error ? e.message : resolveResultError(null, "project.rename_failed"));
+        notifyError(e instanceof ApiError ? e.message : resolveApiError(null, undefined, "project.rename_failed"));
       }
     })();
   },
 
   deleteProject: (id) => {
+    if (rejectOffline()) return;
     // 失败回滚用：删除是破坏性操作，不能「假删成功」
     const snapshot = get().projects;
     const snapshotActiveId = get().activeProjectId;
@@ -223,13 +233,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     void (async () => {
       const { ok, message } = await apiDeleteProject(id);
       if (ok) return;
-      notifyError(message ?? resolveResultError(null, "project.delete_failed"));
+      notifyError(message ?? resolveApiError(null, undefined, "project.delete_failed"));
       set({ projects: snapshot, activeProjectId: snapshotActiveId });
       saveLocalActiveId(snapshotActiveId);
     })();
   },
 
   deleteProjects: (ids) => {
+    if (rejectOffline()) return;
     const snapshot = get().projects;
     const idSet = new Set(ids);
     set((s) => {
@@ -245,7 +256,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const results = await Promise.all(ids.map((id) => apiDeleteProject(id)));
       const failedIds = new Set(ids.filter((_, i) => !results[i].ok));
       if (failedIds.size === 0) return;
-      notifyError(results.find((r) => !r.ok)?.message ?? resolveResultError(null, "project.delete_failed"));
+      notifyError(results.find((r) => !r.ok)?.message ?? resolveApiError(null, undefined, "project.delete_failed"));
       // 只把删除失败的项放回列表：成功删除的在服务端已不存在，
       // 整表回滚会让它们变成「刷新才消失」的幽灵项目
       const restored = snapshot.filter((p) => failedIds.has(p.id));

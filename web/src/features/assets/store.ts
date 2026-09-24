@@ -4,9 +4,10 @@
  */
 import { create } from "zustand";
 
-import { ASSET_BATCH_LIMIT, assetApi, type AssetCountersDto, type AssetFolderDto, type AssetItemDto } from "@/features/assets/api";
+import { ASSET_BATCH_LIMIT, assetApi, type AssetCountersDto, type AssetFolderDto, type AssetItemDto, type AssetSkippedDto } from "@/features/assets/api";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput, MediaType } from "@/features/assets/types";
-import { resolveResultError } from "@/lib/api/error-message";
+import { ApiError } from "@/lib/api/client";
+import { resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 
 // --- Helpers ---
@@ -54,10 +55,10 @@ function toIntId(id: string): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-/** 写操作失败提示（store 层统一负责，UI 只处理成功分支） */
-function notifyFailure(res: { code: number; msg?: string } | null, fallbackKey: string) {
+/** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
+function notifyFailure(e: unknown, fallbackKey: string) {
   showGlobalNotification().error({
-    title: resolveResultError(res, fallbackKey),
+    title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
     placement: "bottomRight",
     duration: 6,
   });
@@ -103,7 +104,7 @@ export async function fetchAssetPage(
     typeParam = Array.isArray(filters.category) ? filters.category.join(",") : filters.category;
   }
 
-  const res = await assetApi.listAssets({
+  const data = await assetApi.listAssets({
     folderId: toIntId(filters.folderId || ""),
     type: typeParam,
     search: filters.search || undefined,
@@ -111,7 +112,6 @@ export async function fetchAssetPage(
     cursor: cursor || undefined,
     limit,
   });
-  const data = res.data || { items: [], total: 0, nextCursor: null };
   return {
     items: (data.items || []).map(dtoToAsset),
     total: data.total,
@@ -187,8 +187,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   initialize: async () => {
     if (get().initialized) return;
     try {
-      const res = await assetApi.bootstrap("personal");
-      const summary = res.data;
+      const summary = await assetApi.bootstrap("personal");
       set({
         folders: (summary?.folders || []).map(dtoToFolder),
         initialized: true,
@@ -203,26 +202,27 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   addAsset: async (input) => {
     const scope = input.scope || "personal";
-    const res = await assetApi.createAsset({
-      name: input.name,
-      type: input.type,
-      mediaType: input.mediaType,
-      description: input.description,
-      tags: input.tags,
-      prompt: input.prompt,
-      sourceUrl: input.sourceUrl,
-      sourceType: input.sourceType,
-      folderId: toIntId(input.folderId || "") ?? null,
-      scope,
-    }).catch(() => null);
-
-    if (!res || res.code !== 200 || !res.data) {
-      notifyFailure(res, "asset.create_failed");
+    let data: { item: AssetItemDto; counters: AssetCountersDto };
+    try {
+      data = await assetApi.createAsset({
+        name: input.name,
+        type: input.type,
+        mediaType: input.mediaType,
+        description: input.description,
+        tags: input.tags,
+        prompt: input.prompt,
+        sourceUrl: input.sourceUrl,
+        sourceType: input.sourceType,
+        folderId: toIntId(input.folderId || "") ?? null,
+        scope,
+      });
+    } catch (e) {
+      notifyFailure(e, "asset.create_failed");
       return null;
     }
 
-    const item = dtoToAsset(res.data.item);
-    get().applyCounters(res.data.counters);
+    const item = dtoToAsset(data.item);
+    get().applyCounters(data.counters);
     if (item.sourceUrl) get().markAssetUrlSaved(item.sourceUrl);
     get().noteLibraryChanged();
     return item;
@@ -235,31 +235,36 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
     for (let offset = 0; offset < inputs.length; offset += ASSET_BATCH_LIMIT) {
       const chunk = inputs.slice(offset, offset + ASSET_BATCH_LIMIT);
-      const res = await assetApi.createAssetsBatch(
-        chunk.map((input) => ({
-          name: input.name,
-          type: input.type,
-          mediaType: input.mediaType,
-          description: input.description,
-          tags: input.tags,
-          prompt: input.prompt,
-          sourceUrl: input.sourceUrl,
-          sourceType: input.sourceType,
-          folderId: toIntId(input.folderId || "") ?? null,
-          scope: input.scope || "personal",
-        })),
-      );
-
-      if (res.code !== 200 || !res.data) {
+      let data: {
+        items: AssetItemDto[];
+        counters: AssetCountersDto;
+        skipped: AssetSkippedDto[];
+      };
+      try {
+        data = await assetApi.createAssetsBatch(
+          chunk.map((input) => ({
+            name: input.name,
+            type: input.type,
+            mediaType: input.mediaType,
+            description: input.description,
+            tags: input.tags,
+            prompt: input.prompt,
+            sourceUrl: input.sourceUrl,
+            sourceType: input.sourceType,
+            folderId: toIntId(input.folderId || "") ?? null,
+            scope: input.scope || "personal",
+          })),
+        );
+      } catch (e) {
         // 已入库的前序分片保留；重复来源在重试时会被后端跳过，整体重试是安全的。
-        notifyFailure(res, "asset.create_failed");
+        notifyFailure(e, "asset.create_failed");
         return { ok: false, items, skippedCount };
       }
 
-      const chunkItems = res.data.items.map(dtoToAsset);
+      const chunkItems = data.items.map(dtoToAsset);
       items.push(...chunkItems);
-      skippedCount += res.data.skipped?.length ?? 0;
-      get().applyCounters(res.data.counters);
+      skippedCount += data.skipped?.length ?? 0;
+      get().applyCounters(data.counters);
       // 每个成功分片即时失效：后续分片失败提前返回时，已入库的条目也能让视图刷新。
       if (chunkItems.length > 0) get().noteLibraryChanged();
 
@@ -268,7 +273,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         if (item.sourceUrl) urls.add(item.sourceUrl);
       }
       // 被跳过的来源本就已在库中；本地已知集合可能因并发过期，一并补登记。
-      for (const skip of res.data.skipped ?? []) urls.add(skip.sourceUrl);
+      for (const skip of data.skipped ?? []) urls.add(skip.sourceUrl);
       if (urls.size > 0) {
         set((state) => ({ knownAssetUrls: new Set([...state.knownAssetUrls, ...urls]) }));
       }
@@ -289,52 +294,55 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (patch.prompt !== undefined) body.prompt = patch.prompt;
     if (Object.keys(body).length === 0) return false;
 
-    const res = await assetApi.updateAsset(intId, body).catch(() => null);
-    if (res && res.code === 200) {
-      get().applyCounters(res.data.counters);
+    try {
+      const data = await assetApi.updateAsset(intId, body);
+      get().applyCounters(data.counters);
       get().noteLibraryChanged();
       return true;
+    } catch (e) {
+      notifyFailure(e, "asset.update_failed");
+      return false;
     }
-    notifyFailure(res, "asset.update_failed");
-    return false;
   },
 
   removeAssetsBatch: async (ids) => {
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length === 0) return { ok: false };
 
-    const res = await assetApi.deleteAssetsBatch(intIds).catch(() => null);
-    if (res && res.code === 200 && res.data) {
-      get().applyCounters(res.data.counters);
+    try {
+      const data = await assetApi.deleteAssetsBatch(intIds);
+      get().applyCounters(data.counters);
       get().noteLibraryChanged();
-      if (res.data.sourceUrls.length > 0) {
-        const removed = new Set(res.data.sourceUrls);
+      if (data.sourceUrls.length > 0) {
+        const removed = new Set(data.sourceUrls);
         set((state) => ({
           knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
         }));
       }
-      return { ok: true, total: res.data.counters.total };
+      return { ok: true, total: data.counters.total };
+    } catch (e) {
+      notifyFailure(e, "asset.delete_failed");
+      return { ok: false };
     }
-    notifyFailure(res, "asset.delete_failed");
-    return { ok: false };
   },
 
   unsaveAssetsByUrls: async (urls) => {
     if (urls.length === 0) return false;
-    const res = await assetApi.deleteAssetsBySource(urls).catch(() => null);
-    if (res && res.code === 200 && res.data) {
-      get().applyCounters(res.data.counters);
+    try {
+      const data = await assetApi.deleteAssetsBySource(urls);
+      get().applyCounters(data.counters);
       get().noteLibraryChanged();
-      if (res.data.sourceUrls.length > 0) {
-        const removed = new Set(res.data.sourceUrls);
+      if (data.sourceUrls.length > 0) {
+        const removed = new Set(data.sourceUrls);
         set((state) => ({
           knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
         }));
       }
       return true;
+    } catch (e) {
+      notifyFailure(e, "asset.delete_failed");
+      return false;
     }
-    notifyFailure(res, "asset.delete_failed");
-    return false;
   },
 
   updateAssetsBatch: async (ids, updates) => {
@@ -346,14 +354,15 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if ("type" in updates) body.type = updates.type;
     if (Object.keys(body).length === 0) return { ok: false };
 
-    const res = await assetApi.updateAssetsBatch(intIds, body).catch(() => null);
-    if (res && res.code === 200) {
-      get().applyCounters(res.data.counters);
+    try {
+      const data = await assetApi.updateAssetsBatch(intIds, body);
+      get().applyCounters(data.counters);
       get().noteLibraryChanged();
-      return { ok: true, total: res.data.counters.total };
+      return { ok: true, total: data.counters.total };
+    } catch (e) {
+      notifyFailure(e, "asset.update_failed");
+      return { ok: false };
     }
-    notifyFailure(res, "asset.update_failed");
-    return { ok: false };
   },
 
   // --- Folder CRUD ---
@@ -367,14 +376,14 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     );
     if (existing) return { status: "duplicate" };
 
-    const res = await assetApi.createFolder(name, scope, toIntId(parentId || "")).catch(() => null);
-    if (res && res.code === 200 && res.data) {
-      const folder = dtoToFolder(res.data);
+    try {
+      const folder = dtoToFolder(await assetApi.createFolder(name, scope, toIntId(parentId || "")));
       set((state) => ({ folders: [...state.folders, folder] }));
       return { status: "created", folder };
+    } catch (e) {
+      notifyFailure(e, "asset.folder_create_failed");
+      return { status: "failed" };
     }
-    notifyFailure(res, "asset.folder_create_failed");
-    return { status: "failed" };
   },
 
   renameFolder: async (id, name) => {
@@ -392,25 +401,27 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     );
     if (duplicate) return { status: "duplicate" };
 
-    const res = await assetApi.updateFolder(intId, name).catch(() => null);
-    if (res && res.code === 200 && res.data) {
-      const updated = dtoToFolder(res.data);
+    try {
+      const updated = dtoToFolder(await assetApi.updateFolder(intId, name));
       set((state) => ({
         folders: state.folders.map((folder) => (folder.id === id ? { ...folder, name: updated.name } : folder)),
       }));
       return { status: "updated" };
+    } catch (e) {
+      notifyFailure(e, "asset.folder_update_failed");
+      return { status: "failed" };
     }
-    notifyFailure(res, "asset.folder_update_failed");
-    return { status: "failed" };
   },
 
   removeFolder: async (id) => {
     const intId = toIntId(id);
     if (!intId) return false;
 
-    const res = await assetApi.deleteFolder(intId).catch(() => null);
-    if (!res || res.code !== 200) {
-      notifyFailure(res, "asset.folder_delete_failed");
+    let data: { sourceUrls: string[]; counters: AssetCountersDto };
+    try {
+      data = await assetApi.deleteFolder(intId);
+    } catch (e) {
+      notifyFailure(e, "asset.folder_delete_failed");
       return false;
     }
 
@@ -432,12 +443,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       }
     }
 
-    const deletedSourceUrls = new Set(res.data.sourceUrls || []);
+    const deletedSourceUrls = new Set(data.sourceUrls || []);
     set((state) => ({
       folders: state.folders.filter((folder) => !subtree.has(folder.id)),
       knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !deletedSourceUrls.has(url))),
     }));
-    get().applyCounters(res.data.counters);
+    get().applyCounters(data.counters);
     return true;
   },
 

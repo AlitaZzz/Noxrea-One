@@ -25,6 +25,7 @@ import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
 import path from "path";
+import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
 import { createHash, randomUUID } from "crypto";
 
@@ -120,8 +121,7 @@ router.post("/api/files/video-proxy", async (c) => {
   const videoPath = path.resolve(baseDir, video_key);
 
   // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-  const rel = path.relative(baseDir, videoPath);
-  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+  if (!isPathWithinBase(baseDir, videoPath)) {
     return failCode(403, "files.invalid_path");
   }
 

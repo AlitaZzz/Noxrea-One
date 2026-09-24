@@ -778,7 +778,7 @@
   },
   "error": {
     "unknown": "Unknown error",
-    "network_unreachable": "Cannot connect to the server, please make sure the backend is running",
+    "network_unreachable": "Cannot connect to the server, please check your network",
     "network_error": "Network error",
     "parse_failed": "Failed to parse the response",
     "session_expired": "Session expired",

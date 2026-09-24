@@ -131,21 +131,9 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         return;
       }
 
-      let completedUrls: string[] = evt.resultUrls || [];
+      const completedUrls = evt.resultUrls || [];
       if (evt.status === "completed" && completedUrls.length) {
         const prompt = evt.prompt || "";
-
-        // 【测试用 TODO】多图补齐：前台选了 n 张（config.n>1）但上游只返回 1 条时，把第一条复制补齐到 n 条，
-        // 便于测试多图堆叠/网格模式；上游真实返回多张时不干预。
-        // 上游正式支持多图后，删除这段 mock 补齐逻辑。
-        // 追加 ?mock=n 区分，避免 URL 完全相同被堆叠卡片 filter(u !== src) 过滤掉导致背景卡不显示。
-        const expectedCount = Number((evt.config as { n?: number } | undefined)?.n) || 0;
-        if (!isVideoNode && expectedCount > 1 && completedUrls.length === 1) {
-          const first = completedUrls[0];
-          const sep = first.includes("?") ? "&" : "?";
-          completedUrls = Array.from({ length: expectedCount }, (_, i) =>
-            i === 0 ? first : `${first}${sep}mock=${i}`);
-        }
         const firstUrl = completedUrls[0];
         // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
         // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
@@ -317,10 +305,11 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         );
         if (disposed) return;
         for (const chunk of chunkResults) {
+          // 非 2xx / 网络失败在 api() 内抛错，allSettled 已归为 rejected 跳过
           if (chunk.status !== "fulfilled") continue;
-          const res = chunk.value;
-          if (res.code >= 400 || !Array.isArray(res.data)) continue;
-          for (const t of res.data) {
+          const events = chunk.value;
+          if (!Array.isArray(events)) continue;
+          for (const t of events) {
             byId.set(t.taskId, t);
           }
         }

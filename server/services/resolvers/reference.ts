@@ -5,19 +5,11 @@
 
 import { logEvent } from "@server/core/logger/utils";
 import { getConfig } from "@server/core/config";
+import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
 import path from "path";
 import { localStorage } from "@server/services/storage/backends/local";
 import { GenerationFailureError } from "@server/services/tasks/failure";
-
-/**
- * 路径穿越防护：校验用户文件访问是否在允许的目录内。
- */
-function isPathWithin(base: string, target: string): boolean {
-  const resolvedBase = path.resolve(base).replace(/\\/g, "/");
-  const resolvedTarget = path.resolve(target).replace(/\\/g, "/");
-  return resolvedTarget.startsWith(resolvedBase + "/") || resolvedTarget === resolvedBase;
-}
 
 /**
  * 将存储路径转为完整的 data: URL（base64）。
@@ -29,7 +21,7 @@ async function readSelfFile(relPath: string): Promise<string> {
   const fullPath = path.resolve(localStorage.baseDir, relPath);
 
   // 路径穿越防护
-  if (!isPathWithin(localStorage.baseDir, fullPath)) {
+  if (!isPathWithinBase(localStorage.baseDir, fullPath)) {
     logEvent("resolver.reference", {
       stage: "path_traversal_blocked",
       path: relPath.slice(0, 80),

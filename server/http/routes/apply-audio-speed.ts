@@ -9,6 +9,7 @@ import { z } from "zod";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import { changeAudioSpeed } from "@server/services/storage/media";
 import { localStorage } from "@server/services/storage/backends/local";
+import { isPathWithinBase } from "@server/core/paths";
 import { computeFileHash } from "@server/services/storage/hash";
 import { buildFileUrl, buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
@@ -73,9 +74,7 @@ router.post("/api/files/apply-audio-speed", async (c) => {
   const audioPath = path.resolve(localStorage.baseDir, audio_key);
 
   // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-  const baseDir = path.resolve(localStorage.baseDir);
-  const rel = path.relative(baseDir, audioPath);
-  if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) {
+  if (!isPathWithinBase(localStorage.baseDir, audioPath)) {
     return failCode(403, "files.invalid_path");
   }
 

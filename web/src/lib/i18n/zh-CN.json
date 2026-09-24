@@ -778,7 +778,7 @@
   },
   "error": {
     "unknown": "未知错误",
-    "network_unreachable": "无法连接服务器，请确认后端服务已启动",
+    "network_unreachable": "无法连接服务器，请检查网络",
     "network_error": "网络错误",
     "parse_failed": "响应解析失败",
     "session_expired": "登录已过期",

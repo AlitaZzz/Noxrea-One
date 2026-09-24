@@ -1,101 +1,107 @@
 /**
  * SSRF 防护。
- * 解析并校验请求地址，拦截指向内网与保留地址的恶意访问。
+ * 白名单式地址校验（仅放行 unicast 公网地址）+ 连接级 DNS pinning：
+ * 校验发生在建连的 lookup 阶段，连接实际使用的就是通过校验的 IP，
+ * 消除「校验与连接各解析一次 DNS」的 rebinding（TOCTOU）窗口，并覆盖重定向后的每一跳。
  */
 import dns from "dns/promises";
-import net from "net";
+import net from "node:net";
+import type { LookupAddress } from "node:dns";
+import type { LookupFunction } from "node:net";
+import ipaddr from "ipaddr.js";
+import { Agent } from "undici";
 import { getConfig } from "@server/core/config";
-
-const PRIVATE_IP_PREFIXES = [
-  "0.", "10.", "100.", "127.", "169.254.",
-  "172.16.", "172.17.", "172.18.", "172.19.", "172.20.",
-  "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
-  "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
-  "192.0.0.", "192.0.2.", "192.88.99.", "192.168.",
-  "198.18.", "198.19.", "198.51.100.", "203.0.113.",
-];
-
-// IPv6 ULA 精确范围: fc00::/7（fc 或 fd 开头）
-const IPV6_ULA_FIRST_BYTE = new Set(["fc", "fd"]);
-
-function isPrivateIPv6(ip: string): boolean {
-  if (ip === "::1") return true;
-  const lower = ip.toLowerCase();
-
-  // fc00::/7 ULA 范围（fc 或 fd 开头，后面跟 00-ff）
-  const firstTwo = lower.slice(0, 2);
-  if (IPV6_ULA_FIRST_BYTE.has(firstTwo)) {
-    // 必须后面跟着冒号分隔的组，避免误匹配
-    const rest = lower.slice(2);
-    return rest.startsWith("0") || rest.startsWith("1") ||
-           rest.startsWith("2") || rest.startsWith("3") ||
-           rest.startsWith("4") || rest.startsWith("5") ||
-           rest.startsWith("6") || rest.startsWith("7") ||
-           rest.startsWith("8") || rest.startsWith("9") ||
-           rest.startsWith("a") || rest.startsWith("b") ||
-           rest.startsWith("c") || rest.startsWith("d") ||
-           rest.startsWith("e") || rest.startsWith("f") ||
-           rest.startsWith(":");
-  }
-
-  // fe80::/10 link-local
-  if (lower.startsWith("fe8") || lower.startsWith("fe9") ||
-      lower.startsWith("fea") || lower.startsWith("feb")) {
-    return true;
-  }
-
-  return false;
-}
-
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) return PRIVATE_IP_PREFIXES.some((p) => ip.startsWith(p));
-  if (net.isIPv6(ip)) return isPrivateIPv6(ip);
-  return false;
-}
 
 function getAllowedInternalHosts(): string[] {
   const raw = getConfig().ALLOWED_INTERNAL_HOSTS;
   if (!raw) return [];
-  return raw.split(",").map((h) => h.trim()).filter(Boolean);
+  return raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+}
+
+function isHostAllowed(hostname: string): boolean {
+  return getAllowedInternalHosts().includes(hostname.toLowerCase());
 }
 
 function isIpAllowed(ip: string): boolean {
   if (getAllowedInternalHosts().includes(ip)) return true;
-  return !isPrivateIp(ip);
+  const addr = ipaddr.parse(ip);
+  // ::ffff:x.x.x.x 映射地址展开为 IPv4 再判，防止内网地址套 v6 伪装绕过
+  if (addr.kind() === "ipv6" && (addr as ipaddr.IPv6).isIPv4MappedAddress()) {
+    const v4 = (addr as ipaddr.IPv6).toIPv4Address();
+    if (v4.range() !== "unicast") {
+      throw new Error(`SSRF blocked: ${ip} → ${v4.toString()} is a ${v4.range()} address`);
+    }
+    return true;
+  }
+  const range = addr.range();
+  if (range !== "unicast") {
+    throw new Error(`SSRF blocked: ${ip} is a ${range} address`);
+  }
+  return true;
+}
+
+/** 解析 hostname（含 IP 字面量）为地址列表，非白名单目标逐个校验，违规即抛错。 */
+async function resolveForConnection(hostname: string): Promise<LookupAddress[]> {
+  const allowInternal = isHostAllowed(hostname);
+  // URL.hostname 对 IPv6 字面量保留方括号（"[::1]"），先剥掉
+  const bare = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
+
+  const literalFamily = net.isIP(bare);
+  if (literalFamily !== 0) {
+    if (!allowInternal) isIpAllowed(bare);
+    return [{ address: bare, family: literalFamily }];
+  }
+
+  // dns.lookup 走 getaddrinfo（含 /etc/hosts），与真实建连的解析行为一致；
+  // resolve4/6 只查递归 DNS，会漏掉 hosts 文件映射的内网入口
+  const addresses = await dns.lookup(bare, { all: true });
+  if (!allowInternal) {
+    for (const { address } of addresses) isIpAllowed(address);
+  }
+  return addresses;
 }
 
 /**
- * DNS 解析 + SSRF 校验，返回第一个通过校验的 IP。
+ * 预检入口：解析并校验地址，返回通过校验的全部地址。
+ * 用于代理模式（DNS 由代理解析，lookup pinning 不生效）下的守卫与早期失败提示；
+ * 直连模式下真正建连时还会由 ssrfLookup 再校验一次。
  */
-export async function resolveAndValidate(hostname: string): Promise<string> {
-  if (net.isIPv4(hostname)) {
-    if (!isIpAllowed(hostname)) {
-      throw new Error(`SSRF blocked: ${hostname} is a private/internal IP`);
-    }
-    return hostname;
-  }
+export async function resolveAndValidate(hostname: string): Promise<string[]> {
+  const addresses = await resolveForConnection(hostname);
+  return addresses.map((a) => a.address);
+}
 
-  const blockedHosts = ["localhost", "127.0.0.1", "::1", "0.0.0.0"];
-  if (blockedHosts.includes(hostname.toLowerCase())) {
-    throw new Error(`SSRF blocked: ${hostname} is blacklisted`);
-  }
+/** net 风格 LookupFunction：解析 + 校验一体，返回给 net.connect 的就是校验通过的 IP。 */
+const ssrfLookup: LookupFunction = (hostname, options, callback) => {
+  resolveForConnection(hostname).then(
+    (addresses) => {
+      if (options.all) {
+        callback(null, addresses);
+        return;
+      }
+      const family = options.family ?? 0;
+      const pool = family === 0 ? addresses : addresses.filter((a) => a.family === family);
+      const chosen = (pool.length > 0 ? pool : addresses)[0];
+      callback(null, chosen.address, chosen.family);
+    },
+    (err: Error) => callback(err, "")
+  );
+};
 
-  let addresses: string[];
-  try {
-    addresses = await dns.resolve4(hostname);
-  } catch {
-    throw new Error(`SSRF: DNS resolution failed for ${hostname}`);
-  }
+/**
+ * SSRF 校验型 Agent：作为直连 fetch 的默认 dispatcher。
+ * 按 connect timeout 分档缓存（场景超时来自固定的小集合）。
+ */
+const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
+const agents = new Map<number, Agent>();
 
-  if (addresses.length === 0) {
-    throw new Error(`SSRF: no IP addresses resolved for ${hostname}`);
+export function getSsrfAgent(connectTimeoutMs: number = DEFAULT_CONNECT_TIMEOUT_MS): Agent {
+  let agent = agents.get(connectTimeoutMs);
+  if (!agent) {
+    agent = new Agent({ connect: { timeout: connectTimeoutMs, lookup: ssrfLookup } });
+    agents.set(connectTimeoutMs, agent);
   }
-
-  for (const ip of addresses) {
-    if (!isIpAllowed(ip)) {
-      throw new Error(`SSRF blocked: ${hostname} → ${ip} is private/internal`);
-    }
-  }
-
-  return addresses[0];
+  return agent;
 }
