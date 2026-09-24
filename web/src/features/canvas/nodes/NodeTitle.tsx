@@ -57,6 +57,8 @@ export default function NodeTitle({
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
             autoFocus
+            // 进入编辑即全选：改名比追加更常见，全选便于一键替换
+            onFocus={(e) => e.target.select()}
             style={{
               padding: "1px 4px",
               height: 20,
