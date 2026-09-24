@@ -108,6 +108,8 @@ export type TextNodeData = GroupableData & {
   label: string;
   content: string; // 富文本 HTML，仅供编辑器渲染
   plainText: string; // 纯文本，仅供下游消费
+  /** 节点创建时间戳（ms），资源管理器等列表展示用 */
+  createdAt?: number;
   genSettings?: TextGenSettings;
   taskBinding?: TaskBinding;
 };
@@ -120,6 +122,10 @@ export type ImageNodeData = GroupableData & {
   lockAspectRatio: boolean;
   naturalWidth: number;
   naturalHeight: number;
+  /** 节点创建时间戳（ms），资源管理器等列表展示用 */
+  createdAt?: number;
+  /** 源文件大小（字节），上传/生成落库时回填，资源管理器展示用 */
+  fileSize?: number;
   /** CSS 旋转度数（0/90/180/270），仅影响显示，不修改原图文件 */
   rotation?: number;
   /** CSS 水平翻转，仅影响显示，不修改原图文件 */
@@ -148,6 +154,12 @@ export type VideoNodeData = GroupableData & {
   src: string;
   naturalWidth: number;
   naturalHeight: number;
+  /** 视频时长（秒），节点加载元数据后回填（skipHistory），资源管理器等列表展示用 */
+  duration?: number;
+  /** 节点创建时间戳（ms），资源管理器等列表展示用 */
+  createdAt?: number;
+  /** 源文件大小（字节），上传/生成落库时回填，资源管理器展示用 */
+  fileSize?: number;
   taskBinding?: TaskBinding;
   upload?: UploadState;
   genSettings?: VideoGenSettings;
@@ -167,6 +179,10 @@ export type AudioNodeData = GroupableData & {
   src: string;
   /** 音频时长（秒），加载元数据后回填 */
   duration?: number;
+  /** 节点创建时间戳（ms），资源管理器等列表展示用 */
+  createdAt?: number;
+  /** 源文件大小（字节），上传/生成落库时回填，资源管理器展示用 */
+  fileSize?: number;
   taskBinding?: TaskBinding;
   upload?: UploadState;
 };
@@ -226,6 +242,8 @@ export interface DirectorStateData {
 
 export type DirectorNodeData = GroupableData & {
   label: string;
+  /** 节点创建时间戳（ms），资源管理器等列表展示用 */
+  createdAt?: number;
   directorState?: DirectorStateData;
 };
 

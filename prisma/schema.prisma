@@ -181,8 +181,7 @@ model AssetItem {
   name        String   @default("Untitled") @map("name")
   type        String   @default("other") @map("type")
   mediaType   String   @default("") @map("media_type") // 媒体类型：image/video/audio
-  width       Int      @default(0) @map("width")
-  height      Int      @default(0) @map("height")
+  // 宽高不在此表存储：以 sourceUrl 关联 file_objects 的探测值为准（join 得出）
   description String   @default("") @map("description")
   tags        String   @default("[]") @map("tags") // JSON TEXT
   prompt      String   @default("") @map("prompt") // 生成该素材所用的提示词
@@ -210,6 +209,10 @@ model FileObject {
   mimeType  String   @default("") @map("mime_type")
   ext       String   @default("") @map("ext")
   source    String   @default("unknown") @map("source")
+  // 媒体元数据：落盘时由服务端探测（sharp / ffmpeg 读文件头），失败留 null
+  width     Int?     @map("width")
+  height    Int?     @map("height")
+  duration  Float?   @map("duration") // 秒（视频 / 音频）
   refCount  Int      @default(0) @map("ref_count") // 引用计数，归零时可 GC
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")

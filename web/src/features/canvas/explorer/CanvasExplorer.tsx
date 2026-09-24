@@ -9,6 +9,7 @@
 import {
   AppstoreOutlined,
   CaretRightOutlined,
+  ClockCircleOutlined,
   DownOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
@@ -32,9 +33,10 @@ import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { AnyNode } from "@/features/canvas/types";
-import { ASSET_CATEGORIES, NODE_TYPE } from "@/lib/constants";
+import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
+import { ASSET_CATEGORIES, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
+import { formatBytes, formatDateTime, formatTime } from "@/lib/utils/format";
 
 export const DRAWER_WIDTH = 360;
 
@@ -178,6 +180,7 @@ function CanvasElementsView() {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
   const selectedNodeIds = useMemo(
     () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
@@ -185,7 +188,7 @@ function CanvasElementsView() {
   );
 
   // 构建大纲树：组节点作为可折叠容器，成员嵌套在内；未分组节点按类型分组。
-  const { groupNodes, membersByGroup, ungroupedGroups } = useMemo(() => {
+  const tree = useMemo(() => {
     const groupNodes: AnyNode[] = [];
     const membersByGroup = new Map<string, AnyNode[]>();
     const ungrouped: AnyNode[] = [];
@@ -217,6 +220,39 @@ function CanvasElementsView() {
     };
   }, [nodes]);
 
+  // 搜索过滤：命中标题 / 正文 / 生成 prompt / 类型名；组名命中保留全部成员，
+  // 否则只保留命中的成员，无命中的组整体隐藏。
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tree;
+    const matches = (n: AnyNode) => {
+      const d = n.data as { label?: string; plainText?: string; genSettings?: { prompt?: string } };
+      const typeKey = NODE_TYPE_I18N[n.type || ""];
+      return [d.label, d.plainText, d.genSettings?.prompt, typeKey ? t(typeKey) : ""].some(
+        (v) => typeof v === "string" && v.toLowerCase().includes(q),
+      );
+    };
+    const groupEntries: Array<{ group: AnyNode; members: AnyNode[] }> = [];
+    for (const g of tree.groupNodes) {
+      const members = tree.membersByGroup.get(g.id) ?? [];
+      const rawLabel = ((g.data as { label?: string }).label || "").toLowerCase();
+      if (rawLabel.includes(q)) groupEntries.push({ group: g, members });
+      else {
+        const hit = members.filter(matches);
+        if (hit.length > 0) groupEntries.push({ group: g, members: hit });
+      }
+    }
+    return {
+      groupNodes: groupEntries.map((e) => e.group),
+      membersByGroup: new Map(groupEntries.map((e) => [e.group.id, e.members])),
+      ungroupedGroups: tree.ungroupedGroups
+        .map(({ type, nodes: list }) => ({ type, nodes: list.filter(matches) }))
+        .filter((g) => g.nodes.length > 0),
+    };
+  }, [search, tree, t]);
+
+  const hasMatch = visible.groupNodes.length > 0 || visible.ungroupedGroups.length > 0;
+
   const toggleGroup = useCallback((id: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -228,17 +264,32 @@ function CanvasElementsView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "12px 16px", scrollbarGutter: "stable" }}>
+      {/* 搜索：与资产页同规格（高 32、搜索图标前缀、可清除） */}
+      <div className="flex items-center px-4 py-3 flex-shrink-0">
+        <Input
+          size="small"
+          placeholder={t("canvas.searchPlaceholder")}
+          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          allowClear
+          style={{ height: 32 }}
+          className="flex-1"
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
         {nodes.length === 0 ? (
           <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
+        ) : !hasMatch ? (
+          <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("common.noData")}</span>} />
         ) : (
           <>
             {/* 组：可折叠容器，成员嵌套在其下 */}
-            {groupNodes.map((group) => (
+            {visible.groupNodes.map((group) => (
               <GroupItem
                 key={group.id}
                 group={group}
-                members={sortMembersByType(membersByGroup.get(group.id) ?? [])}
+                members={sortMembersByType(visible.membersByGroup.get(group.id) ?? [])}
                 selected={selectedNodeIds.has(group.id)}
                 collapsed={collapsedGroups.has(group.id)}
                 onToggle={() => toggleGroup(group.id)}
@@ -247,7 +298,7 @@ function CanvasElementsView() {
             ))}
 
             {/* 未分组节点：按类型分组 */}
-            {ungroupedGroups.map((group) => (
+            {visible.ungroupedGroups.map((group) => (
               <div key={group.type} className="mb-3">
                 <div className="text-xs mb-1 px-2" style={{ color: "var(--canvas-text-muted)" }}>
                   {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
@@ -294,15 +345,18 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
   return (
     <div className="mb-1">
       <div
-        className="flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
-        style={{
-          paddingLeft: 8,
-          paddingRight: 8,
-          background: selected ? "var(--canvas-bg-hover)" : "transparent",
-          color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
+        className={`canvas-explorer-row relative flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none${selected ? " is-selected" : ""}`}
+        style={{ paddingLeft: 8, paddingRight: 8 }}
+        onClick={() => {
+          const s = useCanvasStore.getState();
+          s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
+          centerNode(group);
         }}
-        onClick={() => centerNode(group)}
       >
+        {/* 选中竖条：与画布节点 --canvas-select 选中描边同色（约定同 ApiSettingsDrawer） */}
+        {selected && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--canvas-select)" }} />
+        )}
         {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
         <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
           <button
@@ -351,36 +405,74 @@ function ElementItemImpl(props: ElementItemProps) {
   const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = (node.data as { src?: string }).src;
 
+  // 状态点：生成/处理中转圈，失败（任务失败或上传失败）红点，其余不显示
+  const { taskBinding, upload, createdAt, fileSize } = node.data as {
+    taskBinding?: TaskBinding;
+    upload?: UploadState;
+    createdAt?: number;
+    fileSize?: number;
+  };
+  const generating = isGenerating(taskBinding) || upload?.uploading === true;
+  const failed = taskBinding?.status === "failed" || !!upload?.error;
+  const plainText = nodeType === NODE_TYPE.TEXT ? (node.data as { plainText?: string }).plainText : undefined;
+
+  // 第二行元数据：类型 · 尺寸/时长/字数 · 大小（与画布节点标题栏同口径）
+  const metaParts: string[] = [];
+  if (typeLabel) metaParts.push(typeLabel);
+  switch (nodeType) {
+    case NODE_TYPE.IMAGE:
+    case NODE_TYPE.VIDEO: {
+      const { naturalWidth: w, naturalHeight: h, duration } = node.data as { naturalWidth?: number; naturalHeight?: number; duration?: number };
+      if (w && h && w > 0 && h > 0) metaParts.push(`${w}×${h}`);
+      if (nodeType === NODE_TYPE.VIDEO && duration && duration > 0) metaParts.push(formatTime(duration));
+      break;
+    }
+    case NODE_TYPE.AUDIO: {
+      const { duration } = node.data as { duration?: number };
+      if (duration && duration > 0) metaParts.push(formatTime(duration));
+      break;
+    }
+    case NODE_TYPE.TEXT: {
+      if (plainText && plainText.length > 0) metaParts.push(String(plainText.length));
+      break;
+    }
+  }
+  const sizeText = formatBytes(fileSize);
+  if (sizeText) metaParts.push(sizeText);
+  const metaLine = metaParts.length > 0 ? metaParts.join(" · ") : null;
+  const timeText = formatDateTime(createdAt);
+
   const handleClick = useCallback(() => {
+    // 与画布点选节点同一语义：单选该节点（列表选中态来自 nodes 的 selected 标记）并定位居中
+    const s = useCanvasStore.getState();
+    s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
     centerNode(node);
   }, [node, centerNode]);
 
   return (
     <div
       onClick={handleClick}
-      className="flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none"
+      className={`canvas-explorer-row relative flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none${selected ? " is-selected" : ""}`}
       style={{
-        background: selected ? "var(--canvas-bg-hover)" : "transparent",
-        color: selected ? "var(--canvas-text)" : "var(--canvas-text-dim)",
         paddingLeft: 8 + depth * ROW_INDENT,
         paddingRight: 8,
       }}
       onMouseEnter={(e) => {
-        if (!selected) { (e.currentTarget as HTMLElement).style.background = "var(--canvas-bg-elevated)"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text)"; }
         if (sourceUrl) preview.onEnter(node as unknown as AssetItem, e);
       }}
-      onMouseLeave={(e) => {
-        if (!selected) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--canvas-text-dim)"; }
-        preview.onLeave();
-      }}
+      onMouseLeave={() => preview.onLeave()}
     >
+      {/* 选中竖条：与画布节点 --canvas-select 选中描边同色（约定同 ApiSettingsDrawer） */}
+      {selected && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--canvas-select)" }} />
+      )}
       {/* 空槽位：与组行折叠箭头同宽，保证图标与组图标垂直对齐 */}
       <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
-      {/* 缩略图/图标 */}
+      {/* 缩略图/图标：等高正方形卡片（高度 = 标题 20 + 元数据 16 + 时间 16 三行） */}
       <div
-        className="relative w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
+        className="relative w-[52px] h-[52px] rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
         style={{
-          minWidth: 32,
+          minWidth: 52,
           background: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
             ? "var(--canvas-bg-elevated)"
             : `${getNodeTypeColor(nodeType)}18`,
@@ -405,13 +497,51 @@ function ElementItemImpl(props: ElementItemProps) {
               />
             </span>
           </>
+        ) : nodeType === NODE_TYPE.TEXT && plainText ? (
+          /* 文本节点：内容预览小卡（与参考排版一致，正文片段替代类型图标） */
+          <div
+            className="w-full h-full px-1 py-0.5 overflow-hidden"
+            style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+          >
+            <span className="text-[8px] leading-[1.4] break-all line-clamp-4" style={{ color: "var(--canvas-text-muted)" }}>
+              {plainText.slice(0, 64)}
+            </span>
+          </div>
         ) : nodeType === NODE_TYPE.VIDEO && loading ? (
           <LoadingOutlined style={{ fontSize: 14, color: "var(--canvas-text-dim)" }} />
         ) : (
           getNodeTypeIcon(nodeType)
         )}
       </div>
-      <span className="flex-1 truncate text-[13px]">{label || `Node ${node.id}`}</span>
+      {/* 固定三行高度：标题 20px + 元数据 16px + 时间 16px，缺行时整体仍保持同高 */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center overflow-hidden">
+        <div className="flex items-center gap-1.5 min-w-0 h-5">
+          <span className="flex-1 truncate text-[13px] leading-5 font-medium">{label || `Node ${node.id}`}</span>
+          {failed ? (
+            <Tooltip title={t("common.statusFailed")}>
+              <span
+                className="shrink-0 rounded-full"
+                style={{ width: 6, height: 6, background: "var(--canvas-danger)" }}
+              />
+            </Tooltip>
+          ) : generating ? (
+            <Tooltip title={t("common.generating")}>
+              <LoadingOutlined className="shrink-0" spin style={{ fontSize: 12, color: "var(--canvas-accent)" }} />
+            </Tooltip>
+          ) : null}
+        </div>
+        {metaLine && (
+          <div className="explorer-row-sub text-[11px] leading-4 truncate">
+            {metaLine}
+          </div>
+        )}
+        {timeText && (
+          <div className="explorer-row-sub text-[11px] leading-4 flex items-center gap-1">
+            <ClockCircleOutlined style={{ fontSize: 10 }} />
+            <span className="tabular-nums">{timeText}</span>
+          </div>
+        )}
+      </div>
       <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
     </div>
   );

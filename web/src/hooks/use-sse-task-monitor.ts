@@ -150,14 +150,16 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
         // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
         const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
-        // 一次性回填：图片 + 多图列表 + 清除生成中状态（遮罩此时才消失）。
+        // 一次性回填：图片 + 多图列表 + 产物大小 + 清除生成中状态（遮罩此时才消失）。
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
+        // fileSize 由服务端终态事件直接给出（resultSizes 与 resultUrls 对齐），重新生成时覆盖旧值。
         runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
           src: firstUrl,
           naturalWidth: 0, naturalHeight: 0,
           lockAspectRatio: true, taskBinding: undefined,
           source: "generate",
+          fileSize: evt.resultSizes?.[0] ?? undefined,
           // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
           // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
           multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,

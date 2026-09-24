@@ -231,11 +231,24 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [commitHasAudio, capturingFrame, data.hasAudio]);
   const onLoadedMeta = useCallback(() => {
     const v = videoRef.current;
-    if (v) setDuration(v.duration || 0);
+    if (v) {
+      setDuration(v.duration || 0);
+      // 时长回填节点数据（skipHistory，探测属渲染副产物），供资源管理器等列表展示；
+      // 选帧期间播放器是代理视频，同音轨结论一样不能据此写入
+      const d = v.duration;
+      if (!capturingFrame() && Number.isFinite(d) && d > 0 && data.duration !== d) {
+        useCanvasStore.getState().updateNodeData(
+          id,
+          { duration: d } as Partial<VideoNodeData>,
+          undefined,
+          { skipHistory: true },
+        );
+      }
+    }
     // 同上：换源后的 metadata 来自代理（转码产物），不能据此判定原视频的音轨
     if (capturingFrame()) return;
     resolveAudioTrack();
-  }, [resolveAudioTrack, capturingFrame]);
+  }, [resolveAudioTrack, capturingFrame, data.duration, id]);
 
   const seekTo = useCallback((clientX: number) => {
     const v = videoRef.current;
@@ -552,8 +565,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       mediaType: "video",
       sourceUrl: src,
       sourceType: d?.source,
-      width: d?.naturalWidth || 0,
-      height: d?.naturalHeight || 0,
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
     });

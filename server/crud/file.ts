@@ -13,6 +13,10 @@ export async function upsertFileObject(data: {
   mimeType: string;
   ext: string;
   source?: string;
+  /** 媒体元数据（落盘时探测）；探测失败为 null，update 时 undefined 表示不覆盖已有值 */
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
 }) {
   const now = new Date();
 
@@ -28,6 +32,9 @@ export async function upsertFileObject(data: {
       mimeType: data.mimeType,
       ext: data.ext,
       source: data.source ?? "unknown",
+      width: data.width ?? undefined,
+      height: data.height ?? undefined,
+      duration: data.duration ?? undefined,
       updatedAt: now,
     },
     create: {
@@ -37,6 +44,9 @@ export async function upsertFileObject(data: {
       mimeType: data.mimeType,
       ext: data.ext,
       source: data.source ?? "unknown",
+      width: data.width ?? null,
+      height: data.height ?? null,
+      duration: data.duration ?? null,
     },
   });
 }

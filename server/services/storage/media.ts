@@ -91,18 +91,6 @@ export async function getResizedWebP(
   }
 }
 
-/**
- * 从 /api/files/{storageKey} 形式的文件 URL 提取存储键。
- * 非本服务文件 URL（外链等）返回 null。
- */
-export function storageKeyFromFileUrl(url: string): string | null {
-  const marker = "/api/files/";
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  const key = url.slice(idx + marker.length).split(/[?#]/)[0];
-  return key || null;
-}
-
 /** 真实像素尺寸（媒体探测共用形状） */
 export interface MediaDimensions {
   width: number;
@@ -134,35 +122,86 @@ export async function probeImageMeta(filePath: string): Promise<MediaDimensions 
 }
 
 /**
- * 资产落库前的服务端尺寸探测：按 sourceUrl 解析存储文件，读取真实宽高。
- *
- * 尺寸以媒体文件本身为准（与「前端探测后随请求回传」解耦）：前端探针
- * 失败、超时或缺失都不该把 0 写进资产库，否则资产插入画布时比例只能
- * 回落默认值。图片走 sharp 元数据，视频走 ffmpeg 流信息（带缓存与超时）。
- * 文件不存在 / 路径非法 / 探测失败一律返回 null，由调用方回退请求值。
+ * 文件落盘时的媒体元数据探测：按 MIME 分派探测器，一次拿齐宽高与时长。
+ * 图片走 sharp 元数据头，视频走 ffmpeg 流信息（带缓存），音频走容器时长。
+ * 任何失败都返回全 null——探测是 best-effort，不阻塞落盘主流程。
  */
-export async function probeSourceDimensions(
-  sourceUrl: string,
-  mediaType: string,
-): Promise<MediaDimensions | null> {
-  if (mediaType !== "image" && mediaType !== "video") return null;
-  const key = storageKeyFromFileUrl(sourceUrl);
-  if (!key) return null;
-  const filePath = path.resolve(path.join(localStorage.baseDir, key));
+export interface PersistedMediaMeta {
+  width: number | null;
+  height: number | null;
+  /** 时长（秒），仅视频 / 音频有值 */
+  duration: number | null;
+}
+
+export async function probePersistedMediaMeta(
+  storageKey: string,
+  mimeType: string,
+): Promise<PersistedMediaMeta> {
+  const empty: PersistedMediaMeta = { width: null, height: null, duration: null };
+  const isImage = mimeType.startsWith("image/");
+  const isVideo = mimeType.startsWith("video/");
+  const isAudio = mimeType.startsWith("audio/");
+  if (!isImage && !isVideo && !isAudio) return empty;
+  const filePath = path.resolve(path.join(localStorage.baseDir, storageKey));
   // 包含关系用 path.relative 判定：startsWith 前缀比对会被兄弟目录绕过
   // （baseDir ".../storage/files" 恰是 ".../storage/filesPrivate" 的前缀）
   const rel = path.relative(path.resolve(localStorage.baseDir), filePath);
-  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return empty;
   try {
-    await fs.access(filePath);
+    if (isImage) {
+      const dims = await probeImageMeta(filePath);
+      return dims ? { ...empty, width: dims.width, height: dims.height } : empty;
+    }
+    if (isVideo) {
+      const meta = await probeVideoMetaCached(filePath);
+      return {
+        width: meta?.width ?? null,
+        height: meta?.height ?? null,
+        duration: meta?.duration ?? null,
+      };
+    }
+    return { ...empty, duration: await probeAudioDuration(filePath) };
   } catch {
-    return null;
+    return empty;
   }
-  if (mediaType === "video") {
-    const meta = await probeVideoMetaCached(filePath);
-    return meta?.width && meta?.height ? { width: meta.width, height: meta.height } : null;
-  }
-  return probeImageMeta(filePath);
+}
+
+/**
+ * 探测音频文件时长（spawn ffmpeg 解析容器信息，只读头部）。
+ * 拿不到（文件缺失 / 非音频 / 解析失败）返回 null，由调用方兜底。
+ */
+export function probeAudioDuration(audioPath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const ffmpegBin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
+    // 只给 -i 不给输出文件：ffmpeg 会带错误码退出，但容器信息照常打到 stderr
+    const ffmpeg = spawn(ffmpegBin, ["-i", audioPath]);
+    let stderr = "";
+    let settled = false;
+
+    const settle = (value: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+
+    const timer = setTimeout(() => {
+      ffmpeg.kill("SIGKILL");
+      settle(null);
+    }, FFMPEG_PROBE_TIMEOUT_MS);
+
+    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    ffmpeg.on("close", () => {
+      const dur = stderr.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+      const seconds = dur
+        ? Number(dur[1]) * 3600 + Number(dur[2]) * 60 + Number(dur[3])
+        : NaN;
+      settle(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+    });
+    ffmpeg.on("error", () => settle(null));
+  });
 }
 
 /**

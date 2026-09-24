@@ -49,7 +49,8 @@
     "zoom": "Zoom",
     "fit": "Fit to Screen",
     "noData": "No data",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "statusFailed": "Failed"
   },
   "param": {
     "quality": "Quality",
@@ -335,6 +336,8 @@
     "exitManage": "Done",
     "typeLabel": "Type",
     "dimensionsLabel": "Dimensions",
+    "sizeLabel": "File size",
+    "durationLabel": "Duration",
     "locationLabel": "Location",
     "createdAtLabel": "Created",
     "updatedAtLabel": "Updated",

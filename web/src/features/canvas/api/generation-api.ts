@@ -56,6 +56,8 @@ export interface TaskStatusEvent {
   taskId: string;
   status: TaskStatus;
   resultUrls?: string[];
+  /** 与 resultUrls 逐位对齐的产物大小（字节），服务端 stat 落盘文件得出，缺失为 null */
+  resultSizes?: Array<number | null>;
   resultText?: string;
   error?: string;
   errorCode?: string;

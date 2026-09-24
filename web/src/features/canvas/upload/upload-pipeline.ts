@@ -354,6 +354,8 @@ interface RetryContext {
   label: string;
   nw: number;
   nh: number;
+  /** 源文件大小（字节），落库时回填节点 data.fileSize */
+  size: number;
   source: "upload" | "derived";
   previewUrl?: string;
 }
@@ -378,7 +380,7 @@ function gcRetryStore() {
 }
 
 function retryContextOf(p: Prepared, source: "upload" | "derived"): RetryContext {
-  return { item: p.item, kind: p.kind, label: p.label, nw: p.nw, nh: p.nh, source, previewUrl: p.previewUrl };
+  return { item: p.item, kind: p.kind, label: p.label, nw: p.nw, nh: p.nh, size: p.file.size, source, previewUrl: p.previewUrl };
 }
 
 /** 把节点标记为上传失败：保留本地预览，UI 依此渲染失败遮罩与重试入口 */
@@ -396,6 +398,7 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
   const data: Record<string, unknown> = {
     src: result.url,
     label: ctx.label,
+    fileSize: ctx.size,
     upload: undefined,
     source: ctx.source,
   };
@@ -485,6 +488,7 @@ async function runUploads(
           ...(node.data as Record<string, unknown>),
           src: r.value.url,
           label: p.label,
+          fileSize: p.file.size,
           upload: undefined,
           source,
           ...clear,

@@ -31,6 +31,10 @@ export interface AssetItem {
   mediaType: MediaType;
   width: number;
   height: number;
+  /** 源文件大小（字节），服务端按 hash 关联 file_objects 得出；缺失为 0 */
+  size: number;
+  /** 媒体时长（秒），同出自 file_objects 的落盘探测；缺失为 0 */
+  duration: number;
   description: string;
   createdAt: number;
   updatedAt: number;
@@ -46,8 +50,6 @@ export interface CreateAssetInput {
   name: string;
   type: AssetType;
   mediaType?: MediaType;
-  width?: number;
-  height?: number;
   description?: string;
   tags?: string[];
   prompt?: string;

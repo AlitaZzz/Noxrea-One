@@ -51,12 +51,14 @@ export function createAssetNode(
   if (isAudio) {
     const node = createAudioNode(pos, sourceUrl);
     node.data.label = asset.name;
+    node.data.fileSize = asset.size || undefined;
     return node;
   } else if (isVideo) {
     const node = createVideoNode(pos, sourceUrl);
     node.data.label = asset.name;
     node.data.naturalWidth = nw;
     node.data.naturalHeight = nh;
+    node.data.fileSize = asset.size || undefined;
     node.data.source = "upload";
     node.style = { width: dw, height: dh };
     return node;
@@ -66,6 +68,7 @@ export function createAssetNode(
     node.data.label = asset.name;
     node.data.naturalWidth = nw;
     node.data.naturalHeight = nh;
+    node.data.fileSize = asset.size || undefined;
     node.data.source = "upload";
     node.style = { width: dw, height: dh };
     if (!asset.width || !asset.height) {
