@@ -8,7 +8,7 @@
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
 import { Input, Select, Tooltip, TreeSelect } from "antd";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
@@ -17,6 +17,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
+import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
 import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
@@ -257,24 +258,26 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleBatchMove = useCallback(async (folderId: string) => {
     const ids = [...selectedIds];
     if (ids.length === 0 || batchMoving) return;
-    // 移动到当前所在文件夹：直接收起，不发请求也不刷新。
-    if (folderId === activeFolderId) {
+    // 目标与当前位置一致（待分类视作根目录）：直接收起，不发请求也不刷新。
+    const targetId = normalizeFolderId(folders, folderId);
+    if (targetId === normalizeFolderId(folders, activeFolderId)) {
       setSelectedIds(new Set());
       setMultiSelectMode(false);
       setBatchMoveOpen(false);
       return;
     }
     setBatchMoving(true);
-    const result = await updateAssetsBatch(ids, { folderId });
+    // 根目录 = 无文件夹：服务端把 null 归入待分类目录（待分类即根目录的实现载体）
+    const result = await updateAssetsBatch(ids, { folderId: targetId === ROOT_FOLDER_ID ? null : targetId });
     setBatchMoving(false);
     if (!result.ok) return;
     setSelectedIds(new Set());
     setMultiSelectMode(false);
     setBatchMoveOpen(false);
     // 文件夹内列表：移动成功的项必然离开当前视图，本地剔除并补页；
-    // 根目录的跨文件夹搜索结果中这些项仍匹配，保留不动。
+    // 根目录是全量视图（跨文件夹搜索结果中这些项仍匹配），保留不动。
     if (activeFolderId !== null) await removeItems(ids);
-  }, [selectedIds, batchMoving, activeFolderId, updateAssetsBatch, removeItems]);
+  }, [selectedIds, batchMoving, activeFolderId, folders, updateAssetsBatch, removeItems]);
 
   const handleBatchType = useCallback(async (type: AssetType) => {
     const ids = [...selectedIds];
@@ -326,9 +329,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
   const gridShowFolders = categories.length === 0 && !appliedSearch.trim();
 
-  // 移动弹窗的目标树：未分类固定在首位（根级叶子），普通文件夹递归构建；
-  // 当前所在文件夹禁选（移入自己无意义）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
-  // label 为纯文本供内置过滤（treeNodeFilterProp="label"），title 渲染命中片段的白色高亮。
+  // 移动弹窗的目标树：与上传弹窗共用 useFolderTree（个人资产库为根 + 普通文件夹递归），
+  // 当前所在位置禁选（待分类视作根目录）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
   // title 始终返回元素：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
   const renderMoveTitle = useCallback((name: string) => {
     const m = splitMatch(name, moveTreeQuery);
@@ -341,35 +343,7 @@ export default function AssetsModal({ open, onClose }: Props) {
       </>
     );
   }, [moveTreeQuery]);
-  const moveFolderTreeData = useMemo(() => {
-    type FolderNode = { value: string; title: ReactNode; label: string; disabled?: boolean; children?: FolderNode[] };
-    const normal = folders.filter((f) => f.scope === activeScope && f.kind === "normal");
-    function build(parentId: string | undefined): FolderNode[] {
-      return normal
-        .filter((f) => (f.parentId || undefined) === parentId)
-        .map((f) => {
-          const children = build(f.id);
-          const node: FolderNode = {
-            value: f.id,
-            label: f.name,
-            title: renderMoveTitle(f.name),
-            disabled: f.id === activeFolderId,
-          };
-          if (children.length > 0) node.children = children;
-          return node;
-        });
-    }
-    const roots = build(undefined);
-    if (uncategorizedFolder) {
-      roots.unshift({
-        value: uncategorizedFolder.id,
-        label: t("asset.uncategorized"),
-        title: renderMoveTitle(t("asset.uncategorized")),
-        disabled: uncategorizedFolder.id === activeFolderId,
-      });
-    }
-    return roots;
-  }, [folders, activeScope, activeFolderId, uncategorizedFolder, renderMoveTitle, t]);
+  const moveTreeData = useFolderTree(folders, renderMoveTitle, normalizeFolderId(folders, activeFolderId));
 
   // --- Handlers ---
 
@@ -832,7 +806,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             treeDefaultExpandAll
             listHeight={280}
             treeNodeFilterProp="label"
-            treeData={moveFolderTreeData}
+            treeData={moveTreeData}
           />
         </AppModal>
 
@@ -874,6 +848,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           onClose={() => setCreateOpen(false)}
           onCreate={handleCreateAssets}
           folders={folders}
+          defaultFolderId={activeFolderId}
         />
 
         {/* Create folder dialog */}

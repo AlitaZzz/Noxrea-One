@@ -458,15 +458,23 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   pointer-events: none;
 }
 /* 上传弹窗：拖放区卡片，悬停提亮一格 */
+/* 上传弹窗：宫格整体托盘——外框固定并裁切圆角，卡片超出时在内层滚动（滚动条贴托盘右缘） */
+.upload-grid {
+  border: 1px solid var(--canvas-border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow: hidden;
+}
 .upload-drop-zone {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 130px;
   height: 130px;
-  border: 2px dashed var(--canvas-border);
+  /* 外层已有托盘实线框，内部虚线减淡为 1px 只做「可放置」暗示 */
+  border: 1px dashed var(--canvas-border);
   border-radius: 8px;
-  background: var(--canvas-bg-elevated);
+  background: rgb(255 255 255 / 3%);
   cursor: pointer;
   transition: background 0.15s;
 }
