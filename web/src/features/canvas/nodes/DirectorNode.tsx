@@ -23,7 +23,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   return (
-    <div className="group relative w-full h-full flex flex-col">
+    <div className="group relative w-full h-full flex flex-col node-tilt">
       {/* Title */}
       <NodeTitle
         nodeId={id}
