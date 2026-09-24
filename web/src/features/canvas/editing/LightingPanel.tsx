@@ -165,7 +165,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           aria-label="close"
           onClick={onClose}
           style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
-          icon={<span style={{ color: "var(--canvas-text-secondary)", fontSize: 12, lineHeight: 1 }}>✕</span>}
+          icon={<span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>}
         />
       </div>
       <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
