@@ -18,10 +18,10 @@ import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
-import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { clearDraft, type DraftRecord, isDraftNewer, loadDraft } from "@/features/project/draft-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
+import { useCanvasSession } from "@/features/project/use-canvas-session";
 
 const DirectorOverlay = dynamic(
   () => import("@/features/director/components/DirectorOverlay"),
@@ -49,9 +49,12 @@ export default function CanvasPage({
   // 用它与 URL 上的 projectId 比较得到加载态，切换项目时会自动回到 Loading，
   // 避免短暂渲染上一个项目的画布内容，也避免在 effect 体内同步 setState。
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
-  const [draftPrompt, setDraftPrompt] = useState<DraftRecord | null>(null);
-  // 会话过期（画布在其他标签页 / 浏览器被修改）：唯一出口是刷新页面
+  // 会话过期（画布编辑权被其他页面实例取得）：唯一出口是刷新页面
   const sessionExpired = useSessionExpiredStore((s) => s.expired);
+
+  // 编辑权事件流：其他标签页 / 浏览器进入即抢占，本页立即收到 evict 弹提示，
+  // 不等到保存撞 409 才发现。本 hook 独立于项目加载，抢占感知尽可能早。
+  useCanvasSession(projectId);
 
   // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
   // URL 是项目身份的真相源：先同步进 store，再从服务器拉取最新项目数据恢复到画布，
@@ -62,41 +65,21 @@ export default function CanvasPage({
       return;
     }
     useProjectStore.getState().setActiveProject(projectId);
-    useProjectStore.getState().refreshProject(projectId).then(async (project) => {
+    useProjectStore.getState().refreshProject(projectId).then((project) => {
       if (!project) {
         window.location.href = "/project";
         return;
       }
-      // 先用后端数据渲染画布，再按代际检查是否有比后端更新的离线草稿（弹窗询问）
+      // 后端数据是唯一真相源：刷新后一律以服务端内容渲染画布。
+      // 被抢占期间产生的本地改动随之作废（不再有离线草稿机制兜底）。
       useCanvasStore.getState().restoreFromProject(project.id, project);
       setLoadedProjectId(projectId);
-
-      const draft = await loadDraft(projectId);
-      if (isDraftNewer(draft, project.revision)) {
-        setDraftPrompt(draft);
-      }
     }).catch((err) => {
       // 拉取 / 解析失败时不能停在 "Loading canvas..."，回到项目列表
       console.error("[canvas] load project failed:", err);
       window.location.href = "/project";
     });
   }, [projectId]);
-
-  /** 恢复离线草稿：用草稿覆盖画布并触发重新落库 */
-  const handleRestoreDraft = useCallback(() => {
-    if (!draftPrompt) return;
-    useCanvasStore.getState().restoreFromProject(projectId, draftPrompt.canvasData);
-    markDirtyImmediate();
-    void clearDraft(projectId);
-    setDraftPrompt(null);
-  }, [draftPrompt, projectId]);
-
-  /** 丢弃离线草稿：保留后端数据 */
-  const handleDiscardDraft = useCallback(() => {
-    if (!draftPrompt) return;
-    void clearDraft(projectId);
-    setDraftPrompt(null);
-  }, [draftPrompt, projectId]);
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
   useEffect(() => {
@@ -172,18 +155,7 @@ export default function CanvasPage({
         <DirectorOverlay onClose={() => setDirectorOverlayOpen(false)} />
       )}
 
-      {/* 离线草稿恢复确认 */}
-      <ConfirmModal
-        open={!!draftPrompt}
-        title={t("draft.title")}
-        content={t("draft.content")}
-        okText={t("draft.restore")}
-        cancelText={t("draft.discard")}
-        onOk={handleRestoreDraft}
-        onCancel={handleDiscardDraft}
-      />
-
-      {/* 会话过期：不可关闭，唯一动作是刷新；未落库改动已由草稿承接，刷新后弹恢复框 */}
+      {/* 会话过期：不可关闭，唯一动作是刷新；刷新即新页面实例，重新取得编辑权 */}
       <ConfirmModal
         open={sessionExpired}
         title={t("conflict.title")}

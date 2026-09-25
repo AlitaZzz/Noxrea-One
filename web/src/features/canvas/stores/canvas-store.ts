@@ -28,7 +28,7 @@ let _liveViewport: ViewportState = DEFAULT_VIEWPORT;
 
 /**
  * 内容所有者：当前画布内容所属的项目 ID，未加载为 null。
- * 保存与草稿一律以此寻址，与 UI 激活态（activeProjectId）解耦，
+ * 保存一律以此寻址，与 UI 激活态（activeProjectId）解耦，
  * 项目切换窗口期内编辑仍能正确存回原项目。
  */
 let _canvasProjectId: string | null = null;
@@ -59,7 +59,7 @@ export function markDirtyUndo() {
  * 高频 viewport 变更入口（onViewportChange 调用）。
  * 只更新模块级变量 + markDirty，不触发 Zustand set()，避免渲染循环。
  * 与当前值相同的同步（React Flow 挂载/程序化 setRfViewport 后的回声）不标脏——
- * 否则零编辑进画布也会被标脏，先写草稿再落库，造成「刚进画布就提示有草稿」的误报。
+ * 否则零编辑进画布也会被标脏，造成「刚进画布就触发保存」的误报。
  */
 export function syncLiveViewport(vp: ViewportState) {
   const prev = _liveViewport;
@@ -189,7 +189,7 @@ interface CanvasState {
   /**
    * restoreFromProject 的应用次数：作为视口同步信号。
    * React Flow 的内部视口只在挂载与 activeProjectId 变化时同步，
-   * 草稿恢复不换项目 ID，靠订阅此计数把恢复出的视口应用到 React Flow。
+   * 同项目的内容恢复不换项目 ID，靠订阅此计数把恢复出的视口应用到 React Flow。
    */
   viewportSyncCount: number;
   restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
@@ -378,10 +378,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   snapGridSize: 20,
   snapThreshold: 5,
 
-  /** 从项目恢复画布状态（内容所有者随之切换；切换前未落库的尾部编辑先固化进旧项目草稿） */
+  /** 从项目恢复画布状态（内容所有者随之切换；未落库的尾部编辑不随新内容派发保存） */
   restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
-    // 必须在换 owner 与内容之前：此时草稿仍按旧项目寻址、快照仍是旧内容
-    saveManager.resetForProjectSwitch();
+    // 过期态只在「真正的项目切换」时随切换清除；同项目 / 首次加载的服务端数据
+    // 恢复保留过期态——加载在途时收到的 evict 不能被恢复完成冲掉
+    // （过期弹窗唯一出口是刷新，同项目恢复并不重新取得编辑权）
+    const previousOwner = _canvasProjectId;
+    const isProjectSwitch = previousOwner !== null && previousOwner !== projectId;
+    saveManager.resetForProjectSwitch({ clearExpired: isProjectSwitch });
     _canvasProjectId = projectId;
     const vp = data.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;

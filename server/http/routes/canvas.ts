@@ -18,6 +18,8 @@ import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
 import { renderAngleTemplate } from "@server/services/canvas/angle-prompt";
 import { renderLightingTemplate } from "@server/services/canvas/lighting-prompt";
+import { createSseResponse } from "../sse";
+import { broadcastToOthers, destroyRoom, joinCanvasRoom, leaveCanvasRoom } from "../canvas-presence";
 
 const router = new Hono();
 
@@ -164,6 +166,59 @@ router.put("/api/canvas/projects/:id", async (c) => {
 
 });
 
+/**
+ * 等待连接终止：SSE 任务体返回即关流，这里把连接挂起到客户端断开。
+ * 心跳由 createSseResponse 每 15s 发出，用于防止代理掐断空闲长连接。
+ */
+function waitUntilAbort(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
+
+/**
+ * GET /api/canvas/projects/:id/events
+ * 画布编辑权事件流：每个页面实例持有一条，接收 evict（被抢占）与 sync（版本同步）。
+ * 抢占与失效的判定详见 canvas-presence。
+ */
+router.get("/api/canvas/projects/:id/events", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const id = c.req.param("id");
+  if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
+
+  const sid = c.req.query("sid")?.trim();
+  if (!sid || sid.length > 64) return failCode(422, "common.invalid_request");
+
+  const project = await getProject(id, auth.user.id);
+  if (!project) return failCode(404, "canvas.project_not_found");
+
+  return createSseResponse(request, async ({ emit, signal }) => {
+    const { connId, fresh, superseded } = joinCanvasRoom(id, sid, emit);
+    try {
+      const payload = { revision: project.revision };
+      if (fresh) {
+        // 新页面实例取得编辑权，其余页面立即失效
+        broadcastToOthers(id, sid, "evict", payload);
+      } else if (superseded) {
+        // 断线期间被他人抢占：只补发给本连接，避免只靠版本号比对发现不了
+        emit("evict", payload);
+      }
+      emit("sync", payload);
+
+      await waitUntilAbort(signal);
+    } finally {
+      leaveCanvasRoom(id, sid, connId);
+    }
+  });
+});
+
 // DELETE /api/canvas/projects/:id
 router.delete("/api/canvas/projects/:id", async (c) => {
   const request = c.req.raw;
@@ -175,6 +230,10 @@ router.delete("/api/canvas/projects/:id", async (c) => {
 
   const result = await deleteProject(id, auth.user.id);
   if (result.count === 0) return failCode(404, "canvas.project_not_found");
+
+  // 房间生命周期与项目对齐：项目删除即释放编辑权房间，
+  // 在室连接的后续断开回调因房间不存在而幂等跳过
+  destroyRoom(id);
 
   return c.json(ok(null, "Project deleted"));
 });

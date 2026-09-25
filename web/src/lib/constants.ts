@@ -97,10 +97,6 @@ export const ASSET_CATEGORIES: { key: AssetType | "all"; labelKey: string }[] = 
 ];
 
 // ── 任务绑定 / 上传状态常量（自 lib/types/nodes.ts 迁移） ──
-export const TASK_BINDING_KEY = "taskBinding" as const;
-
-/** 已完成/无任务的空绑定 */
-export const EMPTY_TASK_BINDING: TaskBinding = { taskId: "", status: "completed" };
 
 /** 是否处于生成/处理中——由 taskBinding.status 推导，不再有独立 generating 字段 */
 export function isGenerating(binding: TaskBinding | undefined): boolean {

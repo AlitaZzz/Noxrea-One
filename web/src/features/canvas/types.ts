@@ -3,7 +3,7 @@
  * 合并了画布基础类型（连线别名、背景/主题枚举、视口）与节点数据类型
  * （任务绑定、生成参数、各节点 data 结构、判别联合 AnyNode）。
  *
- * 运行时常量（NODE_TYPE、TASK_BINDING_KEY、UPLOAD_KEY 等）在 lib/constants.ts。
+ * 运行时常量（NODE_TYPE、UPLOAD_KEY 等）在 lib/constants.ts。
  */
 import type { Edge, Node } from "@xyflow/react";
 

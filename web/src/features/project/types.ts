@@ -23,6 +23,21 @@ export interface CanvasProject {
   edges: AnyEdge[];
 }
 
+/**
+ * 提交服务端的画布内容快照。
+ * 与 CanvasProject 的区别：不含服务端拥有的元数据（id/name/revision/updatedAt），
+ * 只包含画布自身状态。
+ */
+export interface CanvasData {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+  viewport: ViewportState;
+  background: BackgroundType;
+  minimapVisible: boolean;
+  snapToGrid: boolean;
+  agentModel?: string;
+}
+
 // ============================================================
 // 历史记录（undo/redo）
 // ============================================================

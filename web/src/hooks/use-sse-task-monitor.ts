@@ -14,17 +14,11 @@ import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
+import { SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 /** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
 const MAX_ERROR_LEN = 1000;
-
-/** SSE 看门狗超时：服务端每 15s 发心跳，30s 收不到任何字节即判定连接已静默死亡 */
-const SSE_WATCHDOG_TIMEOUT_MS = 30_000;
-/** 连接建立阶段（fetch 至响应头）的预算：TLS/代理握手慢不等于连接死亡，放宽到 60s，
- * 否则慢握手会陷入「30s abort → 3s 重连」的死循环 */
-const SSE_CONNECT_TIMEOUT_MS = 60_000;
-const SSE_WATCHDOG_CHECK_MS = 5_000;
 
 /**
  * 截断错误文案。

@@ -98,6 +98,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const [presetOpen, setPresetOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
+  /**
+   * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
+   * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
+   */
+  const [submitting, setSubmitting] = useState(false);
 
   // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时，
   // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
@@ -253,12 +258,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         return null;
       }
 
-      // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
-      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-      if (!isGeneratingBinding(curBinding)) return null;
-      // Save task_id to node data immediately (SSE handled by InfiniteCanvas)
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { skipHistory: true });
+      // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
+      // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
+      const depthBefore = useHistoryStore.getState().undoStack.length;
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
+      const stack = useHistoryStore.getState().undoStack;
+      pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
       await flushAndWait();
       return null;
     } catch (e: unknown) {
@@ -270,20 +275,19 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const handleRefUpload = useRefUpload(nodeId);
 
   const handleGenerate = async () => {
+    if (isGenerating || submitting) return;
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey) return;
     const entry = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
     const provider = providers.find((c) => c.id === entry.providerId);
     if (!provider) return;
 
-    // forceHistory 先捕获不含 taskBinding 的干净状态，再写入处理中标记。
-    // 记录被压入的快照引用，失败 / 取消时按引用精确回滚（见 dropPendingHistory）。
-    const depthBefore = useHistoryStore.getState().undoStack.length;
-    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
-    const stack = useHistoryStore.getState().undoStack;
-    pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
-    markDirtyImmediate();
+    // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
+    // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
+    // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时 submitTask 会
+    // 主动取消已创建的后端任务，不产生孤儿任务。
     const generationRunId = ++generationRunRef.current;
+    setSubmitting(true);
     // preset 令牌在提交前展开为模板全文（任务记录保存可读全文；模板热更新每次生效）
     try {
       const submittedPrompt = await expandPresetTokens(finalPrompt);
@@ -294,33 +298,38 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
       if (generationRunId !== generationRunRef.current) return;
       if (errMsg === null) {
-        // 生成成功
-      } else {
-        useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
-        markDirtyImmediate();
-        dropPendingHistory();
+        // 生成成功：绑定已带真实 taskId 落库，SSE 由 InfiniteCanvas 监控
       }
+      // 失败：全程未写 taskBinding，无需清理；错误文案已在 submitTask 内解析
     } catch (error: unknown) {
       if (generationRunId !== generationRunRef.current) return;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
-      markDirtyImmediate();
-      dropPendingHistory();
       console.error("Image generation preparation failed:", error);
+    } finally {
+      // 仅当自己仍是最新一轮时复位：被取消的轮次由 handleCancel 复位，
+      // 避免旧流程收尾误关新一轮提交的取消态
+      if (generationRunId === generationRunRef.current) setSubmitting(false);
     }
   };
 
   const handleCancel = () => {
+    // 取消分两种：生成中（binding 处于进行中态）才取消后端任务并回滚本轮快照；
+    // 提交在途（本轮 binding 尚未写入，节点上至多是上一轮已结束任务的遗留绑定）
+    // 只需失效提交流程——误清会删掉上一轮 succeeded 绑定、误弹上一轮的快照
+    // 丢一步撤销历史。孤儿任务由 submitTask 检测 runId 失效后主动取消
     ++generationRunRef.current;
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
-    if (tid) {
-      generationApi.cancelGenerationTask(tid).catch(() => {});
+    if (isGenerating) {
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
+      if (tid) {
+        generationApi.cancelGenerationTask(tid).catch(() => {});
+      }
+      useCanvasStore.getState().updateNodeData(nodeId, {
+        taskBinding: undefined,
+      }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      dropPendingHistory();
     }
-    useCanvasStore.getState().updateNodeData(nodeId, {
-      taskBinding: undefined,
-    }, undefined, { skipHistory: true });
-    markDirtyImmediate();
-    dropPendingHistory();
+    setSubmitting(false);
   };
 
   // ── 预设：空节点改写本节点提示词；有图节点派生子节点承载（源图只读），选中态跟随 ──
@@ -488,9 +497,9 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         </Popover>
         <div className="flex-1" />
         <PrimaryActionButton
-          cancel={isGenerating}
-          disabled={!isGenerating && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
-          onClick={isGenerating ? handleCancel : handleGenerate}
+          cancel={isGenerating || submitting}
+          disabled={!isGenerating && !submitting && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
+          onClick={isGenerating || submitting ? handleCancel : handleGenerate}
         />
       </div>
     </WheelGuard>

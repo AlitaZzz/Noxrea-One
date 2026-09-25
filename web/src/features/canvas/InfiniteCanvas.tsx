@@ -232,7 +232,7 @@ export default function InfiniteCanvas() {
     }
   }, [activeProjectId]);
 
-  // React Flow 内部视口跟随 restoreFromProject（含草稿恢复）：订阅应用次数信号。
+  // React Flow 内部视口跟随 restoreFromProject：订阅应用次数信号。
   // 恢复出的视口与 _liveViewport 一致，syncLiveViewport 的同值守卫不会误标脏。
   const viewportSyncCount = useCanvasStore((s) => s.viewportSyncCount);
   useEffect(() => {
