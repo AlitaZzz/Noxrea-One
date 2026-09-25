@@ -452,14 +452,17 @@ export default function LoginPage() {
       setLoading(true);
 
       try {
+        // 登录/注册成功后直达 /project：cookie 已下发，无需再经「/ → proxy 重定向」
+        // 二次跳转（客户端软导航 + middleware 重定向组合在部分环境下不可靠，
+        // 会出现「提示登录成功却停在登录页」）；全局提示渲染在 portal，不受导航影响
         if (mode === "signin") {
           await authStore.login(username, password);
           showGlobalMessage().success(i18n.t("auth.login.welcomeBack"));
-          setTimeout(() => router.push("/"), 600);
+          router.replace("/project");
         } else {
           await authStore.register(username, password);
           showGlobalMessage().success(i18n.t("auth.login.accountCreated"));
-          setTimeout(() => router.push("/"), 600);
+          router.replace("/project");
         }
       } catch (err: unknown) {
         showGlobalMessage().error((err as Error).message || i18n.t("error.unknown"));
