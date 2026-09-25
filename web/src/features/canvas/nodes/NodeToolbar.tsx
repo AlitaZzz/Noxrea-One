@@ -11,7 +11,6 @@ import {
   CopyOutlined,
   DownloadOutlined,
   ExpandOutlined,
-  FileTextOutlined,
   HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
@@ -28,19 +27,12 @@ import { useTranslation } from "react-i18next";
 
 import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
-import { Back5sIcon } from "@/components/ui/icons/canvas/Back5sIcon";
-import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
-import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
-import { Forward3sIcon } from "@/components/ui/icons/canvas/Forward3sIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
-import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { SpeedIcon } from "@/components/ui/icons/canvas/SpeedIcon";
-import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
-import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
@@ -48,6 +40,7 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
+import { presetIconOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
 
@@ -229,6 +222,8 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   if (prevNodeId !== nodeId) {
     setPrevNodeId(nodeId);
   }
+  // 创作菜单与生成面板共用同一份后端模板目录（preset + reverse，已按 order 排序）
+  const { data: promptTemplates } = usePromptPresets();
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
@@ -330,56 +325,20 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               </Tooltip>
             }
             content={
-              <>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-reverse"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <FileTextOutlined style={{ fontSize: 16 }} />
-                    {t("node.creationReverse")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-character-face"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <CharacterFaceThreeViewIcon style={{ fontSize: 16 }} />
-                    {t("node.creationCharacterFace")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-character-three-view"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <CharacterThreeViewIcon style={{ fontSize: 16 }} />
-                    {t("node.creationCharacterThreeView")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-nine-grid-scene"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <NineGridIcon style={{ fontSize: 16 }} />
-                    {t("node.creationNineGrid")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-25-grid-storyboard"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <Storyboard25Icon style={{ fontSize: 16 }} />
-                    {t("node.creation25Grid")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-4-grid-storyboard"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <Storyboard4Icon style={{ fontSize: 16 }} />
-                    {t("node.creation4Grid")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-forward-3s"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <Forward3sIcon style={{ fontSize: 16 }} />
-                    {t("node.creationForward3s")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-back-5s"); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <Back5sIcon style={{ fontSize: 16 }} />
-                    {t("node.creationBack5s")}
-                  </span>
-                </MenuItem>
-              </>
+              (promptTemplates ?? []).map((entry) => {
+                const Icon = presetIconOf(entry.id);
+                return (
+                  <MenuItem
+                    key={entry.id}
+                    onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: entry.id }); }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Icon style={{ fontSize: 16 }} />
+                      {t(entry.labelKey)}
+                    </span>
+                  </MenuItem>
+                );
+              })
             }
           />
           {/* Export */}

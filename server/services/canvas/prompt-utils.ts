@@ -10,8 +10,8 @@ export const num = (value: string | undefined, fallback: number) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-// 方位角 → 八方位词基座（去「方」字，供与上/下/前/后组合）
-const AZIMUTH_BASES = ["前", "右前", "右", "右后", "后", "左后", "左", "左前"];
+// 方位角 → 八方位词基座（供打光和相机机位共用）
+const AZIMUTH_BASES = ["front", "front-right", "right", "rear-right", "rear", "rear-left", "left", "front-left"];
 export function azimuthBase(azimuth: number): string {
   return AZIMUTH_BASES[Math.round(((((azimuth % 360) + 360) % 360) / 45)) % 8];
 }

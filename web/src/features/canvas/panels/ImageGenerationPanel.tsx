@@ -7,6 +7,7 @@
 
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
+import { Wand2 } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +17,7 @@ import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
+import { createImageNode } from "@/features/canvas/node-defaults";
 import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
 import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -32,11 +34,19 @@ import { type ModelOption } from "@/lib/types/models";
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
+import {
+  expandPresetTokens,
+  presetIconOf,
+  presetTokenOf,
+  replacePresetToken,
+  usePromptPresets,
+} from "../shared/prompt-presets";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
+import { spawnPromptDerivedNode } from "../upload/derived-node";
 
 interface Props { nodeId: string; }
 
@@ -80,7 +90,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
+  // 预设目录来自后端（与创作菜单同一份数据源），仅取 kind === "preset"
+  const { data: promptTemplates } = usePromptPresets();
+  const presets = useMemo(() => (promptTemplates ?? []).filter((p) => p.kind === "preset"), [promptTemplates]);
+
   const [modelOpen, setModelOpen] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
 
@@ -185,6 +200,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
   const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
+  /** 使取消或新一轮生成中的旧异步流程失效 */
+  const generationRunRef = useRef(0);
 
   /**
    * 回滚 handleGenerate 压入的预生成快照。
@@ -198,10 +215,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, []);
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
-  const submitTask = async (): Promise<string | null> => {
+  const submitTask = async (runId: number): Promise<string | null> => {
     const { entry, provider, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
     if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
     try {
+      if (runId !== generationRunRef.current) return null;
       const res = await generationApi.submitGenerationTask({
         type: "image",
         prompt: p.trim(),
@@ -221,6 +239,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       const json = await res.json();
       const taskId = json.data?.id;
       if (!taskId) return i18n.t("error.generate.no_task_id");
+
+      // 取消可能发生在请求返回前：主动取消已经创建的后端任务，避免留下孤儿任务
+      if (runId !== generationRunRef.current) {
+        await generationApi.cancelGenerationTask(taskId).catch(() => {});
+        return null;
+      }
 
       // 异步回调时检查：取消后 taskBinding 被清空，丢弃过期结果
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
@@ -252,20 +276,34 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     const stack = useHistoryStore.getState().undoStack;
     pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
     markDirtyImmediate();
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, provider };
+    const generationRunId = ++generationRunRef.current;
+    // preset 令牌在提交前展开为模板全文（任务记录保存可读全文；模板热更新每次生效）
+    try {
+      const submittedPrompt = await expandPresetTokens(finalPrompt);
+      if (generationRunId !== generationRunRef.current) return;
+      retryRef.current = { count: 0, prompt: submittedPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, provider };
 
-    const errMsg = await submitTask();
+      const errMsg = await submitTask(generationRunId);
 
-    if (errMsg === null) {
-      // 生成成功
-    } else {
+      if (generationRunId !== generationRunRef.current) return;
+      if (errMsg === null) {
+        // 生成成功
+      } else {
+        useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
+        markDirtyImmediate();
+        dropPendingHistory();
+      }
+    } catch (error: unknown) {
+      if (generationRunId !== generationRunRef.current) return;
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
       dropPendingHistory();
+      console.error("Image generation preparation failed:", error);
     }
   };
 
   const handleCancel = () => {
+    ++generationRunRef.current;
     const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
     const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
     if (tid) {
@@ -277,6 +315,26 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     markDirtyImmediate();
     dropPendingHistory();
   };
+
+  // ── 预设：空节点改写本节点提示词；有图节点派生子节点承载（源图只读），选中态跟随 ──
+  const handleApplyPreset = useCallback((presetId: string) => {
+    const store = useCanvasStore.getState();
+    const node = store.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    if ((node.data as { src?: string }).src) {
+      const preset = presets.find((p) => p.id === presetId);
+      const created = spawnPromptDerivedNode(nodeId, presetTokenOf(presetId), createImageNode, store, {
+        label: preset ? t(preset.labelKey) : presetId,
+      });
+      if (!created) return;
+      markDirtyImmediate();
+      // 单选切到派生节点：RfNodeToolbar 跟随单选，面板随之挂到新节点
+      store.setNodes(store.getNodes().map((n) => ({ ...n, selected: n.id === created.id })));
+    } else {
+      setPrompt(replacePresetToken(prompt, presetId));
+    }
+  }, [nodeId, prompt, setPrompt, t, presets]);
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 图片节点上游只有文本与图片，故最多两组。
@@ -353,6 +411,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         </div>
       <MentionPrompt
         references={references}
+        presets={presets}
         value={prompt}
         onChange={setPrompt}
         placeholder={t("generation.promptPlaceholder")}
@@ -379,6 +438,30 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               </span>
             </MenuItem>
           ))}
+        />
+        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
+        <MenuPopover
+          open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
+          trigger={
+            <Tooltip title={t("node.creationPreset")}>
+              <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
+                style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
+                <Wand2 size={14} />
+                <span className="truncate">{t("node.creationPreset")}</span>
+              </button>
+            </Tooltip>
+          }
+          content={presets.map((p) => {
+            const Icon = presetIconOf(p.id);
+            return (
+              <MenuItem key={p.id} onClick={() => { setPresetOpen(false); handleApplyPreset(p.id); }}>
+                <span className="flex items-center gap-1.5">
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate">{t(p.labelKey)}</span>
+                </span>
+              </MenuItem>
+            );
+          })}
         />
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover

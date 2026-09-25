@@ -1,14 +1,84 @@
 {
-  "reverse": "请根据参考图片反推一段适合用于 AI 生图的提示词。\n\n要求：\n1. 只输出提示词正文，不要解释。\n2. 覆盖主体、构图、风格、光线、色彩、材质、镜头和氛围。\n3. 尽量写成可直接用于生图模型的完整提示词。",
-  "expand": "",
-  "lighting": "在保持原图内容、构图与主体不变的前提下，重新渲染画面的光照：主光源位于画面{{direction}}，{{elevation}}，色光为{{color}}，整体光照强度{{strength}}。仅调整光照氛围与明暗关系，不改变画面内容与构图。",
-  "angle": "在保持主体、场景与画风完全一致的前提下，把观察机位转移到{{viewpoint}}，{{pitch}}，景别为{{distance}}。{{note}}只改变相机位置、朝向与透视关系，不改变主体的外观、比例与场景内容。",
-  "stylize": "",
-  "characterFaceThreeView": "角色面部设定三视图，统一灰色纯色背景，依次展示正面肖像、侧面肖像、45 度斜侧肖像，保持人物五官、神态、画风完全一致，面部细节刻画完整，干净的角色参考图。",
-  "characterThreeView": "角色设定三视图，统一灰色纯色背景，参考原图人物特征，上面输出头部特写组：面部正面特写、面部侧面特写、45 度斜侧面特写；下面输出全身三视图，剔除下巴以上头部，仅展示身体躯体部分。保持人物五官、神态、画风完全一致，面部细节刻画完整，干净的角色参考图。",
-  "nineGridScene": "3×3九宫格场景设定图，9个独立分格画面，全部画面严格沿用参考图的同一场景，保留原有结构、空间布局、道具摆放、材质纹理、环境主题，不改动场景物体。\n九个分格同时遵循“固定相机视角 + 指定景别”的专业电影分镜逻辑。九个画面虽然采用不同相机方向和不同景别，但始终保持同一个场景、同一个建筑主体、同一空间结构和同一环境，不得因为景别变化而改变、增加、删除或重新摆放任何场景物体。\n第一格：远景 ELS，正面平视 Front Eye-Level View。相机位于场景正前方，以正常人眼高度平视主体，使用远景构图，主体在完整环境中占比较小，但必须能够清晰辨认主体整体结构，同时展示广阔环境。\n第二格：全景 LS，右前45度斜视角 Front-Right 45° View。相机位于场景右前方约45度，以平视或接近正常视线高度观察，使用全景构图，完整展示整个场景主体及其周围空间。\n第三格：中全景 MLS，右侧面 Right Side 90° View。相机位于场景正右侧，以90度侧面观察主体，使用中全景构图，主体完整可见，占据画面主要区域，但仍保留一定环境空间，不裁切建筑主体。\n第四格：中景 MS，左前45度斜视角 Front-Left 45° View。相机位于场景左前方约45度，以正常视线高度观察，使用中景构图，突出场景主体及其空间关系，同时保持主体完整可见。\n第五格：中近景 MCU，高空鸟瞰俯视 Aerial Top-Down View。相机位于场景上方较高位置向下俯视，使用中近景式主体构图，但这里的“中近景”仅用于控制主体在画面中的占比，不允许裁切建筑，不允许进行局部特写，必须完整展示场景主体及主要空间布局。\n第六格：近景 CU，右后45度斜视角 Rear-Right 45° View。相机位于场景右后方约45度，以接近主体的构图观察，但仍必须完整展示建筑或场景主体，不得裁切，不得只拍摄局部细节。\n第七格：特写 ECU，左侧面 Left Side 90° View。相机位于场景正左侧，以90度侧面观察。虽然使用特写景别，但对于建筑和大型场景而言，仍然必须完整展示主体，不允许真正裁切主体或只展示局部；“ECU”仅用于强调主体在画面中的占比和视觉集中度。\n第八格：低角度 Low Angle，左后45度斜视角 Rear-Left 45° View。相机位于场景左后方约45度，并降低相机高度，从较低位置向上观察主体，形成具有电影感和空间纵深感的低机位构图，同时保持建筑主体完整。\n第九格：高角度 High Angle，背面平视 Rear Eye-Level View。相机位于场景正后方，并采用略高于正常视线的高角度观察主体，完整展示建筑背面及周围环境，不裁切主体。\n九个画面必须保持完全一致的场景内容。唯一允许变化的是相机位置、相机朝向、相机高度以及由景别要求产生的合理构图变化。建筑结构、空间布局、道具数量、道具位置、材质、纹理、颜色、环境元素必须完全一致。\n所有画面保持统一的镜头语言、统一的电影摄影风格、统一的透视关系、统一的光照方向、统一的环境氛围、统一的色调、统一的时间、统一的天气条件。电影级画质，真实材质，丰富细节，锐利清晰，高质量建筑可视化效果。\n每个分格都是独立完整画面，九个画面之间不融合、不重叠、不串位、不发生场景重组。\n每个分格画面底部设置统一的专业电影分镜标注区域，标注区域为浅灰色纯色背景，与九宫格整体背景保持统一。每个标签位于对应分格画面正下方，水平居中排列，字体简洁、专业、清晰、规整，字号统一，格式统一，不遮挡画面主体，不进入场景内部。\n九个分格底部依次标注以下文字：\n第一格底部标注：远景 ELS｜正面平视 Front Eye-Level\n第二格底部标注：全景 LS｜右前45° Front-Right 45°\n第三格底部标注：中全景 MLS｜右侧面 Right Side 90°\n第四格底部标注：中景 MS｜左前45° Front-Left 45°\n第五格底部标注：中近景 MCU｜高空鸟瞰 Aerial Top-Down\n第六格底部标注：近景 CU｜右后45° Rear-Right 45°\n第七格底部标注：特写 ECU｜左侧面 Left Side 90°\n第八格底部标注：低角度 Low Angle｜左后45° Rear-Left 45°\n第九格底部标注：高角度 High Angle｜背面平视 Rear Eye-Level\n所有标签必须准确对应所在分格，不得错位、重复、遗漏或出现乱码。标签仅作为九宫格专业分镜说明，不属于场景内容。\n画面主体内部无任何文字、Logo、水印；仅允许在每个分格底部的独立标注区域显示上述专业分镜标签。\n特别要求：景别变化不得导致场景结构变化。远景、全景、中全景、中景、中近景、近景、特写等景别只用于控制主体在画面中的视觉占比和摄影构图，不能改变建筑本身的尺寸、比例、结构或物体位置。除高空鸟瞰和低角度镜头外，尽量保持相近的镜头距离和透视效果。\n这是“同一个场景 × 九种专业电影分镜景别 × 九个不同空间相机视角 × 底部专业分镜标签”的九宫格场景设定图。",
-  "storyboard25": "剧情推演：自动补全成一个包含“起、承、转、合”的 25 帧完整故事，情节内容文字标注在宫格下方。镜头多样性：在 25 帧中合理分配特写（Close-up）、中景（Medium shot）、远景（Wide shot）和俯仰角切换，确保视觉丰富度。视觉一致性：所有分镜必须严格遵循参考图的美术风格。",
-  "storyboard4": "剧情推演：以4宫格连环画形式，连贯展现故事情节的动态演变，情节内容文字标注在宫格下方。视觉一致性：所有分镜必须严格遵循参考图的美术风格。",
-  "forward3s": "根据当前画面状态，生成 3 秒之后下一时刻动态延续的画面：\n1. 逆向推理逻辑：基于当前帧的视觉内容、角色位置、道具状态等信息，推算后 3 秒可能发生的场景变化，并生成对应的前置镜头。\n2. 视觉一致性：生成的前置镜头必须严格遵循参考图的美术风格，包括色彩基调、光影处理、线条风格、材质表现等，确保画面风格无变化。\n3. 连续性与合理性：生成的内容需符合剧情逻辑与物理合理性，避免出现突兀或不连贯的视觉元素。",
-  "back5s": "根据当前画面状态，生成 5 秒之前时刻的剧情前置镜头画面：\n1. 逆向推理逻辑：基于当前帧的视觉内容、角色位置、道具状态等信息，推算出 5 秒前可能发生的场景变化，并生成对应的前置镜头。\n2. 视觉一致性：生成的前置镜头必须严格遵循参考图的美术风格，包括色彩基调、光影处理、线条风格、材质表现等，确保画面风格无变化。\n3. 连续性与合理性：生成的内容需符合剧情逻辑与物理合理性，避免出现突兀或不连贯的视觉元素。"
+  "entries": [
+    {
+      "id": "characterFaceThreeView",
+      "kind": "preset",
+      "labelKey": "node.creationCharacterFace",
+      "order": 1,
+      "template": "Create a clean three-view facial reference sheet for the character in the source image against a uniform solid gray background. Arrange a front portrait, a side portrait, and a 45-degree three-quarter portrait in sequence. Keep the character's facial features, expression, and art style identical across all views. Render the facial details fully and consistently."
+    },
+    {
+      "id": "characterThreeView",
+      "kind": "preset",
+      "labelKey": "node.creationCharacterThreeView",
+      "order": 2,
+      "template": "Create a character reference sheet against a uniform solid gray background, preserving the character's defining traits from the source image. In the top row, show close-ups of the face from the front, the side, and a 45-degree three-quarter angle. In the bottom row, show three full-body views with the head above the chin omitted, displaying only the body and torso. Keep the character's facial features, expression, proportions, and art style consistent across all views. Render facial details fully and keep the sheet clean and legible."
+    },
+    {
+      "id": "productThreeView",
+      "kind": "preset",
+      "labelKey": "node.creationProductThreeView",
+      "order": 3,
+      "template": "Generate a clean three-view product reference sheet from the source image.\n\nOutput requirements:\n- Show front, side, and back/alternate view of the same product.\n- Preserve materials, silhouette, proportions, and key details.\n- Use a clean product reference layout with neutral presentation.\n- Final output must be a three-view sheet."
+    },
+    {
+      "id": "cinematicLightCorrection",
+      "kind": "preset",
+      "labelKey": "node.creationCinematicLightCorrection",
+      "order": 4,
+      "template": "Cinematically refine the source image lighting.\n\nOutput requirements:\n- Improve light hierarchy, shadow structure, exposure balance, and atmosphere.\n- Preserve the source image aspect ratio, canvas dimensions, and orientation exactly.\n- Keep the same scene, same characters, and same camera framing.\n- Do not turn the image into a different composition.\n- Fill the whole existing canvas; do not add black bars, borders, or letterboxing.\n- Final output must remain a single frame with no collage, UI, watermark, or text."
+    },
+    {
+      "id": "nineGridScene",
+      "kind": "preset",
+      "labelKey": "node.creationNineGrid",
+      "order": 5,
+      "template": "Create a 3 x 3 scene reference sheet with nine separate, complete panels. Every panel must depict the exact same scene from the reference image: the same architectural subject, spatial layout, structures, props and their positions, materials, textures, colors, and environment. Change only camera position, direction, height, and the framing required by each shot size. Do not add, remove, resize, rearrange, or redesign any scene object.\n\nUse these nine fixed camera views and cinematic shot sizes in reading order:\n1. Extreme long shot (ELS), front eye-level view. Place the camera directly in front of the subject at normal eye height. Show the complete, clearly recognizable structure at a smaller scale within a broad environment.\n2. Long shot (LS), front-right 45-degree view. Place the camera about 45 degrees to the front-right at eye level or near normal sight height. Show the complete subject and its surroundings.\n3. Medium long shot (MLS), right side 90-degree view. Shoot from directly to the right. Keep the entire subject visible and prominent, with some surrounding space; do not crop the building.\n4. Medium shot (MS), front-left 45-degree view. Shoot from about 45 degrees to the front-left at normal eye height. Emphasize the subject and its spatial relationships while keeping the subject fully visible.\n5. Medium close-up (MCU), aerial top-down view. Shoot downward from a high position above the scene. Use MCU only to control the subject's share of the frame: never crop the building or isolate a detail. Show the complete scene subject and primary layout.\n6. Close-up (CU), rear-right 45-degree view. Shoot from about 45 degrees to the rear-right with tighter framing, but still show the complete building or scene subject. Do not crop or show only a detail.\n7. Extreme close-up (ECU), left side 90-degree view. Shoot from directly to the left. For architecture or a large scene, ECU means a stronger visual emphasis and a larger subject in the frame, not an actual crop or a detail-only view. Show the entire subject.\n8. Low-angle shot, rear-left 45-degree view. Shoot from about 45 degrees to the rear-left with a lower camera looking upward. Convey cinematic depth while keeping the entire architectural subject visible.\n9. High-angle shot, rear eye-level view. Place the camera directly behind the scene at a slightly higher-than-normal eye height. Show the complete back of the building and surrounding environment without cropping.\n\nMaintain the same cinematic photographic style, coherent perspective, lighting direction, atmosphere, color grading, time of day, and weather throughout all nine panels. Render cinematic image quality, realistic materials, rich detail, and sharp architectural visualization. Keep panels distinct: no merging, overlap, swapped views, or scene reconstruction. Shot size changes affect only composition and the subject's visual share of the frame, never the subject's actual size, proportions, structure, or object positions. Except for the aerial and low-angle shots, keep camera distance and perspective as similar as the prescribed shot sizes allow.\n\nPlace a separate, uniform light-gray storyboard caption band directly below each panel, matching the grid background. Center each caption beneath its own panel in the same clean, professional, legible font and size. Do not let captions cover the subject or enter the scene image. Use exactly these captions in panel order:\n1. ELS | Front Eye-Level\n2. LS | Front-Right 45°\n3. MLS | Right Side 90°\n4. MS | Front-Left 45°\n5. MCU | Aerial Top-Down\n6. CU | Rear-Right 45°\n7. ECU | Left Side 90°\n8. Low Angle | Rear-Left 45°\n9. High Angle | Rear Eye-Level\n\nEach caption must match its panel exactly, with no misplaced, duplicated, missing, or garbled labels. Captions belong only in their separate bands. No text, logos, or watermarks inside any scene image. The final result is one consistent scene shown in nine distinct professional cinematic views with their captions below."
+    },
+    {
+      "id": "storyboard25",
+      "kind": "preset",
+      "labelKey": "node.creation25Grid",
+      "order": 6,
+      "template": "Create a complete 25-frame visual storyboard that develops the reference image into a coherent story with an introduction, development, turning point, and resolution. Put a brief description of each story beat below its frame. Distribute close-ups, medium shots, wide shots, and high- and low-angle views across the 25 frames for visual variety. Keep the art style strictly consistent with the reference image throughout."
+    },
+    {
+      "id": "storyboard4",
+      "kind": "preset",
+      "labelKey": "node.creation4Grid",
+      "order": 7,
+      "template": "Create a four-panel sequential storyboard showing the story's dynamic progression across four connected frames. Place a brief description of each story beat below its panel. Keep every panel strictly consistent with the reference image's art style."
+    },
+    {
+      "id": "forward3s",
+      "kind": "preset",
+      "labelKey": "node.creationForward3s",
+      "order": 8,
+      "template": "Generate the next frame of the scene approximately 3 seconds after the reference image. Infer the most plausible changes to character positions, movements, props, and the environment from the current frame. Depict a subsequent moment, not a preceding shot. Preserve the reference image's color palette, lighting, line work, materials, and overall art style. Ensure narrative and physical continuity without abrupt or inconsistent visual elements."
+    },
+    {
+      "id": "back5s",
+      "kind": "preset",
+      "labelKey": "node.creationBack5s",
+      "order": 9,
+      "template": "Generate a preceding frame of the scene approximately 5 seconds before the reference image. Infer the most plausible earlier character positions, prop states, and events from the current frame. Preserve the reference image's color palette, lighting, line work, materials, and overall art style. Ensure narrative and physical continuity without abrupt or inconsistent visual elements."
+    },
+    {
+      "id": "reverse",
+      "kind": "reverse",
+      "labelKey": "node.creationReverse",
+      "order": 0,
+      "template": "Analyze the reference image and write a prompt suitable for an image-generation model. Output only the finished prompt, without explanations. Describe the subject, composition, style, lighting, colors, materials, camera, and atmosphere in enough detail to generate a similar image. Write it as a complete, directly usable image-generation prompt in English."
+    },
+    {
+      "id": "lighting",
+      "kind": "dynamic",
+      "template": "Rerender the lighting of the reference image while preserving its subject, scene content, and composition. Position the key light {{direction}}, {{elevation}}. Use {{color}} with {{strength}} overall intensity. Change only the lighting mood and light-shadow relationships; do not alter the scene content or framing."
+    },
+    {
+      "id": "angle",
+      "kind": "dynamic",
+      "template": "Keep the subject, scene, and art style identical to the reference image. Move the camera to {{viewpoint}}, {{pitch}}, with {{distance}} framing. {{note}}Change only camera position, direction, and perspective; preserve the subject's appearance, proportions, and scene content."
+    }
+  ]
 }
