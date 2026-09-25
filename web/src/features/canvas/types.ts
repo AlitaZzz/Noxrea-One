@@ -53,25 +53,26 @@ export interface TextGenSettings extends BaseGenSettings {
 /** 图片生成设置 */
 export interface ImageGenSettings extends BaseGenSettings {
   kind: "image";
-  quality: string;
-  resolution: string;
-  ratio: string;
-  n: number;
+  /** 参数字段只持久化用户实际设置过的值；未设置时由面板回退到当前模型默认值 */
+  quality?: string;
+  resolution?: string;
+  ratio?: string;
+  n?: number;
 }
 
 /** 视频生成设置 */
 export interface VideoGenSettings extends BaseGenSettings {
   kind: "video";
-  resolution: string;
-  ratio: string;
-  seconds: number;
-  generateAudio: boolean;
+  resolution?: string;
+  ratio?: string;
+  seconds?: number;
+  generateAudio?: boolean;
   refAudioOrder: string[];
   /** 参考视频顺序（上游 VIDEO 节点 src） */
   refVideoOrder: string[];
   /** 参考方式：none/first/first-last/full，空或 none = 文生视频 */
   refMode?: string;
-  n: number;
+  n?: number;
 }
 
 /** 语音生成设置 */
