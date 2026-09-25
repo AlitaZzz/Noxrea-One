@@ -9,6 +9,7 @@
 
 import "@xyflow/react/dist/style.css";
 
+import { EditOutlined } from "@ant-design/icons";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -28,7 +29,6 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { App } from "antd";
-import { EditOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
