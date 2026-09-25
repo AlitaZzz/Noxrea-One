@@ -19,7 +19,6 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import { useAssetsStore } from "@/features/assets/store";
-import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
@@ -27,6 +26,7 @@ import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
+import { presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
@@ -312,16 +312,23 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  const handleApplyTemplate = useCallback(async (type: "reverse" | "characterFaceThreeView" | "characterThreeView" | "nineGridScene" | "storyboard25" | "storyboard4" | "forward3s" | "back5s") => {
-    if (!src) return;
-    const template = await getPromptTemplate(type);
-    if (!template) return;
+  // 模板目录（与生成面板 / 工具条同一数据源）：reverse → 文本节点；preset → 图片节点（令牌 chip，提交时展开）
+  const { data: promptTemplates } = usePromptPresets();
 
-    // 反推提示词 -> 文本节点（承载可编辑的提示词文本）
-    // 角色面部三视图 / 角色三视图 / 多机位九宫格 -> 图片节点（预填提示词，供图片生成面板使用）
-    if (!spawnPromptDerivedNode(id, template, type === "reverse" ? createTextNode : createImageNode, useCanvasStore.getState())) return;
+  const handleApplyTemplate = useCallback((templateId: string) => {
+    if (!src) return;
+    const entry = (promptTemplates ?? []).find((p) => p.id === templateId);
+    if (!entry) return;
+    const created = spawnPromptDerivedNode(
+      id,
+      entry.kind === "reverse" ? entry.template : presetTokenOf(entry.id),
+      entry.kind === "reverse" ? createTextNode : createImageNode,
+      useCanvasStore.getState(),
+      entry.kind === "reverse" ? undefined : { label: t(entry.labelKey) },
+    );
+    if (!created) return;
     markDirtyImmediate();
-  }, [id, src]);
+  }, [id, src, promptTemplates, t]);
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
@@ -358,14 +365,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
-        case "create-reverse": a.handleApplyTemplate("reverse"); break;
-        case "create-character-face": a.handleApplyTemplate("characterFaceThreeView"); break;
-        case "create-character-three-view": a.handleApplyTemplate("characterThreeView"); break;
-        case "create-nine-grid-scene": a.handleApplyTemplate("nineGridScene"); break;
-        case "create-25-grid-storyboard": a.handleApplyTemplate("storyboard25"); break;
-        case "create-4-grid-storyboard": a.handleApplyTemplate("storyboard4"); break;
-        case "create-forward-3s": a.handleApplyTemplate("forward3s"); break;
-        case "create-back-5s": a.handleApplyTemplate("back5s"); break;
+        case "create-template": a.handleApplyTemplate(detail.templateId); break;
       }
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);

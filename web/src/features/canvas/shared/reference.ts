@@ -8,8 +8,10 @@ export interface ReferenceItem {
   src: string;
   thumbnail: string;
   index: number; // 0-based index within its kind list
-  kind: "image" | "audio" | "video";
+  kind: "image" | "audio" | "video" | "preset";
   label?: string; // audio/video label (filename), unused for images
+  /** kind === "preset" 时必填：预设 id（对应 prompt-template.json 的 key），chip 无 src */
+  presetId?: string;
 }
 
 /** mention 节点 attrs 的存储形态：ReferenceItem 去掉 label（attrs 由 Tiptap addAttributes 声明，无 label 字段） */

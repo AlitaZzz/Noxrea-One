@@ -21,17 +21,32 @@ import { renderLightingTemplate } from "@server/services/canvas/lighting-prompt"
 
 const router = new Hono();
 
-// 提示词模板库（按 type 分桶，位于 server/resources/prompt-template.json），支持热更新
-function loadPromptTemplates(): Record<string, string> {
-  return loadJson<Record<string, string>>("prompt-template.json");
+interface PromptTemplateEntry {
+  id: string;
+  kind: "preset" | "reverse" | "dynamic";
+  labelKey?: string;
+  order?: number;
+  template: string;
 }
 
-// GET /api/canvas/prompt-template?type=reverse
-// 返回指定类型的提示词模板（模板库由后端下发，支持修改配置热更新）。
-// lighting 类型额外支持 {{占位符}}：按 query 参数（intensity/azimuth/elevation/kelvin/color）
-// 插值成成稿提示词，语义翻译见 services/canvas/lighting-prompt；
-// angle 类型同链路（azimuth/elevation/zoom），见 services/canvas/angle-prompt；
-// 其余类型为静态文案。
+// 文件 mtime 变化时由 json-loader 重新解析，两个接口共享同一份实时目录。
+function loadPromptTemplates(): PromptTemplateEntry[] {
+  return loadJson<{ entries: PromptTemplateEntry[] }>("prompt-template.json").entries;
+}
+
+// 两个前端入口共用可选目录：反推 + 生成预设；动态插值项不进入列表。
+router.get("/api/canvas/prompt-templates", async (c) => {
+  const request = c.req.raw;
+  const auth = await authenticateRequest(request);
+  if ("error" in auth) return auth.error;
+
+  const selectable = loadPromptTemplates()
+    .filter((entry) => entry.kind === "preset" || entry.kind === "reverse")
+    .sort((a, b) => a.order! - b.order!)
+    .map(({ id, kind, labelKey, order, template }) => ({ id, kind, labelKey, order, template }));
+  return c.json(ok(selectable));
+});
+
 router.get("/api/canvas/prompt-template", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
@@ -40,14 +55,13 @@ router.get("/api/canvas/prompt-template", async (c) => {
   const type = c.req.query("type");
   if (!type) return failCode(400, "canvas.missing_type_param");
 
-  const templates = loadPromptTemplates();
-  const template = templates[type];
-  if (template === undefined) return failCode(404, "canvas.template_not_found", { type });
+  const entry = loadPromptTemplates().find((item) => item.id === type);
+  if (!entry) return failCode(404, "canvas.template_not_found", { type });
 
-  let rendered = template;
-  if (type === "lighting") rendered = renderLightingTemplate(template, c.req.query());
-  else if (type === "angle") rendered = renderAngleTemplate(template, c.req.query());
-  return c.json(ok({ type, template: rendered }));
+  let template = entry.template;
+  if (type === "lighting") template = renderLightingTemplate(template, c.req.query());
+  else if (type === "angle") template = renderAngleTemplate(template, c.req.query());
+  return c.json(ok({ type, template }));
 });
 
 router.get("/api/canvas/projects", async (c) => {

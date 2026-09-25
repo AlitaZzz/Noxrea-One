@@ -23,10 +23,17 @@ import { useTranslation } from "react-i18next";
 
 import MentionChip from "./MentionChip";
 import MentionDropdown from "./MentionDropdown";
+import { findPreset, PRESET_TOKEN_PATTERN, presetTokenOf, type PromptPreset } from "./prompt-presets";
 import { type ReferenceItem, type ReferenceItemAttrs, refLabel, refLabelKey } from "./reference";
+
+/** mention chip 的纯文本序列化：素材 → refLabel，预设 → @[preset:id] 令牌（往返一致） */
+function mentionPlainText(attrs: ReferenceItemAttrs): string {
+  return attrs.kind === "preset" ? presetTokenOf(attrs.presetId || "") : refLabel(attrs as ReferenceItem);
+}
 
 interface Props {
   references: ReferenceItem[];
+  presets?: PromptPreset[];
   value: string;
   onChange: (text: string) => void;
   placeholder: string;
@@ -58,26 +65,45 @@ const bridges = new WeakMap<object, SuggestionBridge>();
 const MENTION_PATTERN = /(图片|音频|视频)(\d+)/g;
 
 /** 纯文本 → 文档：chip 文本还原为 mention 节点，换行切分为段落 */
-function textToDoc(text: string, references: ReferenceItem[]): JSONContent {
+function textToDoc(text: string, references: ReferenceItem[], presets?: PromptPreset[]): JSONContent {
   const lookup = new Map(references.map((r) => [refLabel(r), r]));
 
   const content = text.split("\n").map((line) => {
     const inline: JSONContent[] = [];
-    let last = 0;
+
+    // 收集本行全部命中（素材 mention + 已知 preset 令牌），按位置排序后切片还原
+    const hits: Array<{ start: number; end: number; node: JSONContent }> = [];
     MENTION_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
-
     while ((match = MENTION_PATTERN.exec(line)) !== null) {
-      if (match.index > last) inline.push({ type: "text", text: line.slice(last, match.index) });
       const ref = lookup.get(match[0]);
-      inline.push(
-        ref
+      hits.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        node: ref
           ? { type: "mention", attrs: { src: ref.src, thumbnail: ref.thumbnail, index: ref.index, kind: ref.kind } }
           : { type: "text", text: match[0] },
-      );
-      last = match.index + match[0].length;
+      });
     }
-    if (last < line.length) inline.push({ type: "text", text: line.slice(last) });
+    PRESET_TOKEN_PATTERN.lastIndex = 0;
+    while ((match = PRESET_TOKEN_PATTERN.exec(line)) !== null) {
+      if (!presets || !findPreset(presets, match[1])) continue;
+      hits.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        node: { type: "mention", attrs: { kind: "preset", presetId: match[1] } },
+      });
+    }
+    hits.sort((a, b) => a.start - b.start);
+
+    let pos = 0;
+    for (const hit of hits) {
+      if (hit.start < pos) continue; // 重叠保护（理论上不会发生）
+      if (hit.start > pos) inline.push({ type: "text", text: line.slice(pos, hit.start) });
+      inline.push(hit.node);
+      pos = hit.end;
+    }
+    if (pos < line.length) inline.push({ type: "text", text: line.slice(pos) });
 
     return { type: "paragraph", ...(inline.length ? { content: inline } : {}) };
   });
@@ -157,7 +183,7 @@ function closeMention(bridge: SuggestionBridge, setMention: (state: MentionState
   setMention(null);
 }
 
-const MentionPrompt = ({ references, value, onChange, placeholder, style }: Props) => {
+const MentionPrompt = ({ references, presets, value, onChange, placeholder, style }: Props) => {
   const { t } = useTranslation();
 
   const [mention, setMention] = useState<MentionState | null>(null);
@@ -195,6 +221,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
             thumbnail: { default: "" },
             index: { default: 0 },
             kind: { default: "image" },
+            presetId: { default: "" },
           };
         },
         addNodeView() {
@@ -202,9 +229,9 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
         },
       }).configure({
         HTMLAttributes: { class: "mention-chip" },
-        // 纯文本化：chip 输出为「图片N / 音频N / 视频N」
-        renderText: ({ node }) => refLabel(node.attrs as ReferenceItemAttrs),
-        renderHTML: ({ options, node }) => ["span", options.HTMLAttributes, refLabel(node.attrs as ReferenceItemAttrs)],
+        // 纯文本化：素材 chip 输出为「图片N / 音频N / 视频N」，预设 chip 输出为 @[preset:id] 令牌
+        renderText: ({ node }) => mentionPlainText(node.attrs as ReferenceItemAttrs),
+        renderHTML: ({ options, node }) => ["span", options.HTMLAttributes, mentionPlainText(node.attrs as ReferenceItemAttrs)],
         // 退格直接整体删除 @ 触发符与 chip
         deleteTriggerWithBackspace: true,
         suggestion: {
@@ -234,7 +261,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
       }),
       Placeholder.configure({ placeholder }),
     ],
-    content: textToDoc(value, references),
+    content: textToDoc(value, references, presets),
     onUpdate: ({ editor }) => {
       const bridge = bridges.get(editor.view.dom);
       bridge?.onChange(editor.getText({ blockSeparator: "\n" }));
@@ -262,14 +289,26 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     bridges.set(editor.view.dom, bridge);
   }, [editor, references, onChange, t]);
 
-  // 外部变更 value（切换节点 / AI 回填）时同步进编辑器；序列化结果一致则跳过，避免循环
+  // 外部变更 value（切换节点 / AI 回填）时同步进编辑器；序列化结果一致则跳过，避免循环。
+  // 延后到微任务，避免 Tiptap 的 NodeView 更新在 React effect 生命周期内触发 flushSync。
   useEffect(() => {
     if (!editor) return;
     if (editor.getText({ blockSeparator: "\n" }) === value) return;
-    editor.commands.setContent(textToDoc(value, references), { emitUpdate: false });
-  }, [value, references, editor]);
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled || editor.isDestroyed) return;
+      if (editor.getText({ blockSeparator: "\n" }) === value) return;
+      editor.commands.setContent(textToDoc(value, references, presets), { emitUpdate: false });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [value, references, presets, editor]);
 
   // 引用变化：同步 chip 序号（图片1 ↔ 图片2），并移除已从参考区删除的引用
+  // preset chip 无对应引用，跳过清理（其持久化由 genSettings.prompt 直接承载）
   useEffect(() => {
     if (!editor) return;
     const { state } = editor;
@@ -279,6 +318,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     const entries: Array<{ pos: number; node: PMNode; ref: ReferenceItem | undefined }> = [];
     state.doc.descendants((node, pos) => {
       if (node.type.name !== "mention") return;
+      if ((node.attrs as ReferenceItemAttrs).kind === "preset") return;
       entries.push({
         pos,
         node,

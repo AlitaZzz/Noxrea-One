@@ -63,6 +63,7 @@ export function resolveDerivedPosition(
  * 提示词模板派生节点：在源节点右侧创建新节点、预填提示词、连线入库。
  * 供打光 / 多角度面板与图片节点的模板工具条复用；nodeFactory 决定节点类型
  * （createImageNode / createTextNode），两者的默认 genSettings 均含 prompt 字段。
+ * options.label 设置派生节点标题（如生成面板预设用预设名）。
  * 返回创建的节点；源节点不存在时返回 null，提示方式由调用方决定。
  */
 export function spawnPromptDerivedNode(
@@ -70,12 +71,14 @@ export function spawnPromptDerivedNode(
   prompt: string,
   nodeFactory: (position: { x: number; y: number }) => TextNode | ImageNode,
   storeApi: CanvasStoreApi,
+  options?: { label?: string },
 ): TextNode | ImageNode | null {
   const source = storeApi.nodes.find((n) => n.id === sourceId);
   if (!source) return null;
   const node = nodeFactory(resolveDerivedPosition(source));
   const gen = node.data.genSettings;
   if (gen) gen.prompt = prompt;
+  if (options?.label) node.data.label = options.label;
   storeApi.addNodes([node]);
   storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
   return node;

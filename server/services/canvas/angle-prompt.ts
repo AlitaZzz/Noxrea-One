@@ -9,29 +9,28 @@
 
 import { azimuthBase, clamp, num } from "./prompt-utils";
 
-// 机位方位：方位角 → 机位相对主体的位置描述
+// 机位方位：方位角 → 机位相对主体的位置描述。
 function viewpointWord(azimuth: number): string {
   const base = azimuthBase(azimuth);
-  if (base === "前") return "主体正前方";
-  if (base === "后") return "主体正后方";
-  return `主体${base}方`;
+  if (base === "front") return "directly in front of the subject";
+  if (base === "rear") return "directly behind the subject";
+  return `to the ${base} of the subject`;
 }
 
-// 俯仰角(-90~90，>0 俯拍) → 拍摄角度描述。边界取开区间：±60 已是明显斜射，
-// 不再归入「垂直顶视/仰视」，避免措辞与括注的原始角度自相矛盾
+// 俯仰角(-90~90，>0 俯拍)：±60 仍属于斜拍，避免与原始角度矛盾。
 function pitchWord(elevation: number): string {
-  if (elevation > 60) return "自正上方垂直向下的顶视";
-  if (elevation > 15) return "自上而下俯拍";
-  if (elevation >= -15) return "与人眼等高的平视";
-  if (elevation >= -60) return "自下而上仰拍";
-  return "自正下方垂直向上的仰视";
+  if (elevation > 60) return "looking straight down from above";
+  if (elevation > 15) return "looking down from above";
+  if (elevation >= -15) return "at eye level";
+  if (elevation >= -60) return "looking up from below";
+  return "looking straight up from below";
 }
 
-// 景别(0/1/2) → 景别描述
+// 景别(0/1/2) → 景别描述。
 function distanceWord(zoom: number): string {
-  if (zoom <= 0) return "近景特写，主体细节占满画面";
-  if (zoom >= 2) return "远景全景，主体完整呈现在环境中";
-  return "中景，主体与环境均衡呈现";
+  if (zoom <= 0) return "close-up, with the subject's details filling the frame";
+  if (zoom >= 2) return "wide shot, showing the complete subject in its environment";
+  return "medium shot, balancing the subject and its surroundings";
 }
 
 /** 把 angle 模板的 {{占位符}} 按查询参数插值成成稿提示词 */
@@ -42,20 +41,17 @@ export function renderAngleTemplate(template: string, query: Record<string, stri
 
   const vars: Record<string, string> = {
     // 括注原始值与打光模板同一风格，便于生图模型和用户核对。
-    // 近垂直仰角下方位角失去意义（同打光 directionWord 的收敛思路，边界取开区间与 pitchWord 一致）：
-    // >60 只说正上方，<-60 只说正下方
+    // 近垂直时方位角不再决定机位方向；±60 仍保留方位。
     viewpoint: elevation > 60
-      ? "主体正上方"
+      ? "directly above the subject"
       : elevation < -60
-        ? "主体正下方"
-        : `${viewpointWord(azimuth)}（方位角约 ${azimuth}°）`,
-    pitch: `${pitchWord(elevation)}（俯仰角约 ${elevation}°）`,
+        ? "directly below the subject"
+        : `${viewpointWord(azimuth)} (azimuth approximately ${azimuth}°)`,
+    pitch: `${pitchWord(elevation)} (elevation approximately ${elevation}°)`,
     distance: distanceWord(zoom),
-    // 背面机位原图未观察到的部分需要模型合理补全，其余机位留空。
-    // 窗口与八方位的「后」扇区对齐，右后/左后扇区背面大半可见，不触发；
-    // 近垂直俯仰（视角已收敛为正上/正下方）背面不在画面内，同样不触发
-    note: azimuthBase(azimuth) === "后" && elevation >= -60 && elevation <= 60
-      ? "原图中未直接展示的背面部分需依据主体结构合理补全，细节密度与画风须与原图一致。"
+    // 正背面机位需合理补全原图不可见的部分；近垂直视角不触发。
+    note: azimuthBase(azimuth) === "rear" && elevation >= -60 && elevation <= 60
+      ? "Reconstruct the parts of the subject's back that are not visible in the reference image based on its structure; match the original detail level and art style. "
       : "",
   };
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
