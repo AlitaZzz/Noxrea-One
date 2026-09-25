@@ -19,7 +19,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { clearDraft, type DraftRecord,loadDraft } from "@/features/project/draft-store";
+import { clearDraft, type DraftRecord, isDraftNewer, loadDraft } from "@/features/project/draft-store";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
 
@@ -54,8 +54,7 @@ export default function CanvasPage({
   const sessionExpired = useSessionExpiredStore((s) => s.expired);
 
   // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
-  // URL 是项目身份的真相源：先同步进 store（save-manager 按 activeProjectId 存盘），
-  // 再从服务器拉取最新项目数据恢复到画布，
+  // URL 是项目身份的真相源：先同步进 store，再从服务器拉取最新项目数据恢复到画布，
   // 避免多浏览器 / 多 Tab 场景下本地缓存过期导致数据不一致。
   useEffect(() => {
     if (!projectId) {
@@ -68,12 +67,12 @@ export default function CanvasPage({
         window.location.href = "/project";
         return;
       }
-      // 先用后端数据渲染画布，再检查是否有比后端更新的离线草稿（弹窗询问）
-      useCanvasStore.getState().restoreFromProject(project);
+      // 先用后端数据渲染画布，再按代际检查是否有比后端更新的离线草稿（弹窗询问）
+      useCanvasStore.getState().restoreFromProject(project.id, project);
       setLoadedProjectId(projectId);
 
       const draft = await loadDraft(projectId);
-      if (draft && draft.updatedAt > project.updatedAt) {
+      if (isDraftNewer(draft, project.revision)) {
         setDraftPrompt(draft);
       }
     }).catch((err) => {
@@ -86,7 +85,7 @@ export default function CanvasPage({
   /** 恢复离线草稿：用草稿覆盖画布并触发重新落库 */
   const handleRestoreDraft = useCallback(() => {
     if (!draftPrompt) return;
-    useCanvasStore.getState().restoreFromProject(draftPrompt.canvasData);
+    useCanvasStore.getState().restoreFromProject(projectId, draftPrompt.canvasData);
     markDirtyImmediate();
     void clearDraft(projectId);
     setDraftPrompt(null);
