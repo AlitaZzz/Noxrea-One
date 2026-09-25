@@ -129,6 +129,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const currentFields = Array.isArray(modelParams?.fields) ? modelParams.fields : null;
     if (!currentFields || currentFields === correctedForRef.current) return;
     correctedForRef.current = currentFields;
+    // 空节点占位框按当前模型默认比例落位（ratio 未设置时），与建节点工厂同一规则；
+    // 覆盖建节点时参数配置尚未就绪、占位框暂落结构默认尺寸的场景
+    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+    const gs = (node?.data as MediaGenFields | undefined)?.genSettings as VideoGenSettings | undefined;
+    if (node && !(node.data as { src?: string }).src && !gs?.ratio && typeof defaults.ratio === "string") {
+      applyRatioToNode(nodeId, defaults.ratio);
+    }
     for (const f of currentFields) {
       const cur = fieldValues[f.name] as string | number | undefined;
       if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {

@@ -3,6 +3,8 @@
  * 集中定义各类节点的默认数据、默认尺寸与 ID 生成规则，
  * 并提供节点再制（duplicate）与连线创建函数。
  */
+import { resolveModelDefaultField } from "@/features/canvas/shared/model-defaults";
+import { ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import {
   type AnyNode,
   type AudioNode,
@@ -35,7 +37,6 @@ import {
   TEXT_NODE_MIN_WIDTH,
 } from "@/lib/constants";
 import { NODE_TYPE } from "@/lib/constants";
-import i18n from "@/lib/i18n/config";
 
 // id 形如 "t-3xK9qP2mAbZc1"：单字母类型前缀便于一眼识别归属，
 // 随机段不泄露创建时间；会话内去重守卫兜底极小概率的随机碰撞。
@@ -50,6 +51,16 @@ function uid(prefix: string) {
   } while (usedIds.has(id));
   usedIds.add(id);
   return id;
+}
+
+/**
+ * 空媒体节点占位框尺寸：跟随当前默认模型的默认比例（model-ui.json 为唯一
+ * 默认值来源，经 resolveModelDefaultField 解析）；"adaptive" 或参数未就绪
+ * 返回 null，由调用方回退到结构默认尺寸。有内容节点不适用（尺寸由真实分辨率决定）。
+ */
+function placeholderStyleFor(kind: "image" | "video"): { width: number; height: number } | null {
+  const ratio = resolveModelDefaultField(kind, "ratio");
+  return typeof ratio === "string" ? ratioToNodeSize(ratio) : null;
 }
 
 export function createTextNode(position: { x: number; y: number }): TextNode {
@@ -88,9 +99,11 @@ export function createImageNode(
       naturalWidth: DEFAULT_NODE_WIDTH,
       naturalHeight: DEFAULT_NODE_CONTENT_HEIGHT,
       createdAt: Date.now(),
-      genSettings: { kind: "image", prompt: "", modelKey: "", quality: "", resolution: "", ratio: "", refOrder: [], n: 1 } satisfies ImageGenSettings,
+      // 参数字段（quality/resolution/ratio/n）不预置空值：未设置的参数不持久化，
+      // 由生成面板回退到当前模型默认值
+      genSettings: { kind: "image", prompt: "", modelKey: "", refOrder: [] } satisfies ImageGenSettings,
     } as ImageNodeData,
-    style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+    style: (src ? null : placeholderStyleFor("image")) ?? { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };
 }
 
@@ -108,9 +121,9 @@ export function createVideoNode(
       naturalWidth: 320,
       naturalHeight: 180,
       createdAt: Date.now(),
-      genSettings: { kind: "video", prompt: "", modelKey: "", resolution: "", ratio: "", seconds: 5, generateAudio: false, refOrder: [], refAudioOrder: [], refVideoOrder: [], n: 1 } satisfies VideoGenSettings,
+      genSettings: { kind: "video", prompt: "", modelKey: "", refOrder: [], refAudioOrder: [], refVideoOrder: [] } satisfies VideoGenSettings,
     } as VideoNodeData,
-    style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+    style: (src ? null : placeholderStyleFor("video")) ?? { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
   };
 }
 

@@ -127,6 +127,13 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // 模型切换时：重置不在新模型 options 中的参数
   useEffect(() => {
     if (!Array.isArray(modelParams?.fields)) return;
+    // 空节点占位框按当前模型默认比例落位（ratio 未设置时），与建节点工厂同一规则；
+    // 覆盖建节点时参数配置尚未就绪、占位框暂落结构默认尺寸的场景
+    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+    const gs = (node?.data as MediaGenFields | undefined)?.genSettings as ImageGenSettings | undefined;
+    if (node && !(node.data as { src?: string }).src && !gs?.ratio && typeof defaults.ratio === "string") {
+      applyRatioToNode(nodeId, defaults.ratio);
+    }
     for (const f of modelParams.fields) {
       const cur = fieldValues[f.name] as string | number | undefined;
       if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
