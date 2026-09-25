@@ -99,7 +99,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   // 全景模式：由节点 data.panorama 布尔字段驱动（随节点落库，刷新后自动恢复），
   // 仅支持手动退出（工具栏关闭按钮）；每个节点独立判断，可多个节点同时开启
   // 完全派生自 data.panorama，不再用本地 state 镜像：
-  // 撤销 / 重做、切换项目、恢复离线草稿都会整体替换 data，本地镜像无法跟随，
+  // 撤销 / 重做、切换项目都会整体替换 data，本地镜像无法跟随，
   // 会出现「撤销到开启状态后面板不重开 / 撤销到关闭状态后面板不关闭」的错乱。
   const panoramaOpen = !!data.panorama;
   const setPanoramaOpen = useCallback(

@@ -27,7 +27,6 @@ import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
-import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
@@ -221,6 +220,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   // 参数值在 params 缓存未就绪时为 undefined，由 submitTask 的 hasField 守卫决定是否上报
   const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution?: string; ratio?: string; seconds?: number; generateAudio?: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n?: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", entry: null, provider: null });
+  /** 使取消或新一轮生成中的旧异步流程失效 */
+  const generationRunRef = useRef(0);
+  /**
+   * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
+   * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
+   */
+  const [submitting, setSubmitting] = useState(false);
   const { notification } = App.useApp();
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
@@ -287,7 +293,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   }
 
   // ── Submit generation task (SSE handled by InfiniteCanvas) ──
-  const submitTask = async (): Promise<string | null> => {
+  const submitTask = async (runId: number): Promise<string | null> => {
     const { entry, provider, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
     if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
     try {
@@ -315,10 +321,18 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       const taskId = json.data?.id;
       if (!taskId) return i18n.t("error.generate.no_task_id");
 
-      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
-      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
-      if (!isGeneratingBinding(curBinding)) return null;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { skipHistory: true });
+      // 取消可能发生在请求返回前：主动取消已经创建的后端任务，避免留下孤儿任务
+      if (runId !== generationRunRef.current) {
+        await generationApi.cancelGenerationTask(taskId).catch(() => {});
+        return null;
+      }
+
+      // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
+      // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
+      const depthBefore = useHistoryStore.getState().undoStack.length;
+      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
+      const stack = useHistoryStore.getState().undoStack;
+      pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
       await flushAndWait();
       return null;
     } catch (e: unknown) {
@@ -347,50 +361,67 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   }, []);
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !modelKey) return;
+    if (!prompt.trim() || !modelKey || isGenerating || submitting) return;
     const entry = allModels.find((m) => m.value === modelKey);
     if (!entry) return;
     const provider = providers.find((c) => c.id === entry.providerId);
     if (!provider) return;
 
     setError("");
-    // 记录被 forceHistory 压入的快照引用，失败 / 取消时按引用精确回滚（见 dropPendingHistory）
-    const depthBefore = useHistoryStore.getState().undoStack.length;
-    useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId: "", status: "processing", startedAt: Date.now() } }, undefined, { forceHistory: true });
-    const stack = useHistoryStore.getState().undoStack;
-    pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
-    markDirtyImmediate();
+    // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
+    // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
+    // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时 submitTask 会
+    // 主动取消已创建的后端任务，不产生孤儿任务。
+    const generationRunId = ++generationRunRef.current;
+    setSubmitting(true);
     setElapsed(0);
     const isTextToVideo = refMode === "text";
     retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: isTextToVideo ? [] : refOrder, refAudios: isTextToVideo ? [] : audioOrder, refVideos: isTextToVideo ? [] : refVideoOrder, refMode, n, entry, provider };
     timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
-    const errMsg = await submitTask();
+    try {
+      const errMsg = await submitTask(generationRunId);
 
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (generationRunId !== generationRunRef.current) return;
 
-    if (errMsg === null) {
-      setError("");
-    } else {
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
-      markDirtyImmediate();
-      dropPendingHistory();
-      setError(errMsg);
+      if (errMsg === null) {
+        setError("");
+      } else {
+        // 失败：全程未写 taskBinding，无需清理；错误文案已在 submitTask 内解析
+        setError(errMsg);
+      }
+    } finally {
+      // 仅当自己仍是最新一轮时收尾：清计时器、复位取消态。取消后再立即生成时
+      // timerRef 已属于新一轮，旧轮收尾误清会把新计时冻结在当前值
+      if (generationRunId === generationRunRef.current) {
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setSubmitting(false);
+      }
     }
   };
 
   const handleCancel = () => {
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
-    if (tid) {
-      generationApi.cancelGenerationTask(tid).catch(() => {});
+    // 取消分两种：生成中（binding 处于进行中态）才取消后端任务并回滚本轮快照；
+    // 提交在途（本轮 binding 尚未写入，节点上至多是上一轮已结束任务的遗留绑定）
+    // 只需失效提交流程——无状态可清，误清会删掉上一轮 succeeded 绑定、误弹
+    // 上一轮的快照丢一步撤销历史。孤儿任务由 submitTask 检测 runId 失效后
+    // 主动取消
+    ++generationRunRef.current;
+    if (isGenerating) {
+      const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
+      const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
+      if (tid) {
+        generationApi.cancelGenerationTask(tid).catch(() => {});
+      }
+      useCanvasStore.getState().updateNodeData(nodeId, {
+        taskBinding: undefined,
+      }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      dropPendingHistory();
     }
-    useCanvasStore.getState().updateNodeData(nodeId, {
-      taskBinding: undefined,
-    }, undefined, { skipHistory: true });
-    markDirtyImmediate();
-    dropPendingHistory();
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setError("");
+    setSubmitting(false);
   };
 
   return (
@@ -550,9 +581,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         </Popover>
         <div className="flex-1" />
         <PrimaryActionButton
-          cancel={isGenerating}
-          disabled={!isGenerating && (!prompt.trim() || !modelKey)}
-          onClick={isGenerating ? handleCancel : handleGenerate}
+          cancel={isGenerating || submitting}
+          disabled={!isGenerating && !submitting && (!prompt.trim() || !modelKey)}
+          onClick={isGenerating || submitting ? handleCancel : handleGenerate}
         />
       </div>
     </WheelGuard>

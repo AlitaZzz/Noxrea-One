@@ -2,7 +2,7 @@
  * 画布基础纯类型（背景 / 主题 / 视口 / 任务绑定 / 上传状态）。
  *
  * 为何放在 lib 层：`lib/constants.ts` 中大量运行时常量（DEFAULT_VIEWPORT、
- * EMPTY_TASK_BINDING、isGenerating 等）依赖这些类型，而架构分层约定 lib 只能
+ * isGenerating 等）依赖这些类型，而架构分层约定 lib 只能
  * 依赖 lib。若类型留在 features/canvas/types，就会形成 lib → features 的反向依赖。
  *
  * features/canvas/types.ts 会从这里转出，上层既有的
@@ -22,7 +22,7 @@ export interface ViewportState {
 export type TaskStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface TaskBinding {
-  /** 后端任务 ID（本地处理如裁剪/变换时为空串） */
+  /** 后端任务 ID：绑定只在拿到真实 taskId 后才写入，不存在空串形态 */
   taskId: string;
   status: TaskStatus;
   /** 异步任务的语义动作 */

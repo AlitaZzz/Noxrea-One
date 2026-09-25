@@ -561,12 +561,6 @@
     "buffering": "Buffering preview...",
     "suffix": " (clip {{range}})"
   },
-  "draft": {
-    "title": "Unsaved offline edits found",
-    "content": "Detected unsaved changes from your last session. Restore the local draft?",
-    "restore": "Restore",
-    "discard": "Discard"
-  },
   "conflict": {
     "title": "Session expired",
     "content": "This canvas is open in another tab or browser. Refresh the page to continue editing.",

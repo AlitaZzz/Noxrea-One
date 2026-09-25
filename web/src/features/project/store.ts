@@ -31,6 +31,8 @@ function saveLocalActiveId(id: string | null) {
 
 // ===== API helpers =====
 
+// 服务端返回的 canvasData 是未验证 JSON，按宽松投影解析（读侧，字段全可选）；
+// 前端提交侧的严格快照类型见 types.ts 的 CanvasData，两者描述同一 wire 格式。
 interface CanvasData {
   viewport?: ViewportState;
   background?: BackgroundType;
