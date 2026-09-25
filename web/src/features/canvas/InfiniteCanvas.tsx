@@ -224,16 +224,20 @@ export default function InfiniteCanvas() {
     const project = useProjectStore.getState().activeProject();
     if (project) {
       // 项目恢复是程序化写入，不算用户操作，不进动作历史
-      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project));
-      // defaultViewport 仅首次挂载生效，切换项目需手动同步 React Flow 内部 viewport
-      const vp = useCanvasStore.getState().viewport;
-      setRfViewport(vp, { duration: 0 });
+      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project.id, project));
       // 切换/加载项目 = 历史归零。修复 undo 弹出即应用后不再需要基线快照
       // （旧基线是为了规避 undo 偏移下的 emptySnapshot 兜底），同时避免
       // 撤销穿透到上一个项目的画布内容。
       useHistoryStore.getState().clear();
     }
-  }, [activeProjectId, setRfViewport]);
+  }, [activeProjectId]);
+
+  // React Flow 内部视口跟随 restoreFromProject（含草稿恢复）：订阅应用次数信号。
+  // 恢复出的视口与 _liveViewport 一致，syncLiveViewport 的同值守卫不会误标脏。
+  const viewportSyncCount = useCanvasStore((s) => s.viewportSyncCount);
+  useEffect(() => {
+    setRfViewport(useCanvasStore.getState().viewport, { duration: 0 });
+  }, [viewportSyncCount, setRfViewport]);
 
   // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光 / 多视角）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
@@ -1151,9 +1155,9 @@ export default function InfiniteCanvas() {
                         await flushAndWait();
                         const proj = await useProjectStore.getState().createProject();
                         useProjectStore.getState().setActiveProject(proj.id);
-                        runSuppressed(() => useCanvasStore.getState().restoreFromProject(proj));
+                        runSuppressed(() => useCanvasStore.getState().restoreFromProject(proj.id, proj));
                         // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）；
-                        // 视口同步由 activeProjectId effect 完成（restoreFromProject 置默认视口 → setRfViewport）
+                        // 视口同步由 viewportSyncCount effect 完成（restoreFromProject 置默认视口）
                         router.replace(`/canvas/${proj.id}`);
                       }}>{t("project.new")}</MenuItem>
                     <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>

@@ -1,9 +1,18 @@
 /**
  * SaveManager - 画布保存的唯一入口。
  *
+ * 不变量：
+ *  1. 内容有主 —— 保存与草稿一律按 canvasProjectId（画布内容所属项目）寻址，
+ *     与 UI 激活态（activeProjectId）解耦；派发即定格（快照/所有者在同一同步 tick 捕获），
+ *     互斥锁内只做网络请求，项目切换窗口期不可能把 A 的内容发给 B。
+ *  2. 写通道单飞 —— 服务端写请求任意时刻至多一个（saveMutex 串行）；
+ *     卸载兜底不再并发第二个 PUT（同 baseRevision 并发必然 409），
+ *     在途请求已携带其派发快照，此后增量由本地草稿承接。
+ *  3. 草稿按代际判定 —— 草稿 rev = 落库将产生的 revision；rev <= 服务端 revision
+ *     的草稿即陈旧（含竞态幽灵记录），删除或忽略均安全，不依赖时钟比较。
+ *
  * 职责：
- *  - dirty 状态管理
- *  - trailing save queue（只保存最终最新状态）
+ *  - dirty 状态管理（trailing save queue，只保存最终最新状态）
  *  - save: PUT /api/canvas/projects/{id}
  *  - flushSave / flushOnHide：页面存活场景的紧急保存（普通请求，无 64KB 限制）
  *  - flushOnUnload：页面真正卸载前的兜底（keepalive，受 64KB 请求体上限约束）
@@ -13,16 +22,14 @@
  * 仅支持登录用户，画布不允许游客访问。
  */
 
-import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { getCanvasProjectId, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
-import { clearDraft, saveDraft } from "@/features/project/draft-store";
+import { clearStaleDraft, type DraftCanvasData, saveDraft } from "@/features/project/draft-store";
 import { saveMutex } from "@/features/project/save-mutex";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
 import { parseErrorBody } from "@/lib/api/error-message";
-
-type CanvasSnapshot = ReturnType<typeof takeCanvasSnapshot>;
 
 const SAVE_DELAY = 2000;
 const SAVE_DELAY_IMMEDIATE = 100;
@@ -64,6 +71,11 @@ function withTimeout(p: Promise<void>, ms: number): Promise<void> {
       },
     );
   });
+}
+
+/** 服务端当前 revision（项目不在列表内存时按 1 处理） */
+function currentRevision(projectId: string): number {
+  return useProjectStore.getState().projects.find((p) => p.id === projectId)?.revision ?? 1;
 }
 
 // ── fingerprint：追踪画布文件引用变化 ──
@@ -129,7 +141,7 @@ function isUnresolvedUploadNode(node: unknown): boolean {
 }
 
 /** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
-function stripRuntimeFields(snapshot: CanvasSnapshot) {
+function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
   // 悬空边（任一端指向被剔除的失败节点）一并剔除，避免存下指向空节点的连线
   const removed = new Set(
     snapshot.nodes.filter(isUnresolvedUploadNode).map((n) => (n as { id: string }).id),
@@ -157,6 +169,20 @@ function stripRuntimeFields(snapshot: CanvasSnapshot) {
   };
 }
 
+/** 从当前画布构建可持久化的画布数据（同步，供保存派发与草稿写入共用） */
+function buildCanvasData(): DraftCanvasData {
+  const clean = stripRuntimeFields(takeCanvasSnapshot());
+  return {
+    nodes: clean.nodes as AnyNode[],
+    edges: clean.edges as AnyEdge[],
+    viewport: clean.viewport,
+    background: clean.background,
+    minimapVisible: clean.minimapVisible,
+    snapToGrid: clean.snapToGrid,
+    agentModel: useCanvasStore.getState().agentModel ?? undefined,
+  };
+}
+
 class SaveManager {
   private dirty = false;
   private saving = false;
@@ -164,8 +190,9 @@ class SaveManager {
   private offline = false;
   /**
    * 会话已过期：画布已在其他标签页 / 浏览器被修改（保存收到 409）。
-   * 同页写通道已由 saveMutex 串行化，409 不可能来自本窗口——停用一切后续保存，
-   * 本地改动继续写草稿，由过期弹窗引导用户刷新后经草稿恢复承接。
+   * 同页写通道已由 saveMutex 串行化且卸载兜底不再并发第二个请求，
+   * 409 不可能来自本窗口——停用一切后续保存，本地改动继续写草稿，
+   * 由过期弹窗引导用户刷新后经草稿恢复承接。
    */
   private expired = false;
   /** 过期期间有新的本地改动：驱动草稿持续写入（保存请求已停用） */
@@ -207,7 +234,6 @@ class SaveManager {
       this.scheduleDraftWrite();
       return;
     }
-    // NOTE: syncCanvasState 已移至 save() 中执行，避免拖动时每帧重建 projects 数组
     if (!this.dirty) {
       this.dirty = true;
       this.dirtySince = Date.now();
@@ -218,34 +244,71 @@ class SaveManager {
     this.scheduleDraftWrite();
   }
 
+  /**
+   * 切换 / 重载画布内容前调用（restoreFromProject 换 owner 之前）。
+   * 语义：未派发的尾部编辑以草稿为准，不随新内容派发保存——
+   * 此刻先按旧 owner 固化草稿，再清空全部派发状态。
+   * 过期态属于旧画布内容：一并解除（换项目 / 重新加载即恢复全新编辑会话，
+   * 冲突语义不随导航带到其他项目）。
+   */
+  resetForProjectSwitch(): void {
+    if (this.dirty || this.expiredDirty) void this.writeDraftCore();
+    this.dirty = false;
+    this.expired = false;
+    this.expiredDirty = false;
+    this.dirtySince = null;
+    this.pendingSave = null;
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    if (this.draftTimer) {
+      clearTimeout(this.draftTimer);
+      this.draftTimer = null;
+    }
+    useSessionExpiredStore.getState().resetExpired();
+  }
+
   /** 防抖写离线草稿：markDirty 后延迟写入，避免拖拽逐帧写 IndexedDB */
   private scheduleDraftWrite(): void {
     if (this.draftTimer) clearTimeout(this.draftTimer);
     this.draftTimer = setTimeout(() => {
       this.draftTimer = null;
-      void this.writeDraft();
+      this.queueDraftWrite();
     }, DRAFT_WRITE_DELAY);
   }
 
-  private async writeDraft(): Promise<void> {
-    // 没有未落库的改动、也不在保存中 → 不需要草稿。
-    // 关键：保存成功后 dirty 与 saving 均为 false，此时若仍有排队的 draftTimer 触发，
-    // 会把「已落库的状态」重新写回本地，形成幽灵草稿，导致下次进入误报「有未保存编辑」。
+  /** 草稿写入排队到写互斥锁上：与保存的 put/clearStaleDraft 全局串行，杜绝交错 */
+  private queueDraftWrite(): void {
+    void saveMutex.runExclusive(() => this.writeDraftCore());
+  }
+
+  /**
+   * 草稿写入核心。快照与 owner 在同步前缀捕获。
+   * 互斥锁内的调用（防抖路径）在此复查 guard——若期间保存已把内容落库，
+   * 则跳过写入，幽灵草稿从构造上不可能产生；
+   * 卸载 / 切换项目的直调路径由调用方保证 dirty 语义。
+   */
+  private async writeDraftCore(): Promise<void> {
+    const projectId = getCanvasProjectId();
+    if (!projectId) return;
     if (!this.dirty && !this.saving && !this.expiredDirty) return;
-    const activeId = useProjectStore.getState().activeProjectId;
-    if (!activeId) return;
-    const s = useCanvasStore.getState();
-    const clean = stripRuntimeFields(takeCanvasSnapshot());
-    await saveDraft(activeId, {
-      nodes: clean.nodes as AnyNode[],
-      edges: clean.edges as AnyEdge[],
-      viewport: clean.viewport,
-      background: clean.background,
-      minimapVisible: clean.minimapVisible,
-      snapToGrid: clean.snapToGrid,
-      agentModel: s.agentModel ?? undefined,
-    });
+    const canvasData = buildCanvasData();
+    // 快照已定格即视为消费完毕；标志必须在 await 前清掉，
+    // 否则与过期期间的并发编辑竞态（在途写入的完成回调会覆盖掉新一轮编辑的置位）。
+    // await 期间的编辑会重新置位，由下一次防抖写入承接。
     this.expiredDirty = false;
+    // 代际：若落库将产生的 revision。在途保存成功会推高服务端版本，
+    // 故在途时 +1，保证草稿在「在途保存成功」之后仍被判定为更新。
+    const rev = currentRevision(projectId) + (this.saving ? 1 : 0) + 1;
+    await saveDraft(projectId, rev, canvasData);
+  }
+
+  /** 保存失败时按失败的 job 内容固化草稿（rev = 该请求本应产生的版本号） */
+  private writeJobDraft(projectId: string, baseRevision: number, canvasData: DraftCanvasData): void {
+    // 已有更新的未落库改动：防抖草稿内容更新且代际更准，由其覆盖
+    if (this.dirty) return;
+    void saveDraft(projectId, baseRevision + 1, canvasData);
   }
 
   /** 立即保存最新状态（fire-and-forget；页面存活，故无需 keepalive） */
@@ -254,7 +317,13 @@ class SaveManager {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    if (this.saving) return;
+    if (this.saving) {
+      // 在途保存收尾后立即补存，而非丢弃定时器等默认延迟重排
+      if (this.dirty) {
+        this.pendingSave = { keepalive: false, skipUnauthorized: false };
+      }
+      return;
+    }
     void this.save(false);
   }
 
@@ -307,7 +376,7 @@ class SaveManager {
     this.flush({ keepalive: true, skipUnauthorized: true });
   }
 
-  /** 兜底保存的公共实现；保留空画布保护，防止误覆盖有效数据 */
+  /** 兜底保存的公共实现 */
   private flush(opts: { keepalive: boolean; skipUnauthorized: boolean }): void {
     if (this.expired || !this.dirty) return;
     if (this.saveTimer) {
@@ -315,19 +384,12 @@ class SaveManager {
       this.saveTimer = null;
     }
 
-    const snapshot = takeCanvasSnapshot();
-    if (!snapshot.nodes.length && !snapshot.edges.length) return;
-
     if (this.saving) {
       if (opts.keepalive) {
-        // 页面即将卸载：等不到当前保存结束，必须立即把最新快照发出去。
-        // 只发请求、不进 save()，因此不会覆盖 saving / savePromise（那是并发竞态的根源）。
-        const activeId = useProjectStore.getState().activeProjectId;
-        if (activeId) {
-          void this.saveToApi(activeId, snapshot, opts)
-            .then(() => { this.dirty = false; })
-            .catch(() => { /* 卸载兜底失败：保留 dirty，下次进入继续补存 */ });
-        }
+        // 页面即将卸载：绝不发第二个写请求（与在途请求同 baseRevision 并发必然 409）。
+        // 在途请求已携带其派发快照，此后的增量直接固化进本地草稿（IndexedDB 事务
+        // 同步发起，不依赖页面存活；put 先于在途保存的清理创建，顺序有保证）。
+        void this.writeDraftCore();
         return;
       }
       // 页面仍存活：记录诉求，由当前保存收尾后补存
@@ -380,35 +442,39 @@ class SaveManager {
       return this.savePromise;
     }
     if (!this.dirty) return;
+    // 派发即定格：所有者与快照在同一同步 tick 捕获，之后任何 await 都不重读全局状态。
+    // 内容无主（画布未加载）时没有可保存对象，保持 dirty 等待加载完成。
+    const projectId = getCanvasProjectId();
+    if (!projectId) return;
+    const s = useCanvasStore.getState();
+    const canvasData = buildCanvasData();
+    useProjectStore.getState().syncCanvasState(
+      projectId, s.nodes, s.edges, canvasData.viewport,
+      canvasData.background, canvasData.minimapVisible, canvasData.snapToGrid, s.agentModel,
+    );
     this.dirty = false;
     this.saving = true;
     this.savePromise = new Promise((r) => { this.resolveSave = r; });
 
     try {
-      const activeId = useProjectStore.getState().activeProjectId;
-      if (!activeId) {
-        this.dirty = true;
-        return;
-      }
-
       // 网络段进入写互斥锁：与项目重命名共用同一条串行通道，
-      // baseRevision 因此总在请求发出前一刻读取，同页 409 从构造上不可能发生。
-      await saveMutex.runExclusive(async () => {
-        // 同步项目列表内存状态（从 setDirty 移至此处，避免拖动时每帧重建 projects 数组）
-        const s = useCanvasStore.getState();
-        useProjectStore.getState().syncCanvasState(
-          activeId, s.nodes, s.edges, getLiveViewport(),
-          s.background, s.minimapVisible, s.snapToGrid, s.agentModel,
-        );
-
-        const snapshot = takeCanvasSnapshot();
-        await this.saveToApi(activeId, snapshot, { keepalive, skipUnauthorized });
-      });
+      // baseRevision 在锁内发请求前一刻读取，同页 409 从构造上不可能发生。
+      await saveMutex.runExclusive(() =>
+        this.saveToApi(projectId, canvasData, { keepalive, skipUnauthorized }),
+      );
     } catch (e) {
       console.error("[SaveManager] save failed:", e);
-      this.dirty = true;
-      // 失败后补写一次草稿：此刻服务端没有这份数据，本地兜底最有价值
-      this.scheduleDraftWrite();
+      if (getCanvasProjectId() === projectId) {
+        this.dirty = true;
+        // 失败后补写一次草稿：此刻服务端没有这份数据，本地兜底最有价值
+        this.scheduleDraftWrite();
+      } else {
+        // 派发后已切换内容所有者：失败 job 属于旧项目，按其本应产生的代际固化草稿
+        //（网络异常路径没有 saveToApi 里的 writeJobDraft 兜底，这里是唯一固化点）；
+        // 失败不标到新项目头上，否则新项目的原始内容会被无意义重存并误写草稿。
+        // 若切换前已固化过更新代际的草稿，saveDraft 的代际单调性会拒绝本次回退写入。
+        void saveDraft(projectId, currentRevision(projectId) + 1, canvasData);
+      }
     } finally {
       this.saving = false;
       this.resolveSave?.();
@@ -440,31 +506,18 @@ class SaveManager {
 
   private async saveToApi(
     projectId: string,
-    snapshot: ReturnType<typeof takeCanvasSnapshot>,
+    canvasData: DraftCanvasData,
     opts: { keepalive: boolean; skipUnauthorized: boolean },
   ): Promise<void> {
-    const clean = stripRuntimeFields(snapshot);
-
     // 计算当前 fingerprint，判断文件引用数量是否变化
-    const currentFp = _buildCanvasHashFingerprint(clean.nodes);
+    const currentFp = _buildCanvasHashFingerprint(canvasData.nodes);
     const prevFp = fingerprintMap.get(projectId) ?? "";
     const needRefRecalc = currentFp !== prevFp;
     // 每次更新都携带保存前的版本；服务端校验后递增，防止迟到请求回退引用账本。
-    const baseRevision =
-      useProjectStore.getState().projects.find((p) => p.id === projectId)?.revision ?? 1;
+    // 在互斥锁内、请求发出前一刻读取，保证同页写通道严格串行。
+    const baseRevision = currentRevision(projectId);
 
-    const payload: Record<string, unknown> = {
-      baseRevision,
-      canvasData: {
-        nodes: clean.nodes,
-        edges: clean.edges,
-        viewport: snapshot.viewport,
-        background: snapshot.background,
-        minimapVisible: snapshot.minimapVisible,
-        snapToGrid: snapshot.snapToGrid,
-        agentModel: useCanvasStore.getState().agentModel ?? undefined,
-      },
-    };
+    const payload: Record<string, unknown> = { baseRevision, canvasData };
     if (needRefRecalc) {
       payload.needRefRecalc = true;
     }
@@ -478,34 +531,46 @@ class SaveManager {
       opts.skipUnauthorized,
     );
 
-    // 只有真正落库成功（2xx）才更新 fingerprint 并清草稿：失败时若也更新 fingerprint，
+    // 只有真正落库成功（2xx）才更新 fingerprint 并清陈旧草稿：失败时若也更新 fingerprint，
     // 下次保存会误判「文件引用未变化」而跳过 needRefRecalc，造成引用计数长期不一致。
-    // 401：重试也无意义（需重新登录），保留草稿交给下次进入提示恢复。
+    // 401：重试也无意义（需重新登录），按失败 job 固化草稿交给下次进入提示恢复。
     // 其余失败（5xx 等）必须抛错 —— 否则 save() 开头的 dirty=false 不会被撤销、
     // 也不重排定时器，改动静默丢失，草稿却还留着（刷新后误报且救不回来）。
     if (!res.ok) {
-      if (res.status === 401) return;
+      if (res.status === 401) {
+        this.writeJobDraft(projectId, baseRevision, canvasData);
+        return;
+      }
       if (res.status === 409) {
-        // 409 即会话过期：同页写通道已由 saveMutex 串行化，冲突只可能来自
-        // 其他标签页 / 浏览器。立即把最新快照写入草稿（刷新后由草稿恢复框承接
-        // 未落库改动），停用本窗口的全部后续保存，由过期弹窗引导用户刷新。
-        const body = parseErrorBody(await res.json().catch(() => null));
-        const currentRevision = body?.ctx?.revision;
-        if (typeof currentRevision === "number") {
-          useProjectStore.getState().updateProjectRevision(projectId, currentRevision);
+        // 409 即该画布已在其他标签页 / 浏览器被修改（同页写通道已由 saveMutex 串行化、
+        // 卸载兜底不再并发第二个请求）。同步服务端版本并按派发所有者归属结局：
+        // owner 未变 → 进入过期态，停用本窗口后续保存，草稿承接未落库改动；
+        // owner 已切换（409 迟到）→ 冲突属于旧项目，按服务端当前版本固化其草稿，
+        // 绝不把过期态带给新进入的画布。
+        const respBody = parseErrorBody(await res.json().catch(() => null));
+        const conflictRevision = respBody?.ctx?.revision;
+        if (typeof conflictRevision === "number") {
+          useProjectStore.getState().updateProjectRevision(projectId, conflictRevision);
         }
         // 服务端内容已经变化；清空指纹，刷新恢复后如继续编辑会重算引用账本。
         fingerprintMap.delete(projectId);
-        this.markExpired();
+        if (getCanvasProjectId() === projectId) {
+          this.markExpired();
+        } else {
+          void saveDraft(projectId, currentRevision(projectId) + 1, canvasData);
+        }
         return;
       }
+      this.writeJobDraft(projectId, baseRevision, canvasData);
       throw new Error(`[SaveManager] save failed: HTTP ${res.status}`);
     }
 
     fingerprintMap.set(projectId, currentFp);
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
-    useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
-    void clearDraft(projectId);
+    const serverRev = baseRevision + 1;
+    useProjectStore.getState().updateProjectRevision(projectId, serverRev);
+    // 只清陈旧代际：在途期间写入的较新草稿（含切换项目前固化的）保留承接未落库改动
+    await clearStaleDraft(projectId, serverRev);
   }
 
   /** 进入过期态：停用全部保存路径，立即固化草稿，交由过期弹窗引导刷新。 */
@@ -518,8 +583,9 @@ class SaveManager {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    // dirty=false、saving=true 的时机下 writeDraft 的幽灵草稿 guard 恰好放行
-    void this.writeDraft();
+    // 排队到当前保存回调之后执行（此刻仍在互斥锁内，直接跑会嵌套排队自己）；
+    // 执行时 revision 已同步为服务端当前版本，草稿代际据此推算
+    this.queueDraftWrite();
     useSessionExpiredStore.getState().markExpired();
   }
 
