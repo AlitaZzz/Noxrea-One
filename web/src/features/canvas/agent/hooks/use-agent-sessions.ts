@@ -39,14 +39,21 @@ export function useAgentSessions(opts: {
   // ref 用于在 await 之后判断当前会话是否仍然有效
   const chatIdRef = useRef<string | null>(null);
 
-  // 切换项目时自动重置对话，避免旧项目的会话串到新项目
-  useEffect(() => {
-    opts.onStopStream();
-    opts.onClearMessages();
-    clearUserActions();
-    chatIdRef.current = null;
+  // 切换项目时自动重置对话，避免旧项目的会话串到新项目。
+  // state 重置用渲染期条件调整（React 官方推荐的 prop 变化重置模式），
+  // 避免 effect 内同步 setState 触发级联渲染；ref 清理与停流/清消息副作用仍走 effect。
+  const [prevProjectId, setPrevProjectId] = useState(opts.projectId);
+  if (prevProjectId !== opts.projectId) {
+    setPrevProjectId(opts.projectId);
     setChatId(null);
     setChatTitle(null);
+  }
+
+  useEffect(() => {
+    chatIdRef.current = null;
+    clearUserActions();
+    opts.onStopStream();
+    opts.onClearMessages();
   }, [opts.projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 创建新会话（首条消息前调用），可选传入初始标题 */
