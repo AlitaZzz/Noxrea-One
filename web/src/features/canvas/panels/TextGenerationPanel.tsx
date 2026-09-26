@@ -2,12 +2,13 @@
  * 文本生成面板，挂在文本节点下方。
  * 参考区接入四类上游，按类型分组展示：文本（拼进 prompt）→ 音频 → 图片 → 视频，
  * 组间竖线分隔；排序只在同类型内生效（跨类型拖放禁止），多模态参考可 @ 引用。
- * 负责提示词输入与文本模型选择，以流式方式接收生成结果并写回节点内容。
+ * 负责提示词输入（含文本预设令牌）与文本模型选择，以流式方式接收生成结果并写回节点内容。
  */
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
+import { Wand2 } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -30,6 +31,8 @@ import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
+import PresetMenuContent from "../shared/PresetMenuContent";
+import { expandPresetTokens, replacePresetToken, usePromptTemplateCatalog } from "../shared/prompt-presets";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
@@ -73,6 +76,15 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   const [modelOpen, setModelOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
+
+  // 预设目录（与图片面板同机制）：按 target 取文本预设（反推 / 扩写），
+  // 选中后以令牌 chip 形式插入提示词，提交前统一展开为模板全文
+  const { data: promptTemplateCatalog } = usePromptTemplateCatalog("text");
+  const presets = useMemo(() => promptTemplateCatalog?.entries ?? [], [promptTemplateCatalog]);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const handleApplyPreset = useCallback((presetId: string) => {
+    setPrompt(replacePresetToken(prompt, presetId));
+  }, [prompt, setPrompt]);
 
   // 悬空模型键纠偏（同 ImageGenerationPanel）：持久化的 modelKey 已不存在时，
   // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
@@ -327,11 +339,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     const generationRunId = ++generationRunRef.current;
     setSubmitting(true);
     try {
+      // preset 令牌在提交前展开为模板全文（任务记录保存可读全文；模板热更新每次生效）
+      const submittedPrompt = await expandPresetTokens(finalPrompt);
+      if (generationRunId !== generationRunRef.current) return;
       // 与 image/video 链路完全同构：prompt 落任务级文本列、参考图落 ref_images 列。
       // messages 的构造（含多模态组装与 base64 转换）由后端 llm service 归一化完成
       const res = await generationApi.submitGenerationTask({
         type: "llm",
-        prompt: finalPrompt,
+        prompt: submittedPrompt,
         model: entry.name,
         providerId: entry.providerId,
         nodeId,
@@ -442,6 +457,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           </div>
         <MentionPrompt
           references={references}
+          presets={presets}
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderText")}
@@ -482,6 +498,26 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 </span>
               </MenuItem>
             ))}
+          />
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
+          <MenuPopover
+            open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
+            overlayClassName="creation-menu-popover"
+            trigger={
+              <Tooltip title={t("node.creationPreset")}>
+                <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
+                  style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
+                  <Wand2 size={14} />
+                  <span className="truncate">{t("node.creationPreset")}</span>
+                </button>
+              </Tooltip>
+            }
+            content={
+              <PresetMenuContent
+                catalog={promptTemplateCatalog}
+                onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+              />
+            }
           />
           <div className="flex-1" />
           <PrimaryActionButton
