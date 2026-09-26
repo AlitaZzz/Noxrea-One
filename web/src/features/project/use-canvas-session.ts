@@ -69,7 +69,7 @@ export function handleCanvasSessionEvent(
     if (revision !== undefined) {
       useProjectStore.getState().updateProjectRevision(projectId, revision);
     }
-    saveManager.notifyEvicted(projectId);
+    saveManager.notifyEvicted();
     return;
   }
 
@@ -81,7 +81,7 @@ export function handleCanvasSessionEvent(
     if (known === null) return;
     if (revision > known) {
       useProjectStore.getState().updateProjectRevision(projectId, revision);
-      saveManager.notifyEvicted(projectId);
+      saveManager.notifyEvicted();
     }
   }
 }

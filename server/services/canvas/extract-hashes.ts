@@ -1,6 +1,7 @@
 /**
  * 从画布数据中提取文件 hash 列表。
- * 镜像前端 save-manager.ts 的 _collectCanvasHashes 逻辑。
+ * 保存链路的唯一实现：服务端在 updateProject 内比较新旧画布引用，
+ * 决定是否重算 file_refs 账本（前端不再参与该判定）。
  */
 
 interface CanvasNode {
@@ -42,6 +43,14 @@ export function extractHashCountsFromCanvas(
 }
 
 /** 从画布节点数组中提取去重后的文件 hash（排序后返回，便于测试和展示）。 */
-export function extractHashesFromCanvas(canvasData: Record<string, unknown>): string[] {
-  return [...extractHashCountsFromCanvas(canvasData).keys()].sort();
+/** 两份引用计数是否一致；一致时保存无需重算账本（布局保存不触发账本写入）。 */
+export function hashCountsEqual(
+  a: ReadonlyMap<string, number>,
+  b: ReadonlyMap<string, number>,
+): boolean {
+  if (a.size !== b.size) return false;
+  for (const [hash, count] of a) {
+    if (b.get(hash) !== count) return false;
+  }
+  return true;
 }

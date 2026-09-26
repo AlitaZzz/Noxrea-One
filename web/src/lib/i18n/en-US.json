@@ -262,7 +262,7 @@
     "logout": "Logout",
     "logoutConfirm": "Are you sure you want to logout?",
     "accountSettings": "Account Settings",
-    "nickname": "Nickname",
+    "username": "Username",
     "newPassword": "New Password (leave blank)",
     "currentPassword": "Current Password",
     "oldPwRequired": "Required to change password",
@@ -793,6 +793,7 @@
       "invalid_request": "Invalid request parameters, please check and try again",
       "not_found": "The requested resource does not exist",
       "internal_error": "Internal server error, please try again later",
+      "body_too_large": "Request body too large",
       "empty_response": "Empty response from server",
       "unexpected_response": "Unexpected response format from server"
     },
@@ -897,7 +898,6 @@
       "failed": "Audio speed change failed, please retry"
     },
     "generate": {
-      "body_too_large": "Request body too large",
       "provider_id_required": "providerId is required",
       "provider_not_found": "Provider not found",
       "provider_protocol_missing": "Provider has no protocol configured",

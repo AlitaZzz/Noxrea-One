@@ -147,8 +147,6 @@ router.put("/api/canvas/projects/:id", async (c) => {
       name: parsed.data.name,
       canvasData: parsed.data.canvasData,
     }, {
-      // 只有媒体结构指纹变化时前端才标记 needRefRecalc；布局保存不进入账本计算。
-      recalcRefs: Boolean(parsed.data.needRefRecalc && parsed.data.canvasData),
       baseRevision: parsed.data.baseRevision,
     });
     if (!project) return failCode(404, "canvas.project_not_found");

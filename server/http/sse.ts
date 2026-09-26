@@ -20,6 +20,15 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
+const activeConnections = new Set<() => void>();
+
+/** 优雅停机时主动关闭所有 SSE 流，避免 server.close() 被长连接无限阻塞。 */
+export function closeAllSseConnections(): void {
+  for (const disconnect of [...activeConnections]) {
+    disconnect();
+  }
+}
+
 export function createSseResponse(
   request: Request,
   task: (context: SseContext) => Promise<void>,
@@ -30,14 +39,6 @@ export function createSseResponse(
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let terminated = false;
-
-  const cleanup = () => {
-    if (heartbeat) {
-      clearInterval(heartbeat);
-      heartbeat = undefined;
-    }
-    request.signal.removeEventListener("abort", disconnect);
-  };
 
   const disconnect = () => {
     if (terminated) return;
@@ -52,6 +53,15 @@ export function createSseResponse(
     } catch {
       // The consumer may have cancelled between the state check and close.
     }
+  };
+
+  const cleanup = () => {
+    activeConnections.delete(disconnect);
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+    request.signal.removeEventListener("abort", disconnect);
   };
 
   const write = (content: string) => {
@@ -81,6 +91,7 @@ export function createSseResponse(
   const stream = new ReadableStream<Uint8Array>({
     async start(streamController) {
       controller = streamController;
+      activeConnections.add(disconnect);
       request.signal.addEventListener("abort", disconnect, { once: true });
       if (request.signal.aborted) {
         disconnect();

@@ -249,13 +249,23 @@ export const TASK_HEARTBEAT_INTERVAL_MS = 30_000;
 export async function touchTaskHeartbeat(
   id: string,
   expectedStartedAt: Date | null
-): Promise<void> {
-  await prisma.generationTask
-    .updateMany({
+): Promise<boolean> {
+  try {
+    const result = await prisma.generationTask.updateMany({
       where: { id, status: "processing", startedAt: expectedStartedAt },
       data: { updatedAt: new Date() },
-    })
-    .catch(() => undefined);
+    });
+    return result.count === 1;
+  } catch (err: unknown) {
+    // DB 错误不能被解释为所有权丢失；继续轮询，等下一次心跳恢复后重试。
+    logEvent("task", {
+      level: "warn",
+      stage: "heartbeat_write_failed",
+      taskId: id,
+      error: errText(err),
+    });
+    return true;
+  }
 }
 
 // 启动时恢复未完成的任务

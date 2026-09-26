@@ -20,8 +20,8 @@ vi.mock("@/features/project/save-manager", async () => {
   const { useSessionExpiredStore } = await import("@/features/project/session-expired-store");
   return {
     saveManager: {
-      notifyEvicted: (projectId: string) => {
-        mocks.notifyEvicted(projectId);
+      notifyEvicted: () => {
+        mocks.notifyEvicted();
         useSessionExpiredStore.getState().markExpired();
       },
     },
@@ -41,21 +41,21 @@ describe("handleCanvasSessionEvent", () => {
     handleCanvasSessionEvent("p1", "evict", { revision: 5 });
     expect(useSessionExpiredStore.getState().expired).toBe(true);
     expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(5);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
+    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
   });
 
   it("evict：无 revision 载荷也进入过期态", () => {
     handleCanvasSessionEvent("p1", "evict", {});
     expect(useSessionExpiredStore.getState().expired).toBe(true);
     expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(2);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
+    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
   });
 
   it("sync：服务端 revision 更新时收敛过期（断线期间错过的变更）并联动停用保存", () => {
     handleCanvasSessionEvent("p1", "sync", { revision: 3 });
     expect(useSessionExpiredStore.getState().expired).toBe(true);
     expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(3);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
+    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
   });
 
   it("sync：服务端 revision 与本地一致时无副作用", () => {
@@ -89,6 +89,6 @@ describe("handleCanvasSessionEvent", () => {
   it("revision 载荷非数字时 evict 仍进入过期态（容错）", () => {
     handleCanvasSessionEvent("p1", "evict", { revision: "9" as unknown as number });
     expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
+    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
   });
 });

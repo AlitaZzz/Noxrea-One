@@ -9,6 +9,8 @@ import { getUserByUsername, getUserById, updateUser, createUser, setUserPassword
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getConfig } from "@server/core/config";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import { resolveRateLimitIp } from "@server/core/ratelimit/client-ip";
 import { ok, failCode } from "@server/core/response";
 
 const router = new Hono();
@@ -16,8 +18,13 @@ const router = new Hono();
 router.post("/api/auth/login", async (c) => {
   const request = c.req.raw;
 
-  // 限流
-  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+  // 限流：X-Forwarded-For 可伪造，默认使用 socket peer；只有可信代理链才解析该头。
+  const cfg = getConfig();
+  const ip = resolveRateLimitIp({
+    remoteAddress: getConnInfo(c).remote.address,
+    forwardedFor: request.headers.get("x-forwarded-for"),
+    trustedProxyCidrs: cfg.TRUSTED_PROXY_CIDRS,
+  });
   if (!getLoginRateLimiter().check(`login:${ip}`)) {
     return failCode(429, "auth.login_rate_limited");
   }
@@ -66,8 +73,12 @@ router.post("/api/auth/register", async (c) => {
     return failCode(403, "auth.registration_disabled");
   }
 
-  // 限流
-  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+  // 限流：与登录一致，不信任未配置为可信代理的 X-Forwarded-For。
+  const ip = resolveRateLimitIp({
+    remoteAddress: getConnInfo(c).remote.address,
+    forwardedFor: request.headers.get("x-forwarded-for"),
+    trustedProxyCidrs: cfg.TRUSTED_PROXY_CIDRS,
+  });
   if (!getRegisterRateLimiter().check(`register:${ip}`)) {
     return failCode(429, "auth.register_rate_limited");
   }
@@ -85,7 +96,7 @@ router.post("/api/auth/register", async (c) => {
     return failCode(422, "common.invalid_request");
   }
 
-  const { username, password, email } = parsed.data;
+  const { username, password } = parsed.data;
 
   // 查重
   const existing = await getUserByUsername(username);
@@ -97,7 +108,7 @@ router.post("/api/auth/register", async (c) => {
   const hashed = await hashPassword(password);
 
   // 创建用户
-  const user = await createUser({ username, hashedPassword: hashed, email });
+  const user = await createUser({ username, hashedPassword: hashed });
 
   // 签发 JWT 并下发 httpOnly cookie（同登录）
   const token = await createAccessToken(user.id, user.username, user.tokenVersion);
@@ -145,7 +156,6 @@ router.put("/api/auth/me", async (c) => {
 
   const updates: Record<string, unknown> = {};
 
-  if (parsed.data.username !== undefined) updates.username = parsed.data.username;
   if (parsed.data.avatarUrl !== undefined) updates.avatarUrl = parsed.data.avatarUrl;
   if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
   if (parsed.data.language !== undefined) updates.language = parsed.data.language;

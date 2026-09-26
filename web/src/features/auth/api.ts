@@ -25,7 +25,7 @@ export const authApi = {
       skipUnauthorized: true,
     }),
 
-  /** 局部更新当前用户字段（如 lastName / displayName 等）。 */
+  /** 局部更新当前用户字段（头像、主题、语言、密码）。username 为登录身份，不可修改。 */
   updateMe: (patch: Record<string, unknown>) =>
     api("/api/auth/me", { method: "PUT", body: JSON.stringify(patch) }),
 

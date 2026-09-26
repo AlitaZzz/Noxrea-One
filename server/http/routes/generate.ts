@@ -46,13 +46,6 @@ router.post("/api/generate/task", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  // 请求体大小限制
-  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
-  const maxBodySize = 1024 * 1024; // 1MB
-  if (contentLength > maxBodySize) {
-    return failCode(413, "generate.body_too_large");
-  }
-
   let body: unknown;
   try {
     body = await c.req.json();

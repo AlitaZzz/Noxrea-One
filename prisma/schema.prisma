@@ -100,7 +100,8 @@ model CanvasProject {
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
 
   // 关系
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentSessions AgentSession[]
 
   @@index([userId])
   @@map("canvas_projects")
@@ -256,6 +257,7 @@ model AgentSession {
 
   // 关系
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  CanvasProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   messages AgentMessage[]
 
   @@index([userId, projectId])

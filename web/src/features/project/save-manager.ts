@@ -75,58 +75,6 @@ function currentRevision(projectId: string): number {
   return useProjectStore.getState().projects.find((p) => p.id === projectId)?.revision ?? 1;
 }
 
-// ── fingerprint：追踪画布文件引用变化 ──
-// 提取 /api/files/{user_id}/{hash[:2]}/{hash}{ext} 中的 64 位 hash
-function _extractHashFromUrl(url: string): string | null {
-  if (!url || typeof url !== "string") return null;
-  const idx = url.indexOf("/api/files/");
-  if (idx === -1) return null;
-  const path = url.slice(idx + "/api/files/".length);
-  const parts = path.split("/");
-  if (parts.length !== 3) return null;
-  const fn = parts[2];
-  const dot = fn.lastIndexOf(".");
-  const h = dot > 0 ? fn.slice(0, dot) : fn;
-  return h.length === 64 ? h : null;
-}
-
-/** 提取单个节点引用的文件 hash；当前媒体节点只使用 data.src。 */
-function _collectNodeHashes(node: { data?: Record<string, unknown> }): Set<string> {
-  const hashes = new Set<string>();
-  const d = node?.data ?? {};
-  if (typeof d.src === "string") {
-    const hash = _extractHashFromUrl(d.src);
-    if (hash) hashes.add(hash);
-  }
-  return hashes;
-}
-
-/** 按节点数量统计画布文件引用；复制节点会带来新的数量。 */
-function _collectCanvasHashCounts(
-  nodes: ReadonlyArray<{ data?: Record<string, unknown> }>,
-): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const node of nodes) {
-    for (const hash of _collectNodeHashes(node)) {
-      counts.set(hash, (counts.get(hash) ?? 0) + 1);
-    }
-  }
-  return counts;
-}
-
-/** 引用指纹包含数量；仅 hash 列表会让复制节点被误判为无变化。 */
-function _buildCanvasHashFingerprint(
-  nodes: ReadonlyArray<{ data?: Record<string, unknown> }>,
-): string {
-  return [..._collectCanvasHashCounts(nodes)]
-    .sort(([hashA], [hashB]) => hashA.localeCompare(hashB))
-    .map(([hash, count]) => `${hash}:${count}`)
-    .join(",");
-}
-
-/** 按 projectId 区分指纹，项目切换时自动隔离 */
-const fingerprintMap = new Map<string, string>();
-
 /**
  * 上传失败且尚未落库的占位节点：留在画布上供用户重试，但没有有效 src。
  * 落库会留下空节点，且刷新后重试上下文失效会变成无法处理的僵尸节点，故保存时剔除。
@@ -446,20 +394,13 @@ class SaveManager {
     canvasData: CanvasData,
     opts: { keepalive: boolean; skipUnauthorized: boolean },
   ): Promise<void> {
-    // 计算当前 fingerprint，判断文件引用数量是否变化
-    const currentFp = _buildCanvasHashFingerprint(canvasData.nodes);
-    const prevFp = fingerprintMap.get(projectId) ?? "";
-    const needRefRecalc = currentFp !== prevFp;
+    // 文件引用账本的重算由服务端权威判定（updateProject 内比较新旧画布引用），
+    // 前端不再携带引用指纹，避免客户端 bug 影响服务端账本正确性。
     // 每次更新都携带保存前的版本；服务端校验后递增，防止迟到请求回退引用账本。
     // 在互斥锁内、请求发出前一刻读取，保证同页写通道严格串行。
     const baseRevision = currentRevision(projectId);
 
-    const payload: Record<string, unknown> = { baseRevision, canvasData };
-    if (needRefRecalc) {
-      payload.needRefRecalc = true;
-    }
-
-    const body = JSON.stringify(payload);
+    const body = JSON.stringify({ baseRevision, canvasData });
 
     const res = await projectApi.saveProjectRaw(
       projectId,
@@ -468,9 +409,7 @@ class SaveManager {
       opts.skipUnauthorized,
     );
 
-    // 只有真正落库成功（2xx）才更新 fingerprint：失败时若也更新 fingerprint，
-    // 下次保存会误判「文件引用未变化」而跳过 needRefRecalc，造成引用计数长期不一致。
-    // 其余失败（5xx 等）必须抛错 —— 否则 save() 开头的 dirty=false 不会被撤销、
+    // 落库失败（5xx 等）必须抛错 —— 否则 save() 开头的 dirty=false 不会被撤销、
     // 也不重排定时器，改动静默丢失。
     if (!res.ok) {
       // 401：重试也无意义（需重新登录），交由 client 的全局失效流程处理
@@ -486,8 +425,6 @@ class SaveManager {
         if (typeof conflictRevision === "number") {
           useProjectStore.getState().updateProjectRevision(projectId, conflictRevision);
         }
-        // 服务端内容已经变化；清空指纹，刷新恢复后如继续编辑会重算引用账本。
-        fingerprintMap.delete(projectId);
         if (getCanvasProjectId() === projectId) {
           this.markExpired();
         }
@@ -496,7 +433,6 @@ class SaveManager {
       throw new Error(`[SaveManager] save failed: HTTP ${res.status}`);
     }
 
-    fingerprintMap.set(projectId, currentFp);
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
     useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
   }
@@ -515,12 +451,10 @@ class SaveManager {
 
   /**
    * SSE 过期事件（evict / sync 判定落后）联动：编辑权已被其他页面实例取得，
-   * 本窗口尚未撞 409。与 409 路径同等收尾——清引用指纹（服务端内容已变，
-   * 刷新恢复后需重算引用账本）并停用全部保存路径，避免过期弹窗出现后
-   * 仍发出必 409 的保存请求。
+   * 本窗口尚未撞 409。与 409 路径同等收尾——停用全部保存路径，
+   * 避免过期弹窗出现后仍发出必 409 的保存请求。
    */
-  notifyEvicted(projectId: string): void {
-    fingerprintMap.delete(projectId);
+  notifyEvicted(): void {
     this.markExpired();
   }
 

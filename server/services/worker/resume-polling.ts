@@ -113,10 +113,7 @@ async function _doResumePoll(
     maxPollAttempts: maxAttempts,
     initialDelay: 0,
     logChannel: "resume_poll",
-    onHeartbeat: async () => {
-      void touchTaskHeartbeat(taskId, task.startedAt);
-      return true;
-    },
+    onHeartbeat: async () => touchTaskHeartbeat(taskId, task.startedAt),
     shouldStop: async () => stopSignal.stopped || (await isTaskCancelled(taskId)),
   });
 

@@ -88,10 +88,12 @@ export class ApiError extends Error {
   }
 }
 
-/** 2xx 响应体解包：统一包裹格式 { code, data, msg } 取 data，裸 JSON（agent 会话等）原样返回 */
+/** 2xx 响应体解包：统一 envelope { code, data, msg } 取 data；空响应体（204 等）按 null 处理 */
 function unwrapBody<T>(body: unknown): T {
+  if (body === null || body === undefined) return null as T;
   if (isRecord(body) && "code" in body && "data" in body) return body.data as T;
-  return body as T;
+  // 所有 /api JSON 接口统一返回 envelope；出现裸 JSON 即服务端契约回归，显式报错而非静默透传
+  throw new ApiError(0, i18n.t("error.parse_failed"));
 }
 
 export async function api<T = unknown>(

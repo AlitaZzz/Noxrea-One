@@ -262,7 +262,7 @@
     "logout": "退出登录",
     "logoutConfirm": "确定退出登录？",
     "accountSettings": "账号设置",
-    "nickname": "昵称",
+    "username": "用户名",
     "newPassword": "新密码（留空保持不变）",
     "currentPassword": "当前密码",
     "oldPwRequired": "修改密码需输入当前密码",
@@ -793,6 +793,7 @@
       "invalid_request": "请求参数不合法，请检查后重试",
       "not_found": "请求的资源不存在",
       "internal_error": "服务内部错误，请稍后重试",
+      "body_too_large": "请求体过大",
       "empty_response": "服务端返回内容为空",
       "unexpected_response": "服务端响应格式异常"
     },
@@ -897,7 +898,6 @@
       "failed": "音频变速失败，请稍后重试"
     },
     "generate": {
-      "body_too_large": "请求体过大",
       "provider_id_required": "缺少 providerId",
       "provider_not_found": "供应商不存在",
       "provider_protocol_missing": "供应商未配置协议",

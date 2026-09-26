@@ -91,7 +91,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
    ```env
    JWT_SECRET_KEY=替换为随机长密钥
-   DATABASE_URL=file:./prisma/dev.db
+   DATABASE_URL=file:./dev.db
    ```
 
    生成密钥示例：
@@ -143,9 +143,11 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | 变量 | 说明 |
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
-| `DATABASE_URL` | SQLite 连接串，默认 `file:./prisma/dev.db` |
+| `DATABASE_URL` | SQLite 连接串，默认 `file:./dev.db` |
 | `SERVER_HOST` / `SERVER_PORT` | Hono 服务监听地址与端口，默认 `0.0.0.0:4000` |
 | `SERVER_URL` | Next.js 转发 `/api/*` 的目标地址，默认 `http://localhost:4000` |
+| `AUTH_GATE_MODE` | 路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
+| `TRUSTED_PROXY_CIDRS` | 可信反向代理网段（逗号分隔 IP/CIDR）；留空时登录/注册限流使用 socket peer，不信任 `X-Forwarded-For` |
 | `ALLOW_REGISTRATION` | 是否允许新用户注册，默认 `true` |
 | `UPLOAD_DIR` | 上传文件目录，默认 `uploads` |
 | `PUBLIC_URL` | 对外访问地址；设置后参考素材可以上游可访问的 URL 提供给模型 |

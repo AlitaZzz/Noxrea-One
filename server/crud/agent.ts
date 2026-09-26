@@ -23,14 +23,26 @@ export async function createSession(data: {
   projectId?: string | null;
   title?: string;
 }) {
-  const session = await prisma.agentSession.create({
-    data: {
-      userId: data.userId,
-      projectId: data.projectId ?? null,
-      title: data.title ?? "New Chat",
-    },
+  // 项目存在性与归属在同一个事务内判定，避免 route 层 check/create 竞态
+  // 留下跨用户或已删除项目的会话。
+  return prisma.$transaction(async (tx) => {
+    if (data.projectId != null) {
+      const project = await tx.canvasProject.findFirst({
+        where: { id: data.projectId, userId: data.userId },
+        select: { id: true },
+      });
+      if (!project) return null;
+    }
+
+    const session = await tx.agentSession.create({
+      data: {
+        userId: data.userId,
+        projectId: data.projectId ?? null,
+        title: data.title ?? "New Chat",
+      },
+    });
+    return deserializeSession(session);
   });
-  return deserializeSession(session);
 }
 
 export async function listSessions(userId: number, projectId?: string | null) {

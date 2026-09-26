@@ -29,7 +29,7 @@ if (process.env.NODE_ENV !== "production") {
 // SQLite PRAGMA（WAL 等运行时参数设置）
 
 export async function applyPragmas(): Promise<void> {
-  const dbUrl = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
+  const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db";
   if (!dbUrl.startsWith("file:")) return; // 非 SQLite 跳过
 
   const dbTimeout = parseInt(process.env.DB_TIMEOUT ?? "30", 10);
