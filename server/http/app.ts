@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
 import { requestId } from "./middleware/request-id";
+import { jsonBodyLimit } from "./middleware/body-limit";
 import { router as authRouter } from "./routes/auth";
 import { router as modelConfigRouter } from "./routes/model-config";
 import { router as canvasRouter } from "./routes/canvas";
@@ -30,6 +31,17 @@ const app = new Hono();
 
 // 请求 ID：先于所有路由执行，使日志与错误响应都能带上同一标识
 app.use("*", requestId());
+
+// JSON 请求体分级上限：画布与 Agent 携带整份画布快照（10MB），资产批量次之（2MB），
+// 模型配置/生成任务最小（1MB），认证请求体很小（64KB）。
+// /api/files/* 不设全局上限：上传走 multipart 且有 MAX_UPLOAD_SIZE_MB 专用校验。
+app.use("/api/canvas/*", jsonBodyLimit(10 * 1024 * 1024));
+app.use("/api/agent/*", jsonBodyLimit(10 * 1024 * 1024));
+app.use("/api/assets/*", jsonBodyLimit(2 * 1024 * 1024));
+app.use("/api/generate/*", jsonBodyLimit(1024 * 1024));
+app.use("/api/model-config/*", jsonBodyLimit(1024 * 1024));
+app.use("/api/models/*", jsonBodyLimit(1024 * 1024));
+app.use("/api/auth/*", jsonBodyLimit(64 * 1024));
 
 // 健康检查
 app.get("/api/health", (c) => c.json(ok({ status: "ok" })));

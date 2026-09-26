@@ -1,13 +1,13 @@
 /**
  * 账户设置弹窗。
- * 修改当前登录用户的头像（经裁剪弹窗上传）、昵称与登录密码，
+ * 展示当前登录用户的用户名（登录身份，不可修改），修改头像（经裁剪弹窗上传）与登录密码，
  * 保存后同步更新 auth store 中的用户信息。与模型 / 渠道配置无关。
  */
 "use client";
 
 import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
 import { App,Button, Input } from "antd";
-import { useEffect, useRef,useState } from "react";
+import { useRef,useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppModal from "@/components/ui/AppModal";
@@ -30,7 +30,6 @@ export default function SettingsModal({ open, onClose }: Props) {
   const user = useAuthStore((s) => s.user);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [nick, setNick] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -45,7 +44,6 @@ export default function SettingsModal({ open, onClose }: Props) {
   if (userKey !== prevUserKey) {
     setPrevUserKey(userKey);
     if (userKey !== null && user) {
-      setNick(user.username || "");
       setAvatarUrl(user.avatarUrl || "");
       setOldPw("");
       setNewPw("");
@@ -59,7 +57,6 @@ export default function SettingsModal({ open, onClose }: Props) {
     setSaving(true);
     try {
       const body: Record<string, string> = {};
-      if (nick.trim() && nick.trim() !== user?.username) body.username = nick.trim();
       if (avatarUrl.trim() && avatarUrl !== user?.avatarUrl) body.avatarUrl = avatarUrl.trim();
       if (newPw.trim()) {
         if (!oldPw) { message.error(t("auth.oldPwRequired")); setSaving(false); return; }
@@ -100,7 +97,7 @@ export default function SettingsModal({ open, onClose }: Props) {
             {avatarUrl ? (
               <img src={avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
-              nick[0]?.toUpperCase() || "U"
+              user?.username?.[0]?.toUpperCase() || "U"
             )}
             <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <CameraOutlined style={{ fontSize: 18 }} />
@@ -110,10 +107,10 @@ export default function SettingsModal({ open, onClose }: Props) {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCropFile(f); setCropOpen(true); } }} />
         </div>
 
-        {/* Nickname */}
+        {/* Username（登录身份，不可修改） */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.nickname")}</div>
-          <Input prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={nick} onChange={(e) => setNick(e.target.value)} style={is} />
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.username")}</div>
+          <Input prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={user?.username ?? ""} disabled style={is} />
         </div>
 
         {/* Old Password */}

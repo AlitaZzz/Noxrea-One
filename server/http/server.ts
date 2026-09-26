@@ -3,6 +3,7 @@ import type { Server as HttpServer } from "node:http";
 import fs from "fs/promises";
 import path from "path";
 import { app } from "./app";
+import { closeAllSseConnections } from "./sse";
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
 import { localStorage } from "@server/services/storage/backends/local";
@@ -58,6 +59,11 @@ export function stopServer(): Promise<void> {
       resolve();
       return;
     }
+    // SSE 可能等待上游任务或画布事件，先主动终止这些长响应，再等待 HTTP server 关闭。
+    closeAllSseConnections();
+    // keepAliveTimeout = 0 后服务端不再主动销毁空闲连接，优雅停机必须显式关闭它们，
+    // 否则 close() 要干等各客户端自己的空闲超时（undici 约 4s）才完成
+    (server as HttpServer).closeIdleConnections();
     server.close(() => {
       logEvent("http.server", { stage: "stopped" });
       resolve();

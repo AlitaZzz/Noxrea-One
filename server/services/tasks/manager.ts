@@ -359,8 +359,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     logChannel: "taskmgr",
     onHeartbeat: async () => {
       if (!persistPending) {
-        void touchTaskHeartbeat(taskId, startedAt);
-        return true;
+        return touchTaskHeartbeat(taskId, startedAt);
       }
       // 落盘被推迟的补投递：与心跳同周期重试（重试失败不影响主轮询）
       try {
@@ -374,8 +373,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
         return false;
       } catch (err: unknown) {
         logWriteFailed("heartbeat", err);
-        void touchTaskHeartbeat(taskId, startedAt);
-        return true;
+        return touchTaskHeartbeat(taskId, startedAt);
       }
     },
     shouldStop: async () => {

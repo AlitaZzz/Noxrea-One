@@ -3,6 +3,7 @@
  * 从环境变量读取服务配置，经 zod 校验并提供带默认值的强类型访问。
  */
 import { z } from "zod";
+import { isValidTrustedProxyCidrs } from "@server/core/ratelimit/client-ip";
 
 // 占位符密钥
 const PLACEHOLDER_SECRETS: Record<string, string> = {
@@ -11,7 +12,7 @@ const PLACEHOLDER_SECRETS: Record<string, string> = {
 
 const configSchema = z.object({
   // Database
-  DATABASE_URL: z.string().default("file:./prisma/dev.db"),
+  DATABASE_URL: z.string().default("file:./dev.db"),
   DB_TIMEOUT: z.coerce.number().int().positive().default(30),
 
   // JWT
@@ -26,6 +27,11 @@ const configSchema = z.object({
   // HTTP Server
   SERVER_PORT: z.coerce.number().int().positive().default(4000),
   SERVER_HOST: z.string().default("0.0.0.0"),
+  /** 可信反向代理网段（逗号分隔 IP/CIDR）。只有直连 peer 命中该网段时才解析 X-Forwarded-For。 */
+  TRUSTED_PROXY_CIDRS: z
+    .string()
+    .default("")
+    .refine(isValidTrustedProxyCidrs, "TRUSTED_PROXY_CIDRS must be comma-separated IP/CIDR values"),
 
   // Worker
   WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(1),

@@ -30,6 +30,8 @@ export const ERROR_CODES = [
   "common.rate_limited",
   /** 服务端内部错误 */
   "common.internal_error",
+  /** 请求体超过体积上限 */
+  "common.body_too_large",
 
   // ── 模型 ──
   /** 拉取模型列表失败 */
@@ -126,8 +128,6 @@ export const ERROR_CODES = [
   "generation.unknown_capability",
 
   // ── 生成任务接口（同步 HTTP） ──
-  /** 请求体超过体积上限 */
-  "generate.body_too_large",
   /** 缺少 providerId */
   "generate.provider_id_required",
   /** 供应商不存在 */

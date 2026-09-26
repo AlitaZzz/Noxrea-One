@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/http/middleware/auth";
-import { failCode } from "@server/core/response";
+import { ok, failCode } from "@server/core/response";
 import { createSseResponse } from "@server/http/sse";
 import { agentToolRegistry } from "@server/services/agent/tools/registry";
 import "@server/services/agent/tools/definitions"; // 触发工具注册（副作用）
@@ -46,13 +46,15 @@ router.post("/api/agent/sessions", async (c) => {
   } catch {
     return failCode(400, "common.invalid_json");
   }
-  const parsed = createSessionSchema.parse(body);
+  const parsed = createSessionSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
   const session = await createSession({
     userId,
-    projectId: parsed.projectId ?? null,
-    title: parsed.title,
+    projectId: parsed.data.projectId ?? null,
+    title: parsed.data.title,
   });
-  return c.json(session, 201);
+  if (!session) return failCode(404, "canvas.project_not_found");
+  return c.json(ok(session), 201);
 });
 
 router.get("/api/agent/sessions", async (c) => {
@@ -65,7 +67,7 @@ router.get("/api/agent/sessions", async (c) => {
   // 静默转成 NaN 再回落为 null，导致会话丢失项目归属
   const pid = projectId || undefined;
   const sessions = await listSessions(userId, pid);
-  return c.json(sessions);
+  return c.json(ok(sessions));
 });
 
 router.get("/api/agent/sessions/:id", async (c) => {
@@ -76,7 +78,7 @@ router.get("/api/agent/sessions/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
   if (!session) return failCode(404, "agent.session_not_found");
-  return c.json(session);
+  return c.json(ok(session));
 });
 
 const renameSchema = z.object({ title: z.string().min(1) });
@@ -93,9 +95,10 @@ router.patch("/api/agent/sessions/:id", async (c) => {
   } catch {
     return failCode(400, "common.invalid_json");
   }
-  const parsed = renameSchema.parse(body);
-  await renameSession(id, userId, parsed.title);
-  return c.json({ ok: true });
+  const parsed = renameSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
+  await renameSession(id, userId, parsed.data.title);
+  return c.json(ok({ ok: true }));
 });
 
 router.delete("/api/agent/sessions/:id", async (c) => {
@@ -105,7 +108,7 @@ router.delete("/api/agent/sessions/:id", async (c) => {
 
   const id = Number(c.req.param("id"));
   await deleteSession(id, userId);
-  return c.json({ ok: true });
+  return c.json(ok({ ok: true }));
 });
 
 router.get("/api/agent/sessions/:id/messages", async (c) => {
@@ -117,7 +120,7 @@ router.get("/api/agent/sessions/:id/messages", async (c) => {
   const session = await getSession(id, userId);
   if (!session) return failCode(404, "agent.session_not_found");
   const messages = await listMessages(id);
-  return c.json(messages);
+  return c.json(ok(messages));
 });
 
 // ── 非流式兜底 ──
@@ -143,7 +146,8 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
   } catch {
     return failCode(400, "common.invalid_json");
   }
-  const parsed = sendMessageSchema.parse(body);
+  const parsed = sendMessageSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
   const history: HistoryMessage[] = await listMessages(id);
 
   const messages = buildAgentMessages({
@@ -151,11 +155,11 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
     incoming: [
       {
         role: "user",
-        content: parsed.content,
-        ...(parsed.refImages?.length ? { images: parsed.refImages } : {}),
+        content: parsed.data.content,
+        ...(parsed.data.refImages?.length ? { images: parsed.data.refImages } : {}),
       },
     ],
-    canvasSystem: buildCanvasSystem(parsed.canvasState),
+    canvasSystem: buildCanvasSystem(parsed.data.canvasState),
   });
 
   const providerId = c.req.query("providerId");
@@ -172,11 +176,11 @@ router.post("/api/agent/sessions/:id/messages", async (c) => {
     return failCode(502, "agent.upstream_failed");
   }
 
-  await createMessage({ sessionId: id, role: "user", content: parsed.content, refImages: parsed.refImages });
+  await createMessage({ sessionId: id, role: "user", content: parsed.data.content, refImages: parsed.data.refImages });
   const assistant = await createMessage({ sessionId: id, role: "assistant", content: reply.text });
   await touchSession(id);
 
-  return c.json(assistant);
+  return c.json(ok(assistant));
 });
 
 // ── 共享：一轮补全后的工具调用处理 ──
@@ -264,7 +268,8 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   } catch {
     return failCode(400, "common.invalid_json");
   }
-  const parsed = streamSchema.parse(payload);
+  const parsed = streamSchema.safeParse(payload);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
 
   return createSseResponse(c.req.raw, async ({ emit, signal }) => {
       // ★ 立即 flush thinking，前端马上显示"思考中…"
@@ -278,16 +283,16 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         sessionId,
         model: model ?? null,
         history: history.length,
-        hasCanvasState: parsed.canvasState != null,
+        hasCanvasState: parsed.data.canvasState != null,
       });
 
       // 用户消息先落库
-      const userContent = parsed.content || "";
+      const userContent = parsed.data.content || "";
       await createMessage({
         sessionId,
         role: "user",
         content: userContent,
-        refImages: parsed.refImages,
+        refImages: parsed.data.refImages,
       });
       if (history.length === 0 && userContent) {
         // 首条消息：按内容设置标题（截断，防止长消息撑爆会话列表）
@@ -298,15 +303,15 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
         {
           role: "user",
           content: userContent,
-          ...(parsed.refImages?.length ? { images: parsed.refImages } : {}),
+          ...(parsed.data.refImages?.length ? { images: parsed.data.refImages } : {}),
         },
       ];
 
       const messages = buildAgentMessages({
         history,
         incoming,
-        canvasSystem: buildCanvasSystem(parsed.canvasState),
-        userActionSystem: buildUserActionSystem(parsed.userActions),
+        canvasSystem: buildCanvasSystem(parsed.data.canvasState),
+        userActionSystem: buildUserActionSystem(parsed.data.userActions),
       });
 
       const result = await runCompletionStream({
@@ -369,7 +374,8 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   } catch {
     return failCode(400, "common.invalid_json");
   }
-  const parsed = toolResultSchema.parse(body);
+  const parsed = toolResultSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
 
   const providerId = c.req.query("providerId");
   const model = c.req.query("model");
@@ -378,7 +384,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       const history: HistoryMessage[] = await listMessages(sessionId);
 
       // 先落库 tool 消息（终止轮也要落，保证上游历史里 tool_calls 都有对应结果）
-      for (const r of parsed.results) {
+      for (const r of parsed.data.results) {
         await createMessage({
           sessionId,
           role: "tool",
@@ -389,7 +395,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
 
       // message_user 是终止性工具：本轮工具调用包含它即视为回合结束，
       // 不再续轮调 LLM，避免产生与 message_user 重复的收尾文本
-      const resultIds = new Set(parsed.results.map((r) => r.toolCallId));
+      const resultIds = new Set(parsed.data.results.map((r) => r.toolCallId));
       const lastAssistantCalls = [...history].reverse().find((m) => m.role === "assistant" && m.toolCalls)?.toolCalls ?? [];
       const isTerminal = lastAssistantCalls.some((tc) => tc.name === "message_user" && resultIds.has(tc.id));
       if (isTerminal) {
@@ -400,7 +406,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
 
       emit("thinking", {});
 
-      const incoming: IncomingMessage[] = parsed.results.map((r) => ({
+      const incoming: IncomingMessage[] = parsed.data.results.map((r) => ({
         role: "tool",
         content: r.result,
         toolCallId: r.toolCallId,
@@ -409,8 +415,8 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       const messages = buildAgentMessages({
         history,
         incoming,
-        canvasSystem: buildCanvasSystem(parsed.canvasState),
-        userActionSystem: buildUserActionSystem(parsed.userActions),
+        canvasSystem: buildCanvasSystem(parsed.data.canvasState),
+        userActionSystem: buildUserActionSystem(parsed.data.userActions),
       });
 
       const result = await runCompletionStream({

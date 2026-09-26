@@ -7,7 +7,7 @@
 // ── 流式对话请求参数 ──
 
 export interface StreamAgentOptions {
-  sessionId: string;
+  sessionId: number;
   modelId: string;
   /** 供应商 id（providerId/modelName 稳定键的前半），缺省时由后端按模型名解析 */
   providerId?: string;
@@ -23,7 +23,7 @@ export interface StreamAgentOptions {
 // ── 工具结果回传参数 ──
 
 export interface ToolResultOptions {
-  sessionId: string;
+  sessionId: number;
   modelId: string;
   providerId?: string;
   /** 本轮执行的全部工具结果 */
@@ -111,12 +111,4 @@ export interface AgentToolResult {
   failed?: boolean;
   /** 用户未勾选/拒绝而未执行（操作行灰叉「未执行」依据） */
   skipped?: boolean;
-}
-
-// ── 会话列表项 ──
-
-export interface SessionListItem {
-  id: string;
-  title: string;
-  updatedAt: string;
 }

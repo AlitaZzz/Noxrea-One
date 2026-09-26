@@ -4,7 +4,7 @@
  */
 import { prisma } from "@server/core/database/client";
 import { newId } from "@server/utils/id";
-import { extractHashCountsFromCanvas } from "@server/services/canvas/extract-hashes";
+import { extractHashCountsFromCanvas, hashCountsEqual } from "@server/services/canvas/extract-hashes";
 import {
   replaceSourceFileRefs,
   removeSourceFileRefs,
@@ -70,7 +70,7 @@ export async function updateProject(
   id: string,
   userId: number,
   data: { name?: string; canvasData?: Record<string, unknown> },
-  options?: { recalcRefs?: boolean; baseRevision?: number }
+  options?: { baseRevision?: number }
 ) {
   return prisma.$transaction(async (tx) => {
     // 事务内读取当前版本；旧请求的 baseRevision 不一致时立即拒绝。
@@ -78,7 +78,7 @@ export async function updateProject(
     // 不参与冲突判定也不递增版本——否则改名会把其他窗口的画布会话误杀成过期。
     const existing = await tx.canvasProject.findFirst({
       where: { id, userId },
-      select: { id: true, revision: true },
+      select: { id: true, revision: true, canvasData: true },
     });
     if (!existing) return null;
     if (
@@ -103,13 +103,18 @@ export async function updateProject(
       data: updateData,
     });
 
-    // 引用重算只在媒体结构变化时执行；拖动节点等布局保存不会解析引用。
-    if (options?.recalcRefs && data.canvasData !== undefined) {
-      await replaceSourceFileRefs(tx, {
-        userId,
-        sourceType: "canvas",
-        sourceId: id,
-      }, extractHashCountsFromCanvas(data.canvasData));
+    // 引用账本重算由服务端权威判定：事务内比较落库前后的引用计数，
+    // 仅媒体结构变化（引用集合或数量不同）才写账本；布局保存零账本写入。
+    if (data.canvasData !== undefined) {
+      const oldCounts = extractHashCountsFromCanvas(parseJsonObject(existing.canvasData));
+      const newCounts = extractHashCountsFromCanvas(data.canvasData);
+      if (!hashCountsEqual(oldCounts, newCounts)) {
+        await replaceSourceFileRefs(tx, {
+          userId,
+          sourceType: "canvas",
+          sourceId: id,
+        }, newCounts);
+      }
     }
 
     return {

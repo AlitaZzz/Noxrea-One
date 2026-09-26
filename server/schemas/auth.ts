@@ -12,8 +12,7 @@ export const loginRequestSchema = z.object({
 export const registerRequestSchema = z.object({
   username: z.string().min(3).max(50),
   password: z.string().min(6),
-  email: z.string().email().optional(),
-});
+}).strict();
 
 export const loginResponseSchema = z.object({
   access_token: z.string(),
@@ -21,13 +20,12 @@ export const loginResponseSchema = z.object({
 });
 
 export const updateMeSchema = z.object({
-  username: z.string().min(1).max(50).optional(),
   avatarUrl: z.string().max(500).optional(),
   theme: z.string().max(10).optional(),
   language: z.string().max(10).optional(),
   password: z.string().min(6).optional(),
   oldPassword: z.string().optional(),
-});
+}).strict();
 
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;

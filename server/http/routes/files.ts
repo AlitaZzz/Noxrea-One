@@ -9,6 +9,7 @@ import { failCode } from "@server/core/response";
 import path from "path";
 import { createReadStream } from "fs";
 import { Readable } from "node:stream";
+import { buildFileResponseHeaders } from "@server/http/file-response";
 
 const router = new Hono();
 
@@ -63,37 +64,12 @@ router.get("/api/files/*", async (c) => {
 
   if (!stat) return failCode(404, "files.file_not_found");
 
-  // Content-Type
   const ext = path.extname(resolvedPath).toLowerCase();
-  const mimeMap: Record<string, string> = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".mp4": "video/mp4",
-    ".m4v": "video/x-m4v",
-    ".mov": "video/quicktime",
-    ".mkv": "video/x-matroska",
-    ".webm": "video/webm",
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".ogg": "audio/ogg",
-    ".flac": "audio/flac",
-    ".m4a": "audio/mp4",
-    ".aac": "audio/aac",
-  };
-  const contentType = mimeMap[ext] ?? "application/octet-stream";
 
   // download 参数 -> Content-Disposition
   const download = c.req.query("download");
   const filename = c.req.query("filename");
-  const headers = new Headers({
-    "Content-Type": contentType,
-    "Content-Length": String(stat.size),
-    "Accept-Ranges": "bytes",
-    "Cache-Control": "public, max-age=31536000, immutable",
-  });
+  const headers = buildFileResponseHeaders(ext, stat.size);
 
   if (download !== null) {
     const rawExt = path.extname(resolvedPath);

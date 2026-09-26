@@ -12,7 +12,6 @@ export const canvasCreateSchema = z.object({
 export const canvasUpdateSchema = z.object({
   name: z.string().max(200).optional(),
   canvasData: z.record(z.unknown()).optional(),
-  needRefRecalc: z.boolean().optional(),
   // 仅改名（无 canvasData）可省略；带 canvasData 的画布保存必须携带，由路由层强制校验
   baseRevision: z.number().int().min(1).optional(),
 });

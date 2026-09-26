@@ -313,7 +313,7 @@ describe("SaveManager 并发保存", () => {
   it("resetForProjectSwitch：同项目恢复（clearExpired:false）不冲掉 evict 置的过期态", async () => {
     // 场景：画布加载在途时收到 evict（编辑权被其他页面实例取得），
     // 随后服务端数据恢复完成——过期态必须保留，弹窗不能闪现即消
-    saveManager.notifyEvicted("p1");
+    saveManager.notifyEvicted();
     expect((saveManager as unknown as { expired: boolean }).expired).toBe(true);
 
     saveManager.resetForProjectSwitch({ clearExpired: false });
