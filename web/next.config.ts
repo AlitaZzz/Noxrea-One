@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
   // 保持 React 默认的双挂载检查：组件 effect 必须写成幂等（挂载两次不产生重复副作用）
   reactStrictMode: true,
   env: publicEnv,
-  transpilePackages: ["antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
+  transpilePackages: ["@noxrea/shared", "antd", "@ant-design/icons", "@xyflow/react", "react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
   outputFileTracingRoot: path.join(__dirname, ".."),
   serverExternalPackages: ["sharp", "pino"],
   experimental: {

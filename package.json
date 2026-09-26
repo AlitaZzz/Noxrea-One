@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "web"
+    "web",
+    "shared"
   ],
   "scripts": {
     "dev": "concurrently -n web,server -c cyan,magenta \"npm -w web run dev\" \"tsx watch --env-file=.env server/index.ts\"",
@@ -14,7 +15,7 @@
     "start": "concurrently -n web,server -c cyan,magenta \"npm -w web run start\" \"npm run server\"",
     "lint": "npm run lint:web && npm run lint:server",
     "lint:web": "npm -w web run lint",
-    "lint:server": "eslint server",
+    "lint:server": "eslint server shared",
     "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.json",
     "test": "npm -w web run test",
     "test:server": "vitest run --config vitest.config.ts",
@@ -36,6 +37,7 @@
     "hono": "^4.12.33",
     "ipaddr.js": "^2.5.0",
     "jose": "^5.9.0",
+    "@noxrea/shared": "*",
     "p-limit": "^6.1.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
