@@ -104,14 +104,14 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     });
 
     if (!response.ok) {
-      // HTTP 错误：尝试从错误响应提取 task_id
+      // 错误响应体统一文本读取：JSON 体由提取器解析，纯文本体（网关错误页等）原样截断透传；
+      // task_id 只可能出现在 JSON 体中，解析失败即无 ID 可提取
+      const errText = await response.text().catch(() => "");
       let errData: unknown = {};
       try {
-        errData = await response.json();
+        errData = JSON.parse(errText);
       } catch {
-        try {
-          errData = { raw: await response.text() };
-        } catch { /* ignore */ }
+        // 非 JSON 体
       }
 
       const extractedId = protocol.extractTaskId?.(errData, channelConfig, capability);
@@ -136,9 +136,9 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
         stage: "upstream_http_error",
         taskId,
         status: response.status,
-        body: JSON.stringify(errData).slice(0, 500),
+        body: errText.slice(0, 500),
       });
-      const upstreamMsg = extractUpstreamMessage(errData);
+      const upstreamMsg = extractUpstreamMessage(errText);
       return {
         status: "failed",
         urls: [],

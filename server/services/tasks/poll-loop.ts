@@ -8,6 +8,7 @@ import { fetchWithTimeout } from "@server/core/http-client";
 import { logger } from "@server/core/logger";
 import { logEvent, errText } from "@server/core/logger/utils";
 import { TASK_HEARTBEAT_INTERVAL_MS } from "@server/crud/task";
+import { extractUpstreamMessage } from "@server/services/tasks/failure";
 import type { ProtocolService } from "@server/services/protocols/base";
 
 export type PollOutcome =
@@ -82,7 +83,16 @@ export async function pollUpstreamTask(input: PollLoopInput): Promise<PollOutcom
           ![408, 425, 429].includes(pollResp.status);
         if (permanent) {
           logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll permanent error");
-          return { kind: "failed", error: `轮询失败（HTTP ${pollResp.status}），upstream_task_id=${upstreamTaskId}` };
+          // 4xx 响应体可能携带失败原因（如内容安全拒绝），与提交路径共用同一文案提取规则；
+          // 纯文本体（网关错误页等）由提取器原样截断透传
+          const errText = await pollResp.text().catch(() => "");
+          const upstreamMsg = extractUpstreamMessage(errText);
+          return {
+            kind: "failed",
+            error: upstreamMsg
+              ? `${upstreamMsg}（HTTP ${pollResp.status}）`
+              : `轮询失败（HTTP ${pollResp.status}），upstream_task_id=${upstreamTaskId}`,
+          };
         }
         logger.warn({ taskId, attempt: attempt + 1, status: pollResp.status }, "poll bad status");
         continue;

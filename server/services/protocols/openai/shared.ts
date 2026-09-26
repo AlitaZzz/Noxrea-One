@@ -1,35 +1,22 @@
 /**
  * OpenAI 协议共享解析核心。
- * image.ts / video.ts 共用的状态归一化、轮询端点解析与产物提取逻辑（消除两文件重复实现）。
+ * image.ts / video.ts 共用的轮询端点解析与产物提取逻辑（消除两文件重复实现）。
  *
- * 产物提取采用整树 URL 扫描：上游返回结构不可控（各渠道响应形态各异且无契约），
- * 无法按固定字段路径解析，故扫描全部字符串值兜底。已知的风险控制：
- * - 键名为 prompt / prompts 的值不参与扫描（用户输入回显，其中的 URL 非产物）；
- * - 状态为 failed 的响应先于扫描返回，错误详情不会被判成产物。
+ * 上游返回结构不可控（各渠道响应形态各异且无契约），无法按固定字段路径解析，
+ * 成败判定同为证据制且规则收敛在 tasks/failure：
+ *  - 失败证据（状态词 / 错误专用键，判定先于产物扫描，错误详情中的 URL 不会被判成产物）；
+ *  - 产物证据（整树 URL 扫描 + 裸 base64 字段兜底）。
+ * 两者皆无才视为 pending。
  */
 
 import type { PollResult } from "../base";
-
-const PENDING_STATUSES = new Set([
-  "pending", "queued", "submitted", "processing", "running", "started", "in_progress",
-]);
-
-const COMPLETED_STATUSES = new Set([
-  "success", "succeeded", "completed", "done", "ready", "finished",
-]);
-
-const FAILED_STATUSES = new Set([
-  "failed", "error", "cancelled", "canceled", "timeout", "aborted", "invalid",
-]);
-
-/** 归一化上游状态到 pending/completed/failed（无法识别时原样返回小写） */
-export function normalizeStatus(raw: string): string {
-  const s = raw.toLowerCase().trim();
-  if (PENDING_STATUSES.has(s)) return "pending";
-  if (COMPLETED_STATUSES.has(s)) return "completed";
-  if (FAILED_STATUSES.has(s)) return "failed";
-  return s;
-}
+import {
+  extractUpstreamMessage,
+  normalizeStatus,
+  scanErrorEvidence,
+  scanFailureStatus,
+  walkResponseTree,
+} from "@server/services/tasks/failure";
 
 /**
  * 从 channelConfig.protocol.endpoints 提取轮询占位符名。
@@ -85,41 +72,22 @@ export function buildOpenAiPollUrl(
   return `${baseUrl}/tasks/${upstreamTaskId}`;
 }
 
-/** URL 扫描跳过的键名：prompt 类字段是用户输入回显，其中的 URL 不是产物地址 */
-const URL_SCAN_SKIP_KEYS = new Set(["prompt", "prompts"]);
-
 /**
  * 从 JSON 树中提取所有 https:// 和 data: 开头的 URL。
- * 递归遍历字段值；键名为 prompt / prompts 的值不参与扫描，
+ * 递归遍历字段值（prompt / prompts 回显在 walkResponseTree 统一跳过），
  * 避免请求参数回显中的 URL 被误判为产物地址。
  */
 export function scanUrls(root: unknown): string[] {
   const urls: string[] = [];
   const re = /(?:https?:\/\/|data:)[^\s"',;}\]<>]+/g;
-  const scanString = (s: string) => {
+  walkResponseTree(root, null, (_key, value) => {
+    if (typeof value !== "string") return;
     let match: RegExpExecArray | null;
-    while ((match = re.exec(s)) !== null) {
+    while ((match = re.exec(value)) !== null) {
       const u = match[0].replace(/[)\]}>.,;!?]+$/, "");
       if (!urls.includes(u)) urls.push(u);
     }
-  };
-  const visit = (n: unknown) => {
-    if (typeof n === "string") {
-      scanString(n);
-      return;
-    }
-    if (n === null || typeof n !== "object") return;
-    if (Array.isArray(n)) {
-      for (const item of n) visit(item);
-      return;
-    }
-    const obj = n as Record<string, unknown>;
-    for (const key of Object.keys(obj)) {
-      if (URL_SCAN_SKIP_KEYS.has(key)) continue;
-      visit(obj[key]);
-    }
-  };
-  visit(root);
+  });
   return urls;
 }
 
@@ -127,25 +95,13 @@ export function scanUrls(root: unknown): string[] {
  * 裸 base64 兜底：正则无法识别不带 data: 前缀的裸 base64，
  * 故按字段名（b64_json / b64）递归定位后补 MIME 前缀。
  */
-export function extractB64Fields(node: unknown, prefix: string): string[] {
+export function extractB64Fields(root: unknown, prefix: string): string[] {
   const result: string[] = [];
-  const visit = (n: unknown) => {
-    if (n === null || typeof n !== "object") return;
-    if (Array.isArray(n)) {
-      for (const item of n) visit(item);
-      return;
+  walkResponseTree(root, null, (key, value) => {
+    if ((key === "b64_json" || key === "b64") && typeof value === "string" && value.length > 0) {
+      result.push(value.startsWith("data:") ? value : `${prefix}${value}`);
     }
-    const obj = n as Record<string, unknown>;
-    for (const key of Object.keys(obj)) {
-      const val = obj[key];
-      if ((key === "b64_json" || key === "b64") && typeof val === "string" && val.length > 0) {
-        result.push(val.startsWith("data:") ? val : `${prefix}${val}`);
-      } else if (val !== null && typeof val === "object") {
-        visit(val);
-      }
-    }
-  };
-  visit(node);
+  });
   return result;
 }
 
@@ -156,26 +112,25 @@ export function parseScanSyncResult(response: unknown, b64Mime: string): { urls:
   return { urls };
 }
 
-/** 轮询响应解析：状态判定优先，其次 URL 扫描兜底 */
+/**
+ * 轮询响应解析：失败证据（状态词 / 错误专用键）优先，其次产物扫描，均无则 pending。
+ * 判定规则与文案提取统一在 tasks/failure，本函数只做证据编排。
+ */
 export function parseScanPollResult(data: unknown, b64Mime: string): PollResult {
   const payload = data as Record<string, unknown>;
   if (!payload || typeof payload !== "object") {
     return { status: "pending", urls: [] };
   }
 
-  const status = normalizeStatus(String(payload.status ?? ""));
-
-  if (status === "failed") {
-    const err = payload.error ?? payload.message ?? "Unknown error";
-    const errMsg =
-      typeof err === "object"
-        ? String((err as Record<string, unknown>).message ?? "Unknown error")
-        : String(err);
-    // 限长：上游文案会直接展示给用户，避免超长内容撑破提示框
-    return { status: "failed", urls: [], error: errMsg.slice(0, 200) };
+  if (scanFailureStatus(payload) !== null || scanErrorEvidence(payload) !== null) {
+    return {
+      status: "failed",
+      urls: [],
+      error: extractUpstreamMessage(payload) || "Upstream task failed",
+    };
   }
 
-  // URL 扫描兜底：上游返回结构不可控，只要能扫描到产物 URL 就视为完成
+  // URL 扫描兜底：只要能扫描到产物 URL 就视为完成
   const urls = scanUrls(payload);
   urls.push(...extractB64Fields(payload, b64Mime));
   if (urls.length > 0) return { status: "completed", urls };
