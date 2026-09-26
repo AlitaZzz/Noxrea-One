@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   authenticateRequest: vi.fn(),
   createSession: vi.fn(),
   getSession: vi.fn(),
-  runCompletion: vi.fn(),
   runCompletionStream: vi.fn(),
 }));
 
@@ -22,7 +21,6 @@ vi.mock("@server/crud/agent", () => ({
   touchSession: vi.fn(),
 }));
 vi.mock("@server/services/agent/completion", () => ({
-  runCompletion: mocks.runCompletion,
   runCompletionStream: mocks.runCompletionStream,
 }));
 

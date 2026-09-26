@@ -28,9 +28,21 @@ function authCookieMaxAgeS() {
 
 const AUTH_COOKIE_OPTS = { path: "/", httpOnly: true, sameSite: "Lax" } as const;
 
+/**
+ * secure 按请求实际协议判定：HTTPS 部署（含反代终止 TLS，以 X-Forwarded-Proto
+ * 为准）下发 Secure cookie，本地 http 开发自动关闭——Secure cookie 会被 http
+ * 页面直接丢弃，条件判断是必需而非优化。头可伪造，但伪造只影响本响应的
+ * cookie 属性，最坏是 http 下浏览器丢弃 cookie，无安全面。
+ */
+function requestIsHttps(c: Context): boolean {
+  const forwarded = c.req.header("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (forwarded) return forwarded === "https";
+  return new URL(c.req.url).protocol === "https:";
+}
+
 /** 签发鉴权 cookie 的唯一入口（maxAge 传 0 即过期清除，供登出使用） */
 export function setAuthCookie(c: Context, token: string, maxAgeS = authCookieMaxAgeS()) {
-  setCookie(c, AUTH_COOKIE, token, { ...AUTH_COOKIE_OPTS, maxAge: maxAgeS });
+  setCookie(c, AUTH_COOKIE, token, { ...AUTH_COOKIE_OPTS, secure: requestIsHttps(c), maxAge: maxAgeS });
 }
 
 export interface AuthUser {

@@ -8,10 +8,11 @@ import { getConfig } from "@server/core/config";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
-import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media";
+import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { logEvent } from "@server/core/logger/utils";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
+import { checkUserRateLimit } from "@server/core/ratelimit";
 import { logger } from "@server/core/logger";
 import path from "path";
 
@@ -35,7 +36,7 @@ const ALLOWED_MIME = new Set([
 const ALLOWED_FORMATS: Record<"image" | "video" | "audio", string[]> = {
   image: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"],
   video: ["mp4", "webm", "mov", "avi", "mkv"],
-  audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac"],
+  audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"],
 };
 
 /** 扁平白名单：MIME 缺失或不常见时（如 mkv 被上报为 octet-stream）按扩展名兜底 */
@@ -86,8 +87,20 @@ router.post("/api/files/upload", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
+  // 按用户限流：上传解析与探测开销大，拖拽批量（前端并发 3）之下单用户 30 次/分钟
+  if (!checkUserRateLimit("upload", auth.user.id, 30, 60)) {
+    return failCode(429, "common.rate_limited");
+  }
+
   const cfg = getConfig();
   const maxSize = cfg.MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+
+  // 体积校验前置：multipart 解析会把整个请求缓冲进内存。Content-Length 已超限
+  // （含 multipart 封装开销的余量）时直接拒绝，避免恶意大文件先吃满内存再失败
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isInteger(contentLength) && contentLength > maxSize + 1024 * 1024) {
+    return failCode(413, "upload.file_too_large", { limit: cfg.MAX_UPLOAD_SIZE_MB });
+  }
 
   let formData: FormData;
   try {
@@ -129,9 +142,9 @@ router.post("/api/files/upload", async (c) => {
     // 写入本地
     await localStorage.save(storageKey, buffer);
 
-    // 持久化
+    // 持久化（媒体元数据在此一次探测入库，随响应下发给前端作为尺寸权威值）
     const source = (c.req.query("source") as "upload" | "derived") || "upload";
-    await persistFileObject({
+    const mediaMeta = await persistFileObject({
       userId: auth.user.id,
       hash,
       size: buffer.length,
@@ -176,6 +189,8 @@ router.post("/api/files/upload", async (c) => {
         size: buffer.length,
         mime_type: mime,
         hash,
+        width: mediaMeta.width,
+        height: mediaMeta.height,
         media_warning: mediaWarning,
       })
     );

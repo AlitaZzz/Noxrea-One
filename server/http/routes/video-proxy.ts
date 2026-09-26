@@ -19,15 +19,15 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/http/middleware/auth";
-import { createScrubProxy, probeVideoMetaCached } from "@server/services/storage/media";
+import { createScrubProxy } from "@server/services/storage/video-frames";
+import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
+import { createMediaEditRoute } from "./media-edit";
 import path from "path";
-import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
-import { createHash, randomUUID } from "crypto";
+import { createHash } from "crypto";
 
 const videoProxySchema = z.object({
   video_key: z.string().min(1),
@@ -74,10 +74,11 @@ async function generateProxy(
   proxyPath: string,
   width: number,
   fps: number | null,
+  signal?: AbortSignal,
 ): Promise<void> {
   let renamed = false;
   try {
-    await createScrubProxy(videoPath, tmpPath, width, fps);
+    await createScrubProxy(videoPath, tmpPath, width, fps, signal);
     await fs.mkdir(path.dirname(proxyPath), { recursive: true });
     await fs.rename(tmpPath, proxyPath);
     renamed = true;
@@ -99,88 +100,64 @@ async function proxyDurationOf(proxyPath: string): Promise<number | null> {
 
 const router = new Hono();
 
-router.post("/api/files/video-proxy", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
+router.post(
+  "/api/files/video-proxy",
+  createMediaEditRoute({
+    schema: videoProxySchema,
+    resolveKey: (d) => d.video_key,
+    name: "proxy",
+    failureCode: "video_proxy.generation_failed",
+    async run({ c, sourceKey, sourcePath, tmpDir, signal }) {
+      const baseDir = path.resolve(localStorage.baseDir);
 
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return failCode(400, "common.invalid_json");
-  }
+      // 帧率与分辨率：读取容器信息，开销可忽略。
+      // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成；
+      // 帧率用来把关键帧间隔定成 1 秒——探测结果在雪碧图路由间共用，只跑一次
+      const meta = await probeVideoMetaCached(sourcePath);
+      const width = meta?.width && meta.width > 0
+        ? Math.min(PROXY_WIDTH, meta.width)
+        : PROXY_WIDTH;
 
-  const parsed = videoProxySchema.safeParse(body);
-  if (!parsed.success) {
-    return failCode(422, "common.invalid_request");
-  }
-  const { video_key } = parsed.data;
+      // 代理名由源键与宽度共同派生：同一视频反复打开面板直接命中缓存；
+      // 宽度并入哈希后，调整参数会自动生成新代理，不会命中旧尺寸的缓存
+      const proxyKey = `_proxy/${createHash("sha1").update(`${sourceKey}|${width}|v${PROXY_VERSION}`).digest("hex").slice(0, 32)}.mp4`;
+      const proxyPath = path.resolve(baseDir, proxyKey);
+      const fps = meta?.fps ?? null;
 
-  const baseDir = path.resolve(localStorage.baseDir);
-  const videoPath = path.resolve(baseDir, video_key);
+      // 顺带做一次低频清理，不阻塞本次请求
+      void cleanupStaleProxies(baseDir);
 
-  // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-  if (!isPathWithinBase(baseDir, videoPath)) {
-    return failCode(403, "files.invalid_path");
-  }
+      try {
+        await fs.access(proxyPath);
+        return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
+      } catch {
+        // 未生成，继续往下走
+      }
 
-  try {
-    await fs.access(videoPath);
-  } catch {
-    return failCode(404, "capture_frame.video_not_found");
-  }
+      // 同一代理正在生成：复用那次转码，避免并发各跑一个 ffmpeg
+      const pending = inflight.get(proxyKey);
+      if (pending) {
+        await pending.catch(() => {});
+        try {
+          await fs.access(proxyPath);
+          return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
+        } catch {
+          return failCode(500, "video_proxy.generation_failed");
+        }
+      }
 
-  // 帧率与分辨率：读取容器信息，开销可忽略。
-  // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成；
-  // 帧率用来把关键帧间隔定成 1 秒——探测结果在雪碧图路由间共用，只跑一次
-  const meta = await probeVideoMetaCached(videoPath);
-  const width = meta?.width && meta.width > 0
-    ? Math.min(PROXY_WIDTH, meta.width)
-    : PROXY_WIDTH;
+      const tmpPath = path.join(tmpDir, "proxy.mp4");
+      const task = generateProxy(sourcePath, tmpPath, proxyPath, width, fps, signal);
+      inflight.set(proxyKey, task);
 
-  // 代理名由源键与宽度共同派生：同一视频反复打开面板直接命中缓存；
-  // 宽度并入哈希后，调整参数会自动生成新代理，不会命中旧尺寸的缓存
-  const proxyKey = `_proxy/${createHash("sha1").update(`${video_key}|${width}|v${PROXY_VERSION}`).digest("hex").slice(0, 32)}.mp4`;
-  const proxyPath = path.resolve(baseDir, proxyKey);
-  const fps = meta?.fps ?? null;
-
-  // 顺带做一次低频清理，不阻塞本次请求
-  void cleanupStaleProxies(baseDir);
-
-  try {
-    await fs.access(proxyPath);
-    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
-  } catch {
-    // 未生成，继续往下走
-  }
-
-  // 同一代理正在生成：复用那次转码，避免并发各跑一个 ffmpeg
-  const pending = inflight.get(proxyKey);
-  if (pending) {
-    await pending.catch(() => {});
-    try {
-      await fs.access(proxyPath);
-      return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
-    } catch {
-      return failCode(500, "video_proxy.generation_failed");
-    }
-  }
-
-  const tmpPath = path.resolve(baseDir, `_tmp/proxy_${process.pid}_${randomUUID()}.mp4`);
-  const task = generateProxy(videoPath, tmpPath, proxyPath, width, fps);
-  inflight.set(proxyKey, task);
-
-  try {
-    await task;
-    return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: false }));
-  } catch (err: unknown) {
-    // ffmpeg 缺失或转码失败的底层信息只进日志，运维细节不下发给客户端
-    logger.error({ err, videoKey: video_key }, "Video proxy generation failed");
-    return failCode(500, "video_proxy.generation_failed");
-  } finally {
-    inflight.delete(proxyKey);
-  }
-});
+      try {
+        await task;
+        return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: false }));
+      } finally {
+        inflight.delete(proxyKey);
+      }
+    },
+  }),
+);
 
 export { router };

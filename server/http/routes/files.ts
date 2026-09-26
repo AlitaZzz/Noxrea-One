@@ -3,22 +3,29 @@
  * 提供文件下载、Range 请求、WebP 缩放与流式响应等接口。
  */
 import { Hono } from "hono";
-import { getResizedWebP, getVideoPosterWebP, validateUserFile } from "@server/services/storage/media";
+import { getResizedWebP, getVideoPosterWebP } from "@server/services/storage/resize-cache";
 import { localStorage } from "@server/services/storage/backends/local";
 import { failCode } from "@server/core/response";
 import path from "path";
 import { createReadStream } from "fs";
 import { Readable } from "node:stream";
 import { buildFileResponseHeaders } from "@server/http/file-response";
+import { isPathWithinBase } from "@server/core/paths";
 
 const router = new Hono();
 
 router.get("/api/files/*", async (c) => {
   const request = c.req.raw;
 
-  // 从 URL 提取文件路径（去掉 /api/files/ 前缀）
+  // 从 URL 提取文件路径（去掉 /api/files/ 前缀）；
+  // 畸形百分号编码（如 /api/files/%zz）按客户端错误回 400，而非未捕获 URIError 变 500
   const url = new URL(request.url);
-  const filePath = decodeURIComponent(url.pathname.replace(/^\/api\/files\//, ""));
+  let filePath: string;
+  try {
+    filePath = decodeURIComponent(url.pathname.replace(/^\/api\/files\//, ""));
+  } catch {
+    return failCode(400, "common.invalid_request");
+  }
 
   // 路径穿越防护
   const pathSegments = filePath.split("/");
@@ -51,7 +58,7 @@ router.get("/api/files/*", async (c) => {
   const fullPath = path.resolve(localStorage.baseDir, resolvedPath);
 
   // 路径穿越校验
-  if (!validateUserFile(fullPath, localStorage.baseDir)) {
+  if (!isPathWithinBase(localStorage.baseDir, fullPath)) {
     return failCode(403, "files.access_denied");
   }
 
@@ -90,8 +97,12 @@ router.get("/api/files/*", async (c) => {
         ? parseInt(match[2], 10)
         : stat.size - 1;
 
-      if (start >= stat.size) {
-        return new Response(null, { status: 416, headers });
+      if (start >= stat.size || end < start) {
+        // 416 附带 Content-Range: bytes */size（RFC 9110），便于客户端探测真实大小
+        const failHeaders = new Headers(headers);
+        failHeaders.delete("Content-Length");
+        failHeaders.set("Content-Range", `bytes */${stat.size}`);
+        return new Response(null, { status: 416, headers: failHeaders });
       }
 
       const actualEnd = Math.min(end, stat.size - 1);
