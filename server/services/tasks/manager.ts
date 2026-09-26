@@ -7,7 +7,7 @@ import { getConfig } from "@server/core/config";
 import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
-import { extractUpstreamMessage } from "@server/services/tasks/failure";
+import { extractUpstreamMessage, failFromUpstream } from "@server/services/tasks/failure";
 import {
   markTaskProcessing,
   isTaskCancelled,
@@ -142,10 +142,11 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       return {
         status: "failed",
         urls: [],
-        // 上游给出可读文案时原样展示；否则回退错误码，由前端本地化
-        // （状态码已包含在 error 文案中，供用户报障时查看）
-        error: upstreamMsg || `HTTP ${response.status}`,
-        errorCode: upstreamMsg ? undefined : "generation.upstream_http_error",
+        ...failFromUpstream(upstreamMsg, {
+          // 状态码已包含在 error 文案中，供用户报障时查看
+          message: `HTTP ${response.status}`,
+          code: "generation.upstream_http_error",
+        }),
       };
     }
 
@@ -235,8 +236,10 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   return {
     status: "failed",
     urls: [],
-    error: upstreamMsg || "Upstream returned neither result nor task_id",
-    errorCode: upstreamMsg ? undefined : "generation.upstream_no_result",
+    ...failFromUpstream(upstreamMsg, {
+      message: "Upstream returned neither result nor task_id",
+      code: "generation.upstream_no_result",
+    }),
     metadata: { raw_sample: sample },
   };
 }

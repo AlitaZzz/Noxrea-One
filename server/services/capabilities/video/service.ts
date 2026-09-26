@@ -1,91 +1,42 @@
 /**
  * 视频能力服务。
  * 实现视频生成能力，组装协议请求并提交异步任务，支持结果回传与日志脱敏。
+ * 公共骨架（管线、endpoints、submitAndWait、终态翻译）在 polling-base.ts。
  */
 
 import {
   registerCapability,
-  type CapabilityService,
   type CapabilityContext,
   type CapabilityParams,
 } from "@server/services/capabilities/base";
-import { getProtocol } from "@server/services/protocols/base";
-import { build } from "@server/services/request-builder/engine";
-import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
-import { submitAndWait } from "@server/services/tasks/manager";
-import { logEvent } from "@server/core/logger/utils";
-import { GenerationCancelledError, GenerationFailureError } from "@server/services/tasks/failure";
-import type { GenerationResult } from "@server/schemas/result";
+import { PollingCapabilityService, type CapabilityEndpointConfig } from "@server/services/capabilities/polling-base";
+import type {
+  ProtocolRequestResult,
+  ProtocolResponse,
+  ProtocolService,
+} from "@server/services/protocols/base";
 
-class VideoCapabilityService implements CapabilityService {
+class VideoCapabilityService extends PollingCapabilityService {
   readonly name = "video";
+  protected readonly capability = "video";
+  protected readonly failFallback = "Video generation failed";
 
-  async generate(
+  protected buildRequest(
+    protocol: ProtocolService,
     ctx: CapabilityContext,
-    params: CapabilityParams
-  ): Promise<GenerationResult> {
-    const protocol = getProtocol(ctx.protocol);
-    if (!protocol?.buildVideoRequest) {
-      throw new Error(`Protocol ${ctx.protocol} does not support video generation`);
+    _params: CapabilityParams,
+    body: Record<string, unknown>,
+    endpointCfg: CapabilityEndpointConfig
+  ): ProtocolRequestResult {
+    if (!protocol.buildVideoRequest) {
+      throw new Error(`Protocol ${protocol.name} does not support video generation`);
     }
 
-    const body = build({
-      params,
-      modelName: ctx.model,
-      capability: "video",
-      protocol: ctx.protocol,
-      baseUrl: ctx.baseUrl,
-      taskId: ctx.taskId,
-    });
+    return protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);
+  }
 
-    // 从 model-ui.json 上游级解析 endpoints（替代旧的用户渠道 config）
-    const endpoints = resolveProviderEndpoints(hostFromBaseUrl(ctx.baseUrl), ctx.model, "video");
-    const endpointCfg = endpoints ? { protocol: { endpoints } } : undefined;
-
-    const req = protocol.buildVideoRequest(ctx.baseUrl, ctx.apiKey, body, endpointCfg);
-
-    // 请求组装完成阶段：内部参数已按厂商协议生成具体请求，即将提交
-    logEvent("capability.video", {
-      banner: true,
-      bannerTitle: "视频请求组装完成，即将提交",
-      stage: "translation_done",
-      taskId: ctx.taskId,
-      url: req.url,
-      method: req.method,
-      body: req.body,
-    });
-
-    const result = await submitAndWait({
-      taskId: ctx.taskId,
-      userId: ctx.userId,
-      startedAt: ctx.startedAt,
-      protocol,
-      capability: "video",
-      baseUrl: ctx.baseUrl,
-      apiKey: ctx.apiKey,
-      body,
-      channelConfig: endpointCfg,
-      buildRequest: () => req,
-      parseResponse: (data) => {
-        const parsed = protocol.parseVideoResponse
-          ? protocol.parseVideoResponse(data)
-          : { urls: [] };
-        return parsed;
-      },
-    });
-
-    if (result.status === "cancelled") {
-      throw new GenerationCancelledError();
-    }
-
-    if (result.status === "failed") {
-      throw new GenerationFailureError(
-        result.error ?? "Video generation failed",
-        result.errorCode
-      );
-    }
-
-    return { urls: result.urls, text: result.text };
+  protected parseResponse(protocol: ProtocolService, data: unknown): ProtocolResponse {
+    return protocol.parseVideoResponse ? protocol.parseVideoResponse(data) : { urls: [] };
   }
 }
 

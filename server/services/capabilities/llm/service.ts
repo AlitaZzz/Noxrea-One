@@ -17,6 +17,7 @@ import { logEvent } from "@server/core/logger/utils";
 import {
   GenerationFailureError,
   extractUpstreamMessage,
+  failFromUpstream,
 } from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
@@ -169,10 +170,11 @@ class LlmCapabilityService implements CapabilityService {
         body: errBody.slice(0, 500),
       });
       const upstreamMsg = extractUpstreamMessage(errBody);
-      throw new GenerationFailureError(
-        upstreamMsg || `HTTP ${response.status}`,
-        upstreamMsg ? undefined : "generation.upstream_http_error"
-      );
+      const { error, errorCode } = failFromUpstream(upstreamMsg, {
+        message: `HTTP ${response.status}`,
+        code: "generation.upstream_http_error",
+      });
+      throw new GenerationFailureError(error, errorCode);
     }
 
     const data = await response.json();

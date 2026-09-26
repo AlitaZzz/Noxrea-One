@@ -49,12 +49,40 @@ export function getPollFieldName(
 }
 
 /** 从 channelConfig.protocol.endpoints 提取轮询路径（能力优先，回退通用 poll）。 */
-export function getPollPath(
+function getPollPath(
   channelConfig?: Record<string, unknown>,
   capability?: string
 ): string | undefined {
   const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
   return (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
+}
+
+/**
+ * 构造轮询 URL（image / video 共用，仅能力名不同）。
+ * 自定义路径三种形态：完整 URL 直接替换占位符；含 {xxx} 占位符拼接 baseUrl 后
+ * 替换；纯路径段追加任务 ID。占位符替换规则：{model} 走请求模型名，
+ * 其余（如 {video_id} / {task_id}）走任务 ID。
+ */
+export function buildOpenAiPollUrl(
+  baseUrl: string,
+  upstreamTaskId: string,
+  channelConfig?: Record<string, unknown>,
+  capability?: string,
+  model?: string
+): string {
+  const customPath = getPollPath(channelConfig, capability);
+  const fill = (path: string) =>
+    path.replace(/\{([^}]+)\}/g, (_, name: string) => (name === "model" ? (model ?? "") : upstreamTaskId));
+  if (customPath) {
+    if (/^https?:\/\//.test(customPath)) {
+      return fill(customPath);
+    }
+    if (/\{[^}]+\}/.test(customPath)) {
+      return `${baseUrl}${fill(customPath)}`;
+    }
+    return `${baseUrl}${customPath}/${upstreamTaskId}`;
+  }
+  return `${baseUrl}/tasks/${upstreamTaskId}`;
 }
 
 /** URL 扫描跳过的键名：prompt 类字段是用户输入回显，其中的 URL 不是产物地址 */

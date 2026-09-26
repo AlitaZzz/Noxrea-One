@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOpenAiPollUrl,
   extractB64Fields,
   extractOpenAiTaskId,
   normalizeStatus,
@@ -116,6 +117,34 @@ describe("parseScanSyncResult", () => {
 
   it("无 URL 的提交回执 → 空 urls，交由任务 ID 提取/轮询", () => {
     expect(parseScanSyncResult({ task_id: "t-1", status: "pending" }, IMAGE_B64)).toEqual({ urls: [] });
+  });
+});
+
+describe("buildOpenAiPollUrl", () => {
+  const cfg = (endpoints: Record<string, string>) => ({ protocol: { endpoints } });
+
+  it("无自定义路径 → 默认 /tasks/{id}", () => {
+    expect(buildOpenAiPollUrl("https://api.example.com", "t-1")).toBe("https://api.example.com/tasks/t-1");
+  });
+
+  it("能力专属 poll 路径（纯路径段）追加任务 ID", () => {
+    expect(buildOpenAiPollUrl("https://api.example.com", "v-1", cfg({ "video.poll": "/v1/videos" }), "video"))
+      .toBe("https://api.example.com/v1/videos/v-1");
+  });
+
+  it("含 {xxx} 占位符拼接 baseUrl 后替换：{model} 走模型名，其余走任务 ID", () => {
+    expect(
+      buildOpenAiPollUrl("https://api.example.com", "v-1", cfg({ "video.poll": "/v1/videos/{video_id}" }), "video", "wan-2.5")
+    ).toBe("https://api.example.com/v1/videos/v-1");
+    expect(
+      buildOpenAiPollUrl("https://api.example.com", "t-2", cfg({ poll: "/fetch?model={model}&task_id={task_id}" }), "image", "gpt-image")
+    ).toBe("https://api.example.com/fetch?model=gpt-image&task_id=t-2");
+  });
+
+  it("已是完整 URL（含协议头）直接替换占位符，不拼 baseUrl", () => {
+    expect(
+      buildOpenAiPollUrl("https://api.example.com", "v-2", cfg({ "video.poll": "https://poll.example.com/v/{video_id}" }), "video")
+    ).toBe("https://poll.example.com/v/v-2");
   });
 });
 

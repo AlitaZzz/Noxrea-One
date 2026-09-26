@@ -1,4 +1,5 @@
 import { prisma } from "@server/core/database/client";
+import { TASK_TERMINAL_STATUSES } from "@noxrea/shared";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./json-column";
 import { publishTaskTerminal } from "@server/services/tasks/event-bus";
 import { logEvent, errText } from "@server/core/logger/utils";
@@ -88,20 +89,6 @@ export async function isTaskCancelled(id: string): Promise<boolean> {
     });
     return false;
   }
-}
-
-export async function getTasksByUser(
-  userId: number,
-  skip = 0,
-  limit = 20
-) {
-  const tasks = await prisma.generationTask.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    skip,
-    take: limit,
-  });
-  return tasks.map(deserializeTask);
 }
 
 /**
@@ -315,7 +302,7 @@ export type TaskTerminalFields = Pick<
 
 /** 终态判断的单一谓词：取消路由、SSE 路由与 watcher 兜底共用，避免字面量逐处漂移 */
 export function isTerminalTaskStatus(status: string): status is TerminalTaskState["status"] {
-  return status === "completed" || status === "failed" || status === "cancelled";
+  return (TASK_TERMINAL_STATUSES as readonly string[]).includes(status);
 }
 
 /** 终态回填/广播所需的投影列：避免拉取 refImages/refAudios/refVideos 等大 JSON 列后丢弃 */
@@ -420,7 +407,11 @@ async function transitionToTerminal(
   return task;
 }
 
-export function completeTask(
+/**
+ * completeTask / failTask：模块内私有，仅经 safeCompleteTask / safeFailTask
+ * 兜底变体对外使用——终态写入的异常兜底是唯一正确的调用姿势。
+ */
+function completeTask(
   id: string,
   data: { resultUrls?: string[]; resultText?: string },
   ownership: { startedAt: Date | null }
@@ -431,7 +422,7 @@ export function completeTask(
   }, ownership);
 }
 
-export function failTask(
+function failTask(
   id: string,
   data: { error?: string; errorCode?: string },
   ownership: { startedAt: Date | null }
