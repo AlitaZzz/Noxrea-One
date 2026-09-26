@@ -1,7 +1,8 @@
 /**
  * Agent 工具元信息注册表（ActionUtil 式）：每个画布工具对应一个图标、
- * 中文标题与参数描述模板。聊天面板操作行展示文案 = intent ?? describe ?? label ?? name。
+ * 标题与参数描述模板。聊天面板操作行展示文案 = intent ?? describe ?? label ?? name。
  * describe 通过 useCanvasStore.getState() 同步查询节点标题，查不到回退 id 前 6 位。
+ * 标题与 describe 均为 UI 文案，经 i18n 取当前语言；在渲染期同步调用。
  */
 import type { ReactNode } from "react";
 
@@ -19,21 +20,30 @@ import UpdateNodeIcon from "@/components/ui/icons/agent/UpdateNodeIcon";
 import ViewportFocusIcon from "@/components/ui/icons/agent/ViewportFocusIcon";
 import type { ToolCallView } from "@/features/canvas/agent/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import i18n from "@/lib/i18n/config";
 
-const KIND_NAMES: Record<string, string> = {
-  text: "文本",
-  image: "图片",
-  video: "视频",
-  audio: "音频",
-  director: "导演台",
-  group: "编组",
+/** 节点 kind → i18n key（与画布元素面板共用 node.* 文案） */
+const KIND_KEYS: Record<string, string> = {
+  text: "node.text",
+  image: "node.image",
+  video: "node.video",
+  audio: "node.audio",
+  director: "node.director",
+  group: "node.group",
 };
+
+const kindName = (k: string): string => (KIND_KEYS[k] ? i18n.t(KIND_KEYS[k]) : k);
 
 /** 按节点 id 查标题；查不到回退 id 前 6 位 */
 function nodeLabel(id: string): string {
   const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
   const label = node?.data?.label;
   return typeof label === "string" && label ? label : id.slice(0, 6);
+}
+
+/** 带书名号的节点引用；无 id 时回退到「节点」 */
+function quotedLabel(id: string | undefined): string {
+  return id ? i18n.t("agent.tool.nodeLabel", { label: nodeLabel(id) }) : i18n.t("agent.tool.nodeFallback");
 }
 
 function asArray(v: unknown): unknown[] {
@@ -46,131 +56,124 @@ function asString(v: unknown): string | undefined {
 
 export interface ToolMeta {
   icon: ReactNode;
-  title: string;
   describe: (args: Record<string, unknown>) => string;
 }
 
 export const TOOL_META: Record<string, ToolMeta> = {
   create_node: {
     icon: <CreateNodeIcon />,
-    title: "创建节点",
     describe: (args) => {
+      const t = (k: string, opts?: Record<string, unknown>) => i18n.t(k, opts);
       const items = asArray(args.nodes);
-      if (items.length === 0) return "新建节点";
+      if (items.length === 0) return t("agent.tool.createNode");
       const counts = new Map<string, number>();
       for (const it of items) {
         const kind = typeof (it as { kind?: unknown }).kind === "string" ? (it as { kind: string }).kind : "text";
         counts.set(kind, (counts.get(kind) ?? 0) + 1);
       }
-      const summary = [...counts.entries()].map(([k, n]) => `${KIND_NAMES[k] ?? k}${n}`).join("、");
-      return `新建 ${items.length} 个节点（${summary}）`;
+      // 每类「名称×数量」与分隔符均经 i18n 取当前语言形态，不硬编码中文标点
+      const summary = [...counts.entries()]
+        .map(([k, n]) => i18n.t("agent.tool.kindCount", { name: kindName(k), count: n }))
+        .join(i18n.t("agent.tool.listSeparator"));
+      return t("agent.tool.createNodeN", { count: items.length, summary });
     },
   },
   update_node: {
     icon: <UpdateNodeIcon />,
-    title: "更新节点",
     describe: (args) => {
       const id = asString(args.nodeId);
-      return id ? `更新节点「${nodeLabel(id)}」` : "更新节点";
+      return id ? i18n.t("agent.tool.updateNode", { label: nodeLabel(id) }) : i18n.t("agent.tool.updateNodePlain");
     },
   },
   delete_nodes: {
     icon: <DeleteNodeIcon />,
-    title: "删除节点",
     describe: (args) => {
       const ids = asArray(args.nodeIds);
-      return ids.length ? `删除 ${ids.length} 个节点` : "删除节点";
+      return ids.length ? i18n.t("agent.tool.deleteNodeN", { count: ids.length }) : i18n.t("agent.tool.deleteNode");
     },
   },
   connect_nodes: {
     icon: <ConnectNodesIcon />,
-    title: "连接节点",
     describe: (args) => {
       const edges = asArray(args.edges);
-      return edges.length ? `创建 ${edges.length} 条连线` : "创建连线";
+      return edges.length ? i18n.t("agent.tool.connectN", { count: edges.length }) : i18n.t("agent.tool.connect");
     },
   },
   delete_edges: {
     icon: <UnlinkIcon />,
-    title: "删除连线",
     describe: (args) => {
       const edges = asArray(args.edges);
-      return edges.length ? `删除 ${edges.length} 条连线` : "删除连线";
+      return edges.length ? i18n.t("agent.tool.deleteEdgesN", { count: edges.length }) : i18n.t("agent.tool.deleteEdges");
     },
   },
   duplicate_node: {
     icon: <DuplicateIcon />,
-    title: "复制节点",
     describe: (args) => {
       const id = asString(args.nodeId);
-      return id ? `复制节点「${nodeLabel(id)}」` : "复制节点";
+      return id ? i18n.t("agent.tool.copyNodeLabeled", { label: nodeLabel(id) }) : i18n.t("agent.tool.copyNode");
     },
   },
   move_node: {
     icon: <MoveIcon />,
-    title: "移动节点",
     describe: (args) => {
       const id = asString(args.nodeId);
-      const label = id ? `「${nodeLabel(id)}」` : "节点";
+      const label = quotedLabel(id);
       if (typeof args.x === "number" && typeof args.y === "number") {
-        return `移动${label}到 (${Math.round(args.x)}, ${Math.round(args.y)})`;
+        return i18n.t("agent.tool.moveNodeTo", { label, x: Math.round(args.x), y: Math.round(args.y) });
       }
-      if (args.alignTo === "center") return `移动${label}到视口中心`;
+      if (args.alignTo === "center") return i18n.t("agent.tool.moveNodeCenter", { label });
       const ref = asString(args.alignTo);
-      if (ref) return `移动${label}到「${nodeLabel(ref)}」旁`;
-      return `移动${label}`;
+      if (ref) return i18n.t("agent.tool.moveNodeBeside", { label, ref: nodeLabel(ref) });
+      return i18n.t("agent.tool.moveNodeLabeled", { label });
     },
   },
   arrange_canvas: {
     icon: <ArrangeIcon />,
-    title: "整理画布",
-    describe: () => "整理画布布局",
+    describe: () => i18n.t("agent.tool.arrangeCanvas"),
   },
   set_viewport: {
     icon: <ViewportFocusIcon />,
-    title: "调整视口",
     describe: (args) => {
       const id = asString(args.nodeId);
-      if (id) return `聚焦节点「${nodeLabel(id)}」`;
+      if (id) return i18n.t("agent.tool.focusNode", { label: nodeLabel(id) });
       if (typeof args.x === "number" && typeof args.y === "number") {
-        return `移动视口到 (${Math.round(args.x)}, ${Math.round(args.y)})`;
+        return i18n.t("agent.tool.moveViewportTo", { x: Math.round(args.x), y: Math.round(args.y) });
       }
-      return "调整视口";
+      return i18n.t("agent.tool.setViewport");
     },
   },
   select_nodes: {
     icon: <SelectIcon />,
-    title: "选中节点",
     describe: (args) => {
       const ids = asArray(args.nodeIds);
       const focus = args.focus === true;
-      return ids.length ? `选中 ${ids.length} 个节点${focus ? "并聚焦" : ""}` : "选中节点";
+      if (!ids.length) return i18n.t("agent.tool.selectNodes");
+      return focus
+        ? i18n.t("agent.tool.selectNodesNFocus", { count: ids.length })
+        : i18n.t("agent.tool.selectNodesN", { count: ids.length });
     },
   },
   get_canvas_state: {
     icon: <CanvasStateIcon />,
-    title: "查看画布状态",
     describe: (args) => {
       const r = args.region;
       const hasRegion = r != null && typeof r === "object" && !Array.isArray(r)
         && ["minX", "maxX", "minY", "maxY"].every((k) => typeof (r as Record<string, unknown>)[k] === "number");
-      return hasRegion ? "按坐标范围读取画布状态" : "读取画布当前状态";
+      return hasRegion ? i18n.t("agent.tool.canvasStateRegion") : i18n.t("agent.tool.canvasState");
     },
   },
   get_node_detail: {
     icon: <NodeDetailIcon />,
-    title: "读取节点内容",
     describe: (args) => {
       const ids = asArray(args.nodeIds);
-      if (ids.length === 0) return "读取节点内容";
-      const shown = ids.slice(0, 3).map((id) => `「${nodeLabel(String(id))}」`).join("、");
-      const more = ids.length > 3 ? ` 等 ${ids.length} 个节点` : "";
-      return `读取节点内容：${shown}${more}`;
+      if (ids.length === 0) return i18n.t("agent.tool.readNodes");
+      const shown = ids.slice(0, 3).map((id) => i18n.t("agent.tool.nodeLabel", { label: nodeLabel(String(id)) })).join("、");
+      const more = ids.length > 3 ? i18n.t("agent.tool.readNodesMore", { count: ids.length }) : "";
+      return i18n.t("agent.tool.readNodesList", { labels: shown, more });
     },
   },
   message_user: {
     icon: <CanvasStateIcon />,
-    title: "回复用户",
     describe: () => "",
   },
 };

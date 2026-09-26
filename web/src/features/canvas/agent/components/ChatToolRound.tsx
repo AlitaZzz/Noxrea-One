@@ -5,6 +5,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import ChatActionRow from "@/features/canvas/agent/components/ChatActionRow";
 import type { ChatRound } from "@/features/canvas/agent/utils/group-sections";
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function ChatToolRound({ round, isStreaming }: Props) {
+  const { t } = useTranslation();
   const allDone = !isStreaming && round.calls.every((c) => round.results.has(c.id));
   // null = 用户未干预：未完成展开、完成后折叠；用户点击后固定
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
@@ -29,7 +31,7 @@ export function ChatToolRound({ round, isStreaming }: Props) {
   if (!open) {
     return (
       <button type="button" className="chat-tool-round-toggle" onClick={() => setUserOpen(true)}>
-        执行了 {round.calls.length} 个操作
+        {t("agent.executedCount", { count: round.calls.length })}
         <span className="chat-tool-round-arrow">▸</span>
       </button>
     );
@@ -39,7 +41,7 @@ export function ChatToolRound({ round, isStreaming }: Props) {
     <div className="chat-tool-round">
       {round.calls.length > 1 && (
         <button type="button" className="chat-tool-round-toggle" onClick={() => setUserOpen(false)}>
-          执行了 {round.calls.length} 个操作
+          {t("agent.executedCount", { count: round.calls.length })}
           <span className="chat-tool-round-arrow">▾</span>
         </button>
       )}

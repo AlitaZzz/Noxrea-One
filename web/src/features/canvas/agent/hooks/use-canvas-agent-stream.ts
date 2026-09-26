@@ -26,6 +26,7 @@ import { applyConfirmSelections, collectConfirmTargetNodeIds } from "@/features/
 import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { resolveResponseError } from "@/lib/api/error-message";
+import i18n from "@/lib/i18n/config";
 
 /** 工具续轮上限：防止模型反复调用失败工具造成死循环 */
 const MAX_TOOL_ROUNDS = 12;
@@ -439,14 +440,14 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         }
         // 轮数打满仍有工具调用：明确收尾，避免气泡永远挂着未执行的 chip
         if (result.hasTool) {
-          patchNote(result.assistantId, "⚠ 工具调用轮数已达上限，剩余操作未执行，请重新描述需求。");
+          patchNote(result.assistantId, i18n.t("agent.toolRoundLimitReached"));
         }
         finishTurnHistory();
       } catch (err: unknown) {
         finishTurnHistory();
         const isAbort = err instanceof Error && err.name === "AbortError";
         if (!isAbort) {
-          const msg = err instanceof Error ? err.message : "对话失败";
+          const msg = err instanceof Error ? err.message : i18n.t("agent.chatFailed");
           // 错误只渲染到气泡内：patch 最后一个空的 assistant 占位
           setMessages((prev) => {
             const next = [...prev];

@@ -10,6 +10,7 @@
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
 import { Drawer, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
@@ -34,6 +35,7 @@ interface Props {
 
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 工具续轮） */
 export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
+  const { t } = useTranslation();
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
   const initializeFailed = useModelStore((s) => s.initializeFailed);
@@ -77,7 +79,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
       return;
     }
     if (undoAction()) {
-      showGlobalMessage().success("已撤销本轮操作");
+      showGlobalMessage().success(i18n.t("agent.undoTurnSuccess"));
     }
   }, []);
 
@@ -120,20 +122,20 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
     setEditing(true);
   }, [chatTitle]);
   const commitRename = useCallback(() => {
-    const t = titleDraft.trim();
-    if (t) void renameChat(t);
+    const title = titleDraft.trim();
+    if (title) void renameChat(title);
     setEditing(false);
   }, [titleDraft, renameChat]);
 
   const formatRelative = useCallback((iso: string) => {
     const diff = Date.now() - new Date(iso).getTime();
     const min = Math.floor(diff / 60000);
-    if (min < 1) return "刚刚";
-    if (min < 60) return `${min}分钟`;
+    if (min < 1) return i18n.t("agent.timeJustNow");
+    if (min < 60) return i18n.t("agent.timeMinutes", { n: min });
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}小时`;
+    if (hr < 24) return i18n.t("agent.timeHours", { n: hr });
     const day = Math.floor(hr / 24);
-    if (day < 7) return `${day}天`;
+    if (day < 7) return i18n.t("agent.timeDays", { n: day });
     const d = new Date(iso);
     const p = (n: number) => `${n}`.padStart(2, "0");
     return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())}`;
@@ -161,15 +163,15 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             }}
           />
         ) : (
-          <Tooltip title="点击重命名" placement="bottom">
-            <span className="chat-title" onClick={startRename}>{chatTitle ?? "新对话"}</span>
+          <Tooltip title={t("agent.renameTooltip")} placement="bottom">
+            <span className="chat-title" onClick={startRename}>{chatTitle ?? t("agent.newChat")}</span>
           </Tooltip>
         )
       }
       extra={
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <Tooltip title="新对话" placement="bottom">
-            <button type="button" className="chat-header-btn" aria-label="新对话" onClick={() => newChat()}>
+          <Tooltip title={t("agent.newChat")} placement="bottom">
+            <button type="button" className="chat-header-btn" aria-label={t("agent.newChat")} onClick={() => newChat()}>
               <NewChatIcon />
             </button>
           </Tooltip>
@@ -183,10 +185,10 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             overlayClassName="chat-history-popover"
             content={
               <div className="chat-history-body">
-                <div className="chat-history-title">历史对话</div>
+                <div className="chat-history-title">{t("agent.historyTitle")}</div>
                 <div className="chat-history-list">
                   {sessions.length === 0 ? (
-                    <div className="chat-history-empty">暂无历史对话</div>
+                    <div className="chat-history-empty">{t("agent.historyEmpty")}</div>
                   ) : (
                     sessions.map((s) => (
                       <div key={s.id} className="chat-history-item group">
@@ -198,17 +200,17 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                             setHistoryOpen(false);
                           }}
                         >
-                          <span className="chat-history-name">{s.title || "新对话"}</span>
+                          <span className="chat-history-name">{s.title || t("agent.newChat")}</span>
                         </button>
                         <div className="chat-history-side">
                           <Tooltip title={new Date(s.updatedAt).toLocaleString()} placement="top">
                             <span className="chat-history-time">{formatRelative(s.updatedAt)}</span>
                           </Tooltip>
-                          <Tooltip title="删除对话" placement="top">
+                          <Tooltip title={t("agent.deleteChatTooltip")} placement="top">
                           <button
                             type="button"
                             className="chat-history-del"
-                            aria-label={`删除「${s.title || "新对话"}」`}
+                            aria-label={t("agent.deleteChatAria", { title: s.title || t("agent.newChat") })}
                             onClick={() => void deleteChat(s.id)}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19.5 21.5" width="14" height="14" aria-hidden="true" role="img">
@@ -224,8 +226,8 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               </div>
             }
             trigger={
-              <Tooltip title="历史对话" placement="bottom">
-                <button type="button" className="chat-header-btn" aria-label="历史对话" onClick={() => setHistoryOpen((v) => !v)}>
+              <Tooltip title={t("agent.historyTitle")} placement="bottom">
+                <button type="button" className="chat-header-btn" aria-label={t("agent.historyTitle")} onClick={() => setHistoryOpen((v) => !v)}>
                   <HistoryIcon />
                 </button>
               </Tooltip>
@@ -243,7 +245,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
         {messages.length === 0 ? (
           <div className="chat-empty">
             <div className="chat-empty-title">Noxrea One</div>
-            <div className="chat-empty-subtitle">从灵感碎片，到完整世界</div>
+            <div className="chat-empty-subtitle">{t("agent.emptySubtitle")}</div>
           </div>
         ) : (
           sections.map((section, index) => (
@@ -267,7 +269,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             className="chat-composer-input"
             contentEditable
             suppressContentEditableWarning
-            data-placeholder="描述你的想法，例如「画布上建三个文本节点连起来」"
+            data-placeholder={t("agent.composerPlaceholder")}
             onInput={(e) => {
               const el = e.currentTarget;
               if (!el.textContent?.trim()) el.innerHTML = "";
@@ -311,7 +313,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   className="chat-composer-model"
                   onClick={() => void initialize()}
                 >
-                  <span className="chat-composer-model-label">模型列表加载失败，点击重试</span>
+                  <span className="chat-composer-model-label">{t("agent.modelLoadFailed")}</span>
                 </button>
               ) : (
                 <MenuPopover
@@ -319,7 +321,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   onOpenChange={setModelOpen}
                   placement="topRight"
                   trigger={
-                    <button type="button" className="chat-composer-model" aria-label="选择模型">
+                    <button type="button" className="chat-composer-model" aria-label={t("agent.selectModelAria")}>
                       <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
                       <ChevronDownIcon />
                     </button>
@@ -340,7 +342,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               )}
               <button
                 type="button"
-                aria-label={isStreaming ? "停止" : "发送"}
+                aria-label={isStreaming ? t("agent.stopAria") : t("agent.sendAria")}
                 className="flex items-center justify-center flex-shrink-0 transition-all"
                 style={{
                   width: 36,

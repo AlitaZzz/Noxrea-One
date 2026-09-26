@@ -4,14 +4,16 @@
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AgentSessionDto } from "@/features/canvas/agent/api";
 import { agentApi } from "@/features/canvas/agent/api";
+import { createSessionGate } from "@/features/canvas/agent/hooks/session-gate";
 import type { ChatMessage, ChatRole } from "@/features/canvas/agent/types";
 import { clearUserActions } from "@/features/canvas/agent/user-action-tracker";
 import { ApiError } from "@/lib/api/client";
 import { showGlobalMessage } from "@/lib/global-message";
+import i18n from "@/lib/i18n/config";
 
 let _seq = 0;
 function uid() {
@@ -41,13 +43,14 @@ export function useAgentSessions(opts: {
   const [chatId, setChatId] = useState<number | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSessionDto[]>([]);
-  // chatId 的同步镜像：ensureSession 异步等待期间可能被 newChat / 项目切换重置，
-  // ref 用于在 await 之后判断当前会话是否仍然有效
-  const chatIdRef = useRef<number | null>(null);
+
+  // 会话生命周期门闸（世代令牌 + 单飞）：ensureSession 在途时被 newChat / 切项目 /
+  // 切会话重置，孤儿会话会被门闸放弃挂载；并发 ensure 共用一次创建
+  const gate = useMemo(() => createSessionGate(), []);
 
   // 切换项目时自动重置对话，避免旧项目的会话串到新项目。
   // state 重置用渲染期条件调整（React 官方推荐的 prop 变化重置模式），
-  // 避免 effect 内同步 setState 触发级联渲染；ref 清理与停流/清消息副作用仍走 effect。
+  // 避免 effect 内同步 setState 触发级联渲染；门闸/停流/清消息副作用仍走 effect。
   const [prevProjectId, setPrevProjectId] = useState(opts.projectId);
   if (prevProjectId !== opts.projectId) {
     setPrevProjectId(opts.projectId);
@@ -56,7 +59,7 @@ export function useAgentSessions(opts: {
   }
 
   useEffect(() => {
-    chatIdRef.current = null;
+    gate.reset();
     clearUserActions();
     opts.onStopStream();
     opts.onClearMessages();
@@ -65,21 +68,24 @@ export function useAgentSessions(opts: {
   /** 创建新会话（首条消息前调用），可选传入初始标题 */
   const ensureSession = useCallback(
     async (initialTitle?: string): Promise<number | null> => {
-      if (chatIdRef.current) return chatIdRef.current;
       try {
-        const session = await agentApi.createSession(initialTitle, opts.projectId);
-        // 等待期间被 newChat / 项目切换重置则放弃该会话，避免串到旧对话
-        if (chatIdRef.current) return chatIdRef.current;
-        chatIdRef.current = session.id;
-        setChatId(session.id);
-        if (session.title) setChatTitle(session.title);
-        return session.id;
+        const ref = await gate.ensure(
+          (title) => agentApi.createSession(title, opts.projectId),
+          initialTitle
+        );
+        // resolve 与本续体之间可能插入 reset（微任务间隙）：门闸已重置则该会话同为孤儿
+        if (ref && gate.current?.id === ref.id) {
+          setChatId(ref.id);
+          if (ref.title) setChatTitle(ref.title);
+          return ref.id;
+        }
+        return null;
       } catch (e) {
-        showGlobalMessage().error(agentError(e, "创建会话失败"));
+        showGlobalMessage().error(agentError(e, i18n.t("agent.createSessionFailed")));
         return null;
       }
     },
-    [opts.projectId]
+    [gate, opts.projectId]
   );
 
   /** 加载历史消息（切换会话时调用） */
@@ -120,15 +126,15 @@ export function useAgentSessions(opts: {
           return [msg];
         });
         opts.onLoadMessages(loaded);
-        chatIdRef.current = sessionId;
-        setChatId(sessionId);
         const found = sessions.find((s) => s.id === sessionId);
+        gate.adopt({ id: sessionId, title: found?.title ?? null });
+        setChatId(sessionId);
         setChatTitle(found?.title ?? null);
       } catch (e) {
-        showGlobalMessage().error(agentError(e, "加载历史失败"));
+        showGlobalMessage().error(agentError(e, i18n.t("agent.loadHistoryFailed")));
       }
     },
-    [sessions, opts]
+    [gate, sessions, opts]
   );
 
   /** 开新对话 */
@@ -136,10 +142,10 @@ export function useAgentSessions(opts: {
     opts.onStopStream();
     opts.onClearMessages();
     clearUserActions();
-    chatIdRef.current = null;
+    gate.reset();
     setChatId(null);
     setChatTitle(null);
-  }, [opts]);
+  }, [gate, opts]);
 
   /** 拉取历史会话列表（按 updatedAt 倒序） */
   const loadSessions = useCallback(async () => {
@@ -147,7 +153,7 @@ export function useAgentSessions(opts: {
       const data = await agentApi.listSessions(opts.projectId);
       setSessions(data ?? []);
     } catch (e) {
-      showGlobalMessage().error(agentError(e, "加载历史列表失败"));
+      showGlobalMessage().error(agentError(e, i18n.t("agent.loadSessionsFailed")));
     }
   }, [opts.projectId]);
 
@@ -158,9 +164,9 @@ export function useAgentSessions(opts: {
         await agentApi.deleteSession(sessionId);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         if (sessionId === chatId) newChat();
-        showGlobalMessage().success("已删除会话");
+        showGlobalMessage().success(i18n.t("agent.sessionDeleted"));
       } catch (e) {
-        showGlobalMessage().error(agentError(e, "删除失败"));
+        showGlobalMessage().error(agentError(e, i18n.t("agent.deleteFailed")));
       }
     },
     [chatId, newChat]
@@ -174,7 +180,7 @@ export function useAgentSessions(opts: {
         await agentApi.renameSession(chatId, title);
         setChatTitle(title);
       } catch (e) {
-        showGlobalMessage().error(agentError(e, "重命名失败"));
+        showGlobalMessage().error(agentError(e, i18n.t("agent.renameFailed")));
       }
     },
     [chatId]

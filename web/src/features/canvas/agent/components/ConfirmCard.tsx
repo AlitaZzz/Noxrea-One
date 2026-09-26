@@ -6,18 +6,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { ConfirmDecision, PendingConfirmation } from "@/features/canvas/agent/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
-const NODE_TYPE_NAMES: Record<string, string> = {
-  [NODE_TYPE.TEXT]: "文本",
-  [NODE_TYPE.IMAGE]: "图片",
-  [NODE_TYPE.VIDEO]: "视频",
-  [NODE_TYPE.AUDIO]: "音频",
-  [NODE_TYPE.DIRECTOR]: "导演台",
-  [NODE_TYPE.GROUP]: "编组",
+/** 节点类型 → i18n key（类型名与画布元素面板共用 node.* 文案） */
+const NODE_TYPE_KEYS: Record<string, string> = {
+  [NODE_TYPE.TEXT]: "node.text",
+  [NODE_TYPE.IMAGE]: "node.image",
+  [NODE_TYPE.VIDEO]: "node.video",
+  [NODE_TYPE.AUDIO]: "node.audio",
+  [NODE_TYPE.DIRECTOR]: "node.director",
+  [NODE_TYPE.GROUP]: "node.group",
 };
 
 interface ParsedCall {
@@ -53,6 +55,7 @@ interface Props {
 }
 
 export function ConfirmCard({ pending, onResolve }: Props) {
+  const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const calls = useMemo(() => parseCalls(pending), [pending]);
   // callId → 勾选保留项（nodeId 或原 edges 下标）；初始全选
@@ -101,19 +104,19 @@ export function ConfirmCard({ pending, onResolve }: Props) {
 
   return (
     <div className="chat-confirm">
-      <div className="chat-confirm-title">Agent 请求确认</div>
+      <div className="chat-confirm-title">{t("agent.confirmTitle")}</div>
       {calls.map((c) => {
         if (c.name === "arrange_canvas") {
           return (
             <div key={c.id} className="chat-confirm-item">
-              <span className="chat-confirm-detail">将重新整理画布上全部节点的布局（可用「撤销此轮」恢复）</span>
+              <span className="chat-confirm-detail">{t("agent.arrangeCanvasDetail")}</span>
             </div>
           );
         }
         if (c.nodeIds.length > 0) {
           return (
             <div key={c.id} className="chat-confirm-group">
-              <div className="chat-confirm-subtitle">将删除 {c.nodeIds.length} 个节点（连线一并移除）</div>
+              <div className="chat-confirm-subtitle">{t("agent.confirmDeleteNodes", { count: c.nodeIds.length })}</div>
               <div className="chat-confirm-list">
                 {c.nodeIds.map((id) => {
                   const n = nodesById.get(id);
@@ -127,7 +130,7 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                       />
                       {thumb && <img className="chat-confirm-thumb" src={thumb} alt="" />}
                       <span className="chat-confirm-item-label">{nodeLabel(id)}</span>
-                      <span className="chat-confirm-item-type">{NODE_TYPE_NAMES[n?.type ?? ""] ?? "节点"}</span>
+                      <span className="chat-confirm-item-type">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
                     </label>
                   );
                 })}
@@ -138,7 +141,7 @@ export function ConfirmCard({ pending, onResolve }: Props) {
         if (c.edges.length > 0) {
           return (
             <div key={c.id} className="chat-confirm-group">
-              <div className="chat-confirm-subtitle">将删除 {c.edges.length} 条连线</div>
+              <div className="chat-confirm-subtitle">{t("agent.confirmDeleteEdges", { count: c.edges.length })}</div>
               <div className="chat-confirm-list">
                 {c.edges.map((e, i) => (
                   <label key={`${e.source}-${e.target}-${i}`} className="chat-confirm-item chat-confirm-item-check">
@@ -156,16 +159,16 @@ export function ConfirmCard({ pending, onResolve }: Props) {
         }
         return (
           <div key={c.id} className="chat-confirm-item">
-            <span className="chat-confirm-detail">此操作需要你的确认</span>
+            <span className="chat-confirm-detail">{t("agent.confirmGeneric")}</span>
           </div>
         );
       })}
       <div className="chat-confirm-actions">
         <button type="button" className="chat-confirm-btn chat-confirm-approve" onClick={() => onResolve(buildDecision(true))}>
-          确认执行
+          {t("agent.confirmExecute")}
         </button>
         <button type="button" className="chat-confirm-btn chat-confirm-deny" onClick={() => onResolve({ approved: false })}>
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     </div>
