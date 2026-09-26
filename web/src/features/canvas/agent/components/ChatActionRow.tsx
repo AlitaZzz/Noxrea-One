@@ -7,6 +7,7 @@
 import { CheckOutlined, CloseOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Tooltip } from "antd";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { actionRowText, TOOL_META } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function ChatActionRow({ call, result, isStreaming }: Props) {
+  const { t } = useTranslation();
   const [detailOpen, setDetailOpen] = useState(false);
   const meta = TOOL_META[call.name];
   const text = actionRowText(call);
@@ -36,7 +38,7 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
       : "skipped";
 
   const rawDetail = result?.content ?? call.args;
-  const detail = rawDetail.length > DETAIL_MAX_CHARS ? `${rawDetail.slice(0, DETAIL_MAX_CHARS)}…(已截断)` : rawDetail;
+  const detail = rawDetail.length > DETAIL_MAX_CHARS ? `${rawDetail.slice(0, DETAIL_MAX_CHARS)}${t("agent.detailTruncated")}` : rawDetail;
   let pretty = detail;
   if (!result?.content) {
     try {
@@ -54,10 +56,10 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
         {status === "ok" && <CheckOutlined />}
         {status === "pending" && <LoadingOutlined spin />}
         {(status === "error" || status === "skipped") && <CloseOutlined />}
-        {status === "skipped" && <span className="chat-action-skip-text">未执行</span>}
+        {status === "skipped" && <span className="chat-action-skip-text">{t("agent.skipped")}</span>}
       </span>
       <button type="button" className="chat-action-detail-toggle" onClick={() => setDetailOpen((v) => !v)}>
-        {detailOpen ? "收起" : "详情"}
+        {detailOpen ? t("common.collapse") : t("agent.detail")}
       </button>
       {detailOpen && <pre className="chat-tool-detail">{pretty}</pre>}
     </div>

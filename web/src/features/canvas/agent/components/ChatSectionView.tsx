@@ -3,6 +3,8 @@
  */
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 import { UndoTurnIcon } from "@/components/ui/icons/agent/UndoTurnIcon";
 import ChatToolRound from "@/features/canvas/agent/components/ChatToolRound";
 import Markdown from "@/features/canvas/agent/components/Markdown";
@@ -17,6 +19,7 @@ interface Props {
 }
 
 export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props) {
+  const { t } = useTranslation();
   return (
     <div className="chat-section">
       {section.userMsg && (
@@ -38,8 +41,10 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       {section.confirmResult && (
         <div className={`chat-confirm-result ${section.confirmResult.approved ? "chat-confirm-result-ok" : "chat-confirm-result-deny"}`}>
           {section.confirmResult.approved
-            ? `已确认执行 ${section.confirmResult.executedCount} 项操作${section.confirmResult.skippedCount > 0 ? `，跳过 ${section.confirmResult.skippedCount} 项` : ""}`
-            : "已取消，未执行任何操作"}
+            ? section.confirmResult.skippedCount > 0
+              ? t("agent.confirmExecuted", { executed: section.confirmResult.executedCount, skipped: section.confirmResult.skippedCount })
+              : t("agent.confirmExecutedAll", { executed: section.confirmResult.executedCount })
+            : t("agent.confirmCancelled")}
         </div>
       )}
 
@@ -58,7 +63,7 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       {section.thinking && isStreaming && (
         <div className="chat-msg chat-msg-assistant" style={{ marginBottom: 12, display: "flex", justifyContent: "flex-start" }}>
           <div className="chat-bubble chat-bubble-assistant">
-            <span className="chat-thinking">思考中…</span>
+            <span className="chat-thinking">{t("agent.thinking")}</span>
           </div>
         </div>
       )}
@@ -66,7 +71,7 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       {canUndo && (
         <button type="button" className="chat-section-undo-btn" onClick={onUndo}>
           <UndoTurnIcon />
-          <span>撤销此轮</span>
+          <span>{t("agent.undoTurn")}</span>
         </button>
       )}
     </div>
