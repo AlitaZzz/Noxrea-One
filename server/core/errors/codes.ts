@@ -159,11 +159,17 @@ export const ERROR_CODES = [
   /** 文件不存在 */
   "files.file_not_found",
 
-  // ── 视频抽帧 ──
-  /** 源视频不存在 */
-  "capture_frame.video_not_found",
+  // ── 媒体编辑路由共享错误码（抽帧/裁剪/截取/分离/变速/代理/雪碧图）──
+  /** 源文件不存在 */
+  "media.source_not_found",
+  /** 客户端提前断开，处理已中止 */
+  "media.cancelled",
   /** 未安装 ffmpeg */
-  "capture_frame.ffmpeg_missing",
+  "media.ffmpeg_missing",
+  /** 处理超时 */
+  "media.timeout",
+
+  // ── 视频抽帧 ──
   /** 抽帧处理失败 */
   "capture_frame.capture_failed",
 
@@ -178,44 +184,28 @@ export const ERROR_CODES = [
   "frame_sprite.generation_failed",
 
   // ── 音视频分离 ──
-  /** 源视频不存在 */
-  "detach_audio.video_not_found",
-  /** 未安装 ffmpeg */
-  "detach_audio.ffmpeg_missing",
   /** 源视频不含音轨，无法分离 */
   "detach_audio.no_audio_track",
   /** 分离处理失败 */
   "detach_audio.extract_failed",
-  /** 客户端提前断开，处理已中止 */
-  "detach_audio.cancelled",
 
-  // ── 视频片段截取 ──
-  /** 源视频不存在 */
-  "clip.video_not_found",
+  // ── 片段截取（视频 / 音频共用）──
   /** 片段范围无效（起点不早于终点，或不足 0.5 秒） */
   "clip.invalid_range",
   /** 片段超过单次截取时长上限 */
   "clip.range_too_long",
-  /** 未安装 ffmpeg */
-  "clip.ffmpeg_missing",
-  /** 截取超时 */
-  "clip.timeout",
   /** 截取处理失败 */
   "clip.extract_failed",
-  /** 客户端提前断开，处理已中止 */
-  "clip.cancelled",
 
-  // ── 音频片段截取（其余错误码复用 clip.*）──
-  /** 源音频不存在 */
-  "clip.audio_not_found",
-
-  // ── 视频画面裁剪（复用 clip.video_not_found / ffmpeg_missing / cancelled）──
+  // ── 视频画面裁剪 ──
   /** 裁剪矩形无效（退化或超出画面） */
   "crop.invalid_rect",
-  /** 视频裁剪超时 */
-  "crop.timeout",
   /** 裁剪处理失败 */
   "crop.failed",
+
+  // ── 音频变速 ──
+  /** 变速处理失败 */
+  "speed.failed",
 
   // ── 认证 ──
   /** 未携带登录凭证 */

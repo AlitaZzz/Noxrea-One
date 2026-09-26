@@ -15,6 +15,7 @@ import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
 import { buildFileUrl } from "@server/services/storage/service";
 import { localStorage } from "@server/services/storage/backends/local";
+import { checkUserRateLimit } from "@server/core/ratelimit";
 
 const router = new Hono();
 
@@ -45,6 +46,11 @@ router.post("/api/generate/task", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
+
+  // 按用户限流：每个任务都占用 worker 与上游配额，单用户 20 次/分钟
+  if (!checkUserRateLimit("generate", auth.user.id, 20, 60)) {
+    return failCode(429, "common.rate_limited");
+  }
 
   let body: unknown;
   try {

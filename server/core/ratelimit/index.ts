@@ -59,18 +59,6 @@ export class RateLimiter {
     entry.timestamps.push(now);
     return true;
   }
-
-  /** 获取剩余配额 */
-  remaining(key: string): number {
-    const now = Date.now();
-    const cutoff = now - this.windowSeconds * 1000;
-
-    const entry = this.windows.get(key);
-    if (!entry) return this.maxRequests;
-
-    entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-    return Math.max(0, this.maxRequests - entry.timestamps.length);
-  }
 }
 
 // 预置限流器
@@ -102,4 +90,31 @@ export function getRegisterRateLimiter(): RateLimiter {
     globalLimiters.set(key, limiter);
   }
   return limiter;
+}
+
+/**
+ * 通用具名限流器：同名（maxRequests, windowSeconds）全局唯一，惰性创建。
+ * 各业务路由经 checkUserRateLimit 声明配额，无需为每个场景复制一个 getter。
+ */
+function getNamedRateLimiter(name: string, maxRequests: number, windowSeconds: number): RateLimiter {
+  let limiter = globalLimiters.get(name);
+  if (!limiter) {
+    limiter = new RateLimiter(maxRequests, windowSeconds);
+    globalLimiters.set(name, limiter);
+  }
+  return limiter;
+}
+
+/**
+ * 已登录接口的按用户限流：以「业务名 + userId」为键。
+ * 已登录请求的调用方身份明确，无需走 IP 解析（IP 维度留给未鉴权的登录/注册）。
+ * 返回 false 表示被限流，调用方应回 429。
+ */
+export function checkUserRateLimit(
+  name: string,
+  userId: number,
+  maxRequests: number,
+  windowSeconds: number,
+): boolean {
+  return getNamedRateLimiter(name, maxRequests, windowSeconds).check(`${name}:${userId}`);
 }

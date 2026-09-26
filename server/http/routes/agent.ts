@@ -24,7 +24,7 @@ import {
 } from "@server/crud/agent";
 import { buildAgentMessages, buildCanvasSystem, buildUserActionSystem } from "@server/services/agent/context-builder";
 import type { IncomingMessage, HistoryMessage } from "@server/services/agent/context-builder";
-import { runCompletion, runCompletionStream } from "@server/services/agent/completion";
+import { runCompletionStream } from "@server/services/agent/completion";
 
 const router = new Hono();
 
@@ -121,66 +121,6 @@ router.get("/api/agent/sessions/:id/messages", async (c) => {
   if (!session) return failCode(404, "agent.session_not_found");
   const messages = await listMessages(id);
   return c.json(ok(messages));
-});
-
-// ── 非流式兜底 ──
-
-const sendMessageSchema = z.object({
-  content: z.string().min(1),
-  refImages: z.array(z.string()).optional(),
-  canvasState: z.unknown().optional(),
-});
-
-router.post("/api/agent/sessions/:id/messages", async (c) => {
-  const auth = await authenticateRequest(c.req.raw);
-  if ("error" in auth) return auth.error;
-  const userId = auth.user.id;
-
-  const id = Number(c.req.param("id"));
-  const session = await getSession(id, userId);
-  if (!session) return failCode(404, "agent.session_not_found");
-
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return failCode(400, "common.invalid_json");
-  }
-  const parsed = sendMessageSchema.safeParse(body);
-  if (!parsed.success) return failCode(422, "common.invalid_request");
-  const history: HistoryMessage[] = await listMessages(id);
-
-  const messages = buildAgentMessages({
-    history,
-    incoming: [
-      {
-        role: "user",
-        content: parsed.data.content,
-        ...(parsed.data.refImages?.length ? { images: parsed.data.refImages } : {}),
-      },
-    ],
-    canvasSystem: buildCanvasSystem(parsed.data.canvasState),
-  });
-
-  const providerId = c.req.query("providerId");
-  const model = c.req.query("model");
-  const reply = await runCompletion({
-    messages,
-    providerId: providerId ? Number(providerId) : undefined,
-    model: model ?? undefined,
-    userId,
-  });
-  if (!reply.ok) {
-    // 上游模型返回的原始错误只进日志，不随响应下发
-    logEvent("agent.reply", { level: "warn", stage: "failed", sessionId: id, error: reply.error });
-    return failCode(502, "agent.upstream_failed");
-  }
-
-  await createMessage({ sessionId: id, role: "user", content: parsed.data.content, refImages: parsed.data.refImages });
-  const assistant = await createMessage({ sessionId: id, role: "assistant", content: reply.text });
-  await touchSession(id);
-
-  return c.json(ok(assistant));
 });
 
 // ── 共享：一轮补全后的工具调用处理 ──

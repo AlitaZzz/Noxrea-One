@@ -13,15 +13,15 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/http/middleware/auth";
-import { createFrameSprite, probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media";
+import { createFrameSprite } from "@server/services/storage/video-frames";
+import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
 import { logger } from "@server/core/logger";
+import { createMediaEditRoute } from "./media-edit";
 import path from "path";
-import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
-import { createHash, randomUUID } from "crypto";
+import { createHash } from "crypto";
 
 const frameSpriteSchema = z.object({
   video_key: z.string().min(1),
@@ -83,10 +83,11 @@ async function generateSprite(
   spritePath: string,
   count: number,
   duration: number,
+  signal?: AbortSignal,
 ): Promise<void> {
   let renamed = false;
   try {
-    await createFrameSprite(videoPath, tmpPath, { count, cellWidth: CELL_WIDTH, duration });
+    await createFrameSprite(videoPath, tmpPath, { count, cellWidth: CELL_WIDTH, duration }, signal);
     await fs.mkdir(path.dirname(spritePath), { recursive: true });
     await fs.rename(tmpPath, spritePath);
     renamed = true;
@@ -103,115 +104,90 @@ async function generateSprite(
 
 const router = new Hono();
 
-router.post("/api/files/frame-sprite", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
+router.post(
+  "/api/files/frame-sprite",
+  createMediaEditRoute({
+    schema: frameSpriteSchema,
+    resolveKey: (d) => d.video_key,
+    name: "sprite",
+    failureCode: "frame_sprite.generation_failed",
+    async run({ c, sourceKey, sourcePath, tmpDir, signal }) {
+      const baseDir = path.resolve(localStorage.baseDir);
+      const meta = await probeVideoMetaCached(sourcePath);
+      const declaredDuration = meta?.duration ?? null;
+      // 拿不到时长就无法把格子映射到时间轴，采样间隔无从计算——此时只能放弃缩略图。
+      // 面板退化为「只有播放头」仍可定位与截取：成片抽帧走后端精确 seek
+      if (!declaredDuration) {
+        return failCode(422, "frame_sprite.duration_unavailable");
+      }
 
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return failCode(400, "common.invalid_json");
-  }
+      // 容器声明时长可能大于实际数据（下载中断的截断文件：moov 完整、mdat 只有前段）。
+      // 按声明时长采样会把超出部分铺满坏帧，且与代理、播放器的时长对不上；
+      // 这里把采样收敛到实际可解码范围，并随响应下发标记，前端在面板上给出警示
+      const integrity = await probeVideoIntegrity(sourcePath, declaredDuration);
+      const duration =
+        integrity.truncated && integrity.decodableDuration
+          ? integrity.decodableDuration
+          : declaredDuration;
+      const truncated = integrity.truncated && integrity.decodableDuration !== null;
 
-  const parsed = frameSpriteSchema.safeParse(body);
-  if (!parsed.success) {
-    return failCode(422, "common.invalid_request");
-  }
-  const { video_key } = parsed.data;
+      // 密度由时长决定（每格约 TARGET_SEC_PER_FRAME 秒）后钳到上下限：
+      // 10 秒内的视频能拿到 0.5 秒粒度，更长的视频固定 20 格、粒度随之变粗
+      const count = clamp(Math.ceil(duration / TARGET_SEC_PER_FRAME), MIN_FRAMES, MAX_FRAMES);
+      const fps = meta?.fps ?? null;
 
-  const baseDir = path.resolve(localStorage.baseDir);
-  const videoPath = path.resolve(baseDir, video_key);
+      // 图名由源键、格宽与帧数共同派生：格宽与帧数并入哈希后，调整参数会自动生成
+      // 新图，不会命中旧规格的缓存
+      const spriteKey = `_sprite/${createHash("sha1")
+        .update(`${sourceKey}|${CELL_WIDTH}|${count}|v${SPRITE_VERSION}`)
+        .digest("hex")
+        .slice(0, 32)}.webp`;
+      const spritePath = path.resolve(baseDir, spriteKey);
 
-  // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-  if (!isPathWithinBase(baseDir, videoPath)) {
-    return failCode(403, "files.invalid_path");
-  }
+      // 顺带做一次低频清理，不阻塞本次请求
+      void cleanupStaleSprites(baseDir);
 
-  try {
-    await fs.access(videoPath);
-  } catch {
-    return failCode(404, "capture_frame.video_not_found");
-  }
+      const payload = {
+        url: `/api/files/${spriteKey}`,
+        count,
+        cell_width: CELL_WIDTH,
+        duration,
+        fps,
+        truncated,
+        declared_duration: declaredDuration,
+      };
 
-  const meta = await probeVideoMetaCached(videoPath);
-  const declaredDuration = meta?.duration ?? null;
-  // 拿不到时长就无法把格子映射到时间轴，采样间隔无从计算——此时只能放弃缩略图。
-  // 面板退化为「只有播放头」仍可定位与截取：成片抽帧走后端精确 seek
-  if (!declaredDuration) {
-    return failCode(422, "frame_sprite.duration_unavailable");
-  }
+      try {
+        await fs.access(spritePath);
+        return c.json(ok({ ...payload, cached: true }));
+      } catch {
+        // 未生成，继续往下走
+      }
 
-  // 容器声明时长可能大于实际数据（下载中断的截断文件：moov 完整、mdat 只有前段）。
-  // 按声明时长采样会把超出部分铺满坏帧，且与代理、播放器的时长对不上；
-  // 这里把采样收敛到实际可解码范围，并随响应下发标记，前端在面板上给出警示
-  const integrity = await probeVideoIntegrity(videoPath, declaredDuration);
-  const duration =
-    integrity.truncated && integrity.decodableDuration
-      ? integrity.decodableDuration
-      : declaredDuration;
-  const truncated = integrity.truncated && integrity.decodableDuration !== null;
+      // 同一张图正在生成：复用那次转码，避免并发各跑一个 ffmpeg
+      const pending = inflight.get(spriteKey);
+      if (pending) {
+        await pending.catch(() => {});
+        try {
+          await fs.access(spritePath);
+          return c.json(ok({ ...payload, cached: true }));
+        } catch {
+          return failCode(500, "frame_sprite.generation_failed");
+        }
+      }
 
-  // 密度由时长决定（每格约 TARGET_SEC_PER_FRAME 秒）后钳到上下限：
-  // 10 秒内的视频能拿到 0.5 秒粒度，更长的视频固定 20 格、粒度随之变粗
-  const count = clamp(Math.ceil(duration / TARGET_SEC_PER_FRAME), MIN_FRAMES, MAX_FRAMES);
-  const fps = meta?.fps ?? null;
+      const tmpPath = path.join(tmpDir, "sprite.webp");
+      const task = generateSprite(sourcePath, tmpPath, spritePath, count, duration, signal);
+      inflight.set(spriteKey, task);
 
-  // 图名由源键、格宽与帧数共同派生：格宽与帧数并入哈希后，调整参数会自动生成
-  // 新图，不会命中旧规格的缓存
-  const spriteKey = `_sprite/${createHash("sha1")
-    .update(`${video_key}|${CELL_WIDTH}|${count}|v${SPRITE_VERSION}`)
-    .digest("hex")
-    .slice(0, 32)}.webp`;
-  const spritePath = path.resolve(baseDir, spriteKey);
-
-  // 顺带做一次低频清理，不阻塞本次请求
-  void cleanupStaleSprites(baseDir);
-
-  const payload = {
-    url: `/api/files/${spriteKey}`,
-    count,
-    cell_width: CELL_WIDTH,
-    duration,
-    fps,
-    truncated,
-    declared_duration: declaredDuration,
-  };
-
-  try {
-    await fs.access(spritePath);
-    return c.json(ok({ ...payload, cached: true }));
-  } catch {
-    // 未生成，继续往下走
-  }
-
-  // 同一张图正在生成：复用那次转码，避免并发各跑一个 ffmpeg
-  const pending = inflight.get(spriteKey);
-  if (pending) {
-    await pending.catch(() => {});
-    try {
-      await fs.access(spritePath);
-      return c.json(ok({ ...payload, cached: true }));
-    } catch {
-      return failCode(500, "frame_sprite.generation_failed");
-    }
-  }
-
-  const tmpPath = path.resolve(baseDir, `_tmp/sprite_${process.pid}_${randomUUID()}.webp`);
-  const task = generateSprite(videoPath, tmpPath, spritePath, count, duration);
-  inflight.set(spriteKey, task);
-
-  try {
-    await task;
-    return c.json(ok({ ...payload, cached: false }));
-  } catch (err: unknown) {
-    // ffmpeg 缺失或转码失败的底层信息只进日志，运维细节不下发给客户端
-    logger.error({ err, videoKey: video_key }, "Frame sprite generation failed");
-    return failCode(500, "frame_sprite.generation_failed");
-  } finally {
-    inflight.delete(spriteKey);
-  }
-});
+      try {
+        await task;
+        return c.json(ok({ ...payload, cached: false }));
+      } finally {
+        inflight.delete(spriteKey);
+      }
+    },
+  }),
+);
 
 export { router };

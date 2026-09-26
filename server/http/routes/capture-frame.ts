@@ -4,16 +4,14 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { authenticateRequest } from "@server/http/middleware/auth";
-import { captureVideoFrame } from "@server/services/storage/media";
+import path from "path";
+import { captureVideoFrame } from "@server/services/storage/video-frames";
 import { localStorage } from "@server/services/storage/backends/local";
-import { isPathWithinBase } from "@server/core/paths";
 import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
-import { ok, failCode } from "@server/core/response";
-import { logger } from "@server/core/logger";
-import path from "path";
+import { ok } from "@server/core/response";
+import { createMediaEditRoute } from "./media-edit";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
 
@@ -24,87 +22,38 @@ const captureFrameSchema = z.object({
 
 const router = new Hono();
 
-router.post("/api/files/capture-frame", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
+router.post(
+  "/api/files/capture-frame",
+  createMediaEditRoute({
+    schema: captureFrameSchema,
+    resolveKey: (d) => d.video_key,
+    name: "frame",
+    failureCode: "capture_frame.capture_failed",
+    async run({ c, data, sourcePath, userId, signal, tmpDir }) {
+      // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错
+      const tmpFramePath = path.join(tmpDir, `frame_${randomUUID()}.jpg`);
+      await captureVideoFrame(sourcePath, tmpFramePath, data.time ?? 1, signal);
 
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    return failCode(400, "common.invalid_json");
-  }
+      // 读取截取的帧，按标准流程落盘 + 落库
+      const buffer = await fs.readFile(tmpFramePath);
+      const hash = await computeBufferHash(buffer);
+      const sniffed = sniffMime(buffer.subarray(0, 16));
+      const finalExt = normalizeExt(sniffed.ext);
+      const storageKey = buildStorageKey(userId, hash, finalExt);
 
-  const parsed = captureFrameSchema.safeParse(body);
-  if (!parsed.success) {
-    return failCode(422, "common.invalid_request");
-  }
-  const { video_key, time } = parsed.data;
+      await localStorage.save(storageKey, buffer);
+      await persistFileObject({
+        userId,
+        hash,
+        size: buffer.length,
+        mimeType: sniffed.mime,
+        ext: finalExt,
+        source: "derived",
+      });
 
-  const videoPath = path.resolve(localStorage.baseDir, video_key);
-
-  // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-  if (!isPathWithinBase(localStorage.baseDir, videoPath)) {
-    return failCode(403, "files.invalid_path");
-  }
-
-  try {
-    await fs.access(videoPath);
-  } catch {
-    return failCode(404, "capture_frame.video_not_found");
-  }
-
-  // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错，
-  // 且 unlink 因句柄占用失败时会在 uploads 根目录静默留下垃圾文件
-  const tmpFramePath = path.resolve(
-    localStorage.baseDir,
-    `_tmp/frame_${process.pid}_${randomUUID()}.jpg`,
-  );
-
-  try {
-    await captureVideoFrame(videoPath, tmpFramePath, time ?? 1, request.signal);
-
-    // 读取截取的帧，按标准流程落盘 + 落库
-    const buffer = await fs.readFile(tmpFramePath);
-    const hash = await computeBufferHash(buffer);
-    const sniffed = sniffMime(buffer.subarray(0, 16));
-    const finalExt = normalizeExt(sniffed.ext);
-    const storageKey = buildStorageKey(auth.user.id, hash, finalExt);
-
-    await localStorage.save(storageKey, buffer);
-    await persistFileObject({
-      userId: auth.user.id,
-      hash,
-      size: buffer.length,
-      mimeType: sniffed.mime,
-      ext: finalExt,
-      source: "derived",
-    });
-
-    return c.json(
-      ok({
-        frame_key: storageKey,
-        url: `/api/files/${storageKey}`,
-      })
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Frame capture failed";
-    const code = typeof err === "object" && err !== null && "code" in err
-      ? err.code
-      : undefined;
-    // ffmpeg 缺失或抽帧失败的底层信息只进日志，运维细节不下发给客户端
-    logger.error({ err, videoKey: video_key }, "Frame capture failed");
-    if (code === "ENOENT" || message.includes("ENOENT")) {
-      return failCode(500, "capture_frame.ffmpeg_missing");
-    }
-    return failCode(500, "capture_frame.capture_failed");
-  } finally {
-    // 清理临时文件；失败通常意味着 ffmpeg 仍持有句柄，必须留痕以便排查
-    await fs.unlink(tmpFramePath).catch((err: unknown) => {
-      logger.warn({ err, tmpFramePath }, "Failed to remove temp frame file");
-    });
-  }
-});
+      return c.json(ok({ frame_key: storageKey, url: `/api/files/${storageKey}` }));
+    },
+  }),
+);
 
 export { router };

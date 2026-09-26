@@ -3,6 +3,7 @@
  * 处理资产、文件夹的查询、创建、更新与批量操作，所有写操作返回最新计数快照。
  */
 import { Hono } from "hono";
+import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import {
@@ -179,6 +180,14 @@ router.get("/api/assets/items", async (c) => {
   const folderId = folderIdRaw ? parseInt(folderIdRaw, 10) : undefined;
   if (folderId !== undefined && isNaN(folderId)) return failCode(400, "assets.invalid_folder_id");
 
+  // limit 经 zod 校验：NaN 会穿透 Math.min 钳制直达 Prisma take 变成 500，必须在入口拦成 422
+  let limit: number | undefined;
+  if (limitRaw) {
+    const parsedLimit = z.coerce.number().int().positive().safeParse(limitRaw);
+    if (!parsedLimit.success) return failCode(422, "common.invalid_request");
+    limit = parsedLimit.data;
+  }
+
   const result = await getAssets({
     userId: auth.user.id,
     folderId,
@@ -186,7 +195,7 @@ router.get("/api/assets/items", async (c) => {
     search: c.req.query("search") ?? undefined,
     scope: c.req.query("scope") ?? undefined,
     cursor,
-    limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
+    limit,
   });
 
   return c.json(ok({ items: result.items, total: result.total, nextCursor: result.nextCursor }));
