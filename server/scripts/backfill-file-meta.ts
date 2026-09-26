@@ -8,7 +8,7 @@ import path from "path";
 
 import { prisma } from "@server/core/database/client";
 import { buildStorageKey } from "@server/services/storage/service";
-import { probePersistedMediaMeta } from "@server/services/storage/media";
+import { probePersistedMediaMeta } from "@server/services/storage/media-probe";
 import { localStorage } from "@server/services/storage/backends/local";
 
 /** 同时 spawn 的探测进程上限，避免大批量回填时压垮机器 */

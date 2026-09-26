@@ -5,7 +5,7 @@
 
 import { upsertFileObject } from "@server/crud/file";
 import { buildStorageKey } from "./service";
-import { probePersistedMediaMeta } from "./media";
+import { probePersistedMediaMeta } from "./media-probe";
 import { logEvent } from "@server/core/logger/utils";
 
 export interface FilePersistenceInput {
@@ -17,6 +17,13 @@ export interface FilePersistenceInput {
   source?: string;
 }
 
+/** 本次写入 file_objects 的媒体元数据（探测失败的字段为 null） */
+export interface PersistedMediaMeta {
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}
+
 /**
  * 去重 + 写 file_objects 表。
  * 对齐 Python save_upload_bytes 的 INSERT + IntegrityError 去重逻辑。
@@ -26,12 +33,18 @@ export interface FilePersistenceInput {
  * 刚落盘的文件不删除——DB 不可用时无法确认该 hash 是否已被其他记录引用，
  * 误删会破坏已有对象，孤儿文件交由 GC 对账清理。
  */
-export async function persistFileObject(data: FilePersistenceInput) {
+export async function persistFileObject(data: FilePersistenceInput): Promise<PersistedMediaMeta> {
   try {
     const meta = await probePersistedMediaMeta(
       buildStorageKey(data.userId, data.hash, data.ext),
       data.mimeType,
     ).catch(() => null);
+
+    const persistedMeta: PersistedMediaMeta = {
+      width: meta?.width ?? null,
+      height: meta?.height ?? null,
+      duration: meta?.duration ?? null,
+    };
 
     await upsertFileObject({
       userId: data.userId,
@@ -40,9 +53,7 @@ export async function persistFileObject(data: FilePersistenceInput) {
       mimeType: data.mimeType,
       ext: data.ext,
       source: data.source ?? "generated",
-      width: meta?.width ?? null,
-      height: meta?.height ?? null,
-      duration: meta?.duration ?? null,
+      ...persistedMeta,
     });
 
     logEvent("storage", {
@@ -52,6 +63,8 @@ export async function persistFileObject(data: FilePersistenceInput) {
       size: data.size,
       source: data.source,
     });
+
+    return persistedMeta;
   } catch (err: unknown) {
     // 记录完整错误信息，便于排查 DB 写入失败的真实原因
     const details = err instanceof Error
