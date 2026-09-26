@@ -155,3 +155,12 @@ export function getConfig(): Config {
   }
   return _config;
 }
+
+/**
+ * 出站 HTTP 是否走配置的代理。代理模式下出站 DNS 由代理解析，
+ * 本地解析结果与实际连接路径无关（SSRF 预检随之降级，见 core/ssrf）。
+ */
+export function isProxyRoutingEnabled(): boolean {
+  const cfg = getConfig();
+  return cfg.USE_SYSTEM_PROXY && cfg.PROXY_URL !== "";
+}
