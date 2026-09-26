@@ -40,7 +40,7 @@ export function getCanvasProjectId(): string | null {
 
 /**
  * Mark canvas as modified — SaveManager 负责 trailing save。
- * 内部自动先调用 syncCanvasState 同步项目列表内存状态。
+ * 项目列表内存状态的同步（syncCanvasState）由 SaveManager 在保存派发时统一执行。
  */
 export function markDirty() {
   saveManager.markDirty();
@@ -85,7 +85,7 @@ export function flushAndWait(): Promise<void> {
  * 大画布会直接抛 TypeError: Failed to fetch，导致编辑内容静默丢失。
  * 真正的页面卸载由 SaveManager 内部监听 pagehide/beforeunload 处理。
  */
-export function flushOnUnload(): void {
+export function flushBeforeUnload(): void {
   saveManager.flushSave();
 }
 

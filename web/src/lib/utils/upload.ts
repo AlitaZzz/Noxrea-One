@@ -18,6 +18,11 @@ export const UPLOAD_MAX_RETRIES = 1;
 export interface UploadResult {
   url: string;
   key: string;
+  /** 服务端 file_objects 探测的媒体尺寸（EXIF 旋转已归一）；探测失败为 null */
+  width?: number | null;
+  height?: number | null;
+  /** 服务端视频体检：标称时长 vs 实际可解码时长（截断 / 损坏时非空） */
+  media_warning?: { declared: number; decodable: number } | null;
 }
 
 /**

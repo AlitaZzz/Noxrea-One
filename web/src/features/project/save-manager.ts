@@ -136,10 +136,16 @@ class SaveManager {
   /**
    * 编辑权已失效：其他页面实例取得了本画布的编辑权（保存收到 409 或 SSE 收到 evict）。
    * 同页写通道已由 saveMutex 串行化且卸载兜底不再并发第二个请求，
-   * 409 不可能来自本窗口——停用一切后续保存，由过期弹窗引导刷新。
+   * 409 不可能来自本窗口——唯一例外是抢占瞬间上一任 holder 的迟到落库
+   * （首存撞上时按 409 回传版本重试一次，见 saveToApi），停用一切后续保存，
+   * 由过期弹窗引导刷新。
    * 刷新即新页面实例，重新取得编辑权并以服务端内容为准，故期间的本地改动不作保留。
    */
   private expired = false;
+  /** 本页面实例是否已成功落库过一次（首存 409 重试资格的判据） */
+  private hasSuccessfulSave = false;
+  /** 在途保存请求携带的 baseRevision（重连 sync 误判排除依据，save 收尾清空） */
+  private inFlightBaseRevision: number | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
@@ -193,8 +199,11 @@ class SaveManager {
     const clearExpired = options?.clearExpired ?? true;
     this.dirty = false;
     this.expired = clearExpired ? false : this.expired;
+    // 首存重试资格随「窗口 × 项目」重置：切换后重新加入房间，迟到落库竞态可再次出现
+    this.hasSuccessfulSave = false;
     this.dirtySince = null;
     this.pendingSave = null;
+    this.pendingDelay = SAVE_DELAY;
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
@@ -362,6 +371,7 @@ class SaveManager {
       }
     } finally {
       this.saving = false;
+      this.inFlightBaseRevision = null;
       this.resolveSave?.();
     }
 
@@ -393,12 +403,14 @@ class SaveManager {
     projectId: string,
     canvasData: CanvasData,
     opts: { keepalive: boolean; skipUnauthorized: boolean },
+    allowConflictRetry = true,
   ): Promise<void> {
     // 文件引用账本的重算由服务端权威判定（updateProject 内比较新旧画布引用），
     // 前端不再携带引用指纹，避免客户端 bug 影响服务端账本正确性。
     // 每次更新都携带保存前的版本；服务端校验后递增，防止迟到请求回退引用账本。
     // 在互斥锁内、请求发出前一刻读取，保证同页写通道严格串行。
     const baseRevision = currentRevision(projectId);
+    this.inFlightBaseRevision = baseRevision;
 
     const body = JSON.stringify({ baseRevision, canvasData });
 
@@ -425,6 +437,19 @@ class SaveManager {
         if (typeof conflictRevision === "number") {
           useProjectStore.getState().updateProjectRevision(projectId, conflictRevision);
         }
+        // 抢占瞬间的迟到落库竞态：上一任 holder 的在途保存恰在本实例取得编辑权后
+        // 落库，此时 409 不代表本窗口编辑权失效。本实例尚无成功保存且未收到 evict
+        // （SSE 仍认同本窗口）时，按 409 回传版本原地重试一次；再冲突才是真冲突。
+        // 已成功保存过的实例不重试：此后 409 只能来自其他窗口的真实编辑。
+        if (
+          allowConflictRetry &&
+          !this.hasSuccessfulSave &&
+          !this.expired &&
+          typeof conflictRevision === "number" &&
+          getCanvasProjectId() === projectId
+        ) {
+          return this.saveToApi(projectId, canvasData, opts, false);
+        }
         if (getCanvasProjectId() === projectId) {
           this.markExpired();
         }
@@ -434,6 +459,7 @@ class SaveManager {
     }
 
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
+    this.hasSuccessfulSave = true;
     useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
   }
 
@@ -456,6 +482,22 @@ class SaveManager {
    */
   notifyEvicted(): void {
     this.markExpired();
+  }
+
+  /**
+   * 该版本是否恰为当前在途保存的落库结果。
+   * 断线重连 sync 帧排除自身误判用：保存响应未返回期间重连，sync 推送的
+   * revision = 本地 known + 1，正是本窗口自己刚提交的保存，不能判为他人编辑。
+   * 互斥锁等待窗口（baseRevision 尚未读取）返回 false——此时无法判定，
+   * 误判由 409 路径兜底。
+   */
+  isOwnInFlightRevision(projectId: string, revision: number): boolean {
+    return (
+      this.saving &&
+      this.inFlightBaseRevision !== null &&
+      revision === this.inFlightBaseRevision + 1 &&
+      getCanvasProjectId() === projectId
+    );
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */

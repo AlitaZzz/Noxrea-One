@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
+import { loadUploadFormats } from "@/lib/upload-formats";
 import { directorTheme } from "@/styles/theme";
 
 const queryClient = new QueryClient({
@@ -33,6 +34,14 @@ function MessageApiRegistrar() {
   return null;
 }
 
+/** 应用启动即预热上传格式白名单（失败静默回落兜底值），供各上传入口同步读取 */
+function UploadFormatsWarmup() {
+  useEffect(() => {
+    void loadUploadFormats();
+  }, []);
+  return null;
+}
+
 function AntConfigProvider({ children }: { children: ReactNode }) {
   return (
     <ConfigProvider
@@ -41,6 +50,7 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
     >
       <AntApp>
         <MessageApiRegistrar />
+        <UploadFormatsWarmup />
         {children}
       </AntApp>
     </ConfigProvider>

@@ -47,7 +47,6 @@ import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
-import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
@@ -85,7 +84,7 @@ import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel"
 import { computeFittedGroupRect } from "@/features/canvas/shared/group-bounds";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
-import { findFreePosition, flushAndWait, flushOnUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, flushBeforeUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
@@ -207,7 +206,7 @@ export default function InfiniteCanvas() {
   // Initialize stores
   useEffect(() => { useModelStore.getState().initialize(); useAssetsStore.getState().initialize(); }, []);
 
-  // When switching projects, load the new project's canvas
+  // 当前激活项目（agent 等子组件按 projectId 寻址）
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
   const authUser = useCurrentUser();
@@ -220,18 +219,8 @@ export default function InfiniteCanvas() {
     setPrevProjectName(projectName);
     setEditName(projectName);
   }
-  useEffect(() => {
-    const project = useProjectStore.getState().activeProject();
-    if (project) {
-      // 项目恢复是程序化写入，不算用户操作，不进动作历史
-      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project.id, project));
-      // 切换/加载项目 = 历史归零。修复 undo 弹出即应用后不再需要基线快照
-      // （旧基线是为了规避 undo 偏移下的 emptySnapshot 兜底），同时避免
-      // 撤销穿透到上一个项目的画布内容。
-      useHistoryStore.getState().clear();
-    }
-  }, [activeProjectId]);
-
+  // 画布内容恢复的唯一入口在页面层（page.tsx 按 URL projectId 拉取后 restore）：
+  // 本组件仅在 loader 门开启（恢复已完成）后挂载，此处不再重复恢复。
   // React Flow 内部视口跟随 restoreFromProject：订阅应用次数信号。
   // 恢复出的视口与 _liveViewport 一致，syncLiveViewport 的同值守卫不会误标脏。
   const viewportSyncCount = useCanvasStore((s) => s.viewportSyncCount);
@@ -985,7 +974,7 @@ export default function InfiniteCanvas() {
 
   // ---- Component unmount: browser back, route change → save current state ----
   useEffect(() => {
-    return () => { flushOnUnload(); };
+    return () => { flushBeforeUnload(); };
   }, []);
 
   // 中键拖拽同样能平移，但 React Flow 的 .draggable 只在 panOnDrag 含左键 0 时挂载，
@@ -1153,12 +1142,10 @@ export default function InfiniteCanvas() {
                     <MenuItem onClick={async () => {
                         setToolbarMenuOpen(false);
                         await flushAndWait();
-                        const proj = await useProjectStore.getState().createProject();
-                        useProjectStore.getState().setActiveProject(proj.id);
-                        runSuppressed(() => useCanvasStore.getState().restoreFromProject(proj.id, proj));
-                        // 画布身份以 URL 为准，新建后同步地址（replace 避免堆积历史记录）；
-                        // 视口同步由 viewportSyncCount effect 完成（restoreFromProject 置默认视口）
-                        router.replace(`/canvas/${proj.id}`);
+                        await useProjectStore.getState().createProject();
+                        // 画布身份以 URL 为准：router.replace 触发页面层拉取并恢复，
+                        // loader 门随后放行新画布（恢复入口收口在 page.tsx）
+                        router.replace(`/canvas/${useProjectStore.getState().activeProjectId}`);
                       }}>{t("project.new")}</MenuItem>
                     <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
                     <MenuDivider />

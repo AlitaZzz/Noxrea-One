@@ -19,9 +19,9 @@ import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/ass
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
 import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { fetchUploadLimits, type UploadLimits } from "@/features/canvas/api/file-api";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { expandAccept } from "@/features/canvas/upload/pick-files";
+import { kindOfBlob, loadUploadLimits, type UploadLimits } from "@/lib/upload-formats";
 import { isOffline } from "@/lib/utils/upload";
 
 const ASSET_TYPE_OPTIONS: { value: AssetType; labelKey: string }[] = [
@@ -46,24 +46,6 @@ const MAX_CONCURRENCY = 3;
 
 function uid() {
   return `up_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-}
-
-function extOf(name: string) {
-  const i = name.lastIndexOf(".");
-  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
-}
-
-function isImage(file: File) {
-  if (file.type.startsWith("image/")) return true;
-  return ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extOf(file.name));
-}
-function isVideo(file: File) {
-  if (file.type.startsWith("video/")) return true;
-  return ["mp4", "webm", "mov", "avi", "mkv"].includes(extOf(file.name));
-}
-function isAudio(file: File) {
-  if (file.type.startsWith("audio/")) return true;
-  return ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"].includes(extOf(file.name));
 }
 
 /**
@@ -135,7 +117,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     if (!open) return;
     let cancelled = false;
     const ctrl = new AbortController();
-    fetchUploadLimits(ctrl.signal)
+    loadUploadLimits(ctrl.signal)
       .then((d) => { if (!cancelled) setLimits(d); })
       .catch(() => { /* 隐藏说明即可 */ });
     return () => { cancelled = true; ctrl.abort(); };
@@ -188,7 +170,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     setFiles((prev) => [...prev, ...entries]);
 
     // 不支持的类型直接标红，不送管道（整批不支持时管道会弹全局提示，语义不符）
-    const uploadable = entries.filter((e) => isImage(e.file) || isVideo(e.file) || isAudio(e.file));
+    const uploadable = entries.filter((e) => kindOfBlob(e.file, e.file.name) !== null);
     const supported = new Set(uploadable);
     for (const e of entries) {
       if (!supported.has(e)) updateFile(e.id, { status: "error" });
@@ -276,14 +258,17 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
       return;
     }
 
-    const inputs: CreateAssetInput[] = doneFiles.map((f) => ({
-      name: deriveAssetName(f.file.name),
-      type: category,
-      mediaType: isVideo(f.file) ? "video" : isAudio(f.file) ? "audio" : "image",
-      description: "",
-      sourceUrl: f.url || undefined,
-      folderId: saveFolderId && saveFolderId !== ROOT_FOLDER_ID ? saveFolderId : undefined,
-    }));
+    const inputs: CreateAssetInput[] = doneFiles.map((f) => {
+      const kind = kindOfBlob(f.file, f.file.name);
+      return {
+        name: deriveAssetName(f.file.name),
+        type: category,
+        mediaType: kind === "video" ? "video" : kind === "audio" ? "audio" : "image",
+        description: "",
+        sourceUrl: f.url || undefined,
+        folderId: saveFolderId && saveFolderId !== ROOT_FOLDER_ID ? saveFolderId : undefined,
+      };
+    });
 
     const result = await onCreate(inputs);
 
@@ -419,11 +404,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                 </div>
 
                 {/* Uploaded files */}
-                {files.map((f) => (
+                {files.map((f) => {
+                  const kind = kindOfBlob(f.file, f.file.name);
+                  return (
                   <div key={f.id} className="upload-file-card group shrink-0">
-                    {isImage(f.file) ? (
+                    {kind === "image" ? (
                       <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
-                    ) : isVideo(f.file) ? (
+                    ) : kind === "video" ? (
                       <div className="w-full h-full relative flex items-center justify-center bg-black/50">
                         {f.url ? (
                           <img
@@ -477,7 +464,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                       <div className="text-white/70 text-[10px] truncate">{f.file.name}</div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

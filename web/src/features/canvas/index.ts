@@ -63,7 +63,7 @@ export {
 export {
   findFreePosition,
   flushAndWait,
-  flushOnUnload,
+  flushBeforeUnload,
   getLiveViewport,
   getViewportCenter,
   markDirty,
