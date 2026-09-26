@@ -48,7 +48,6 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  isAdmin: () => boolean;
   savePreference: (key: "theme" | "language", value: string) => Promise<void>;
 }
 
@@ -120,8 +119,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       new Promise<never>((resolve) => setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS)),
     ]).then(() => undefined);
   },
-
-  isAdmin: () => get().user?.role === "admin",
 
   savePreference: async (key, value) => {
     const user = get().user;

@@ -22,11 +22,9 @@ model User {
   username       String   @unique @map("username")
   hashedPassword String   @map("password_hash")
   avatarUrl      String?  @map("avatar")
-  role           String   @default("user") @map("role")
   theme          String   @default("dark") @map("theme")
   language       String   @default("zh") @map("lang")
   isActive       Boolean  @default(true) @map("is_active")
-  isSuperuser    Boolean  @default(false) @map("is_superuser")
   // 凭据版本号：密码修改时递增，JWT payload 携带签发时的值，
   // 与库中不一致即视为已吊销（旧 token 立即失效）
   tokenVersion   Int      @default(0) @map("token_version")

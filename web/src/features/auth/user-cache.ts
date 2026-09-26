@@ -7,7 +7,6 @@ export const USER_COOKIE = "noxrea-user";
 export interface UserInfo {
   id: number;
   username: string;
-  role: string;
   avatarUrl: string | null;
   theme: string;
   language: string;
