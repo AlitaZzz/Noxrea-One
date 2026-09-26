@@ -367,6 +367,6 @@
     "_comment": "TODO(vendor)：以下供应商属 OpenAI 协议体系，但需 body 重组 / 响应包装（超出声明式 mapping 能力），本期不实现。待接入时在顶层新增对应 host 通配条目与 _endpoints/mapping。",
     "kie": "需 body 重组（如 normalizeKIEVideoBody），未适配",
     "mimo": "需响应包装（如 copyMiMoTTSResponse），未适配",
-    "note": "非 openai 协议（ark/gemini）的 provider 可落库，但发起生成时由 capabilities/*/service.ts 的 getProtocol 守卫抛出『Protocol X does not support Y generation』错误，不静默、不降级。"
+    "note": "非 openai 协议（ark）的 provider 可落库，但发起生成时由 capabilities/*/service.ts 的 getProtocol 守卫抛出『Protocol X does not support Y generation』错误，不静默、不降级。"
   }
 }

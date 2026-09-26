@@ -1,7 +1,7 @@
 /**
  * Agent 上游调用层。
  * 封装从 chat 抽离的上游 LLM 调用逻辑：解析可用渠道、组装上游请求、
- * 执行非流式与流式补全，并累积 tool_call 结果。
+ * 执行流式补全，并累积 tool_call 结果。
  */
 
 import type { ProtocolService, ProtocolToolCall } from "@server/services/protocols/base";
@@ -104,41 +104,6 @@ export async function buildUpstream(args: {
 export type RunResult =
   | { ok: true; text: string; toolCalls?: ProtocolToolCall[] }
   | { ok: false; error: string };
-
-/** 非流式调用（兜底接口使用） */
-export async function runCompletion(args: {
-  messages: AgentMessage[];
-  providerId?: number;
-  model?: string;
-  userId: number;
-}): Promise<RunResult> {
-  const built = await buildUpstream(args);
-  if (!built.ok) return { ok: false, error: built.error };
-
-  try {
-    const resp = await fetchWithTimeout(built.url, {
-      method: built.method,
-      headers: built.headers,
-      body: JSON.stringify(built.body),
-      scene: "async",
-      timeoutMs: getWorkerApiTimeout(),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text().catch(() => "");
-      return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
-    }
-    const data = await resp.json();
-    // 协议解析为空或协议不支持解析都按错误处理：调用方（报告生成等）拿空文本无意义
-    const parsed = built.protocol.parseLlmResponse?.(data);
-    const text = parsed?.text ?? "";
-    if (!text) {
-      return { ok: false, error: `upstream returned no text (protocol ${built.protocol.name})` };
-    }
-    return { ok: true, text };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
-}
 
 /**
  * 流式 body 空闲超时：fetchWithTimeout 的超时只覆盖「等响应头」阶段，
@@ -332,16 +297,6 @@ function extractDelta(data: string): string {
   if (Array.isArray(choices)) {
     const delta = (choices[0]?.delta as Record<string, unknown> | undefined)?.content;
     if (typeof delta === "string") return delta;
-  }
-
-  // Gemini 流式格式
-  const candidates = json?.candidates as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(candidates)) {
-    const parts = (candidates[0]?.content as Record<string, unknown> | undefined)?.parts as
-      | Array<Record<string, unknown>>
-      | undefined;
-    const text = parts?.[0]?.text;
-    if (typeof text === "string") return text;
   }
 
   return "";
