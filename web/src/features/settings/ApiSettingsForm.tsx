@@ -153,7 +153,6 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                   onChange={setProtocol}
                   options={[
                     { label: t("modelConfig.protocol.openai"), value: "openai" },
-                    { label: t("modelConfig.protocol.gemini"), value: "gemini" },
                     { label: t("modelConfig.protocol.ark"), value: "ark" },
                   ]}
                 />

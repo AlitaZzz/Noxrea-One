@@ -17,8 +17,6 @@ import { OpenAiImageProtocol } from "@server/services/protocols/openai/image";
 import { OpenAiVideoProtocol } from "@server/services/protocols/openai/video";
 import { OpenAiLlmProtocol } from "@server/services/protocols/openai/llm";
 import { OpenAiAudioProtocol } from "@server/services/protocols/openai/audio";
-import { GeminiImageProtocol } from "@server/services/protocols/gemini/image";
-import { GeminiLlmProtocol } from "@server/services/protocols/gemini/llm";
 import { ArkImageProtocol } from "@server/services/protocols/ark/image";
 import { ArkVideoProtocol } from "@server/services/protocols/ark/video";
 
@@ -51,17 +49,6 @@ export function initGateway(): void {
     parseLlmResponse: openaiLlm.parseLlmResponse.bind(openaiLlm),
     buildAudioRequest: openaiAudio.buildAudioRequest.bind(openaiAudio),
     parseAudioResponse: openaiAudio.parseAudioResponse.bind(openaiAudio),
-  });
-
-  // Gemini
-  const geminiImage = new GeminiImageProtocol();
-  const geminiLlm = new GeminiLlmProtocol();
-  registerProtocol("gemini", {
-    name: "gemini",
-    buildImageRequest: geminiImage.buildImageRequest.bind(geminiImage),
-    parseImageResponse: geminiImage.parseImageResponse.bind(geminiImage),
-    buildLlmRequest: geminiLlm.buildLlmRequest.bind(geminiLlm),
-    parseLlmResponse: geminiLlm.parseLlmResponse.bind(geminiLlm),
   });
 
   // Ark
