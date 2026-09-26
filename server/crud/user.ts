@@ -36,14 +36,13 @@ type UpdatableUserFields = {
 };
 
 /**
- * 对外安全的用户视图：剔除 hashedPassword / isSuperuser 等敏感字段。
+ * 对外安全的用户视图：剔除 hashedPassword 等敏感字段。
  * 所有返回给 HTTP 客户端的 user 对象都必须经此转换。
  */
 export function toPublicUser(user: User) {
   return {
     id: user.id,
     username: user.username,
-    role: user.role,
     avatarUrl: user.avatarUrl,
     theme: user.theme,
     language: user.language,
