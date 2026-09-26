@@ -153,7 +153,8 @@ router.put("/api/canvas/projects/:id", async (c) => {
     return c.json(ok(project));
   } catch (error) {
     // 版本冲突携带当前 revision。前端同页写通道已串行化，409 即画布已在
-    // 其他标签页 / 浏览器被修改，据此弹「会话已过期」引导刷新。
+    // 其他标签页 / 浏览器被修改（唯一例外：抢占瞬间上一任的迟到落库，前端
+    // 首存撞上时按回传版本重试一次），仍冲突才弹「会话已过期」引导刷新。
     if (error instanceof CanvasRevisionConflictError) {
       return failCode(409, "canvas.project_revision_conflict", {
         revision: error.currentRevision,
