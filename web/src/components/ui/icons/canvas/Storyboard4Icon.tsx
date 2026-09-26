@@ -13,11 +13,13 @@ export function Storyboard4Icon({ className, style }: IconProps) {
   return (
     <svg
       viewBox="0 0 16 16"
+      width="1em"
+      height="1em"
       fill="none"
       stroke="currentColor"
       strokeWidth={1.2}
       className={className}
-      style={{ display: "inline-block", verticalAlign: "-0.125em", width: "1em", height: "1em", ...style }}
+      style={{ display: "inline-block", verticalAlign: "-0.125em", ...style }}
       aria-hidden="true"
     >
       <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" />

@@ -1,6 +1,6 @@
 /**
  * 25宫格剧情分镜图标，用于「创作」菜单中的「25宫格剧情分镜」项。
- * 书本 / 分镜脚本造型，代表一段完整的多帧故事脚本。
+ * 场记板（clapperboard）造型，代表一段完整的多帧故事脚本。
  */
 import type { CSSProperties } from "react";
 
@@ -12,13 +12,22 @@ interface IconProps {
 export function Storyboard25Icon({ className, style }: IconProps) {
   return (
     <svg
-      viewBox="0 0 16 16"
-      fill="currentColor"
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={className}
-      style={{ display: "inline-block", verticalAlign: "-0.125em", width: "1em", height: "1em", ...style }}
+      style={{ display: "inline-block", verticalAlign: "-0.125em", ...style }}
       aria-hidden="true"
     >
-      <path d="M14.5 3H10a2.5 2.5 0 0 0-2 1 2.5 2.5 0 0 0-2-1H1.5a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H6a1.5 1.5 0 0 1 1.5 1.5.5.5 0 0 0 1 0A1.5 1.5 0 0 1 10 13h4.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5M6 12H2V4h4a1.5 1.5 0 0 1 1.5 1.5v7A2.5 2.5 0 0 0 6 12m8 0h-4c-.541 0-1.068.175-1.5.5v-7A1.5 1.5 0 0 1 10 4h4zm-4-6.5h2.5a.5.5 0 0 1 0 1H10a.5.5 0 1 1 0-1M13 8a.5.5 0 0 1-.5.5H10a.5.5 0 1 1 0-1h2.5a.5.5 0 0 1 .5.5m0 2a.5.5 0 0 1-.5.5H10a.5.5 0 0 1 0-1h2.5a.5.5 0 0 1 .5.5" />
+      <path d="m12.296 3.464 3.02 3.956" />
+      <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z" />
+      <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="m6.18 5.276 3.1 3.899" />
     </svg>
   );
 }
