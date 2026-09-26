@@ -1,72 +1,96 @@
 {
+  "groups": [
+    { "id": "view", "label": { "zh": "三视图", "en": "Three-View" }, "order": 1 },
+    { "id": "storyboard", "label": { "zh": "分镜", "en": "Storyboard" }, "order": 2 },
+    { "id": "light", "label": { "zh": "光影", "en": "Lighting" }, "order": 3 },
+    { "id": "timeline", "label": { "zh": "画面推演", "en": "Frame Prediction" }, "order": 4 }
+  ],
   "entries": [
     {
       "id": "characterFaceThreeView",
       "kind": "preset",
-      "labelKey": "node.creationCharacterFace",
+      "group": "view",
+      "label": { "zh": "角色面部三视图", "en": "Character Face Three-View" },
+      "description": { "zh": "三视角面部特写参考，风格一致", "en": "Three-angle face close-ups in a consistent style" },
       "order": 1,
       "template": "Create a clean three-view facial reference sheet for the character in the source image against a uniform solid gray background. Arrange a front portrait, a side portrait, and a 45-degree three-quarter portrait in sequence. Keep the character's facial features, expression, and art style identical across all views. Render the facial details fully and consistently."
     },
     {
       "id": "characterThreeView",
       "kind": "preset",
-      "labelKey": "node.creationCharacterThreeView",
+      "group": "view",
+      "label": { "zh": "角色三视图", "en": "Character Three-View" },
+      "description": { "zh": "面部特写与全身多视角角色参考图", "en": "Face close-ups plus multi-angle full-body reference sheet" },
       "order": 2,
       "template": "Create a character reference sheet against a uniform solid gray background, preserving the character's defining traits from the source image. In the top row, show close-ups of the face from the front, the side, and a 45-degree three-quarter angle. In the bottom row, show three full-body views with the head above the chin omitted, displaying only the body and torso. Keep the character's facial features, expression, proportions, and art style consistent across all views. Render facial details fully and keep the sheet clean and legible."
     },
     {
       "id": "productThreeView",
       "kind": "preset",
-      "labelKey": "node.creationProductThreeView",
+      "group": "view",
+      "label": { "zh": "产品三视图", "en": "Product Three-View" },
+      "description": { "zh": "产品的正面、侧面与背面三视图展示", "en": "Front, side and back three-view sheet for the product" },
       "order": 3,
       "template": "Generate a clean three-view product reference sheet from the source image.\n\nOutput requirements:\n- Show front, side, and back/alternate view of the same product.\n- Preserve materials, silhouette, proportions, and key details.\n- Use a clean product reference layout with neutral presentation.\n- Final output must be a three-view sheet."
     },
     {
       "id": "cinematicLightCorrection",
       "kind": "preset",
-      "labelKey": "node.creationCinematicLightCorrection",
+      "group": "light",
+      "label": { "zh": "电影级光影校正", "en": "Cinematic Light Correction" },
+      "description": { "zh": "电影级优化光影层次与氛围，构图内容不变", "en": "Cinematic lighting polish while keeping framing and content intact" },
       "order": 4,
       "template": "Cinematically refine the source image lighting.\n\nOutput requirements:\n- Improve light hierarchy, shadow structure, exposure balance, and atmosphere.\n- Preserve the source image aspect ratio, canvas dimensions, and orientation exactly.\n- Keep the same scene, same characters, and same camera framing.\n- Do not turn the image into a different composition.\n- Fill the whole existing canvas; do not add black bars, borders, or letterboxing.\n- Final output must remain a single frame with no collage, UI, watermark, or text."
     },
     {
       "id": "nineGridScene",
       "kind": "preset",
-      "labelKey": "node.creationNineGrid",
+      "group": "storyboard",
+      "label": { "zh": "多机位九宫格", "en": "Scene Multi-Camera 3×3 Grid" },
+      "description": { "zh": "同一场景的九个机位电影级画面", "en": "Nine cinematic camera views of the same scene" },
       "order": 5,
       "template": "Create a 3 x 3 scene reference sheet with nine separate, complete panels. Every panel must depict the exact same scene from the reference image: the same architectural subject, spatial layout, structures, props and their positions, materials, textures, colors, and environment. Change only camera position, direction, height, and the framing required by each shot size. Do not add, remove, resize, rearrange, or redesign any scene object.\n\nUse these nine fixed camera views and cinematic shot sizes in reading order:\n1. Extreme long shot (ELS), front eye-level view. Place the camera directly in front of the subject at normal eye height. Show the complete, clearly recognizable structure at a smaller scale within a broad environment.\n2. Long shot (LS), front-right 45-degree view. Place the camera about 45 degrees to the front-right at eye level or near normal sight height. Show the complete subject and its surroundings.\n3. Medium long shot (MLS), right side 90-degree view. Shoot from directly to the right. Keep the entire subject visible and prominent, with some surrounding space; do not crop the building.\n4. Medium shot (MS), front-left 45-degree view. Shoot from about 45 degrees to the front-left at normal eye height. Emphasize the subject and its spatial relationships while keeping the subject fully visible.\n5. Medium close-up (MCU), aerial top-down view. Shoot downward from a high position above the scene. Use MCU only to control the subject's share of the frame: never crop the building or isolate a detail. Show the complete scene subject and primary layout.\n6. Close-up (CU), rear-right 45-degree view. Shoot from about 45 degrees to the rear-right with tighter framing, but still show the complete building or scene subject. Do not crop or show only a detail.\n7. Extreme close-up (ECU), left side 90-degree view. Shoot from directly to the left. For architecture or a large scene, ECU means a stronger visual emphasis and a larger subject in the frame, not an actual crop or a detail-only view. Show the entire subject.\n8. Low-angle shot, rear-left 45-degree view. Shoot from about 45 degrees to the rear-left with a lower camera looking upward. Convey cinematic depth while keeping the entire architectural subject visible.\n9. High-angle shot, rear eye-level view. Place the camera directly behind the scene at a slightly higher-than-normal eye height. Show the complete back of the building and surrounding environment without cropping.\n\nMaintain the same cinematic photographic style, coherent perspective, lighting direction, atmosphere, color grading, time of day, and weather throughout all nine panels. Render cinematic image quality, realistic materials, rich detail, and sharp architectural visualization. Keep panels distinct: no merging, overlap, swapped views, or scene reconstruction. Shot size changes affect only composition and the subject's visual share of the frame, never the subject's actual size, proportions, structure, or object positions. Except for the aerial and low-angle shots, keep camera distance and perspective as similar as the prescribed shot sizes allow.\n\nPlace a separate, uniform light-gray storyboard caption band directly below each panel, matching the grid background. Center each caption beneath its own panel in the same clean, professional, legible font and size. Do not let captions cover the subject or enter the scene image. Use exactly these captions in panel order:\n1. ELS | Front Eye-Level\n2. LS | Front-Right 45°\n3. MLS | Right Side 90°\n4. MS | Front-Left 45°\n5. MCU | Aerial Top-Down\n6. CU | Rear-Right 45°\n7. ECU | Left Side 90°\n8. Low Angle | Rear-Left 45°\n9. High Angle | Rear Eye-Level\n\nEach caption must match its panel exactly, with no misplaced, duplicated, missing, or garbled labels. Captions belong only in their separate bands. No text, logos, or watermarks inside any scene image. The final result is one consistent scene shown in nine distinct professional cinematic views with their captions below."
     },
     {
       "id": "storyboard25",
       "kind": "preset",
-      "labelKey": "node.creation25Grid",
+      "group": "storyboard",
+      "label": { "zh": "25宫格剧情分镜", "en": "25-Grid Storyboard" },
+      "description": { "zh": "25 帧完整故事分镜，含每格情节说明", "en": "25-frame storyboard of a complete story with per-frame captions" },
       "order": 6,
       "template": "Create a complete 25-frame visual storyboard that develops the reference image into a coherent story with an introduction, development, turning point, and resolution. Put a brief description of each story beat below its frame. Distribute close-ups, medium shots, wide shots, and high- and low-angle views across the 25 frames for visual variety. Keep the art style strictly consistent with the reference image throughout."
     },
     {
       "id": "storyboard4",
       "kind": "preset",
-      "labelKey": "node.creation4Grid",
+      "group": "storyboard",
+      "label": { "zh": "剧情推演四宫格", "en": "4-Grid Storyboard" },
+      "description": { "zh": "四格连贯叙事分镜", "en": "Four-panel sequential storyboard" },
       "order": 7,
       "template": "Create a four-panel sequential storyboard showing the story's dynamic progression across four connected frames. Place a brief description of each story beat below its panel. Keep every panel strictly consistent with the reference image's art style."
     },
     {
       "id": "forward3s",
       "kind": "preset",
-      "labelKey": "node.creationForward3s",
+      "group": "timeline",
+      "label": { "zh": "画面推演 - 3S后", "en": "Frame Prediction - 3S Later" },
+      "description": { "zh": "推演参考图约 3 秒后的画面", "en": "Generate the frame about 3 seconds after the reference" },
       "order": 8,
       "template": "Generate the next frame of the scene approximately 3 seconds after the reference image. Infer the most plausible changes to character positions, movements, props, and the environment from the current frame. Depict a subsequent moment, not a preceding shot. Preserve the reference image's color palette, lighting, line work, materials, and overall art style. Ensure narrative and physical continuity without abrupt or inconsistent visual elements."
     },
     {
       "id": "back5s",
       "kind": "preset",
-      "labelKey": "node.creationBack5s",
+      "group": "timeline",
+      "label": { "zh": "画面推演 - 5S前", "en": "Frame Prediction - 5S Earlier" },
+      "description": { "zh": "回溯参考图约 5 秒前的画面", "en": "Generate the frame about 5 seconds before the reference" },
       "order": 9,
       "template": "Generate a preceding frame of the scene approximately 5 seconds before the reference image. Infer the most plausible earlier character positions, prop states, and events from the current frame. Preserve the reference image's color palette, lighting, line work, materials, and overall art style. Ensure narrative and physical continuity without abrupt or inconsistent visual elements."
     },
     {
       "id": "reverse",
       "kind": "reverse",
-      "labelKey": "node.creationReverse",
+      "label": { "zh": "反推提示词", "en": "Reverse Prompt" },
       "order": 0,
       "template": "Analyze the reference image and write a prompt suitable for an image-generation model. Output only the finished prompt, without explanations. Describe the subject, composition, style, lighting, colors, materials, camera, and atmosphere in enough detail to generate a similar image. Write it as a complete, directly usable image-generation prompt in English."
     },

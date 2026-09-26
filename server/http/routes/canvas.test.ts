@@ -20,9 +20,16 @@ const selectableIds = [
 interface SelectableResponse {
   id: string;
   kind: "preset" | "reverse";
-  labelKey: string;
+  group: string;
+  label: { zh: string; en: string };
+  description: { zh: string; en: string };
   order: number;
   template: string;
+}
+
+interface CatalogResponse {
+  groups: { id: string; label: { zh: string; en: string }; order: number }[];
+  entries: SelectableResponse[];
 }
 
 interface TemplateResponse {
@@ -42,28 +49,38 @@ beforeEach(() => {
 });
 
 describe("canvas prompt template routes", () => {
-  it("lists reverse and nine presets in order with five public fields", async () => {
-    loadJson.mockReturnValue({ entries: [...catalog.entries].reverse() });
-    const { status, body } = await request<SelectableResponse[]>("/api/canvas/prompt-templates");
+  it("lists reverse and nine presets in order with public catalog fields", async () => {
+    loadJson.mockReturnValue({ groups: catalog.groups, entries: [...catalog.entries].reverse() });
+    const { status, body } = await request<CatalogResponse>("/api/canvas/prompt-templates");
     expect(status).toBe(200);
-    expect(body.data.map((entry) => entry.id)).toEqual(selectableIds);
-    expect(body.data.map((entry) => entry.order)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(body.data.map((entry) => entry.kind)).toEqual(["reverse", ...Array(9).fill("preset")]);
-    for (const entry of body.data) {
-      expect(Object.keys(entry).sort()).toEqual(["id", "kind", "labelKey", "order", "template"]);
-      expect(entry.labelKey).toMatch(/^node\.creation/);
+    expect(body.data.groups.map((group) => group.id))
+      .toEqual(["view", "storyboard", "light", "timeline"]);
+    expect(body.data.entries.map((entry) => entry.id)).toEqual(selectableIds);
+    expect(body.data.entries.map((entry) => entry.order)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(body.data.entries.map((entry) => entry.kind)).toEqual(["reverse", ...Array(9).fill("preset")]);
+    for (const entry of body.data.entries) {
+      // preset 携带分组与描述字段；reverse 由独立按钮承载，不进分组菜单
+      expect(Object.keys(entry).sort()).toEqual(entry.kind === "preset"
+        ? ["description", "group", "id", "kind", "label", "order", "template"]
+        : ["id", "kind", "label", "order", "template"]);
+      expect(entry.label.zh).toBeTruthy();
+      expect(entry.label.en).toBeTruthy();
+      if (entry.kind === "preset") {
+        expect(entry.description!.zh).toBeTruthy();
+        expect(entry.description!.en).toBeTruthy();
+      }
       expect(entry.template).toBeTruthy();
     }
     expect(loadJson).toHaveBeenCalledWith("prompt-template.json");
   });
 
   it("reads the catalog for each request, including after a loader refresh", async () => {
-    await request<SelectableResponse[]>("/api/canvas/prompt-templates");
+    await request<CatalogResponse>("/api/canvas/prompt-templates");
     const updated = structuredClone(catalog);
     updated.entries.find((entry) => entry.id === "productThreeView")!.template = "Updated product prompt";
     loadJson.mockReturnValue(updated);
-    const { body } = await request<SelectableResponse[]>("/api/canvas/prompt-templates");
-    expect(body.data.find((entry) => entry.id === "productThreeView")?.template)
+    const { body } = await request<CatalogResponse>("/api/canvas/prompt-templates");
+    expect(body.data.entries.find((entry) => entry.id === "productThreeView")?.template)
       .toBe("Updated product prompt");
     expect(loadJson).toHaveBeenCalledTimes(2);
   });
@@ -98,7 +115,7 @@ describe("canvas prompt template routes", () => {
     authenticateRequest.mockImplementation(async () => ({
       error: Response.json({ error: "auth.not_authenticated" }, { status: 401 }),
     }));
-    expect((await request<SelectableResponse[]>("/api/canvas/prompt-templates")).status).toBe(401);
+    expect((await request<CatalogResponse>("/api/canvas/prompt-templates")).status).toBe(401);
     expect((await request("/api/canvas/prompt-template?type=reverse")).status).toBe(401);
     expect(loadJson).not.toHaveBeenCalled();
   });

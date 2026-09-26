@@ -23,30 +23,47 @@ import { broadcastToOthers, destroyRoom, joinCanvasRoom, leaveCanvasRoom } from 
 
 const router = new Hono();
 
+interface BilingualText {
+  zh: string;
+  en: string;
+}
+
 interface PromptTemplateEntry {
   id: string;
   kind: "preset" | "reverse" | "dynamic";
-  labelKey?: string;
+  group?: string;
+  label?: BilingualText;
+  description?: BilingualText;
   order?: number;
   template: string;
 }
 
+interface PromptTemplateGroup {
+  id: string;
+  label: BilingualText;
+  order: number;
+}
+
 // 文件 mtime 变化时由 json-loader 重新解析，两个接口共享同一份实时目录。
-function loadPromptTemplates(): PromptTemplateEntry[] {
-  return loadJson<{ entries: PromptTemplateEntry[] }>("prompt-template.json").entries;
+function loadPromptTemplateCatalog(): { groups: PromptTemplateGroup[]; entries: PromptTemplateEntry[] } {
+  return loadJson<{ groups: PromptTemplateGroup[]; entries: PromptTemplateEntry[] }>("prompt-template.json");
 }
 
 // 两个前端入口共用可选目录：反推 + 生成预设；动态插值项不进入列表。
+// label / description 为内联双语，前端按当前语言在渲染期取值，语言切换即时生效。
 router.get("/api/canvas/prompt-templates", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  const selectable = loadPromptTemplates()
+  const catalog = loadPromptTemplateCatalog();
+  const selectable = catalog.entries
     .filter((entry) => entry.kind === "preset" || entry.kind === "reverse")
     .sort((a, b) => a.order! - b.order!)
-    .map(({ id, kind, labelKey, order, template }) => ({ id, kind, labelKey, order, template }));
-  return c.json(ok(selectable));
+    .map(({ id, kind, group, label, description, order, template }) =>
+      ({ id, kind, group, label, description, order, template }));
+  const groups = [...catalog.groups].sort((a, b) => a.order - b.order);
+  return c.json(ok({ groups, entries: selectable }));
 });
 
 router.get("/api/canvas/prompt-template", async (c) => {
@@ -57,7 +74,7 @@ router.get("/api/canvas/prompt-template", async (c) => {
   const type = c.req.query("type");
   if (!type) return failCode(400, "canvas.missing_type_param");
 
-  const entry = loadPromptTemplates().find((item) => item.id === type);
+  const entry = loadPromptTemplateCatalog().entries.find((item) => item.id === type);
   if (!entry) return failCode(404, "canvas.template_not_found", { type });
 
   let template = entry.template;
