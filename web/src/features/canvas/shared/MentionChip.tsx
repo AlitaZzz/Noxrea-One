@@ -11,11 +11,11 @@ import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-import { findPreset, presetIconOf, usePromptPresets } from "./prompt-presets";
+import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
 import { type ReferenceItemAttrs, refLabel } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
-  const { t } = useTranslation();
+  const { i18n } = useTranslation();
   const { data: presets } = usePromptPresets();
   const item = node.attrs as ReferenceItemAttrs;
 
@@ -24,7 +24,7 @@ export default function MentionChip({ node }: NodeViewProps) {
     return (
       <NodeViewWrapper as="span" className="mention-chip">
         {preset ? createElement(presetIconOf(preset.id), { className: "mention-preset-icon" }) : null}
-        <span>{preset ? t(preset.labelKey) : item.presetId}</span>
+        <span>{preset ? localizeText(preset.label, i18n.language) : item.presetId}</span>
       </NodeViewWrapper>
     );
   }

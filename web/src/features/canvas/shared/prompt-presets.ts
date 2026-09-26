@@ -7,33 +7,54 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Wand2 } from "lucide-react";
+import { Wand2 } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
 
 import { Back5sIcon } from "@/components/ui/icons/canvas/Back5sIcon";
 import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
 import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
 import { Forward3sIcon } from "@/components/ui/icons/canvas/Forward3sIcon";
+import { LightCorrectionIcon } from "@/components/ui/icons/canvas/LightCorrectionIcon";
 import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
+import { ProductThreeViewIcon } from "@/components/ui/icons/canvas/ProductThreeViewIcon";
 import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
 import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
 import { api } from "@/lib/api/client";
 
+export interface BilingualText {
+  zh: string;
+  en: string;
+}
+
 export interface PromptPreset {
   id: string;
   kind: "preset" | "reverse";
-  labelKey: string;
+  group?: string;
+  label: BilingualText;
+  description?: BilingualText;
   order: number;
   template: string;
+}
+
+export interface PresetGroup {
+  id: string;
+  label: BilingualText;
+  order: number;
+}
+
+export interface PromptTemplateCatalog {
+  groups: PresetGroup[];
+  entries: PromptPreset[];
 }
 
 export type PresetIcon = ComponentType<{ className?: string; style?: CSSProperties }>;
 
 /** Icons are visual hints only; the API owns the catalog and its identifiers. */
 const presetIcons: Record<string, PresetIcon> = {
-  reverse: FileText,
   characterFaceThreeView: CharacterFaceThreeViewIcon,
   characterThreeView: CharacterThreeViewIcon,
+  productThreeView: ProductThreeViewIcon,
+  cinematicLightCorrection: LightCorrectionIcon,
   nineGridScene: NineGridIcon,
   storyboard25: Storyboard25Icon,
   storyboard4: Storyboard4Icon,
@@ -57,13 +78,34 @@ export function findPreset(presets: PromptPreset[], id: string): PromptPreset | 
   return presets.find((p) => p.id === id && p.kind === "preset");
 }
 
-/** The directory is shared by both menus; submission fetches afresh for hot updates. */
-export function fetchPromptTemplates(): Promise<PromptPreset[]> {
-  return api<PromptPreset[]>("/api/canvas/prompt-templates");
+/** preset 条目必有分组与描述（reverse / dynamic 不进分组菜单） */
+export function isPresetEntry(entry: PromptPreset): entry is PromptPreset & { group: string; description: BilingualText } {
+  return entry.kind === "preset";
 }
 
-export function usePromptPresets(enabled = true) {
+/** 目录为内联双语：渲染期按当前语言取值（随 useTranslation 重渲染即时切换），禁止模块加载期定格语言 */
+export function localizeText(text: BilingualText, language: string): string {
+  return language === "en" ? text.en : text.zh;
+}
+
+/** The directory is shared by both menus; submission fetches afresh for hot updates. */
+export function fetchPromptTemplates(): Promise<PromptTemplateCatalog> {
+  return api<PromptTemplateCatalog>("/api/canvas/prompt-templates");
+}
+
+/** 完整目录（分组 + 条目），「创作」菜单等需要分组标题的场景使用 */
+export function usePromptTemplateCatalog(enabled = true) {
   return useQuery({ queryKey: ["canvas", "prompt-templates"], queryFn: fetchPromptTemplates, enabled });
+}
+
+/** 仅条目列表：mention chip、节点派生（含反推按钮的数据源）等只需要扁平条目 */
+export function usePromptPresets(enabled = true) {
+  return useQuery({
+    queryKey: ["canvas", "prompt-templates"],
+    queryFn: fetchPromptTemplates,
+    enabled,
+    select: (catalog) => catalog.entries,
+  });
 }
 
 /**
@@ -71,7 +113,7 @@ export function usePromptPresets(enabled = true) {
  */
 export async function expandPresetTokens(text: string): Promise<string> {
   if (!text.includes("@[preset:")) return text;
-  const templates = await fetchPromptTemplates();
+  const { entries: templates } = await fetchPromptTemplates();
   return text.replace(PRESET_TOKEN_PATTERN, (_token, id: string) => {
     const preset = findPreset(templates, id);
     if (!preset) throw new Error(`Preset "${id}" is unavailable or disabled`);

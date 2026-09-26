@@ -26,7 +26,7 @@ import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
-import { presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
+import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
@@ -71,7 +71,7 @@ function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
 }
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选。
@@ -324,11 +324,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       entry.kind === "reverse" ? entry.template : presetTokenOf(entry.id),
       entry.kind === "reverse" ? createTextNode : createImageNode,
       useCanvasStore.getState(),
-      entry.kind === "reverse" ? undefined : { label: t(entry.labelKey) },
+      entry.kind === "reverse" ? undefined : { label: localizeText(entry.label, i18n.language) },
     );
     if (!created) return;
     markDirtyImmediate();
-  }, [id, src, promptTemplates, t]);
+  }, [id, src, promptTemplates, t, i18n]);
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
