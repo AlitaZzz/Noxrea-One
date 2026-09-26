@@ -80,6 +80,10 @@ export function handleCanvasSessionEvent(
     // 「断线期间错过的变更」场景项目必然已加载；他人进入必发 evict 兜底
     if (known === null) return;
     if (revision > known) {
+      // 保存响应未返回期间 SSE 闪断重连：sync 推送的 revision 恰为本地在途保存
+      // 的落库结果（known + 1），是自己刚提交的保存，不是他人编辑——排除误判。
+      // revision 不在此代写：保存若失败版本不能凭空前进，由保存响应自行回写。
+      if (saveManager.isOwnInFlightRevision(projectId, revision)) return;
       useProjectStore.getState().updateProjectRevision(projectId, revision);
       saveManager.notifyEvicted();
     }

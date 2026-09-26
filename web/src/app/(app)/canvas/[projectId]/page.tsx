@@ -16,9 +16,11 @@ import AppShell from "@/components/layout/AppShell";
 import AppModal from "@/components/ui/AppModal";
 import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
 import { useCanvasSession } from "@/features/project/use-canvas-session";
@@ -72,7 +74,10 @@ export default function CanvasPage({
       }
       // 后端数据是唯一真相源：刷新后一律以服务端内容渲染画布。
       // 被抢占期间产生的本地改动随之作废（不再有离线草稿机制兜底）。
-      useCanvasStore.getState().restoreFromProject(project.id, project);
+      // 项目恢复是程序化写入，不算用户操作，不进 agent 动作历史；
+      // 恢复完成即切换/加载项目，撤销历史同步归零（避免撤销穿透到上一个项目）。
+      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project.id, project));
+      useHistoryStore.getState().clear();
       setLoadedProjectId(projectId);
     }).catch((err) => {
       // 拉取 / 解析失败时不能停在 "Loading canvas..."，回到项目列表

@@ -8,6 +8,8 @@
  * features/canvas/types.ts 会从这里转出，上层既有的
  * `import type { … } from "@/features/canvas/types"` 导入路径保持不变。
  */
+import type { TaskStatus } from "@noxrea/shared";
+
 import type { UploadErrorInfo } from "@/lib/utils/upload";
 
 export type BackgroundType = "dots" | "grid" | "blank";
@@ -18,8 +20,8 @@ export interface ViewportState {
   zoom: number;
 }
 
-/** 任务状态：与服务端终态词汇对齐（cancelled 为用户取消的终态） */
-export type TaskStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+/** 任务状态：契约单一来源在 @noxrea/shared（zod 派生），此处仅转出给画布层 */
+export type { TaskStatus };
 
 export interface TaskBinding {
   /** 后端任务 ID：绑定只在拿到真实 taskId 后才写入，不存在空串形态 */

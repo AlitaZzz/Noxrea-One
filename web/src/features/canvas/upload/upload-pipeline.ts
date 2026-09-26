@@ -32,6 +32,7 @@ import {
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
+import { kindOfBlob } from "@/lib/upload-formats";
 import { stripMediaExtension } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -49,10 +50,6 @@ import {
 import { resolveDerivedLabel, resolveDerivedPosition } from "./derived-node";
 import type { MediaKind, UploadHandle, UploadItem, UploadPlan, UploadSummary } from "./types";
 
-const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"];
-const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "mkv"];
-const AUDIO_EXTS = ["mp3", "wav", "ogg", "m4a", "aac", "flac"];
-
 /** 版本号序列：防异步回调竞态（撤销 / 重置后旧回调自动失效） */
 let _versionSeq = Date.now();
 function nextVersion(): number {
@@ -60,22 +57,11 @@ function nextVersion(): number {
 }
 
 /**
- * 判定媒体类型：优先用 MIME，缺失时退回扩展名。
+ * 判定媒体类型：优先用 MIME，缺失时退回扩展名（白名单见 lib/upload-formats）。
  * 部分来源（粘贴、某些文件管理器）不带 MIME，仅按 MIME 判定会误杀。
  */
 export function detectMediaKind(blob: Blob, filename?: string): MediaKind | null {
-  const type = blob.type;
-  if (type.startsWith("image/")) return "image";
-  if (type.startsWith("video/")) return "video";
-  if (type.startsWith("audio/")) return "audio";
-
-  const dot = filename ? filename.lastIndexOf(".") : -1;
-  if (!filename || dot < 0) return null;
-  const ext = filename.slice(dot + 1).toLowerCase();
-  if (IMAGE_EXTS.includes(ext)) return "image";
-  if (VIDEO_EXTS.includes(ext)) return "video";
-  if (AUDIO_EXTS.includes(ext)) return "audio";
-  return null;
+  return kindOfBlob(blob, filename);
 }
 
 function toFile(item: UploadItem): File {
@@ -402,11 +388,17 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
     upload: undefined,
     source: ctx.source,
   };
+  // 尺寸以服务端 file_objects 探测值为权威（EXIF 旋转已归一）；
+  // 占位期间的客户端探测值只为撑住上传前的 UI，服务端缺失时兜底
+  let style: { width: number; height: number } | undefined;
   if (ctx.kind !== "audio") {
-    data.naturalWidth = ctx.nw;
-    data.naturalHeight = ctx.nh;
+    const nw = result.width ?? ctx.nw;
+    const nh = result.height ?? ctx.nh;
+    data.naturalWidth = nw;
+    data.naturalHeight = nh;
+    style = computeNodeSize(nw, nh);
   }
-  runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, data, undefined, { skipHistory: true }));
+  runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, data, style, { skipHistory: true }));
   if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
 }
 
@@ -465,9 +457,7 @@ async function runUploads(
       summaryResults[p.itemIndex] = r.value;
       // 服务端上传体检发现视频截断 / 损坏：上传不阻断（文件可用部分照常入库），
       // 但必须立刻告诉用户「标称时长 vs 实际可解码时长」
-      const mediaWarning = (
-        r.value as { data?: { media_warning?: { declared: number; decodable: number } } } | null
-      )?.data?.media_warning;
+      const mediaWarning = r.value?.media_warning;
       if (mediaWarning) {
         showGlobalMessage().warning(
           i18n.t("file.mediaTruncated", {
@@ -493,9 +483,12 @@ async function runUploads(
           source,
           ...clear,
         };
+        // 尺寸以服务端探测值为权威（与 applyUploadResult 同一规则）
+        const nw = r.value.width ?? p.nw;
+        const nh = r.value.height ?? p.nh;
         if (p.kind !== "audio") {
-          data.naturalWidth = p.nw;
-          data.naturalHeight = p.nh;
+          data.naturalWidth = nw;
+          data.naturalHeight = nh;
         }
         // NODE_UPDATE_DATA 监听器同步执行，包裹 dispatch 即可覆盖监听器内的 store 写入
         runSuppressed(() => window.dispatchEvent(
@@ -505,7 +498,7 @@ async function runUploads(
               data,
               style: p.kind === "audio"
                 ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
-                : computeNodeSize(p.nw, p.nh),
+                : computeNodeSize(nw, nh),
               immediate: true,
             },
           }),

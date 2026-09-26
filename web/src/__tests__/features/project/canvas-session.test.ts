@@ -12,6 +12,7 @@ import { handleCanvasSessionEvent } from "@/features/project/use-canvas-session"
 
 const mocks = vi.hoisted(() => ({
   notifyEvicted: vi.fn(),
+  isOwnInFlightRevision: vi.fn<(projectId: string, revision: number) => boolean>(() => false),
 }));
 
 vi.mock("@/features/project/save-manager", async () => {
@@ -24,12 +25,15 @@ vi.mock("@/features/project/save-manager", async () => {
         mocks.notifyEvicted();
         useSessionExpiredStore.getState().markExpired();
       },
+      isOwnInFlightRevision: (...args: unknown[]) => mocks.isOwnInFlightRevision(...(args as [string, number])),
     },
   };
 });
 
 beforeEach(() => {
   mocks.notifyEvicted.mockClear();
+  mocks.isOwnInFlightRevision.mockClear();
+  mocks.isOwnInFlightRevision.mockReturnValue(false);
   useSessionExpiredStore.setState({ expired: false });
   useProjectStore.setState({
     projects: [{ id: "p1", revision: 2 } as never],
@@ -78,6 +82,30 @@ describe("handleCanvasSessionEvent", () => {
     handleCanvasSessionEvent("p1", "sync", { revision: 9 });
     expect(useSessionExpiredStore.getState().expired).toBe(false);
     expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+  });
+
+  it("sync：revision 恰为本地在途保存的落库版本时排除误判，不进入过期态", () => {
+    // 保存响应未返回期间 SSE 闪断重连：sync 推送的 revision = known + 1，
+    // 正是本窗口自己刚提交的保存，不是他人编辑
+    mocks.isOwnInFlightRevision.mockReturnValue(true);
+    handleCanvasSessionEvent("p1", "sync", { revision: 3 });
+    expect(useSessionExpiredStore.getState().expired).toBe(false);
+    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+    // revision 不代写：保存若失败版本不能凭空前进，由保存响应自行回写
+    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(2);
+  });
+
+  it("sync：在途保存判定不命中时仍按他人编辑收敛过期", () => {
+    mocks.isOwnInFlightRevision.mockReturnValue(false);
+    handleCanvasSessionEvent("p1", "sync", { revision: 3 });
+    expect(useSessionExpiredStore.getState().expired).toBe(true);
+    expect(mocks.notifyEvicted).toHaveBeenCalled();
+  });
+
+  it("evict：即使命中在途保存也立即过期（evict 是权威信号，不做排除）", () => {
+    mocks.isOwnInFlightRevision.mockReturnValue(true);
+    handleCanvasSessionEvent("p1", "evict", { revision: 3 });
+    expect(useSessionExpiredStore.getState().expired).toBe(true);
   });
 
   it("未知事件名与陈旧事件（前面的 event 行未被 data 覆盖）不误触发", () => {
