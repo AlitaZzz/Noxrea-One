@@ -221,7 +221,6 @@
     "deleteProviderConfirm": "Deleting \"{{name}}\" will also delete its {{count}} model(s), and this cannot be undone. Continue?",
     "protocol": {
       "openai": "OpenAI",
-      "gemini": "Gemini",
       "ark": "Ark"
     },
     "cap": {
@@ -582,7 +581,82 @@
     "mediaTruncated": "Video file looks incomplete: claims {{declared}} but only {{actual}} is decodable"
   },
   "agent": {
-    "title": "Agent"
+    "title": "Agent",
+    "createSessionFailed": "Failed to create session",
+    "loadHistoryFailed": "Failed to load history",
+    "loadSessionsFailed": "Failed to load session list",
+    "sessionDeleted": "Session deleted",
+    "deleteFailed": "Delete failed",
+    "renameFailed": "Rename failed",
+    "toolRoundLimitReached": "⚠ Tool call round limit reached; remaining actions were not executed. Please restate your request.",
+    "chatFailed": "Conversation failed",
+    "undoTurnSuccess": "Turn undone",
+    "undoTurn": "Undo this turn",
+    "timeJustNow": "just now",
+    "timeMinutes": "{{n}}m",
+    "timeHours": "{{n}}h",
+    "timeDays": "{{n}}d",
+    "renameTooltip": "Click to rename",
+    "newChat": "New chat",
+    "historyTitle": "History",
+    "historyEmpty": "No chats yet",
+    "deleteChatTooltip": "Delete chat",
+    "deleteChatAria": "Delete \"{{title}}\"",
+    "selectModelAria": "Select model",
+    "sendAria": "Send",
+    "stopAria": "Stop",
+    "emptySubtitle": "From sparks of inspiration to a complete world",
+    "composerPlaceholder": "Describe your idea, e.g. \"Create three text nodes on the canvas and connect them\"",
+    "modelLoadFailed": "Model list failed to load, click to retry",
+    "detailTruncated": "…(truncated)",
+    "skipped": "Not executed",
+    "detail": "Details",
+    "thinking": "Thinking…",
+    "confirmExecuted": "Executed {{executed}} actions, skipped {{skipped}}",
+    "confirmExecutedAll": "Executed {{executed}} actions",
+    "confirmCancelled": "Cancelled, nothing was executed",
+    "executedCount": "Executed {{count}} actions",
+    "nodeTypeFallback": "Node",
+    "confirmTitle": "Agent needs your confirmation",
+    "arrangeCanvasDetail": "The layout of all nodes on the canvas will be rearranged (recoverable via \"Undo this turn\")",
+    "confirmDeleteNodes": "{{count}} nodes will be deleted (connected edges removed as well)",
+    "confirmDeleteEdges": "{{count}} edges will be deleted",
+    "confirmGeneric": "This action needs your confirmation",
+    "confirmExecute": "Confirm",
+    "tool": {
+      "createNode": "Create nodes",
+      "createNodeN": "Create {{count}} nodes ({{summary}})",
+      "kindCount": "{{count}} × {{name}}",
+      "listSeparator": ", ",
+      "updateNode": "Update node \"{{label}}\"",
+      "updateNodePlain": "Update node",
+      "deleteNodeN": "Delete {{count}} nodes",
+      "deleteNode": "Delete nodes",
+      "connectN": "Create {{count}} edges",
+      "connect": "Create edges",
+      "deleteEdgesN": "Delete {{count}} edges",
+      "deleteEdges": "Delete edges",
+      "copyNodeLabeled": "Copy node \"{{label}}\"",
+      "copyNode": "Copy node",
+      "moveNodeTo": "Move {{label}} to ({{x}}, {{y}})",
+      "moveNodeCenter": "Move {{label}} to viewport center",
+      "moveNodeBeside": "Move {{label}} next to \"{{ref}}\"",
+      "moveNodeLabeled": "Move {{label}}",
+      "nodeLabel": "\"{{label}}\"",
+      "nodeFallback": "the node",
+      "arrangeCanvas": "Tidy canvas layout",
+      "setViewport": "Adjust viewport",
+      "focusNode": "Focus node \"{{label}}\"",
+      "moveViewportTo": "Move viewport to ({{x}}, {{y}})",
+      "selectNodesNFocus": "Select {{count}} nodes and focus",
+      "selectNodesN": "Select {{count}} nodes",
+      "selectNodes": "Select nodes",
+      "canvasStateRegion": "Read canvas state by region",
+      "canvasState": "Read current canvas state",
+      "readNodes": "Read node content",
+      "readNodesList": "Read node content: {{labels}}{{more}}",
+      "readNodesMore": " and {{count}} more nodes"
+    }
   },
   "video": {
     "refModeTitle": "Video Mode",
@@ -795,7 +869,11 @@
       "internal_error": "Internal server error, please try again later",
       "body_too_large": "Request body too large",
       "empty_response": "Empty response from server",
-      "unexpected_response": "Unexpected response format from server"
+      "unexpected_response": "Unexpected response format from server",
+      "unauthorized": "Your session has expired, please sign in again",
+      "forbidden": "You do not have access to this resource",
+      "conflict": "The resource has changed, please refresh and retry",
+      "rate_limited": "Too many requests, please try again later"
     },
     "auth": {
       "not_authenticated": "Not signed in",
@@ -860,9 +938,13 @@
       "access_denied": "Access to this file is denied",
       "file_not_found": "File not found"
     },
+    "media": {
+      "source_not_found": "Source file not found or deleted",
+      "cancelled": "Processing aborted",
+      "ffmpeg_missing": "ffmpeg is not installed on the server; media cannot be processed",
+      "timeout": "Processing timed out, please try again later"
+    },
     "capture_frame": {
-      "video_not_found": "Source video not found",
-      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "capture_failed": "Frame capture failed, please try again later"
     },
     "video_proxy": {
@@ -873,25 +955,16 @@
       "generation_failed": "Failed to generate frame strip"
     },
     "detach_audio": {
-      "video_not_found": "Source video not found",
-      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
       "no_audio_track": "This video has no audio track",
-      "extract_failed": "Audio detach failed, please try again later",
-      "cancelled": "Processing cancelled"
+      "extract_failed": "Audio detach failed, please try again later"
     },
     "clip": {
-      "video_not_found": "Source video not found",
       "invalid_range": "Invalid range: start must be before end, and at least 0.5s",
       "range_too_long": "Clip too long: max 10 minutes per extraction",
-      "ffmpeg_missing": "Video processing component is unavailable, please contact the administrator",
-      "timeout": "Clip extraction timed out, try a shorter range",
-      "extract_failed": "Clip extraction failed, please retry",
-      "cancelled": "Processing cancelled",
-      "audio_not_found": "Source audio not found"
+      "extract_failed": "Clip extraction failed, please retry"
     },
     "crop": {
       "invalid_rect": "Invalid crop area: it must stay within the video frame",
-      "timeout": "Video crop timed out, please retry",
       "failed": "Video crop failed, please retry"
     },
     "speed": {
