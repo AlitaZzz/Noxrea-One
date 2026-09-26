@@ -91,9 +91,9 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
-  // 预设目录来自后端（与创作菜单同一份数据源），仅取 kind === "preset"
-  const { data: promptTemplateCatalog } = usePromptTemplateCatalog();
-  const presets = useMemo(() => (promptTemplateCatalog?.entries ?? []).filter((p) => p.kind === "preset"), [promptTemplateCatalog]);
+  // 预设目录来自后端（与创作菜单同一份数据源），按 target 取图片预设
+  const { data: promptTemplateCatalog } = usePromptTemplateCatalog("image");
+  const presets = useMemo(() => promptTemplateCatalog?.entries ?? [], [promptTemplateCatalog]);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);

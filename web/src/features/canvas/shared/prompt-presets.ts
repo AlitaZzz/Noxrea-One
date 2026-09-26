@@ -1,7 +1,8 @@
 /**
- * 图片生成面板「预设」：提示词模板目录、令牌格式与展开逻辑。
+ * 生成面板「预设」：提示词模板目录、令牌格式与展开逻辑。
  *
- * 预设与节点工具条「创作」菜单共用同一批后端模板（server/resources/prompt-template.json），
+ * 图片 / 文本生成面板与节点工具条「创作」菜单共用同一批后端模板
+ * （server/resources/prompt-template.json，按 target 区分节点类型），
  * 本模块提供共享目录查询、图标映射与提交前令牌展开。
  */
 "use client";
@@ -26,12 +27,15 @@ export interface BilingualText {
   en: string;
 }
 
+export type PromptTarget = "image" | "text";
+
 export interface PromptPreset {
   id: string;
-  kind: "preset" | "reverse";
-  group?: string;
+  kind: "preset";
+  target: PromptTarget;
+  group: string;
   label: BilingualText;
-  description?: BilingualText;
+  description: BilingualText;
   order: number;
   template: string;
 }
@@ -75,12 +79,7 @@ export function presetTokenOf(id: string): string {
 
 /** 按 id 查预设项（chip 渲染、令牌展开共用） */
 export function findPreset(presets: PromptPreset[], id: string): PromptPreset | undefined {
-  return presets.find((p) => p.id === id && p.kind === "preset");
-}
-
-/** preset 条目必有分组与描述（reverse / dynamic 不进分组菜单） */
-export function isPresetEntry(entry: PromptPreset): entry is PromptPreset & { group: string; description: BilingualText } {
-  return entry.kind === "preset";
+  return presets.find((p) => p.id === id);
 }
 
 /** 目录为内联双语：渲染期按当前语言取值（随 useTranslation 重渲染即时切换），禁止模块加载期定格语言 */
@@ -89,20 +88,29 @@ export function localizeText(text: BilingualText, language: string): string {
 }
 
 /** The directory is shared by both menus; submission fetches afresh for hot updates. */
-export function fetchPromptTemplates(): Promise<PromptTemplateCatalog> {
-  return api<PromptTemplateCatalog>("/api/canvas/prompt-templates");
+export function fetchPromptTemplates(target?: PromptTarget): Promise<PromptTemplateCatalog> {
+  return api<PromptTemplateCatalog>(target
+    ? `/api/canvas/prompt-templates?target=${target}`
+    : "/api/canvas/prompt-templates");
 }
 
-/** 完整目录（分组 + 条目），「创作」菜单等需要分组标题的场景使用 */
-export function usePromptTemplateCatalog(enabled = true) {
-  return useQuery({ queryKey: ["canvas", "prompt-templates"], queryFn: fetchPromptTemplates, enabled });
+/**
+ * 指定 target 的目录（分组 + 条目），生成面板 / 创作菜单按节点类型取各自的预设；
+ * 省略 target 时返回全部条目，令牌展开依赖它覆盖跨类令牌。
+ */
+export function usePromptTemplateCatalog(target?: PromptTarget, enabled = true) {
+  return useQuery({
+    queryKey: ["canvas", "prompt-templates", target ?? "all"],
+    queryFn: () => fetchPromptTemplates(target),
+    enabled,
+  });
 }
 
-/** 仅条目列表：mention chip、节点派生（含反推按钮的数据源）等只需要扁平条目 */
+/** 仅条目列表（全量目录）：mention chip、节点派生等只需要扁平条目 */
 export function usePromptPresets(enabled = true) {
   return useQuery({
-    queryKey: ["canvas", "prompt-templates"],
-    queryFn: fetchPromptTemplates,
+    queryKey: ["canvas", "prompt-templates", "all"],
+    queryFn: () => fetchPromptTemplates(),
     enabled,
     select: (catalog) => catalog.entries,
   });

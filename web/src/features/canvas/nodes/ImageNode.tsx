@@ -312,7 +312,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   const handleGridSplit = useGridSplit(id, src);
 
-  // 模板目录（与生成面板 / 工具条同一数据源）：reverse → 文本节点；preset → 图片节点（令牌 chip，提交时展开）
+  // 模板目录（与生成面板 / 工具条同一数据源）：按条目 target 决定派生节点类型，
+  // 统一写入令牌（chip 展示，提交时展开）
   const { data: promptTemplates } = usePromptPresets();
 
   const handleApplyTemplate = useCallback((templateId: string) => {
@@ -321,14 +322,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     if (!entry) return;
     const created = spawnPromptDerivedNode(
       id,
-      entry.kind === "reverse" ? entry.template : presetTokenOf(entry.id),
-      entry.kind === "reverse" ? createTextNode : createImageNode,
+      presetTokenOf(entry.id),
+      entry.target === "text" ? createTextNode : createImageNode,
       useCanvasStore.getState(),
-      entry.kind === "reverse" ? undefined : { label: localizeText(entry.label, i18n.language) },
+      { label: localizeText(entry.label, i18n.language) },
     );
     if (!created) return;
     markDirtyImmediate();
-  }, [id, src, promptTemplates, t, i18n]);
+  }, [id, src, promptTemplates, i18n]);
 
   const handleClear = useCallback(() => {
     useCanvasStore.getState().updateNodeData(id, {
