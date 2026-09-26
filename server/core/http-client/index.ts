@@ -3,7 +3,7 @@
  * 按下载、轮询、接口、异步等场景提供差异化的超时与请求封装。
  */
 import { ProxyAgent } from "undici";
-import { getConfig } from "@server/core/config";
+import { getConfig, isProxyRoutingEnabled } from "@server/core/config";
 import { getSsrfAgent } from "@server/core/ssrf";
 
 export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
@@ -19,12 +19,11 @@ export function getSceneTimeout(scene: HttpTimeoutScene): number {
   }
 }
 
-/** 获取代理 dispatcher（仅在 USE_SYSTEM_PROXY=true 时生效） */
+/** 获取代理 dispatcher（仅在配置了系统代理时生效） */
 export function getProxyDispatcher(): unknown {
-  const cfg = getConfig();
-  if (!cfg.USE_SYSTEM_PROXY || !cfg.PROXY_URL) return undefined;
+  if (!isProxyRoutingEnabled()) return undefined;
 
-  return new ProxyAgent(cfg.PROXY_URL);
+  return new ProxyAgent(getConfig().PROXY_URL);
 }
 
 /** 带超时的 fetch，支持可选的系统代理 */
@@ -42,7 +41,7 @@ export async function fetchWithTimeout(
 
   const effectiveTimeout = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
 
-  // 代理模式：DNS 由代理解析，SSRF 靠调用方预检兜底；
+  // 代理模式：DNS 由代理解析，SSRF 预检降级为告警（见 core/ssrf）；
   // 直连模式：默认走 SSRF 校验型 Agent，建连 lookup 阶段校验并 pinning 校验通过的 IP，
   // 覆盖重定向后的每一跳
   const proxyDispatcher = dispatcher ?? getProxyDispatcher();
