@@ -20,7 +20,7 @@ export interface BuildInput {
   modelName: string;
   /** 能力名（image/video/llm/audio） */
   capability: string;
-  /** 协议名（openai/gemini/ark） */
+  /** 协议名（openai/ark） */
   protocol: string;
   /** 上游 baseUrl，用于匹配渠道 */
   baseUrl: string;

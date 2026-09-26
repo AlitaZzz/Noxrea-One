@@ -70,6 +70,20 @@ export function extractFailureCode(err: unknown): { code?: string } {
 }
 
 /**
+ * 上游错误的统一翻译：「上游自带可读文案时原样回传（不附错误码，前端原样展示）；
+ * 取不到时回退兜底文案 + 错误码（由前端本地化）」。该规则此前在 manager、
+ * audio、llm 中各自实现，统一收敛于此。
+ */
+export function failFromUpstream(
+  upstreamMsg: string,
+  fallback: { message: string; code: string }
+): { error: string; errorCode?: string } {
+  return upstreamMsg
+    ? { error: upstreamMsg }
+    : { error: fallback.message, errorCode: fallback.code };
+}
+
+/**
  * 任务已被用户取消（DB 中任务已是 cancelled 终态）。
  * 能力服务收到上游返回的取消信号时抛出；executor 捕获后直接结束本次执行，
  * 不写任何终态——失败终态守卫本会拒绝 cancelled 行，显式抛错让「无需写入」

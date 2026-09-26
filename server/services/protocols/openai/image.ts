@@ -13,7 +13,7 @@ import {
   parseScanPollResult,
   parseScanSyncResult,
   extractOpenAiTaskId,
-  getPollPath,
+  buildOpenAiPollUrl,
 } from "./shared";
 
 /** 裸 base64 产物补 PNG 前缀（OpenAI 标准 b64_json 不带 data: 锚点） */
@@ -63,23 +63,7 @@ export class OpenAiImageProtocol implements ProtocolService {
   }
 
   buildPollUrl(baseUrl: string, upstreamTaskId: string, channelConfig?: Record<string, unknown>, capability?: string, model?: string): string {
-    const customPath = getPollPath(channelConfig, capability ?? "image");
-    // 替换占位符：{model} 走请求模型名，其余（如 {task_id}）走任务 ID
-    const fill = (path: string) =>
-      path.replace(/\{([^}]+)\}/g, (_, name: string) => (name === "model" ? (model ?? "") : upstreamTaskId));
-    if (customPath) {
-      // 如果已是完整 URL（含协议头），直接替换占位符返回
-      if (/^https?:\/\//.test(customPath)) {
-        return fill(customPath);
-      }
-      // 如果包含 {xxx} 占位符，拼接 baseUrl 后替换
-      if (/\{[^}]+\}/.test(customPath)) {
-        return `${baseUrl}${fill(customPath)}`;
-      }
-      // 无占位符：追加到路径末尾
-      return `${baseUrl}${customPath}/${upstreamTaskId}`;
-    }
-    return `${baseUrl}/tasks/${upstreamTaskId}`;
+    return buildOpenAiPollUrl(baseUrl, upstreamTaskId, channelConfig, capability ?? "image", model);
   }
 
   parsePollResponse(data: unknown): PollResult {
