@@ -1,7 +1,7 @@
 /**
  * 预设目录菜单内容：按目录分组渲染「分组标题 + 图标两行条目」。
- * 节点工具条「创作」菜单与生成面板「预设」菜单共用；仅渲染 kind === "preset"，
- * 反推提示词是独立动作，由工具条 / 面板的独立按钮承载，不进菜单。
+ * 节点工具条「创作」菜单与生成面板「预设」菜单共用；目录按 target 过滤后传入，
+ * 仅含 kind === "preset" 的可选条目。
  */
 "use client";
 
@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { MenuItem } from "@/components/ui/MenuPopover";
 
-import { isPresetEntry, localizeText, presetIconOf, type PromptTemplateCatalog } from "./prompt-presets";
+import { localizeText, presetIconOf, type PromptTemplateCatalog } from "./prompt-presets";
 
 interface Props {
   catalog: PromptTemplateCatalog | undefined;
@@ -20,7 +20,7 @@ interface Props {
 export default function PresetMenuContent({ catalog, onSelect }: Props) {
   const { i18n } = useTranslation();
   const groups = catalog?.groups ?? [];
-  const entries = (catalog?.entries ?? []).filter(isPresetEntry);
+  const entries = catalog?.entries ?? [];
   return (
     <>
       {groups

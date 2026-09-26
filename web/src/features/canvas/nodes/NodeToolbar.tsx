@@ -223,9 +223,9 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   if (prevNodeId !== nodeId) {
     setPrevNodeId(nodeId);
   }
-  // 创作菜单与生成面板共用同一份后端模板目录与同一个分组菜单组件；
+  // 创作菜单与生成面板共用同一份后端模板目录与同一个分组菜单组件（图片节点取 image 预设）；
   // 反推提示词是独立动作，单独成按钮
-  const { data: templateCatalog } = usePromptTemplateCatalog();
+  const { data: templateCatalog } = usePromptTemplateCatalog("image");
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
