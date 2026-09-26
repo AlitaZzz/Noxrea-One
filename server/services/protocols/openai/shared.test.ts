@@ -1,7 +1,8 @@
 /**
  * OpenAI 协议共享解析核心测试。
- * 产物提取为整树 URL 扫描（上游返回结构不可控的有意设计），
- * 重点覆盖：prompt 回显跳过、失败状态优先、base64 兜底与 task_id 提取。
+ * 成败判定同为证据制（规则收敛在 tasks/failure，此处测编排）：
+ * 失败证据（状态词 / 错误专用键）优先于产物扫描，prompt 回显跳过，
+ * base64 兜底与 task_id 提取。
  */
 import { describe, expect, it } from "vitest";
 
@@ -9,7 +10,6 @@ import {
   buildOpenAiPollUrl,
   extractB64Fields,
   extractOpenAiTaskId,
-  normalizeStatus,
   parseScanPollResult,
   parseScanSyncResult,
   scanUrls,
@@ -17,15 +17,6 @@ import {
 
 const IMAGE_B64 = "data:image/png;base64,";
 const VIDEO_B64 = "data:;base64,";
-
-describe("normalizeStatus", () => {
-  it("pending 类 / completed 类 / failed 类归一化，未知值原样返回", () => {
-    expect(normalizeStatus("Running")).toBe("pending");
-    expect(normalizeStatus(" succeeded ")).toBe("completed");
-    expect(normalizeStatus("CANCELLED")).toBe("failed");
-    expect(normalizeStatus("75%")).toBe("75%");
-  });
-});
 
 describe("scanUrls", () => {
   it("穿透任意层级收集 https 与 data URL 并去重", () => {
@@ -92,6 +83,40 @@ describe("parseScanPollResult", () => {
   it("failed 状态下错误对象取 message，字符串直接用，限长 200", () => {
     expect(parseScanPollResult({ status: "failed", message: "x".repeat(500) }, IMAGE_B64).error).toHaveLength(200);
     expect(parseScanPollResult({ status: "failed", error: "boom" }, IMAGE_B64).error).toBe("boom");
+  });
+
+  it("failed 状态但文案在 detail 字段 → 透传 detail", () => {
+    expect(parseScanPollResult({ status: "failed", detail: "content safety violation" }, IMAGE_B64).error)
+      .toBe("content safety violation");
+  });
+
+  it("无 status 但携带错误专用键 → failed 并透传原文", () => {
+    const r = parseScanPollResult(
+      { error: { message: "Your prompt or input was rejected by the content safety system." } },
+      IMAGE_B64
+    );
+    expect(r.status).toBe("failed");
+    expect(r.error).toBe("Your prompt or input was rejected by the content safety system.");
+  });
+
+  it("嵌套状态字段值命中失败词 → failed（顶层 status 只是特例）", () => {
+    expect(parseScanPollResult({ data: { state: "failed" } }, IMAGE_B64).status).toBe("failed");
+    expect(parseScanPollResult({ result: "error" }, IMAGE_B64).status).toBe("failed");
+  });
+
+  it("message 是进度字段：无失败证据的回执仍为 pending", () => {
+    expect(parseScanPollResult({ message: "processing" }, IMAGE_B64)).toEqual({ status: "pending", urls: [] });
+    expect(parseScanPollResult({ status: "processing", error: null, progress: 50 }, IMAGE_B64))
+      .toEqual({ status: "pending", urls: [] });
+  });
+
+  it("错误证据先于产物扫描：携带错误键的响应不判成完成", () => {
+    const r = parseScanPollResult(
+      { error: { message: "rejected" }, data: [{ url: "https://cdn.example.com/a.png" }] },
+      IMAGE_B64
+    );
+    expect(r.status).toBe("failed");
+    expect(r.urls).toEqual([]);
   });
 
   it("裸 b64_json 兜底合并进产物（image 补 PNG 前缀）", () => {
