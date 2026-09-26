@@ -221,7 +221,6 @@
     "deleteProviderConfirm": "删除「{{name}}」将同时删除该供应商下的 {{count}} 个模型，且不可恢复。确定要删除吗？",
     "protocol": {
       "openai": "OpenAI",
-      "gemini": "Gemini",
       "ark": "Ark"
     },
     "cap": {
@@ -582,7 +581,82 @@
     "mediaTruncated": "视频文件疑似不完整：标称 {{declared}}，实际仅 {{actual}} 可解码"
   },
   "agent": {
-    "title": "Agent"
+    "title": "Agent",
+    "createSessionFailed": "创建会话失败",
+    "loadHistoryFailed": "加载历史失败",
+    "loadSessionsFailed": "加载历史列表失败",
+    "sessionDeleted": "已删除会话",
+    "deleteFailed": "删除失败",
+    "renameFailed": "重命名失败",
+    "toolRoundLimitReached": "⚠ 工具调用轮数已达上限，剩余操作未执行，请重新描述需求。",
+    "chatFailed": "对话失败",
+    "undoTurnSuccess": "已撤销本轮操作",
+    "undoTurn": "撤销此轮",
+    "timeJustNow": "刚刚",
+    "timeMinutes": "{{n}}分钟",
+    "timeHours": "{{n}}小时",
+    "timeDays": "{{n}}天",
+    "renameTooltip": "点击重命名",
+    "newChat": "新对话",
+    "historyTitle": "历史对话",
+    "historyEmpty": "暂无历史对话",
+    "deleteChatTooltip": "删除对话",
+    "deleteChatAria": "删除「{{title}}」",
+    "selectModelAria": "选择模型",
+    "sendAria": "发送",
+    "stopAria": "停止",
+    "emptySubtitle": "从灵感碎片，到完整世界",
+    "composerPlaceholder": "描述你的想法，例如「画布上建三个文本节点连起来」",
+    "modelLoadFailed": "模型列表加载失败，点击重试",
+    "detailTruncated": "…(已截断)",
+    "skipped": "未执行",
+    "detail": "详情",
+    "thinking": "思考中…",
+    "confirmExecuted": "已确认执行 {{executed}} 项操作，跳过 {{skipped}} 项",
+    "confirmExecutedAll": "已确认执行 {{executed}} 项操作",
+    "confirmCancelled": "已取消，未执行任何操作",
+    "executedCount": "执行了 {{count}} 个操作",
+    "nodeTypeFallback": "节点",
+    "confirmTitle": "Agent 请求确认",
+    "arrangeCanvasDetail": "将重新整理画布上全部节点的布局（可用「撤销此轮」恢复）",
+    "confirmDeleteNodes": "将删除 {{count}} 个节点（连线一并移除）",
+    "confirmDeleteEdges": "将删除 {{count}} 条连线",
+    "confirmGeneric": "此操作需要你的确认",
+    "confirmExecute": "确认执行",
+    "tool": {
+      "createNode": "新建节点",
+      "createNodeN": "新建 {{count}} 个节点（{{summary}}）",
+      "kindCount": "{{name}}×{{count}}",
+      "listSeparator": "、",
+      "updateNode": "更新节点「{{label}}」",
+      "updateNodePlain": "更新节点",
+      "deleteNodeN": "删除 {{count}} 个节点",
+      "deleteNode": "删除节点",
+      "connectN": "创建 {{count}} 条连线",
+      "connect": "创建连线",
+      "deleteEdgesN": "删除 {{count}} 条连线",
+      "deleteEdges": "删除连线",
+      "copyNodeLabeled": "复制节点「{{label}}」",
+      "copyNode": "复制节点",
+      "moveNodeTo": "移动{{label}}到 ({{x}}, {{y}})",
+      "moveNodeCenter": "移动{{label}}到视口中心",
+      "moveNodeBeside": "移动{{label}}到「{{ref}}」旁",
+      "moveNodeLabeled": "移动{{label}}",
+      "nodeLabel": "「{{label}}」",
+      "nodeFallback": "节点",
+      "arrangeCanvas": "整理画布布局",
+      "setViewport": "调整视口",
+      "focusNode": "聚焦节点「{{label}}」",
+      "moveViewportTo": "移动视口到 ({{x}}, {{y}})",
+      "selectNodesNFocus": "选中 {{count}} 个节点并聚焦",
+      "selectNodesN": "选中 {{count}} 个节点",
+      "selectNodes": "选中节点",
+      "canvasStateRegion": "按坐标范围读取画布状态",
+      "canvasState": "读取画布当前状态",
+      "readNodes": "读取节点内容",
+      "readNodesList": "读取节点内容：{{labels}}{{more}}",
+      "readNodesMore": " 等 {{count}} 个节点"
+    }
   },
   "video": {
     "refModeTitle": "视频生成模式",
@@ -795,7 +869,11 @@
       "internal_error": "服务内部错误，请稍后重试",
       "body_too_large": "请求体过大",
       "empty_response": "服务端返回内容为空",
-      "unexpected_response": "服务端响应格式异常"
+      "unexpected_response": "服务端响应格式异常",
+      "unauthorized": "登录状态已失效，请重新登录",
+      "forbidden": "无权访问该资源",
+      "conflict": "资源状态已变化，请刷新后重试",
+      "rate_limited": "操作过于频繁，请稍后重试"
     },
     "auth": {
       "not_authenticated": "未登录",
@@ -860,9 +938,13 @@
       "access_denied": "无权访问该文件",
       "file_not_found": "文件不存在"
     },
+    "media": {
+      "source_not_found": "源文件不存在或已被删除",
+      "cancelled": "处理已中止",
+      "ffmpeg_missing": "服务器未安装 ffmpeg，无法处理媒体",
+      "timeout": "处理超时，请稍后重试"
+    },
     "capture_frame": {
-      "video_not_found": "源视频不存在",
-      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "capture_failed": "抽帧失败，请稍后重试"
     },
     "video_proxy": {
@@ -873,25 +955,16 @@
       "generation_failed": "帧序列生成失败"
     },
     "detach_audio": {
-      "video_not_found": "源视频不存在",
-      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
       "no_audio_track": "该视频没有音轨",
-      "extract_failed": "音轨分离失败，请稍后重试",
-      "cancelled": "处理已取消"
+      "extract_failed": "音轨分离失败，请稍后重试"
     },
     "clip": {
-      "video_not_found": "源视频不存在",
       "invalid_range": "片段范围无效：起点需早于终点，且不少于 0.5 秒",
       "range_too_long": "片段过长：单次截取最长 10 分钟",
-      "ffmpeg_missing": "视频处理组件未就绪，请联系管理员",
-      "timeout": "片段截取超时，请缩短片段后重试",
-      "extract_failed": "片段截取失败，请稍后重试",
-      "cancelled": "处理已取消",
-      "audio_not_found": "源音频不存在"
+      "extract_failed": "片段截取失败，请稍后重试"
     },
     "crop": {
       "invalid_rect": "裁剪区域无效：需落在画面范围内",
-      "timeout": "视频裁剪超时，请稍后重试",
       "failed": "视频裁剪失败，请稍后重试"
     },
     "speed": {
