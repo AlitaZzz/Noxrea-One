@@ -21,7 +21,7 @@ import {
   StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
-import { Crop, Eraser, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Crop, Eraser, FileText, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -40,7 +40,8 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
-import { presetIconOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
+import PresetMenuContent from "@/features/canvas/shared/PresetMenuContent";
+import { usePromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
 
@@ -222,8 +223,9 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   if (prevNodeId !== nodeId) {
     setPrevNodeId(nodeId);
   }
-  // 创作菜单与生成面板共用同一份后端模板目录（preset + reverse，已按 order 排序）
-  const { data: promptTemplates } = usePromptPresets();
+  // 创作菜单与生成面板共用同一份后端模板目录与同一个分组菜单组件；
+  // 反推提示词是独立动作，单独成按钮
+  const { data: templateCatalog } = usePromptTemplateCatalog();
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [gridOpen, setGridOpen] = useState(false);
@@ -315,30 +317,27 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               icon={<LightingIcon />}
               onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} />
           </Tooltip>
+          <Tooltip title={t("node.reversePrompt")}>
+            <Button type="text" size="middle" style={{ padding: 8 }}
+              icon={<FileText size={16} />}
+              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
+              disabled={!assetSrc} />
+          </Tooltip>
           <MenuPopover
             open={creationOpen}
             onOpenChange={setCreationOpen}
             placement="bottomRight"
+            overlayClassName="creation-menu-popover"
             trigger={
               <Tooltip title={t("node.creation")}>
                 <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />} disabled={!assetSrc} />
               </Tooltip>
             }
             content={
-              (promptTemplates ?? []).map((entry) => {
-                const Icon = presetIconOf(entry.id);
-                return (
-                  <MenuItem
-                    key={entry.id}
-                    onClick={() => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: entry.id }); }}
-                  >
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <Icon style={{ fontSize: 16 }} />
-                      {t(entry.labelKey)}
-                    </span>
-                  </MenuItem>
-                );
-              })
+              <PresetMenuContent
+                catalog={templateCatalog}
+                onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
+              />
             }
           />
           {/* Export */}

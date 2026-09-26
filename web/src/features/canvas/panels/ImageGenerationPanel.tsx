@@ -34,12 +34,13 @@ import { type ModelOption } from "@/lib/types/models";
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
+import PresetMenuContent from "../shared/PresetMenuContent";
 import {
   expandPresetTokens,
-  presetIconOf,
+  localizeText,
   presetTokenOf,
   replacePresetToken,
-  usePromptPresets,
+  usePromptTemplateCatalog,
 } from "../shared/prompt-presets";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
@@ -51,7 +52,7 @@ import { spawnPromptDerivedNode } from "../upload/derived-node";
 interface Props { nodeId: string; }
 
 const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const providers = useModelStore((s) => s.providers);
   const findModelParams = useModelStore((s) => s.findModelParams);
   const modelParamsCache = useModelStore((s) => s.modelParamsCache);
@@ -91,8 +92,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
   // 预设目录来自后端（与创作菜单同一份数据源），仅取 kind === "preset"
-  const { data: promptTemplates } = usePromptPresets();
-  const presets = useMemo(() => (promptTemplates ?? []).filter((p) => p.kind === "preset"), [promptTemplates]);
+  const { data: promptTemplateCatalog } = usePromptTemplateCatalog();
+  const presets = useMemo(() => (promptTemplateCatalog?.entries ?? []).filter((p) => p.kind === "preset"), [promptTemplateCatalog]);
 
   const [modelOpen, setModelOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
@@ -341,7 +342,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     if ((node.data as { src?: string }).src) {
       const preset = presets.find((p) => p.id === presetId);
       const created = spawnPromptDerivedNode(nodeId, presetTokenOf(presetId), createImageNode, store, {
-        label: preset ? t(preset.labelKey) : presetId,
+        label: preset ? localizeText(preset.label, i18n.language) : presetId,
       });
       if (!created) return;
       markDirtyImmediate();
@@ -350,7 +351,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     } else {
       setPrompt(replacePresetToken(prompt, presetId));
     }
-  }, [nodeId, prompt, setPrompt, t, presets]);
+  }, [nodeId, prompt, setPrompt, t, i18n, presets]);
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 图片节点上游只有文本与图片，故最多两组。
@@ -458,6 +459,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <MenuPopover
           open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
+          overlayClassName="creation-menu-popover"
           trigger={
             <Tooltip title={t("node.creationPreset")}>
               <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
@@ -467,17 +469,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               </button>
             </Tooltip>
           }
-          content={presets.map((p) => {
-            const Icon = presetIconOf(p.id);
-            return (
-              <MenuItem key={p.id} onClick={() => { setPresetOpen(false); handleApplyPreset(p.id); }}>
-                <span className="flex items-center gap-1.5">
-                  <Icon className="size-4 shrink-0" />
-                  <span className="truncate">{t(p.labelKey)}</span>
-                </span>
-              </MenuItem>
-            );
-          })}
+          content={
+            <PresetMenuContent
+              catalog={promptTemplateCatalog}
+              onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+            />
+          }
         />
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
