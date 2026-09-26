@@ -28,9 +28,12 @@ interface BilingualText {
   en: string;
 }
 
+type PromptTarget = "image" | "text";
+
 interface PromptTemplateEntry {
   id: string;
-  kind: "preset" | "reverse" | "dynamic";
+  kind: "preset" | "dynamic";
+  target: PromptTarget;
   group?: string;
   label?: BilingualText;
   description?: BilingualText;
@@ -49,20 +52,30 @@ function loadPromptTemplateCatalog(): { groups: PromptTemplateGroup[]; entries: 
   return loadJson<{ groups: PromptTemplateGroup[]; entries: PromptTemplateEntry[] }>("prompt-template.json");
 }
 
-// 两个前端入口共用可选目录：反推 + 生成预设；动态插值项不进入列表。
+// 生成面板 / 工具条共用可选目录。target 过滤按节点类型取各面板自己的预设
+// （image=图片预设，text=文本预设）；省略时返回全部条目（令牌展开用）。
+// 分组只保留含有当前条目的。动态插值项不进入列表。
 // label / description 为内联双语，前端按当前语言在渲染期取值，语言切换即时生效。
 router.get("/api/canvas/prompt-templates", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
+  const target = c.req.query("target");
+  if (target !== undefined && target !== "image" && target !== "text") {
+    return failCode(422, "common.invalid_request");
+  }
+
   const catalog = loadPromptTemplateCatalog();
   const selectable = catalog.entries
-    .filter((entry) => entry.kind === "preset" || entry.kind === "reverse")
+    .filter((entry) => entry.kind === "preset" && (target === undefined || entry.target === target))
     .sort((a, b) => a.order! - b.order!)
-    .map(({ id, kind, group, label, description, order, template }) =>
-      ({ id, kind, group, label, description, order, template }));
-  const groups = [...catalog.groups].sort((a, b) => a.order - b.order);
+    .map(({ id, kind, target: entryTarget, group, label, description, order, template }) =>
+      ({ id, kind, target: entryTarget, group, label, description, order, template }));
+  const entryGroups = new Set(selectable.map((entry) => entry.group));
+  const groups = [...catalog.groups]
+    .filter((group) => entryGroups.has(group.id))
+    .sort((a, b) => a.order - b.order);
   return c.json(ok({ groups, entries: selectable }));
 });
 

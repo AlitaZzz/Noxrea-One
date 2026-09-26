@@ -3,12 +3,14 @@
     { "id": "view", "label": { "zh": "三视图", "en": "Three-View" }, "order": 1 },
     { "id": "storyboard", "label": { "zh": "分镜", "en": "Storyboard" }, "order": 2 },
     { "id": "light", "label": { "zh": "光影", "en": "Lighting" }, "order": 3 },
-    { "id": "timeline", "label": { "zh": "画面推演", "en": "Frame Prediction" }, "order": 4 }
+    { "id": "timeline", "label": { "zh": "画面推演", "en": "Frame Prediction" }, "order": 4 },
+    { "id": "prompt", "label": { "zh": "提示词", "en": "Prompt" }, "order": 5 }
   ],
   "entries": [
     {
       "id": "characterFaceThreeView",
       "kind": "preset",
+      "target": "image",
       "group": "view",
       "label": { "zh": "角色面部三视图", "en": "Character Face Three-View" },
       "description": { "zh": "三视角面部特写参考，风格一致", "en": "Three-angle face close-ups in a consistent style" },
@@ -18,6 +20,7 @@
     {
       "id": "characterThreeView",
       "kind": "preset",
+      "target": "image",
       "group": "view",
       "label": { "zh": "角色三视图", "en": "Character Three-View" },
       "description": { "zh": "面部特写与全身多视角角色参考图", "en": "Face close-ups plus multi-angle full-body reference sheet" },
@@ -27,6 +30,7 @@
     {
       "id": "productThreeView",
       "kind": "preset",
+      "target": "image",
       "group": "view",
       "label": { "zh": "产品三视图", "en": "Product Three-View" },
       "description": { "zh": "产品的正面、侧面与背面三视图展示", "en": "Front, side and back three-view sheet for the product" },
@@ -36,6 +40,7 @@
     {
       "id": "cinematicLightCorrection",
       "kind": "preset",
+      "target": "image",
       "group": "light",
       "label": { "zh": "电影级光影校正", "en": "Cinematic Light Correction" },
       "description": { "zh": "电影级优化光影层次与氛围，构图内容不变", "en": "Cinematic lighting polish while keeping framing and content intact" },
@@ -45,6 +50,7 @@
     {
       "id": "nineGridScene",
       "kind": "preset",
+      "target": "image",
       "group": "storyboard",
       "label": { "zh": "多机位九宫格", "en": "Scene Multi-Camera 3×3 Grid" },
       "description": { "zh": "同一场景的九个机位电影级画面", "en": "Nine cinematic camera views of the same scene" },
@@ -54,6 +60,7 @@
     {
       "id": "storyboard25",
       "kind": "preset",
+      "target": "image",
       "group": "storyboard",
       "label": { "zh": "25宫格剧情分镜", "en": "25-Grid Storyboard" },
       "description": { "zh": "25 帧完整故事分镜，含每格情节说明", "en": "25-frame storyboard of a complete story with per-frame captions" },
@@ -63,6 +70,7 @@
     {
       "id": "storyboard4",
       "kind": "preset",
+      "target": "image",
       "group": "storyboard",
       "label": { "zh": "剧情推演四宫格", "en": "4-Grid Storyboard" },
       "description": { "zh": "四格连贯叙事分镜", "en": "Four-panel sequential storyboard" },
@@ -72,6 +80,7 @@
     {
       "id": "forward3s",
       "kind": "preset",
+      "target": "image",
       "group": "timeline",
       "label": { "zh": "画面推演 - 3S后", "en": "Frame Prediction - 3S Later" },
       "description": { "zh": "推演参考图约 3 秒后的画面", "en": "Generate the frame about 3 seconds after the reference" },
@@ -81,6 +90,7 @@
     {
       "id": "back5s",
       "kind": "preset",
+      "target": "image",
       "group": "timeline",
       "label": { "zh": "画面推演 - 5S前", "en": "Frame Prediction - 5S Earlier" },
       "description": { "zh": "回溯参考图约 5 秒前的画面", "en": "Generate the frame about 5 seconds before the reference" },
@@ -89,19 +99,34 @@
     },
     {
       "id": "reverse",
-      "kind": "reverse",
+      "kind": "preset",
+      "target": "text",
+      "group": "prompt",
       "label": { "zh": "反推提示词", "en": "Reverse Prompt" },
-      "order": 0,
+      "description": { "zh": "从参考图反推生成提示词", "en": "Derive a generation prompt from the reference image" },
+      "order": 10,
       "template": "Analyze the reference image and write a prompt suitable for an image-generation model. Output only the finished prompt, without explanations. Describe the subject, composition, style, lighting, colors, materials, camera, and atmosphere in enough detail to generate a similar image. Write it as a complete, directly usable image-generation prompt in English."
+    },
+    {
+      "id": "expand",
+      "kind": "preset",
+      "target": "text",
+      "group": "prompt",
+      "label": { "zh": "扩写提示词", "en": "Expand Prompt" },
+      "description": { "zh": "把简短提示词扩写成完整细节", "en": "Expand a brief prompt with full detail" },
+      "order": 11,
+      "template": "Expand the brief image-generation prompt provided in the text above into a detailed, directly usable prompt. Infer reasonable details for the subject's appearance, composition, lighting, colors, atmosphere, and camera while staying faithful to the original subject and intent. Do not introduce content that contradicts the original prompt. Output only the finished expanded prompt, without explanations."
     },
     {
       "id": "lighting",
       "kind": "dynamic",
+      "target": "image",
       "template": "Rerender the lighting of the reference image while preserving its subject, scene content, and composition. Position the key light {{direction}}, {{elevation}}. Use {{color}} with {{strength}} overall intensity. Change only the lighting mood and light-shadow relationships; do not alter the scene content or framing."
     },
     {
       "id": "angle",
       "kind": "dynamic",
+      "target": "image",
       "template": "Keep the subject, scene, and art style identical to the reference image. Move the camera to {{viewpoint}}, {{pitch}}, with {{distance}} framing. {{note}}Change only camera position, direction, and perspective; preserve the subject's appearance, proportions, and scene content."
     }
   ]

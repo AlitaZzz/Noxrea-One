@@ -17,18 +17,19 @@ function expectFinishedEnglish(result: string) {
 }
 
 describe("prompt template catalog", () => {
-  it("contains exactly nine ordered presets and three non-preset templates in English", () => {
+  it("contains ordered image and text presets plus dynamic templates in English", () => {
     const presets = entries.filter((entry) => entry.kind === "preset");
-    expect(presets.map((entry) => entry.id)).toEqual([
+    const imagePresets = presets.filter((entry) => entry.target === "image");
+    expect(imagePresets.map((entry) => entry.id)).toEqual([
       "characterFaceThreeView", "characterThreeView", "productThreeView", "cinematicLightCorrection",
       "nineGridScene", "storyboard25", "storyboard4", "forward3s", "back5s",
     ]);
-    expect(presets.map((entry) => entry.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(imagePresets.map((entry) => entry.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const textPresets = presets.filter((entry) => entry.target === "text");
+    expect(textPresets.map((entry) => entry.id)).toEqual(["reverse", "expand"]);
+    expect(textPresets.map((entry) => entry.order)).toEqual([10, 11]);
     expect(entries.filter((entry) => entry.kind !== "preset").map((entry) => entry.id))
-      .toEqual(["reverse", "lighting", "angle"]);
-    expect(entries.find((entry) => entry.id === "reverse"))
-      .toMatchObject({ kind: "reverse", order: 0 });
-    expect(entries.some((entry) => entry.id === "expand" || entry.id === "stylize")).toBe(false);
+      .toEqual(["lighting", "angle"]);
     for (const entry of entries) expect(entry.template).not.toMatch(chinese);
   });
 
@@ -39,8 +40,9 @@ describe("prompt template catalog", () => {
     for (const group of groups) {
       expect(group.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
     }
-    // preset 进分组菜单，必须有 group 与非空双语 label / description
+    // preset 进分组菜单：target 合法、group 存在且携带非空双语 label / description
     for (const entry of entries.filter((e) => e.kind === "preset")) {
+      expect(["image", "text"], entry.id).toContain(entry.target);
       expect(entry.group, entry.id).toBeDefined();
       expect(groupIds.has(entry.group!), entry.id).toBe(true);
       expect(entry.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
@@ -50,15 +52,18 @@ describe("prompt template catalog", () => {
         expect(text.en).not.toBe("");
       }
     }
-    // 反推由独立按钮承载，不进分组菜单：无需 group；动态插值项两者皆无需
+    // 分组按 target 归属：同组条目 target 一致，按 target 过滤后分组不会出现空壳
+    for (const group of groups) {
+      const members = entries.filter((entry) => entry.group === group.id);
+      expect(members.length, group.id).toBeGreaterThan(0);
+      expect(new Set(members.map((member) => member.target)).size, group.id).toBe(1);
+    }
+    // dynamic 不进菜单：无分组与文案，仅服务图片链路
     for (const entry of entries.filter((e) => e.kind !== "preset")) {
+      expect(entry.target).toBe("image");
       expect(entry.group).toBeUndefined();
+      expect(entry.label).toBeUndefined();
       expect(entry.description).toBeUndefined();
-      if (entry.kind === "reverse") {
-        expect(entry.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
-      } else {
-        expect(entry.label).toBeUndefined();
-      }
     }
   });
 
