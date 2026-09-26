@@ -28,5 +28,10 @@ export async function bootstrap(): Promise<void> {
   initGateway();
   logEvent("bootstrap", { stage: "gateway_initialized" });
 
+  // 4. 存储引用 GC 循环（幂等，内部自带延迟首跑与异常兜底）
+  const { startStorageGc } = await import("@server/services/storage/gc");
+  startStorageGc();
+  logEvent("bootstrap", { stage: "storage_gc_scheduled" });
+
   logEvent("bootstrap", { stage: "done" });
 }

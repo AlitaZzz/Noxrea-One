@@ -8,8 +8,8 @@ export function stringifyJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** 从存储字符串解析 JSON，失败返回 fallback */
-export function parseJson<T>(raw: unknown, fallback: T): T {
+/** 从存储字符串解析 JSON，失败返回 fallback（模块内私有，外界一律走带类型的变体） */
+function parseJson<T>(raw: unknown, fallback: T): T {
   if (typeof raw !== "string") return fallback;
   try {
     return JSON.parse(raw) as T;

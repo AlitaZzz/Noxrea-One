@@ -51,20 +51,6 @@ export async function upsertFileObject(data: {
   });
 }
 
-export async function getFileObject(userId: number, hash: string) {
-  return prisma.fileObject.findUnique({
-    where: {
-      userId_hash: { userId, hash },
-    },
-  });
-}
-
-export async function getFileObjectByHash(hash: string) {
-  return prisma.fileObject.findFirst({
-    where: { hash },
-  });
-}
-
 // ── 引用聚合计数操作 ──
 
 /**
