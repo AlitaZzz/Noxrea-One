@@ -6,6 +6,7 @@ import { renderLightingTemplate } from "./lighting-prompt";
 import { azimuthBase } from "./prompt-utils";
 
 const entries = catalog.entries;
+const groups = catalog.groups;
 const lighting = entries.find((entry) => entry.id === "lighting")!.template;
 const angle = entries.find((entry) => entry.id === "angle")!.template;
 const chinese = /[㐀-鿿]/;
@@ -23,13 +24,42 @@ describe("prompt template catalog", () => {
       "nineGridScene", "storyboard25", "storyboard4", "forward3s", "back5s",
     ]);
     expect(presets.map((entry) => entry.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(presets.every((entry) => Boolean(entry.labelKey && entry.template))).toBe(true);
     expect(entries.filter((entry) => entry.kind !== "preset").map((entry) => entry.id))
       .toEqual(["reverse", "lighting", "angle"]);
     expect(entries.find((entry) => entry.id === "reverse"))
-      .toMatchObject({ kind: "reverse", labelKey: "node.creationReverse", order: 0 });
+      .toMatchObject({ kind: "reverse", order: 0 });
     expect(entries.some((entry) => entry.id === "expand" || entry.id === "stylize")).toBe(false);
     for (const entry of entries) expect(entry.template).not.toMatch(chinese);
+  });
+
+  it("provides inline bilingual labels, descriptions and a valid group for every menu entry", () => {
+    const groupIds = new Set(groups.map((group) => group.id));
+    expect(groupIds.size).toBe(groups.length);
+    expect([...groupIds]).toEqual([...groups].sort((a, b) => a.order - b.order).map((group) => group.id));
+    for (const group of groups) {
+      expect(group.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
+    }
+    // preset 进分组菜单，必须有 group 与非空双语 label / description
+    for (const entry of entries.filter((e) => e.kind === "preset")) {
+      expect(entry.group, entry.id).toBeDefined();
+      expect(groupIds.has(entry.group!), entry.id).toBe(true);
+      expect(entry.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
+      expect(entry.description).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
+      for (const text of [entry.label!, entry.description!]) {
+        expect(text.zh).not.toBe("");
+        expect(text.en).not.toBe("");
+      }
+    }
+    // 反推由独立按钮承载，不进分组菜单：无需 group；动态插值项两者皆无需
+    for (const entry of entries.filter((e) => e.kind !== "preset")) {
+      expect(entry.group).toBeUndefined();
+      expect(entry.description).toBeUndefined();
+      if (entry.kind === "reverse") {
+        expect(entry.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
+      } else {
+        expect(entry.label).toBeUndefined();
+      }
+    }
   });
 
   it("preserves the nine-view camera order and the separate caption constraints", () => {
