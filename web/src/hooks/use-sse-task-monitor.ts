@@ -11,10 +11,11 @@ import { createElement, useEffect, useRef } from "react";
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
 import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
+import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
 import i18n from "@/lib/i18n/config";
-import { SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
+import { readSseStream,SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 /** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
@@ -40,24 +41,6 @@ function resolveTaskError(evt: { error?: string; errorCode?: string }): string {
     if (i18n.exists(key)) return i18n.t(key);
   }
   return truncateError(evt.error ?? "");
-}
-
-/**
- * 将 LLM 返回的纯文本转成文本节点编辑器可渲染的 HTML。
- * 按空行分段为 <p>，段内换行转 <br/>，并转义 HTML 特殊字符，避免被当作标签解析。
- */
-function textToHtml(text: string): string {
-  const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  return text
-    .split(/\n{2,}/)
-    .map((block) => {
-      const trimmed = block.replace(/\n+$/, "");
-      if (!trimmed.trim()) return "";
-      const lines = trimmed.split("\n").map((line) => escapeHtml(line)).join("<br/>");
-      return `<p>${lines}</p>`;
-    })
-    .join("");
 }
 
 /**
@@ -116,7 +99,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         const resultText = evt.resultText;
         // 生成结果回填是程序化写回，不算用户操作（用户操作感知不应记录）
         runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
-          content: textToHtml(resultText),
+          content: textToTiptapHtml(resultText),
           plainText: resultText,
           taskBinding: undefined,
         }, undefined, { skipHistory: true }));
@@ -243,28 +226,18 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
             lastDataAt = Date.now();
             connected = true;
             if (!res.ok || !res.body) return;
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-            while (true) {
-              const { done, value } = await reader.read();
-              lastDataAt = Date.now();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || "";
-              for (const line of lines) {
-                if (!line.startsWith("data: ")) continue;
-                try {
-                  const evt = JSON.parse(line.slice(6)) as TaskStatusEvent;
-                  if (isTerminalTaskStatus(evt.status)) {
-                    // 终态：落地后直接退出（服务端推完即关流）
-                    handleTerminal(nodeId, taskId, evt);
-                    return;
-                  }
-                } catch {}
-              }
-            }
+            // 公共解析器单源；终态回调返回 false 即停（服务端推完即关流）
+            await readSseStream(
+              res.body,
+              (_event, data) => {
+                const evt = data as unknown as TaskStatusEvent;
+                if (isTerminalTaskStatus(evt.status)) {
+                  handleTerminal(nodeId, taskId, evt);
+                  return false;
+                }
+              },
+              { onActivity: () => { lastDataAt = Date.now(); } },
+            );
           } catch { /* SSE 断开：扫描器稍后重连取快照 */ }
           finally {
             clearInterval(watchdog);

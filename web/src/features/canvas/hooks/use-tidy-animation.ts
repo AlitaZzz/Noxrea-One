@@ -13,7 +13,10 @@
 import { useCallback, useEffect } from "react";
 
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
+import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 
 /** 是否正在播放整理动画（供画布交互判断是否需要让路） */
 let _animating = false;
@@ -57,6 +60,66 @@ export interface AnimateNodesOptions {
 }
 
 /**
+ * 模块级动画核心（供非 React 上下文调用，如共享编排 applyTidyLayout；
+ * hook 的 animateTo 委托至此）。重复调用会自动取消上一次动画。
+ */
+export function animateNodesTo(
+  targets: Map<string, { x: number; y: number }>,
+  options: AnimateNodesOptions = {},
+): void {
+  cancelTidyAnimation();
+
+  const { duration = 300, onDone } = options;
+  const store = useCanvasStore.getState();
+
+  // 冻结起点
+  const from = new Map<string, { x: number; y: number }>();
+  for (const n of store.nodes) {
+    if (targets.has(n.id)) from.set(n.id, { x: n.position.x, y: n.position.y });
+  }
+  if (from.size === 0) {
+    onDone?.();
+    return;
+  }
+
+  const start = performance.now();
+  _animating = true;
+
+  const step = (now: number) => {
+    const raw = duration > 0 ? Math.min(1, (now - start) / duration) : 1;
+    const t = easeOutCubic(raw);
+    const current = useCanvasStore.getState().nodes;
+
+    const next = current.map((n) => {
+      const f = from.get(n.id);
+      const to = targets.get(n.id);
+      if (!f || !to) return n; // 引用不变，跳过 diff
+      if (raw >= 1) return { ...n, position: to };
+      return {
+        ...n,
+        position: { x: f.x + (to.x - f.x) * t, y: f.y + (to.y - f.y) * t },
+      };
+    });
+
+    if (options.suppressTracking) {
+      runSuppressed(() => useCanvasStore.getState().setNodes(next));
+    } else {
+      useCanvasStore.getState().setNodes(next);
+    }
+
+    if (raw < 1) {
+      _activeRaf = requestAnimationFrame(step);
+    } else {
+      _activeRaf = null;
+      _animating = false;
+      onDone?.();
+    }
+  };
+
+  _activeRaf = requestAnimationFrame(step);
+}
+
+/**
  * 返回节点位移动画控制器（须在 ReactFlowProvider 内使用，实测不依赖但保持上下文一致）。
  */
 export function useTidyAnimation() {
@@ -68,65 +131,64 @@ export function useTidyAnimation() {
 
   useEffect(() => cancel, [cancel]);
 
-  /**
-   * 把节点插值移动到 targets（nodeId → 目标坐标）。
-   * 重复调用会自动取消上一次动画。
-   */
-  const animateTo = useCallback(
-    (targets: Map<string, { x: number; y: number }>, options: AnimateNodesOptions = {}) => {
-      cancel();
+  // 模块级函数引用稳定，直接透传（重复调用自动取消上一次动画）
+  return { animateTo: animateNodesTo, cancel };
+}
 
-      const { duration = 300, onDone } = options;
-      const store = useCanvasStore.getState();
+/** applyTidyLayout 所需的 React Flow 实例能力子集 */
+export interface TidyRfLike {
+  fitView: (opts?: { duration?: number }) => unknown;
+}
 
-      // 冻结起点
-      const from = new Map<string, { x: number; y: number }>();
-      for (const n of store.nodes) {
-        if (targets.has(n.id)) from.set(n.id, { x: n.position.x, y: n.position.y });
-      }
-      if (from.size === 0) {
-        onDone?.();
-        return;
-      }
+export interface ApplyTidyLayoutOptions {
+  /** 跳过整理前压栈（agent 回合会把整理并入整批变更的一次撤销） */
+  skipHistory?: boolean;
+  /** 动画逐帧写入不进用户操作历史（agent 触发的整理为 true） */
+  suppressTracking?: boolean;
+}
 
-      const start = performance.now();
-      _animating = true;
+/**
+ * 整理画布编排（单一实现）：计算布局 → 压栈 → 落位/动画 → 视口自适应。
+ * 此前工具栏入口（InfiniteCanvas.handleTidyCanvas）与 Agent 桥（Runtime.tidyCanvas）
+ * 各持一份逐行相同的编排，动画分支靠人肉保持一致。
+ *
+ * 返回是否实际移动了节点；skipHistory 时不自压快照，由调用方把整理并入整批变更的撤销。
+ */
+export function applyTidyLayout(rf: TidyRfLike, opts: ApplyTidyLayoutOptions = {}): boolean {
+  const store = useCanvasStore.getState();
+  if (store.nodes.length < 2) return false;
 
-      const step = (now: number) => {
-        const raw = duration > 0 ? Math.min(1, (now - start) / duration) : 1;
-        const t = easeOutCubic(raw);
-        const current = useCanvasStore.getState().nodes;
+  const result = computeTidyLayout(store.nodes, store.edges, {
+    mode: "auto",
+    snapSize: store.snapToGrid ? store.snapGridSize : 0,
+  });
+  if (result.movedCount === 0) return false;
 
-        const next = current.map((n) => {
-          const f = from.get(n.id);
-          const to = targets.get(n.id);
-          if (!f || !to) return n; // 引用不变，跳过 diff
-          if (raw >= 1) return { ...n, position: to };
-          return {
-            ...n,
-            position: { x: f.x + (to.x - f.x) * t, y: f.y + (to.y - f.y) * t },
-          };
-        });
+  // setNodes/animateTo 不自动压栈；未跳过时整理前显式压一次，保证整块布局可一步撤销
+  if (!opts.skipHistory) {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+  }
 
-        if (options.suppressTracking) {
-          runSuppressed(() => useCanvasStore.getState().setNodes(next));
-        } else {
-          useCanvasStore.getState().setNodes(next);
-        }
+  // 节点过多时直接落位，避免每帧 setNodes 掉帧
+  if (result.movedCount > TIDY_MAX_ANIMATED_NODES) {
+    store.setNodes(
+      store.nodes.map((n) => {
+        const p = result.positions.get(n.id);
+        return p ? { ...n, position: p } : n;
+      }),
+    );
+    markDirtyImmediate();
+    void rf.fitView({ duration: 300 });
+    return true;
+  }
 
-        if (raw < 1) {
-          _activeRaf = requestAnimationFrame(step);
-        } else {
-          _activeRaf = null;
-          _animating = false;
-          onDone?.();
-        }
-      };
-
-      _activeRaf = requestAnimationFrame(step);
+  animateNodesTo(result.positions, {
+    duration: TIDY_ANIMATION_DURATION,
+    suppressTracking: !!opts.suppressTracking,
+    onDone: () => {
+      markDirtyImmediate();
+      void rf.fitView({ duration: 300 });
     },
-    [cancel],
-  );
-
-  return { animateTo, cancel };
+  });
+  return true;
 }

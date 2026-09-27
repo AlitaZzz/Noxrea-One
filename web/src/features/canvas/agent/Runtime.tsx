@@ -9,16 +9,8 @@
 import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
-import { useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
-import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
-import {
-  markDirtyImmediate,
-  takeCanvasSnapshot,
-  useCanvasStore,
-} from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { applyTidyLayout } from "@/features/canvas/hooks/use-tidy-animation";
 import type { AnyNode } from "@/features/canvas/types";
-import { TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 
 export interface CanvasAgentRuntime {
   /** 聚焦某个节点（视口居中，带动画） */
@@ -48,7 +40,6 @@ export function getCanvasAgentRuntime(): CanvasAgentRuntime | null {
 /** 挂在 ReactFlowProvider 树内的桥组件：注册实例能力，卸载时注销 */
 export default function CanvasAgentRuntimeBridge() {
   const rf = useReactFlow();
-  const { animateTo } = useTidyAnimation();
 
   useEffect(() => {
     runtime = {
@@ -61,43 +52,13 @@ export default function CanvasAgentRuntimeBridge() {
         if (!nodeIds.length) return;
         void rf.fitView({ nodes: nodeIds.map((id) => ({ id })), duration: 300, padding: 0.3 });
       },
-      tidyCanvas: (opts) => {
-        const store = useCanvasStore.getState();
-        if (store.nodes.length < 2) return false;
-        const result = computeTidyLayout(store.nodes, store.edges, {
-          mode: "auto",
-          snapSize: store.snapToGrid ? store.snapGridSize : 0,
-        });
-        if (result.movedCount === 0) return false;
-
-        // setNodes/animateTo 不自动压栈；未跳过时整理前显式压一次，保证整块布局可一步撤销
-        if (!opts?.skipHistory) {
-          useHistoryStore.getState().push(takeCanvasSnapshot());
-        }
-
-        if (result.movedCount > TIDY_MAX_ANIMATED_NODES) {
-          store.setNodes(
-            store.nodes.map((n) => {
-              const p = result.positions.get(n.id);
-              return p ? { ...n, position: p } : n;
-            }),
-          );
-          markDirtyImmediate();
-          void rf.fitView({ duration: 300 });
-          return true;
-        }
-
-        animateTo(result.positions, {
-          duration: TIDY_ANIMATION_DURATION,
-          // agent 触发的整理：动画帧是 agent 写回，不进用户操作历史
+      tidyCanvas: (opts) =>
+        // 编排单源在 applyTidyLayout（与工具栏入口共用）；
+        // agent 触发的整理：跳过自压栈（并入整批变更的一次撤销）且动画帧不进用户操作历史
+        applyTidyLayout(rf, {
+          skipHistory: !!opts?.skipHistory,
           suppressTracking: !!opts?.skipHistory,
-          onDone: () => {
-            markDirtyImmediate();
-            void rf.fitView({ duration: 300 });
-          },
-        });
-        return true;
-      },
+        }),
       setCenter: (x, y, zoom) => {
         rf.setCenter(x, y, { zoom: zoom ?? rf.getZoom(), duration: 300 });
       },
@@ -105,7 +66,7 @@ export default function CanvasAgentRuntimeBridge() {
     return () => {
       runtime = null;
     };
-  }, [rf, animateTo]);
+  }, [rf]);
 
   return null;
 }

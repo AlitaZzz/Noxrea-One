@@ -5,7 +5,7 @@
 
 import { type KeyboardEvent, useCallback, useRef, useState } from "react";
 
-import { EventNames } from "@/lib/constants";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /**
  * 节点标题编辑 hook。
@@ -36,12 +36,9 @@ export function useEditableTitle(nodeId: string, currentTitle: string) {
     // trim 防止纯空格被当成有效标题（空格串是真值，显示层回退会失效）
     const next = draft.trim();
     if (next === currentTitle) return;
-    const data: Record<string, string> = { label: next };
-    window.dispatchEvent(
-      new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-        detail: { nodeId, data },
-      })
-    );
+    useCanvasStore.getState().updateNodeVisual(nodeId, {
+      data: { label: next },
+    });
   }, [nodeId, draft, currentTitle]);
 
   /** Esc：放弃本次修改，不落库 */

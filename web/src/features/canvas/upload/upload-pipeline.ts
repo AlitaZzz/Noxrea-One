@@ -14,7 +14,7 @@
  * - 每个占位带 version，异步回调前校验 version 与节点是否仍存在，
  *   不匹配说明节点已被撤销 / 删除，直接放弃写入。
  * - 所有 blob: 预览 URL 由管道统一释放，无论成功、失败还是节点被移除。
- * - replace sink 成功走 NODE_UPDATE_DATA 事件并 immediate，保持原有
+ * - replace sink 成功走 updateNodeVisual(immediate) 写回，保持原有
  *   「上传完成即落盘」语义；失败回滚到上传前的 data / style 快照。
  */
 "use client";
@@ -28,7 +28,6 @@ import {
   AUDIO_NODE_WIDTH,
   DEFAULT_NODE_CONTENT_HEIGHT,
   DEFAULT_NODE_WIDTH,
-  EventNames,
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
@@ -490,19 +489,16 @@ async function runUploads(
           data.naturalWidth = nw;
           data.naturalHeight = nh;
         }
-        // NODE_UPDATE_DATA 监听器同步执行，包裹 dispatch 即可覆盖监听器内的 store 写入
-        runSuppressed(() => window.dispatchEvent(
-          new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-            detail: {
-              nodeId: targetId,
-              data,
-              style: p.kind === "audio"
-                ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
-                : computeNodeSize(nw, nh),
-              immediate: true,
-            },
+        // runSuppressed 同步包裹 store 写入：上传回填不进用户操作历史
+        runSuppressed(() =>
+          useCanvasStore.getState().updateNodeVisual(targetId, {
+            data,
+            style: p.kind === "audio"
+              ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
+              : computeNodeSize(nw, nh),
+            immediate: true,
           }),
-        ));
+        );
         releasePreview();
       }
       return;

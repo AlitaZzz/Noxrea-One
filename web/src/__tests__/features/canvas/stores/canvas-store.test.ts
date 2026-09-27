@@ -18,7 +18,7 @@
 
 import { beforeEach,describe, expect, it } from "vitest";
 
-import { takeCanvasSnapshot,useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
@@ -412,5 +412,76 @@ describe("节点级编辑态全局互斥（store 收口）", () => {
     expect(s.annotatingNodeId).toBeNull();
     expect(s.frameCaptureNodeId).toBeNull();
     expect(s.editingTextNodeId).toBeNull();
+  });
+});
+
+describe("isNodeInUiState（9 态清单单源）", () => {
+  const emptyUi = {
+    multiExpandedNodeId: null, annotatingNodeId: null, croppingNodeId: null,
+    editingTextNodeId: null, frameCaptureNodeId: null, clipCaptureNodeId: null,
+    lightingNodeId: null, audioClipNodeId: null, angleEditorNodeId: null,
+  };
+
+  it("节点担任任一编辑态宿主时返回 true", () => {
+    const ui = { ...emptyUi, croppingNodeId: "n1" };
+    expect(isNodeInUiState(ui, "n1")).toBe(true);
+    expect(isNodeInUiState(ui, "n2")).toBe(false);
+  });
+
+  it("每个键都参与判定（新增编辑态只改清单一处）", () => {
+    for (const key of NODE_UI_STATE_KEYS) {
+      const ui = { ...emptyUi, [key]: "n9" };
+      expect(isNodeInUiState(ui, "n9")).toBe(true);
+    }
+  });
+
+  it("全空快照对任何节点返回 false", () => {
+    expect(isNodeInUiState(emptyUi, "n1")).toBe(false);
+  });
+});
+
+describe("updateNodeVisual（事件总线拆除后的单写通道）", () => {
+  function addNode(id: string) {
+    useCanvasStore.getState().addNodes(
+      [{ id, position: { x: 0, y: 0 }, data: { label: "old", keep: 1 }, style: { width: 100 } }] as never,
+      { skipHistory: true },
+    );
+  }
+
+  it("position 存在时单次合并写 position+style+data", () => {
+    addNode("v1");
+    useCanvasStore.getState().updateNodeVisual("v1", {
+      position: { x: 300, y: 400 },
+      style: { width: 200 },
+      data: { label: "new" },
+    });
+    const n = useCanvasStore.getState().nodes.find((x) => x.id === "v1")!;
+    expect(n.position).toEqual({ x: 300, y: 400 });
+    expect(n.style).toMatchObject({ width: 200 });
+    expect(n.data).toMatchObject({ label: "new", keep: 1 });
+  });
+
+  it("无 position 时走 updateNodeData 路径（含历史压栈语义）", () => {
+    addNode("v2");
+    useCanvasStore.getState().updateNodeVisual("v2", { data: { label: "edited" } });
+    const n = useCanvasStore.getState().nodes.find((x) => x.id === "v2")!;
+    expect(n.data).toMatchObject({ label: "edited", keep: 1 });
+  });
+
+  it("空 data 不展开：合并写保留原 data 引用", () => {
+    addNode("v3");
+    const before = useCanvasStore.getState().nodes.find((x) => x.id === "v3")!.data;
+    useCanvasStore.getState().updateNodeVisual("v3", {
+      position: { x: 1, y: 2 },
+      data: {},
+    });
+    const after = useCanvasStore.getState().nodes.find((x) => x.id === "v3")!.data;
+    expect(after).toBe(before);
+  });
+
+  it("未知节点 id 不炸（与 updateNodeData 一致的 no-op 语义）", () => {
+    expect(() =>
+      useCanvasStore.getState().updateNodeVisual("ghost", { data: { label: "x" } })
+    ).not.toThrow();
   });
 });

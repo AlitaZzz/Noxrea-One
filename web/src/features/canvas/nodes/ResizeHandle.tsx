@@ -11,7 +11,6 @@ import { useCallback, useRef } from "react";
 import { ResizeCornerIcon } from "@/components/ui/icons/canvas/ResizeCornerIcon";
 import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { EventNames } from "@/lib/constants";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -123,18 +122,12 @@ export default function ResizeHandle({
           changedRef.current = true;
         }
 
-        window.dispatchEvent(
-          new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-            detail: {
-              nodeId,
-              data: {},
-              style: { width: newW, height: newH },
-              position: { x: newX, y: newY },
-              // 逐帧写回不进历史：结束时统一压一条「缩放前」的快照
-              skipHistory: true,
-            },
-          })
-        );
+        useCanvasStore.getState().updateNodeVisual(nodeId, {
+          style: { width: newW, height: newH },
+          position: { x: newX, y: newY },
+          // 逐帧写回不进历史：结束时统一压一条「缩放前」的快照
+          skipHistory: true,
+        });
       }
 
       function onPointerUp() {

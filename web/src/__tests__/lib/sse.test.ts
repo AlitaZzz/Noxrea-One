@@ -69,4 +69,70 @@ describe("readSseStream", () => {
     const received = await collect(['event: sync\r\ndata: {"e":5}\r\n\r\n']);
     expect(received).toEqual([{ event: "sync", data: { e: 5 } }]);
   });
+
+  it("onActivity 每次读取（含 done 读）都回调，对齐旧 monitor 心跳刷新语义", async () => {
+    let activity = 0;
+    await readSseStream(streamOf('data: {"a":1}\n\n', 'data: {"b":2}\n\n'), () => {}, {
+      onActivity: () => {
+        activity++;
+      },
+    });
+    expect(activity).toBe(3);
+  });
+
+  it("onEvent 返回 false 提前结束读取（终态即停）", async () => {
+    const received: Received[] = [];
+    await readSseStream(
+      streamOf('data: {"a":1}\n\n', 'data: {"b":2,"stop":true}\n\n', 'data: {"c":3}\n\n'),
+      (_event, data) => {
+        received.push({ event: "message", data });
+        return data.stop === true ? false : undefined;
+      }
+    );
+    expect(received).toEqual([
+      { event: "message", data: { a: 1 } },
+      { event: "message", data: { b: 2, stop: true } },
+    ]);
+  });
+
+  it("onEvent 抛错中断读取并向上传播（error 事件终止对话流）", async () => {
+    const received: Received[] = [];
+    await expect(
+      readSseStream(
+        streamOf('data: {"a":1}\n\n', 'data: {"boom":true}\n\n', 'data: {"c":3}\n\n'),
+        (_event, data) => {
+          if (data.boom === true) throw new Error("stream error");
+          received.push({ event: "message", data });
+        }
+      )
+    ).rejects.toThrow("stream error");
+    expect(received).toEqual([{ event: "message", data: { a: 1 } }]);
+  });
+
+  it("readTimeoutMs：流静默超时 cancel reader 并 reject", async () => {
+    // 永不产出也永不关闭的流
+    const stalled = new ReadableStream<Uint8Array>({
+      start() {
+        // 不 enqueue、不 close
+      },
+    });
+    await expect(
+      readSseStream(stalled, () => {}, { readTimeoutMs: 50 })
+    ).rejects.toThrow("read timeout: no data for 0.05s");
+  });
+
+  it("三路服务端真实格式样例：生成任务 / Agent / 画布编辑权（锁定统一前提）", async () => {
+    const received = await collect([
+      // 生成任务（generate.ts emit("status", snapshot)）
+      'event: status\ndata: {"type":"status","taskId":"t1","status":"completed"}\n\n',
+      // Agent（agent.ts emit("delta"/"tool_call"/"done")）
+      'event: delta\ndata: {"delta":"你"}\n\n',
+      'event: done\ndata: {"toolCalls":[]}\n\n',
+      // 画布编辑权（canvas.ts emit("evict")）
+      'event: evict\ndata: {"reason":"fresh"}\n\n',
+      // 心跳
+      ': ping\n\n',
+    ]);
+    expect(received.map((r) => r.event)).toEqual(["status", "delta", "done", "evict"]);
+  });
 });

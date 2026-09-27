@@ -68,7 +68,7 @@ import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
-import { isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
+import { applyTidyLayout, isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
 import DirectorNode from "@/features/canvas/nodes/DirectorNode";
@@ -82,15 +82,14 @@ import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { computeFittedGroupRect } from "@/features/canvas/shared/group-bounds";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
-import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
-import { findFreePosition, flushAndWait, flushBeforeUnload, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
+import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -367,7 +366,7 @@ export default function InfiniteCanvas() {
   const closeAudioClipPanel = useCallback(() => useCanvasStore.getState().setAudioClipNodeId(null), []);
 
   // 画布整理：位移动画控制器（整理触发动画，拖拽时取消动画）
-  const { animateTo, cancel: cancelTidy } = useTidyAnimation();
+  const { cancel: cancelTidy } = useTidyAnimation();
 
   // ---- Change handlers ----
 
@@ -913,43 +912,12 @@ export default function InfiniteCanvas() {
   }, [fitView]);
 
   /**
-   * 整理画布：把所有节点重排为整齐网格，分组连同成员作为整体块平移。
+   * 整理画布：编排单源在 applyTidyLayout（与 Agent 桥共用）。
    * 排序依据自动选择 —— 有连线走拓扑序（上游在前），否则走读序。
    */
   const handleTidyCanvas = useCallback(() => {
-    const store = useCanvasStore.getState();
-    if (store.nodes.length < 2) return;
-
-    const result = computeTidyLayout(store.nodes, store.edges, {
-      mode: "auto",
-      snapSize: store.snapToGrid ? store.snapGridSize : 0,
-    });
-    if (result.movedCount === 0) return;
-
-    // setNodes 不自动压栈，整理前显式压一次，保证整块布局可一步撤销
-    useHistoryStore.getState().push(takeCanvasSnapshot());
-
-    // 节点过多时直接落位，避免每帧 setNodes 掉帧
-    if (result.movedCount > TIDY_MAX_ANIMATED_NODES) {
-      setNodes(
-        store.nodes.map((n) => {
-          const p = result.positions.get(n.id);
-          return p ? { ...n, position: p } : n;
-        }),
-      );
-      markDirtyImmediate();
-      fitView({ duration: 300 });
-      return;
-    }
-
-    animateTo(result.positions, {
-      duration: TIDY_ANIMATION_DURATION,
-      onDone: () => {
-        markDirtyImmediate();
-        fitView({ duration: 300 });
-      },
-    });
-  }, [animateTo, fitView, setNodes]);
+    applyTidyLayout({ fitView });
+  }, [fitView]);
 
   // ---- File drop on canvas → create image node ----
 
@@ -1338,7 +1306,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(annotatingNodeId === nid || croppingNodeId === nid || editingTextNodeId === nid || frameCaptureNodeId === nid || clipCaptureNodeId === nid || audioClipNodeId === nid || lightingNodeId === nid || angleEditorNodeId === nid || multiExpandedNodeId === nid || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(isNodeInUiState({ multiExpandedNodeId, annotatingNodeId, croppingNodeId, editingTextNodeId, frameCaptureNodeId, clipCaptureNodeId, lightingNodeId, audioClipNodeId, angleEditorNodeId }, nid) || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}

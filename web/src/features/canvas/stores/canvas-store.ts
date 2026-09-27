@@ -112,6 +112,25 @@ interface CanvasState {
   setEdges: (edges: Edge[], options?: { skipHistory?: boolean }) => void;
   addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
   updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean; forceHistory?: boolean }) => void;
+  /**
+   * 节点视觉态单写通道（position/style/data 一次性合并写入）。
+   * 取代已拆除的 NODE_UPDATE_DATA window 事件总线：此前节点组件经事件总线
+   * 转译回 store，store 写入存在两条通道。position 存在时单次 setNodes 合并
+   * （分两次 set 触发两轮全画布重渲染，缩放逐帧操作下掉帧），否则走
+   * updateNodeData（含历史压栈语义）。
+   */
+  updateNodeVisual: (
+    nodeId: string,
+    patch: {
+      data?: Record<string, unknown>;
+      style?: Record<string, unknown>;
+      position?: { x: number; y: number };
+      /** 透传 updateNodeData 的历史压栈选项（仅非 position 路径） */
+      skipHistory?: boolean;
+      /** 写入后额外 markDirtyImmediate（上传回填、配色即时生效等场景） */
+      immediate?: boolean;
+    },
+  ) => void;
   removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
   removeEdges: (edgeIds: string[], options?: { skipHistory?: boolean }) => void;
 
@@ -202,7 +221,7 @@ interface CanvasState {
  * - 九个编辑态全局互斥（同一时刻只允许一个编辑浮层），由 applyNodeUiState
  *   统一收口，调用方不再各自手工罗列关闭清单。
  */
-const NODE_UI_STATE_KEYS = [
+export const NODE_UI_STATE_KEYS = [
   "multiExpandedNodeId",
   "annotatingNodeId",
   "croppingNodeId",
@@ -215,6 +234,17 @@ const NODE_UI_STATE_KEYS = [
 ] as const;
 
 type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
+
+/** 节点级 UI 态快照形状（各键值为宿主节点 id 或 null） */
+export type NodeUiStateSnapshot = { [K in NodeUiStateKey]: string | null };
+
+/**
+ * 节点是否担任任一编辑态浮层的宿主。
+ * 工具栏隐藏条件与宿主校验共用此清单，新增编辑态只改 NODE_UI_STATE_KEYS 一处。
+ */
+export function isNodeInUiState(ui: NodeUiStateSnapshot, nodeId: string): boolean {
+  return NODE_UI_STATE_KEYS.some((k) => ui[k] === nodeId);
+}
 
 /** 互斥写入口：id 非空时清空其余编辑态；id 为空时仅清自身（避免误关别处刚打开的面板） */
 function applyNodeUiState(s: CanvasState, key: NodeUiStateKey, id: string | null): Partial<CanvasState> {
@@ -260,6 +290,31 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       ),
     }));
     saveManager.markDirty();
+  },
+  updateNodeVisual: (nodeId, patch) => {
+    const { data, style, position, skipHistory, immediate } = patch;
+    if (position) {
+      // 位置、尺寸、数据同批写入一次：分两次 set 会触发两轮全画布重渲染，
+      // 缩放这类逐帧操作下掉帧会直接表现为「框不跟手」（原事件总线合并写语义）
+      const hasData = !!data && Object.keys(data).length > 0;
+      set((s) => ({
+        nodes: s.nodes.map((n) =>
+          n.id === nodeId
+            ? ({
+                ...n,
+                position,
+                ...(style ? { style: { ...n.style, ...style } } : {}),
+                ...(hasData ? { data: { ...n.data, ...data } } : {}),
+              } as AnyNode)
+            : n,
+        ),
+      }));
+      saveManager.markDirty();
+      if (immediate) saveManager.markDirtyImmediate();
+      return;
+    }
+    get().updateNodeData(nodeId, data ?? {}, style, { skipHistory });
+    if (immediate) saveManager.markDirtyImmediate();
   },
   removeNodes: (nodeIds, options) => {
     maybePushHistory(options);

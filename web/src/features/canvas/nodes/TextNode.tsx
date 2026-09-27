@@ -80,14 +80,9 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       if (!editorReadyRef.current) return;
       // 空文档（仅剩一个空段落 <p></p>）时存空串，避免把无意义的空段落写进数据
       const html = editor.isEmpty ? "" : editor.getHTML();
-      window.dispatchEvent(
-        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-          detail: {
-            nodeId: id,
-            data: { content: html, plainText: editor.getText({ blockSeparator: "\n" }) },
-          },
-        })
-      );
+      useCanvasStore.getState().updateNodeVisual(id, {
+        data: { content: html, plainText: editor.getText({ blockSeparator: "\n" }) },
+      });
     },
   });
 
@@ -98,7 +93,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
   // 外部修改 content（如 AI 生成回填）时同步到编辑器，否则编辑器不会自动刷新。
   // emitUpdate:false——这是程序化回显而非用户编辑，若触发 onUpdate 会经
-  // NODE_UPDATE_DATA → updateNodeData 走一次历史压栈，把 redo 栈清空
+  // onUpdate → updateNodeData 走一次历史压栈，把 redo 栈清空
   // （撤销恢复节点 → 重挂回填 → 幽灵压栈，Ctrl+Z 看似失效）。
   useEffect(() => {
     if (!editor || editingContent) return;
@@ -133,7 +128,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
     markDirtyImmediate();
     // emitUpdate:false——updateNodeData 已压过历史， setContent 回显再触发一次
-    // onUpdate 会经 NODE_UPDATE_DATA 重复压栈，清空后 Ctrl+Z 看似失灵
+    // onUpdate 会经 updateNodeData 重复压栈，清空后 Ctrl+Z 看似失灵
     editor?.commands.setContent("", { emitUpdate: false });
   }, [id, editor]);
 

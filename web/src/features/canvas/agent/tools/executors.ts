@@ -23,6 +23,7 @@ import {
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
+import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import {
   findFreePosition,
@@ -78,23 +79,13 @@ function snapValue(v: number, snapSize: number): number {
   return snapSize > 0 ? Math.round(v / snapSize) * snapSize : v;
 }
 
-/** 纯文本 → 段落化富文本 HTML（供 Tiptap 编辑，语义同 canvas-edit-actions 的粘贴分支） */
-function textToHtml(text: string): string {
-  const escape = (s: string) =>
-    s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-  return text
-    .split(/\n{2,}/)
-    .map((para) => `<p>${para.split("\n").map(escape).join("<br>")}</p>`)
-    .join("");
-}
-
-/** 按节点类型把 prompt/content/title 写入节点数据 */
-function fillNodeData(node: AnyNode, item: { kind: CanvasNodeType; content?: string; prompt?: string; title?: string }): AnyNode {
+/** 按节点类型把 prompt/content/title 写入节点数据（导出供测试锁定） */
+export function fillNodeData(node: AnyNode, item: { kind: CanvasNodeType; content?: string; prompt?: string; title?: string }): AnyNode {
   const data = { ...node.data } as Record<string, unknown>;
   if (item.title != null && item.title !== "") data.label = item.title;
 
   if (item.kind === NODE_TYPE.TEXT && item.content) {
-    (data as Partial<TextNodeData>).content = textToHtml(item.content);
+    (data as Partial<TextNodeData>).content = textToTiptapHtml(item.content);
     (data as Partial<TextNodeData>).plainText = item.content;
   }
   if (item.kind === NODE_TYPE.TEXT && item.prompt) {
@@ -112,13 +103,6 @@ function fillNodeData(node: AnyNode, item: { kind: CanvasNodeType; content?: str
   if (item.kind === NODE_TYPE.VIDEO && item.prompt) {
     (data as { genSettings: VideoGenSettings }).genSettings = {
       ...(node.data as { genSettings: VideoGenSettings }).genSettings,
-      prompt: item.prompt,
-    };
-  }
-  if (item.kind === NODE_TYPE.AUDIO && item.prompt) {
-    // 音频节点数据形状未定义 genSettings，预填 prompt 供生成面板读取
-    (data as { genSettings?: { prompt: string } }).genSettings = {
-      ...((data as { genSettings?: { prompt: string } }).genSettings ?? {}),
       prompt: item.prompt,
     };
   }
@@ -335,16 +319,16 @@ const NODE_PARAM_CAPABILITY: Partial<Record<CanvasNodeType, ModelCapability>> = 
   [NODE_TYPE.VIDEO]: "video",
 };
 
-/** 支持预填 prompt 的节点类型（text/image/video 各自的生成面板都读 genSettings.prompt） */
+/** 支持预填 prompt 的节点类型（text/image/video 各自的生成面板都读 genSettings.prompt；
+    音频节点无生成面板，不预填） */
 const PROMPT_NODE_TYPES = new Set<CanvasNodeType>([
   NODE_TYPE.TEXT,
   NODE_TYPE.IMAGE,
   NODE_TYPE.VIDEO,
-  NODE_TYPE.AUDIO,
 ]);
 
-/** 解析 "W:H" 为宽高比数值；"adaptive" 等非比例串返回 null */
-function parseRatioValue(v: string): number | null {
+/** 解析 "W:H" 为宽高比数值；"adaptive" 等非比例串返回 null（导出供测试锁定） */
+export function parseRatioValue(v: string): number | null {
   const m = /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.exec(v);
   return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : null;
 }
@@ -500,7 +484,7 @@ function execUpdateNode(args: ToolArgs): ExecOutcome {
 
   if (title !== undefined) patch.label = title;
   if (content && node.type === NODE_TYPE.TEXT) {
-    patch.content = textToHtml(content);
+    patch.content = textToTiptapHtml(content);
     patch.plainText = content;
   } else if (content) {
     lines.push("content 仅对 text 节点生效，已忽略");

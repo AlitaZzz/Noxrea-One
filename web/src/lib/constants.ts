@@ -266,19 +266,11 @@ export function getGroupColor(key?: string): GroupColorPreset {
 }
 
 // ── 画布自定义事件名（原 event-names.ts，合并至此） ──
-// 组件间通过 window.dispatchEvent / addEventListener 使用这些事件通信，
-// 统一管理避免字符串字面量散落各处。
+// 仅承载「跨组件命令」类事件（节点操作 / 成组取消成组）；节点数据写入已
+// 拆除事件总线，由节点组件直调 store.updateNodeVisual 单写通道。
 export const EventNames = {
-  /** 节点数据更新（data / style / 标记 dirty） */
-  NODE_UPDATE_DATA: "node:update-data",
   /** 节点操作（来自 NodeToolbar，由节点组件处理） */
   CANVAS_NODE_ACTION: "canvas:node-action",
-  /** 复制选中节点 */
-  CANVAS_COPY_NODE: "canvas:copy-node",
-  /** 删除节点 */
-  CANVAS_DELETE_NODES: "canvas:delete-nodes",
-  /** 删除边 */
-  CANVAS_DELETE_EDGES: "canvas:delete-edges",
   /** 编组 */
   CANVAS_GROUP_NODES: "canvas:group-nodes",
   /** 取消编组 */

@@ -15,6 +15,7 @@
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
+import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
@@ -238,24 +239,13 @@ function pasteNodes(clipNodes: AnyNode[], at: { x: number; y: number }): boolean
   return true;
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 /**
  * 用纯文本创建文本节点（系统剪贴板粘贴的文本分支）。
  * content 存段落化的富文本 HTML（供 Tiptap 编辑），plainText 存原文（供下游消费）。
  */
 export function createTextNodeWithContent(text: string, at: { x: number; y: number }): AnyNode {
   const node = createTextNode(at);
-  const html = text
-    .split(/\n{2,}/)
-    .map((para) => `<p>${para.split("\n").map(escapeHtml).join("<br>")}</p>`)
-    .join("");
+  const html = textToTiptapHtml(text);
   (node.data as { content: string; plainText: string }).content = html;
   (node.data as { content: string; plainText: string }).plainText = text;
   useCanvasStore.getState().addNodes([node]);

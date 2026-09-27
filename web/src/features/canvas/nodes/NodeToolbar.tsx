@@ -122,11 +122,10 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
   const { t } = useTranslation();
   const handlePick = useCallback(
     (key: string) => {
-      window.dispatchEvent(
-        new CustomEvent(EventNames.NODE_UPDATE_DATA, {
-          detail: { nodeId, data: { color: key }, immediate: true },
-        })
-      );
+      useCanvasStore.getState().updateNodeVisual(nodeId, {
+        data: { color: key },
+        immediate: true,
+      });
     },
     [nodeId]
   );
