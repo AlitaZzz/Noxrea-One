@@ -106,4 +106,25 @@ describe("Agent 工具四处注册一致性", () => {
   it("NODE_KINDS（server）与 TOOL_NODE_KINDS（web）完全一致", () => {
     expect(webNodeKinds()).toEqual(serverNodeKinds());
   });
+
+  /** 从 Meta.tsx 提取前端行为标志集合字面量 */
+  function webBehaviorSet(setName: "TERMINAL_TOOLS" | "PROMOTE_TEXT_TOOLS"): string[] {
+    const src = read(path.join(webToolsDir, "Meta.tsx"));
+    const m = new RegExp(`${setName} = new Set<string>\\(\\[([^\\]]*)\\]\\)`).exec(src);
+    expect(m, `Meta.tsx 中找不到 ${setName} 定义`).toBeTruthy();
+    return [...m![1].matchAll(/"(\w+)"/g)].map((x) => x[1]);
+  }
+
+  /** server 侧带指定行为标志的已注册工具名 */
+  function flaggedTools(flag: "terminal" | "promoteTextToContent"): string[] {
+    return agentToolRegistry.names().filter((n) => agentToolRegistry.get(n)![flag] === true).sort();
+  }
+
+  it("TERMINAL_TOOLS（web）与 server terminal 标志完全一致", () => {
+    expect(webBehaviorSet("TERMINAL_TOOLS").sort()).toEqual(flaggedTools("terminal"));
+  });
+
+  it("PROMOTE_TEXT_TOOLS（web）与 server promoteTextToContent 标志完全一致", () => {
+    expect(webBehaviorSet("PROMOTE_TEXT_TOOLS").sort()).toEqual(flaggedTools("promoteTextToContent"));
+  });
 });

@@ -315,23 +315,23 @@ export async function deleteFolder(userId: number, id: number) {
 
 // Items
 
-/**
- * 资产列表游标：`<createdAt 毫秒>_<id>`。
+/** 资产列表游标：`<createdAt 毫秒>_<id>`。
  * 排序固定为 createdAt desc, id desc，游标指向「上一页最后一条」，
  * 取下一行严格更旧的记录。keyset 分页在新增/删除后不会像 offset 那样漂移、重复或漏项。
- */
-function parseAssetCursor(raw: string): { createdAt: Date; id: number } | null {
+ * 导出供测试锁定游标契约。 */
+export function parseAssetCursor(raw: string): { createdAt: Date; id: number } | null {
   const match = /^(\d+)_(\d+)$/.exec(raw);
   if (!match) return null;
   return { createdAt: new Date(Number(match[1])), id: Number(match[2]) };
 }
 
-function encodeAssetCursor(row: { createdAt: Date; id: number }): string {
+export function encodeAssetCursor(row: { createdAt: Date; id: number }): string {
   return `${row.createdAt.getTime()}_${row.id}`;
 }
 
-/** 展开某文件夹的完整子树 id（含自身）；folders 为同一 scope 下全部文件夹的 id/parentId 列表。 */
-function collectSubtreeIds(rootId: number, folders: { id: number; parentId: number | null }[]): number[] {
+/** 展开某文件夹的完整子树 id（含自身）；folders 为同一 scope 下全部文件夹的 id/parentId 列表。
+ * 导出供测试锁定子树展开语义。 */
+export function collectSubtreeIds(rootId: number, folders: { id: number; parentId: number | null }[]): number[] {
   const childrenByParent = new Map<number | null, number[]>();
   for (const folder of folders) {
     const parentId = folder.parentId ?? null;

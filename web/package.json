@@ -13,6 +13,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@dagrejs/dagre": "^3.1.1",
+    "@noxrea/shared": "*",
     "@photo-sphere-viewer/core": "^5.15.1",
     "@tanstack/react-query": "^5.101.2",
     "@tiptap/extension-mention": "^3.30.5",
@@ -26,7 +27,6 @@
     "@xyflow/react": "^12.11.2",
     "antd": "^6.5.0",
     "i18next": "^26.3.6",
-    "@noxrea/shared": "*",
     "idb": "^8.0.3",
     "lucide-react": "^1.24.0",
     "next": "16.3.3",
@@ -43,6 +43,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -51,6 +53,7 @@
     "eslint-plugin-boundaries": "^7.1.0",
     "eslint-plugin-check-file": "^3.3.2",
     "eslint-plugin-simple-import-sort": "^14.0.0",
+    "jsdom": "^25.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.7"
