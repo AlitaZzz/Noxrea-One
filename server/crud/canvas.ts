@@ -5,7 +5,7 @@
 import { prisma } from "@server/core/database/client";
 import { newId } from "@server/utils/id";
 import { extractHashCountsFromCanvas, extractHashFromUrl, hashCountsEqual } from "@server/services/canvas/extract-hashes";
-import { toProjectSummary } from "@server/services/canvas/project-summary";
+import { deriveCanvasSummary, toProjectSummary } from "@server/services/canvas/project-summary";
 import {
   replaceSourceFileRefs,
   removeSourceFileRefs,
@@ -27,7 +27,7 @@ export class CanvasCoverUrlError extends Error {
 }
 
 export async function getProjects(userId: number) {
-  // 列表只出摘要：canvasData 在投影中剥掉，仅用于计算缩略图与节点数
+  // 摘要冗余列在保存路径维护，列表不再读取全量 canvasData（读放大根治）
   const rows = await prisma.canvasProject.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
@@ -37,7 +37,8 @@ export async function getProjects(userId: number) {
       revision: true,
       updatedAt: true,
       coverUrl: true,
-      canvasData: true,
+      nodeCount: true,
+      thumbnailSrc: true,
     },
   });
   return rows.map(toProjectSummary);
@@ -57,12 +58,15 @@ export async function createProject(
   data: { name?: string; canvasData?: Record<string, unknown> }
 ) {
   return prisma.$transaction(async (tx) => {
+    const summary = deriveCanvasSummary(data.canvasData ?? {});
     const project = await tx.canvasProject.create({
       data: {
         id: newId(),
         userId,
         name: data.name ?? "Untitled",
         canvasData: stringifyJson(data.canvasData ?? {}),
+        nodeCount: summary.nodeCount,
+        thumbnailSrc: summary.thumbnailSrc,
       },
     });
 
@@ -111,6 +115,10 @@ export async function updateProject(
     if (data.canvasData !== undefined) {
       updateData.canvasData = stringifyJson(data.canvasData);
       updateData.revision = { increment: 1 };
+      // 摘要冗余列随保存派生（画布 JSON 已在下方账本重算中解析，此处复用对象）
+      const summary = deriveCanvasSummary(data.canvasData);
+      updateData.nodeCount = summary.nodeCount;
+      updateData.thumbnailSrc = summary.thumbnailSrc;
     }
     if (data.coverUrl !== undefined) {
       // 封面必须能解析出本站文件 hash：引用账本按 hash 登记，防 GC 回收封面文件
