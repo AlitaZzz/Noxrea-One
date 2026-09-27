@@ -20,7 +20,7 @@ export const providerUpdateSchema = z.object({
 
 export const providerOutSchema = z.object({
   id: z.number(),
-  userId: z.number().nullable(),
+  userId: z.number(),
   name: z.string(),
   baseUrl: z.string(),
   apiKey: z.string(),

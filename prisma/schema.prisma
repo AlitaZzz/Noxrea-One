@@ -97,6 +97,11 @@ model CanvasProject {
   // 文件本体走内容寻址存储，引用登记在 canvas_cover 来源的账本（防 GC 回收）
   coverUrl   String?  @map("cover_url")
   revision   Int      @default(1) @map("revision") // 乐观并发版本号；每次更新递增
+  // 列表摘要冗余列：保存事务中由已解析的画布 JSON 派生（节点数 / 首个带 src 的
+  // image-node src，封面无关），列表查询不再全量读取 canvasData（读放大根治）。
+  // 坏数据降级 0/null，与列表摘要的降级语义一致
+  nodeCount    Int     @default(0) @map("node_count")
+  thumbnailSrc String? @map("thumbnail_src")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -113,7 +118,7 @@ model CanvasProject {
 // ──────────────────────────────────────────
 model ModelProvider {
   id        Int       @id @default(autoincrement())
-  userId    Int?      @map("user_id")
+  userId    Int       @map("user_id")
   name      String    @map("name")
   baseUrl   String    @map("base_url")
   apiKey    String    @default("") @map("api_key")

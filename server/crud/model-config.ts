@@ -34,7 +34,7 @@ export async function getProvider(id: number, userId: number) {
 }
 
 export async function createProvider(data: {
-  userId?: number;
+  userId: number;
   name: string;
   baseUrl: string;
   apiKey?: string;
@@ -42,7 +42,7 @@ export async function createProvider(data: {
 }) {
   const provider = await prisma.modelProvider.create({
     data: {
-      userId: data.userId ?? null,
+      userId: data.userId,
       name: data.name,
       baseUrl: data.baseUrl,
       apiKey: data.apiKey ?? "",
