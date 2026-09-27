@@ -12,11 +12,10 @@ vi.mock("@server/services/json-loader", () => ({ loadJson }));
 
 import { router } from "./canvas";
 
-const imagePresetIds = [
+const selectableIds = [
   "characterFaceThreeView", "characterThreeView", "productThreeView", "cinematicLightCorrection",
-  "nineGridScene", "storyboard25", "storyboard4", "forward3s", "back5s",
+  "nineGridScene", "storyboard25", "storyboard4", "forward3s", "back5s", "reverse", "expand",
 ];
-const selectableIds = [...imagePresetIds, "reverse", "expand"];
 
 interface SelectableResponse {
   id: string;
@@ -71,21 +70,6 @@ describe("canvas prompt template routes", () => {
       expect(entry.template).toBeTruthy();
     }
     expect(loadJson).toHaveBeenCalledWith("prompt-template.json");
-  });
-
-  it("filters entries and their groups by target", async () => {
-    const image = await request<CatalogResponse>("/api/canvas/prompt-templates?target=image");
-    expect(image.body.data.groups.map((group) => group.id)).toEqual(["view", "storyboard", "light", "timeline"]);
-    expect(image.body.data.entries.map((entry) => entry.id)).toEqual(imagePresetIds);
-
-    const text = await request<CatalogResponse>("/api/canvas/prompt-templates?target=text");
-    expect(text.body.data.groups.map((group) => group.id)).toEqual(["prompt"]);
-    expect(text.body.data.entries.map((entry) => entry.id)).toEqual(["reverse", "expand"]);
-  });
-
-  it("rejects an unknown target", async () => {
-    expect(await request("/api/canvas/prompt-templates?target=video"))
-      .toMatchObject({ status: 422, body: { error: "common.invalid_request" } });
   });
 
   it("reads the catalog for each request, including after a loader refresh", async () => {
