@@ -123,6 +123,11 @@ export async function fetchAssetPage(
 
 interface AssetsState {
   folders: AssetFolder[];
+  /**
+   * 拉取成功（含空列表）为 true；失败保持 false 以允许重试。
+   * 画布门页在拉取 settle 后凭它区分「就绪」与「失败」——
+   * 吞掉失败置 true 会让空素材库与网络故障不可区分。
+   */
   initialized: boolean;
   /** 保存过的 sourceUrl 集合，用于画布节点保存按钮状态。 */
   knownAssetUrls: Set<string>;
@@ -194,7 +199,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         knownAssetUrls: new Set(summary?.sourceUrls || []),
       });
     } catch {
-      set({ folders: [], initialized: true });
+      // 失败保持 initialized=false：门页在 settle 后凭它判失败并重试
     }
   },
 

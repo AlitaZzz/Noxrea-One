@@ -428,7 +428,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         </div>
       <MentionPrompt
         references={references}
-        presets={presets}
         value={prompt}
         onChange={setPrompt}
         placeholder={t("generation.promptPlaceholder")}

@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 
 import MentionChip from "./MentionChip";
 import MentionDropdown from "./MentionDropdown";
-import { findPreset, PRESET_TOKEN_PATTERN, presetTokenOf, type PromptPreset } from "./prompt-presets";
+import { PRESET_TOKEN_PATTERN, presetTokenOf } from "./prompt-presets";
 import { type ReferenceItem, type ReferenceItemAttrs, refLabel, refLabelKey } from "./reference";
 
 /** mention chip 的纯文本序列化：素材 → refLabel，预设 → @[preset:id] 令牌（往返一致） */
@@ -33,7 +33,6 @@ function mentionPlainText(attrs: ReferenceItemAttrs): string {
 
 interface Props {
   references: ReferenceItem[];
-  presets?: PromptPreset[];
   value: string;
   onChange: (text: string) => void;
   placeholder: string;
@@ -64,14 +63,17 @@ const bridges = new WeakMap<object, SuggestionBridge>();
 /** chip 在纯文本中的存储形式：图片N / 音频N / 视频N */
 const MENTION_PATTERN = /(图片|音频|视频)(\d+)/g;
 
-/** 纯文本 → 文档：chip 文本还原为 mention 节点，换行切分为段落 */
-function textToDoc(text: string, references: ReferenceItem[], presets?: PromptPreset[]): JSONContent {
+/** 纯文本 → 文档：chip 文本还原为 mention 节点，换行切分为段落。
+ *  预设令牌按语法还原（匹配 PRESET_TOKEN_PATTERN 即建节点，不查目录）——
+ *  解析是 text + references 的纯函数，不依赖异步目录数据；目录只影响
+ *  chip 标签展示（MentionChip 自行解析，未知预设显示占位文案）。 */
+export function textToDoc(text: string, references: ReferenceItem[]): JSONContent {
   const lookup = new Map(references.map((r) => [refLabel(r), r]));
 
   const content = text.split("\n").map((line) => {
     const inline: JSONContent[] = [];
 
-    // 收集本行全部命中（素材 mention + 已知 preset 令牌），按位置排序后切片还原
+    // 收集本行全部命中（素材 mention + preset 令牌），按位置排序后切片还原
     const hits: Array<{ start: number; end: number; node: JSONContent }> = [];
     MENTION_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -87,7 +89,6 @@ function textToDoc(text: string, references: ReferenceItem[], presets?: PromptPr
     }
     PRESET_TOKEN_PATTERN.lastIndex = 0;
     while ((match = PRESET_TOKEN_PATTERN.exec(line)) !== null) {
-      if (!presets || !findPreset(presets, match[1])) continue;
       hits.push({
         start: match.index,
         end: match.index + match[0].length,
@@ -183,7 +184,7 @@ function closeMention(bridge: SuggestionBridge, setMention: (state: MentionState
   setMention(null);
 }
 
-const MentionPrompt = ({ references, presets, value, onChange, placeholder, style }: Props) => {
+const MentionPrompt = ({ references, value, onChange, placeholder, style }: Props) => {
   const { t } = useTranslation();
 
   const [mention, setMention] = useState<MentionState | null>(null);
@@ -261,7 +262,7 @@ const MentionPrompt = ({ references, presets, value, onChange, placeholder, styl
       }),
       Placeholder.configure({ placeholder }),
     ],
-    content: textToDoc(value, references, presets),
+    content: textToDoc(value, references),
     onUpdate: ({ editor }) => {
       const bridge = bridges.get(editor.view.dom);
       bridge?.onChange(editor.getText({ blockSeparator: "\n" }));
@@ -291,6 +292,7 @@ const MentionPrompt = ({ references, presets, value, onChange, placeholder, styl
 
   // 外部变更 value（切换节点 / AI 回填）时同步进编辑器；序列化结果一致则跳过，避免循环。
   // 延后到微任务，避免 Tiptap 的 NodeView 更新在 React effect 生命周期内触发 flushSync。
+  // 注：textToDoc 不依赖目录数据，presets 不再是解析输入，无需参与本同步。
   useEffect(() => {
     if (!editor) return;
     if (editor.getText({ blockSeparator: "\n" }) === value) return;
@@ -299,13 +301,13 @@ const MentionPrompt = ({ references, presets, value, onChange, placeholder, styl
     const timer = window.setTimeout(() => {
       if (cancelled || editor.isDestroyed) return;
       if (editor.getText({ blockSeparator: "\n" }) === value) return;
-      editor.commands.setContent(textToDoc(value, references, presets), { emitUpdate: false });
+      editor.commands.setContent(textToDoc(value, references), { emitUpdate: false });
     }, 0);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [value, references, presets, editor]);
+  }, [value, references, editor]);
 
   // 引用变化：同步 chip 序号（图片1 ↔ 图片2），并移除已从参考区删除的引用
   // preset chip 无对应引用，跳过清理（其持久化由 genSettings.prompt 直接承载）

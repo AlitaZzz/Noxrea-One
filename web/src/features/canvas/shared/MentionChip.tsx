@@ -15,16 +15,19 @@ import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prom
 import { type ReferenceItemAttrs, refLabel } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { data: presets } = usePromptPresets();
   const item = node.attrs as ReferenceItemAttrs;
 
   if (item.kind === "preset") {
     const preset = presets ? findPreset(presets, item.presetId || "") : undefined;
+    // 目录由画布门页预取，正常路径 presets 必然就绪；查不到 = 预设已被删除
+    // （旧画布数据残留令牌）——显示占位文案而非裸 id，提交时 expandPresetTokens 会拒绝。
+    // 图标统一走 presetIconOf（未知 id 兜底 Wand2）
     return (
       <NodeViewWrapper as="span" className="mention-chip">
-        {preset ? createElement(presetIconOf(preset.id), { className: "mention-preset-icon" }) : null}
-        <span>{preset ? localizeText(preset.label, i18n.language) : item.presetId}</span>
+        {createElement(presetIconOf(item.presetId || ""), { className: "mention-preset-icon" })}
+        <span>{preset ? localizeText(preset.label, i18n.language) : t("canvas.presetRemoved")}</span>
       </NodeViewWrapper>
     );
   }

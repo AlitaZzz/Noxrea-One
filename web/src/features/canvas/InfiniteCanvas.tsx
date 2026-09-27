@@ -41,7 +41,6 @@ import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsModal from "@/features/assets/components/AssetsModal";
-import { useAssetsStore } from "@/features/assets/store";
 import type { AssetItem } from "@/features/assets/types";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
@@ -93,7 +92,6 @@ import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT, TIDY_ANIMATION_DURATION, TIDY_MAX_ANIMATED_NODES } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
-import { useModelStore } from "@/lib/model-store";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
 // nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
@@ -203,8 +201,8 @@ export default function InfiniteCanvas() {
   // History
   const pushHistory = useHistoryStore((s) => s.push);
 
-  // Initialize stores
-  useEffect(() => { useModelStore.getState().initialize(); useAssetsStore.getState().initialize(); }, []);
+  // 模型库 / 素材库初始化已前移至画布门页（canvas/[projectId]/page.tsx）：
+  // 与项目数据并行拉齐后再放行画布，避免面板在空 store 上挂载产生空态竞态
 
   // 当前激活项目（agent 等子组件按 projectId 寻址）
   const activeProjectId = useProjectStore((s) => s.activeProjectId);

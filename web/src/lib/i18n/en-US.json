@@ -117,7 +117,10 @@
       "to100": "Zoom to 100%"
     },
     "fit": "Fit to Screen",
-    "tidy": "Tidy Canvas"
+    "tidy": "Tidy Canvas",
+    "loadFailed": "Failed to load settings, please check your network",
+    "retry": "Retry",
+    "presetRemoved": "Preset removed"
   },
   "node": {
     "add": "Add Node",

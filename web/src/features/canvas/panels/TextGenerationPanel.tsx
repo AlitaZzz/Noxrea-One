@@ -80,7 +80,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // 预设目录（与图片面板同机制）：按 target 取文本预设（反推 / 扩写），
   // 选中后以令牌 chip 形式插入提示词，提交前统一展开为模板全文
   const { data: promptTemplateCatalog } = usePromptTemplateCatalog("text");
-  const presets = useMemo(() => promptTemplateCatalog?.entries ?? [], [promptTemplateCatalog]);
   const [presetOpen, setPresetOpen] = useState(false);
   const handleApplyPreset = useCallback((presetId: string) => {
     setPrompt(replacePresetToken(prompt, presetId));
@@ -457,7 +456,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           </div>
         <MentionPrompt
           references={references}
-          presets={presets}
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderText")}

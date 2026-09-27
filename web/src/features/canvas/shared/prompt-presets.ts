@@ -4,6 +4,9 @@
  * 图片 / 文本生成面板与节点工具条「创作」菜单共用同一批后端模板
  * （server/resources/prompt-template.json，按 target 区分节点类型），
  * 本模块提供共享目录查询、图标映射与提交前令牌展开。
+ *
+ * 目录只有一份 query 缓存（PROMPT_TEMPLATES_QUERY_KEY，全量目录），
+ * target 差异在 select 侧投影；画布门页预取同一份，面板挂载时必然命中。
  */
 "use client";
 
@@ -87,31 +90,68 @@ export function localizeText(text: BilingualText, language: string): string {
   return language === "en" ? text.en : text.zh;
 }
 
-/** The directory is shared by both menus; submission fetches afresh for hot updates. */
-export function fetchPromptTemplates(target?: PromptTarget): Promise<PromptTemplateCatalog> {
-  return api<PromptTemplateCatalog>(target
-    ? `/api/canvas/prompt-templates?target=${target}`
-    : "/api/canvas/prompt-templates");
+/** 目录 query 唯一 key：全量目录一份缓存，target 投影在 select 侧完成，画布门页预取同一份 */
+export const PROMPT_TEMPLATES_QUERY_KEY = ["canvas", "prompt-templates", "all"] as const;
+
+/** 全量目录（服务端已过滤可选预设条目并按 order 排序），门页预取与提交前展开共用 */
+export function fetchPromptTemplates(): Promise<PromptTemplateCatalog> {
+  return api<PromptTemplateCatalog>("/api/canvas/prompt-templates");
+}
+
+/**
+ * target 投影：条目按 target 过滤、分组只保留含当前条目的；
+ * 全量目录已按 order 排序，过滤保序，分组沿用服务端排序。
+ */
+export function filterCatalogByTarget(
+  catalog: PromptTemplateCatalog,
+  target: PromptTarget
+): PromptTemplateCatalog {
+  const entries = catalog.entries.filter((entry) => entry.target === target);
+  const usedGroups = new Set(entries.map((entry) => entry.group));
+  return { groups: catalog.groups.filter((group) => usedGroups.has(group.id)), entries };
+}
+
+/** 稳定的 target 选择器：select 引用不稳定会在每次渲染重建结果对象 */
+const TARGET_SELECTORS: Record<PromptTarget, (catalog: PromptTemplateCatalog) => PromptTemplateCatalog> = {
+  image: (catalog) => filterCatalogByTarget(catalog, "image"),
+  text: (catalog) => filterCatalogByTarget(catalog, "text"),
+};
+
+/**
+ * 目录 query 公共选项：门页预取（fetchQuery）与两个 hook 共用同一份
+ * key / queryFn / 驻留策略，三者不可漂移。
+ *
+ * gcTime 取 Infinity：门页预取后目录即画布会话的常驻数据，禁止被 GC——
+ * 画布可能长时间无任何订阅者（无图片节点、未开面板、未选中节点），
+ * 默认 5 分钟回收后重开面板会先落在空目录上（菜单空、已有 chip 误显示
+ * 「预设已移除」），正是门页要消除的空态竞态；驻留策略由 query 自身声明，
+ * 不依赖订阅者偶然在场。gcTime 属于 query 而非观察者，故门页的 fetchQuery
+ * 也必须携带本选项，否则回收会发生在任何 hook 挂载之前。
+ * 目录热更新不受影响：staleTime 沿用全局默认（30s），过期后挂载即后台刷新。
+ */
+export function promptTemplatesQueryOptions() {
+  return {
+    queryKey: PROMPT_TEMPLATES_QUERY_KEY,
+    queryFn: fetchPromptTemplates,
+    gcTime: Infinity,
+  };
 }
 
 /**
  * 指定 target 的目录（分组 + 条目），生成面板 / 创作菜单按节点类型取各自的预设；
- * 省略 target 时返回全部条目，令牌展开依赖它覆盖跨类令牌。
+ * 省略 target 时返回全量目录，令牌展开依赖它覆盖跨类令牌。
  */
-export function usePromptTemplateCatalog(target?: PromptTarget, enabled = true) {
+export function usePromptTemplateCatalog(target?: PromptTarget) {
   return useQuery({
-    queryKey: ["canvas", "prompt-templates", target ?? "all"],
-    queryFn: () => fetchPromptTemplates(target),
-    enabled,
+    ...promptTemplatesQueryOptions(),
+    select: target ? TARGET_SELECTORS[target] : undefined,
   });
 }
 
 /** 仅条目列表（全量目录）：mention chip、节点派生等只需要扁平条目 */
-export function usePromptPresets(enabled = true) {
+export function usePromptPresets() {
   return useQuery({
-    queryKey: ["canvas", "prompt-templates", "all"],
-    queryFn: () => fetchPromptTemplates(),
-    enabled,
+    ...promptTemplatesQueryOptions(),
     select: (catalog) => catalog.entries,
   });
 }
