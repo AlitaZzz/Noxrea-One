@@ -81,10 +81,6 @@
     "llm": {
       "allowedFields": ["messages", "stream"],
       "fields": []
-    },
-    "audio": {
-      "allowedFields": ["mode", "input", "voice", "audio_file", "references"],
-      "fields": []
     }
   },
 

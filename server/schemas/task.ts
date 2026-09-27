@@ -5,8 +5,8 @@
 import { z } from "zod";
 
 export const taskCreateSchema = z.object({
-  type: z.string().max(30).optional(),
-  protocol: z.string().max(30).optional(),
+  // 模态白名单：与产品能力对齐（音频生成未开放，见 T3 决策）；text 为历史归一化输入
+  type: z.enum(["image", "video", "llm", "text"]).optional(),
   model: z.string().max(200).optional(),
   providerId: z.number().int().positive().optional(),
   prompt: z.string().optional(),
@@ -34,12 +34,7 @@ export const taskCreateSchema = z.object({
   stop: z.union([z.string(), z.array(z.string())]).optional(),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
-  // --- 音频/视频参数 ---
-  mode: z.string().optional(),
-  input: z.string().optional(),
-  voice: z.string().optional(),
-  audio_file: z.string().optional(),
-  references: z.array(z.string()).optional(),
+  // --- 视频参数 ---
   refMode: z.string().optional(),
 });
 

@@ -75,13 +75,8 @@ export interface VideoGenSettings extends BaseGenSettings {
   n?: number;
 }
 
-/** 语音生成设置 */
-export interface AudioGenSettings extends BaseGenSettings {
-  kind: "audio";
-}
-
-/** 生成设置判别联合：文本 / 图片 / 视频 / 语音 */
-export type GenSettings = TextGenSettings | ImageGenSettings | VideoGenSettings | AudioGenSettings;
+/** 生成设置判别联合：文本 / 图片 / 视频（音频生成未开放，仅保留节点形态） */
+export type GenSettings = TextGenSettings | ImageGenSettings | VideoGenSettings;
 
 /** 图片/视频节点共享的生成相关子字段 */
 export interface MediaGenFields {

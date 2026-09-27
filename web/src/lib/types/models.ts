@@ -2,7 +2,8 @@
 // 模型配置类型
 // ============================================================
 
-export type ModelCapability = "text" | "image" | "video" | "audio";
+/** 模型能力（音频生成未开放，不提供该能力开关） */
+export type ModelCapability = "text" | "image" | "video";
 
 export interface ProviderPreset {
   name: string;

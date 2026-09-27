@@ -106,7 +106,6 @@ router.post("/api/generate/task", async (c) => {
   const config: Record<string, unknown> = {};
   if (data.providerId) config.providerId = data.providerId;
   if (data.model) config.model = data.model;
-  if (data.protocol) config.protocol = data.protocol;
 
   const allowedSet = new Set(allowedFields);
   // 参考素材字段有独立存储路径（task.refImages/refAudios/refVideos），不进 config
@@ -145,7 +144,8 @@ router.post("/api/generate/task", async (c) => {
   const task = await createTask({
     userId: auth.user.id,
     type: capability,
-    protocol: data.protocol ?? providerProtocol ?? undefined,
+    // 协议单源：恒取 provider.protocol，客户端不再可覆写（堵请求形态漂移）
+    protocol: providerProtocol ?? undefined,
     model: data.model ?? undefined,
     prompt,
     config,

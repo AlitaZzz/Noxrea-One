@@ -22,20 +22,17 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo, ModelProvider } from "@/lib/types/models";
 
-/** 模块级常量（稳定引用，避免每次渲染重建导致虚拟列表失效）。
-    图标语义沿用画布：声波 = 音频，不用 antd 的麦克风。 */
+/** 模块级常量（稳定引用，避免每次渲染重建导致虚拟列表失效） */
 const CAP_PILLS: { cap: ModelCapability; Icon: ComponentType<{ className?: string; style?: CSSProperties }> }[] = [
   { cap: "text", Icon: TextIcon },
   { cap: "image", Icon: PictureOutlined },
   { cap: "video", Icon: VideoCameraOutlined },
-  { cap: "audio", Icon: WaveIcon },
 ];
 
 /** 单行（已 memo）：仅在 m / dim / onToggle / onDelete 变化时才重渲染。
@@ -125,7 +122,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
   const [batchOpen, setBatchOpen] = useState(false);
 
   // 各能力计数（筛选 chips 角标）
-  const capCounts: Record<ModelCapability, number> = { text: 0, image: 0, video: 0, audio: 0 };
+  const capCounts: Record<ModelCapability, number> = { text: 0, image: 0, video: 0 };
   for (const m of provider.models) {
     for (const c of m.capabilities || []) capCounts[c]++;
   }

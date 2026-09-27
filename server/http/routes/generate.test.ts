@@ -74,3 +74,43 @@ describe("生成任务请求体限制", () => {
     expect(mocks.authenticateRequest).not.toHaveBeenCalled();
   });
 });
+
+describe("创建任务入参校验", () => {
+  beforeEach(() => {
+    mocks.authenticateRequest.mockResolvedValue({ user: { id: 1 } });
+    mocks.getProvider.mockResolvedValue({
+      id: 7,
+      protocol: "openai",
+      baseUrl: "http://upstream.test",
+    });
+    mocks.getAllowedFields.mockReturnValue([]);
+    mocks.createTask.mockResolvedValue({ id: "task-1" });
+  });
+
+  it("type 非枚举值（audio 生成未开放）被 zod 拒绝", async () => {
+    const response = await app.request("/api/generate/task", {
+      method: "POST",
+      body: JSON.stringify({ type: "audio", providerId: 7 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: "common.invalid_request" });
+    expect(mocks.createTask).not.toHaveBeenCalled();
+  });
+
+  it("客户端传 protocol 被忽略，任务协议恒取 provider.protocol（A5 回归）", async () => {
+    const response = await app.request("/api/generate/task", {
+      method: "POST",
+      body: JSON.stringify({ type: "image", providerId: 7, protocol: "ark", model: "m" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol: "openai" })
+    );
+    const config = mocks.createTask.mock.calls[0][0].config as Record<string, unknown>;
+    expect(config).not.toHaveProperty("protocol");
+  });
+});

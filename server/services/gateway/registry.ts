@@ -10,13 +10,11 @@ import { logEvent } from "@server/core/logger/utils";
 import "@server/services/capabilities/image/service";
 import "@server/services/capabilities/video/service";
 import "@server/services/capabilities/llm/service";
-import "@server/services/capabilities/audio/service";
 
 // 导入 Protocol 实现
 import { OpenAiImageProtocol } from "@server/services/protocols/openai/image";
 import { OpenAiVideoProtocol } from "@server/services/protocols/openai/video";
 import { OpenAiLlmProtocol } from "@server/services/protocols/openai/llm";
-import { OpenAiAudioProtocol } from "@server/services/protocols/openai/audio";
 import { ArkImageProtocol } from "@server/services/protocols/ark/image";
 import { ArkVideoProtocol } from "@server/services/protocols/ark/video";
 
@@ -34,10 +32,10 @@ export function initGateway(): void {
   const openaiImage = new OpenAiImageProtocol();
   const openaiVideo = new OpenAiVideoProtocol();
   const openaiLlm = new OpenAiLlmProtocol();
-  const openaiAudio = new OpenAiAudioProtocol();
 
   registerProtocol("openai", {
     name: "openai",
+    capabilities: { supportsTools: true, supportsImageParts: true },
     buildImageRequest: openaiImage.buildImageRequest.bind(openaiImage),
     parseImageResponse: openaiImage.parseImageResponse.bind(openaiImage),
     extractTaskId: openaiImage.extractTaskId.bind(openaiImage),
@@ -47,8 +45,6 @@ export function initGateway(): void {
     parseVideoResponse: openaiVideo.parseVideoResponse.bind(openaiVideo),
     buildLlmRequest: openaiLlm.buildLlmRequest.bind(openaiLlm),
     parseLlmResponse: openaiLlm.parseLlmResponse.bind(openaiLlm),
-    buildAudioRequest: openaiAudio.buildAudioRequest.bind(openaiAudio),
-    parseAudioResponse: openaiAudio.parseAudioResponse.bind(openaiAudio),
   });
 
   // Ark
@@ -56,6 +52,8 @@ export function initGateway(): void {
   const arkVideo = new ArkVideoProtocol();
   registerProtocol("ark", {
     name: "ark",
+    // ark 未实现 LLM（无 buildLlmRequest），Agent 渠道不可用；能力缺省即全不支持
+    capabilities: {},
     buildImageRequest: arkImage.buildImageRequest.bind(arkImage),
     parseImageResponse: arkImage.parseImageResponse.bind(arkImage),
     buildVideoRequest: arkVideo.buildVideoRequest.bind(arkVideo),

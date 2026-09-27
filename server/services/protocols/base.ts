@@ -28,6 +28,14 @@ export interface ProtocolResponse {
   toolCalls?: ProtocolToolCall[];
 }
 
+/** 协议能力声明：Agent 层按声明分支，不再硬编码协议名字符串比较 */
+export interface ProtocolCapabilities {
+  /** LLM 请求是否支持 tools（function calling）注入 */
+  supportsTools?: boolean;
+  /** LLM 消息是否支持多模态 image_url 内容段 */
+  supportsImageParts?: boolean;
+}
+
 /** 轮询结果 */
 export interface PollResult {
   status: "completed" | "failed" | "pending";
@@ -39,6 +47,9 @@ export interface PollResult {
 export interface ProtocolService {
   /** 协议名称 */
   readonly name: string;
+
+  /** 能力声明（缺省视为均不支持；Agent 侧按此降级） */
+  readonly capabilities?: ProtocolCapabilities;
 
   /** 构建图片生成请求（body 已经过管线 transforms→mapping→patch） */
   buildImageRequest?(
@@ -64,13 +75,6 @@ export interface ProtocolService {
     body: Record<string, unknown>
   ): ProtocolRequestResult;
 
-  /** 构建音频生成请求 */
-  buildAudioRequest?(
-    baseUrl: string,
-    apiKey: string,
-    body: Record<string, unknown>
-  ): ProtocolRequestResult;
-
   /** 解析图片响应 */
   parseImageResponse?(response: unknown): ProtocolResponse;
 
@@ -79,9 +83,6 @@ export interface ProtocolService {
 
   /** 解析 LLM 响应 */
   parseLlmResponse?(response: unknown): ProtocolResponse;
-
-  /** 解析音频响应 */
-  parseAudioResponse?(response: unknown): ProtocolResponse;
 
   // 异步任务支持
 
@@ -107,4 +108,9 @@ export function registerProtocol(
 
 export function getProtocol(name: string): ProtocolService | undefined {
   return protocolRegistry.get(name);
+}
+
+/** 无自定义轮询路径时的默认轮询 URL（`tasks/{id}` 惯例路径，manager 兜底与 openai shared 共用） */
+export function defaultPollUrl(baseUrl: string, upstreamTaskId: string): string {
+  return `${baseUrl}/tasks/${upstreamTaskId}`;
 }

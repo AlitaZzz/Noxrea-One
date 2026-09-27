@@ -79,7 +79,8 @@ describe("前后端契约一致性", () => {
       if (!serviceSrc) continue;
       for (const m of serviceSrc.matchAll(/registerCapability\("(\w+)"/g)) serverCaps.add(m[1]);
     }
-    expect(serverCaps.size, "服务端至少应注册 4 个能力").toBeGreaterThanOrEqual(4);
+    // 音频生成能力未开放已拆除（2026-09-27 T3 决策），现存能力：image / video / llm
+    expect(serverCaps.size, "服务端至少应注册 3 个能力").toBeGreaterThanOrEqual(3);
 
     // 能力名在边界处有一处显式归一化：web/DB 层叫 "text"，服务端生成能力叫 "llm"
     // （server/services/model-config/index.ts normalizeCapability）。钉住该映射本身，

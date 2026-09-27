@@ -10,6 +10,7 @@
  */
 
 import type { PollResult } from "../base";
+import { defaultPollUrl } from "../base";
 import {
   extractUpstreamMessage,
   normalizeStatus,
@@ -69,7 +70,7 @@ export function buildOpenAiPollUrl(
     }
     return `${baseUrl}${customPath}/${upstreamTaskId}`;
   }
-  return `${baseUrl}/tasks/${upstreamTaskId}`;
+  return defaultPollUrl(baseUrl, upstreamTaskId);
 }
 
 /**
