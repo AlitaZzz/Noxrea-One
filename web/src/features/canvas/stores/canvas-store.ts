@@ -40,7 +40,6 @@ export function getCanvasProjectId(): string | null {
 
 /**
  * Mark canvas as modified — SaveManager 负责 trailing save。
- * 项目列表内存状态的同步（syncCanvasState）由 SaveManager 在保存派发时统一执行。
  */
 export function markDirty() {
   saveManager.markDirty();

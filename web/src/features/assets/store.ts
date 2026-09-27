@@ -164,6 +164,12 @@ interface AssetsState {
   getUncategorizedFolder: (scope?: AssetScope) => AssetFolder | undefined;
 }
 
+/**
+ * initialize 的在途 promise：并发调用（StrictMode 双挂载 / 多调用方）共享同一次拉取。
+ * 失败时清空以保留「initialized=false 可重试」语义；store 是模块单例，无重置路径。
+ */
+let assetsInitInFlight: Promise<void> | null = null;
+
 export const useAssetsStore = create<AssetsState>((set, get) => ({
   folders: [],
   initialized: false,
@@ -189,18 +195,23 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     });
   },
 
-  initialize: async () => {
-    if (get().initialized) return;
-    try {
-      const summary = await assetApi.bootstrap("personal");
-      set({
-        folders: (summary?.folders || []).map(dtoToFolder),
-        initialized: true,
-        knownAssetUrls: new Set(summary?.sourceUrls || []),
-      });
-    } catch {
-      // 失败保持 initialized=false：门页在 settle 后凭它判失败并重试
-    }
+  initialize: () => {
+    if (get().initialized) return Promise.resolve();
+    assetsInitInFlight ??= (async () => {
+      try {
+        const summary = await assetApi.bootstrap("personal");
+        set({
+          folders: (summary?.folders || []).map(dtoToFolder),
+          initialized: true,
+          knownAssetUrls: new Set(summary?.sourceUrls || []),
+        });
+      } catch {
+        // 失败保持 initialized=false：门页在 settle 后凭它判失败并重试
+      }
+    })().finally(() => {
+      assetsInitInFlight = null;
+    });
+    return assetsInitInFlight;
   },
 
   // --- Asset CRUD ---

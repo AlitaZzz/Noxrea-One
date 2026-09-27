@@ -12,20 +12,9 @@ export const canvasCreateSchema = z.object({
 export const canvasUpdateSchema = z.object({
   name: z.string().max(200).optional(),
   canvasData: z.record(z.unknown()).optional(),
+  // 用户自定义封面（/api/files/... URL）；null 表示清除封面。
+  // 纯元数据：与 name 同语义，不参与版本判定、不递增 revision
+  coverUrl: z.string().max(2000).nullable().optional(),
   // 仅改名（无 canvasData）可省略；带 canvasData 的画布保存必须携带，由路由层强制校验
   baseRevision: z.number().int().min(1).optional(),
 });
-
-export const canvasOutSchema = z.object({
-  id: z.string(),
-  userId: z.number(),
-  name: z.string(),
-  revision: z.number(),
-  canvasData: z.record(z.unknown()),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-export type CanvasCreate = z.infer<typeof canvasCreateSchema>;
-export type CanvasUpdate = z.infer<typeof canvasUpdateSchema>;
-export type CanvasOut = z.infer<typeof canvasOutSchema>;

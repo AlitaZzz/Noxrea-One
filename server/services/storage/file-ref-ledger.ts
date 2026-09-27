@@ -6,8 +6,9 @@
 import type { Prisma } from "@prisma/client";
 import { adjustFileRefCount } from "@server/crud/file";
 
-/** 支持的业务来源类型。 */
-export type FileRefSourceType = "canvas" | "asset_item";
+/** 支持的业务来源类型。canvas_cover 是项目封面专用来源：与画布内容（canvas）
+ *  正交——画布保存的 replaceSourceFileRefs 每次整替集合，封面若混入会被冲掉。 */
+export type FileRefSourceType = "canvas" | "canvas_cover" | "asset_item";
 
 /** 文件引用数量表：key 是内容 SHA256，value 是节点/条目数量。 */
 export type FileHashCounts = Map<string, number>;

@@ -16,6 +16,7 @@
  */
 "use client";
 
+import { LoadingOutlined } from "@ant-design/icons";
 import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from "react";
 
 import i18n from "@/lib/i18n/config";
@@ -30,6 +31,7 @@ interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className
   block?: boolean;
   /** 纯图标：宽度收敛为与高度相等、内边距归零 */
   iconOnly?: boolean;
+  /** 加载中：禁用并给出指示——文本按钮换「处理中」，纯图标按钮换旋转图标 */
   loading?: boolean;
   /** 布局用（如 absolute 定位），不要用它改按钮视觉 */
   className?: string;
@@ -60,7 +62,11 @@ const AppButton = forwardRef<HTMLButtonElement, Props>(function AppButton(
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading && !iconOnly ? i18n.t("common.processing") : children}
+      {loading
+        ? iconOnly
+          ? <LoadingOutlined spin />
+          : i18n.t("common.processing")
+        : children}
     </button>
   );
 });

@@ -116,11 +116,10 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const ctrl = new AbortController();
-    loadUploadLimits(ctrl.signal)
+    loadUploadLimits()
       .then((d) => { if (!cancelled) setLimits(d); })
       .catch(() => { /* 隐藏说明即可 */ });
-    return () => { cancelled = true; ctrl.abort(); };
+    return () => { cancelled = true; };
   }, [open]);
 
   // ---- 上传：统一走画布上传管道（raw sink，复用并发 / 重试 / 离线判定 / 错误分类）----

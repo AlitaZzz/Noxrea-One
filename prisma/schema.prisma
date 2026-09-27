@@ -93,6 +93,9 @@ model CanvasProject {
   userId     Int      @map("user_id")
   name       String   @default("Untitled") @map("name")
   canvasData String   @default("{}") @map("canvas_data") // JSON TEXT
+  // 用户自定义封面（/api/files/... URL）；null 时列表页回退首图预览。
+  // 文件本体走内容寻址存储，引用登记在 canvas_cover 来源的账本（防 GC 回收）
+  coverUrl   String?  @map("cover_url")
   revision   Int      @default(1) @map("revision") // 乐观并发版本号；每次更新递增
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")

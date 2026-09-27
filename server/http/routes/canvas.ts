@@ -12,6 +12,7 @@ import {
   updateProject,
   deleteProject,
   CanvasRevisionConflictError,
+  CanvasCoverUrlError,
 } from "@server/crud/canvas";
 import { ok, failCode } from "@server/core/response";
 import { isValidId } from "@server/utils/id";
@@ -171,6 +172,7 @@ router.put("/api/canvas/projects/:id", async (c) => {
     const project = await updateProject(id, auth.user.id, {
       name: parsed.data.name,
       canvasData: parsed.data.canvasData,
+      coverUrl: parsed.data.coverUrl,
     }, {
       baseRevision: parsed.data.baseRevision,
     });
@@ -184,6 +186,10 @@ router.put("/api/canvas/projects/:id", async (c) => {
       return failCode(409, "canvas.project_revision_conflict", {
         revision: error.currentRevision,
       });
+    }
+    // 封面不是本站 /api/files/ 地址：无法登记引用账本（GC 会回收），直接拒绝
+    if (error instanceof CanvasCoverUrlError) {
+      return failCode(422, "common.invalid_request");
     }
     throw error;
   }

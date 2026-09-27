@@ -347,12 +347,7 @@ class SaveManager {
     // 内容无主（画布未加载）时没有可保存对象，保持 dirty 等待加载完成。
     const projectId = getCanvasProjectId();
     if (!projectId) return;
-    const s = useCanvasStore.getState();
     const canvasData = buildCanvasData();
-    useProjectStore.getState().syncCanvasState(
-      projectId, s.nodes, s.edges, canvasData.viewport,
-      canvasData.background, canvasData.minimapVisible, canvasData.snapToGrid, s.agentModel,
-    );
     this.dirty = false;
     this.saving = true;
     this.savePromise = new Promise((r) => { this.resolveSave = r; });

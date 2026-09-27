@@ -95,6 +95,12 @@ interface ModelState {
   fetchPresets: () => Promise<void>;
 }
 
+/**
+ * initialize 的在途 promise：并发调用（StrictMode 双挂载 / 多调用方）共享同一次拉取。
+ * 失败时清空以保留「initialized=false 可重试」语义；store 是模块单例，无重置路径。
+ */
+let modelInitInFlight: Promise<void> | null = null;
+
 export const useModelStore = create<ModelState>((set, get) => ({
   providers: [],
   presets: [],
@@ -102,25 +108,30 @@ export const useModelStore = create<ModelState>((set, get) => ({
   initialized: false,
   initializeFailed: false,
 
-  initialize: async () => {
-    if (get().initialized) return;
-    try {
-      const providers = await modelApi.fetchProviders<ModelProvider[]>();
-      if (!Array.isArray(providers)) throw new Error("unexpected providers payload");
-      // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
-      set({ providers, initialized: true, initializeFailed: false });
-      await get().fetchPresets();
-      // 拉取模型参数配置（fields 为唯一数据源）
+  initialize: () => {
+    if (get().initialized) return Promise.resolve();
+    modelInitInFlight ??= (async () => {
       try {
-        const params = await modelApi.fetchModelParams<ModelParamsMap>();
-        if (isRecord(params)) set({ modelParamsCache: params });
+        const providers = await modelApi.fetchProviders<ModelProvider[]>();
+        if (!Array.isArray(providers)) throw new Error("unexpected providers payload");
+        // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
+        set({ providers, initialized: true, initializeFailed: false });
+        await get().fetchPresets();
+        // 拉取模型参数配置（fields 为唯一数据源）
+        try {
+          const params = await modelApi.fetchModelParams<ModelParamsMap>();
+          if (isRecord(params)) set({ modelParamsCache: params });
+        } catch {
+          // 模型参数拉取失败不阻塞
+        }
       } catch {
-        // 模型参数拉取失败不阻塞
+        // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
+        set({ initializeFailed: true });
       }
-    } catch {
-      // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
-      set({ initializeFailed: true });
-    }
+    })().finally(() => {
+      modelInitInFlight = null;
+    });
+    return modelInitInFlight;
   },
 
   findModelParams: (providerId: string, modelName: string, capability: string) => {

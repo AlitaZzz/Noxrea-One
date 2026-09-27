@@ -4,9 +4,11 @@
  * 覆盖：
  *   - 重命名成功 → 同步服务端版本
  *   - 重命名失败 → 回滚本地名称并提示
+ *   - 改封面成功 / 失败回滚（乐观更新契约）
  *   - 删除失败 → 项目回到列表
  *   - 批量删除部分失败 → 只恢复失败项（成功的已真的删除，整表回滚会产生幽灵项目）
  *   - 拉取列表失败 → 保留现有列表，不清空；成功且为空才清空
+ *   - 摘要 upsert：单项目拉取后列表带名称与版本（画布顶栏与保存链路的数据源）
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,9 +47,9 @@ import { useProjectStore } from "@/features/project/store";
 const seed = () => {
   useProjectStore.setState({
     projects: [
-      { id: "p1", name: "A", revision: 1, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
-      { id: "p2", name: "B", revision: 1, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
-      { id: "p3", name: "C", revision: 1, updatedAt: 0, viewport: { x: 0, y: 0, zoom: 1 }, background: "dots", minimapVisible: true, snapToGrid: false, nodes: [], edges: [] },
+      { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2 },
+      { id: "p2", name: "B", revision: 1, updatedAt: 0, nodeCount: 0 },
+      { id: "p3", name: "C", revision: 1, updatedAt: 0, nodeCount: 0 },
     ],
     activeProjectId: "p1",
   });
@@ -63,7 +65,7 @@ describe("project store 删除与列表", () => {
     seed();
   });
 
-  it("重命名成功时同步服务端版本", async () => {
+  it("重命名成功时同步服务端版本（纯元数据不携带 baseRevision）", async () => {
     mocks.updateProject.mockResolvedValue({ revision: 6 });
 
     useProjectStore.getState().renameProject("p1", "A2");
@@ -73,7 +75,7 @@ describe("project store 删除与列表", () => {
       expect(project?.name).toBe("A2");
       expect(project?.revision).toBe(6);
     });
-    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { name: "A2", baseRevision: 1 });
+    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { name: "A2" });
     expect(mocks.notify.error).not.toHaveBeenCalled();
   });
 
@@ -86,6 +88,37 @@ describe("project store 删除与列表", () => {
     const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
     expect(project?.name).toBe("A");
     expect(project?.revision).toBe(1);
+  });
+
+  it("改封面成功时乐观更新封面与缩略图", async () => {
+    mocks.updateProject.mockResolvedValue({ revision: 1 });
+    const cover = "/api/files/1/ab/abcd.png";
+
+    useProjectStore.getState().updateCover("p1", cover);
+
+    await vi.waitFor(() => {
+      const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+      expect(project?.coverUrl).toBe(cover);
+      expect(project?.thumbnail).toBe(cover);
+    });
+    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { coverUrl: cover });
+    expect(mocks.notify.error).not.toHaveBeenCalled();
+  });
+
+  it("改封面失败时回滚并提示错误", async () => {
+    useProjectStore.setState({
+      projects: [
+        { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2, coverUrl: "/old.png", thumbnail: "/old.png" },
+      ],
+    });
+    mocks.updateProject.mockRejectedValue(new ApiError(500, "服务内部错误"));
+
+    useProjectStore.getState().updateCover("p1", "/api/files/1/ab/new.png");
+
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+    const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(project?.coverUrl).toBe("/old.png");
+    expect(project?.thumbnail).toBe("/old.png");
   });
 
   it("删除失败时把项目放回列表", async () => {
@@ -142,5 +175,42 @@ describe("project store 删除与列表", () => {
     await useProjectStore.getState().refreshProjects();
 
     expect(useProjectStore.getState().projects).toHaveLength(0);
+  });
+});
+
+describe("project store 摘要 upsert", () => {
+  beforeEach(() => {
+    mocks.getProject.mockReset();
+  });
+
+  it("单项目拉取后把摘要 upsert 进列表（画布顶栏与保存链路的数据源）", async () => {
+    useProjectStore.setState({ projects: [], activeProjectId: null });
+    mocks.getProject.mockResolvedValue({
+      id: "p1",
+      name: "A",
+      revision: 4,
+      updatedAt: "2026-01-01T00:00:00Z",
+      coverUrl: "/api/files/1/ab/cover.png",
+      canvasData: { nodes: [{ type: "image-node", data: { src: "/img.png" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 }, background: "dots" },
+    });
+
+    const project = await useProjectStore.getState().refreshProject("p1");
+
+    expect(project?.nodes).toHaveLength(1);
+    const summary = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    // 列表项是摘要：不携带内容，缩略图自定义封面优先
+    expect(summary).toMatchObject({ id: "p1", name: "A", revision: 4, nodeCount: 1 });
+    expect(summary?.thumbnail).toBe("/api/files/1/ab/cover.png");
+    expect(summary && "nodes" in summary).toBe(false);
+  });
+
+  it("拉取失败返回 null 且不动列表", async () => {
+    mocks.getProject.mockRejectedValue(new ApiError(0, "网络不可达"));
+    useProjectStore.setState({ projects: [{ id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 0 }] });
+
+    const project = await useProjectStore.getState().refreshProject("p1");
+
+    expect(project).toBeNull();
+    expect(useProjectStore.getState().projects).toHaveLength(1);
   });
 });

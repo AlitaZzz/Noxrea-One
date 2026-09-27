@@ -13,6 +13,7 @@ import { ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
+import { useAuthStore } from "@/features/auth/store";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
 import { loadUploadFormats } from "@/lib/upload-formats";
@@ -34,11 +35,13 @@ function MessageApiRegistrar() {
   return null;
 }
 
-/** 应用启动即预热上传格式白名单（失败静默回落兜底值），供各上传入口同步读取 */
+/** 已登录后预热上传格式白名单（失败静默回落兜底值），供各上传入口同步读取。
+ *  未登录不发：接口要求鉴权，未登录预热是必败请求（登录页上的 401 噪音）。 */
 function UploadFormatsWarmup() {
+  const user = useAuthStore((s) => s.user);
   useEffect(() => {
-    void loadUploadFormats();
-  }, []);
+    if (user) void loadUploadFormats();
+  }, [user]);
   return null;
 }
 

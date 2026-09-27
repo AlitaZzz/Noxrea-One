@@ -9,11 +9,28 @@ import type { AnyNode } from "@/features/canvas/types";
 // 项目
 // ============================================================
 
-export interface CanvasProject {
+/**
+ * 项目摘要：列表页与 revision 账本的最小单元。
+ * 列表接口只返回这些字段，不含任何画布内容。
+ */
+export interface ProjectSummary {
   id: string;
   name: string;
   revision: number;
   updatedAt: number;
+  /** 列表卡片缩略图：自定义封面优先，否则首个图片节点 src（服务端投影） */
+  thumbnail?: string;
+  /** 用户自定义封面 URL（未设置为 undefined） */
+  coverUrl?: string;
+  /** 节点总数（服务端投影） */
+  nodeCount: number;
+}
+
+/**
+ * 单项目全量投影（GET /api/canvas/projects/:id）：摘要字段 + 画布内容。
+ * 仅画布页恢复流程使用；项目列表（projects 数组）不持有内容。
+ */
+export interface CanvasProject extends ProjectSummary {
   viewport: ViewportState;
   background: BackgroundType;
   minimapVisible?: boolean;

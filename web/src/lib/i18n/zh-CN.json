@@ -248,6 +248,7 @@
     "none": "暂无项目",
     "home": "首页",
     "rename": "重命名",
+    "setCover": "设置封面",
     "deleteConfirm": "删除「{{name}}」后将无法继续访问，项目中的生成内容也会被全部删除，且不可恢复。确定要删除吗？",
     "deleteBatch": "删除选中的 {{count}} 个项目后将无法继续访问，其中的生成内容也会被全部删除，且不可恢复。确定要删除吗？"
   },
@@ -905,6 +906,7 @@
     },
     "project": {
       "rename_failed": "重命名项目失败",
+      "cover_failed": "设置封面失败",
       "delete_failed": "删除项目失败"
     },
     "asset": {

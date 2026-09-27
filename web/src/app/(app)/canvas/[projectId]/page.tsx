@@ -107,7 +107,7 @@ export default function CanvasPage({
     };
   }, [loadSettings]);
 
-  // 鉴权与项目列表初始化已由 (app)/layout.tsx 统一完成。
+  // 鉴权初始化已由 (app)/layout.tsx 统一完成；项目列表不在画布页拉取（唯一消费方是 /project 门页）。
   // URL 是项目身份的真相源：先同步进 store，再从服务器拉取最新项目数据恢复到画布，
   // 避免多浏览器 / 多 Tab 场景下本地缓存过期导致数据不一致。
   useEffect(() => {

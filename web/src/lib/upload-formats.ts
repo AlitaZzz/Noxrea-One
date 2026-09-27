@@ -30,6 +30,12 @@ const FALLBACK_UPLOAD_FORMATS: UploadFormats = {
 
 let cachedLimits: UploadLimits | null = null;
 
+/**
+ * loadUploadLimits 的在途 promise：并发调用（StrictMode 双挂载的启动预热 /
+ * 弹窗打开）共享同一次请求。失败时清空以允许后续重试；成功后写入 cachedLimits。
+ */
+let limitsInFlight: Promise<UploadLimits> | null = null;
+
 /** 同步读取当前白名单（未拉取到服务端数据时返回兜底值） */
 export function getUploadFormats(): UploadFormats {
   return cachedLimits?.formats ?? FALLBACK_UPLOAD_FORMATS;
@@ -39,10 +45,17 @@ export function getUploadFormats(): UploadFormats {
  * 拉取并缓存服务端白名单；失败时抛出，由调用方决定兜底方式。
  * 成功后 getUploadFormats() 返回服务端数据。
  */
-export async function loadUploadLimits(signal?: AbortSignal): Promise<UploadLimits> {
-  if (cachedLimits) return cachedLimits;
-  cachedLimits = await api<UploadLimits>("/api/files/upload-limits", { signal });
-  return cachedLimits;
+export function loadUploadLimits(): Promise<UploadLimits> {
+  if (cachedLimits) return Promise.resolve(cachedLimits);
+  limitsInFlight ??= api<UploadLimits>("/api/files/upload-limits")
+    .then((limits) => {
+      cachedLimits = limits;
+      return limits;
+    })
+    .finally(() => {
+      limitsInFlight = null;
+    });
+  return limitsInFlight;
 }
 
 /** 应用启动预热：失败时静默回落兜底值（上传校验仍由服务端把关） */

@@ -15,7 +15,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   saveProjectRaw: vi.fn(),
-  syncCanvasState: vi.fn(),
   updateProjectRevision: vi.fn(),
   markSessionExpired: vi.fn(),
   resetSessionExpired: vi.fn(),
@@ -43,7 +42,6 @@ vi.mock("@/features/project/store", () => ({
   useProjectStore: {
     getState: () => ({
       projects: Object.entries(mocks.revisions).map(([id, revision]) => ({ id, revision })),
-      syncCanvasState: mocks.syncCanvasState,
       updateProjectRevision: (id: string, rev: number) => {
         mocks.updateProjectRevision(id, rev);
         mocks.revisions[id] = Math.max(mocks.revisions[id] ?? 1, rev);
@@ -255,7 +253,6 @@ describe("SaveManager 并发保存", () => {
     await p;
 
     expect(mocks.saveProjectRaw.mock.calls[0][0]).toBe("p1");
-    expect(mocks.syncCanvasState.mock.calls[0][0]).toBe("p1");
     expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 2);
   });
 

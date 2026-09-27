@@ -159,3 +159,52 @@ describe("model-store 写操作", () => {
     expect(mocks.notify.error).toHaveBeenCalled();
   });
 });
+
+describe("model-store initialize 并发去重", () => {
+  beforeEach(() => {
+    mocks.fetchProviders.mockReset();
+    useModelStore.setState({
+      providers: [],
+      initialized: false,
+      initializeFailed: false,
+    });
+  });
+
+  it("并发 initialize 共享同一次拉取（StrictMode 双挂载不双发请求）", async () => {
+    let resolveFetch!: (v: unknown) => void;
+    mocks.fetchProviders.mockImplementation(
+      () => new Promise((resolve) => { resolveFetch = resolve; }),
+    );
+
+    const a = useModelStore.getState().initialize();
+    const b = useModelStore.getState().initialize();
+    expect(mocks.fetchProviders).toHaveBeenCalledTimes(1);
+
+    resolveFetch([structuredClone(PROVIDER)]);
+    await Promise.all([a, b]);
+
+    expect(mocks.fetchProviders).toHaveBeenCalledTimes(1);
+    expect(useModelStore.getState().initialized).toBe(true);
+  });
+
+  it("失败后在途标记清空，后续 initialize 可重试", async () => {
+    mocks.fetchProviders.mockRejectedValueOnce(new ApiError(500, "服务内部错误"));
+
+    await useModelStore.getState().initialize();
+    expect(useModelStore.getState().initializeFailed).toBe(true);
+
+    mocks.fetchProviders.mockResolvedValue([structuredClone(PROVIDER)]);
+    await useModelStore.getState().initialize();
+    expect(useModelStore.getState().initialized).toBe(true);
+    expect(mocks.fetchProviders).toHaveBeenCalledTimes(2);
+  });
+
+  it("已初始化后再次 initialize 不再发请求", async () => {
+    mocks.fetchProviders.mockResolvedValue([structuredClone(PROVIDER)]);
+
+    await useModelStore.getState().initialize();
+    await useModelStore.getState().initialize();
+
+    expect(mocks.fetchProviders).toHaveBeenCalledTimes(1);
+  });
+});

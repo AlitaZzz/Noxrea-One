@@ -39,6 +39,12 @@ function cacheUser(user: UserInfo | null) {
 /** 登出清凭据的最大等待时长：超过即放行导航，避免网络挂起时卡在当前页 */
 const LOGOUT_CLEAR_TIMEOUT_MS = 3000;
 
+/**
+ * initialize 的在途 promise：并发调用（StrictMode 双挂载）共享同一次 /me。
+ * store 是模块单例且 initialized 无重置路径，模块级变量安全。
+ */
+let authInitInFlight: Promise<void> | null = null;
+
 interface AuthState {
   user: UserInfo | null;
   loading: boolean;
@@ -56,18 +62,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: false,
   initialized: false,
 
-  initialize: async () => {
-    if (get().initialized) return;
-    set({ loading: true });
-    try {
-      const user = await authApi.me<UserInfo>();
-      if (user) {
-        set({ user });
+  initialize: () => {
+    if (get().initialized) return Promise.resolve();
+    authInitInFlight ??= (async () => {
+      set({ loading: true });
+      try {
+        const user = await authApi.me<UserInfo>();
+        if (user) {
+          set({ user });
+        }
+      } catch {
+        // Not logged in — guest mode
       }
-    } catch {
-      // Not logged in — guest mode
-    }
-    set({ loading: false, initialized: true });
+      set({ loading: false, initialized: true });
+    })().finally(() => {
+      authInitInFlight = null;
+    });
+    return authInitInFlight;
   },
 
   login: async (rawUsername, rawPassword) => {

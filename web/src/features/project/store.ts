@@ -1,7 +1,14 @@
 /**
  * 画布项目状态仓库。
- * 管理项目列表与当前激活项目（本地记忆 activeId），
- * 负责项目的增删改查以及画布数据的序列化保存与加载。
+ * 管理项目摘要列表（不含画布内容）与当前激活项目（内存会话标记），
+ * 负责项目的增删改查；画布内容的持久化由 SaveManager 单独负责。
+ *
+ * 边界约定：
+ *  - projects 只存摘要（ProjectSummary）：列表页渲染 + 保存链路的 revision 账本。
+ *    画布内容从不落进本 store（restoreFromProject 直达 canvas-store），
+ *    列表缩略图 / 节点数由服务端列表投影提供。
+ *  - activeProjectId 是纯内存的画布会话标记（画布页从 URL 写入），
+ *    项目身份的唯一真相源是 URL，不做本地持久化记忆。
  */
 import { create } from "zustand";
 
@@ -9,25 +16,12 @@ import type { AnyEdge, BackgroundType, ViewportState } from "@/features/canvas/t
 import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { saveMutex } from "@/features/project/save-mutex";
-import type { CanvasProject } from "@/features/project/types";
+import type { CanvasProject, ProjectSummary } from "@/features/project/types";
 import { ApiError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
 import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { isOffline } from "@/lib/utils/upload";
-
-// ===== localStorage helpers (active project only) =====
-
-function loadLocalActiveId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("noxrea-canvas-active-project");
-}
-
-function saveLocalActiveId(id: string | null) {
-  if (typeof window === "undefined") return;
-  if (id) localStorage.setItem("noxrea-canvas-active-project", id);
-  else localStorage.removeItem("noxrea-canvas-active-project");
-}
 
 // ===== API helpers =====
 
@@ -43,66 +37,112 @@ interface CanvasData {
   edges?: unknown[];
 }
 
-interface ServerProject {
+interface ServerProjectSummary {
+  id: string;
+  name: string;
+  revision: number;
+  updatedAt: string;
+  thumbnail: string | null;
+  coverUrl: string | null;
+  nodeCount: number;
+}
+
+interface ServerProjectDetail {
   id: string;
   name: string;
   revision?: number;
+  coverUrl?: string | null;
   canvasData?: CanvasData;
   updatedAt: string;
 }
 
-function mapServerProject(p: ServerProject): CanvasProject {
+function toTimestamp(updatedAt: string): number {
+  const ts = new Date(updatedAt).getTime();
+  return Number.isFinite(ts) ? ts : Date.now();
+}
+
+function mapServerSummary(p: ServerProjectSummary): ProjectSummary {
+  return {
+    id: p.id,
+    name: p.name,
+    revision: p.revision,
+    updatedAt: toTimestamp(p.updatedAt),
+    thumbnail: p.thumbnail ?? undefined,
+    coverUrl: p.coverUrl ?? undefined,
+    nodeCount: p.nodeCount,
+  };
+}
+
+/** 首个带 src 的图片节点（与服务端 project-summary 投影同一取法） */
+function firstImageSrc(nodes: AnyNode[]): string | undefined {
+  for (const node of nodes) {
+    if (node?.type === "image-node") {
+      const src = (node.data as { src?: unknown } | undefined)?.src;
+      if (typeof src === "string" && src) return src;
+    }
+  }
+  return undefined;
+}
+
+function mapServerDetail(p: ServerProjectDetail): CanvasProject {
+  const nodes = (p.canvasData?.nodes || []) as AnyNode[];
+  const coverUrl = p.coverUrl ?? undefined;
   return {
     id: p.id,
     name: p.name,
     revision: p.revision ?? 1,
-    updatedAt: new Date(p.updatedAt).getTime(),
+    updatedAt: toTimestamp(p.updatedAt),
+    thumbnail: coverUrl ?? firstImageSrc(nodes),
+    coverUrl,
+    nodeCount: nodes.length,
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
     background: p.canvasData?.background || DEFAULT_BACKGROUND,
     minimapVisible: p.canvasData?.minimapVisible ?? true,
     snapToGrid: p.canvasData?.snapToGrid || false,
     agentModel: p.canvasData?.agentModel,
-    nodes: (p.canvasData?.nodes || []) as AnyNode[],
+    nodes,
     edges: (p.canvasData?.edges || []) as AnyEdge[],
   };
 }
 
+/** 摘要化（upsert 进列表用）：detail 已带全部摘要字段 */
+function toSummary(p: CanvasProject): ProjectSummary {
+  return {
+    id: p.id,
+    name: p.name,
+    revision: p.revision,
+    updatedAt: p.updatedAt,
+    thumbnail: p.thumbnail,
+    coverUrl: p.coverUrl,
+    nodeCount: p.nodeCount,
+  };
+}
+
 /**
- * 拉取项目列表。
+ * 拉取项目摘要列表。
  * 返回 null 表示「请求失败」（离线 / 5xx / 业务码非 200），与「成功但为空」区分开：
  * 调用方据此保留本地数据，避免短暂断网被误判成「项目全部丢失」。
  */
-async function fetchProjects(): Promise<CanvasProject[] | null> {
+async function fetchProjects(): Promise<ProjectSummary[] | null> {
   try {
-    const data = await projectApi.listProjects<ServerProject[]>();
-    return Array.isArray(data) ? data.map(mapServerProject) : null;
+    const data = await projectApi.listProjects<ServerProjectSummary[]>();
+    return Array.isArray(data) ? data.map(mapServerSummary) : null;
   } catch { /* offline or error */ }
   return null;
 }
 
 async function fetchProjectById(id: string): Promise<CanvasProject | null> {
   try {
-    const data = await projectApi.getProject<ServerProject>(id);
-    return data ? mapServerProject(data) : null;
+    const data = await projectApi.getProject<ServerProjectDetail>(id);
+    return data ? mapServerDetail(data) : null;
   } catch { /* offline or error */ }
   return null;
 }
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
-    const data = await projectApi.createProject<ServerProject>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
-    if (data) {
-      return {
-        id: String(data.id),
-        name: data.name,
-        revision: data.revision ?? 1,
-        updatedAt: Date.now(),
-        viewport: DEFAULT_VIEWPORT,
-        background: DEFAULT_BACKGROUND,
-        nodes: [],
-        edges: [],
-      };
-    }
+    const data = await projectApi.createProject<ServerProjectDetail>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
+    if (data) return mapServerDetail(data);
   } catch { /* */ }
   return null;
 }
@@ -135,20 +175,19 @@ function rejectOffline(): boolean {
 // ===== Store =====
 
 interface ProjectState {
-  projects: CanvasProject[];
+  projects: ProjectSummary[];
   activeProjectId: string | null;
 
-  activeProject: () => CanvasProject | undefined;
+  activeProject: () => ProjectSummary | undefined;
   refreshProject: (id: string) => Promise<CanvasProject | null>;
   createProject: (name?: string) => Promise<CanvasProject>;
   renameProject: (id: string, name: string) => void;
+  updateCover: (id: string, coverUrl: string | null) => void;
   deleteProject: (id: string) => void;
   deleteProjects: (ids: string[]) => void;
   updateProjectRevision: (id: string, revision: number) => void;
   setActiveProject: (id: string) => void;
-  syncCanvasState: (id: string, nodes: unknown[], edges: unknown[], viewport: ViewportState, background: BackgroundType, minimapVisible?: boolean, snapToGrid?: boolean, agentModel?: string | null) => void;
   refreshProjects: () => Promise<void>;
-  initialize: () => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -163,12 +202,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   refreshProject: async (id) => {
     const fresh = await fetchProjectById(id);
     if (!fresh) return null;
-    // upsert：刷新画布时本方法与 initialize（全量列表）并行请求，若列表尚未
-    // 就绪，map 匹配不到会把刚拉到的项目整个丢掉，画布顶栏先闪一帧 Untitled
+    // upsert 摘要：直接经 URL 进画布时列表可能为空，需插入；
+    // 画布顶栏的名称与保存链路的 revision 都从这里来
     set((s) => ({
       projects: s.projects.some((p) => p.id === id)
-        ? s.projects.map((p) => (p.id === id ? fresh : p))
-        : [...s.projects, fresh],
+        ? s.projects.map((p) => (p.id === id ? toSummary(fresh) : p))
+        : [...s.projects, toSummary(fresh)],
     }));
     return fresh;
   },
@@ -178,7 +217,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const projectName = name || `Project ${count + 1}`;
     const project = await apiCreateProject(projectName);
     if (project) {
-      set((s) => ({ projects: [...s.projects, project], activeProjectId: project.id }));
+      set((s) => ({ projects: [...s.projects, toSummary(project)], activeProjectId: project.id }));
       return project;
     }
     throw new Error("Failed to create project");
@@ -196,10 +235,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // 与画布保存共用同一条写互斥锁。改名是纯元数据：服务端不做版本校验也不递增
         // revision，因此不存在改名引发的版本冲突（409 只属于画布内容保存）。
         const updated = await saveMutex.runExclusive(() =>
-          projectApi.updateProject(id, {
-            name,
-            baseRevision: get().projects.find((p) => p.id === id)?.revision ?? 1,
-          }),
+          projectApi.updateProject(id, { name }),
         );
 
         if (typeof updated?.revision === "number") {
@@ -218,40 +254,68 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     })();
   },
 
+  updateCover: (id, coverUrl) => {
+    if (rejectOffline()) return;
+    const prev = get().projects.find((p) => p.id === id);
+    // 乐观更新，失败回滚；封面是纯元数据（同改名：不参与版本判定）
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, coverUrl: coverUrl ?? undefined, thumbnail: coverUrl ?? undefined } : p
+      ),
+    }));
+    void (async () => {
+      try {
+        const updated = await saveMutex.runExclusive(() =>
+          projectApi.updateProject(id, { coverUrl }),
+        );
+        if (typeof updated?.revision === "number") {
+          get().updateProjectRevision(id, updated.revision);
+          return;
+        }
+        throw new Error(resolveApiError(null, undefined, "project.cover_failed"));
+      } catch (e) {
+        if (prev) {
+          set((s) => ({
+            projects: s.projects.map((p) =>
+              p.id === id ? { ...p, coverUrl: prev.coverUrl, thumbnail: prev.thumbnail } : p
+            ),
+          }));
+        }
+        notifyError(e instanceof ApiError ? e.message : resolveApiError(null, undefined, "project.cover_failed"));
+      }
+    })();
+  },
+
   deleteProject: (id) => {
     if (rejectOffline()) return;
     // 失败回滚用：删除是破坏性操作，不能「假删成功」
     const snapshot = get().projects;
     const snapshotActiveId = get().activeProjectId;
-    set((s) => {
-      const projects = s.projects.filter((p) => p.id !== id);
-      let { activeProjectId } = s;
-      if (activeProjectId === id) {
-        activeProjectId = projects.length > 0 ? projects[0].id : null;
-        saveLocalActiveId(activeProjectId);
-      }
-      return { projects, activeProjectId };
-    });
+    set((s) => ({
+      projects: s.projects.filter((p) => p.id !== id),
+      // 激活项目被删：会话标记指向删除后列表的首项（画布页此刻未挂载，无导航联动）
+      activeProjectId: s.activeProjectId === id
+        ? (s.projects.find((p) => p.id !== id)?.id ?? null)
+        : s.activeProjectId,
+    }));
     void (async () => {
       const { ok, message } = await apiDeleteProject(id);
       if (ok) return;
       notifyError(message ?? resolveApiError(null, undefined, "project.delete_failed"));
       set({ projects: snapshot, activeProjectId: snapshotActiveId });
-      saveLocalActiveId(snapshotActiveId);
     })();
   },
 
   deleteProjects: (ids) => {
     if (rejectOffline()) return;
     const snapshot = get().projects;
+    const snapshotActiveId = get().activeProjectId;
     const idSet = new Set(ids);
     set((s) => {
       const projects = s.projects.filter((p) => !idSet.has(p.id));
-      let { activeProjectId } = s;
-      if (activeProjectId && idSet.has(activeProjectId)) {
-        activeProjectId = projects.length > 0 ? projects[0].id : null;
-        saveLocalActiveId(activeProjectId);
-      }
+      const activeProjectId = s.activeProjectId && idSet.has(s.activeProjectId)
+        ? (projects[0]?.id ?? null)
+        : s.activeProjectId;
       return { projects, activeProjectId };
     });
     void (async () => {
@@ -265,11 +329,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set((s) => {
         const keptIds = new Set(s.projects.map((p) => p.id));
         const projects = [...s.projects, ...restored.filter((p) => !keptIds.has(p.id))];
-        let { activeProjectId } = s;
-        if ((!activeProjectId || !projects.some((p) => p.id === activeProjectId)) && projects.length > 0) {
-          activeProjectId = projects[0].id;
-          saveLocalActiveId(activeProjectId);
-        }
+        const activeProjectId = projects.some((p) => p.id === snapshotActiveId) ? snapshotActiveId : (projects[0]?.id ?? null);
         return { projects, activeProjectId };
       });
     })();
@@ -289,40 +349,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setActiveProject: (id) => {
     set({ activeProjectId: id });
-    saveLocalActiveId(id);
-  },
-
-  syncCanvasState: (id, nodes, edges, viewport, background, minimapVisible, snapToGrid, agentModel) => {
-    set((s) => ({
-      projects: s.projects.map((p) =>
-        p.id === id ? { ...p, nodes: nodes as AnyNode[], edges: edges as AnyEdge[], viewport, background, minimapVisible, snapToGrid, agentModel: agentModel ?? undefined, updatedAt: Date.now() } : p
-      ),
-    }));
   },
 
   refreshProjects: async () => {
     const projects = await fetchProjects();
-    // 拉取失败：保留现有列表与激活项目，宁可展示过期数据也不能清空
-    // （空列表会让用户以为项目被删，且顺带重置 activeProjectId）
+    // 拉取失败：保留现有列表，宁可展示过期数据也不能清空
+    // （空列表会让用户以为项目被删）
     if (!projects) return;
-    set((s) => {
-      let { activeProjectId } = s;
-      if (activeProjectId && !projects.find((p) => p.id === activeProjectId)) {
-        activeProjectId = projects.length > 0 ? projects[0].id : null;
-        saveLocalActiveId(activeProjectId);
-      }
-      return { projects, activeProjectId };
-    });
-  },
-
-  initialize: async () => {
-    // 同样区分失败与空列表：失败时沿用已有的本地数据
-    const projects = (await fetchProjects()) ?? get().projects;
-    let activeId: string | null = loadLocalActiveId();
-    if (projects.length > 0) {
-      const validId = activeId && projects.find((p) => p.id === activeId) ? activeId : projects[0].id;
-      activeId = validId;
-    }
-    set({ projects, activeProjectId: activeId });
+    set({ projects });
   },
 }));

@@ -5,10 +5,10 @@
  */
 "use client";
 
-import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@ant-design/icons";
 import { Popover } from "antd";
 import { usePathname,useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
@@ -19,18 +19,25 @@ import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
-import { flushAndWait, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { flushAndWait } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
-import type { CanvasProject } from "@/features/project/types";
+import type { ProjectSummary } from "@/features/project/types";
+import { showGlobalNotification } from "@/lib/global-notification";
+import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
 
 export default function ProjectPage() {
   const router = useRouter();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<CanvasProject | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  // 改封面：选图目标卡片 + 上传中的卡片 ID（单 file input 复用）
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const coverTargetRef = useRef<string | null>(null);
+  const [coverUploadingId, setCoverUploadingId] = useState<string | null>(null);
   const renameProject = useProjectStore((s) => s.renameProject);
+  const updateCover = useProjectStore((s) => s.updateCover);
   const user = useCurrentUser();
   const { t, i18n } = useTranslation();
   const projects = useProjectStore((s) => s.projects);
@@ -53,13 +60,39 @@ export default function ProjectPage() {
     return () => { cancelled = true; };
   }, [pathname, refreshProjects]);
 
-  // 鉴权与项目初始化已由 (app)/layout.tsx 统一完成。
+  // 鉴权由 (app)/layout.tsx 统一完成；项目列表由本页拉取（唯一消费方）。
 
-  const handleOpen = (p: CanvasProject) => {
+  const handleOpen = (p: ProjectSummary) => {
     setActiveProject(p.id);
     router.push(`/canvas/${p.id}`);
   };
 
+  // 改封面入口：点击记录目标卡片并弹浏览器文件选择框
+  const handlePickCover = (id: string) => {
+    coverTargetRef.current = id;
+    coverInputRef.current?.click();
+  };
+
+  // 选图后：走公共上传通道，成功即提交封面（store 乐观更新 + 失败回滚提示）
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const targetId = coverTargetRef.current;
+    // 允许同一文件重复选择：读取后立即清空 input 值
+    e.target.value = "";
+    coverTargetRef.current = null;
+    if (!file || !targetId) return;
+
+    setCoverUploadingId(targetId);
+    try {
+      const result = await uploadWithRetry(file);
+      useProjectStore.getState().updateCover(targetId, result.url);
+    } catch (err) {
+      const info = classifyUploadError(err);
+      showGlobalNotification().error({ title: info.message, placement: "bottomRight", duration: 6 });
+    } finally {
+      setCoverUploadingId(null);
+    }
+  };
 
   const handleCreate = async () => {
     const p = await createProject();
@@ -158,20 +191,16 @@ export default function ProjectPage() {
               }}
               onClick={() => handleOpen(p)}
             >
-              {/* Preview area */}
+              {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
               <div
                 className="aspect-video rounded-t-xl flex items-center justify-center overflow-hidden"
                 style={{ background: "var(--canvas-bg-elevated)" }}
               >
-                {(() => {
-                  const imgNode = (p.nodes || []).find(
-                    (n) => n.type === "image-node" && (n.data as { src?: string })?.src
-                  );
-                  if (imgNode) {
-                    return <img src={(imgNode.data as { src?: string }).src} alt="" className="w-full h-full object-cover" />;
-                  }
-                  return <FolderOpenOutlined className="text-3xl" style={{ color: "var(--canvas-text-muted)" }} />;
-                })()}
+                {p.thumbnail ? (
+                  <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <FolderOpenOutlined className="text-3xl" style={{ color: "var(--canvas-text-muted)" }} />
+                )}
               </div>
 
               {/* Info */}
@@ -192,6 +221,17 @@ export default function ProjectPage() {
                     <div className="text-sm font-medium truncate flex-1">{p.name}</div>
                   )}
                   <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <AppButton
+                      size="sm"
+                      iconOnly
+                      variant="ghost"
+                      aria-label={t("project.setCover")}
+                      loading={coverUploadingId === p.id}
+                      disabled={coverUploadingId !== null}
+                      onClick={() => handlePickCover(p.id)}
+                    >
+                      <PictureOutlined />
+                    </AppButton>
                     <AppButton
                       size="sm"
                       iconOnly
@@ -228,12 +268,22 @@ export default function ProjectPage() {
                   {formatDate(p.updatedAt)}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>
-                  {p.nodes?.length || 0}{t("canvas.nodesCount")}
+                  {p.nodeCount}{t("canvas.nodesCount")}
                 </div>
               </div>
             </div>
           ))}
         </div>
+
+        {/* 改封面：隐藏 file input，卡片按钮触发选择 */}
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleCoverChange}
+        />
+
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <ConfirmModal
