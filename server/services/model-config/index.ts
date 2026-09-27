@@ -19,13 +19,32 @@
  *   - 未命中任何 host 时回退 _default 兜底（fields/allowedFields/基础映射）。
  */
 
+import { z } from "zod";
 import { loadJson } from "@server/services/json-loader";
 
 // 预设
 
-/** 加载预设配置（供前端 API 使用），支持热更新 */
-export function loadPresets(): Record<string, unknown> {
-  return loadJson<Record<string, unknown>>("provider-presets.json");
+const providerPresetSchema = z.object({
+  name: z.string().min(1),
+  baseUrl: z.string().min(1),
+  protocol: z.string().optional(),
+});
+
+const providerPresetsSchema = z.array(providerPresetSchema);
+
+export interface ProviderPreset {
+  name: string;
+  baseUrl: string;
+  protocol?: string;
+}
+
+/**
+ * 加载预设配置（供前端 API 使用），支持热更新。
+ * 校验经 loadJson 的 validate 参数纳入加载成功语义：首载非法（文件缺失 / JSON 坏 /
+ * 结构坏）fail-fast 启动报错；热更新非法由 json-loader 统一记 warn 并服务旧缓存。
+ */
+export function loadPresets(): ProviderPreset[] {
+  return loadJson("provider-presets.json", (data) => providerPresetsSchema.parse(data));
 }
 
 // 模型参数
@@ -164,7 +183,16 @@ function expandShared(data: HostMap): HostMap {
 const expandedCache = new WeakMap<object, HostMap>();
 
 function loadRaw(): HostMap {
-  const raw = loadJson<HostMap>("model-ui.json");
+  // 校验经 validate 参数纳入加载成功语义（首载结构非法 fail-fast；
+  // 热更非法由 json-loader 记 warn 服务旧缓存）。
+  // 只断言引擎必需的形状（顶层对象），不做深度字段校验——
+  // 配置结构多态（_default 两层 / host 三层），过严的校验会误伤合法配置阻断启动
+  const raw = loadJson<HostMap>("model-ui.json", (data) => {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("model-ui.json 顶层必须是配置对象");
+    }
+    return data as HostMap;
+  });
   const cached = expandedCache.get(raw);
   if (cached) return cached;
   const expanded = expandShared(raw);

@@ -19,11 +19,22 @@ export function getSceneTimeout(scene: HttpTimeoutScene): number {
   }
 }
 
+/** 代理 dispatcher 单例：按 PROXY_URL 值缓存，配置变化时重建。
+    此前每次请求 new ProxyAgent 且不复用不 close，keep-alive 连接池随 GC 才释放 */
+let cachedProxyUrl: string | null = null;
+let cachedProxyAgent: ProxyAgent | null = null;
+
 /** 获取代理 dispatcher（仅在配置了系统代理时生效） */
 export function getProxyDispatcher(): unknown {
   if (!isProxyRoutingEnabled()) return undefined;
 
-  return new ProxyAgent(getConfig().PROXY_URL);
+  const proxyUrl = getConfig().PROXY_URL;
+  if (cachedProxyUrl !== proxyUrl || !cachedProxyAgent) {
+    cachedProxyAgent?.close().catch(() => {});
+    cachedProxyAgent = new ProxyAgent(proxyUrl);
+    cachedProxyUrl = proxyUrl;
+  }
+  return cachedProxyAgent;
 }
 
 /** 带超时的 fetch，支持可选的系统代理 */
