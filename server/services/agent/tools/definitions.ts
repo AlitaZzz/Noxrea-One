@@ -252,6 +252,9 @@ const MESSAGE_USER_TOOL: AgentToolDefinition = {
   }),
   execute: "client",
   label: "回复用户",
+  // 行为契约（终止判定 / 文本提升）由此声明，路由与前端按标志判断
+  terminal: true,
+  promoteTextToContent: true,
 };
 
 for (const tool of [

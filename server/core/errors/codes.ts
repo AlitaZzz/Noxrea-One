@@ -102,6 +102,8 @@ export const ERROR_CODES = [
   "agent.session_not_found",
   /** 缺少 sessionId */
   "agent.session_id_required",
+  /** 未找到可用的模型供应商 */
+  "agent.provider_not_found",
   /** 上游模型调用失败 */
   "agent.upstream_failed",
 

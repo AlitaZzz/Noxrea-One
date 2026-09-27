@@ -29,8 +29,8 @@ export async function resolveProvider(userId: number, providerId?: number, model
 }
 
 type BuildResult =
-  | { ok: true; url: string; method: string; headers: Record<string, string>; body: unknown; protocol: ProtocolService }
-  | { ok: false; error: string };
+  | { ok: true; url: string; method: string; headers: Record<string, string>; body: unknown; protocol: ProtocolService; providerName: string }
+  | { ok: false; error: string; errorCode?: string };
 
 /** 构造上游请求：解析参考图、注入 stream:true、按协议组装 body */
 export async function buildUpstream(args: {
@@ -38,14 +38,22 @@ export async function buildUpstream(args: {
   providerId?: number;
   model?: string;
   userId: number;
-  /** 是否注入 Agent 工具（仅 openai 协议支持） */
+  /** 是否注入 Agent 工具（按协议能力声明判断） */
   agent?: boolean;
 }): Promise<BuildResult> {
   const provider = await resolveProvider(args.userId, args.providerId, args.model);
-  if (!provider) return { ok: false, error: "no available provider" };
+  if (!provider) {
+    return { ok: false, error: "no available provider", errorCode: "agent.provider_not_found" };
+  }
 
   const protocol = getProtocol(provider.protocol);
-  if (!protocol?.buildLlmRequest) return { ok: false, error: `protocol ${provider.protocol} not support llm` };
+  if (!protocol?.buildLlmRequest) {
+    return {
+      ok: false,
+      error: `protocol ${provider.protocol} not support llm`,
+      errorCode: "agent.upstream_failed",
+    };
+  }
 
   const upstreamMessages: Array<Record<string, unknown>> = [];
   for (const m of args.messages) {
@@ -73,7 +81,7 @@ export async function buildUpstream(args: {
       continue;
     }
 
-    if (m.images && m.images.length > 0 && provider.protocol === "openai") {
+    if (m.images && m.images.length > 0 && protocol.capabilities?.supportsImageParts) {
       const resolved = await resolveRefImages(m.images);
       const content: Array<Record<string, unknown>> = [{ type: "text", text: m.content }];
       for (const url of resolved) {
@@ -91,19 +99,27 @@ export async function buildUpstream(args: {
     stream: true,
   };
 
-  if (args.agent && provider.protocol === "openai") {
+  if (args.agent && protocol.capabilities?.supportsTools) {
     body.tools = agentToolRegistry.getOpenAiTools();
     body.tool_choice = "auto";
     body.parallel_tool_calls = false;
   }
 
   const req = protocol.buildLlmRequest(provider.baseUrl, provider.apiKey, body);
-  return { ok: true, url: req.url, method: req.method, headers: req.headers, body: req.body, protocol };
+  return {
+    ok: true,
+    url: req.url,
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    protocol,
+    providerName: provider.name,
+  };
 }
 
 export type RunResult =
   | { ok: true; text: string; toolCalls?: ProtocolToolCall[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; errorCode?: string };
 
 /**
  * 流式 body 空闲超时：fetchWithTimeout 的超时只覆盖「等响应头」阶段，
@@ -143,15 +159,14 @@ export async function runCompletionStream(args: {
   const built = await buildUpstream(args);
   if (!built.ok) {
     logEvent("chat.stream", { stage: "build_failed", model: args.model ?? null, error: built.error });
-    return { ok: false, error: built.error };
+    return { ok: false, error: built.error, errorCode: built.errorCode };
   }
 
-  const provider = await resolveProvider(args.userId, args.providerId, args.model);
-  const protocolName = provider?.protocol;
+  // B4 修复：provider 信息由 buildUpstream 随结果透传，不再二次查库
   logEvent("chat.stream", {
     stage: "upstream_start",
-    provider: provider?.name ?? null,
-    protocol: protocolName ?? null,
+    provider: built.providerName,
+    protocol: built.protocol.name,
     model: args.model ?? null,
     messages: args.messages.length,
     agent: args.agent ?? false,
@@ -170,7 +185,7 @@ export async function runCompletionStream(args: {
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
       logEvent("chat.stream", { stage: "upstream_error", status: resp.status, body: txt.slice(0, 200), elapsedMs: elapsed() });
-      return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}` };
+      return { ok: false, error: `upstream ${resp.status}: ${txt.slice(0, 200)}`, errorCode: "agent.upstream_failed" };
     }
 
     const reader = resp.body!.getReader();
@@ -217,7 +232,7 @@ export async function runCompletionStream(args: {
     return { ok: true, text: full, ...(toolCalls.length ? { toolCalls } : {}) };
   } catch (e) {
     logEvent("chat.stream", { stage: "exception", error: String(e), elapsedMs: elapsed() });
-    return { ok: false, error: String(e) };
+    return { ok: false, error: String(e), errorCode: "agent.upstream_failed" };
   }
 }
 
@@ -292,7 +307,7 @@ function extractDelta(data: string): string {
     return "";
   }
 
-  // OpenAI / Ark(兼容) 格式
+  // OpenAI 流式格式（choices[].delta.content）；ark 未注册 LLM，到不了这里
   const choices = json?.choices as Array<Record<string, unknown>> | undefined;
   if (Array.isArray(choices)) {
     const delta = (choices[0]?.delta as Record<string, unknown> | undefined)?.content;

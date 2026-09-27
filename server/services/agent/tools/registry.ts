@@ -19,6 +19,13 @@ export interface AgentToolDefinition {
   execute: "client" | "server";
   /** 对话气泡中展示的中文名（如 create_node → 创建节点），由后台统一定义 */
   label: string;
+  /**
+   * 终止性工具：调用后本轮任务即完成——后端不再续轮调 LLM，前端把回合折叠为收尾。
+   * 行为契约的单一来源（此前散布在前后端 7 处名字字符串特判）。
+   */
+  terminal?: boolean;
+  /** 回复型工具：args.text 提升为 assistant 消息 content 展示，不渲染操作行 */
+  promoteTextToContent?: boolean;
 }
 
 class ToolRegistry {

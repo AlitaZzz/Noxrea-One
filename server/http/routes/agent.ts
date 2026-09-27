@@ -154,9 +154,10 @@ async function finishTurn(opts: {
     for (const call of enriched) {
       emit("tool_call", { id: call.id, name: call.name, args: call.args, label: call.label });
     }
-    // message_user 是回复本身：把其 text 提升为 assistant 消息 content，
-    // 历史会话（UI 与上游）都能看到模型实际说了什么
-    const replyText = enriched.find((c) => c.name === "message_user")?.args?.text;
+    // 回复型工具是回复本身：把其 text 提升为 assistant 消息 content，
+    // 历史会话（UI 与上游）都能看到模型实际说了什么（promoteTextToContent 标志判定）
+    const replyText = enriched.find((c) => agentToolRegistry.get(c.name)?.promoteTextToContent)?.args
+      ?.text;
     // 落库 assistant 消息（含 tool_calls，续流时需回填给上游）
     await createMessage({
       sessionId,
@@ -265,7 +266,7 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
       });
 
       if (!result.ok) {
-        emit("error", { error: result.error });
+        emit("error", { error: result.error, ...(result.errorCode ? { errorCode: result.errorCode } : {}) });
         return;
       }
 
@@ -333,11 +334,13 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
         });
       }
 
-      // message_user 是终止性工具：本轮工具调用包含它即视为回合结束，
-      // 不再续轮调 LLM，避免产生与 message_user 重复的收尾文本
+      // 终止性工具（terminal 标志）：本轮工具调用包含它即视为回合结束，
+      // 不再续轮调 LLM，避免产生与回复重复的收尾文本
       const resultIds = new Set(parsed.data.results.map((r) => r.toolCallId));
       const lastAssistantCalls = [...history].reverse().find((m) => m.role === "assistant" && m.toolCalls)?.toolCalls ?? [];
-      const isTerminal = lastAssistantCalls.some((tc) => tc.name === "message_user" && resultIds.has(tc.id));
+      const isTerminal = lastAssistantCalls.some(
+        (tc) => agentToolRegistry.get(tc.name)?.terminal === true && resultIds.has(tc.id),
+      );
       if (isTerminal) {
         await touchSession(sessionId);
         emit("done", {});
@@ -370,7 +373,7 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
       });
 
       if (!result.ok) {
-        emit("error", { error: result.error });
+        emit("error", { error: result.error, ...(result.errorCode ? { errorCode: result.errorCode } : {}) });
         return;
       }
 
