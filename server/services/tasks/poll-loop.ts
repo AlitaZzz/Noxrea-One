@@ -17,6 +17,9 @@ export type PollOutcome =
   | { kind: "stopped" }
   | { kind: "lost" };
 
+/** 长轮询尾部降频阈值：达到该尝试次数后轮询间隔翻倍（慢任务减少无效请求频率） */
+const POLL_BACKOFF_TRIGGER_ATTEMPT = 60;
+
 export interface PollLoopInput {
   taskId: string;
   upstreamTaskId: string;
@@ -65,7 +68,8 @@ export async function pollUpstreamTask(input: PollLoopInput): Promise<PollOutcom
 
     // 第一次不延迟，后续按 pollInterval 间隔
     if (attempt > 0) {
-      const delay = attempt >= 60 ? pollInterval * 2 : pollInterval;
+      // 长轮询尾部降频：达到阈值后间隔翻倍，减少慢任务尾期的无效请求频率
+      const delay = attempt >= POLL_BACKOFF_TRIGGER_ATTEMPT ? pollInterval * 2 : pollInterval;
       await new Promise((r) => setTimeout(r, delay * 1000));
     }
 

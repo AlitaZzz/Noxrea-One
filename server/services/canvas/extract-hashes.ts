@@ -42,7 +42,6 @@ export function extractHashCountsFromCanvas(
   return counts;
 }
 
-/** 从画布节点数组中提取去重后的文件 hash（排序后返回，便于测试和展示）。 */
 /** 两份引用计数是否一致；一致时保存无需重算账本（布局保存不触发账本写入）。 */
 export function hashCountsEqual(
   a: ReadonlyMap<string, number>,
