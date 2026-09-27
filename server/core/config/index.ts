@@ -65,7 +65,7 @@ const configSchema = z.object({
     .default("true"),
   /** 对外可访问的服务根地址（如 https://canvas.example.com）。配置后参考素材以 URL 发给上游，留空则回退 base64。 */
   PUBLIC_URL: z.string().default(""),
-  /** 资源目录（JSON 配置与技能文件根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
+  /** 资源目录（模型配置等 JSON 资源根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
   RESOURCES_DIR: z.string().default("server/resources"),
 
   // HTTP timeouts - scene-based（单位：秒）

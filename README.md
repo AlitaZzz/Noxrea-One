@@ -28,11 +28,10 @@ Noxrea One 是一个面向创意生产流程的 AI Canvas 应用。你可以在�
 - 文件按用户与内容哈希去重，并通过引用计数管理生命周期。
 - 上传、视频抽帧、音频分离、视频代理与帧预览等媒体处理能力由后端统一提供。
 
-### Agent 与技能
+### Agent
 
 - 每个画布项目可以维护独立的 Agent 会话。
-- 支持自定义技能，例如分镜策划、脚本创作、广告文案和美术资产设计。
-- 技能文件存放在 `server/resources/skills`，使用 front matter 描述名称、分类、说明和适用范围。
+- Agent 可通过工具直接操纵画布：创建/更新/删除节点、连线、整理布局与视口控制等。
 
 ## 技术架构
 
@@ -228,9 +227,8 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 | `server/resources/model-ui.json` | 定义各能力可编辑的参数、默认值、选项和请求字段映射 |
 | `server/resources/provider-presets.json` | 保存常用供应商预设 |
 | `server/resources/prompt-template.json` | 管理 Prompt 模板 |
-| `server/resources/skills/<skill>/skill.md` | Agent 技能定义与提示词 |
 
-模型供应商和模型能力主要通过 Web 设置中心配置；JSON 资源适合维护参数结构、预设与技能。`RESOURCES_DIR` 指向的 JSON 配置支持按文件修改时间热更新。
+模型供应商和模型能力主要通过 Web 设置中心配置；JSON 资源适合维护参数结构、预设与 Prompt 模板。`RESOURCES_DIR` 指向的 JSON 配置支持按文件修改时间热更新。
 
 ## API 概览
 
