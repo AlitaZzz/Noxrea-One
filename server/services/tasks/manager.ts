@@ -5,15 +5,17 @@
 
 import { getConfig } from "@server/core/config";
 import { logEvent, errText } from "@server/core/logger/utils";
-import { logger } from "@server/core/logger";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
-import { extractUpstreamMessage, failFromUpstream } from "@server/services/tasks/failure";
+import {
+  fetchUpstream,
+  httpUpstreamFailure,
+  noUpstreamResult,
+} from "@server/services/tasks/sync-fetch";
 import {
   markTaskProcessing,
   isTaskCancelled,
   touchTaskHeartbeat,
 } from "@server/crud/task";
-import type { ProtocolService } from "@server/services/protocols/base";
+import { defaultPollUrl, type ProtocolService } from "@server/services/protocols/base";
 import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 
 export interface SubmitAndWaitResult {
@@ -78,7 +80,6 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
 
   // 1. 提交上游请求
   const req = input.buildRequest();
-  let data: unknown;
 
   // 从请求体提取 model，供轮询 URL 的 {model} 占位符使用
   const reqModel = (req.body as Record<string, unknown> | undefined)?.model;
@@ -95,87 +96,44 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     body: req.body,
   });
 
-  try {
-    const response = await fetchWithTimeout(req.url, {
-      method: req.method,
-      headers: req.headers as Record<string, string>,
-      body: req.body ? JSON.stringify(req.body) : undefined,
-      timeoutMs: getWorkerApiTimeout(),
-    });
+  const outcome = await fetchUpstream(req, taskId);
 
-    if (!response.ok) {
-      // 错误响应体统一文本读取：JSON 体由提取器解析，纯文本体（网关错误页等）原样截断透传；
-      // task_id 只可能出现在 JSON 体中，解析失败即无 ID 可提取
-      const errText = await response.text().catch(() => "");
-      let errData: unknown = {};
-      try {
-        errData = JSON.parse(errText);
-      } catch {
-        // 非 JSON 体
+  if (outcome.kind === "failure") {
+    return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
+  }
+
+  if (outcome.kind === "http-error") {
+    // 错误体中可能携带 task_id：视为上游已受理，升级为轮询
+    const extractedId = protocol.extractTaskId?.(outcome.errData, channelConfig, capability);
+    if (extractedId) {
+      // 检查是否已被取消
+      if (await isTaskCancelled(taskId)) {
+        return { status: "cancelled", urls: [] };
       }
-
-      const extractedId = protocol.extractTaskId?.(errData, channelConfig, capability);
-      if (extractedId) {
-        // 检查是否已被取消
-        if (await isTaskCancelled(taskId)) {
-          return { status: "cancelled", urls: [] };
-        }
-        return await _poll({
-          taskId, startedAt: input.startedAt,
-          protocol, capability, baseUrl, apiKey,
-          upstreamTaskId: extractedId,
-          channelConfig,
-          model,
-          pollInterval, maxPollAttempts, initialDelay,
-        });
-      }
-
-      // 原始响应体只进日志；对外只回传上游自带的可读文案，取不到时退化为状态码
-      logEvent("taskmgr", {
-        level: "warn",
-        stage: "upstream_http_error",
-        taskId,
-        status: response.status,
-        body: errText.slice(0, 500),
+      return await _poll({
+        taskId, startedAt: input.startedAt,
+        protocol, capability, baseUrl, apiKey,
+        upstreamTaskId: extractedId,
+        channelConfig,
+        model,
+        pollInterval, maxPollAttempts, initialDelay,
       });
-      const upstreamMsg = extractUpstreamMessage(errText);
-      return {
-        status: "failed",
-        urls: [],
-        ...failFromUpstream(upstreamMsg, {
-          // 状态码已包含在 error 文案中，供用户报障时查看
-          message: `HTTP ${response.status}`,
-          code: "generation.upstream_http_error",
-        }),
-      };
     }
 
-    data = await response.json();
-    logger.debug({ taskId, keys: Object.keys(data as object) }, "upstream response");
-  } catch (err: unknown) {
-    const e = err as Error & { code?: string; cause?: { code?: string; message?: string } };
-    if (e.name === "TimeoutError" || e.code === "UND_ERR_HEADERS_TIMEOUT") {
-      return {
-        status: "failed",
-        urls: [],
-        error: "API call timed out",
-        errorCode: "generation.timeout",
-      };
-    }
-    const cause = e.cause;
-    const detail = cause
-      ? `${e.message} [cause: ${cause.code ?? cause.message}]`
-      : (e.message ?? "Unknown error");
-    logEvent("taskmgr", { level: "warn", stage: "upstream_network_error", taskId, error: detail });
-    return {
-      status: "failed",
-      urls: [],
-      error: detail.slice(0, 200),
-      errorCode: "generation.network_error",
-    };
+    // 原始响应体只进日志；对外只回传上游自带的可读文案，取不到时退化为状态码
+    logEvent("taskmgr", {
+      level: "warn",
+      stage: "upstream_http_error",
+      taskId,
+      status: outcome.status,
+      body: outcome.errText.slice(0, 500),
+    });
+    const { error, errorCode } = httpUpstreamFailure(outcome.status, outcome.errText);
+    return { status: "failed", urls: [], error, errorCode };
   }
 
   // 2. 尝试同步提取结果
+  const data = outcome.data;
   const result = input.parseResponse(data);
   if (result.urls.length > 0 || result.text) {
     logEvent("taskmgr", {
@@ -199,7 +157,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       maxLen: Infinity,
     });
     const pollUrlPreview = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
-      ?? `${baseUrl}/tasks/${upstreamTaskId}`;
+      ?? defaultPollUrl(baseUrl, upstreamTaskId);
     logEvent("taskmgr", {
       banner: true,
       bannerTitle: "已获取任务 ID，开始轮询",
@@ -232,14 +190,10 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     taskId,
     body: sample,
   });
-  const upstreamMsg = extractUpstreamMessage(data);
   return {
     status: "failed",
     urls: [],
-    ...failFromUpstream(upstreamMsg, {
-      message: "Upstream returned neither result nor task_id",
-      code: "generation.upstream_no_result",
-    }),
+    ...noUpstreamResult(data, "Upstream returned neither result nor task_id"),
     metadata: { raw_sample: sample },
   };
 }
@@ -283,7 +237,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   }
 
   const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
-    ?? `${baseUrl}/tasks/${upstreamTaskId}`;
+    ?? defaultPollUrl(baseUrl, upstreamTaskId);
 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;

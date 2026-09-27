@@ -11,14 +11,14 @@ import {
 } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { build } from "@server/services/request-builder/engine";
-import { fetchWithTimeout, getWorkerApiTimeout } from "@server/core/http-client";
 import { resolveRefImages } from "@server/services/resolvers/reference";
 import { logEvent } from "@server/core/logger/utils";
 import {
-  GenerationFailureError,
-  extractUpstreamMessage,
-  failFromUpstream,
-} from "@server/services/tasks/failure";
+  fetchUpstream,
+  httpUpstreamFailure,
+  noUpstreamResult,
+} from "@server/services/tasks/sync-fetch";
+import { GenerationFailureError } from "@server/services/tasks/failure";
 import type { GenerationResult } from "@server/schemas/result";
 
 /**
@@ -153,34 +153,43 @@ class LlmCapabilityService implements CapabilityService {
       body: req.body,
     });
 
-    const response = await fetchWithTimeout(req.url, {
-      method: req.method,
-      headers: req.headers,
-      body: JSON.stringify(req.body),
-      timeoutMs: getWorkerApiTimeout(),
-    });
+    // 同步执行段单源（fetch + 超时/网络分类 + HTTP 错误翻译），
+    // 此前在能力内自写：超时与网络失败裸抛无分类
+    const outcome = await fetchUpstream(req, ctx.taskId, "capability.llm");
 
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => "");
-      // 原始响应体只进日志；对外优先用上游自带的可读文案，取不到则回退错误码
-      logEvent("llm", {
+    if (outcome.kind === "failure") {
+      throw new GenerationFailureError(outcome.error, outcome.errorCode);
+    }
+
+    if (outcome.kind === "http-error") {
+      // 原始响应体只进日志；对外优先用上游自带的可读文案，取不到则回退状态码
+      logEvent("capability.llm", {
         level: "warn",
-        stage: "upstream_error",
-        status: response.status,
-        body: errBody.slice(0, 500),
+        stage: "upstream_http_error",
+        taskId: ctx.taskId,
+        status: outcome.status,
+        body: outcome.errText.slice(0, 500),
       });
-      const upstreamMsg = extractUpstreamMessage(errBody);
-      const { error, errorCode } = failFromUpstream(upstreamMsg, {
-        message: `HTTP ${response.status}`,
-        code: "generation.upstream_http_error",
-      });
+      const { error, errorCode } = httpUpstreamFailure(outcome.status, outcome.errText);
       throw new GenerationFailureError(error, errorCode);
     }
 
-    const data = await response.json();
     const parsed = protocol.parseLlmResponse
-      ? protocol.parseLlmResponse(data)
+      ? protocol.parseLlmResponse(outcome.data)
       : { urls: [], text: "" };
+
+    // 空结果判失败（此前空文本会静默 completed，对齐 manager 的 upstream_no_result）
+    if (!parsed.text && parsed.urls.length === 0) {
+      const sample = JSON.stringify(outcome.data).slice(0, 500);
+      logEvent("capability.llm", {
+        level: "warn",
+        stage: "upstream_no_result",
+        taskId: ctx.taskId,
+        body: sample,
+      });
+      const { error, errorCode } = noUpstreamResult(outcome.data, "Upstream returned empty content");
+      throw new GenerationFailureError(error, errorCode);
+    }
 
     // 已获取生成结果（对齐 taskmgr.sync_completed）
     logEvent("capability.llm", {
