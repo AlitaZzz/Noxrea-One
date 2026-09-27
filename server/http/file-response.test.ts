@@ -24,4 +24,9 @@ describe("buildFileResponseHeaders", () => {
     expect(buildFileResponseHeaders(".unknown", 1).get("Content-Type"))
       .toBe("application/octet-stream");
   });
+
+  it("avif/avi 落库后下载响应带正确 Content-Type（回归 A4）", () => {
+    expect(buildFileResponseHeaders(".avif", 1).get("Content-Type")).toBe("image/avif");
+    expect(buildFileResponseHeaders(".avi", 1).get("Content-Type")).toBe("video/x-msvideo");
+  });
 });

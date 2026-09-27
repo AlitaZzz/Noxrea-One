@@ -5,7 +5,8 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import { getConfig } from "@server/core/config";
-import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
+import { computeBufferHash } from "@server/services/storage/hash";
+import { sniffMime, normalizeExt, mimeByExt } from "@server/services/storage/mime";
 import { buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
 import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
@@ -41,28 +42,6 @@ const ALLOWED_FORMATS: Record<"image" | "video" | "audio", string[]> = {
 
 /** 扁平白名单：MIME 缺失或不常见时（如 mkv 被上报为 octet-stream）按扩展名兜底 */
 const ALLOWED_EXT = new Set<string>(Object.values(ALLOWED_FORMATS).flat());
-
-/** 扩展名 → MIME：浏览器未提供 MIME 时据此定档，避免 mkv / m4a 落库成 octet-stream */
-const MIME_BY_EXT: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".avif": "image/avif",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".avi": "video/x-msvideo",
-  ".mkv": "video/x-matroska",
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".ogg": "audio/ogg",
-  ".m4a": "audio/mp4",
-  ".aac": "audio/aac",
-  ".flac": "audio/flac",
-};
 
 /** 取文件名后缀（含点，小写）；无后缀返回空串 */
 function extOfName(name: string): string {
@@ -132,9 +111,9 @@ router.post("/api/files/upload", async (c) => {
     const hash = await computeBufferHash(buffer);
     const sniffed = sniffMime(buffer.subarray(0, 16));
 
-    // 优先使用浏览器提供的 MIME（已通过白名单校验），其次按扩展名定档，
-    // sniffMime 仅作兜底——避免 m4a 被嗅探为 video/mp4 等同签名格式的误判
-    const mime = (file.type && mimeOk ? file.type : null) ?? MIME_BY_EXT[nameExt] ?? sniffed.mime;
+    // 优先使用浏览器提供的 MIME（已通过白名单校验），其次按扩展名定档
+    // （单一来源 mimeByExt），sniffMime 仅作兜底
+    const mime = (file.type && mimeOk ? file.type : null) ?? mimeByExt(nameExt, sniffed.mime);
     // 扩展名同理：白名单内的后缀优先，避免 mkv 这类嗅探不出的容器被存成 .bin
     const finalExt = extOk ? nameExt : normalizeExt(sniffed.ext);
     const storageKey = buildStorageKey(auth.user.id, hash, finalExt);
@@ -174,11 +153,14 @@ router.post("/api/files/upload", async (c) => {
             logEvent("media", { stage: "upload_truncated", video: storageKey, ...verdict });
           }
         })
-        .catch(() => undefined);
-      const inlineVerdict = await Promise.race([
-        check,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
-      ]);
+        // 探测失败（损坏文件 ffmpeg 非零退出属预期场景）记 debug，不静默
+        .catch((err: unknown) => logger.debug({ err, video: storageKey }, "upload probe failed"));
+      const raceTimer = new Promise<null>((resolve) => {
+        const t = setTimeout(() => resolve(null), 1500);
+        // race 胜出后清掉定时器，不留下悬空句柄
+        check.finally(() => clearTimeout(t)).catch(() => undefined);
+      });
+      const inlineVerdict = await Promise.race([check, raceTimer]);
       if (inlineVerdict) mediaWarning = inlineVerdict;
     }
 

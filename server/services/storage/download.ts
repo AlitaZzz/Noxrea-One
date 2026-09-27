@@ -9,7 +9,8 @@ import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { buildStorageKey } from "./service";
-import { computeBufferHash, sniffMime, normalizeExt } from "./hash";
+import { computeBufferHash } from "./hash";
+import { sniffMime, normalizeExt } from "./mime";
 import { persistFileObject } from "./persist";
 import { localStorage } from "./backends/local";
 

@@ -10,23 +10,15 @@ import {
   extractAudioTrack,
   extractMutedVideo,
   NoAudioTrackError,
-} from "@server/services/storage/media-edit";
+} from "@server/services/storage/media-ops";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";
+import { mimeByExt } from "@server/services/storage/mime";
 import path from "path";
 
 const detachAudioSchema = z.object({
   video_key: z.string().min(1),
 });
-
-/** 静音视频的容器沿用源扩展名，仅做 MIME 映射（格式由源容器决定，无需嗅探） */
-const VIDEO_MIME_BY_EXT: Record<string, string> = {
-  ".mp4": "video/mp4",
-  ".m4v": "video/x-m4v",
-  ".mov": "video/quicktime",
-  ".webm": "video/webm",
-  ".mkv": "video/x-matroska",
-};
 
 const router = new Hono();
 
@@ -41,8 +33,9 @@ router.post(
       err instanceof NoAudioTrackError ? failCode(422, "detach_audio.no_audio_track") : undefined,
     async run({ c, sourceKey, sourcePath, userId, signal, tmpDir }) {
       const audio = await extractAudioTrack(sourcePath, tmpDir, "audio", signal);
-      // 静音视频容器沿用源扩展名
+      // 静音视频容器沿用源扩展名（无扩展名兜底 .mp4）；MIME 由扩展名映射
       const sourceExt = path.extname(sourceKey).toLowerCase() || ".mp4";
+      const mutedMime = mimeByExt(sourceExt, "video/mp4");
       const mutedPath = path.join(tmpDir, `muted${sourceExt}`);
       await extractMutedVideo(sourcePath, mutedPath, signal);
 
@@ -56,7 +49,7 @@ router.post(
         userId,
         tmpPath: mutedPath,
         ext: sourceExt,
-        mime: VIDEO_MIME_BY_EXT[sourceExt] ?? "video/mp4",
+        mime: mutedMime,
       });
 
       return c.json(
@@ -64,7 +57,7 @@ router.post(
           audio: { ...audioStored, mime: audio.mime, ext: audio.ext, format: audio.format },
           video: {
             ...videoStored,
-            mime: VIDEO_MIME_BY_EXT[sourceExt] ?? "video/mp4",
+            mime: mutedMime,
             ext: sourceExt,
           },
         })

@@ -6,13 +6,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import path from "path";
 import { captureVideoFrame } from "@server/services/storage/video-frames";
-import { localStorage } from "@server/services/storage/backends/local";
-import { computeBufferHash, sniffMime, normalizeExt } from "@server/services/storage/hash";
-import { buildStorageKey } from "@server/services/storage/service";
-import { persistFileObject } from "@server/services/storage/persist";
 import { ok } from "@server/core/response";
-import { createMediaEditRoute } from "./media-edit";
-import fs from "fs/promises";
+import { createMediaEditRoute, persistDerived } from "./media-edit";
+import { mimeByExt } from "@server/services/storage/mime";
 import { randomUUID } from "crypto";
 
 const captureFrameSchema = z.object({
@@ -34,24 +30,16 @@ router.post(
       const tmpFramePath = path.join(tmpDir, `frame_${randomUUID()}.jpg`);
       await captureVideoFrame(sourcePath, tmpFramePath, data.time ?? 1, signal);
 
-      // 读取截取的帧，按标准流程落盘 + 落库
-      const buffer = await fs.readFile(tmpFramePath);
-      const hash = await computeBufferHash(buffer);
-      const sniffed = sniffMime(buffer.subarray(0, 16));
-      const finalExt = normalizeExt(sniffed.ext);
-      const storageKey = buildStorageKey(userId, hash, finalExt);
-
-      await localStorage.save(storageKey, buffer);
-      await persistFileObject({
+      // 产物落盘走工厂统一通道（流式哈希 + copyFile 落盘 + 文件对象登记，不整帧进内存）；
+      // ffmpeg 抽帧产物恒为 JPEG，扩展名/MIME 定档不再嗅探
+      const stored = await persistDerived({
         userId,
-        hash,
-        size: buffer.length,
-        mimeType: sniffed.mime,
-        ext: finalExt,
-        source: "derived",
+        tmpPath: tmpFramePath,
+        ext: ".jpg",
+        mime: mimeByExt(".jpg"),
       });
 
-      return c.json(ok({ frame_key: storageKey, url: `/api/files/${storageKey}` }));
+      return c.json(ok({ frame_key: stored.key, url: stored.url }));
     },
   }),
 );

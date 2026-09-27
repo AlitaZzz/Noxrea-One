@@ -6,7 +6,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { cropVideoRegion } from "@server/services/storage/media-edit";
+import { cropVideoRegion } from "@server/services/storage/media-ops";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";

@@ -7,7 +7,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { extractVideoClip } from "@server/services/storage/media-edit";
+import { extractVideoClip } from "@server/services/storage/media-ops";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";
 import path from "path";

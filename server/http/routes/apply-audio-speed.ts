@@ -6,10 +6,14 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { changeAudioSpeed } from "@server/services/storage/media-edit";
+import { changeAudioSpeed } from "@server/services/storage/media-ops";
 import { ok } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";
+import { mimeByExt } from "@server/services/storage/mime";
 import path from "path";
+
+/** 产物固定重编码为 m4a（atempo 保留音调） */
+const OUT_EXT = ".m4a";
 
 const applyAudioSpeedSchema = z.object({
   audio_key: z.string().min(1),
@@ -29,19 +33,20 @@ router.post(
     async run({ c, data, sourcePath, userId, signal, tmpDir }) {
       const result = await changeAudioSpeed(
         sourcePath,
-        path.join(tmpDir, "speed.m4a"),
+        path.join(tmpDir, `speed${OUT_EXT}`),
         data.speed,
         signal,
       );
 
+      const mime = mimeByExt(OUT_EXT);
       const stored = await persistDerived({
         userId,
         tmpPath: result.path,
-        ext: ".m4a",
-        mime: "audio/mp4",
+        ext: OUT_EXT,
+        mime,
       });
 
-      return c.json(ok({ ...stored, ext: ".m4a", mime: "audio/mp4" }));
+      return c.json(ok({ ...stored, ext: OUT_EXT, mime }));
     },
   }),
 );

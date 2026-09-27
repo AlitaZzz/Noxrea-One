@@ -9,6 +9,7 @@ import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
 import path from "path";
 import { localStorage } from "@server/services/storage/backends/local";
+import { mimeByExt } from "@server/services/storage/mime";
 import { GenerationFailureError } from "@server/services/tasks/failure";
 
 /**
@@ -48,24 +49,7 @@ async function readSelfFile(relPath: string): Promise<string> {
   }
 
   const ext = path.extname(relPath).toLowerCase();
-  const mimeMap: Record<string, string> = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-    ".gif": "image/gif",
-    ".mp4": "video/mp4",
-    ".webm": "video/webm",
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
-    ".wave": "audio/wav",
-    ".ogg": "audio/ogg",
-    ".oga": "audio/ogg",
-    ".m4a": "audio/mp4",
-    ".aac": "audio/aac",
-    ".flac": "audio/flac",
-  };
-  const mime = mimeMap[ext] ?? "application/octet-stream";
+  const mime = mimeByExt(ext);
   const b64 = data.toString("base64");
   return `data:${mime};base64,${b64}`;
 }
@@ -76,6 +60,9 @@ async function readSelfFile(relPath: string): Promise<string> {
  * 2) 同源 URL（/api/files/ 或纯存储路径） → 配置 PUBLIC_URL 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
  * 3) 外链 URL → 透传原串
  * 本地素材读取失败时抛 GenerationFailureError，外链透传不涉及读取、不会失败。
+ *
+ * 契约：返回数组与输入严格等长同序（1:1）——任一 URL 解析失败即抛错，绝不静默跳过。
+ * 消费方（如 llm 的 resolveMessageImages）依赖此契约按下标对位回写，非空断言因此成立。
  */
 async function resolveRefList(urls: string[]): Promise<string[]> {
   if (!urls || urls.length === 0) return [];

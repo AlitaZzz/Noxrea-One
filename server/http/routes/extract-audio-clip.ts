@@ -8,9 +8,10 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { extractAudioClip } from "@server/services/storage/media-edit";
+import { extractAudioClip } from "@server/services/storage/media-ops";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";
+import { mimeByExt } from "@server/services/storage/mime";
 import path from "path";
 
 const extractAudioClipSchema = z
@@ -24,19 +25,6 @@ const extractAudioClipSchema = z
 /** 区间下限（s）：短于此视为误操作；上限为同步请求封顶（前端轨道可选拖满全片） */
 const MIN_CLIP_DURATION_S = 0.5;
 const MAX_CLIP_DURATION_S = 600;
-
-/** 常见音频容器扩展名 → MIME；未识别的扩展名回退 mpeg（播放器按内容嗅探兜底） */
-const AUDIO_MIME_BY_EXT: Record<string, string> = {
-  ".mp3": "audio/mpeg",
-  ".m4a": "audio/mp4",
-  ".aac": "audio/aac",
-  ".wav": "audio/wav",
-  ".ogg": "audio/ogg",
-  ".oga": "audio/ogg",
-  ".opus": "audio/ogg",
-  ".flac": "audio/flac",
-  ".webm": "audio/webm",
-};
 
 const router = new Hono();
 
@@ -57,9 +45,10 @@ router.post(
       }
 
       // 产物容器与源一致：扩展名取自源（无扩展名兜底 .mp3），MIME 由扩展名映射；
-      // 未识别的扩展名保留原样（copy 产物容器不变，强改容器标签会产出坏文件）
+      // 未识别的扩展名回退 mpeg（播放器按内容嗅探兜底）。
+      // .webm 是音视频共用容器：本路由产物恒为音频流，按音频语境定档
       const ext = path.extname(sourceKey).toLowerCase() || ".mp3";
-      const mime = AUDIO_MIME_BY_EXT[ext] ?? "audio/mpeg";
+      const mime = ext === ".webm" ? "audio/webm" : mimeByExt(ext, "audio/mpeg");
 
       const clip = await extractAudioClip(
         sourcePath,

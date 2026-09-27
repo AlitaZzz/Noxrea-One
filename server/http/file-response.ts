@@ -4,28 +4,10 @@
  * `/api/files/*` 保持公开访问（上游通过 PUBLIC_URL 直接读取），
  * 但 SVG 可包含脚本，必须以独立的安全响应头隔离直接导航场景。
  */
-const FILE_MIME_BY_EXT: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".mp4": "video/mp4",
-  ".m4v": "video/x-m4v",
-  ".mov": "video/quicktime",
-  ".mkv": "video/x-matroska",
-  ".webm": "video/webm",
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".ogg": "audio/ogg",
-  ".flac": "audio/flac",
-  ".m4a": "audio/mp4",
-  ".aac": "audio/aac",
-};
+import { mimeByExt } from "@server/services/storage/mime";
 
 export function buildFileResponseHeaders(ext: string, size: number): Headers {
-  const contentType = FILE_MIME_BY_EXT[ext] ?? "application/octet-stream";
+  const contentType = mimeByExt(ext);
   const headers = new Headers({
     "Content-Type": contentType,
     "Content-Length": String(size),
