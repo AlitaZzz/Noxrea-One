@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgentSessionDto } from "@/features/canvas/agent/api";
 import { agentApi } from "@/features/canvas/agent/api";
 import { createSessionGate } from "@/features/canvas/agent/hooks/session-gate";
+import { PROMOTE_TEXT_TOOLS } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ChatRole } from "@/features/canvas/agent/types";
 import { clearUserActions } from "@/features/canvas/agent/user-action-tracker";
 import { ApiError } from "@/lib/api/client";
@@ -97,17 +98,23 @@ export function useAgentSessions(opts: {
       clearUserActions();
       try {
         const data = await agentApi.getSessionMessages(sessionId);
-        // ghost 清理：message_user 的回执行与"内容为空且无可见工具调用"的 assistant 消息
-        // （历史遗留的空占位，渲染时会永远显示"思考中…"）不进入 UI
+        // ghost 清理：回复型工具（promoteTextToContent）的回执行不进入 UI
+        // （回复文本已在 assistant content 里）
         const messageUserCallIds = new Set(
-          (data ?? []).flatMap((m) => (m.toolCalls ?? []).filter((t) => t.name === "message_user").map((t) => t.id)),
+          (data ?? []).flatMap((m) =>
+            (m.toolCalls ?? []).filter((t) => PROMOTE_TEXT_TOOLS.has(t.name)).map((t) => t.id),
+          ),
         );
         const loaded: ChatMessage[] = (data ?? []).flatMap((m) => {
           if (m.role === "tool" && m.toolCallId && messageUserCallIds.has(m.toolCallId)) return [];
-          // message_user 的回执行与纯 message_user 调用不进入 UI（回复文本已在 assistant content 里）
-          const visibleToolCalls = (m.toolCalls ?? []).filter((t) => t.name !== "message_user");
+          const visibleToolCalls = (m.toolCalls ?? []).filter((t) => !PROMOTE_TEXT_TOOLS.has(t.name));
           const content = m.content;
-          if (m.role === "assistant" && !content && !(visibleToolCalls.length > 0)) return [];
+          // 内容与可视工具调用皆空的 assistant 行不进入 UI。这不是历史兼容：
+          // 服务端 finishTurn 会为上游配对持久化此类行——纯回复型工具轮在模型
+          // 零 delta 且工具参数无有效 text 时 content 落空串（行本身必须存在，
+          // tool_call/result 才能配对续轮），实时流中它只是瞬时占位，历史加载
+          // 进入 UI 则会在新一轮流式期间渲染成幽灵「思考中…」气泡
+          if (m.role === "assistant" && !content && visibleToolCalls.length === 0) return [];
 
           const msg: ChatMessage = {
             id: uid(),

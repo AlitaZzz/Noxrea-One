@@ -32,6 +32,14 @@ const KIND_KEYS: Record<string, string> = {
   group: "node.group",
 };
 
+/** 终止性工具：调用后本轮任务即完成（不续轮、历史折叠为回合收尾）。
+    与 server definitions.ts 的 terminal 标志保持同步，由 consistency.test 锁定 */
+export const TERMINAL_TOOLS = new Set<string>(["message_user"]);
+
+/** 回复型工具：args.text 提升为 assistant content 展示，不渲染操作行、结果不进执行器。
+    与 server definitions.ts 的 promoteTextToContent 标志保持同步，由 consistency.test 锁定 */
+export const PROMOTE_TEXT_TOOLS = new Set<string>(["message_user"]);
+
 const kindName = (k: string): string => (KIND_KEYS[k] ? i18n.t(KIND_KEYS[k]) : k);
 
 /** 按节点 id 查标题；查不到回退 id 前 6 位 */

@@ -3,11 +3,12 @@
  * 一个回合 = 一条用户消息 + 随后的工具轮次（round）+ 确认结果条 + 助手文字气泡。
  * 旧历史消息（无 turnId）逐条独立成 section，tool 结果尽力归入含对应调用的 round。
  */
+import { PROMOTE_TEXT_TOOLS } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
 
 export interface ChatRound {
   key: string;
-  /** 本轮的画布工具调用（message_user 不渲染操作行，排除） */
+  /** 本轮的画布工具调用（回复型工具不渲染操作行，排除） */
   calls: ToolCallView[];
   /** toolCallId → tool 结果消息 */
   results: Map<string, ChatMessage>;
@@ -64,7 +65,7 @@ export function groupSections(messages: ChatMessage[]): ChatSection[] {
     }
 
     if (m.role === "assistant") {
-      const calls = (m.toolCalls ?? []).filter((t) => t.name !== "message_user");
+      const calls = (m.toolCalls ?? []).filter((t) => !PROMOTE_TEXT_TOOLS.has(t.name));
       const section = ensureCurrent();
       if (calls.length > 0) {
         section.rounds.push({ key: m.id, calls, results: new Map() });

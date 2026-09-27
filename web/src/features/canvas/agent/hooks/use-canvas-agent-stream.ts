@@ -14,6 +14,7 @@ import { useAgentSessions } from "@/features/canvas/agent/hooks/use-agent-sessio
 import { getCanvasAgentRuntime } from "@/features/canvas/agent/Runtime";
 import { serializeCanvasState } from "@/features/canvas/agent/tools/canvas-state";
 import { executeCanvasToolCall } from "@/features/canvas/agent/tools/executors";
+import { PROMOTE_TEXT_TOOLS } from "@/features/canvas/agent/tools/Meta";
 import type {
   AgentToolCall,
   ChatMessage,
@@ -27,6 +28,7 @@ import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/can
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { resolveResponseError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
+import { readSseStream } from "@/lib/sse";
 
 /** 工具续轮上限：防止模型反复调用失败工具造成死循环 */
 const MAX_TOOL_ROUNDS = 12;
@@ -47,41 +49,8 @@ function uid() {
   return `m_${Date.now()}_${_seq}`;
 }
 
-/** 前端 read 空闲超时 */
+/** 前端 read 空闲超时：超时 cancel reader 并 reject（公共解析器 readTimeoutMs） */
 const FRONTEND_READ_TIMEOUT_MS = 120_000;
-
-function readWithTimeout(
-  reader: ReadableStreamDefaultReader<Uint8Array>
-): Promise<{ done: boolean; value?: Uint8Array }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reader.cancel().catch(() => {});
-      reject(new Error(`read timeout: no data for ${FRONTEND_READ_TIMEOUT_MS / 1000}s`));
-    }, FRONTEND_READ_TIMEOUT_MS);
-    reader.read().then(
-      (r) => { clearTimeout(timer); resolve(r); },
-      (e) => { clearTimeout(timer); reject(e); }
-    );
-  });
-}
-
-/** 解析一段 SSE buffer 中的事件块 */
-function parseBlocks(buf: string): { blocks: Array<{ event: string; data: string }>; rest: string } {
-  const raw = buf.split("\n\n");
-  const rest = raw.pop() ?? "";
-  const blocks = raw
-    .map((block) => {
-      let event = "";
-      let data = "";
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data = line.slice(5).trim();
-      }
-      return { event, data };
-    })
-    .filter((b) => b.event && b.data);
-  return { blocks, rest };
-}
 
 /**
  * 高层对话封装：管理消息 + SSE 解析 + 工具续轮。
@@ -172,9 +141,6 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
       if (!res.body) throw new Error("no stream body");
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
       let accText = "";
       let accToolCalls: ToolCallView[] = [];
       let doneHasTool = false;
@@ -192,19 +158,10 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         });
       };
 
-      while (true) {
-        const { done, value } = await readWithTimeout(reader);
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const { blocks, rest } = parseBlocks(buf);
-        buf = rest;
-        for (const { event, data } of blocks) {
-          let parsed: Record<string, unknown>;
-          try {
-            parsed = JSON.parse(data) as Record<string, unknown>;
-          } catch {
-            continue;
-          }
+      // 公共解析器单源；error 事件抛错中断读取（reader 由解析器 finally 释放）
+      await readSseStream(
+        res.body,
+        (event, parsed) => {
           if (event === "delta") {
             const delta = typeof parsed.delta === "string" ? parsed.delta : "";
             accText += delta;
@@ -230,12 +187,18 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
               }));
             }
           } else if (event === "error") {
-            const errMsg = typeof parsed.error === "string" ? parsed.error : "stream error";
+            // 结构化错误码优先走本地化文案；无码或未收录时原样展示上游文案
+            const localized =
+              typeof parsed.errorCode === "string" && i18n.exists(`error.${parsed.errorCode}`)
+                ? i18n.t(`error.${parsed.errorCode}`)
+                : null;
+            const errMsg = localized ?? (typeof parsed.error === "string" ? parsed.error : "stream error");
             patchAssistant({ content: `⚠ ${errMsg}`, error: true });
             throw new Error(errMsg);
           }
-        }
-      }
+        },
+        { readTimeoutMs: FRONTEND_READ_TIMEOUT_MS },
+      );
 
       if (accToolCalls.length > 0) patchAssistant({ toolCalls: accToolCalls });
       return { hasTool: doneHasTool, toolCalls: accToolCalls, assistantId, text: accText };
@@ -316,12 +279,15 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           if (!streamingRef.current) break;
           if (!result.hasTool) {
             if (!result.text && !result.toolCalls.length) {
-              setMessages((prev) => prev.filter((m) => m.id !== result.assistantId));
+              // setState updater 是延迟执行的：result 在后续轮次会被重新赋值，
+              // 闭包必须捕获本轮 id 快照，否则会删错消息
+              const finishedId = result.assistantId;
+              setMessages((prev) => prev.filter((m) => m.id !== finishedId));
             }
             break;
           }
 
-          // message_user 由前端直接展示为回复文本，不进画布执行器
+          // 回复型工具（promoteTextToContent）由前端直接展示为回复文本，不进画布执行器
           const toolCalls = result.toolCalls.map((c) => {
             let args: Record<string, unknown> = {};
             try {
@@ -329,16 +295,19 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
             } catch { /* 参数不合法时按空对象处理，执行器会给错误提示 */ }
             return { id: c.id, name: c.name, args };
           });
-          const displayCalls = toolCalls.filter((c) => c.name !== "message_user");
-          const messageUserCalls = toolCalls.filter((c) => c.name === "message_user");
+          const displayCalls = toolCalls.filter((c) => !PROMOTE_TEXT_TOOLS.has(c.name));
+          const messageUserCalls = toolCalls.filter((c) => PROMOTE_TEXT_TOOLS.has(c.name));
 
           for (const c of messageUserCalls) {
             const text0 = typeof c.args.text === "string" ? c.args.text.trim() : "";
             if (text0) {
+              // setState updater 延迟执行时 result 已被下一轮重新赋值，
+              // 必须捕获本轮 assistantId 快照，否则回复文本提升到错误消息上（idx -1 静默丢失）
+              const promotedId = result.assistantId;
               setMessages((prev) => {
-                const idx = prev.findIndex((m) => m.id === result.assistantId);
+                const idx = prev.findIndex((m) => m.id === promotedId);
                 if (idx === -1) {
-                  return [...prev, { id: result.assistantId, role: "assistant" as const, content: text0 }];
+                  return [...prev, { id: promotedId, role: "assistant" as const, content: text0 }];
                 }
                 const next = [...prev];
                 next[idx] = { ...next[idx], content: text0 };
