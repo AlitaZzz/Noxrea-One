@@ -1,6 +1,11 @@
 /**
  * Ark 协议基类。
  * 实现 Ark 上游协议的公共逻辑，提供认证头与请求结果封装。
+ *
+ * 纯同步对接：不实现 extractTaskId / buildPollUrl / parsePollResponse——
+ * 当前 ark 渠道按「提交即同步返回产物」对接（submitAndWait 同步解析；
+ * model-ui.json 亦无 ark 轮询端点配置）。若未来接入火山方舟原生异步
+ * 任务 API，需在此补齐轮询三件套（可复用 openai/shared 的实现）。
  */
 
 import type { ProtocolRequestResult, ProtocolService } from "@server/services/protocols/base";

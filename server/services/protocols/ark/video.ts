@@ -1,10 +1,15 @@
 /**
  * Ark 视频生成协议。
- * 继承 Ark 协议基类，构建视频生成的上游请求与轮询逻辑。
+ * 继承 Ark 协议基类，构建视频生成的上游请求与响应解析。
+ * 产物解析与 openai 协议共用整树扫描（parseScanSyncResult）。
  */
 
 import { ArkProtocol } from "./base";
+import { parseScanSyncResult } from "@server/services/protocols/openai/shared";
 import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";
+
+/** 裸 base64 产物补通用前缀（MIME 省略，由播放器按内容识别） */
+const B64_MIME = "data:;base64,";
 
 export class ArkVideoProtocol extends ArkProtocol {
   buildVideoRequest(
@@ -16,17 +21,6 @@ export class ArkVideoProtocol extends ArkProtocol {
   }
 
   parseVideoResponse(response: unknown): ProtocolResponse {
-    const data = response as Record<string, unknown>;
-    const resultData = data?.data as Array<Record<string, unknown>> | undefined;
-    const urls: string[] = [];
-
-    if (Array.isArray(resultData)) {
-      for (const item of resultData) {
-        const url = item?.url as string | undefined;
-        if (url) urls.push(url);
-      }
-    }
-
-    return { urls };
+    return parseScanSyncResult(response, B64_MIME);
   }
 }

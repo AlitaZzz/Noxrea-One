@@ -7,7 +7,6 @@ import { routeGenerate } from "@server/services/gateway/router";
 import {
   safeCompleteTask,
   safeFailTask,
-  getTaskStatus,
 } from "@server/crud/task";
 import { getProvider } from "@server/crud/model-config";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
@@ -20,7 +19,7 @@ import {
 } from "@server/services/tasks/failure";
 import { buildContext } from "./context";
 import { resumeAsyncPolling } from "./resume-polling";
-import { downloadResultsWithHeartbeat } from "./download-results";
+import { finalizeGeneratedResult } from "./download-results";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
 import type { HydratedGenerationTask } from "@server/crud/task";
@@ -152,45 +151,16 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       return;
     }
 
-    // 结果落盘（对齐 Python _finalize_result + download_and_save）
-    const currentStatus = await getTaskStatus(task.id);
-    if (currentStatus === "cancelled") {
-      logEvent("executor", { stage: "cancelled_before_download", taskId: task.id });
-      return;
-    }
-
-    // 下载落盘并保持心跳（大文件下载可能远超心跳间隔，防止僵尸清理误判重跑）
-    const resultUrls = await downloadResultsWithHeartbeat(
-      task.id,
-      task.userId,
-      result?.urls ?? [],
-      "Failed to download result",
-      task.startedAt
-    );
-
-    // 上游有产物但全部下载失败：显式失败，不能空结果标记 completed
-    if ((result?.urls?.length ?? 0) > 0 && resultUrls.length === 0) {
-      throw new GenerationFailureError("生成结果下载失败", "generation.download_failed");
-    }
-
-    // 更新任务状态（终态守卫：期间被取消的话写入会被丢弃，保留 cancelled）
-    const finalized = await safeCompleteTask(task.id, {
-      resultUrls,
-      resultText: result?.text,
-    }, { startedAt: task.startedAt });
-    if (!finalized) return;
-
-    // 全部动作（保存 + 状态更新 + 媒体处理）完成后再输出收尾节点
-    const saved = resultUrls.length > 0;
-    logEvent("executor", {
-      banner: true,
-      bannerAtEnd: true,
-      bannerTitle: saved ? "生成结束，已下载并保存" : "生成结束，但无结果保存",
-      stage: "completed",
+    // 结果终态编排单源：下载落盘（带心跳）→ 空结果判失败 → safe 终态 → 收尾日志
+    // （LLM 纯文本结果在上面已提前完成，不走 URL 下载，对齐 Python _finalize_result）
+    await finalizeGeneratedResult({
       taskId: task.id,
-      saved,
-      urls: resultUrls,
+      userId: task.userId,
+      startedAt: task.startedAt,
+      urls: result?.urls ?? [],
       text: result?.text,
+      logLabel: "Failed to download result",
+      logChannel: "executor",
     });
   } catch (err: unknown) {
     // 任务已被取消（DB 中已是 cancelled 终态）：终态守卫会拒绝任何写入，

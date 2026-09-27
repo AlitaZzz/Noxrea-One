@@ -12,12 +12,11 @@ import type { PollOutcome } from "@server/services/tasks/poll-loop";
 import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import {
-  safeCompleteTask,
   safeFailTask,
   isTaskCancelled,
   touchTaskHeartbeat,
 } from "@server/crud/task";
-import { downloadResultsWithHeartbeat } from "./download-results";
+import { finalizeGeneratedResult } from "./download-results";
 import type { HydratedGenerationTask } from "@server/crud/task";
 import type { StopSignal } from "./loop";
 
@@ -120,24 +119,17 @@ async function _doResumePoll(
   if (outcome.kind === "completed") {
     logEvent("resume_poll", { stage: "completed", taskId, urls: outcome.urls.length });
 
-    // 下载落盘并保持心跳（与 executor 同理，防止僵尸清理误判重跑）
-    const resultUrls = await downloadResultsWithHeartbeat(
+    // 终态编排单源（与 executor 共用）：下载落盘 → 空结果判失败 → safe 终态
+    // （outcome.text 此前被丢弃，现随编排一并落库）
+    await finalizeGeneratedResult({
       taskId,
-      task.userId,
-      outcome.urls,
-      "Resume poll download failed",
-      task.startedAt
-    );
-
-    // 上游有产物但全部下载失败：显式失败，不能空结果标记 completed
-    if (outcome.urls.length > 0 && resultUrls.length === 0) {
-      await _failTask(task, "生成结果下载失败", "generation.download_failed");
-      return;
-    }
-
-    // safeCompleteTask 自身不抛：守卫拒绝/写库失败均已记日志，任务交由
-    // 僵尸清理兜底，不会让 DB 错误冒充生成失败
-    await safeCompleteTask(taskId, { resultUrls }, { startedAt: task.startedAt });
+      userId: task.userId,
+      startedAt: task.startedAt,
+      urls: outcome.urls,
+      text: outcome.text,
+      logLabel: "Resume poll download failed",
+      logChannel: "resume_poll",
+    });
     return;
   }
 
