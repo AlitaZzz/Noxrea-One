@@ -132,6 +132,7 @@ export default function InfiniteCanvas() {
   const clipCaptureNodeId = useCanvasStore((s) => s.clipCaptureNodeId);
   const lightingNodeId = useCanvasStore((s) => s.lightingNodeId);
   const angleEditorNodeId = useCanvasStore((s) => s.angleEditorNodeId);
+  const panoramaNodeId = useCanvasStore((s) => s.panoramaNodeId);
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
@@ -225,9 +226,9 @@ export default function InfiniteCanvas() {
     setRfViewport(useCanvasStore.getState().viewport, { duration: 0 });
   }, [viewportSyncCount, setRfViewport]);
 
-  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光 / 多视角）激活的节点：生成面板必须让位，
+  // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光 / 多视角 / 全景）激活的节点：生成面板必须让位，
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId ?? angleEditorNodeId;
+  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId ?? angleEditorNodeId ?? panoramaNodeId;
 
   // Check if a single image node is selected
   const genTargetId = useMemo(() => {
@@ -310,6 +311,15 @@ export default function InfiniteCanvas() {
     return n;
   }, [angleEditorNodeId, nodes]);
 
+  // 全景查看的宿主节点：同打光/多视角——节点删除、取消选中或类型变化后立即退出全景
+  const panoramaNode = useMemo(() => {
+    if (!panoramaNodeId) return null;
+    const n = nodes.find((x) => x.id === panoramaNodeId);
+    if (!n || n.type !== NODE_TYPE.IMAGE || !n.selected) return null;
+    if (!(n.data as ImageNodeData).src) return null;
+    return n;
+  }, [panoramaNodeId, nodes]);
+
   // 音频片段截取面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
   const audioClipNode = useMemo(() => {
     if (!audioClipNodeId) return null;
@@ -346,6 +356,7 @@ export default function InfiniteCanvas() {
     if (clipCaptureNodeId && !clipStripNode) st.setClipCaptureNodeId(null);
     if (lightingNodeId && !lightingNode) st.setLightingNodeId(null);
     if (angleEditorNodeId && !angleEditorNode) st.setAngleEditorNodeId(null);
+    if (panoramaNodeId && !panoramaNode) st.setPanoramaNodeId(null);
     if (audioClipNodeId && !audioClipNode) st.setAudioClipNodeId(null);
     if (croppingNodeId && !cropNode) st.setCroppingNodeId(null);
   }, [
@@ -353,6 +364,7 @@ export default function InfiniteCanvas() {
     clipCaptureNodeId, clipStripNode,
     lightingNodeId, lightingNode,
     angleEditorNodeId, angleEditorNode,
+    panoramaNodeId, panoramaNode,
     audioClipNodeId, audioClipNode,
     croppingNodeId, cropNode,
   ]);
@@ -1306,7 +1318,7 @@ export default function InfiniteCanvas() {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>
-            {(isNodeInUiState({ multiExpandedNodeId, annotatingNodeId, croppingNodeId, editingTextNodeId, frameCaptureNodeId, clipCaptureNodeId, lightingNodeId, audioClipNodeId, angleEditorNodeId }, nid) || (n?.type === NODE_TYPE.IMAGE && (n?.data as ImageNodeData | undefined)?.panorama)) ? null : (
+            {(isNodeInUiState({ multiExpandedNodeId, annotatingNodeId, croppingNodeId, editingTextNodeId, frameCaptureNodeId, clipCaptureNodeId, lightingNodeId, audioClipNodeId, angleEditorNodeId, panoramaNodeId }, nid)) ? null : (
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}

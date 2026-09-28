@@ -179,6 +179,10 @@ interface CanvasState {
   // 多视角编辑模式（hides node toolbar；面板经 RfNodeToolbar 悬浮于节点下方，形态同打光面板）
   angleEditorNodeId: string | null;
   setAngleEditorNodeId: (id: string | null) => void;
+  // 全景查看模式（hides node toolbar；与其余编辑态互斥，点空白/他节点即退出；
+  // 查看态不属于节点内容——不落库、不进撤销历史，刷新后不自动恢复）
+  panoramaNodeId: string | null;
+  setPanoramaNodeId: (id: string | null) => void;
 
   /** 关闭不属于 nodeId 的编辑态（nodeId 传 null 即全部关闭） */
   closeForeignNodeEditors: (nodeId: string | null) => void;
@@ -218,7 +222,7 @@ interface CanvasState {
  * - 目标节点被删除时需在 removeNodes 中同步清空——
  *   残留 id 本身无害（uid 会话内永不复用），但撤销会以同一 id 复活节点，
  *   不清空就会带着对应模式（展开/标注/裁剪/文本编辑/选帧）回来。
- * - 九个编辑态全局互斥（同一时刻只允许一个编辑浮层），由 applyNodeUiState
+ * - 十个编辑态全局互斥（同一时刻只允许一个编辑浮层），由 applyNodeUiState
  *   统一收口，调用方不再各自手工罗列关闭清单。
  */
 export const NODE_UI_STATE_KEYS = [
@@ -231,6 +235,7 @@ export const NODE_UI_STATE_KEYS = [
   "lightingNodeId",
   "audioClipNodeId",
   "angleEditorNodeId",
+  "panoramaNodeId",
 ] as const;
 
 type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
@@ -391,6 +396,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setLightingNodeId: (id) => set((s) => applyNodeUiState(s, "lightingNodeId", id)),
   angleEditorNodeId: null,
   setAngleEditorNodeId: (id) => set((s) => applyNodeUiState(s, "angleEditorNodeId", id)),
+  panoramaNodeId: null,
+  setPanoramaNodeId: (id) => set((s) => applyNodeUiState(s, "panoramaNodeId", id)),
 
   closeForeignNodeEditors: (nodeId) => {
     set((s) => {

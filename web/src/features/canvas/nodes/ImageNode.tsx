@@ -96,16 +96,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const setAnnotateOpen = useCallback((open: boolean) => {
     useCanvasStore.getState().setAnnotatingNodeId(open ? id : null);
   }, [id]);
-  // 全景模式：由节点 data.panorama 布尔字段驱动（随节点落库，刷新后自动恢复），
-  // 仅支持手动退出（工具栏关闭按钮）；每个节点独立判断，可多个节点同时开启
-  // 完全派生自 data.panorama，不再用本地 state 镜像：
-  // 撤销 / 重做、切换项目都会整体替换 data，本地镜像无法跟随，
-  // 会出现「撤销到开启状态后面板不重开 / 撤销到关闭状态后面板不关闭」的错乱。
-  const panoramaOpen = !!data.panorama;
+  // 全景模式：store 编辑态（panoramaNodeId），与其余编辑态走同一套互斥/退出流程——
+  // 点空白处或其他节点即关闭（closeForeignNodeEditors 统一收口），同一时刻仅一个节点可开。
+  // 查看态不属于节点内容：不落库、不进撤销历史，刷新后不自动恢复。
+  const panoramaOpen = useCanvasStore((s) => s.panoramaNodeId === id);
   const setPanoramaOpen = useCallback(
     (open: boolean) => {
-      useCanvasStore.getState().updateNodeData(id, { panorama: open });
-      markDirtyImmediate();
+      useCanvasStore.getState().setPanoramaNodeId(open ? id : null);
     },
     [id]
   );
@@ -359,8 +356,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         case "angle-editor": if (src) useCanvasStore.getState().setAngleEditorNodeId(id); break;
         case "annotate": if (src) setAnnotateOpen(true); break;
         case "panorama":
-          // 全景不是 store 互斥键（随节点 data 落库、可多节点并存），需显式关闭其它编辑态
-          if (src) { useCanvasStore.getState().closeForeignNodeEditors(null); setPanoramaOpen(true); }
+          // 走 store 互斥键：applyNodeUiState 打开即清其余编辑态，无需手工收口
+          if (src) setPanoramaOpen(true);
           break;
         case "preview-fullscreen": a.openPreview(); break;
         case "clear": a.handleClear(); break;

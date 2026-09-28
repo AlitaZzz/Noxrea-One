@@ -415,11 +415,12 @@ describe("节点级编辑态全局互斥（store 收口）", () => {
   });
 });
 
-describe("isNodeInUiState（9 态清单单源）", () => {
+describe("isNodeInUiState（10 态清单单源）", () => {
   const emptyUi = {
     multiExpandedNodeId: null, annotatingNodeId: null, croppingNodeId: null,
     editingTextNodeId: null, frameCaptureNodeId: null, clipCaptureNodeId: null,
     lightingNodeId: null, audioClipNodeId: null, angleEditorNodeId: null,
+    panoramaNodeId: null,
   };
 
   it("节点担任任一编辑态宿主时返回 true", () => {
@@ -439,11 +440,12 @@ describe("isNodeInUiState（9 态清单单源）", () => {
     expect(isNodeInUiState(emptyUi, "n1")).toBe(false);
   });
 
-  it("清单契约：键集合恰为 9 态字面量（删键/改名即红，防静默漂移）", () => {
+  it("清单契约：键集合恰为 10 态字面量（删键/改名即红，防静默漂移）", () => {
     expect([...NODE_UI_STATE_KEYS]).toEqual([
       "multiExpandedNodeId", "annotatingNodeId", "croppingNodeId",
       "editingTextNodeId", "frameCaptureNodeId", "clipCaptureNodeId",
       "lightingNodeId", "audioClipNodeId", "angleEditorNodeId",
+      "panoramaNodeId",
     ]);
   });
 });
