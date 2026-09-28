@@ -8,10 +8,10 @@
 
 import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
-import { Wand2 } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -506,8 +506,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               <Tooltip title={t("node.creationPreset")}>
                 <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
                   style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
-                  <Wand2 size={14} />
-                  <span className="truncate">{t("node.creationPreset")}</span>
+                  <PresetIcon />
                 </button>
               </Tooltip>
             }

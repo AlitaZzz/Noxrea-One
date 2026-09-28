@@ -7,11 +7,11 @@
 
 import { PlusOutlined } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
-import { Wand2 } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
+import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
 import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -26,7 +26,6 @@ import { useRefUpload } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider } from "@/lib/types/models";
 import { type ModelOption } from "@/lib/types/models";
@@ -351,7 +350,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     } else {
       setPrompt(replacePresetToken(prompt, presetId));
     }
-  }, [nodeId, prompt, setPrompt, t, i18n, presets]);
+  }, [nodeId, prompt, setPrompt, i18n, presets]);
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 图片节点上游只有文本与图片，故最多两组。
@@ -456,26 +455,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           ))}
         />
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        <MenuPopover
-          open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
-          overlayClassName="creation-menu-popover"
-          trigger={
-            <Tooltip title={t("node.creationPreset")}>
-              <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
-                style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
-                <Wand2 size={14} />
-                <span className="truncate">{t("node.creationPreset")}</span>
-              </button>
-            </Tooltip>
-          }
-          content={
-            <PresetMenuContent
-              catalog={promptTemplateCatalog}
-              onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
-            />
-          }
-        />
-        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
             <div className="menu-popover" style={{ width: 360, padding: 6 }}>
@@ -491,6 +470,25 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             <ParamSummary fields={fields} values={fieldValues} />
           </button>
         </Popover>
+        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
+        <MenuPopover
+          open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
+          overlayClassName="creation-menu-popover"
+          trigger={
+            <Tooltip title={t("node.creationPreset")}>
+              <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
+                style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
+                <PresetIcon />
+              </button>
+            </Tooltip>
+          }
+          content={
+            <PresetMenuContent
+              catalog={promptTemplateCatalog}
+              onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+            />
+          }
+        />
         <div className="flex-1" />
         <PrimaryActionButton
           cancel={isGenerating || submitting}
