@@ -80,7 +80,15 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
   }, [aspect, containerSize]);
 
   useEffect(() => {
-    if (mountRef.current && !viewerRef.current) {
+    let disposed = false;
+    // StrictMode 双挂载会在同一同步批次内执行 create → destroy → create：
+    // 若首个 viewer 在挂载 tick 内就发起全景图 fetch，cleanup 的 destroy 会 abort 它，
+    // 而 three FileLoader 的按 URL 去重表要到拒绝微任务才清理，第二个 viewer 的
+    // 同 URL 加载会搭上这条已死请求并收到 AbortError；PSV 把 AbortError 视为
+    // 「被更新的加载取代」而静默吞掉（不隐藏 loader），表现为永远卡在加载中。
+    // 因此把创建推迟到微任务：首个挂载不产生任何副作用，挂载天然幂等。
+    queueMicrotask(() => {
+      if (disposed || !mountRef.current || viewerRef.current) return;
       viewerRef.current = new Viewer({
         container: mountRef.current,
         panorama: src,
@@ -94,13 +102,14 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       // 隐藏 navbar 容器本身（navbar 设为空数组后仍会渲染一个空底栏）
       const navbarEl = mountRef.current.querySelector(".psv-navbar");
       if (navbarEl) (navbarEl as HTMLElement).style.display = "none";
-    }
+    });
     return () => {
+      disposed = true;
       viewerRef.current?.destroy();
       viewerRef.current = null;
     };
     // 仅依赖 src：viewer 随组件挂载创建、随卸载销毁（退出全景即卸载）
-     
+
   }, [src]);
 
   // 截图目标尺寸上限：按原始分辨率输出，但避免超大全景图导致内存峰值过高
@@ -427,7 +436,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       {/* 全景画布：覆盖原图，z-30 蒙版 */}
       <div
         ref={mountRef}
-        className={`nodrag absolute inset-0 z-30 rounded-lg overflow-hidden ${selected ? "pointer-events-auto" : "pointer-events-none"}`}
+        className={`panorama-mount nodrag absolute inset-0 z-30 rounded-lg overflow-hidden ${selected ? "pointer-events-auto" : "pointer-events-none"}`}
         style={{ touchAction: "none" }}
       >
         {/* 取景框：按所选比例显示截图范围，非原始比例时叠加 */}

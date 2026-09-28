@@ -2480,3 +2480,12 @@ body > .ant-app { line-height: inherit !important; }
   user-select: text;
 }
 
+
+/* ===== 全景面板加载指示器隐藏（.panorama-mount）=====
+   PSV v5 无 useLoader 配置，初始加载强制 loader.show()；其 show() 是清空
+   内联 display 而非设值，故普通 CSS 规则即可压制。加载期间画布透明
+   （rendererParameters 默认 alpha:true），透出节点原图，观感为原图无缝
+   接管为交互全景。用法：PanoramaPanel 全景挂载 div 挂 .panorama-mount。 */
+.panorama-mount .psv-loader-container {
+  display: none;
+}
