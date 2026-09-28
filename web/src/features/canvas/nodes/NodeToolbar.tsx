@@ -8,7 +8,6 @@
 import {
   BgColorsOutlined,
   CheckOutlined,
-  CopyOutlined,
   DownloadOutlined,
   ExpandOutlined,
   InfoCircleOutlined,
@@ -20,7 +19,7 @@ import {
   StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
-import { Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -496,7 +495,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("common.copy")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<CopyOutlined />} disabled={!textContent}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Copy size={16} />} disabled={!textContent}
               onClick={() => dispatchNodeAction(nodeId, "copy")} />
           </Tooltip>
           <Tooltip title={t("common.download")}>
