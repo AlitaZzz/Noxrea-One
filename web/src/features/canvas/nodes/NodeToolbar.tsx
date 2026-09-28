@@ -421,7 +421,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip title={t("common.download")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
           </Tooltip>
           <Tooltip title={t("node.previewFullscreen")}>
@@ -472,7 +472,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
                 />
               </Tooltip>
               <Tooltip title={t("common.download")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
+                <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
                   onClick={() => dispatchNodeAction(nodeId, "download")} />
               </Tooltip>
             </>
