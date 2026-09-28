@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildResolvedClientTree,
+  expandShared,
   getAllowedFields,
   getModelParams,
   hostFromBaseUrl,
@@ -15,6 +16,7 @@ import {
   normalizeCapability,
   resolveMatchedHost,
 } from "./index";
+import type { HostMap } from "./index";
 
 describe("host 解析", () => {
   it("hostFromBaseUrl 剥离协议、端口保留、路径忽略", () => {
@@ -93,5 +95,43 @@ describe("loadPresets", () => {
       expect(typeof p.name).toBe("string");
       expect(typeof p.baseUrl).toBe("string");
     }
+  });
+});
+
+describe("$shared 引用展开（expandShared）", () => {
+  it("真实配置：_default 的 image ratio options 已展开为共享数组（未展开则是 \"$shared:…\" 字面串）", () => {
+    const params = getModelParams("unknown.test", "m", "image");
+    expect(params).not.toBeNull();
+    const ratio = params!.fields.find((f) => f.name === "ratio");
+    expect(ratio?.options).toEqual([
+      "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16",
+      "2:1", "1:2", "3:1", "1:3", "21:9", "9:21",
+    ]);
+  });
+
+  it("解析树中 _shared 节点不外泄（内部键剥离覆盖它）", () => {
+    const tree = buildResolvedClientTree();
+    expect(tree["_shared"]).toBeUndefined();
+  });
+
+  it("未知引用原样保留字符串（配置笔误不静默丢数据）", () => {
+    const out = expandShared({
+      _shared: { a: [1] },
+      host: { model: { cap: { options: "$shared:missing" } } },
+    } as unknown as HostMap);
+    const cap = out.host.model.cap as Record<string, unknown>;
+    expect(cap.options).toBe("$shared:missing");
+  });
+
+  it("命中值深拷贝：多处引用互不影响，也不污染 _shared 源", () => {
+    const source = { k: 1 };
+    const out = expandShared({
+      _shared: { v: source },
+      host: { model: { cap: { a: "$shared:v", b: "$shared:v" } } },
+    } as unknown as HostMap);
+    const cap = out.host.model.cap as Record<string, Record<string, number>>;
+    cap.a.k = 99;
+    expect(cap.b.k).toBe(1);
+    expect(source.k).toBe(1);
   });
 });

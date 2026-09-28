@@ -16,7 +16,7 @@
  * 历史压栈全部显式调用 store.push，canvas-store 的写操作用 skipHistory。
  */
 
-import { beforeEach,describe, expect, it } from "vitest";
+import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -438,6 +438,14 @@ describe("isNodeInUiState（9 态清单单源）", () => {
   it("全空快照对任何节点返回 false", () => {
     expect(isNodeInUiState(emptyUi, "n1")).toBe(false);
   });
+
+  it("清单契约：键集合恰为 9 态字面量（删键/改名即红，防静默漂移）", () => {
+    expect([...NODE_UI_STATE_KEYS]).toEqual([
+      "multiExpandedNodeId", "annotatingNodeId", "croppingNodeId",
+      "editingTextNodeId", "frameCaptureNodeId", "clipCaptureNodeId",
+      "lightingNodeId", "audioClipNodeId", "angleEditorNodeId",
+    ]);
+  });
 });
 
 describe("updateNodeVisual（事件总线拆除后的单写通道）", () => {
@@ -448,24 +456,39 @@ describe("updateNodeVisual（事件总线拆除后的单写通道）", () => {
     );
   }
 
-  it("position 存在时单次合并写 position+style+data", () => {
+  it("position 存在时单次合并写 position+style+data（store.subscribe 恰通知一次）", () => {
     addNode("v1");
-    useCanvasStore.getState().updateNodeVisual("v1", {
-      position: { x: 300, y: 400 },
-      style: { width: 200 },
-      data: { label: "new" },
-    });
+    const onChange = vi.fn();
+    const unsub = useCanvasStore.subscribe(onChange);
+    try {
+      useCanvasStore.getState().updateNodeVisual("v1", {
+        position: { x: 300, y: 400 },
+        style: { width: 200 },
+        data: { label: "new" },
+      });
+    } finally {
+      unsub();
+    }
+    // 每次 set 恰触发一次订阅通知：通知 1 次 = 单次 setNodes（防退化为多轮全画布重渲染）
+    expect(onChange).toHaveBeenCalledTimes(1);
     const n = useCanvasStore.getState().nodes.find((x) => x.id === "v1")!;
     expect(n.position).toEqual({ x: 300, y: 400 });
     expect(n.style).toMatchObject({ width: 200 });
     expect(n.data).toMatchObject({ label: "new", keep: 1 });
   });
 
-  it("无 position 时走 updateNodeData 路径（含历史压栈语义）", () => {
+  it("无 position 时委托 updateNodeData；skipHistory 透传 → 不压历史栈", () => {
     addNode("v2");
-    useCanvasStore.getState().updateNodeVisual("v2", { data: { label: "edited" } });
+    useCanvasStore.getState().updateNodeVisual("v2", { data: { label: "edited" }, skipHistory: true });
     const n = useCanvasStore.getState().nodes.find((x) => x.id === "v2")!;
     expect(n.data).toMatchObject({ label: "edited", keep: 1 });
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+  });
+
+  it("对照：历史路径可达——updateNodeData forceHistory 压栈恰一次", () => {
+    addNode("v2b");
+    useCanvasStore.getState().updateNodeData("v2b", { label: "edited" }, undefined, { forceHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
   });
 
   it("空 data 不展开：合并写保留原 data 引用", () => {

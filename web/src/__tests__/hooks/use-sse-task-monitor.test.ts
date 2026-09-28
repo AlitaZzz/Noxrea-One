@@ -36,6 +36,7 @@ vi.mock("@/features/project/save-manager", () => ({
 
 import type { TaskStatusEvent } from "@/features/canvas/api/generation-api";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 
 const encoder = new TextEncoder();
@@ -78,6 +79,7 @@ const notif = { success: vi.fn(), error: vi.fn() };
 beforeEach(() => {
   vi.clearAllMocks();
   useCanvasStore.setState({ nodes: [], edges: [] });
+  useHistoryStore.getState().clear();
   mocks.loadMediaDimensions.mockResolvedValue({ w: 100, h: 50 });
 });
 
@@ -111,6 +113,8 @@ describe("useSseTaskMonitor", () => {
     });
     await waitFor(() => expect(notif.success).toHaveBeenCalledTimes(1));
     expect(notif.error).not.toHaveBeenCalled();
+    // 终态回填走 skipHistory：不产生撤销历史
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
   });
 
   it("SSE 文本终态：resultText 经 textToTiptapHtml 回填 content", async () => {
@@ -155,6 +159,8 @@ describe("useSseTaskMonitor", () => {
     });
     await waitFor(() => expect(notif.error).toHaveBeenCalledTimes(1));
     expect(notif.success).not.toHaveBeenCalled();
+    // 失败清理路径同样 skipHistory：不产生撤销历史
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
   });
 
   it("对账兜底：SSE 挂死时 online 事件按 DB 状态回填", async () => {
@@ -176,5 +182,14 @@ describe("useSseTaskMonitor", () => {
       expect(data.taskBinding).toBeUndefined();
     });
     expect(mocks.fetchTasksStatus).toHaveBeenCalledWith(["t4"]);
+  });
+
+  it("对照：forceHistory 写入确实产生撤销历史（证明上方断言非空转）", () => {
+    useCanvasStore.setState({
+      nodes: [{ id: "c1", type: "text-node", position: { x: 0, y: 0 }, data: {} }] as never,
+    });
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+    useCanvasStore.getState().updateNodeData("c1", { content: "x" }, undefined, { forceHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
   });
 });

@@ -142,7 +142,7 @@ export interface ModelParamConfig {
 }
 
 /** model-ui.json 顶层：host通配 → 模型名 → capability → 配置 */
-type HostMap = Record<string, Record<string, Record<string, unknown>>>;
+export type HostMap = Record<string, Record<string, Record<string, unknown>>>;
 
 const SHARED_PREFIX = "$shared:";
 
@@ -152,7 +152,7 @@ const SHARED_PREFIX = "$shared:";
  * 未知引用原样保留字符串，配置笔误不会静默丢数据；命中值深拷贝，防止共享引用被下游改写。
  * 仅 model-ui.json 使用该机制，json-loader 保持通用。
  */
-function expandShared(data: HostMap): HostMap {
+export function expandShared(data: HostMap): HostMap {
   const shared = (data as Record<string, unknown>)["_shared"] as Record<string, unknown> | undefined;
   if (!shared || typeof shared !== "object") return data;
 

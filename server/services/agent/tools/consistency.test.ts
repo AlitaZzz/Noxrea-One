@@ -72,12 +72,15 @@ describe("Agent 工具四处注册一致性", () => {
     expect(agentToolRegistry.names().length).toBeGreaterThanOrEqual(10);
   });
 
-  it("每个 client 工具都有执行器分支（message_user 由流 hook 展示，除外）", () => {
+  it("每个 client 工具都有执行器分支（promoteTextToContent 由流 hook 展示，除外）", () => {
     const clientTools = agentToolRegistry
       .names()
       .filter((n) => agentToolRegistry.get(n)!.execute === "client");
     const executors = new Set(executorToolNames());
-    const missing = clientTools.filter((n) => n !== "message_user" && !executors.has(n));
+    // 豁免按 promoteTextToContent 标志判断（与 PROMOTE_TEXT_TOOLS 集合交叉锁定），不写死工具名
+    const missing = clientTools.filter(
+      (n) => !agentToolRegistry.get(n)!.promoteTextToContent && !executors.has(n)
+    );
     expect(missing, "注册了但执行器缺分支的工具").toEqual([]);
   });
 
