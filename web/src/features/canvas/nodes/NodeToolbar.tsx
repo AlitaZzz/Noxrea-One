@@ -6,7 +6,6 @@
 "use client";
 
 import {
-  BgColorsOutlined,
   CheckOutlined,
   DownloadOutlined,
   ExpandOutlined,
@@ -520,8 +519,19 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               <Button
                 type="text"
                 size="middle"
-                style={{ padding: 8, color: groupColor && groupColor !== "default" ? getGroupColor(groupColor).border : "#ffffff" }}
-                icon={<BgColorsOutlined />}
+                style={{ padding: 8 }}
+                icon={
+                  <span
+                    style={{
+                      display: "block",
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      background: getGroupColor(groupColor).border,
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+                    }}
+                  />
+                }
               />
             </Tooltip>
           </Popover>
