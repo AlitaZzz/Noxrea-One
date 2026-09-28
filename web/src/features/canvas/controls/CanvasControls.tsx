@@ -9,7 +9,6 @@ import {
   ApiOutlined,
   BgColorsOutlined,
   ExpandOutlined,
-  MedicineBoxOutlined, // unused — kept for other components
   ZoomInOutlined,
   ZoomOutOutlined,
 } from "@ant-design/icons";
@@ -68,7 +67,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
   const toggleMinimap = useCanvasStore((s) => s.toggleMinimap);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const toggleSnapToGrid = useCanvasStore((s) => s.toggleSnapToGrid);
-  const background = useCanvasStore((s) => s.background);
   const setBackground = useCanvasStore((s) => s.setBackground);
 
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -202,26 +200,15 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
       <span className="canvas-toolbar-sep" style={{ height: 18 }} />
 
-      {/* Shortcuts — 屏幕居中浮层（非 Modal） */}
-      <Tooltip title={t("shortcuts.title")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} onClick={() => setShortcutsOpen((v) => !v)} />
-      </Tooltip>
-      {shortcutsOpen && (
-        <div className="fixed inset-0 z-50" onClick={() => setShortcutsOpen(false)}>
-          <div
-            className="flex gap-10 p-6 select-none shortcut-fade-in"
-            style={{
-              position: "fixed",
-              bottom: 96,
-              left: "50%",
-              transform: "translateX(-50%)",
-              color: "var(--dir-dim)",
-              background: "var(--menu-bg)",
-              borderRadius: 12,
-              border: "1px solid var(--menu-border)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+      {/* Shortcuts — 快捷键速查，随按钮锚定弹出（与背景/缩放菜单同交互） */}
+      <MenuPopover open={shortcutsOpen} onOpenChange={setShortcutsOpen} placement="top"
+        trigger={
+          <Tooltip title={t("shortcuts.title")}>
+            <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} />
+          </Tooltip>
+        }
+        content={
+          <div className="flex gap-10 p-6 select-none" style={{ color: "var(--canvas-text-dim)" }}>
             {[
               { title: t("shortcuts.zoom"), items: [[modKey("="), t("shortcuts.desc.zoomin")], [modKey("-"), t("shortcuts.desc.zoomout")], [modKey("0"), t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
               { title: t("shortcuts.pan"), items: [[t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan")], [t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan")]] },
@@ -229,19 +216,19 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
               { title: t("shortcuts.group"), items: [[modKey("G"), t("shortcuts.desc.group")], [modKey("Shift+G"), t("shortcuts.desc.ungroup")]] },
               { title: t("shortcuts.other"), items: [[modKey("A"), t("shortcuts.desc.selectall")], [modKey("M"), t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
             ].map((group, i, arr) => (
-              <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-white/10 pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
-                <div className="text-white/50 text-sm font-medium mb-3">{group.title}</div>
+              <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-[var(--canvas-border-light)] pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
+                <div className="text-[var(--canvas-text-muted)] text-sm font-medium mb-3">{group.title}</div>
                 {group.items.map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-2">
-                    <kbd className="bg-white/10 px-2.5 py-1 rounded text-sm font-mono text-white/80 whitespace-nowrap">{key}</kbd>
+                    <kbd className="bg-[var(--canvas-bg-active)] px-2.5 py-1 rounded text-sm font-mono text-[var(--canvas-text)] whitespace-nowrap">{key}</kbd>
                     <span className="text-sm text-right">{desc}</span>
                   </div>
                 ))}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        }
+      />
 
       {/* Agent 对话 */}
       {/* Zoom display + menu */}
