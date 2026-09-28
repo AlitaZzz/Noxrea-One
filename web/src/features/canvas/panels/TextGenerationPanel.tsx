@@ -472,7 +472,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                 size="small"
                 type="text"
                 className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
-                style={{ border: "none", cursor: "pointer" }}
               >
                 <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
                 <span className="truncate">
@@ -504,10 +503,9 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             overlayClassName="creation-menu-popover"
             trigger={
               <Tooltip title={t("node.creationPreset")}>
-                <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
-                  style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
+                <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
                   <PresetIcon />
-                </button>
+                </Button>
               </Tooltip>
             }
             content={

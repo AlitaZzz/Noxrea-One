@@ -434,8 +434,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         <MenuPopover
           open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
           trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
-              style={{ border: "none", cursor: "pointer" }}>
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
                 {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
@@ -462,11 +461,10 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           trigger="click" placement="bottomLeft"
           styles={{ container: { padding: 0, background: "transparent" } }}
         >
-          <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
-            style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)", justifyContent: "center" }}>
+          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
             <ParamsIcon style={{ color: "#ffffff" }} />
             <ParamSummary fields={fields} values={fieldValues} />
-          </button>
+          </Button>
         </Popover>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <MenuPopover
@@ -474,10 +472,9 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           overlayClassName="creation-menu-popover"
           trigger={
             <Tooltip title={t("node.creationPreset")}>
-              <button type="button" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm"
-                style={{ border: "none", cursor: "pointer", color: "var(--canvas-text)" }}>
+              <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
                 <PresetIcon />
-              </button>
+              </Button>
             </Tooltip>
           }
           content={
