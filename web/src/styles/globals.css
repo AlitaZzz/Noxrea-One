@@ -419,21 +419,25 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   padding: 12px;
   overflow: hidden;
 }
+/* 虚线添加占位共用规格（生成面板「添加参考」加号 / 上传弹窗放置区）：
+   1px 虚线暗示可放置，hover 提亮边框、底色抬一档（token 见 :root 画布色板） */
+.dashed-add-zone {
+  border: 1px dashed var(--canvas-border);
+  background: var(--canvas-bg-hover);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dashed-add-zone:hover {
+  border-color: var(--canvas-text-dim);
+  background: var(--canvas-bg-active);
+}
 .upload-drop-zone {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 130px;
   height: 130px;
-  /* 外层已有托盘实线框，内部虚线减淡为 1px 只做「可放置」暗示 */
-  border: 1px dashed var(--canvas-border);
   border-radius: 8px;
-  background: rgb(255 255 255 / 3%);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.upload-drop-zone:hover {
-  background: var(--canvas-bg-hover);
 }
 /* 上传弹窗：已选文件卡片 */
 .upload-file-card {

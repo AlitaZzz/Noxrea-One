@@ -397,7 +397,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
-                  className="upload-drop-zone shrink-0"
+                  className="upload-drop-zone dashed-add-zone shrink-0"
                 >
                   <PlusOutlined style={{ fontSize: 28, color: "var(--canvas-text-muted)" }} />
                 </div>

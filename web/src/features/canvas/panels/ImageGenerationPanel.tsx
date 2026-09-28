@@ -413,16 +413,14 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               {group.content}
             </Fragment>
           ))}
-          {/* 添加参考：方形加号占位，与参考缩略图同行 */}
+          {/* 添加参考：方形加号占位，与参考缩略图同行（虚线规格与上传弹窗放置区共用 .dashed-add-zone） */}
           <Tooltip title={t("common.reference")}>
-            <Button size="small" type="text"
-              className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-              style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
-              onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
-              onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
+            <button type="button"
+              className="dashed-add-zone flex items-center justify-center rounded flex-shrink-0"
+              style={{ width: 56, height: 56 }}
               onClick={handleRefUpload}>
               <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-            </Button>
+            </button>
           </Tooltip>
         </div>
       <MentionPrompt
