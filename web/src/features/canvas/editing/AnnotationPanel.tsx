@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { BorderOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined, HighlightOutlined } from "@ant-design/icons";
+import { BorderOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
+import { SmartEditBrushToolIcon } from "@/components/ui/icons/canvas/SmartEditBrushToolIcon";
 import { UndoIcon } from "@/components/ui/icons/canvas/UndoIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -502,7 +503,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
             type="text"
             size="middle"
             style={{ padding: 8, ...(mode === "brush" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            icon={<HighlightOutlined />}
+            icon={<SmartEditBrushToolIcon style={{ fontSize: 16 }} />}
             onClick={() => setMode("brush")}
           />
         </Tooltip>

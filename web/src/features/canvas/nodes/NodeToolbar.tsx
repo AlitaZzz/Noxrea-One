@@ -11,7 +11,6 @@ import {
   CopyOutlined,
   DownloadOutlined,
   ExpandOutlined,
-  HighlightOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
   ScissorOutlined,
@@ -21,7 +20,7 @@ import {
   StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
-import { Crop, FileText, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -29,11 +28,14 @@ import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizonta
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
+import { ImageAnnotationIcon } from "@/components/ui/icons/canvas/ImageAnnotationIcon";
+import { ImageToPromptIcon } from "@/components/ui/icons/canvas/ImageToPromptIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { SpeedIcon } from "@/components/ui/icons/canvas/SpeedIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
+import { VideoToPromptIcon } from "@/components/ui/icons/canvas/VideoToPromptIcon";
 import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
@@ -288,7 +290,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
           </Tooltip>
           <Tooltip title={t("annotation.title")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<HighlightOutlined />} disabled={!assetSrc}
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ImageAnnotationIcon style={{ fontSize: 16 }} />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "annotate")} />
           </Tooltip>
           <MenuPopover
@@ -318,7 +320,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           </Tooltip>
           <Tooltip title={t("node.reversePrompt")}>
             <Button type="text" size="middle" style={{ padding: 8 }}
-              icon={<FileText size={16} />}
+              icon={<ImageToPromptIcon style={{ fontSize: 16 }} />}
               onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
               disabled={!assetSrc} />
           </Tooltip>
@@ -416,6 +418,15 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               icon={<WaveIcon />}
               disabled={!assetSrc || videoHasAudio === false}
               onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
+            />
+          </Tooltip>
+          <Tooltip title={t("node.reversePrompt")}>
+            <Button
+              type="text"
+              size="middle"
+              style={{ padding: 8 }}
+              icon={<VideoToPromptIcon style={{ fontSize: 16 }} />}
+              disabled={!assetSrc}
             />
           </Tooltip>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
