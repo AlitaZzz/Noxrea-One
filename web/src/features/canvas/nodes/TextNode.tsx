@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
-import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { EventNames, isGenerating, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
@@ -124,14 +124,6 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     exitEditing();
   }, [exitEditing]);
 
-  const handleClear = useCallback(() => {
-    useCanvasStore.getState().updateNodeData(id, { content: "", plainText: "" });
-    markDirtyImmediate();
-    // emitUpdate:false——updateNodeData 已压过历史， setContent 回显再触发一次
-    // onUpdate 会经 updateNodeData 重复压栈，清空后 Ctrl+Z 看似失灵
-    editor?.commands.setContent("", { emitUpdate: false });
-  }, [id, editor]);
-
   // 导出为 Markdown：保留标题、列表、加粗等富文本结构，供复制 / 下载复用
   const getMarkdown = useCallback(() => editor?.getMarkdown() ?? "", [editor]);
 
@@ -151,16 +143,15 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   }, [getMarkdown, data.label, t]);
 
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleClear, handleCopy, handleDownload });
+  const actionRefs = useRef({ handleCopy, handleDownload });
   useEffect(() => {
-    actionRefs.current = { handleClear, handleCopy, handleDownload };
-  }, [handleClear, handleCopy, handleDownload]);
+    actionRefs.current = { handleCopy, handleDownload };
+  }, [handleCopy, handleDownload]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const ce = e as CustomEvent;
       if (ce.detail?.nodeId !== id) return;
       switch (ce.detail?.action) {
-        case "clear": actionRefs.current.handleClear(); break;
         case "copy": void actionRefs.current.handleCopy(); break;
         case "download": actionRefs.current.handleDownload(); break;
       }

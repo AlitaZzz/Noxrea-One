@@ -84,20 +84,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     document.body.removeChild(a);
   }, [src, data.label]);
 
-  const handleClear = useCallback(() => {
-    useCanvasStore.getState().updateNodeData(
-      id,
-      {
-        src: "",
-        label: "",
-        duration: undefined,
-        upload: undefined,
-      } as Partial<AudioNodeData>,
-      { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
-    );
-    markDirtyImmediate();
-  }, [id]);
-
   /** 片段截取：服务端音频流 copy 截取 [start, end]，产物作为派生音频节点
       连回源节点（历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
   const handleExtractAudioClip = useCallback(
@@ -195,9 +181,6 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         case "download":
           handleDownload();
           break;
-        case "clear":
-          handleClear();
-          break;
         case "apply-audio-speed":
           void handleApplyAudioSpeed(detail.speed as number);
           break;
@@ -208,7 +191,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, handleDownload, handleClear, handleApplyAudioSpeed, handleExtractAudioClip]);
+  }, [id, handleDownload, handleApplyAudioSpeed, handleExtractAudioClip]);
 
   const hasAudio = src && src.length > 0;
 

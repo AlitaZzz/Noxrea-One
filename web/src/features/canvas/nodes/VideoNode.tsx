@@ -44,7 +44,7 @@ import {
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
-import { DEFAULT_NODE_HEIGHT,DEFAULT_NODE_WIDTH,EventNames,isGenerating } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT, EventNames,isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
@@ -571,14 +571,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     });
   }, [src, data.label, id, addAsset, t]);
 
-  const handleClear = useCallback(() => {
-    useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: "", naturalWidth: 0, naturalHeight: 0,
-      upload: undefined, source: undefined,
-    }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
-    markDirtyImmediate();
-  }, [id]);
-
   // Listen for node action events from NodeToolbar
   useEffect(() => {
     function onNodeAction(e: Event) {
@@ -587,7 +579,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       switch (detail.action) {
         case "download": handleDownload(); break;
         case "save-asset": handleSaveToAssets(); break;
-        case "clear": handleClear(); break;
         case "preview-fullscreen": if (src) setPreviewOpen(true); break;
         case "capture-frame": {
           const v = videoRef.current;
@@ -616,7 +607,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     }
     window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
     return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, handleDownload, handleSaveToAssets, handleClear, captureFrame, handleDetachAudio, handleExtractClip, handleCropVideoApply]);
+  }, [id, src, handleDownload, handleSaveToAssets, captureFrame, handleDetachAudio, handleExtractClip, handleCropVideoApply]);
 
   // 换源后旧探测结论失效，清空以便重新判定。
   // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次

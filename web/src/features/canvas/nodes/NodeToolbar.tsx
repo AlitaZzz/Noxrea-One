@@ -21,7 +21,7 @@ import {
   StepForwardOutlined,
 } from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
-import { Crop, Eraser, FileText, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
+import { Crop, FileText, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -350,12 +350,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
           </Tooltip>
-          {/* Reset */}
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "clear")} />
-          </Tooltip>
         </>
       )}
 
@@ -434,15 +428,10 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
           </Tooltip>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
-              onClick={() => dispatchNodeAction(nodeId, "clear")} />
-          </Tooltip>
         </>
       )}
 
-      {/* Audio node actions — 二态：变速调节 → 常规（片段截取/变速/下载/清除）；
+      {/* Audio node actions — 二态：变速调节 → 常规（片段截取/变速/下载）；
           音频片段截取中本工具栏整体隐藏（✓/✗ 在节点下方的 AudioClipStripPanel 内） */}
       {nodeType === NODE_ACTIONS.AUDIO && (
         <>
@@ -486,16 +475,12 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
                 <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />}
                   onClick={() => dispatchNodeAction(nodeId, "download")} />
               </Tooltip>
-              <Tooltip title={t("common.clear")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />}
-                  onClick={() => dispatchNodeAction(nodeId, "clear")} />
-              </Tooltip>
             </>
           )}
         </>
       )}
 
-      {/* Text node actions — 复制 / 下载为 Markdown，清除 */}
+      {/* Text node actions — 复制 / 下载为 Markdown */}
       {nodeType === NODE_ACTIONS.TEXT && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
@@ -506,10 +491,6 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           <Tooltip title={t("common.download")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!textContent}
               onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
-          <Tooltip title={t("common.clear")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Eraser size={16} />} disabled={!textContent}
-              onClick={() => dispatchNodeAction(nodeId, "clear")} />
           </Tooltip>
         </>
       )}

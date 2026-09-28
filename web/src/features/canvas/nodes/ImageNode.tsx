@@ -30,11 +30,7 @@ import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
-import {
-  DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH,
-  EventNames,
-} from "@/lib/constants";
+import { EventNames } from "@/lib/constants";
 import { isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -328,21 +324,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     markDirtyImmediate();
   }, [id, src, promptTemplates, i18n]);
 
-  const handleClear = useCallback(() => {
-    useCanvasStore.getState().updateNodeData(id, {
-      src: "", label: "", naturalWidth: 0, naturalHeight: 0,
-      rotation: undefined, flipH: undefined, flipV: undefined,
-      upload: undefined, multiResultUrls: undefined, multiResultTotalCount: undefined,
-      source: undefined,
-    }, { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT });
-    markDirtyImmediate();
-  }, [id]);
-
   // Listen for node action events from NodeToolbar
-  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview });
+  const actionRefs = useRef({ handleDownload, handleSaveToAssets, handleTransform, handleGridSplit, handleApplyTemplate, openPreview });
   useEffect(() => {
-    actionRefs.current = { handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview };
-  }, [handleDownload, handleSaveToAssets, handleClear, handleTransform, handleGridSplit, handleApplyTemplate, openPreview]);
+    actionRefs.current = { handleDownload, handleSaveToAssets, handleTransform, handleGridSplit, handleApplyTemplate, openPreview };
+  }, [handleDownload, handleSaveToAssets, handleTransform, handleGridSplit, handleApplyTemplate, openPreview]);
   useEffect(() => {
     function onNodeAction(e: Event) {
       const detail = (e as CustomEvent).detail;
@@ -360,7 +346,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           if (src) setPanoramaOpen(true);
           break;
         case "preview-fullscreen": a.openPreview(); break;
-        case "clear": a.handleClear(); break;
         case "transform": a.handleTransform(detail.op); break;
         case "grid-split": a.handleGridSplit(detail.rows, detail.cols); break;
         case "create-template": a.handleApplyTemplate(detail.templateId); break;
