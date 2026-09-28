@@ -91,16 +91,17 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     editorRef.current = editor;
   }, [editor]);
 
-  // 外部修改 content（如 AI 生成回填）时同步到编辑器，否则编辑器不会自动刷新。
-  // emitUpdate:false——这是程序化回显而非用户编辑，若触发 onUpdate 会经
-  // onUpdate → updateNodeData 走一次历史压栈，把 redo 栈清空
+  // 外部修改 content（如 AI 生成回填、画布级撤销恢复快照）时同步到编辑器，
+  // 编辑中同样应用——store 是唯一数据源，编辑器只是它的视图。
+  // 自身输入的回写经等值检查为 no-op；emitUpdate:false——程序化回显不算用户
+  // 编辑，若触发 onUpdate 会经 updateNodeVisual 走一次历史压栈，把 redo 栈清空
   // （撤销恢复节点 → 重挂回填 → 幽灵压栈，Ctrl+Z 看似失效）。
   useEffect(() => {
-    if (!editor || editingContent) return;
+    if (!editor) return;
     const html = content || "";
     const current = editor.isEmpty ? "" : editor.getHTML();
     if (html !== current) editor.commands.setContent(html, { emitUpdate: false });
-  }, [editor, content, editingContent]);
+  }, [editor, content]);
 
   // 编辑态切换：setEditable + 聚焦到末尾
   useEffect(() => {

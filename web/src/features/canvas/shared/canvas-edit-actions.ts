@@ -350,6 +350,11 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
   // 撤销/重做是程序化恢复，不算用户对画布内容做的增量修改，不进动作历史
   runSuppressed(() => {
     const s = useCanvasStore.getState();
+    // 编辑态下撤销可能回退到该节点尚不存在的时刻：节点已随快照消失则退出编辑，
+    // 否则 editingTextNodeId 悬空指向不存在的节点
+    if (s.editingTextNodeId && !snapshot.nodes.some((n) => n.id === s.editingTextNodeId)) {
+      s.setEditingTextNodeId(null);
+    }
     s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
     s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
     s.setViewport(snapshot.viewport);

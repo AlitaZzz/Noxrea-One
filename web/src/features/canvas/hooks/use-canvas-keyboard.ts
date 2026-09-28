@@ -90,9 +90,14 @@ export function useCanvasKeyboard() {
       // or when a media editor panel (标注/裁剪/选帧/片段截取) owns the keyboard
       const state = useCanvasStore.getState();
       if (state.modalOpen || state.directorOverlayOpen || isMediaEditorOpen()) return;
-      if (isEditableTarget(e.target)) return;
 
       const mod = e.ctrlKey || e.metaKey;
+      // 文本节点编辑态例外：Tiptap 内部历史被禁用（undoRedo: false），画布 store
+      // 历史是唯一撤销源，Ctrl+Z / Ctrl+Y 必须路由到画布级 undo/redo 而不是让位。
+      // 其余可编辑目标（普通 input/textarea）仍保持浏览器原生撤销。
+      const undoRedoAttempt =
+        mod && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y");
+      if (isEditableTarget(e.target) && !(state.editingTextNodeId !== null && undoRedoAttempt)) return;
 
       // ---- Zoom ----
       if (mod && e.key === "=") { e.preventDefault(); zoomIn(); }
