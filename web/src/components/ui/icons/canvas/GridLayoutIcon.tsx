@@ -1,0 +1,28 @@
+/**
+ * 2×2 宫格图标，用于组布局菜单中的宫格布局项。
+ */
+import type { CSSProperties } from "react";
+
+interface IconProps {
+  className?: string;
+  style?: CSSProperties;
+}
+
+export function GridLayoutIcon({ className, style }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 19.8 19.8"
+      fill="none"
+      className={className}
+      style={{ display: "inline-block", verticalAlign: "-0.125em", width: "1em", height: "1em", ...style }}
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M6.9 11c1.05 0 1.9.85 1.9 1.9v5a1.9 1.9 0 0 1-1.9 1.9h-5A1.9 1.9 0 0 1 0 17.9v-5C0 11.85.85 11 1.9 11zm11 0c1.05 0 1.9.85 1.9 1.9v5a1.9 1.9 0 0 1-1.9 1.9h-5a1.9 1.9 0 0 1-1.9-1.9v-5c0-1.05.85-1.9 1.9-1.9zm-16 1.8a.1.1 0 0 0-.1.1v5q.01.1.1.1h5a.1.1 0 0 0 .1-.1v-5a.1.1 0 0 0-.1-.1zm11 0a.1.1 0 0 0-.1.1v5q.01.1.1.1h5a.1.1 0 0 0 .1-.1v-5a.1.1 0 0 0-.1-.1zM6.9 0c1.05 0 1.9.85 1.9 1.9v5a1.9 1.9 0 0 1-1.9 1.9h-5A1.9 1.9 0 0 1 0 6.9v-5C0 .85.85 0 1.9 0zm11 0c1.05 0 1.9.85 1.9 1.9v5a1.9 1.9 0 0 1-1.9 1.9h-5A1.9 1.9 0 0 1 11 6.9v-5c0-1.05.85-1.9 1.9-1.9zm-16 1.8a.1.1 0 0 0-.1.1v5q.01.1.1.1h5a.1.1 0 0 0 .1-.1v-5a.1.1 0 0 0-.1-.1zm11 0a.1.1 0 0 0-.1.1v5q.01.1.1.1h5a.1.1 0 0 0 .1-.1v-5a.1.1 0 0 0-.1-.1z"
+      />
+    </svg>
+  );
+}
+
+export default GridLayoutIcon;

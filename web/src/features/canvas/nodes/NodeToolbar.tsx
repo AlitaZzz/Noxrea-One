@@ -22,11 +22,11 @@ import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
-import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
 import { ClipTrimIcon } from "@/components/ui/icons/canvas/ClipTrimIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
+import { GridLayoutIcon } from "@/components/ui/icons/canvas/GridLayoutIcon";
+import { HorizontalLayoutIcon } from "@/components/ui/icons/canvas/HorizontalLayoutIcon";
 import { ImageAnnotationIcon } from "@/components/ui/icons/canvas/ImageAnnotationIcon";
 import { ImageToPromptIcon } from "@/components/ui/icons/canvas/ImageToPromptIcon";
 import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
@@ -35,6 +35,7 @@ import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
 import { SpeedIcon } from "@/components/ui/icons/canvas/SpeedIcon";
 import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
 import { VideoToPromptIcon } from "@/components/ui/icons/canvas/VideoToPromptIcon";
+import { VerticalLayoutIcon } from "@/components/ui/icons/canvas/VerticalLayoutIcon";
 import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
@@ -541,13 +542,13 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             content={
               <>
                 <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridSplitIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridLayoutIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
                 </MenuItem>
                 <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignHorizontalIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><HorizontalLayoutIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
                 </MenuItem>
                 <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><AlignVerticalIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><VerticalLayoutIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
                 </MenuItem>
               </>
             }
