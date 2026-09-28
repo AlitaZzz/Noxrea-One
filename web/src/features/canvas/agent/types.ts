@@ -104,6 +104,7 @@ export interface PendingConfirmation {
 /** 执行单个工具后的结果 */
 export interface AgentToolResult {
   toolCallId: string;
+  /** 模型协议文本（回传模型 + 详情面板原始展示）：刻意 locale 稳定，勿走 i18n（见 executors.ts 头注释） */
   content: string;
   /** 本轮是否有画布变更（决定是否补一次历史快照） */
   mutated: boolean;

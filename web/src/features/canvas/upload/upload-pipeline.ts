@@ -28,6 +28,8 @@ import {
   AUDIO_NODE_WIDTH,
   DEFAULT_NODE_CONTENT_HEIGHT,
   DEFAULT_NODE_WIDTH,
+  VIDEO_FALLBACK_HEIGHT,
+  VIDEO_FALLBACK_WIDTH,
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
@@ -189,8 +191,8 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       nh = dims.h;
     }
     if (kind !== "audio") {
-      nw = nw || (kind === "video" ? 1280 : DEFAULT_NODE_WIDTH);
-      nh = nh || (kind === "video" ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
+      nw = nw || (kind === "video" ? VIDEO_FALLBACK_WIDTH : DEFAULT_NODE_WIDTH);
+      nh = nh || (kind === "video" ? VIDEO_FALLBACK_HEIGHT : DEFAULT_NODE_CONTENT_HEIGHT);
     }
 
     prepared.push({

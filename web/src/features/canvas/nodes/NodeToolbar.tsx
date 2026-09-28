@@ -189,7 +189,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
         size="middle"
         style={{ padding: 8 }}
         disabled={!assetSrc}
-        icon={isInAssets ? <StarFilled style={{ color: "#faad14" }} /> : <StarOutlined />}
+        icon={isInAssets ? <StarFilled style={{ color: "var(--canvas-warning)" }} /> : <StarOutlined />}
         onClick={() => {
           if (!assetSrc) return;
           if (isInAssets) void unsaveAssetsByUrls([assetSrc]);

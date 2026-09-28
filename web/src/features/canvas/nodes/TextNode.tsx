@@ -193,7 +193,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         display={data.label || t("node.text")}
         trailing={
           charCount > 0 ? (
-            <span style={charCount > 500 ? { color: "var(--canvas-warning, #faad14)" } : undefined}>{charCount}</span>
+            <span style={charCount > 500 ? { color: "var(--canvas-warning)" } : undefined}>{charCount}</span>
           ) : null
         }
       />

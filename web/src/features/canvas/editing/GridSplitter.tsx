@@ -8,12 +8,14 @@
 "use client";
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
 import { canvasToBlob, computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
 
 export function useGridSplit(sourceId: string, src: string | undefined) {
+  const { t } = useTranslation();
   return useCallback(
     async (rows: number, cols: number) => {
       if (!src) return;
@@ -45,7 +47,7 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
               filename: `grid_${r}_${c}.png`,
               naturalWidth: pieceW,
               naturalHeight: pieceH,
-              label: `宫格切分 (${r + 1}-${c + 1})`,
+              label: `${t("node.gridSplit")} (${r + 1}-${c + 1})`,
               position: gridPositionAt(layout, r * cols + c),
             });
           }
@@ -64,6 +66,6 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
           .updateNodeData(sourceId, { taskBinding: undefined }, undefined, { skipHistory: true });
       }
     },
-    [sourceId, src],
+    [sourceId, src, t],
   );
 }

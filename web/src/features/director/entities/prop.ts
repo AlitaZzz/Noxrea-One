@@ -4,9 +4,10 @@
  */
 import * as THREE from "three";
 
+import { DIRECTOR_PRIMARY } from "../theme";
 import { Entity } from "./entity";
 
-const PRIM_COLORS = [0x7ee787, 0xbc8cff, 0xffb066, 0x68d6c8, 0x4f8ef7, 0xf07b6b];
+const PRIM_COLORS = [0x7ee787, 0xbc8cff, 0xffb066, 0x68d6c8, DIRECTOR_PRIMARY, 0xf07b6b];
 let _colorIdx = 0;
 
 function stdMat(c: number) {

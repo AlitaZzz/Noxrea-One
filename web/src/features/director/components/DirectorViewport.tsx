@@ -27,6 +27,7 @@ import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
+import { DIRECTOR_CAMERA_HEX, DIRECTOR_PRIMARY } from "@/features/director/theme";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
 
@@ -79,7 +80,7 @@ export default function DirectorViewport() {
       const d = document.createElement("div");
       d.className = ent.type === "camera" ? "label3d cam" : "label3d";
       d.textContent = ent.name;
-      d.style.cssText = `position:absolute;transform:translate(-50%,${ent.type === "camera" ? "-160%" : "-135%"});background:${ent.type === "camera" ? "#ff8a3d" : "#fff"};color:${ent.type === "camera" ? "#1a0d00" : "#000"};font-size:${ent.type === "camera" ? "12px" : "15px"};font-weight:${ent.type === "camera" ? "600" : "700"};padding:${ent.type === "camera" ? "2px 9px" : "3px 11px"};border-radius:8px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.5);`;
+      d.style.cssText = `position:absolute;transform:translate(-50%,${ent.type === "camera" ? "-160%" : "-135%"});background:${ent.type === "camera" ? DIRECTOR_CAMERA_HEX : "#fff"};color:${ent.type === "camera" ? "#1a0d00" : "#000"};font-size:${ent.type === "camera" ? "12px" : "15px"};font-weight:${ent.type === "camera" ? "600" : "700"};padding:${ent.type === "camera" ? "2px 9px" : "3px 11px"};border-radius:8px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 10px rgba(0,0,0,.5);`;
       const layer = document.getElementById("dirLabelLayer");
       if (layer) layer.appendChild(d);
       _labelEls.set(ent.id, d);
@@ -321,7 +322,7 @@ export default function DirectorViewport() {
         cols = Math.max(1, Math.min(6, Math.round(cols)));
         spacing = Math.max(0.5, Math.min(5, spacing));
         const b = BODY_TYPES.standard;
-        const PALETTE = [0x4f8ef7, 0xff9f43, 0xee5253, 0x10ac84, 0xfeca57, 0xa55eea, 0x00d2d3, 0xff6b9d, 0x9b59b6];
+        const PALETTE = [DIRECTOR_PRIMARY, 0xff9f43, 0xee5253, 0x10ac84, 0xfeca57, 0xa55eea, 0x00d2d3, 0xff6b9d, 0x9b59b6];
         const group = new THREE.Group();
         const members: Character[] = [];
         const usedLetters = new Set<string>();

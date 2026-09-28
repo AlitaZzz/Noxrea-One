@@ -214,7 +214,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
       // 走统一上传管道：先建占位节点（本地预览），上传在后台进行；
       // 失败时管道会移除占位节点并提示，无需调用方兜底
       await runMediaUpload({
-        items: [{ blob, filename: "crop.png", naturalWidth: sw, naturalHeight: sh, label: "裁剪" }],
+        items: [{ blob, filename: "crop.png", naturalWidth: sw, naturalHeight: sh, label: t("node.crop") }],
         sink: { kind: "derived-node", sourceId },
       });
       setLoading(false);
@@ -224,7 +224,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [loading, naturalSize, crop, sourceId, onClose]);
+  }, [loading, naturalSize, crop, sourceId, onClose, t]);
 
   // Info display
   const cropW = Math.round(crop.w * (naturalSize.w || displaySize.w));

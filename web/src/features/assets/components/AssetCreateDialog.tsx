@@ -420,11 +420,11 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                           />
                         ) : null}
-                        <PlayCircleOutlined style={{ fontSize: 28, color: "rgba(255,255,255,0.7)", position: "relative", zIndex: 1 }} />
+                        <PlayCircleOutlined style={{ fontSize: 28, color: "rgb(var(--on-media-rgb) / 0.7)", position: "relative", zIndex: 1 }} />
                       </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <WaveIcon style={{ fontSize: 36, color: "rgba(255,255,255,0.3)" }} />
+                        <WaveIcon style={{ fontSize: 36, color: "rgb(var(--on-media-rgb) / 0.3)" }} />
                       </div>
                     )}
 
@@ -438,7 +438,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                           percent={f.uploadProgress}
                           size={48}
                           strokeColor="#fff"
-                          railColor="rgba(255,255,255,0.2)"
+                          railColor="rgb(var(--on-media-rgb) / 0.2)"
                           status="active"
                         />
                       </div>
@@ -452,7 +452,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
 
                     {f.status === "done" && (
                       <button
-                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer hover:bg-white hover:text-[#1d1d21]"
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer hover:bg-white hover:text-[var(--canvas-bg)]"
                         onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
                       >
                         <CloseOutlined style={{ fontSize: 10 }} />

@@ -121,7 +121,7 @@ export default function ProjectListPage() {
               <style>{`.avatar-menu-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
               <div className="flex items-center gap-2 px-1 py-1.5">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
-                  {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.username || "U")[0].toUpperCase()}
+                  {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.username || t("auth.defaultUser"))[0].toUpperCase()}
                 </div>
                 <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username}</span>
               </div>
@@ -159,7 +159,7 @@ export default function ProjectListPage() {
                 (user?.username || "U")[0].toUpperCase()
               )}
             </div>
-            <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || "User"}</span>
+            <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || t("auth.defaultUser")}</span>
             <ChevronDownIcon style={{ color: "var(--canvas-text-dim)", width: 10, height: 10 }} />
           </div>
         </Popover>

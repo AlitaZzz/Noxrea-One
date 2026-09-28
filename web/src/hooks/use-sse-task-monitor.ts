@@ -14,12 +14,16 @@ import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
+import { TASK_STATUS_BATCH_SIZE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 import { readSseStream,SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
 /** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
 const MAX_ERROR_LEN = 1000;
+
+/** 通知描述里 prompt 的展示长度上限：超出截断加省略号 */
+const NOTIFY_DESC_MAX_LEN = 80;
 
 /**
  * 截断错误文案。
@@ -114,7 +118,9 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
         const firstUrl = completedUrls[0];
         // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
         // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
-        const desc = prompt.length > 80 ? prompt.slice(0, 77) + "..." : prompt;
+        const desc = prompt.length > NOTIFY_DESC_MAX_LEN
+          ? prompt.slice(0, NOTIFY_DESC_MAX_LEN - 3) + "..."
+          : prompt;
         // 一次性回填：图片 + 多图列表 + 产物大小 + 清除生成中状态（遮罩此时才消失）。
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
@@ -260,14 +266,14 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       }
       if (watching.length === 0) return;
       try {
-        // 服务端单次查询上限 100：超出的 id 分批并行请求后合并。
+        // 服务端单次查询上限 TASK_STATUS_BATCH_SIZE：超出的 id 分批并行请求后合并。
         // 单块失败只跳过该块——SSE 已死的场景下对账是唯一恢复路径，
         // 一次瞬时 502 不能把已拿到的其余块结果一并丢掉。
         const ids = [...new Set(watching.map(w => w.taskId))];
         const byId = new Map<string, TaskStatusEvent>();
         const chunkResults = await Promise.allSettled(
-          Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) =>
-            generationApi.fetchTasksStatus(ids.slice(i * 100, (i + 1) * 100))
+          Array.from({ length: Math.ceil(ids.length / TASK_STATUS_BATCH_SIZE) }, (_, i) =>
+            generationApi.fetchTasksStatus(ids.slice(i * TASK_STATUS_BATCH_SIZE, (i + 1) * TASK_STATUS_BATCH_SIZE))
           )
         );
         if (disposed) return;

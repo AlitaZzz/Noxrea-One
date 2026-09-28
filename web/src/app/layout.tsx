@@ -10,16 +10,21 @@ import { cookies } from "next/headers";
 
 import { parseUserCookie, USER_COOKIE } from "@/features/auth/user-cache";
 import { CachedUserProvider } from "@/features/auth/UserContext";
+import enUS from "@/lib/i18n/en-US.json";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { LANG_COOKIE } from "@/lib/i18n/lang-cookie";
+import zhCN from "@/lib/i18n/zh-CN.json";
 import { AppProviders } from "@/providers/AppProviders";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 
-export const metadata: Metadata = {
-  title: APP_NAME,
-  description: "AI-powered infinite canvas workspace",
-};
+// SEO 描述跟随 cookie 语言（服务端直读 JSON 资源，不经 react-i18next——
+// i18n config 是 "use client" 模块，不能进 server bundle）
+export async function generateMetadata(): Promise<Metadata> {
+  const rawLang = (await cookies()).get(LANG_COOKIE)?.value;
+  const description = rawLang === "en" ? enUS.meta.description : zhCN.meta.description;
+  return { title: APP_NAME, description };
+}
 
 export default async function RootLayout({
   children,

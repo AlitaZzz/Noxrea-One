@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import i18n from "@/lib/i18n/config";
 import { readSseStream } from "@/lib/sse";
 
 function streamOf(...chunks: string[]): ReadableStream<Uint8Array> {
@@ -118,7 +119,7 @@ describe("readSseStream", () => {
     });
     await expect(
       readSseStream(stalled, () => {}, { readTimeoutMs: 50 })
-    ).rejects.toThrow("read timeout: no data for 0.05s");
+    ).rejects.toThrow(i18n.t("error.sse_read_timeout", { seconds: 0.05 }));
   });
 
   it("三路服务端真实格式样例：生成任务 / Agent / 画布编辑权（锁定统一前提）", async () => {

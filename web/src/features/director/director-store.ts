@@ -8,6 +8,7 @@ import { create } from "zustand";
 
 import type { DirectorStateData } from "@/features/canvas/types";
 import type { Stage } from "@/features/director/core/stage";
+import { DIRECTOR_SCENE_BG_HEX } from "@/features/director/theme";
 
 import type {
   CameraEntity,
@@ -124,7 +125,7 @@ export const useDirectorStore = create<DirectorState>((set) => ({
     scale: 1,
     pos: { x: 0, y: 0, z: 0 },
     rot: { x: 0, y: 0, z: 0 },
-    sky: "#060608",
+    sky: DIRECTOR_SCENE_BG_HEX,
     labels: true,
     ground: { visible: true, opacity: 0.4, height: 0 },
     panoActive: false,

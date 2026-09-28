@@ -7,7 +7,7 @@
  */
 "use client";
 
-import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { DEFAULT_NODE_WIDTH, NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT, VIDEO_FALLBACK_HEIGHT, VIDEO_FALLBACK_WIDTH } from "@/lib/constants";
 
 /**
  * 纯函数：计算 NODE_DISPLAY_MAX 等比缩放后的显示尺寸（长边约束）。
@@ -107,7 +107,7 @@ export function loadMediaDimensions(url: string, isVideo: boolean, timeoutMs = 1
     if (isVideo) {
       const v = document.createElement("video");
       v.preload = "metadata";
-      v.onloadedmetadata = () => done({ w: v.videoWidth || 1152, h: v.videoHeight || 768 });
+      v.onloadedmetadata = () => done({ w: v.videoWidth || VIDEO_FALLBACK_WIDTH, h: v.videoHeight || VIDEO_FALLBACK_HEIGHT });
       v.onerror = () => done({ w: 0, h: 0 });
       v.src = url;
     } else {
@@ -123,7 +123,8 @@ export function loadMediaDimensions(url: string, isVideo: boolean, timeoutMs = 1
 // 宫格切分、全景多视角截图等批量派生节点统一使用此布局，
 // 保证各处"源节点右侧网格"的基准点与步进逻辑一致。
 
-/** 派生节点相对源节点的水平基准间隙（px） */
+/** 派生节点相对源节点的水平基准间隙（px）。数值与 LAYOUT_GAP 相同但语义独立：
+ *  这是源节点→派生网格的专有间距，不随整理/粘贴间距调整 */
 const DERIVED_BASE_GAP_X = 60;
 /** 相邻派生节点之间的间隙（px） */
 const DERIVED_CELL_GAP = 12;
@@ -159,7 +160,7 @@ export function computeDerivedGrid(
 ): DerivedGridLayout {
   const { displayW, displayH } = computeThumbScale(cellNaturalW, cellNaturalH);
   return {
-    baseX: (sourceNode?.position.x || 0) + ((sourceNode?.style?.width as number) || 600) + DERIVED_BASE_GAP_X,
+    baseX: (sourceNode?.position.x || 0) + ((sourceNode?.style?.width as number) || DEFAULT_NODE_WIDTH) + DERIVED_BASE_GAP_X,
     baseY: sourceNode?.position.y || 0,
     stepX: displayW + DERIVED_CELL_GAP,
     // 纵向需计入标题栏高度，避免下一行节点压住上一行的 title

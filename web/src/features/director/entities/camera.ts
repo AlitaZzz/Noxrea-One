@@ -5,9 +5,10 @@
  */
 import * as THREE from "three";
 
+import { DIRECTOR_CAMERA_COLOR } from "../theme";
 import { Entity } from "./entity";
 
-const BODY_COLOR = 0xff8a3d;
+const BODY_COLOR = DIRECTOR_CAMERA_COLOR;
 const FRUSTUM_COLOR = 0x35a7ff;
 const VIZ_FAR = 0.5;
 

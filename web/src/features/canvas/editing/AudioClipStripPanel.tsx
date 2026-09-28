@@ -23,7 +23,7 @@ import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { SEEK_MARGIN_S } from "@/lib/constants";
+import { DEFAULT_NODE_COLOR, SEEK_MARGIN_S } from "@/lib/constants";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import PrimaryActionButton from "./PrimaryActionButton";
@@ -113,8 +113,8 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       // 波形形态与节点内一致（细条），仅加粗加大间距、提高透明度：
       // 面板轨道放大到 1000px 后 2px 条偏稀疏单薄，选区亮带对比不足
       waveColor: "#ffffff",
-      progressColor: "#c7f43d",
-      cursorColor: "#c7f43d",
+      progressColor: DEFAULT_NODE_COLOR,
+      cursorColor: DEFAULT_NODE_COLOR,
       cursorWidth: 0,
       barWidth: 3,
       barGap: 2,

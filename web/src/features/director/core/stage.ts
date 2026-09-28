@@ -5,6 +5,8 @@
  */
 import * as THREE from "three";
 
+import { DIRECTOR_SCENE_BG } from "../theme";
+
 // 场景 / 渲染器 / 光照 / 地面 / 网格 / 渲染循环 / resize
 export class Stage {
   viewport: HTMLElement;
@@ -29,8 +31,8 @@ export class Stage {
     this.viewport = viewportEl;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x060608);
-    this.scene.fog = new THREE.Fog(0x060608, 18, 46);
+    this.scene.background = new THREE.Color(DIRECTOR_SCENE_BG);
+    this.scene.fog = new THREE.Fog(DIRECTOR_SCENE_BG, 18, 46);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,

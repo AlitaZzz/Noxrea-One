@@ -1,4 +1,7 @@
 {
+  "meta": {
+    "description": "AI-powered infinite canvas workspace"
+  },
   "common": {
     "switchLanguage": "Switch language",
     "copy": "Copy",
@@ -246,6 +249,7 @@
     "none": "No projects yet",
     "home": "Home",
     "rename": "Rename",
+    "untitled": "Untitled",
     "setCover": "Set cover",
     "deleteConfirm": "Deleting \"{{name}}\" means you will no longer be able to access this project, and all generated content in it will be permanently deleted. This cannot be undone. Continue?",
     "deleteBatch": "Deleting {{count}} selected projects will remove access permanently, and all generated content in them will be permanently deleted. This cannot be undone. Continue?"
@@ -255,6 +259,7 @@
     "logoutConfirm": "Are you sure you want to logout?",
     "accountSettings": "Account Settings",
     "username": "Username",
+    "defaultUser": "User",
     "newPassword": "New Password (leave blank)",
     "currentPassword": "Current Password",
     "oldPwRequired": "Required to change password",
@@ -458,6 +463,8 @@
   "crop": {
     "reset": "Reset",
     "confirm": "Confirm",
+    "play": "Play",
+    "stop": "Stop",
     "cancel": "Cancel",
     "processing": "Cropping video...",
     "suffix": " (crop {{size}})",
@@ -851,6 +858,7 @@
     "network_unreachable": "Cannot connect to the server, please check your network",
     "network_error": "Network error",
     "parse_failed": "Failed to parse the response",
+    "sse_read_timeout": "Read timeout: no data for {{seconds}}s",
     "session_expired": "Session expired",
     "session_expired_desc": "Please sign in again",
     "withRequestId": "{{message}} (Error ID: {{id}})",

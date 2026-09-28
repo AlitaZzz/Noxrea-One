@@ -10,6 +10,7 @@
  * `event: <名称>` 事件行、单行 `data: <JSON 对象>` 载荷、`:` 前缀注释行。
  * 不支持多行 data 拼接与纯 CR 分隔——接入第三方 SSE 源前需先确认帧格式。
  */
+import i18n from "@/lib/i18n/config";
 
 /** 服务端 15s 心跳；30s 收不到任何字节即判定连接静默死亡，断开重连 */
 export const SSE_WATCHDOG_TIMEOUT_MS = 30_000;
@@ -53,7 +54,7 @@ export async function readSseStream(
         new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
           const timer = setTimeout(() => {
             reader.cancel().catch(() => {});
-            reject(new Error(`read timeout: no data for ${options.readTimeoutMs! / 1000}s`));
+            reject(new Error(i18n.t("error.sse_read_timeout", { seconds: options.readTimeoutMs! / 1000 })));
           }, options.readTimeoutMs);
           reader.read().then(
             (r) => {

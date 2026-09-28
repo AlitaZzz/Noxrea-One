@@ -17,7 +17,10 @@ export interface ReferenceItem {
 /** mention 节点 attrs 的存储形态：ReferenceItem 去掉 label（attrs 由 Tiptap addAttributes 声明，无 label 字段） */
 export type ReferenceItemAttrs = Omit<ReferenceItem, 'label'>;
 
-/** 引用项 chip 标签：图片N / 音频N / 视频N（同时作为提示词存储格式） */
+/** 引用项 chip 标签：图片N / 音频N / 视频N。
+ *  这是提示词的存储/回传格式（MentionPrompt 序列化与往返解析依赖它），
+ *  必须跨语言稳定——随 locale 变化会让已存提示词与解析对不上。
+ *  UI 展示一律走 refLabelKey + t()（见 MentionChip / MentionDropdown）。 */
 export function refLabel(item: ReferenceItem): string {
   const prefix = item.kind === "audio" ? "音频" : item.kind === "video" ? "视频" : "图片";
   return `${prefix}${item.index + 1}`;

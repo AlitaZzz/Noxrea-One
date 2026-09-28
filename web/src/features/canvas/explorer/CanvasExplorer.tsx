@@ -67,7 +67,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
           padding: 0,
         },
         section: {
-          borderRight: "1px solid #2c2c31",
+          borderRight: "1px solid var(--canvas-border)",
         },
       }}
       // 关闭按钮用 antd 内置（与 AgentDrawer 一致，hover 规则见 globals.css 的 .ant-drawer-close）

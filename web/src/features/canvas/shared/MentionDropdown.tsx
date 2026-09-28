@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
-import { type ReferenceItem, refLabel, refLabelKey } from "./reference";
+import { type ReferenceItem, refLabelKey } from "./reference";
 
 interface Props {
   items: ReferenceItem[];
@@ -98,7 +98,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           ) : (
             <img
               src={item.thumbnail}
-              alt={refLabel(item)}
+              alt={t(refLabelKey(item), { index: item.index + 1 })}
               className="w-10 h-10 rounded object-cover flex-shrink-0"
               style={{ border: "1px solid var(--canvas-border, #3a3a3a)" }}
             />

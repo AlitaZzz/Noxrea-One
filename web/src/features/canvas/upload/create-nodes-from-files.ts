@@ -14,6 +14,8 @@ import {
   DEFAULT_NODE_CONTENT_HEIGHT,
   DEFAULT_NODE_WIDTH,
   LAYOUT_GAP,
+  VIDEO_FALLBACK_HEIGHT,
+  VIDEO_FALLBACK_WIDTH,
 } from "@/lib/constants";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import { isOffline } from "@/lib/utils/upload";
@@ -63,8 +65,8 @@ export async function createNodesFromFiles(
     if (kind !== "audio" && !isOffline()) {
       previewUrl = URL.createObjectURL(file);
       const dims = await loadMediaDimensions(previewUrl, kind === "video");
-      nw = dims.w || (kind === "video" ? 1280 : DEFAULT_NODE_WIDTH);
-      nh = dims.h || (kind === "video" ? 720 : DEFAULT_NODE_CONTENT_HEIGHT);
+      nw = dims.w || (kind === "video" ? VIDEO_FALLBACK_WIDTH : DEFAULT_NODE_WIDTH);
+      nh = dims.h || (kind === "video" ? VIDEO_FALLBACK_HEIGHT : DEFAULT_NODE_CONTENT_HEIGHT);
       const { width, height } = computeNodeSize(nw, nh);
       nodeW = width;
       nodeH = height;

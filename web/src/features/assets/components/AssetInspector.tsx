@@ -114,10 +114,10 @@ function Preview({ asset }: { asset: AssetItem }) {
         <img src={thumbUrl} alt={asset.name} draggable={false} className="w-full h-full object-cover" />
       ) : (
         asset.mediaType === "video"
-          ? <VideoCameraOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+          ? <VideoCameraOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
           : asset.mediaType === "audio"
-            ? <WaveIcon style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
-            : <PictureOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+            ? <WaveIcon style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
+            : <PictureOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
       )}
     </div>
   );

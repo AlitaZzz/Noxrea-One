@@ -30,12 +30,18 @@ export const SEEK_MARGIN_S = 0.05;
 // History
 export const HISTORY_MAX_SIZE = 50;
 
+// 生成任务状态对账：服务端单次查询的 taskId 数量上限，客户端按此分批
+export const TASK_STATUS_BATCH_SIZE = 100;
+
 // Node sizing
 /** 媒体节点默认宽度（px），同时是 16:9 内容区口径的基准长边 */
 export const DEFAULT_NODE_WIDTH = 600;
 /** 媒体节点默认内容区高度（px）：16:9（600 × 9/16 ≈ 338），不含标题栏。
  *  仅作媒体自然尺寸的兜底值（元数据加载失败时），不直接用作节点框高度 */
 export const DEFAULT_NODE_CONTENT_HEIGHT = Math.round((DEFAULT_NODE_WIDTH * 9) / 16);
+/** 视频节点自然尺寸兜底（元数据加载失败时）：16:9 口径，与上传管道共用 */
+export const VIDEO_FALLBACK_WIDTH = 1280;
+export const VIDEO_FALLBACK_HEIGHT = Math.round((VIDEO_FALLBACK_WIDTH * 9) / 16);
 // 节点标题栏统一高度（px），所有节点共用，避免内联写死
 export const NODE_TITLE_HEIGHT = 28;
 /** 媒体节点默认整体高度（px）：内容区 + 标题栏，与 computeNodeSize 口径一致。

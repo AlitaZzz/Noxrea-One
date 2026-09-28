@@ -4,6 +4,7 @@
  */
 import * as THREE from "three";
 
+import { DIRECTOR_PRIMARY } from "../theme";
 import type { Character } from "./character";
 
 let _seq = 0;
@@ -34,7 +35,7 @@ export class Crowd {
     root.userData.entityId = this.id;
   }
 
-  get color(): number { return this.members[0]?.color ?? 0x4f8ef7; }
+  get color(): number { return this.members[0]?.color ?? DIRECTOR_PRIMARY; }
   setColor(hex: number) { this.members.forEach((m) => { if (m.type !== "camera") m.setColor(hex); }); }
 
   setVisible(v: boolean) {

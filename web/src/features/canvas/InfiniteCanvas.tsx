@@ -1101,11 +1101,11 @@ export default function InfiniteCanvas() {
                   <div className="select-none">
                     <div className="flex items-center gap-2 px-1 py-1.5">
                       <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-                        style={{ background: "#1677ff", color: "#fff" }}>
+                        style={{ background: "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
                         {authUser?.avatarUrl ? (
                           <img src={authUser.avatarUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          (authUser?.username || "G")[0].toUpperCase()
+                          (authUser?.username || t("auth.defaultUser"))[0].toUpperCase()
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1139,7 +1139,7 @@ export default function InfiniteCanvas() {
                 <input
                   className="bg-transparent text-sm outline-none border-none flex-1 min-w-0"
                   style={{ color: "var(--canvas-text)", height: 24, cursor: "text" }}
-                  placeholder="Untitled"
+                  placeholder={t("project.untitled")}
                   autoFocus
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}

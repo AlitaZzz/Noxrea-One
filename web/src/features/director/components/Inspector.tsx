@@ -21,6 +21,7 @@ import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { POSE_PRESETS } from "@/features/director/entities/pose-presets";
+import { DIRECTOR_CHARACTER_COLOR, DIRECTOR_CHARACTER_HEX } from "@/features/director/theme";
 import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";
@@ -259,8 +260,8 @@ export default function Inspector() {
     setActiveTab("attr");
   }
   const colorKey = runtime
-    ? "#" + (((entity ? runtime._getEntity(entity.id) : null) as { color?: number } | null)?.color || 0x34c759).toString(16).padStart(6, "0")
-    : "#34c759";
+    ? "#" + (((entity ? runtime._getEntity(entity.id) : null) as { color?: number } | null)?.color || DIRECTOR_CHARACTER_COLOR).toString(16).padStart(6, "0")
+    : DIRECTOR_CHARACTER_HEX;
   const [prevColorKey, setPrevColorKey] = useState<string | null>(null);
   if (colorKey !== prevColorKey) {
     setPrevColorKey(colorKey);

@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
-import { type ReferenceItemAttrs, refLabel } from "./reference";
+import { type ReferenceItemAttrs, refLabelKey } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
   const { i18n, t } = useTranslation();
@@ -32,6 +32,9 @@ export default function MentionChip({ node }: NodeViewProps) {
     );
   }
 
+  // chip 展示标签走 i18n；提示词存储格式仍由 refLabel 序列化（locale 稳定），两者双轨
+  const label = t(refLabelKey(item), { index: item.index + 1 });
+
   return (
     <NodeViewWrapper as="span" className="mention-chip">
       {item.kind === "audio" ? (
@@ -47,9 +50,9 @@ export default function MentionChip({ node }: NodeViewProps) {
           className="mention-thumb"
         />
       ) : (
-        <img src={item.thumbnail} alt={refLabel(item)} className="mention-thumb" />
+        <img src={item.thumbnail} alt={label} className="mention-thumb" />
       )}
-      <span>{refLabel(item)}</span>
+      <span>{label}</span>
     </NodeViewWrapper>
   );
 }

@@ -4,6 +4,7 @@
  */
 import * as THREE from "three";
 
+import { DIRECTOR_PRIMARY } from "../theme";
 import type { DirectorEntity } from "../types";
 import { worldBox } from "../util/measure";
 
@@ -39,7 +40,7 @@ export class Selection {
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.46, 0.56, 48),
       new THREE.MeshBasicMaterial({
-        color: 0x4f8ef7,
+        color: DIRECTOR_PRIMARY,
         transparent: true,
         opacity: 0.9,
         side: THREE.DoubleSide,

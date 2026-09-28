@@ -185,7 +185,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
       // 走统一上传管道：先建占位节点再后台上传
       await runMediaUpload({
-        items: [{ blob, filename: "panorama.png", naturalWidth: targetW, naturalHeight: targetH, label: "全景截图" }],
+        items: [{ blob, filename: "panorama.png", naturalWidth: targetW, naturalHeight: targetH, label: t("node.panorama") }],
         sink: { kind: "derived-node", sourceId },
       });
       // 截图成功后保持全景模式，不退出
@@ -196,7 +196,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       restoreRef.current = null;
       setLoading(false);
     }
-  }, [loading, sourceId, src, aspect]);
+  }, [loading, sourceId, src, aspect, t]);
 
   // 多视角截图：按 viewCount 等分 360°，每个方向截一帧并生成为独立节点
   const handleMultiScreenshot = useCallback(async (count: ViewCount) => {
@@ -292,7 +292,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           filename: `panorama_${i + 1}.png`,
           naturalWidth: frameW,
           naturalHeight: frameH,
-          label: `全景截图 (${view.label})`,
+          label: `${t("node.panorama")} (${view.label})`,
           position: gridPositionAt(layout, i),
         });
       }

@@ -12,6 +12,7 @@ import { PauseIcon } from "@/components/ui/icons/media/PauseIcon";
 import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
 import { clamp01 } from "@/features/canvas/editing/clip-range";
 import { registerAudioPlayer } from "@/features/canvas/shared/audio-playback-registry";
+import { DEFAULT_NODE_COLOR } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
 /** 波形绘制高度（wavesurfer canvas），固定上限，不随容器拉伸 */
@@ -75,8 +76,8 @@ export default function AudioWaveform({
       // 波形用不透明白色绘制，整体透明度交给 CSS（.canvases 层）控制：
       // 进度层是 source-in 叠加，若 waveColor 自带 alpha 会把进度色一并变淡。
       waveColor: "#ffffff",
-      progressColor: "#c7f43d",
-      cursorColor: "#c7f43d",
+      progressColor: DEFAULT_NODE_COLOR,
+      cursorColor: DEFAULT_NODE_COLOR,
       cursorWidth: 0,
       barWidth: 2,
       barGap: 1,
@@ -207,7 +208,7 @@ export default function AudioWaveform({
                 {/* 进度竖线：占满竖线容器，因此高于波形本身 */}
                 <div
                   className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2"
-                  style={{ width: 2, background: "#c7f43d", borderRadius: 1 }}
+                  style={{ width: 2, background: DEFAULT_NODE_COLOR, borderRadius: 1 }}
                 />
               </div>
             )}

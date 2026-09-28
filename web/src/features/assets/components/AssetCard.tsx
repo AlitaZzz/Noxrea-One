@@ -177,18 +177,18 @@ export default function AssetCard({
               />
             )}
             <div className="absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded bg-black/50 pointer-events-none">
-              <VideoCameraOutlined style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }} />
+              <VideoCameraOutlined style={{ fontSize: 12, color: "rgb(var(--on-media-rgb) / 0.8)" }} />
             </div>
           </div>
         ) : isAudio ? (
           <div className="w-full h-full flex items-center justify-center">
-            <WaveIcon style={{ fontSize: 32, color: "rgba(255,255,255,0.15)" }} />
+            <WaveIcon style={{ fontSize: 32, color: "rgb(var(--on-media-rgb) / 0.15)" }} />
           </div>
         ) : thumbUrl ? (
           <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <PictureOutlined style={{ fontSize: 32, color: "rgba(255,255,255,0.15)" }} />
+            <PictureOutlined style={{ fontSize: 32, color: "rgb(var(--on-media-rgb) / 0.15)" }} />
           </div>
         )}
 
@@ -206,7 +206,7 @@ export default function AssetCard({
                   : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
             }`}
           >
-            {selected && <CheckOutlined style={{ fontSize: 11, color: "#1d1d21", fontWeight: 700 }} />}
+            {selected && <CheckOutlined style={{ fontSize: 11, color: "var(--canvas-bg)", fontWeight: 700 }} />}
           </button>
         )}
 
@@ -255,7 +255,7 @@ export default function AssetCard({
           className="fixed flex items-center justify-center rounded-lg"
           style={{ top: -200, left: -200, width: 56, height: 56, background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
         >
-          <WaveIcon style={{ fontSize: 28, color: "rgba(255,255,255,0.3)" }} />
+          <WaveIcon style={{ fontSize: 28, color: "rgb(var(--on-media-rgb) / 0.3)" }} />
         </div>
       )}
     </div>

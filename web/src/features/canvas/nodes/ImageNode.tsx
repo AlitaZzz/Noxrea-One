@@ -276,7 +276,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       });
       // 3. 创建派生新节点（与宫格切分、裁剪同一条链路）
-      const derivedLabel = op === "rot90" ? "旋转" : op === "flipH" ? "水平翻转" : "垂直翻转";
+      const derivedLabel = op === "rot90" ? t("node.rotate90") : op === "flipH" ? t("node.flipH") : t("node.flipV");
       await runMediaUpload({
         items: [{ blob, filename: "transform.png", naturalWidth: cw, naturalHeight: ch, label: derivedLabel }],
         sink: { kind: "derived-node", sourceId: id },
@@ -286,7 +286,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 本链路不占用 taskBinding，无需回滚生成态；仅记录日志
       console.error("transform failed:", e);
     }
-  }, [id, src]);
+  }, [id, src, t]);
 
   const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
@@ -448,8 +448,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                         width: "100%",
                         height: "100%",
                         zIndex: z,
-                        background: "#262626",
-                        outline: "1px solid rgba(255,255,255,0.15)",
+                        background: "var(--canvas-bg)",
+                        outline: "1px solid color-mix(in srgb, var(--canvas-text) 15%, transparent)",
                       }}
                     >
                           <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
@@ -509,8 +509,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                         transform: `scale(${scale}) rotate(${rotate}deg)`,
                         transformOrigin: "center center",
                         zIndex: -depth,
-                        background: "#262626",
-                        outline: "1px solid rgba(255,255,255,0.15)",
+                        background: "var(--canvas-bg)",
+                        outline: "1px solid color-mix(in srgb, var(--canvas-text) 15%, transparent)",
                       }}
                     >
                       <img src={url} alt="" className="absolute inset-0 w-full h-full" draggable={false} />

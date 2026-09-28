@@ -91,6 +91,9 @@ select:focus-visible,
   --canvas-text-dim: #95959e;
   --canvas-text-muted: #7e7e88;
   --canvas-text-disabled: rgba(231, 231, 236, 0.3);
+  /* 媒体表面上的恒白前景（缩略图覆盖图标 / 波形轨道等）：照片亮暗不定，
+     白字+遮罩不随主题切换，故独立于 canvas-text；用 rgb(var()/alpha) 取不同透明度 */
+  --on-media-rgb: 255 255 255;
   /* 品牌强调色（青柠）：链接 / 加载动画 / 徽标 / 选中描边等交互强调，不再用于按钮填充 */
   --canvas-accent: #c7f43d;
   /* 主色 hover / active：与 theme.ts 的 COLOR_PRIMARY_HOVER / ACTIVE 同值 */

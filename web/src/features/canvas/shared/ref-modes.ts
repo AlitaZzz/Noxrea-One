@@ -72,6 +72,8 @@ export function resolveRefMode(
 
   if (desired) {
     if (allowed.includes(desired) && modelAllows(desired)) return { value: desired, note: null };
+    // note 是回传模型的协议文本（executors 拼进工具结果，面板只用 value 不展示 note），
+    // 刻意 locale 稳定，勿走 i18n（契约见 agent/tools/executors.ts 头注释）
     const reason = !allowed.includes(desired)
       ? modelConstrained && modelOptions.includes(desired)
         ? `当前上游参考不支持 ${desired}`

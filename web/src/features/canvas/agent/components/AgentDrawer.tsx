@@ -238,7 +238,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
       styles={{
         header: { borderBottom: "none", padding: "12px 16px" },
         body: { padding: 0, display: "flex", flexDirection: "column" },
-        section: { borderLeft: "1px solid #2c2c31" },
+        section: { borderLeft: "1px solid var(--canvas-border)" },
       }}
     >
       <div ref={listRef} className="chat-scroll" style={{ flex: 1, overflowY: "auto", padding: 12 }}>
@@ -348,7 +348,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   width: 36,
                   height: 36,
                   borderRadius: 10,
-                  background: isStreaming ? "#e74c3c" : !canSend ? "var(--canvas-border)" : "var(--canvas-text)",
+                  background: isStreaming ? "var(--canvas-danger)" : !canSend ? "var(--canvas-border)" : "var(--canvas-text)",
                   color: isStreaming ? "#fff" : !canSend ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
                   border: "none",
                   cursor: "pointer",

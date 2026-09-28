@@ -1,4 +1,7 @@
 {
+  "meta": {
+    "description": "AI 驱动的无限画布创作工作台"
+  },
   "common": {
     "switchLanguage": "切换语言",
     "copy": "复制",
@@ -18,6 +21,8 @@
     "collapse": "收起",
     "cancel": "取消",
     "confirm": "确认",
+    "play": "播放",
+    "stop": "停止",
     "close": "关闭",
     "save": "保存",
     "add": "添加",
@@ -246,6 +251,7 @@
     "none": "暂无项目",
     "home": "首页",
     "rename": "重命名",
+    "untitled": "未命名",
     "setCover": "设置封面",
     "deleteConfirm": "删除「{{name}}」后将无法继续访问，项目中的生成内容也会被全部删除，且不可恢复。确定要删除吗？",
     "deleteBatch": "删除选中的 {{count}} 个项目后将无法继续访问，其中的生成内容也会被全部删除，且不可恢复。确定要删除吗？"
@@ -255,6 +261,7 @@
     "logoutConfirm": "确定退出登录？",
     "accountSettings": "账号设置",
     "username": "用户名",
+    "defaultUser": "用户",
     "newPassword": "新密码（留空保持不变）",
     "currentPassword": "当前密码",
     "oldPwRequired": "修改密码需输入当前密码",
@@ -851,6 +858,7 @@
     "network_unreachable": "无法连接服务器，请检查网络",
     "network_error": "网络错误",
     "parse_failed": "响应解析失败",
+    "sse_read_timeout": "连接读取超时：{{seconds}} 秒未收到数据",
     "session_expired": "登录已过期",
     "session_expired_desc": "请重新登录",
     "withRequestId": "{{message}}（错误 ID：{{id}}）",

@@ -119,7 +119,7 @@ function AudioRefCard({
       {hovered && (
         <button
           type="button"
-          aria-label={playing ? "停止" : "播放"}
+          aria-label={playing ? t("common.stop") : t("common.play")}
           className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
           onClick={(e) => {
             e.stopPropagation();
@@ -137,7 +137,7 @@ function AudioRefCard({
       {playing && !hovered && (
         <button
           type="button"
-          aria-label="停止"
+          aria-label={t("common.stop")}
           className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
           onClick={(e) => {
             e.stopPropagation();

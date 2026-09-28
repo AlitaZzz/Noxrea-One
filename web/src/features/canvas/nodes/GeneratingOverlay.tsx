@@ -62,10 +62,10 @@ function GeneratingOverlay({
       {/* 噪点抖动：打散渐变色带 */}
       <div className="gen-noise" aria-hidden />
       {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
-      <span className="text-xs" style={{ color: "rgba(231, 231, 236, 0.72)" }}>
+      <span className="text-xs" style={{ color: "color-mix(in srgb, var(--canvas-text) 72%, transparent)" }}>
         {text ?? t("common.generating")}
         {elapsedSeconds !== null && (
-          <span className="tabular-nums" style={{ color: "rgba(149, 149, 158, 0.75)" }}>
+          <span className="tabular-nums" style={{ color: "color-mix(in srgb, var(--canvas-text-dim) 75%, transparent)" }}>
             {" · "}
             {formatElapsed(elapsedSeconds)}
           </span>

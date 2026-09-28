@@ -55,7 +55,7 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
           )}
         </div>
       )}
-      <FolderOutlined style={{ fontSize: 40, color: "rgba(255,255,255,0.25)" }} />
+      <FolderOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
       <div className="text-white/70 text-xs px-2 text-center truncate w-full">{folder.name}</div>
       <div className="text-white/25 text-[10px]">{count ?? 0} {t("asset.count")}</div>
     </div>
