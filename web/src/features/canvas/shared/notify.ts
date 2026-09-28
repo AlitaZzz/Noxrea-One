@@ -19,6 +19,7 @@ export function notifyNodeBusy(
   notification.error({
     title: t("clip.busy"),
     placement: "bottomRight",
+    duration: 6,
     key: `clip-busy-${nodeId}`,
   });
 }
@@ -37,6 +38,7 @@ export function notifyActionFailed(
   notification.error({
     title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
     placement: "bottomRight",
+    duration: 6,
     key: `clip-failed-${nodeId}`,
   });
 }

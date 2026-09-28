@@ -6,7 +6,7 @@
 "use client";
 
 import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@ant-design/icons";
-import { Popover } from "antd";
+import { App, Popover } from "antd";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,11 +22,11 @@ import { useCurrentUser } from "@/features/auth/UserContext";
 import { flushAndWait } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
 import type { ProjectSummary } from "@/features/project/types";
-import { showGlobalNotification } from "@/lib/global-notification";
 import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
 
 export default function ProjectListPage() {
   const router = useRouter();
+  const { notification } = App.useApp();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
@@ -88,7 +88,7 @@ export default function ProjectListPage() {
       useProjectStore.getState().updateCover(targetId, result.url);
     } catch (err) {
       const info = classifyUploadError(err);
-      showGlobalNotification().error({ title: info.message, placement: "bottomRight", duration: 6 });
+      notification.error({ title: info.message, placement: "bottomRight", duration: 6 });
     } finally {
       setCoverUploadingId(null);
     }

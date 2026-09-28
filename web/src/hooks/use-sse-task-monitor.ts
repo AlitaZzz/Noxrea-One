@@ -22,9 +22,6 @@ import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 /** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
 const MAX_ERROR_LEN = 1000;
 
-/** 通知描述里 prompt 的展示长度上限：超出截断加省略号 */
-const NOTIFY_DESC_MAX_LEN = 80;
-
 /**
  * 截断错误文案。
  * 常规失败原因由 TaskErrorDetail 折叠为两行摘要并可展开全文，
@@ -114,13 +111,9 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
 
       const completedUrls = evt.resultUrls || [];
       if (evt.status === "completed" && completedUrls.length) {
-        const prompt = evt.prompt || "";
         const firstUrl = completedUrls[0];
         // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
         // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
-        const desc = prompt.length > NOTIFY_DESC_MAX_LEN
-          ? prompt.slice(0, NOTIFY_DESC_MAX_LEN - 3) + "..."
-          : prompt;
         // 一次性回填：图片 + 多图列表 + 产物大小 + 清除生成中状态（遮罩此时才消失）。
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
@@ -137,7 +130,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
           multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
         }, undefined, { skipHistory: true }));
         markDirtyImmediate();
-        notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), description: desc, placement: "bottomRight", duration: 15 });
+        notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), placement: "bottomRight", duration: 5 });
 
         // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
         // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；

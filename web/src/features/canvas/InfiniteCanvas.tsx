@@ -90,7 +90,6 @@ import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
 // nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
@@ -111,7 +110,7 @@ const RF_EDGE_TYPES = {
 export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
-  const { notification: notif } = App.useApp();
+  const { message, notification: notif } = App.useApp();
   useSseTaskMonitor(notif);
 
   // Canvas state
@@ -944,8 +943,8 @@ export default function InfiniteCanvas() {
     const asset = data as AssetItem;
     const node = createAssetNode(asset, pos, findFreePosition);
     if (node) addNodes([node]);
-    showGlobalMessage().success(t("asset.added"));
-  }, [addNodes, t]);
+    message.success(t("asset.added"));
+  }, [addNodes, message, t]);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);

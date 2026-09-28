@@ -7,7 +7,7 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
-import { Input, Select, Tooltip, TreeSelect } from "antd";
+import { App, Input, Select, Tooltip, TreeSelect } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,7 +23,6 @@ import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
 
 import { downloadAsset } from "../download";
 import AssetCreateDialog from "./AssetCreateDialog";
@@ -39,6 +38,7 @@ interface Props {
 
 export default function AssetsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
   const addFolder = useAssetsStore((s) => s.addFolder);
@@ -350,8 +350,8 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
     if (node) useCanvasStore.getState().addNodes([node]);
-    showGlobalMessage().success(t("asset.added"));
-  }, [t]);
+    message.success(t("asset.added"));
+  }, [message, t]);
 
   // 检查器批量插入：以视口中心为基准错位落位，避免多个节点完全重叠。
   const handleBatchInsert = useCallback((assets: AssetItem[]) => {
@@ -365,8 +365,8 @@ export default function AssetsModal({ open, onClose }: Props) {
       ))
       .filter((node): node is NonNullable<typeof node> => !!node);
     if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes);
-    showGlobalMessage().success(t("asset.addedCount", { count: assets.length }));
-  }, [t]);
+    message.success(t("asset.addedCount", { count: assets.length }));
+  }, [message, t]);
 
   const handleCreateAssets = useCallback(
     async (inputs: CreateAssetInput[]) => {

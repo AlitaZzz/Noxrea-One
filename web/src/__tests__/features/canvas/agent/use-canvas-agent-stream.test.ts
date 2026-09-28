@@ -5,6 +5,7 @@
  * @vitest-environment jsdom
  */
 import { act,renderHook, waitFor } from "@testing-library/react";
+import { App as AntApp } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -61,7 +62,7 @@ describe("useCanvasAgentStream", () => {
       sseResponse([`event: error\ndata: ${JSON.stringify({ error: "raw boom", errorCode: "agent.provider_not_found" })}\n\n`]),
     );
 
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"));
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
     await act(async () => {
       await result.current.sendChat("hi");
     });
@@ -83,7 +84,7 @@ describe("useCanvasAgentStream", () => {
     );
     mocks.submitToolResults.mockResolvedValue(sseResponse(doneFrame([])));
 
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"));
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
     await act(async () => {
       await result.current.sendChat("hi");
     });

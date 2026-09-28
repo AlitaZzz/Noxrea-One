@@ -12,6 +12,7 @@ import { Markdown } from "@tiptap/markdown";
 import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type NodeProps } from "@xyflow/react";
+import { App } from "antd";
 import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,7 +22,6 @@ import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { EventNames, isGenerating, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { copyText, downloadTextFile } from "@/lib/utils/text-export";
 
@@ -32,6 +32,7 @@ import ResizeHandle from "./ResizeHandle";
 
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const content = data.content || "";
   const plainText = data.plainText || "";
   // 编辑态由 store 全局驱动（与裁剪/标注模式一致），进入编辑时隐藏节点工具条
@@ -132,8 +133,8 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     const md = getMarkdown();
     if (!md) return;
     const ok = await copyText(md);
-    showGlobalMessage().success(ok ? t("common.copied") : t("common.copyFailed"));
-  }, [getMarkdown, t]);
+    message.success(ok ? t("common.copied") : t("common.copyFailed"));
+  }, [getMarkdown, message, t]);
 
   const handleDownload = useCallback(() => {
     const md = getMarkdown();

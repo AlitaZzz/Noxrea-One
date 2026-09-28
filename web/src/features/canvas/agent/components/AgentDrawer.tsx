@@ -8,7 +8,7 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
-import { Drawer, Tooltip } from "antd";
+import { App, Drawer, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,7 +23,6 @@ import { groupSections } from "@/features/canvas/agent/utils/group-sections";
 import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-edit-actions";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
@@ -36,6 +35,7 @@ interface Props {
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 工具续轮） */
 export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
   const initializeFailed = useModelStore((s) => s.initializeFailed);
@@ -75,13 +75,13 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
 
   const handleUndoTurn = useCallback(() => {
     if (hasGeneratingNode()) {
-      showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+      message.info(i18n.t("shortcuts.undoBlocked"));
       return;
     }
     if (undoAction()) {
-      showGlobalMessage().success(i18n.t("agent.undoTurnSuccess"));
+      message.success(i18n.t("agent.undoTurnSuccess"));
     }
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     void initialize();

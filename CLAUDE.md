@@ -47,7 +47,13 @@
 4. commit、push、merge 必须经过用户明确确认。
 5. 完成工作后只报告结果，不主动提交或推送代码。
 
-## 七、最终交付报告
+## 七、消息通知规范
+1. 两套通知按场景分工：用户当前操作的同步反馈（复制、保存、上传等即时结果）用 antd `message`（顶部居中、单行、短时）；异步任务结果与需要展开详情的错误（生成终态、后台错误）用 antd `notification`（右下角、可带 description）。
+2. 实例获取统一：React 上下文（组件、自定义 Hook）一律用 `App.useApp()` 解构；store、工具函数等非 React 上下文用 `showGlobalMessage()` / `showGlobalNotification()`（lib/global-message.ts、lib/global-notification.ts）。禁止在 React 上下文绕过 `App.useApp()` 调全局包装，由 eslint `no-restricted-imports` 白名单制强制：默认全项目禁止引入 wrapper，仅白名单内的非 React 模块放行（清单见 web/eslint.config.mjs），新增消费者需先改配置确认。
+3. `notification` duration 只有两档：成功/提示 5s；错误纯标题 6s、带 description 15s。
+4. 同节点/同来源可能重复弹出的通知用 `key` 去重（参考 canvas/shared/notify.ts 的按节点 key 约定）。
+
+## 八、最终交付报告
 每次完成开发任务后，简要报告：
 1. 本次修改的内容及涉及模块。
 2. 发现并修复的 Bug 清单及其根本原因。

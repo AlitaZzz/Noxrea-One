@@ -386,6 +386,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
         description: err instanceof Error ? err.message : "",
         placement: "bottomRight",
         duration: 15,
+        key: `generation-failed-${nodeId}`,
       });
     } finally {
       // 仅当自己仍是最新一轮时复位：被取消的轮次由 handleCancel 复位，

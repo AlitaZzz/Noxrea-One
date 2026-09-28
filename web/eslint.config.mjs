@@ -91,6 +91,38 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // 全局 message/notification wrapper 的使用边界（见根 CLAUDE.md「七、消息通知规范」）。
+  // 策略：白名单制——默认全项目禁止引入 wrapper（React 上下文一律 App.useApp()），
+  // 仅下方 ignores 白名单内的非 React 模块（store / 工具函数 / wrapper 注册方）放行。
+  // 新增合法消费者时在此补一行；改配置这个动作本身就是“确认过确实不在 React 上下文”。
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/providers/AppProviders.tsx",
+      "src/features/assets/store.ts",
+      "src/features/auth/store.ts",
+      "src/features/project/store.ts",
+      "src/lib/model-store.ts",
+      "src/features/canvas/upload/upload-pipeline.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/lib/global-message",
+              message: "React 组件/Hook 内一律 App.useApp() 解构 message；此 wrapper 仅供 store、工具函数等非 React 上下文使用（CLAUDE.md 七）",
+            },
+            {
+              name: "@/lib/global-notification",
+              message: "React 组件/Hook 内一律 App.useApp() 解构 notification；此 wrapper 仅供 store、工具函数等非 React 上下文使用（CLAUDE.md 七）",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

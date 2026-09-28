@@ -6,6 +6,7 @@
  * @vitest-environment jsdom
  */
 import { act, renderHook } from "@testing-library/react";
+import { App as AntApp } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -74,6 +75,7 @@ describe("useAgentSessions.loadHistory", () => {
         onLoadMessages,
         projectId: undefined,
       }),
+      { wrapper: AntApp },
     );
 
     await act(async () => {
@@ -118,6 +120,7 @@ describe("useAgentSessions.loadHistory", () => {
         onLoadMessages,
         projectId: undefined,
       }),
+      { wrapper: AntApp },
     );
 
     await act(async () => {

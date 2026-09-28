@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { App } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AgentSessionDto } from "@/features/canvas/agent/api";
@@ -13,7 +14,6 @@ import { PROMOTE_TEXT_TOOLS } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ChatRole } from "@/features/canvas/agent/types";
 import { clearUserActions } from "@/features/canvas/agent/user-action-tracker";
 import { ApiError } from "@/lib/api/client";
-import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 
 let _seq = 0;
@@ -41,6 +41,7 @@ export function useAgentSessions(opts: {
   /** 当前项目 ID，切换项目时自动重置对话 */
   projectId?: string;
 }) {
+  const { message } = App.useApp();
   const [chatId, setChatId] = useState<number | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSessionDto[]>([]);
@@ -82,11 +83,11 @@ export function useAgentSessions(opts: {
         }
         return null;
       } catch (e) {
-        showGlobalMessage().error(agentError(e, i18n.t("agent.createSessionFailed")));
+        message.error(agentError(e, i18n.t("agent.createSessionFailed")));
         return null;
       }
     },
-    [gate, opts.projectId]
+    [gate, message, opts.projectId]
   );
 
   /** 加载历史消息（切换会话时调用） */
@@ -138,10 +139,10 @@ export function useAgentSessions(opts: {
         setChatId(sessionId);
         setChatTitle(found?.title ?? null);
       } catch (e) {
-        showGlobalMessage().error(agentError(e, i18n.t("agent.loadHistoryFailed")));
+        message.error(agentError(e, i18n.t("agent.loadHistoryFailed")));
       }
     },
-    [gate, sessions, opts]
+    [gate, message, sessions, opts]
   );
 
   /** 开新对话 */
@@ -160,9 +161,9 @@ export function useAgentSessions(opts: {
       const data = await agentApi.listSessions(opts.projectId);
       setSessions(data ?? []);
     } catch (e) {
-      showGlobalMessage().error(agentError(e, i18n.t("agent.loadSessionsFailed")));
+      message.error(agentError(e, i18n.t("agent.loadSessionsFailed")));
     }
-  }, [opts.projectId]);
+  }, [message, opts.projectId]);
 
   /** 删除会话；若删的是当前会话则顺带开新对话 */
   const deleteChat = useCallback(
@@ -171,12 +172,12 @@ export function useAgentSessions(opts: {
         await agentApi.deleteSession(sessionId);
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         if (sessionId === chatId) newChat();
-        showGlobalMessage().success(i18n.t("agent.sessionDeleted"));
+        message.success(i18n.t("agent.sessionDeleted"));
       } catch (e) {
-        showGlobalMessage().error(agentError(e, i18n.t("agent.deleteFailed")));
+        message.error(agentError(e, i18n.t("agent.deleteFailed")));
       }
     },
-    [chatId, newChat]
+    [chatId, message, newChat]
   );
 
   /** 重命名当前会话 */
@@ -187,10 +188,10 @@ export function useAgentSessions(opts: {
         await agentApi.renameSession(chatId, title);
         setChatTitle(title);
       } catch (e) {
-        showGlobalMessage().error(agentError(e, i18n.t("agent.renameFailed")));
+        message.error(agentError(e, i18n.t("agent.renameFailed")));
       }
     },
-    [chatId]
+    [chatId, message]
   );
 
   return {

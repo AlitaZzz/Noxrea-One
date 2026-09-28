@@ -95,7 +95,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
     try {
       const template = await getPromptTemplate("angle", { azimuth, elevation, zoom });
       if (!template) {
-        notification.error({ title: t("angle.generateFailed"), placement: "bottomRight" });
+        notification.error({ title: t("angle.generateFailed"), placement: "bottomRight", duration: 6 });
         return;
       }
       const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());

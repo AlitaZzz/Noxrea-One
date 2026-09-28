@@ -17,7 +17,7 @@ import {
   SelectOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { Tooltip } from "antd";
+import { App, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,7 +26,6 @@ import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
-import { showGlobalNotification } from "@/lib/global-notification";
 import { MOD_KEY } from "@/lib/platform";
 import { formatBytes, formatTime } from "@/lib/utils/format";
 import { copyText } from "@/lib/utils/text-export";
@@ -298,6 +297,7 @@ function PromptEditor({
   onUpdatePrompt: Props["onUpdatePrompt"];
 }) {
   const { t } = useTranslation();
+  const { notification } = App.useApp();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -331,7 +331,7 @@ function PromptEditor({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } else {
-      showGlobalNotification().error({ title: t("common.copyFailed"), placement: "bottomRight", duration: 3 });
+      notification.error({ title: t("common.copyFailed"), placement: "bottomRight", duration: 6 });
     }
   };
 

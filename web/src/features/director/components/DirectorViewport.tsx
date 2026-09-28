@@ -563,9 +563,9 @@ export default function DirectorViewport() {
             i.src = shot.url;
           });
           await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
-          notification.success({ title: t("director.sentToCanvas", { name: shot.name }), placement: "bottomRight" });
+          notification.success({ title: t("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
         } catch {
-          notification.error({ title: t("director.sendToCanvasFailed"), placement: "bottomRight" });
+          notification.error({ title: t("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });
         }
       },
       resetView: () => rig.resetView(),

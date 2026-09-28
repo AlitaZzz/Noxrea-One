@@ -112,7 +112,7 @@ export default function Dock() {
       useDirectorStore.getState().addShot({
         id: "s" + Date.now() + "_" + Math.random().toString(36).slice(2, 8), url: shot.url, name: shot.name, cameraId: shot.cameraId, createdAt: Date.now(),
       });
-      notification.success({ title: shot.name, placement: "bottomRight" });
+      notification.success({ title: shot.name, placement: "bottomRight", duration: 5 });
     }
   }, [runtime, notification]);
 

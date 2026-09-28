@@ -6,6 +6,7 @@
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
+import { App } from "antd";
 import { useEffect, useRef } from "react";
 
 import {
@@ -25,13 +26,13 @@ import {
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EventNames } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 
 /**
  * Global keyboard shortcuts for the canvas.
  */
 export function useCanvasKeyboard() {
+  const { message } = App.useApp();
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
 
   const resetViewport = useCanvasStore((s) => s.resetViewport);
@@ -186,7 +187,7 @@ export function useCanvasKeyboard() {
       if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         if (hasGeneratingNode()) {
-          showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+          message.info(i18n.t("shortcuts.undoBlocked"));
         } else {
           undoAction();
         }
@@ -194,7 +195,7 @@ export function useCanvasKeyboard() {
       if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         e.preventDefault();
         if (hasGeneratingNode()) {
-          showGlobalMessage().info(i18n.t("shortcuts.undoBlocked"));
+          message.info(i18n.t("shortcuts.undoBlocked"));
         } else {
           redoAction();
         }
@@ -214,5 +215,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, resetViewport, screenToFlowPosition]);
+  }, [zoomIn, zoomOut, fitView, message, resetViewport, screenToFlowPosition]);
 }

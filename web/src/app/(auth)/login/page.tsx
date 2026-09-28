@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { App } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -15,7 +16,6 @@ import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
 import { useAuthStore } from "@/features/auth/store";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
-import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
@@ -413,15 +413,16 @@ function RightPanel({
 export default function LoginPage() {
   const router = useRouter();
   const authStore = useAuthStore();
+  const { message } = App.useApp();
 
   // 全局 401 登出跳转而来：读取 client.ts 留下的标记，展示一次性「会话过期」提示
   useEffect(() => {
     try {
       if (sessionStorage.getItem(SESSION_EXPIRED_FLAG) !== "1") return;
       sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
-      showGlobalMessage().error(i18n.t("error.session_expired"));
+      message.error(i18n.t("error.session_expired"));
     } catch { /* sessionStorage 不可用时跳过 */ }
-  }, []);
+  }, [message]);
 
   const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");
@@ -459,20 +460,20 @@ export default function LoginPage() {
         // 会出现「提示登录成功却停在登录页」）；全局提示渲染在 portal，不受导航影响
         if (mode === "signin") {
           await authStore.login(username, password);
-          showGlobalMessage().success(i18n.t("auth.login.welcomeBack"));
+          message.success(i18n.t("auth.login.welcomeBack"));
           router.replace("/project");
         } else {
           await authStore.register(username, password);
-          showGlobalMessage().success(i18n.t("auth.login.accountCreated"));
+          message.success(i18n.t("auth.login.accountCreated"));
           router.replace("/project");
         }
       } catch (err: unknown) {
-        showGlobalMessage().error((err as Error).message || i18n.t("error.unknown"));
+        message.error((err as Error).message || i18n.t("error.unknown"));
       } finally {
         setLoading(false);
       }
     },
-    [mode, username, password, router, authStore]
+    [mode, username, password, router, authStore, message]
   );
 
   const toggleMode = useCallback(() => {

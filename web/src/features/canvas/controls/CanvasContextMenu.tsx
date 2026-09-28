@@ -12,7 +12,7 @@
 
 import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import { Popover } from "antd";
+import { App, Popover } from "antd";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -37,7 +37,6 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import { createNodesFromFiles, pickFiles } from "@/features/canvas/upload";
 import { NODE_TYPE } from "@/lib/constants";
-import { showGlobalMessage } from "@/lib/global-message";
 import { MOD_KEY,modKey } from "@/lib/platform";
 
 interface Props {
@@ -58,6 +57,7 @@ const SHORTCUT_STYLE = { fontSize: 12, color: "var(--canvas-text-muted)" } as co
 
 export default function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const { x, y, visible, kind, hide } = useContextMenuStore();
   // 菜单坐标是屏幕坐标，粘贴落点需要的是画布坐标
   const { screenToFlowPosition } = useReactFlow();
@@ -81,7 +81,7 @@ export default function CanvasContextMenu(props: Props) {
     hide();
     if (!singleImageSrc) return;
     const ok = await copyImageSrcToClipboard(singleImageSrc);
-    showGlobalMessage().success(ok ? t("common.copied") : t("common.copyFailed"));
+    message.success(ok ? t("common.copied") : t("common.copyFailed"));
   };
 
   /** 右键菜单「粘贴」：内部剪贴板优先；为空时主动读取系统剪贴板走智能粘贴
@@ -95,11 +95,11 @@ export default function CanvasContextMenu(props: Props) {
     }
     const content = await readSystemClipboard();
     if (!content) {
-      showGlobalMessage().info(t("common.clipboardReadFailed", { mod: MOD_KEY }));
+      message.info(t("common.clipboardReadFailed", { mod: MOD_KEY }));
       return;
     }
     if (!pasteFromClipboardContent(content, at)) {
-      showGlobalMessage().info(t("common.pasteUnsupported"));
+      message.info(t("common.pasteUnsupported"));
     }
   };
 

@@ -133,7 +133,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
         ...(colorTab === "temp" ? { kelvin } : { color: state.color }),
       });
       if (!template) {
-        notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight" });
+        notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight", duration: 6 });
         return;
       }
       const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
