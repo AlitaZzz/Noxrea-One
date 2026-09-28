@@ -11,9 +11,11 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 
+import GroupConnectRail from "@/features/canvas/controls/GroupConnectRail";
+import { isGroupMember } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
-import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING,NODE_TYPE } from "@/lib/constants";
+import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING } from "@/lib/constants";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
@@ -24,12 +26,14 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   // Dynamic min size + member count.
-  // 只派生 GroupNode 真正依赖的原始值（自身位置、成员外接矩形、成员数），
-  // 用 useShallow 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
+  // 只派生 GroupNode 真正依赖的原始值（成员外接矩形、成员数），用 useShallow
+  // 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
   // （如选中状态、无关节点位移）都重渲染整个组。
-  const { gx, gy, childMaxX, childMaxY, memberCount } = useCanvasStore(
+  const { childMaxX, childMaxY, memberCount } = useCanvasStore(
     useShallow((s) => {
       const nodes = s.nodes;
+      // gx/gy 为循环内累加用的组自身位置（成员坐标换算成组内相对值），
+      // 不进返回值——组自身平移不改变成员相对几何，无需触发本组件重渲染
       let gx = 0, gy = 0;
       let maxX = 0, maxY = 0;
       let count = 0;
@@ -39,7 +43,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
           gy = n.position.y;
           continue;
         }
-        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId === id) {
+        if (isGroupMember(n, id)) {
           const w = Number(n.style?.width) || 0;
           const h = Number(n.style?.height) || 0;
           const x = n.position.x - gx + w;
@@ -49,7 +53,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
           count++;
         }
       }
-      return { gx, gy, childMaxX: maxX, childMaxY: maxY, memberCount: count };
+      return { childMaxX: maxX, childMaxY: maxY, memberCount: count };
     })
   );
   const dynMinWidth = Math.max(GROUP_NODE_MIN_WIDTH, childMaxX + GROUP_NODE_PADDING);
@@ -85,6 +89,10 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
       />
 
       {agentGhost && <AgentGhostOverlay />}
+
+      {/* 批量输出轨道：样式/显隐对齐普通节点（渲染在节点 DOM 内走标准规则），
+          有成员才有可扇出的对象，空组不渲染 */}
+      {memberCount > 0 && <GroupConnectRail groupId={id} />}
 
       {/* Resize — same as ImageNode */}
       {selected && (

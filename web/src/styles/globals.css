@@ -489,6 +489,9 @@ body > .ant-app { line-height: inherit !important; }
 .react-flow__node-director-node { overflow: visible !important; }
 .react-flow__node-video-node { overflow: visible !important; }
 .react-flow__node-text-node { overflow: visible !important; }
+/* 组节点：连接轨道（GroupConnectRail）贴组框边缘外侧渲染，不能被节点壳裁剪 */
+.react-flow__node-group.react-flow__node,
+.react-flow__node.react-flow__node-group-node { overflow: visible !important; }
 
 /* ── 节点连接轨道（ConnectionSideRail）──
    轨道本体是 React Flow 的 Handle：透明的命中区贴在节点边缘外侧（宽 80px、
@@ -635,9 +638,10 @@ body > .ant-app { line-height: inherit !important; }
     pointer-events: auto;
   }
 }
-/* 框选外框批量连线 Handle：常显（节点 Handle 由 hover/选中规则控制显隐），
-   定位由组件内联 left/top 提供，复用 .react-flow__handle-right 的外浮 transform */
-.react-flow__handle.selection-frame-handle {
+/* 批量连线 Handle（仅框选外框）：常显——外框不是节点，没有 hover/选中态可依托；
+   定位由组件内联 left/top 提供，复用 .react-flow__handle-right 的外浮 transform。
+   组节点的批量轨道在组节点 DOM 内（GroupConnectRail），走上方标准显隐规则 */
+.react-flow__handle.batch-connect-handle {
   opacity: 1 !important;
   pointer-events: auto;
 }

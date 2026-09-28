@@ -8,6 +8,7 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
+import { groupMembers, isGroupMember } from "@/features/canvas/shared/group-bounds";
 import { measureNode } from "@/features/canvas/shared/tidy-layout";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -103,8 +104,9 @@ export function useGroupOperations() {
       for (const group of selectedGroup) {
         // 清除归属到该组的子节点标记（坐标保持绝对不变），成员保持选中以便继续操作
         newNodes = newNodes.map((n): AnyNode => {
+          // 先按 type 收窄（GroupNodeData 无 groupId 字段），再用成员唯一口径判定
           if (n.type === NODE_TYPE.GROUP) return n;
-          if (n.data.groupId === group.id) {
+          if (isGroupMember(n, group.id)) {
             const { groupId: _omit, ...restData } = n.data;
             return { ...n, data: restData, selected: true } as AnyNode;
           }
@@ -240,9 +242,7 @@ export function useGroupOperations() {
       const group = store.nodes.find((n) => n.id === detail.nodeId);
       if (!group || group.type !== NODE_TYPE.GROUP) return;
 
-      const members = store.nodes.filter(
-        (n) => n.type !== NODE_TYPE.GROUP && n.data.groupId === group.id
-      );
+      const members = groupMembers(store.nodes, group.id);
       if (members.length === 0) return;
 
       let result: { positioned: Map<string, { x: number; y: number }>; width: number; height: number };

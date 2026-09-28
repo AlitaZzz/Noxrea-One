@@ -15,7 +15,7 @@ import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
 
 export interface PendingConnectionCreate {
   /** 参与本次连线的全部节点 id 与类型（单节点连线时长度为 1；
-   *  框选外框 Handle / 多选扇出时为全部选中节点） */
+   *  批量 Handle——框选外框取选中节点、组右缘取组成员——及多选扇出时为全部参与节点） */
   sourceNodeIds: string[];
   sourceNodeTypes: string[];
   /** 连接方向：从 source 节点右侧 Handle 拖出 = "output"（新节点为下游）；
@@ -25,8 +25,8 @@ export interface PendingConnectionCreate {
   canvasPosition: { x: number; y: number };
   /** 屏幕坐标（用于菜单定位） */
   screenPosition: { x: number; y: number };
-  /** 发起端 Handle 在画布坐标系中的锚点坐标（用于菜单期间持续渲染预览线） */
-  sourceAnchor: { x: number; y: number };
+  /** 预览线不再存锚点：由渲染方按 sourceNodeIds + direction 逐节点取边缘锚点
+   *  （多选扇出时每个选中节点一根线，与拖拽中的束线预览一致） */
 }
 
 interface Props {

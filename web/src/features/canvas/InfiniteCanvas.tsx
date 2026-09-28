@@ -47,13 +47,13 @@ import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
+import BatchConnectHandle from "@/features/canvas/controls/BatchConnectHandle";
 import CanvasContextMenu from "@/features/canvas/controls/CanvasContextMenu";
 import CanvasControls from "@/features/canvas/controls/CanvasControls";
 import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/canvas/controls/ConnectionCreateMenu";
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
-import SelectionFrameHandles from "@/features/canvas/controls/SelectionFrameHandles";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
@@ -80,7 +80,9 @@ import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
-import { computeFittedGroupRect } from "@/features/canvas/shared/group-bounds";
+import { buildConnectionPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
+import { findGroupAtPoint, groupContainsPoint, refitGroupRects } from "@/features/canvas/shared/group-bounds";
+import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
@@ -89,7 +91,8 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, EDGE_BASE_COLOR, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { canConnect, EDGE_BASE_COLOR, GROUP_NODE_PADDING, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
 // nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
@@ -185,6 +188,10 @@ export default function InfiniteCanvas() {
     }
     return { ids: sel.map((n) => n.id), bbox: { x: minX, y: minY, width: maxX - minX, height: maxY - minY } };
   }, [nodes]);
+
+  // 组节点批量输出轨道不再由这里渲染：它渲染在 GroupNode 的节点 DOM 内
+  // （GroupConnectRail），显隐才能走标准 Handle 规则（hover/选中/按住），
+  // 与普通节点的轨道一致；参与集在拖起时从 store 现取组成员
 
   // 冻结 defaultViewport 引用——React Flow 仅在首次挂载时读取此值，
   // 后续 viewport 变更走 store + setRfViewport，绝不能让此 prop 随渲染更新，
@@ -559,44 +566,31 @@ export default function InfiniteCanvas() {
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      const state = useCanvasStore.getState();
-      const nodeById = new Map(state.nodes.map((n) => [n.id, n]));
-      const src = nodeById.get(connection.source || "");
-      const tgt = nodeById.get(connection.target || "");
-      if (!src || !tgt) return;
-
-      // 多选扇出：拖线起点/终点在多选集合（≥2 非组节点）中时，
-      // 扩展为「所有选中节点 ↔ 对端节点」的批量连线，逐个按类型校验
-      const selected = state.nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
-      const pairs: { source: string; target: string }[] = [];
-      const inSelection = (n: AnyNode) => selected.some((s) => s.id === n.id);
-      if (selected.length > 1 && inSelection(src) && !inSelection(tgt)) {
-        for (const s of selected) {
-          if (canConnect(s.type, tgt.type)) pairs.push({ source: s.id, target: tgt.id });
-        }
-      } else if (selected.length > 1 && inSelection(tgt) && !inSelection(src)) {
-        for (const t of selected) {
-          if (canConnect(src.type, t.type)) pairs.push({ source: src.id, target: t.id });
-        }
-      } else {
-        pairs.push({ source: src.id, target: tgt.id });
-      }
+      if (!connection.source || !connection.target) return;
+      // 扇出语义、类型校验与自连排除统一在 buildConnectionPairs（见 shared/connection-rules）
+      const pairs = buildConnectionPairs(
+        connection.source,
+        connection.target,
+        useCanvasStore.getState().nodes
+      );
       batchConnect(pairs);
     },
     [batchConnect]
   );
 
-  // 节点连接规则：根据源/目标节点类型判断连接是否合法
+  // 节点连接规则：xyflow 拖线磁吸时的合法性判定（connectionStatus / 松手 onConnect 的开关）。
+  // 与松手建边、拖拽反馈共用 connection-rules 的「会产生新边」口径：多选扇出为全有或
+  // 全无——全部选中节点与对端类型可连（任一不可连即整体拒绝）且至少产生一条新边
+  // 才合法，全部已连 / 自连也不合法——不会出现「显示可连却建不出边」或自环边。
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
       const srcId = connection.source;
       const tgtId = connection.target;
       if (!srcId || !tgtId) return true;
-      const allNodes = useCanvasStore.getState().nodes;
-      const sourceNode = allNodes.find((n) => n.id === srcId);
-      const targetNode = allNodes.find((n) => n.id === tgtId);
-      if (!sourceNode || !targetNode) return true;
-      return canConnect(sourceNode.type, targetNode.type);
+      const state = useCanvasStore.getState();
+      const known = state.nodes.some((n) => n.id === srcId) && state.nodes.some((n) => n.id === tgtId);
+      if (!known) return true;
+      return connectionWouldCreate(srcId, tgtId, state);
     },
     []
   );
@@ -625,7 +619,8 @@ export default function InfiniteCanvas() {
       const direction: "input" | "output" =
         connectStartHandleTypeRef.current === "target" ? "input" : "output";
       connectStartHandleTypeRef.current = null;
-      // 仅在连接未落到目标节点（空白画布）上时弹出菜单
+      // 连接未磁吸到目标节点的轨道 Handle（toNode 为空）：可能落在节点本体或空白处，
+      // 前者下方直接建边，后者弹出创建菜单
       const toNode = "toNode" in connectionState ? connectionState.toNode : null;
       if (toNode) return;
 
@@ -644,26 +639,35 @@ export default function InfiniteCanvas() {
 
       const canvasPosition = screenToFlowPosition({ x: clientX, y: clientY });
 
-      // 计算发起端连线锚点在画布坐标系中的坐标，供菜单期间持续渲染预览线。
-      // 锚点恒为节点边缘垂直正中（圆点跟随只是视觉反馈，见 ConnectionSideRail）：
-      // source Handle 在节点右侧、target Handle 在节点左侧
-      const sourceWidth = sourceNode.measured?.width ?? sourceNode.width ?? 0;
-      const sourceHeight = sourceNode.measured?.height ?? sourceNode.height ?? 0;
-      const sourceAnchor: { x: number; y: number } =
-        direction === "output"
-          ? { x: sourceNode.position.x + sourceWidth, y: sourceNode.position.y + sourceHeight / 2 }
-          : { x: sourceNode.position.x, y: sourceNode.position.y + sourceHeight / 2 };
+      // 松手落在节点本体（未磁吸到轨道）→ 不弹创建菜单：按「这次连接会不会产生
+      // 新边」判定（connection-rules：多选扇出聚合 + 类型校验 + 自连/已连去重，
+      // 与 isValidConnection、拖拽反馈同口径），可连则直接建边（走 handleConnect，
+      // 继承扇出与置尾），否则静默取消——拖拽中的毛玻璃反馈已提示不可连。
+      // 命中测试与 ConnectionFlowLine 的实时反馈共用 node-hit-test。
+      const state = useCanvasStore.getState();
+      const hit = findNodeAtFlowPoint(state.nodes, canvasPosition);
+      if (hit) {
+        const connection =
+          direction === "output"
+            ? { source: sourceNode.id, target: hit.id, sourceHandle: null, targetHandle: null }
+            : { source: hit.id, target: sourceNode.id, sourceHandle: null, targetHandle: null };
+        if (connectionWouldCreate(connection.source, connection.target, state)) {
+          handleConnect(connection);
+        }
+        return;
+      }
 
+      // 落点为空白 → 弹创建菜单。预览线的锚点不再随状态存储，渲染时按
+      // sourceNodeIds + direction 逐节点取边缘锚点（见下方菜单预览渲染块）
       setPendingConnectionCreate({
         sourceNodeIds: [sourceNode.id],
         sourceNodeTypes: [sourceNode.type ?? ""],
         direction,
         canvasPosition,
         screenPosition: { x: clientX, y: clientY },
-        sourceAnchor,
       });
     },
-    [screenToFlowPosition, canvasInteraction]
+    [screenToFlowPosition, canvasInteraction, handleConnect]
   );
 
   const handleCreateConnectedNode = useCallback(
@@ -689,7 +693,27 @@ export default function InfiniteCanvas() {
           return;
       }
 
+      // 落点创建即归组：与拖入归组同规则「包含即归属」（group-bounds）。
+      // 菜单创建是唯一不经过 drag stop 归属判定的放置入口，此前组内落点
+      // 建节点会落在组里却不归属（不随组移动、不算成员）。
+      // 以新节点中心点判定（媒体节点加载前无实测尺寸，中心 ≈ 落点本身）
+      const newW = Number(newNode.style?.width) || 0;
+      const newH = Number(newNode.style?.height) || 0;
+      const joinedGroupId = findGroupAtPoint(useCanvasStore.getState().nodes, {
+        x: newNode.position.x + newW / 2,
+        y: newNode.position.y + newH / 2,
+      });
+      if (joinedGroupId) {
+        newNode = { ...newNode, data: { ...newNode.data, groupId: joinedGroupId } } as AnyNode;
+      }
+
       addNodes([newNode]);
+      // 组框随新成员只扩不缩（与拖入加入路径同一 refitGroupRects）；
+      // addNodes 已压入创建前快照，撤销一并回滚归组与扩框
+      if (joinedGroupId) {
+        setNodes(refitGroupRects(useCanvasStore.getState().nodes, [joinedGroupId]));
+        markDirtyImmediate();
+      }
       // 批量接线：逐个按类型校验（批量连线时部分选中节点可能不兼容新节点类型），
       // 输出方向：各选中节点 → 新节点；输入方向：新节点 → 各选中节点
       const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
@@ -707,33 +731,50 @@ export default function InfiniteCanvas() {
         });
       batchConnect(pairs);
     },
-    [pendingConnectionCreate, addNodes, batchConnect]
+    [pendingConnectionCreate, addNodes, batchConnect, setNodes]
   );
 
-  /** 框选外框 Handle（右缘 = 输出方向）拖到已有节点：批量扇出，逐个按类型校验 */
-  const connectSelectionToNode = useCallback(
-    (selectedIds: string[], targetId: string) => {
-      const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+  /** 批量 Handle（框选外框 / 组右缘）拖到已有节点：全有或全无批量扇出
+   *  （connection-rules 口径：任一参与节点与目标类型不可连即整体拒绝，
+   *  target 在参与集内（拖回选区/自己成员）产生空对集，静默取消） */
+  const connectParticipantsToNode = useCallback(
+    (participantIds: string[], targetId: string) => {
+      const { nodes: allNodes } = useCanvasStore.getState();
+      const nodeById = new Map(allNodes.map((n) => [n.id, n]));
       const tgt = nodeById.get(targetId);
       if (!tgt) return;
-      const pairs = selectedIds
-        .map((id) => nodeById.get(id))
-        .filter((n): n is AnyNode => !!n && n.id !== targetId)
-        .flatMap((n) => (canConnect(n.type, tgt.type) ? [{ source: n.id, target: targetId }] : []));
-      batchConnect(pairs);
+      const participants = participantIds.flatMap((id) => {
+        const n = nodeById.get(id);
+        return n ? [n] : [];
+      });
+      batchConnect(buildFanoutPairs(participants, tgt));
     },
     [batchConnect]
   );
 
-  /** 框选外框 Handle 拖到空白：弹出「创建连接节点」菜单，创建后批量接驳全部选中节点 */
-  const openSelectionCreateMenu = useCallback(
+  /** 菜单期间的束线预览锚点：按 sourceNodeIds 逐节点取右/左边缘正中
+   *  （多选扇出每个选中节点一根，单节点即一根），无有效盒尺寸的节点跳过 */
+  const pendingPreviewAnchors = useMemo(() => {
+    if (!pendingConnectionCreate) return [];
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    const side = pendingConnectionCreate.direction === "output" ? "right" : "left";
+    return pendingConnectionCreate.sourceNodeIds
+      .map((id) => nodeById.get(id))
+      .flatMap((n) => {
+        const anchor = n ? nodeEdgeAnchor(n, side) : null;
+        return anchor ? [anchor] : [];
+      });
+  }, [pendingConnectionCreate, nodes]);
+
+  /** 批量 Handle 拖到空白：弹出「创建连接节点」菜单，创建后批量接驳全部参与节点
+   *  （框选 = 选中节点，组 = 组成员；菜单按参与类型全有或全无门控选项） */
+  const openBatchCreateMenu = useCallback(
     (
-      selectedIds: string[],
+      participantIds: string[],
       canvasPosition: { x: number; y: number },
-      screenPosition: { x: number; y: number },
-      sourceAnchor: { x: number; y: number }
+      screenPosition: { x: number; y: number }
     ) => {
-      const selected = useCanvasStore.getState().nodes.filter((n) => selectedIds.includes(n.id));
+      const selected = useCanvasStore.getState().nodes.filter((n) => participantIds.includes(n.id));
       if (selected.length === 0) return;
       setPendingConnectionCreate({
         sourceNodeIds: selected.map((n) => n.id),
@@ -741,10 +782,22 @@ export default function InfiniteCanvas() {
         direction: "output",
         canvasPosition,
         screenPosition,
-        sourceAnchor,
       });
     },
     []
+  );
+
+  /** 组节点批量轨道（GroupConnectRail）的接驳回调：渲染在节点 DOM 内，
+   *  不能经 props 透传，也不能塞进持久化的 node data，经 Context 注入 */
+  const batchConnectHandlers = useMemo<BatchConnectHandlers>(
+    () => ({
+      onConnectToNode: connectParticipantsToNode,
+      onConnectToBlank: openBatchCreateMenu,
+      onDragStart: canvasInteraction.onConnectStart,
+      onDragEnd: canvasInteraction.onConnectEnd,
+      screenToFlowPosition,
+    }),
+    [connectParticipantsToNode, openBatchCreateMenu, canvasInteraction, screenToFlowPosition]
   );
 
   const handleViewportChange = useCallback(
@@ -773,28 +826,21 @@ export default function InfiniteCanvas() {
 
       const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
       const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
-      const centerX = draggedNode.position.x + nodeW / 2;
-      const centerY = draggedNode.position.y + nodeH / 2;
-      const insideGroup = (g: AnyNode) => {
-        const gw = Number(g.style?.width) || g.width || 0;
-        const gh = Number(g.style?.height) || g.height || 0;
-        return (
-          centerX >= g.position.x &&
-          centerX <= g.position.x + gw &&
-          centerY >= g.position.y &&
-          centerY <= g.position.y + gh
-        );
+      const center = {
+        x: draggedNode.position.x + nodeW / 2,
+        y: draggedNode.position.y + nodeH / 2,
       };
 
-      // 统一判定归属：中心点仍在原组内 → 不变；离开原组 / 原组已不存在 →
+      // 统一判定归属（group-bounds 的「包含即归属」口径，与组内落点创建节点共用）：
+      // 中心点仍在原组内 → 不变；离开原组 / 原组已不存在 →
       // 按落点重新判定（一次拖拽即可完成跨组换组或脱离）
       const oldGroupId = draggedNode.data?.groupId;
       const oldGroup = oldGroupId
         ? allNodes.find((n) => n.type === NODE_TYPE.GROUP && n.id === oldGroupId)
         : undefined;
       let nextGroupId: string | undefined = oldGroupId;
-      if (!oldGroup || !insideGroup(oldGroup)) {
-        nextGroupId = allNodes.find((n) => n.type === NODE_TYPE.GROUP && insideGroup(n))?.id;
+      if (!oldGroup || !groupContainsPoint(oldGroup, center)) {
+        nextGroupId = findGroupAtPoint(allNodes, center);
       }
 
       if (nextGroupId === oldGroupId) return;
@@ -807,28 +853,16 @@ export default function InfiniteCanvas() {
           : n
       );
 
-      // 组框随成员变化自适应：加入 → 扩张覆盖成员（只扩不缩）；
-      // 脱离后变空 → 收缩到最小尺寸，避免留下巨大空壳
+      // 组框随成员变化自适应（group-bounds.refitGroupRects）：
+      // 加入 → 扩张覆盖成员（只扩不缩）；脱离后变空 → 收缩到最小尺寸
       const touchedGroupIds = new Set<string>();
       if (oldGroupId) touchedGroupIds.add(oldGroupId);
       if (nextGroupId) touchedGroupIds.add(nextGroupId);
-      const finalNodes = withMembership.map((n) => {
-        if (n.type !== NODE_TYPE.GROUP || !touchedGroupIds.has(n.id)) return n;
-        const members = withMembership.filter(
-          (m) => m.type !== NODE_TYPE.GROUP && m.data?.groupId === n.id
-        );
-        const rect = computeFittedGroupRect(n, members);
-        if (!rect) return n;
-        return {
-          ...n,
-          position: { x: rect.x, y: rect.y },
-          style: { ...n.style, width: rect.width, height: rect.height },
-        } as AnyNode;
-      });
+      const finalNodes = refitGroupRects(withMembership, touchedGroupIds);
 
       setNodes(finalNodes);
     },
-    [canvasInteraction, markDirtyImmediate, setAlignmentGuides, setNodes]
+    [canvasInteraction, setAlignmentGuides, setNodes]
   );
 
   const handlePaneClick = useCallback(() => {
@@ -995,6 +1029,7 @@ export default function InfiniteCanvas() {
     >
       <AlignmentGuides guides={alignmentGuides} />
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
+      <BatchConnectContext.Provider value={batchConnectHandlers}>
       <ReactFlow
         data-interaction={canvasInteraction.mode}
         style={{ "--handle-size": `${HANDLE_SIZE}px`, "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties}
@@ -1331,28 +1366,38 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )})}
 
-        {/* 框选外框批量连线 Handle（≥2 个非组节点选中时出现） */}
+        {/* 批量连线 Handle（框选外框专用，右缘 = 输出方向）：≥2 个非组节点选中时，
+            锚点在外框右缘正中，参与集 = 选中节点，常显（外框不是节点，无显隐规则可依托）。
+            组节点的批量轨道由 GroupNode 内部的 GroupConnectRail 渲染 */}
         {selectionFrame && (
-          <SelectionFrameHandles
-            bbox={selectionFrame.bbox}
-            selectedIds={selectionFrame.ids}
-            onConnectToNode={connectSelectionToNode}
-            onConnectToBlank={openSelectionCreateMenu}
+          <BatchConnectHandle
+            anchor={{
+              x: selectionFrame.bbox.x + selectionFrame.bbox.width + GROUP_NODE_PADDING,
+              y: selectionFrame.bbox.y + selectionFrame.bbox.height / 2,
+            }}
+            participantIds={selectionFrame.ids}
+            onConnectToNode={connectParticipantsToNode}
+            onConnectToBlank={openBatchCreateMenu}
             onDragStart={canvasInteraction.onConnectStart}
             onDragEnd={canvasInteraction.onConnectEnd}
             screenToFlowPosition={screenToFlowPosition}
           />
         )}
 
-        {/* 拖拽连线落在空白、弹出创建菜单期间：持续渲染绿色流光预览线 */}
-        {pendingConnectionCreate && (
-          <PendingConnectionPreview
-            from={pendingConnectionCreate.sourceAnchor}
-            to={pendingConnectionCreate.canvasPosition}
-            fromPosition={pendingConnectionCreate.direction === "output" ? Position.Right : Position.Left}
-          />
-        )}
+        {/* 拖拽连线落在空白、弹出创建菜单期间：持续渲染绿色流光预览线。
+            多选扇出时每个选中节点一根（与拖拽中的束线预览一致），单节点即一根；
+            锚点按 direction 取节点右/左边缘正中，无有效盒尺寸的节点跳过 */}
+        {pendingConnectionCreate &&
+          pendingPreviewAnchors.map((anchor, i) => (
+            <PendingConnectionPreview
+              key={i}
+              from={anchor}
+              to={pendingConnectionCreate.canvasPosition}
+              fromPosition={pendingConnectionCreate.direction === "output" ? Position.Right : Position.Left}
+            />
+          ))}
       </ReactFlow>
+      </BatchConnectContext.Provider>
       </EdgeHighlightContext.Provider>
 
       <CanvasContextMenu

@@ -1,15 +1,19 @@
 /**
  * 拖拽连接时的自定义预览线组件。
  * 渲染中性灰贝塞尔预览线（与已建立连线同色），并叠加绿色管道流光动画；
+ * 发起节点处于多选集合时，其余选中节点各补一根束线汇到同一终点（扇出预览，
+ * 与松手「每选中节点建一条边」一致）；
  * 同时驱动目标节点的倾斜/可行性反馈（流动描边 = 可连，毛玻璃 = 不可连，见 ./connection-tilt.ts）。
  */
 "use client";
 
 import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } from "@xyflow/react";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 
+import { connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
+import { findNodeAtFlowPoint, getNodeBox, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { canConnect, EDGE_BASE_COLOR, insetHandleCenter } from "@/lib/constants";
+import { EDGE_BASE_COLOR, insetHandleCenter, NODE_TYPE } from "@/lib/constants";
 
 import { applyConnectionTilt, clearConnectionTilt } from "./connection-tilt";
 import { DOT_COLOR, FlowLines } from "./EdgeFlow";
@@ -71,41 +75,40 @@ export default function ConnectionFlowLine({
     // 磁吸命中：指针已吸到某节点的轨道上，以轨道判定为准（toNode 在 valid/invalid 时都有值）：
     //   valid：通过合法性校验（xyflow 对反向拖拽已交换 source/target，方向语义正确）——
     //          朝指针方位倾斜 + 流动描边；
-    //   invalid：吸上了但不可连（同侧轨道 / 类型不匹配）——蒙毛玻璃。不能漏给悬停循环，
-    //          否则吸在类型可连但轨道同侧的节点上会给出 ok 描边，松手却连不上；
-    // 自连例外：xyflow 的严格模式不排除同节点的另一条轨道，且应用的 isValidConnection
-    // 只按类型判断——源 === 目标时自连不可行，同样降级为 blocked
+    //   invalid：吸上了但不可连——蒙毛玻璃。不能漏给悬停循环，否则吸在类型可连
+    //          但轨道同侧的节点上会给出 ok 描边，松手却连不上。合法性来自应用
+    //          的 isValidConnection（connection-rules 口径：类型 / 自连 / 已连去重
+    //          / 多选扇出全有或全无聚合），此处再兜一道源 === 目标排除。
     if (toNodeId && connectionStatus !== null) {
       const n = nodes.find((m) => m.id === toNodeId);
-      const width = n && typeof n.style?.width === "number" ? n.style.width : 0;
-      const height = n && typeof n.style?.height === "number" ? n.style.height : 0;
-      if (n && width > 0 && height > 0) {
+      const box = n ? getNodeBox(n) : null;
+      if (n && box) {
         const connectable = connectionStatus === "valid" && n.id !== fromNodeId;
         applyConnectionTilt(
-          { id: n.id, box: { x: n.position.x, y: n.position.y, width, height } },
+          { id: n.id, box },
           { x: flowX, y: flowY },
           connectable ? "ok" : "blocked"
         );
         return;
       }
     }
-    // 未磁吸：指针进入节点区域时反馈，数组靠后的节点绘制在上层，自上而下找第一个命中。
-    // 源节点自身也在候选内——拖出后悬回源节点（典型如反向从输入轨道拖出）时指针就在
-    // 源节点上，此时自连不可行，给 blocked 毛玻璃而非无反馈
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const n = nodes[i];
-      const width = typeof n.style?.width === "number" ? n.style.width : 0;
-      const height = typeof n.style?.height === "number" ? n.style.height : 0;
-      if (width <= 0 || height <= 0) continue;
-      if (
-        flowX < n.position.x || flowX > n.position.x + width ||
-        flowY < n.position.y || flowY > n.position.y + height
-      ) continue;
+    // 未磁吸：指针进入节点区域时反馈，只认指针正下方的最上层节点（与松手时的
+    // 建边判定共用同一命中测试）。可连性直接用 connection-rules 的「会产生新边」
+    // 判定（类型 / 自连 / 已连 / 多选扇出同口径），源节点自身也在候选内——拖出后
+    // 悬回源节点时自连不可行，给 blocked 毛玻璃而非无反馈
+    const hit = findNodeAtFlowPoint(nodes, { x: flowX, y: flowY });
+    if (hit) {
+      const { edges } = useCanvasStore.getState();
       const connectable =
-        n.id !== fromNodeId &&
-        (isReverseDrag ? canConnect(n.type, sourceType) : canConnect(sourceType, n.type));
+        !!fromNodeId &&
+        connectionWouldCreate(
+          isReverseDrag ? hit.id : fromNodeId,
+          isReverseDrag ? fromNodeId : hit.id,
+          { nodes, edges }
+        );
+      const box = getNodeBox(hit)!;
       applyConnectionTilt(
-        { id: n.id, box: { x: n.position.x, y: n.position.y, width, height } },
+        { id: hit.id, box },
         { x: flowX, y: flowY },
         connectable ? "ok" : "blocked"
       );
@@ -115,10 +118,40 @@ export default function ConnectionFlowLine({
   }, [fromNodeId, pointerX, pointerY, connectionStatus, toNodeId, isReverseDrag]);
   useEffect(() => () => clearConnectionTilt(), []);
 
+  // 多选扇出的束线预览：发起节点处于多选集合（≥2 非组节点）时，其余选中节点
+  // 也各出一根流光线汇到同一终点——与松手「每选中节点建一条边」一致（正向拖拽
+  // 从右缘出线、反向拖拽从左缘出线）。单选或发起节点未入选时无束线。
+  // 选中集与节点位置在拖线期间不变，直接在渲染时读取即可（组件每帧随指针重渲染）。
+  const bundlePaths: string[] = [];
+  if (fromNode?.id && fromNode.selected) {
+    const side = isReverseDrag ? "left" : "right";
+    const bundleEnd = toPosition ?? (fromPosition === Position.Right ? Position.Left : Position.Right);
+    for (const n of useCanvasStore.getState().nodes) {
+      if (!n.selected || n.type === NODE_TYPE.GROUP || n.id === fromNode.id) continue;
+      const a = nodeEdgeAnchor(n, side);
+      if (!a) continue;
+      const [p] = getBezierPath({
+        sourceX: a.x,
+        sourceY: a.y,
+        sourcePosition: isReverseDrag ? Position.Left : Position.Right,
+        targetX: target.x,
+        targetY: target.y,
+        targetPosition: bundleEnd,
+      });
+      bundlePaths.push(p);
+    }
+  }
+
   return (
     <>
       <BaseEdge path={edgePath} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
       <FlowLines path={edgePath} color={DOT_COLOR} />
+      {bundlePaths.map((p, i) => (
+        <Fragment key={i}>
+          <BaseEdge path={p} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
+          <FlowLines path={p} color={DOT_COLOR} />
+        </Fragment>
+      ))}
     </>
   );
 }

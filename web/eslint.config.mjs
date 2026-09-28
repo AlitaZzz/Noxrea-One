@@ -49,6 +49,10 @@ const eslintConfig = defineConfig([
       // any 在 3D 引擎（three.js 交互）与测试 mock 中大量使用，保持 error 级别，
       // 违规逐项清理（见各文件专项处理），不降级。
       "@typescript-eslint/no-explicit-any": "error",
+      // 「丢弃键 + rest」解构（const { groupId: _omit, ...rest } = data）是刻意的
+      // 剥离写法，ignoreRestSiblings 正是为它准备的选项（use-group-operations /
+      // canvas-edit-actions 剥离 groupId 归属），不再报未使用变量。
+      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
       // 历史技术债：Function 类型（@typescript-eslint/ban-types），降级为 warn 保留提示。
       "@typescript-eslint/no-unsafe-function-type": "warn",
       // react-hooks v6 规则保持 error 级别，违规逐项修复（见各文件清理），不降级。
