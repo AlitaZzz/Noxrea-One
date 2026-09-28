@@ -14,15 +14,15 @@
 
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
-import { createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
+import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
-import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
+import type { AnyEdge, AnyNode, MediaGenFields } from "@/features/canvas/types";
 import { createNodesFromFiles } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
-import { isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
+import { canConnect, isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 
 /** 当前选中的节点 id */
@@ -96,11 +96,19 @@ export function copySelection(): boolean {
         return n.type !== NODE_TYPE.GROUP && gid !== undefined && selectedGroupIds.has(gid);
       })
     : nodes.filter((n) => selSet.has(n.id));
-  useSelectionStore.getState().copySelected(expanded);
+  // 与复制集相关的连线一并入剪贴板（任一端在集内）：集内端点粘贴时重映射到
+  // 副本；副本模式只还原上游外部边（集外 source 指向原上游），下游外部边
+  // 与普通粘贴的外部边都不还原；跨标签页粘贴时集外 id 在目标画布不存在，
+  // 粘贴侧自然丢弃
+  const idSet = new Set(expanded.map((n) => n.id));
+  const relatedEdges = useCanvasStore
+    .getState()
+    .edges.filter((e) => idSet.has(e.source) || idSet.has(e.target));
+  useSelectionStore.getState().copySelected(expanded, relatedEdges);
   // 节点 JSON 同步写入系统剪贴板（带标记）：Ctrl+V 走原生 paste 事件可免权限读取，
   // 并支持跨标签页还原节点。clipboard-write 在安全上下文默认放行，失败静默忽略。
   void navigator.clipboard
-    ?.writeText(CLIPBOARD_NODE_MARKER + JSON.stringify(expanded))
+    ?.writeText(CLIPBOARD_NODE_MARKER + JSON.stringify({ nodes: expanded, edges: relatedEdges }))
     .catch(() => {});
   return true;
 }
@@ -121,7 +129,8 @@ export function duplicateSelection(): boolean {
   const minX = Math.min(...sel.map((n) => n.position.x));
   const minY = Math.min(...sel.map((n) => n.position.y));
   if (!copySelection()) return false;
-  return pasteClipboard({ x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP });
+  // 副本只保留上游连线（含集内边），下游外部连线不还原——副本是开新分支
+  return pasteClipboard({ x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP }, { includeExternalEdges: true });
 }
 
 /**
@@ -157,12 +166,18 @@ export async function copyImageSrcToClipboard(src: string): Promise<boolean> {
  * @param at 目标画布坐标（粘贴内容的包围盒左上角）。保持剪贴板内各节点的
  *           相对布局、整体平移到该点——键盘 Ctrl+V 传光标处（不在画布上时
  *           传视口中心），右键菜单传右键落点。
+ * @param options.includeExternalEdges 副本（创建副本/Ctrl+D）传 true：
+ *           额外还原上游外部边（集外节点 → 副本）。普通粘贴默认 false：
+ *           只还原两端都在剪贴板内的边，不继承外部关系。
  * @returns 是否实际执行了粘贴
  */
-export function pasteClipboard(at: { x: number; y: number }): boolean {
+export function pasteClipboard(
+  at: { x: number; y: number },
+  options?: { includeExternalEdges?: boolean },
+): boolean {
   const clip = useSelectionStore.getState().clipboard;
   if (!clip || clip.nodes.length === 0) return false;
-  return pasteNodes(clip.nodes, at);
+  return pasteNodes(clip.nodes, clip.edges, at, options);
 }
 
 /**
@@ -178,8 +193,10 @@ export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: nu
   } catch {
     return false;
   }
-  if (!Array.isArray(parsed)) return false;
-  const nodes = parsed.filter(
+  // 兼容两种载荷：新格式 { nodes, edges } 与旧格式纯节点数组（跨标签页旧数据）
+  const payload = Array.isArray(parsed) ? { nodes: parsed, edges: [] } : (parsed as { nodes?: unknown; edges?: unknown });
+  if (!Array.isArray(payload.nodes)) return false;
+  const nodes = payload.nodes.filter(
     (n): n is AnyNode =>
       !!n &&
       typeof n === "object" &&
@@ -187,17 +204,34 @@ export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: nu
       !!(n as { position?: { x?: unknown; y?: unknown } }).position
   );
   if (nodes.length === 0) return false;
-  useSelectionStore.getState().copySelected(nodes);
-  return pasteNodes(nodes, at);
+  const edges = Array.isArray(payload.edges)
+    ? payload.edges.filter(
+        (e): e is AnyEdge =>
+          !!e &&
+          typeof e === "object" &&
+          typeof (e as { source?: unknown }).source === "string" &&
+          typeof (e as { target?: unknown }).target === "string",
+      )
+    : [];
+  useSelectionStore.getState().copySelected(nodes, edges);
+  return pasteNodes(nodes, edges, at);
 }
 
 /**
  * 粘贴核心：以剪贴板节点为源派生新节点（新 id、剥离瞬时状态、组归属重映射）、
- * 整体平移到 at 落位并选中。
+ * 整体平移到 at 落位并选中；相关连线还原——集内端点指向副本，副本模式额外
+ * 还原上游外部边（集外 source 指向原节点），跨画布不存在的端点丢弃该边。
  */
-function pasteNodes(clipNodes: AnyNode[], at: { x: number; y: number }): boolean {
+function pasteNodes(
+  clipNodes: AnyNode[],
+  clipEdges: AnyEdge[],
+  at: { x: number; y: number },
+  options?: { includeExternalEdges?: boolean },
+): boolean {
   if (clipNodes.length === 0) return false;
 
+  // 原 id → 副本 id 的映射：连线重映射要用，先于 duplicateNode 建立
+  const idMap = new Map<string, string>();
   // 以 at 为基准整体平移，保持内部相对布局不被打乱
   const minX = Math.min(...clipNodes.map((n) => n.position.x));
   const minY = Math.min(...clipNodes.map((n) => n.position.y));
@@ -207,6 +241,7 @@ function pasteNodes(clipNodes: AnyNode[], at: { x: number; y: number }): boolean
       x: at.x + (n.position.x - minX),
       y: at.y + (n.position.y - minY),
     };
+    idMap.set(n.id, cloned.id);
     return cloned;
   });
 
@@ -214,8 +249,8 @@ function pasteNodes(clipNodes: AnyNode[], at: { x: number; y: number }): boolean
   // 原组不在本次剪贴板内则解除归属，避免副本「串」到画布上的原组
   // （否则拖原组会带着粘贴副本跑、原组成员计数虚增）。
   const groupIdMap = new Map<string, string>();
-  clipNodes.forEach((orig, i) => {
-    if (orig.type === NODE_TYPE.GROUP) groupIdMap.set(orig.id, newNodes[i].id);
+  clipNodes.forEach((orig) => {
+    if (orig.type === NODE_TYPE.GROUP) groupIdMap.set(orig.id, idMap.get(orig.id)!);
   });
   newNodes = newNodes.map((n) => {
     if (n.type === NODE_TYPE.GROUP) return n;
@@ -229,7 +264,42 @@ function pasteNodes(clipNodes: AnyNode[], at: { x: number; y: number }): boolean
     return { ...n, data: rest } as AnyNode;
   });
 
-  useCanvasStore.getState().addNodes(newNodes);
+  // 先落节点再还原连线：节点表必须包含刚创建的副本（边的集内端点已重映射
+  // 为副本 id，在旧快照里查不到会被误丢）
+  const store = useCanvasStore.getState();
+  store.addNodes(newNodes);
+
+  // 连线还原：集内端点重映射到副本；普通粘贴只还原两端都在剪贴板内的边
+  // （不继承与原节点的外部关系）；副本模式（includeExternalEdges）额外还原
+  // 上游外部边（集外 source → 集内副本），下游外部边不还原——副本是开新
+  // 分支，不抢占下游消费者的输入；跨画布粘贴时集外 id 不存在则丢弃该边
+  const includeExternal = options?.includeExternalEdges === true;
+  const latestNodes = useCanvasStore.getState().nodes;
+  const existingPairs = new Set(
+    useCanvasStore.getState().edges.map((e) => `${e.source}→${e.target}`),
+  );
+  const nodeById = new Map(latestNodes.map((n) => [n.id, n]));
+  const newEdges = clipEdges
+    // 集内判定必须用重映射前的原 id：idMap 的键是原节点 id，重映射后已是
+    // 副本 id（idMap 里查不到），错位判定会把所有内部边误判成外部边丢掉
+    .filter((e) => idMap.has(e.target) && (includeExternal || idMap.has(e.source)))
+    .map((e) => {
+      const source = idMap.get(e.source) ?? e.source;
+      const target = idMap.get(e.target) ?? e.target;
+      return { source, target };
+    })
+    .filter(({ source, target }) => {
+      if (!nodeById.has(source) || !nodeById.has(target)) return false;
+      // 跨画布粘贴时集外节点的类型可能与原边不匹配，按连接规则再校验一次
+      if (!canConnect(nodeById.get(source)!.type, nodeById.get(target)!.type)) return false;
+      const key = `${source}→${target}`;
+      if (existingPairs.has(key)) return false;
+      existingPairs.add(key);
+      return true;
+    })
+    .map(({ source, target }) => createEdge(source, target));
+
+  if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
   // 粘贴后选中新节点，与键盘 Ctrl+V 行为保持一致
   const latest = useCanvasStore.getState();
   latest.setNodes(
