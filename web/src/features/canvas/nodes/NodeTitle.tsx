@@ -19,11 +19,12 @@ import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 let measureCtx: CanvasRenderingContext2D | null = null;
 
 /**
- * 保尾截断文本：超宽时省略号打在开头，尾部（派生后缀等区分信息）完整保留。
+ * 中间截断文本：超宽时省略号打在中间，头部（源名，身份）与尾部
+ * （派生后缀，区分信息）都保留 —— 与 macOS Finder 文件名截断同一模式。
  * CSS 的 direction:rtl 技巧会把中文按 bidi 规则反向重排，不可用，
- * 故用 canvas 量宽 + 二分查找能保留的最大尾部长度。
+ * 故用 canvas 量宽 + 交替回收找可行的头/尾保留长度。
  */
-function HeadTruncate({
+function MidTruncate({
   children,
   className,
   style,
@@ -39,7 +40,7 @@ function HeadTruncate({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    /** 量宽 + 二分截断：返回应显示的文案（不超宽时原样返回） */
+    /** 量宽 + 中间截断：返回应显示的文案（不超宽时原样返回） */
     const clipText = (avail: number): string => {
       const cs = getComputedStyle(el);
       measureCtx ??= document.createElement("canvas").getContext("2d");
@@ -47,16 +48,20 @@ function HeadTruncate({
       measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
       const ellipsis = "…";
       if (measureCtx.measureText(text).width <= avail) return text;
-      // 二分找最大的尾部保留长度 n，使「… + 尾 n 字符」不超宽
-      let lo = 0;
-      let hi = text.length;
-      while (lo < hi) {
-        const mid = Math.ceil((lo + hi) / 2);
-        const w = measureCtx.measureText(ellipsis + text.slice(text.length - mid)).width;
-        if (w <= avail) lo = mid;
-        else hi = mid - 1;
+      // 极窄：连省略号都放不下，只显示省略号
+      if (measureCtx.measureText(ellipsis).width > avail) return ellipsis;
+      const widthOf = (s: string) => measureCtx!.measureText(s).width;
+      const availText = avail - widthOf(ellipsis);
+      // 头尾按 2:1 字符预算起步（头部是身份，优先多留），超宽时交替回收保持比例
+      let headLen = Math.min(Math.floor((text.length * 2) / 3), text.length - 1);
+      let tailLen = Math.min(text.length - headLen, text.length - 1);
+      const fits = () =>
+        widthOf(text.slice(0, headLen)) + widthOf(text.slice(text.length - tailLen)) <= availText;
+      while (!fits() && (headLen > 0 || tailLen > 0)) {
+        if (headLen >= tailLen && headLen > 0) headLen--;
+        else if (tailLen > 0) tailLen--;
       }
-      return ellipsis + text.slice(text.length - lo);
+      return text.slice(0, headLen) + ellipsis + (tailLen > 0 ? text.slice(text.length - tailLen) : "");
     };
     // clientWidth 含左右内边距，量的是可用文本宽度
     const pad = parseFloat(getComputedStyle(el).paddingLeft) + parseFloat(getComputedStyle(el).paddingRight);
@@ -135,12 +140,12 @@ export default function NodeTitle({
         <span className="flex items-center gap-0.5 flex-1 min-w-0" onDoubleClick={startEdit}>
           {icon}
           {/* 盒模型与编辑态 Input 一致（1px 边框 + 1px 4px 内边距），进入编辑时文字原点不跳动 */}
-          <HeadTruncate
+          <MidTruncate
             className="flex-1 min-w-0"
             style={{ padding: "1px 4px", border: "1px solid transparent", borderRadius: 4 }}
           >
             {display ?? title}
-          </HeadTruncate>
+          </MidTruncate>
           <EditOutlined
             className="nodrag shrink-0 text-white/30 transition-colors group-hover/title:text-white/70"
             style={{ fontSize: 10 }}
