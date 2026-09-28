@@ -39,7 +39,12 @@ describe("prompt template catalog", () => {
     expect([...groupIds]).toEqual([...groups].sort((a, b) => a.order - b.order).map((group) => group.id));
     for (const group of groups) {
       expect(group.label).toMatchObject({ zh: expect.any(String), en: expect.any(String) });
+      // 菜单分列归属：从 1 起的连续正整数列号，前端按它分列渲染
+      expect(Number.isInteger(group.column), group.id).toBe(true);
+      expect(group.column, group.id).toBeGreaterThan(0);
     }
+    const columns = [...new Set(groups.map((group) => group.column))].sort((a, b) => a - b);
+    expect(columns).toEqual(columns.map((_, i) => i + 1));
     // preset 进分组菜单：target 合法、group 存在且携带非空双语 label / description
     for (const entry of entries.filter((e) => e.kind === "preset")) {
       expect(["image", "text"], entry.id).toContain(entry.target);

@@ -46,6 +46,8 @@ export interface PromptPreset {
 export interface PresetGroup {
   id: string;
   label: BilingualText;
+  /** 菜单分列归属（从 1 起）：同列分组纵向堆叠，列按序从左到右排 */
+  column: number;
   order: number;
 }
 

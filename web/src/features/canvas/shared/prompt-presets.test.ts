@@ -51,9 +51,9 @@ describe("textToDoc 预设令牌语法制", () => {
 describe("filterCatalogByTarget", () => {
   const catalog: PromptTemplateCatalog = {
     groups: [
-      { id: "g-both", label: { zh: "两用", en: "Both" }, order: 1 },
-      { id: "g-text", label: { zh: "文本", en: "Text" }, order: 2 },
-      { id: "g-image", label: { zh: "图片", en: "Image" }, order: 3 },
+      { id: "g-both", label: { zh: "两用", en: "Both" }, column: 1, order: 1 },
+      { id: "g-text", label: { zh: "文本", en: "Text" }, column: 2, order: 2 },
+      { id: "g-image", label: { zh: "图片", en: "Image" }, column: 2, order: 3 },
     ],
     entries: [
       { id: "img-1", kind: "preset", target: "image", group: "g-image", label: { zh: "一", en: "1" }, description: { zh: "", en: "" }, order: 1, template: "t" },

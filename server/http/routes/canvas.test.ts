@@ -29,7 +29,7 @@ interface SelectableResponse {
 }
 
 interface CatalogResponse {
-  groups: { id: string; label: { zh: string; en: string }; order: number }[];
+  groups: { id: string; label: { zh: string; en: string }; column: number; order: number }[];
   entries: SelectableResponse[];
 }
 

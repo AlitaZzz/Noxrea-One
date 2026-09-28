@@ -326,7 +326,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           <MenuPopover
             open={creationOpen}
             onOpenChange={setCreationOpen}
-            placement="bottomRight"
+            placement="bottomLeft"
             overlayClassName="creation-menu-popover"
             trigger={
               <Tooltip title={t("node.creation")}>

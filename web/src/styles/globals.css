@@ -1399,8 +1399,12 @@ body > .ant-app { line-height: inherit !important; }
 /* 分组标题（创作菜单等）：小号弱化文字，条目下的两行说明文字 */
 .menu-group-label { padding: 6px 12px 2px; font-size: 11px; color: var(--canvas-text-muted); }
 .menu-item-description { font-size: 11px; color: var(--canvas-text-dim); }
-/* 创作菜单：分组 + 两行条目，固定宽度避免长描述把弹层撑得过宽 */
-.creation-menu-popover .menu-popover { width: 300px; }
+/* 创作菜单：分组 + 两行条目，宽度随列数自适应（列宽固定，避免长描述把弹层撑得过宽）；
+   多列布局由目录数据的 group.column 声明，列数任意，宽度按 224px 等分 */
+.creation-menu-popover .menu-popover { width: max-content; }
+.preset-menu-columns { display: flex; gap: 6px; }
+.preset-menu-col { width: 288px; }
+.preset-menu-columns.multi .preset-menu-col { width: 224px; }
 
 /* 历史对话弹层：320px 宽，配色沿用 canvas 变量族 */
 .chat-history-popover { min-width: 300px !important; width: 320px !important; }

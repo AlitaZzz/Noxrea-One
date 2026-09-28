@@ -1,10 +1,10 @@
 {
   "groups": [
-    { "id": "view", "label": { "zh": "三视图", "en": "Three-View" }, "order": 1 },
-    { "id": "storyboard", "label": { "zh": "分镜", "en": "Storyboard" }, "order": 2 },
-    { "id": "light", "label": { "zh": "光影", "en": "Lighting" }, "order": 3 },
-    { "id": "timeline", "label": { "zh": "画面推演", "en": "Frame Prediction" }, "order": 4 },
-    { "id": "prompt", "label": { "zh": "提示词", "en": "Prompt" }, "order": 5 }
+    { "id": "view", "label": { "zh": "三视图", "en": "Three-View" }, "column": 1, "order": 1 },
+    { "id": "storyboard", "label": { "zh": "分镜", "en": "Storyboard" }, "column": 1, "order": 2 },
+    { "id": "light", "label": { "zh": "光影", "en": "Lighting" }, "column": 2, "order": 3 },
+    { "id": "timeline", "label": { "zh": "画面推演", "en": "Frame Prediction" }, "column": 2, "order": 4 },
+    { "id": "prompt", "label": { "zh": "提示词", "en": "Prompt" }, "column": 1, "order": 5 }
   ],
   "entries": [
     {
