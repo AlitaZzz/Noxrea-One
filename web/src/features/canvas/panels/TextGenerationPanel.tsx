@@ -502,7 +502,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
             overlayClassName="creation-menu-popover"
             trigger={
-              <Tooltip title={t("node.creationPreset")}>
+              <Tooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
                 <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
                   <PresetIcon />
                 </Button>
