@@ -27,6 +27,7 @@ import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
+import { MOD_KEY } from "@/lib/platform";
 import { formatBytes, formatTime } from "@/lib/utils/format";
 import { copyText } from "@/lib/utils/text-export";
 
@@ -567,7 +568,7 @@ export default function AssetInspector({
             </div>
             <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("asset.noDetail")}</div>
             <div className="text-xs text-center px-2" style={{ color: "var(--canvas-text-muted)" }}>
-              {t("asset.noDetailHint")}
+              {t("asset.noDetailHint", { mod: MOD_KEY })}
             </div>
           </div>
         ) : single ? (

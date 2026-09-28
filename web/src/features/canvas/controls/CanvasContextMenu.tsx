@@ -38,6 +38,7 @@ import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import { createNodesFromFiles, pickFiles } from "@/features/canvas/upload";
 import { NODE_TYPE } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
+import { MOD_KEY,modKey } from "@/lib/platform";
 
 interface Props {
   onAddText: () => void;
@@ -94,7 +95,7 @@ export default function CanvasContextMenu(props: Props) {
     }
     const content = await readSystemClipboard();
     if (!content) {
-      showGlobalMessage().info(t("common.clipboardReadFailed"));
+      showGlobalMessage().info(t("common.clipboardReadFailed", { mod: MOD_KEY }));
       return;
     }
     if (!pasteFromClipboardContent(content, at)) {
@@ -186,25 +187,25 @@ export default function CanvasContextMenu(props: Props) {
               <>
                 <MenuItem onClick={() => { hide(); void handleUpload(); }}><UploadOutlined /> {t("common.upload")}</MenuItem>
                 <MenuDivider />
-                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
-                <MenuItem dimmed={!hasNodes} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+A</span>} onClick={() => { selectAllNodes(); hide(); }}><SelectOutlined /> {t("common.selectAll")}</MenuItem>
+                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>{modKey("V")}</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
+                <MenuItem dimmed={!hasNodes} iconRight={<span style={SHORTCUT_STYLE}>{modKey("A")}</span>} onClick={() => { selectAllNodes(); hide(); }}><SelectOutlined /> {t("common.selectAll")}</MenuItem>
                 {canvasActions}
                 <MenuDivider />
-                <MenuItem dimmed={!canUndo} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+Z</span>} onClick={() => { undoAction(); hide(); }}><UndoOutlined /> {t("common.undo")}</MenuItem>
-                <MenuItem dimmed={!canRedo} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+Shift+Z</span>} onClick={() => { redoAction(); hide(); }}><RedoOutlined /> {t("common.redo")}</MenuItem>
+                <MenuItem dimmed={!canUndo} iconRight={<span style={SHORTCUT_STYLE}>{modKey("Z")}</span>} onClick={() => { undoAction(); hide(); }}><UndoOutlined /> {t("common.undo")}</MenuItem>
+                <MenuItem dimmed={!canRedo} iconRight={<span style={SHORTCUT_STYLE}>{modKey("Shift+Z")}</span>} onClick={() => { redoAction(); hide(); }}><RedoOutlined /> {t("common.redo")}</MenuItem>
               </>
             )}
 
             {kind === "node" && (
               <>
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+C</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copyNode")}</MenuItem>
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>{modKey("C")}</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copyNode")}</MenuItem>
                 {singleImageSrc !== null && (
                   <MenuItem onClick={() => { void handleCopyImage(); }}><PictureOutlined /> {t("node.copyImage")}</MenuItem>
                 )}
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Ctrl+D</span>} onClick={() => { duplicateSelection(); hide(); }}><PlusSquareOutlined /> {t("common.duplicate")}</MenuItem>
-                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>Ctrl+V</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>{modKey("D")}</span>} onClick={() => { duplicateSelection(); hide(); }}><PlusSquareOutlined /> {t("common.duplicate")}</MenuItem>
+                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>{modKey("V")}</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
                 <MenuDivider />
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Del</span>} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
+                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Delete</span>} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
               </>
             )}
           </div>

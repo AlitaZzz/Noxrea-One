@@ -31,6 +31,7 @@ import { useSessionExpiredStore } from "@/features/project/session-expired-store
 import { useProjectStore } from "@/features/project/store";
 import { useCanvasSession } from "@/features/project/use-canvas-session";
 import { useModelStore } from "@/lib/model-store";
+import { modKey } from "@/lib/platform";
 
 const DirectorOverlay = dynamic(
   () => import("@/features/director/components/DirectorOverlay"),
@@ -181,27 +182,27 @@ export default function CanvasPage({
                 {row("Scroll", t("shortcuts.desc.scroll"))}
                 {row(t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan"))}
                 {row(t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan"))}
-                {row("Ctrl+=", t("shortcuts.desc.zoomin"))}
-                {row("Ctrl+-", t("shortcuts.desc.zoomout"))}
-                {row("Ctrl+0", t("shortcuts.desc.reset"))}
-                {row("Ctrl+M", t("shortcuts.desc.minimap"))}
+                {row(modKey("="), t("shortcuts.desc.zoomin"))}
+                {row(modKey("-"), t("shortcuts.desc.zoomout"))}
+                {row(modKey("0"), t("shortcuts.desc.reset"))}
+                {row(modKey("M"), t("shortcuts.desc.minimap"))}
               </div>
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.edit")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
                 {row(t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion"))}
-                {row("Ctrl+A", t("shortcuts.desc.selectall"))}
+                {row(modKey("A"), t("shortcuts.desc.selectall"))}
                 {row(t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect"))}
-                {row("Ctrl+C", t("shortcuts.desc.copy"))}
-                {row("Ctrl+V", t("shortcuts.desc.paste"))}
+                {row(modKey("C"), t("shortcuts.desc.copy"))}
+                {row(modKey("V"), t("shortcuts.desc.paste"))}
                 {row("Delete", t("shortcuts.desc.delete"))}
                 {row("Escape", t("shortcuts.desc.esc"))}
               </div>
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.group")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
-                {row("Ctrl+G", t("shortcuts.desc.group"))}
-                {row("Ctrl+Shift+G", t("shortcuts.desc.ungroup"))}
-                {row("Ctrl+Z", t("shortcuts.desc.undo"))}
-                {row("Ctrl+Shift+Z", t("shortcuts.desc.redo"))}
+                {row(modKey("G"), t("shortcuts.desc.group"))}
+                {row(modKey("Shift+G"), t("shortcuts.desc.ungroup"))}
+                {row(modKey("Z"), t("shortcuts.desc.undo"))}
+                {row(modKey("Shift+Z"), t("shortcuts.desc.redo"))}
               </div>
               <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.other")}</div>
               <div className="space-y-1 text-xs" style={{ color: "var(--canvas-text-muted)" }}>

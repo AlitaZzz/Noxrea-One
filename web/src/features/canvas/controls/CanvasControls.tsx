@@ -28,6 +28,7 @@ import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { BackgroundType } from "@/features/canvas/types";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
+import { modKey } from "@/lib/platform";
 
 function LanguageToggle() {
   const { t, i18n } = useTranslation();
@@ -222,11 +223,11 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
             onClick={(e) => e.stopPropagation()}
           >
             {[
-              { title: t("shortcuts.zoom"), items: [["Ctrl+=", t("shortcuts.desc.zoomin")], ["Ctrl+-", t("shortcuts.desc.zoomout")], ["Ctrl+0", t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
+              { title: t("shortcuts.zoom"), items: [[modKey("="), t("shortcuts.desc.zoomin")], [modKey("-"), t("shortcuts.desc.zoomout")], [modKey("0"), t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
               { title: t("shortcuts.pan"), items: [[t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan")], [t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan")]] },
-              { title: t("shortcuts.edit"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion")], ["Ctrl+C", t("shortcuts.desc.copy")], ["Ctrl+V", t("shortcuts.desc.paste")], ["Ctrl+Z", t("shortcuts.desc.undo")], ["Ctrl+Shift+Z", t("shortcuts.desc.redo")], ["Delete", t("shortcuts.desc.delete")]] },
-              { title: t("shortcuts.group"), items: [["Ctrl+G", t("shortcuts.desc.group")], ["Ctrl+Shift+G", t("shortcuts.desc.ungroup")]] },
-              { title: t("shortcuts.other"), items: [["Ctrl+A", t("shortcuts.desc.selectall")], ["Ctrl+M", t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
+              { title: t("shortcuts.edit"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion")], [modKey("C"), t("shortcuts.desc.copy")], [modKey("V"), t("shortcuts.desc.paste")], [modKey("Z"), t("shortcuts.desc.undo")], [modKey("Shift+Z"), t("shortcuts.desc.redo")], ["Delete", t("shortcuts.desc.delete")]] },
+              { title: t("shortcuts.group"), items: [[modKey("G"), t("shortcuts.desc.group")], [modKey("Shift+G"), t("shortcuts.desc.ungroup")]] },
+              { title: t("shortcuts.other"), items: [[modKey("A"), t("shortcuts.desc.selectall")], [modKey("M"), t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
             ].map((group, i, arr) => (
               <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-white/10 pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
                 <div className="text-white/50 text-sm font-medium mb-3">{group.title}</div>
