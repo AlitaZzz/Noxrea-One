@@ -240,6 +240,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
   }
 
   const sourceNode = sink.kind === "derived-node" ? store.getNodes().find((n) => n.id === sink.sourceId) : undefined;
+  const storeNodes = store.getNodes();
 
   // 上传管道是程序化写回：占位节点 / 进度 / 结果都不算用户操作，不进动作历史
   runSuppressed(() => {
@@ -272,7 +273,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       // raw：只上传拿远程地址，不创建任何画布节点
       if (sink.kind === "raw") continue;
 
-      const node = createPlaceholderNode(p.kind, resolvePosition(p, sink, cursor, sourceNode));
+      const node = createPlaceholderNode(p.kind, resolvePosition(p, sink, cursor, sourceNode, newNodes, storeNodes));
 
       if (sink.kind === "derived-node") {
         p.label = p.item.label ?? resolveDerivedLabel(sourceNode, p.item.labelSuffix ?? "");
@@ -316,15 +317,25 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
   return { nodeIds: newNodes.map((n) => n.id), settled: runUploads(plan, prepared, source) };
 }
 
-/** 决定占位节点落位：显式位置 > 派生默认（源节点右侧）> 锚点旁 > 原点 */
+/** 决定占位节点落位：显式位置 > 派生宫格找空位（源节点右侧）> 锚点旁 > 原点。
+ *  derived 批量未显式指定位置时逐个找空位（含同批已落位节点），互不重叠 */
 function resolvePosition(
   p: Prepared,
   sink: UploadPlan["sink"],
   cursor: AnchorCursor | null,
   sourceNode: AnyNode | undefined,
+  batchNodes: AnyNode[],
+  storeNodes: AnyNode[],
 ): { x: number; y: number } {
   if (p.item.position) return p.item.position;
-  if (sink.kind === "derived-node") return resolveDerivedPosition(sourceNode);
+  if (sink.kind === "derived-node") {
+    return resolveDerivedPosition(sourceNode, undefined, {
+      nodes: [...storeNodes, ...batchNodes],
+      size: p.kind === "audio"
+        ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
+        : computeNodeSize(p.nw, p.nh),
+    });
+  }
   if (cursor) {
     const { width, height } = p.kind === "audio"
       ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }

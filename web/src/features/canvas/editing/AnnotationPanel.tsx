@@ -460,8 +460,9 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
       // 走统一上传管道：先建占位节点（本地预览），上传在后台进行；
       // 失败时管道会移除占位节点并提示，无需调用方兜底
+      // 标题 = 源名（去扩展名）+ 后缀（同源多次标注产物可区分）
       await runMediaUpload({
-        items: [{ blob, filename: "annotated.png", naturalWidth: nw, naturalHeight: nh, label: t("annotation.title") }],
+        items: [{ blob, filename: "annotated.png", naturalWidth: nw, naturalHeight: nh, labelSuffix: t("annotation.suffix") }],
         sink: { kind: "derived-node", sourceId },
       });
       setLoading(false);

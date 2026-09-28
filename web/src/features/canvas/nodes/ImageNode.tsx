@@ -275,10 +275,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         if (op === "flipV") ctx.scale(1, -1);
         ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
       });
-      // 3. 创建派生新节点（与宫格切分、裁剪同一条链路）
-      const derivedLabel = op === "rot90" ? t("node.rotate90") : op === "flipH" ? t("node.flipH") : t("node.flipV");
+      // 3. 创建派生新节点（与宫格切分、裁剪同一条链路）：
+      //    标题 = 源名（去扩展名）+ 操作后缀
+      const suffix = op === "rot90" ? t("node.rotate90Suffix") : op === "flipH" ? t("node.flipHSuffix") : t("node.flipVSuffix");
       await runMediaUpload({
-        items: [{ blob, filename: "transform.png", naturalWidth: cw, naturalHeight: ch, label: derivedLabel }],
+        items: [{ blob, filename: "transform.png", naturalWidth: cw, naturalHeight: ch, labelSuffix: suffix }],
         sink: { kind: "derived-node", sourceId: id },
       });
       markDirtyImmediate();

@@ -13,12 +13,15 @@ import {
   createVideoNode,
 } from "@/features/canvas/node-defaults";
 import type { AnyEdge, AnyNode, ImageNode, TextNode } from "@/features/canvas/types";
-import { DEFAULT_NODE_WIDTH } from "@/lib/constants";
+import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH } from "@/lib/constants";
+import i18n from "@/lib/i18n/config";
 import { stripMediaExtension } from "@/lib/utils/file-name";
-import { computeNodeSize } from "@/lib/utils/image-utils";
-
-/** 派生节点相对源节点的水平基准间隙（px） */
-const DERIVED_BASE_GAP_X = 60;
+import {
+  computeNodeSize,
+  findDerivedSlot,
+  type LayoutNode,
+  nodeRectOf,
+} from "@/lib/utils/image-utils";
 
 /** 同批派生多个节点时的垂直间隙（px），避免产物互相重叠 */
 export const DERIVED_BASE_GAP_Y = 24;
@@ -33,7 +36,17 @@ export interface CanvasStoreApi {
 
 /**
  * 派生节点标题：默认「源节点名（去扩展名）+ 后缀」，labelOverride 优先。
+ * 源名取节点显示用的标题；label 为空时回退到类型默认名（图片/视频/音频/文本），
+ * 与节点组件标题栏的显示兜底（data.label || t("node.xxx")）保持一致。
  */
+const NODE_TYPE_NAME_KEY: Record<string, string> = {
+  "image-node": "node.image",
+  "video-node": "node.video",
+  "audio-node": "node.audio",
+  "text-node": "node.text",
+  "director-node": "node.director",
+};
+
 export function resolveDerivedLabel(
   origNode: AnyNode | undefined,
   labelSuffix: string,
@@ -41,22 +54,30 @@ export function resolveDerivedLabel(
 ): string {
   if (labelOverride !== undefined) return labelOverride;
   const origData = origNode?.data as { label?: string } | undefined;
-  const origName = origData?.label || "image";
+  const typeKey = origNode ? NODE_TYPE_NAME_KEY[origNode.type] : undefined;
+  const origName = origData?.label || i18n.t(typeKey ?? "node.image");
   return stripMediaExtension(origName) + labelSuffix;
 }
 
+/** 派生落位的碰撞上下文：传入后按「宫格找空位」计算，避免与现有节点重叠 */
+export interface DerivedCollision {
+  /** 需要避开的节点（画布现有节点，可含同批已落位节点） */
+  nodes: LayoutNode[];
+  /** 新节点的显示尺寸 */
+  size: { width: number; height: number };
+}
+
 /**
- * 派生节点位置：默认放在源节点右侧，positionOverride 优先。
+ * 派生节点位置：显式 override 优先，否则按宫格找空位
+ * （源节点右侧基准点起行优先扫描，被占则顺延到下一空格）。
  */
 export function resolveDerivedPosition(
   origNode: AnyNode | undefined,
-  positionOverride?: { x: number; y: number },
+  positionOverride: { x: number; y: number } | undefined,
+  collision: DerivedCollision,
 ): { x: number; y: number } {
   if (positionOverride) return positionOverride;
-  return {
-    x: (origNode?.position.x || 0) + ((origNode?.style?.width as number) || DEFAULT_NODE_WIDTH) + DERIVED_BASE_GAP_X,
-    y: origNode?.position.y || 0,
-  };
+  return findDerivedSlot(collision.nodes, origNode, collision.size);
 }
 
 /**
@@ -75,7 +96,10 @@ export function spawnPromptDerivedNode(
 ): TextNode | ImageNode | null {
   const source = storeApi.nodes.find((n) => n.id === sourceId);
   if (!source) return null;
-  const node = nodeFactory(resolveDerivedPosition(source));
+  const node = nodeFactory({ x: 0, y: 0 });
+  // 以节点默认显示尺寸做宫格找空位：重复「创作」/模板派生不再叠在同一处
+  const rect = nodeRectOf(node);
+  node.position = findDerivedSlot(storeApi.nodes, source, { width: rect.width, height: rect.height });
   const gen = node.data.genSettings;
   if (gen) gen.prompt = prompt;
   if (options?.label) node.data.label = options.label;
@@ -109,16 +133,20 @@ export function createNodeFromUrl(
   labelOverride?: string,
 ): AnyNode {
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
-  const position = resolveDerivedPosition(origNode, positionOverride);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
-
-  const node = createImageNode(position, url);
+  const node = createImageNode({ x: 0, y: 0 }, url);
   node.data.label = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
   // 零尺寸保护：degenerate 输入（0 宽/高）按 300 兜底，避免节点塌缩为 0
-  node.style = computeNodeSize(naturalW > 0 ? naturalW : 300, naturalH > 0 ? naturalH : 300);
+  const size = computeNodeSize(naturalW > 0 ? naturalW : 300, naturalH > 0 ? naturalH : 300);
+  node.style = size;
+  // 宫格找空位：重复派生（连续抽帧/截图等）不再叠在同一处
+  node.position = resolveDerivedPosition(origNode, positionOverride, {
+    nodes: storeApi.nodes,
+    size,
+  });
 
   storeApi.addNodes([node]);
   storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
@@ -160,12 +188,16 @@ export function createAudioNodeFromUrl(
   const skipHistory = options?.skipHistory === true;
   const write = options?.write !== false;
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
-  const position = resolveDerivedPosition(origNode, positionOverride);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
 
-  const node = createAudioNode(position, url);
+  const node = createAudioNode({ x: 0, y: 0 }, url);
   node.data.label = label;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
+  // 宫格找空位：连续截取/变速等重复派生不再叠在同一处
+  node.position = resolveDerivedPosition(origNode, positionOverride, {
+    nodes: storeApi.nodes,
+    size: { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT },
+  });
 
   if (write) {
     storeApi.addNodes([node], { skipHistory });
@@ -198,16 +230,21 @@ export function createVideoNodeFromUrl(
   const skipHistory = options?.skipHistory === true;
   const write = options?.write !== false;
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
-  const position = resolveDerivedPosition(origNode, positionOverride);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
 
-  const node = createVideoNode(position, url);
+  const node = createVideoNode({ x: 0, y: 0 }, url);
   node.data.label = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
   // 零尺寸保护：degenerate 输入（0 宽/高）按 300 兜底，避免节点塌缩为 0
-  node.style = computeNodeSize(naturalW > 0 ? naturalW : 300, naturalH > 0 ? naturalH : 300);
+  const size = computeNodeSize(naturalW > 0 ? naturalW : 300, naturalH > 0 ? naturalH : 300);
+  node.style = size;
+  // 宫格找空位：重复派生（连续截取/裁剪等）不再叠在同一处
+  node.position = resolveDerivedPosition(origNode, positionOverride, {
+    nodes: storeApi.nodes,
+    size,
+  });
 
   if (write) {
     storeApi.addNodes([node], { skipHistory });

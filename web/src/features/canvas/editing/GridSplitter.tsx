@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
-import { canvasToBlob, computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
+import { canvasToBlob, computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
 
 export function useGridSplit(sourceId: string, src: string | undefined) {
   const { t } = useTranslation();
@@ -32,8 +32,13 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
         const pieceH = img.naturalHeight / rows;
 
         // Get original node position for grid layout
-        const origNode = useCanvasStore.getState().nodes.find((n) => n.id === sourceId);
+        const store = useCanvasStore.getState();
+        const origNode = store.nodes.find((n) => n.id === sourceId);
         const layout = computeDerivedGrid(origNode, pieceW, pieceH, cols);
+        // 目标区域被占（上一批切分 / 用户手动摆放）时整批平移到空区域
+        const origin = findDerivedBatchOrigin(store.nodes, origNode, layout, rows * cols);
+        layout.baseX = origin.x;
+        layout.baseY = origin.y;
 
         // 1) 本地逐格切图：纯 canvas 操作，不涉及网络
         const items: UploadItem[] = [];
@@ -47,7 +52,7 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
               filename: `grid_${r}_${c}.png`,
               naturalWidth: pieceW,
               naturalHeight: pieceH,
-              label: `${t("node.gridSplit")} (${r + 1}-${c + 1})`,
+              labelSuffix: t("node.gridSplitSuffix", { index: `${r + 1}-${c + 1}` }),
               position: gridPositionAt(layout, r * cols + c),
             });
           }

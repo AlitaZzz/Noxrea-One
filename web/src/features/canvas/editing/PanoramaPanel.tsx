@@ -15,7 +15,7 @@ import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover"
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
-import { computeDerivedGrid, gridPositionAt } from "@/lib/utils/image-utils";
+import { computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
 
 interface Props {
   src: string;
@@ -183,9 +183,9 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       restore();
       restoreRef.current = null;
 
-      // 走统一上传管道：先建占位节点再后台上传
+      // 走统一上传管道：先建占位节点再后台上传（标题 = 源名 + 后缀）
       await runMediaUpload({
-        items: [{ blob, filename: "panorama.png", naturalWidth: targetW, naturalHeight: targetH, label: t("node.panorama") }],
+        items: [{ blob, filename: "panorama.png", naturalWidth: targetW, naturalHeight: targetH }],
         sink: { kind: "derived-node", sourceId },
       });
       // 截图成功后保持全景模式，不退出
@@ -196,7 +196,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       restoreRef.current = null;
       setLoading(false);
     }
-  }, [loading, sourceId, src, aspect, t]);
+  }, [loading, sourceId, src, aspect]);
 
   // 多视角截图：按 viewCount 等分 360°，每个方向截一帧并生成为独立节点
   const handleMultiScreenshot = useCallback(async (count: ViewCount) => {
@@ -267,6 +267,10 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       // 多视角按接近方形的宫格排布：4 视角用 2×2，8/12 视角用多行 4 列，避免横着平铺
       const COLS = COUNT <= 4 ? 2 : 4;
       const layout = computeDerivedGrid(origNode, frameW, frameH, COLS);
+      // 目标区域被占（上一批截图 / 用户手动摆放）时整批平移到空区域
+      const origin = findDerivedBatchOrigin(store.nodes, origNode, layout, COUNT);
+      layout.baseX = origin.x;
+      layout.baseY = origin.y;
 
       // 1) 先逐帧截图（共用同一个 viewer，只能串行），收集产物
       const items: UploadItem[] = [];
@@ -292,7 +296,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           filename: `panorama_${i + 1}.png`,
           naturalWidth: frameW,
           naturalHeight: frameH,
-          label: `${t("node.panorama")} (${view.label})`,
+          labelSuffix: t("node.panoramaViewSuffix", { view: view.label }),
           position: gridPositionAt(layout, i),
         });
       }

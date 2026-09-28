@@ -151,7 +151,11 @@
     "rotate90": "旋转90°",
     "flipH": "水平翻转",
     "flipV": "垂直翻转",
+    "rotate90Suffix": " (旋转90°)",
+    "flipHSuffix": " (水平翻转)",
+    "flipVSuffix": " (垂直翻转)",
     "gridSplit": "宫格切分",
+    "gridSplitSuffix": " (宫格切分 {{index}})",
     "gridCustom": "自定义",
     "gridSelect": "选择行列数",
     "gridLayout": "宫格布局",
@@ -169,6 +173,7 @@
     "previewNext": "下一张",
     "previewDownload": "下载当前图片",
     "panorama": "全景",
+    "panoramaViewSuffix": " (全景 {{view}})",
     "captureFrame": "抽帧",
     "detachAudio": "分离音频",
     "detachAudioNoTrack": "该视频无音轨"
@@ -431,6 +436,7 @@
   },
   "annotation": {
     "title": "标注",
+    "suffix": " (标注)",
     "color": "颜色",
     "brushSize": "笔刷大小",
     "textPlaceholder": "输入文字",

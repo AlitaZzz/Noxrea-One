@@ -149,7 +149,11 @@
     "rotate90": "Rotate 90°",
     "flipH": "Flip H",
     "flipV": "Flip V",
+    "rotate90Suffix": " (Rotate 90°)",
+    "flipHSuffix": " (Flip H)",
+    "flipVSuffix": " (Flip V)",
     "gridSplit": "Grid Split",
+    "gridSplitSuffix": " (Grid Split {{index}})",
     "gridCustom": "Custom",
     "gridSelect": "Select rows & cols",
     "gridLayout": "Grid Layout",
@@ -167,6 +171,7 @@
     "previewNext": "Next",
     "previewDownload": "Download Current",
     "panorama": "Panorama",
+    "panoramaViewSuffix": " (Panorama {{view}})",
     "captureFrame": "Extract frame",
     "detachAudio": "Detach Audio",
     "detachAudioNoTrack": "This video has no audio track"
@@ -429,6 +434,7 @@
   },
   "annotation": {
     "title": "Annotate",
+    "suffix": " (Annotated)",
     "color": "Color",
     "brushSize": "Brush Size",
     "textPlaceholder": "Type text",

@@ -125,9 +125,13 @@ export function loadMediaDimensions(url: string, isVideo: boolean, timeoutMs = 1
 
 /** 派生节点相对源节点的水平基准间隙（px）。数值与 LAYOUT_GAP 相同但语义独立：
  *  这是源节点→派生网格的专有间距，不随整理/粘贴间距调整 */
-const DERIVED_BASE_GAP_X = 60;
+export const DERIVED_BASE_GAP_X = 60;
 /** 相邻派生节点之间的间隙（px） */
 const DERIVED_CELL_GAP = 12;
+/** 单产物派生宫格的列数（创作/裁剪/抽帧等逐次派生按行优先填入） */
+export const DERIVED_SLOT_COLS = 3;
+/** 宫格找空位的扫描上限（槽位数），密集画布兜底取最后一个候选，防死循环 */
+const DERIVED_SLOT_SCAN_LIMIT = 200;
 
 export interface DerivedGridLayout {
   baseX: number;
@@ -137,6 +141,46 @@ export interface DerivedGridLayout {
   cols: number;
   displayW: number;
   displayH: number;
+}
+
+/** 落位计算用的节点最小形状：位置 + 可选显示尺寸 */
+export interface LayoutNode {
+  position: { x: number; y: number };
+  style?: { width?: number | string; height?: number | string };
+}
+
+/** 节点显示矩形：style 宽高缺失、非数字或非正值时按兜底尺寸处理
+ *  （xyflow 类型允许 string；0/NaN 尺寸无法参与落位与碰撞计算） */
+export function nodeRectOf(
+  node: LayoutNode,
+  fallback: { width: number; height: number } = { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_WIDTH },
+): { x: number; y: number; width: number; height: number } {
+  const w = typeof node.style?.width === "number" && node.style.width > 0 ? node.style.width : fallback.width;
+  const h = typeof node.style?.height === "number" && node.style.height > 0 ? node.style.height : fallback.height;
+  return { x: node.position.x, y: node.position.y, width: w, height: h };
+}
+
+/** 矩形是否与任一节点重叠（边接触不算重叠） */
+function rectOverlapsNodes(
+  nodes: LayoutNode[],
+  rect: { x: number; y: number; width: number; height: number },
+): boolean {
+  return nodes.some((n) => {
+    const r = nodeRectOf(n);
+    return (
+      rect.x < r.x + r.width &&
+      rect.x + rect.width > r.x &&
+      rect.y < r.y + r.height &&
+      rect.y + rect.height > r.y
+    );
+  });
+}
+
+/** 派生宫格基准点：源节点右边缘 + 水平间隙（源节点可空时以原点为基准） */
+function derivedGridBase(source: LayoutNode | undefined): { x: number; y: number } {
+  if (!source) return { x: DEFAULT_NODE_WIDTH + DERIVED_BASE_GAP_X, y: 0 };
+  const rect = nodeRectOf(source);
+  return { x: rect.x + rect.width + DERIVED_BASE_GAP_X, y: rect.y };
 }
 
 /**
@@ -153,15 +197,16 @@ export interface DerivedGridLayout {
  * @param cols          网格每行放置的节点数
  */
 export function computeDerivedGrid(
-  sourceNode: { position: { x: number; y: number }; style?: { width?: number | string } } | undefined,
+  sourceNode: LayoutNode | undefined,
   cellNaturalW: number,
   cellNaturalH: number,
   cols: number,
 ): DerivedGridLayout {
   const { displayW, displayH } = computeThumbScale(cellNaturalW, cellNaturalH);
+  const base = derivedGridBase(sourceNode);
   return {
-    baseX: (sourceNode?.position.x || 0) + ((sourceNode?.style?.width as number) || DEFAULT_NODE_WIDTH) + DERIVED_BASE_GAP_X,
-    baseY: sourceNode?.position.y || 0,
+    baseX: base.x,
+    baseY: base.y,
     stepX: displayW + DERIVED_CELL_GAP,
     // 纵向需计入标题栏高度，避免下一行节点压住上一行的 title
     stepY: displayH + NODE_TITLE_HEIGHT + DERIVED_CELL_GAP,
@@ -181,4 +226,72 @@ export function gridPositionAt(layout: DerivedGridLayout, index: number): { x: n
   const col = index % layout.cols;
   const row = Math.floor(index / layout.cols);
   return { x: layout.baseX + col * layout.stepX, y: layout.baseY + row * layout.stepY };
+}
+
+/**
+ * 单产物派生宫格找空位：从源节点右侧基准点开始，按行优先宫格扫描
+ * （列数 DERIVED_SLOT_COLS），返回第一个与新节点矩形不重叠的槽位。
+ *
+ * 槽位步进用新节点自己的显示尺寸，因此重复派生同尺寸产物自然排成宫格、
+ * 不同尺寸产物也不会互相压住；目标区域被任何节点占用（含用户手动摆放的）
+ * 则顺延到下一空格，永不重叠。扫描超过上限时取最后一个候选兜底。
+ *
+ * @param nodes  需要避开的节点（现有画布节点，可含同批已落位的节点）
+ * @param source 源节点（决定基准点，可空）
+ * @param size   新节点的显示尺寸
+ */
+export function findDerivedSlot(
+  nodes: LayoutNode[],
+  source: LayoutNode | undefined,
+  size: { width: number; height: number },
+): { x: number; y: number } {
+  const base = derivedGridBase(source);
+  const stepX = size.width + DERIVED_CELL_GAP;
+  const stepY = size.height + DERIVED_CELL_GAP;
+  let fallback = base;
+  for (let i = 0; i < DERIVED_SLOT_SCAN_LIMIT; i++) {
+    const col = i % DERIVED_SLOT_COLS;
+    const row = Math.floor(i / DERIVED_SLOT_COLS);
+    const pos = { x: base.x + col * stepX, y: base.y + row * stepY };
+    fallback = pos;
+    if (!rectOverlapsNodes(nodes, { ...pos, ...size })) return pos;
+  }
+  return fallback;
+}
+
+/**
+ * 批量派生整体找空位：把整批网格的包围盒当成一个大矩形，从基准点按
+ * 网格步进扫描，返回第一个整批无碰撞的起点（行优先）。
+ *
+ * 整批内部相对布局（computeDerivedGrid + gridPositionAt）保持不变，
+ * 仅整体平移到空区域——重复宫格切分时第二批自动排到第一批下方/右侧，
+ * 不压已有内容。
+ *
+ * @param nodes  需要避开的节点（现有画布节点）
+ * @param source 源节点（决定基准点，可空）
+ * @param layout computeDerivedGrid 的返回值
+ * @param count  本批节点总数
+ * @returns 无碰撞的网格起点（对应 layout.baseX / baseY 的替换值）
+ */
+export function findDerivedBatchOrigin(
+  nodes: LayoutNode[],
+  source: LayoutNode | undefined,
+  layout: DerivedGridLayout,
+  count: number,
+): { x: number; y: number } {
+  const rows = Math.max(1, Math.ceil(count / layout.cols));
+  const bbox = {
+    width: layout.cols * layout.stepX - DERIVED_CELL_GAP,
+    height: rows * layout.stepY - DERIVED_CELL_GAP,
+  };
+  const base = { x: layout.baseX, y: layout.baseY };
+  let fallback = base;
+  for (let i = 0; i < DERIVED_SLOT_SCAN_LIMIT; i++) {
+    const col = i % layout.cols;
+    const row = Math.floor(i / layout.cols);
+    const origin = { x: base.x + col * layout.stepX, y: base.y + row * layout.stepY };
+    fallback = origin;
+    if (!rectOverlapsNodes(nodes, { ...origin, ...bbox })) return origin;
+  }
+  return fallback;
 }

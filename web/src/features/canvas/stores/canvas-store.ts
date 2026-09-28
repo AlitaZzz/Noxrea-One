@@ -13,6 +13,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
 import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
+import { nodeRectOf } from "@/lib/utils/image-utils";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
 const HISTORY_THROTTLE = 300;
@@ -509,15 +510,12 @@ export function findFreePosition(
 
   // 偏移次数 = 与锚点区域重叠的节点数（忽略远处节点，避免把新节点推出锚点）
   const overlapCount = nodes.filter((n) => {
-    const w = (n.style?.width as number) ?? 200;
-    const h = (n.style?.height as number) ?? 120;
-    const nx = n.position.x;
-    const ny = n.position.y;
+    const r = nodeRectOf(n, { width: 200, height: 120 });
     return (
-      nx < cx + nodeSize.width / 2 &&
-      nx + w > cx - nodeSize.width / 2 &&
-      ny < cy + nodeSize.height / 2 &&
-      ny + h > cy - nodeSize.height / 2
+      r.x < cx + nodeSize.width / 2 &&
+      r.x + r.width > cx - nodeSize.width / 2 &&
+      r.y < cy + nodeSize.height / 2 &&
+      r.y + r.height > cy - nodeSize.height / 2
     );
   }).length;
 

@@ -58,8 +58,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
   takeCanvasSnapshot: vi.fn(),
 }));
 
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-
 /** 模拟 CanvasStoreApi（符合 upload/derived-node 中定义的接口） */
 const mockStoreApi = {
   nodes: mockNodes,
@@ -108,6 +106,26 @@ describe("P0-4: CSS transform baking flow", () => {
       // x = source.x(100) + source width(600) + 60 = 760
       expect(node.position.x).toBe(760);
       expect(node.position.y).toBe(200);
+    });
+
+    it("should shift to the next grid slot when the default spot is occupied", () => {
+      // 基准槽位 (760, 200) 被上一次派生产物占据（尺寸与本次相同）
+      const occupied = {
+        id: "occ",
+        type: "image-node",
+        position: { x: 760, y: 200 },
+        style: { width: 600, height: 478 },
+        data: { label: "prev" },
+      };
+      mockNodes.push(occupied as (typeof mockNodes)[number]);
+      try {
+        const node = createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
+        // 不再与占用节点重叠：顺延到右侧下一格
+        expect(node.position.x).toBe(760 + 600 + 12);
+        expect(node.position.y).toBe(200);
+      } finally {
+        mockNodes.pop();
+      }
     });
 
     it("should accept position override", () => {
