@@ -80,7 +80,7 @@ import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
-import { buildConnectionPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
+import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
 import { findGroupAtPoint, groupContainsPoint, refitGroupRects } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
@@ -91,7 +91,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { canConnect, EDGE_BASE_COLOR, GROUP_NODE_PADDING, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { EDGE_BASE_COLOR, GROUP_NODE_PADDING, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -714,42 +714,19 @@ export default function InfiniteCanvas() {
         setNodes(refitGroupRects(useCanvasStore.getState().nodes, [joinedGroupId]));
         markDirtyImmediate();
       }
-      // 批量接线：逐个按类型校验（批量连线时部分选中节点可能不兼容新节点类型），
-      // 输出方向：各选中节点 → 新节点；输入方向：新节点 → 各选中节点
+      // 批量接线与菜单门控同口径（全有或全无，connection-rules）：
+      // 输出方向 buildFanoutPairs（各选中 → 新节点），输入方向 buildFanInPairs（新节点 → 各选中）
       const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
-      const pairs = sourceNodeIds
+      const participants = sourceNodeIds
         .map((id) => nodeById.get(id))
-        .filter((n): n is AnyNode => !!n)
-        .flatMap((n) => {
-          const ok = direction === "output" ? canConnect(n.type, newNode.type) : canConnect(newNode.type, n.type);
-          if (!ok) return [];
-          return [
-            direction === "output"
-              ? { source: n.id, target: newNode.id }
-              : { source: newNode.id, target: n.id },
-          ];
-        });
+        .filter((n): n is AnyNode => !!n);
+      const pairs =
+        direction === "output"
+          ? buildFanoutPairs(participants, newNode)
+          : buildFanInPairs(newNode, participants);
       batchConnect(pairs);
     },
     [pendingConnectionCreate, addNodes, batchConnect, setNodes]
-  );
-
-  /** 批量 Handle（框选外框 / 组右缘）拖到已有节点：全有或全无批量扇出
-   *  （connection-rules 口径：任一参与节点与目标类型不可连即整体拒绝，
-   *  target 在参与集内（拖回选区/自己成员）产生空对集，静默取消） */
-  const connectParticipantsToNode = useCallback(
-    (participantIds: string[], targetId: string) => {
-      const { nodes: allNodes } = useCanvasStore.getState();
-      const nodeById = new Map(allNodes.map((n) => [n.id, n]));
-      const tgt = nodeById.get(targetId);
-      if (!tgt) return;
-      const participants = participantIds.flatMap((id) => {
-        const n = nodeById.get(id);
-        return n ? [n] : [];
-      });
-      batchConnect(buildFanoutPairs(participants, tgt));
-    },
-    [batchConnect]
   );
 
   /** 菜单期间的束线预览锚点：按 sourceNodeIds 逐节点取右/左边缘正中
@@ -767,19 +744,21 @@ export default function InfiniteCanvas() {
   }, [pendingConnectionCreate, nodes]);
 
   /** 批量 Handle 拖到空白：弹出「创建连接节点」菜单，创建后批量接驳全部参与节点
-   *  （框选 = 选中节点，组 = 组成员；菜单按参与类型全有或全无门控选项） */
+   *  （框选 = 选中节点，组 = 组成员；菜单按参与类型全有或全无门控选项，
+   *  方向随拖线轨道：output 新节点在下游，input 新节点在上游） */
   const openBatchCreateMenu = useCallback(
     (
       participantIds: string[],
       canvasPosition: { x: number; y: number },
-      screenPosition: { x: number; y: number }
+      screenPosition: { x: number; y: number },
+      direction: "output" | "input"
     ) => {
       const selected = useCanvasStore.getState().nodes.filter((n) => participantIds.includes(n.id));
       if (selected.length === 0) return;
       setPendingConnectionCreate({
         sourceNodeIds: selected.map((n) => n.id),
         sourceNodeTypes: selected.map((n) => n.type ?? ""),
-        direction: "output",
+        direction,
         canvasPosition,
         screenPosition,
       });
@@ -788,16 +767,18 @@ export default function InfiniteCanvas() {
   );
 
   /** 组节点批量轨道（GroupConnectRail）的接驳回调：渲染在节点 DOM 内，
-   *  不能经 props 透传，也不能塞进持久化的 node data，经 Context 注入 */
+   *  不能经 props 透传，也不能塞进持久化的 node data，经 Context 注入。
+   *  onConnect 直接用 batchConnect——候选对已由 use-batch-connect-drag 按方向
+   *  构建并全有或全无校验，这里只负责建边与去重 */
   const batchConnectHandlers = useMemo<BatchConnectHandlers>(
     () => ({
-      onConnectToNode: connectParticipantsToNode,
+      onConnect: batchConnect,
       onConnectToBlank: openBatchCreateMenu,
       onDragStart: canvasInteraction.onConnectStart,
       onDragEnd: canvasInteraction.onConnectEnd,
       screenToFlowPosition,
     }),
-    [connectParticipantsToNode, openBatchCreateMenu, canvasInteraction, screenToFlowPosition]
+    [batchConnect, openBatchCreateMenu, canvasInteraction, screenToFlowPosition]
   );
 
   const handleViewportChange = useCallback(
@@ -1376,7 +1357,7 @@ export default function InfiniteCanvas() {
               y: selectionFrame.bbox.y + selectionFrame.bbox.height / 2,
             }}
             participantIds={selectionFrame.ids}
-            onConnectToNode={connectParticipantsToNode}
+            onConnect={batchConnect}
             onConnectToBlank={openBatchCreateMenu}
             onDragStart={canvasInteraction.onConnectStart}
             onDragEnd={canvasInteraction.onConnectEnd}

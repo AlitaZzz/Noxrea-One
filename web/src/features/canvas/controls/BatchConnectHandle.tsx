@@ -5,7 +5,7 @@
  * 与节点轨道「hover/选中显隐」的标准规则无关。
  * 拖线语义（拖到节点全有或全无扇出 / 拖到空白弹创建菜单 / 拖回参与集取消）、
  * 束线预览与目标倾斜反馈全部在 use-batch-connect-drag，
- * 与组节点的批量输出轨道（GroupConnectRail）共用同一实现。
+ * 与组节点的批量连接轨道（GroupConnectRail，双向）共用同一实现。
  * 样式复用节点 Handle 的 .react-flow__handle 类（尺寸/加号图标/hover 放大），
  * 定位由组件内联 left/top 提供，复用 .react-flow__handle-right 的外浮 transform。
  */
@@ -22,11 +22,12 @@ interface Props {
   anchor: { x: number; y: number };
   /** 参与集节点 id（框选 = 选中节点） */
   participantIds: string[];
-  onConnectToNode: (participantIds: string[], targetId: string) => void;
+  onConnect: (pairs: { source: string; target: string }[]) => void;
   onConnectToBlank: (
     participantIds: string[],
     canvasPosition: { x: number; y: number },
-    screenPosition: { x: number; y: number }
+    screenPosition: { x: number; y: number },
+    direction: "output" | "input"
   ) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -36,7 +37,7 @@ interface Props {
 export default function BatchConnectHandle({
   anchor,
   participantIds,
-  onConnectToNode,
+  onConnect,
   onConnectToBlank,
   onDragStart,
   onDragEnd,
@@ -44,8 +45,9 @@ export default function BatchConnectHandle({
 }: Props) {
   const getParticipantIds = useCallback(() => participantIds, [participantIds]);
   const { startDrag, preview } = useBatchConnectDrag({
+    direction: "output",
     getParticipantIds,
-    onConnectToNode,
+    onConnect,
     onConnectToBlank,
     onDragStart,
     onDragEnd,

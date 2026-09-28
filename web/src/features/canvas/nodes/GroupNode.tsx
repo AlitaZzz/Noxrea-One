@@ -90,9 +90,14 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
 
       {agentGhost && <AgentGhostOverlay />}
 
-      {/* 批量输出轨道：样式/显隐对齐普通节点（渲染在节点 DOM 内走标准规则），
-          有成员才有可扇出的对象，空组不渲染 */}
-      {memberCount > 0 && <GroupConnectRail groupId={id} />}
+      {/* 批量连接轨道（左入右出）：样式/显隐对齐普通节点（渲染在节点 DOM 内走
+          标准规则），有成员才有可接驳的对象，空组不渲染 */}
+      {memberCount > 0 && (
+        <>
+          <GroupConnectRail groupId={id} side="left" />
+          <GroupConnectRail groupId={id} side="right" />
+        </>
+      )}
 
       {/* Resize — same as ImageNode */}
       {selected && (

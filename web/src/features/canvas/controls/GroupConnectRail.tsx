@@ -1,5 +1,6 @@
 /**
- * 组节点的批量输出连接轨道：样式与显隐完全对齐普通节点的 ConnectionSideRail。
+ * 组节点的批量连接轨道（双向）：样式与显隐完全对齐普通节点的 ConnectionSideRail。
+ * 右缘扇出（成员 → 目标），左缘扇入（目标 → 成员），参与集恒为组成员。
  *
  * 根因设计：轨道必须渲染在 GroupNode 的节点 DOM 内，而不是 ViewportPortal——
  * 只有进节点 DOM，标准 Handle 显隐规则（hover 节点显示 / 选中且空闲常驻 /
@@ -9,7 +10,7 @@
  *
  * 轨道本体是普通 div（非 React Flow <Handle>）：拖线不能交给 Handle 机制，
  * 否则连线源会变成组节点（组不可连、也不该有组级边实体）；改由
- * use-batch-connect-drag 以组成员为参与集自行建边（成员→目标扇出）。
+ * use-batch-connect-drag 以组成员为参与集自行建边。
  * 因此挂 .react-flow__handle 类复用轨道样式与显隐规则，但只是视觉外壳。
  * 回调经 BatchConnectContext 注入；圆点二维跟随与普通轨道共用 use-rail-dot-follow。
  */
@@ -24,35 +25,39 @@ import { useBatchConnect } from "@/providers/BatchConnectContext";
 
 import PendingConnectionPreview from "./PendingConnectionPreview";
 import { useBatchConnectDrag } from "./use-batch-connect-drag";
-import { useRailDotFollow } from "./use-rail-dot-follow";
+import { type RailSide, useRailDotFollow } from "./use-rail-dot-follow";
 
 interface Props {
   /** 所属组节点 id */
   groupId: string;
+  /** 轨道方位：right = 扇出（成员→目标）；left = 扇入（目标→成员） */
+  side: RailSide;
 }
 
-export default function GroupConnectRail({ groupId }: Props) {
-  const { onConnectToNode, onConnectToBlank, onDragStart, onDragEnd, screenToFlowPosition } =
+export default function GroupConnectRail({ groupId, side }: Props) {
+  const { onConnect, onConnectToBlank, onDragStart, onDragEnd, screenToFlowPosition } =
     useBatchConnect();
+  const direction = side === "right" ? "output" : "input";
   const { startDrag, preview } = useBatchConnectDrag({
+    direction,
     // 参与集 = 组成员（显式归属），拖起时从 store 现取
     getParticipantIds: useCallback(
       () => groupMembers(useCanvasStore.getState().nodes, groupId).map((m) => m.id),
       [groupId]
     ),
-    onConnectToNode,
+    onConnect,
     onConnectToBlank,
     onDragStart,
     onDragEnd,
     screenToFlowPosition,
   });
   const { dotRef, restTransform, onPointerEnter, onPointerMove, onPointerLeave } =
-    useRailDotFollow("right");
+    useRailDotFollow(side);
 
   return (
     <>
       <div
-        className="nopan nodrag react-flow__handle react-flow__handle-right connection-rail connection-rail-right"
+        className={`nopan nodrag react-flow__handle react-flow__handle-${side} connection-rail connection-rail-${side}`}
         style={{ top: "50%" }}
         onPointerDown={startDrag}
         onPointerEnter={onPointerEnter}
@@ -63,7 +68,12 @@ export default function GroupConnectRail({ groupId }: Props) {
       </div>
       {preview &&
         preview.sources.map((from, i) => (
-          <PendingConnectionPreview key={i} from={from} to={preview.to} fromPosition={Position.Right} />
+          <PendingConnectionPreview
+            key={i}
+            from={from}
+            to={preview.to}
+            fromPosition={side === "right" ? Position.Right : Position.Left}
+          />
         ))}
     </>
   );

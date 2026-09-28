@@ -11,8 +11,9 @@
  * 类型不可连则整体拒绝（与创建菜单「全部参与节点兼容才启用」同口径），不做
  * 兼容子集的部分建边；已连的对不影响整体（A→C 已存在、B→C 可连仍放行）。
  *
- * 批量 Handle（框选外框 / 组节点批量轨道）不经过 xyflow 连线系统，直接以显式
- * 参与集调用 buildFanoutPairs + pairsWouldCreate（见 use-batch-connect-drag）。
+ * 批量 Handle（框选外框输出 / 组节点双向轨道）不经过 xyflow 连线系统，直接以
+ * 显式参与集调用 buildFanoutPairs / buildFanInPairs + pairsWouldCreate
+ * （见 use-batch-connect-drag）。
  */
 import type { AnyNode } from "@/features/canvas/types";
 import { canConnect, NODE_TYPE } from "@/lib/constants";
@@ -37,6 +38,21 @@ export function buildFanoutPairs(
   if (participants.some((p) => p.id === target.id)) return [];
   if (!participants.every((p) => canConnect(p.type, target.type))) return [];
   return participants.map((p) => ({ source: p.id, target: target.id }));
+}
+
+/**
+ * 批量扇入（输入方向）：source → 参与集的全部候选对，是 buildFanoutPairs 的镜像。
+ * 同样全有或全无——任一参与节点与 source 类型不可连即整体返回空；
+ * source 在参与集内（拖回自己组成员）返回空（取消语义）；不查已存在连线。
+ */
+export function buildFanInPairs(
+  source: AnyNode,
+  participants: AnyNode[]
+): { source: string; target: string }[] {
+  if (participants.length === 0) return [];
+  if (participants.some((p) => p.id === source.id)) return [];
+  if (!participants.every((p) => canConnect(source.type, p.type))) return [];
+  return participants.map((p) => ({ source: source.id, target: p.id }));
 }
 
 /**

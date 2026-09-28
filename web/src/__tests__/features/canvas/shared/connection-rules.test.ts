@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildConnectionPairs,
+  buildFanInPairs,
   buildFanoutPairs,
   type ConnectionRuleState,
   connectionWouldCreate,
@@ -110,6 +111,31 @@ describe("buildFanoutPairs", () => {
 
   it("空参与集：无对", () => {
     expect(buildFanoutPairs([], makeNode("c"))).toEqual([]);
+  });
+});
+
+describe("buildFanInPairs", () => {
+  it("全部参与节点类型可连：返回 source → 参与集全部对", () => {
+    const participants = [makeNode("a", NODE_TYPE.TEXT), makeNode("b", NODE_TYPE.IMAGE)];
+    expect(buildFanInPairs(makeNode("s", NODE_TYPE.TEXT), participants)).toEqual([
+      { source: "s", target: "a" },
+      { source: "s", target: "b" },
+    ]);
+  });
+
+  it("全有或全无：任一参与节点类型不可连 → 整体拒绝（无对）", () => {
+    // 扇入镜像场景：图片源喂「文本 + 音频」，图片可入文本但不可入音频
+    const participants = [makeNode("a", NODE_TYPE.TEXT), makeNode("audio", NODE_TYPE.AUDIO)];
+    expect(buildFanInPairs(makeNode("img", NODE_TYPE.IMAGE), participants)).toEqual([]);
+  });
+
+  it("source 在参与集内（拖回自己组成员）：无对", () => {
+    const participants = [makeNode("a"), makeNode("b", NODE_TYPE.IMAGE)];
+    expect(buildFanInPairs(makeNode("b", NODE_TYPE.IMAGE), participants)).toEqual([]);
+  });
+
+  it("空参与集：无对", () => {
+    expect(buildFanInPairs(makeNode("s"), [])).toEqual([]);
   });
 });
 
