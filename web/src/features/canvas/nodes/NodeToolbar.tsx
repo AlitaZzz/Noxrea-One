@@ -12,7 +12,6 @@ import {
   ExpandOutlined,
   InfoCircleOutlined,
   RotateRightOutlined,
-  ScissorOutlined,
   StarFilled,
   StarOutlined,
   StepBackwardOutlined,
@@ -25,6 +24,7 @@ import { useTranslation } from "react-i18next";
 
 import { AlignHorizontalIcon } from "@/components/ui/icons/canvas/AlignHorizontalIcon";
 import { AlignVerticalIcon } from "@/components/ui/icons/canvas/AlignVerticalIcon";
+import { ClipTrimIcon } from "@/components/ui/icons/canvas/ClipTrimIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
 import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
 import { ImageAnnotationIcon } from "@/components/ui/icons/canvas/ImageAnnotationIcon";
@@ -393,7 +393,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               type="text"
               size="middle"
               style={{ padding: 8 }}
-              icon={<ScissorOutlined />}
+              icon={<ClipTrimIcon style={{ fontSize: 16 }} />}
               disabled={!assetSrc}
               onClick={() => onOpenClipStrip(nodeId)}
             />
@@ -463,7 +463,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
                   type="text"
                   size="middle"
                   style={{ padding: 8 }}
-                  icon={<ScissorOutlined />}
+                  icon={<ClipTrimIcon style={{ fontSize: 16 }} />}
                   disabled={!assetSrc}
                   onClick={() => onOpenAudioClip(nodeId)}
                 />
