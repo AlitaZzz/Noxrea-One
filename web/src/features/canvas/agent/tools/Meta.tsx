@@ -19,6 +19,7 @@ import UnlinkIcon from "@/components/ui/icons/agent/UnlinkIcon";
 import UpdateNodeIcon from "@/components/ui/icons/agent/UpdateNodeIcon";
 import ViewportFocusIcon from "@/components/ui/icons/agent/ViewportFocusIcon";
 import type { ToolCallView } from "@/features/canvas/agent/types";
+import { expandGroupDeletionIds } from "@/features/canvas/agent/utils/confirm-selection";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import i18n from "@/lib/i18n/config";
 
@@ -96,8 +97,13 @@ export const TOOL_META: Record<string, ToolMeta> = {
   delete_nodes: {
     icon: <DeleteNodeIcon />,
     describe: (args) => {
-      const ids = asArray(args.nodeIds);
-      return ids.length ? i18n.t("agent.tool.deleteNodeN", { count: ids.length }) : i18n.t("agent.tool.deleteNode");
+      // 容器型语义：删组连带成员，按展开后的实际删除集合计数（渲染期同步
+      // 查 store，与 nodeLabel 同口径；执行后节点已不在，自然退回原始清单）
+      const ids = asArray(args.nodeIds).filter((x): x is string => typeof x === "string");
+      const expanded = expandGroupDeletionIds(useCanvasStore.getState().nodes, ids);
+      return expanded.length
+        ? i18n.t("agent.tool.deleteNodeN", { count: expanded.length })
+        : i18n.t("agent.tool.deleteNode");
     },
   },
   connect_nodes: {

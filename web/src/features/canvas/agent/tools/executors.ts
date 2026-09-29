@@ -542,8 +542,12 @@ function execDeleteNodes(args: ToolArgs): ExecOutcome {
   const missing = ids.filter((id) => !found.includes(id));
   if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false, failed: true };
 
+  // 实际删除数按执行前后差值计：容器型语义下删组连带成员、组被清空自动
+  // 剔除，均不在入参清单里——差值是唯一真实口径，与 removeNodes 实现解耦
+  const before = useCanvasStore.getState().nodes.length;
   useCanvasStore.getState().removeNodes(found, { skipHistory: true });
-  let content = `已删除 ${found.length} 个节点。`;
+  const removed = before - useCanvasStore.getState().nodes.length;
+  let content = `已删除 ${removed} 个节点。`;
   if (missing.length) content += `\n以下 id 不存在，已跳过：${missing.join(", ")}`;
   return { content, mutated: true };
 }

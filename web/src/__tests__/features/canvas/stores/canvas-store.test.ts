@@ -17,6 +17,7 @@
  */
 
 import { beforeEach,describe, expect, it, vi } from "vitest";
+import type { Edge } from "@xyflow/react";
 
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -347,7 +348,7 @@ describe("删除节点时同步清空节点级 UI 态", () => {
   });
 });
 
-describe("removeNodes 级联：空组即删与归属剥离", () => {
+describe("removeNodes 级联：空组即删与删组连带成员（容器型）", () => {
   function member(id: string, groupId?: string): AnyNode {
     return {
       id, type: "text-node",
@@ -383,14 +384,28 @@ describe("removeNodes 级联：空组即删与归属剥离", () => {
     expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g", "b"]);
   });
 
-  it("删除组节点本身时成员存活且归属剥离", () => {
-    useCanvasStore.setState({ nodes: [group("g"), member("a", "g")] });
+  it("删除组节点连带全部成员（容器型：成员与壳同去，保留内容走取消编组）", () => {
+    useCanvasStore.setState({
+      nodes: [group("g"), member("a", "g"), member("b", "g")],
+    });
 
     useCanvasStore.getState().removeNodes(["g"], { skipHistory: true });
 
-    const nodes = useCanvasStore.getState().nodes;
-    expect(nodes.map((n) => n.id)).toEqual(["a"]);
-    expect((nodes[0].data as { groupId?: string }).groupId).toBeUndefined();
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual([]);
+  });
+
+  it("删组连带成员的连线一并清理（成员不再是孤立悬挂边）", () => {
+    useCanvasStore.setState({
+      nodes: [group("g"), member("a", "g"), member("b", "g")],
+      edges: [
+        { id: "e1", source: "a", target: "b" } as unknown as Edge,
+        { id: "e2", source: "b", target: "outside" } as unknown as Edge,
+      ],
+    });
+
+    useCanvasStore.getState().removeNodes(["g"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().edges).toEqual([]);
   });
 
   it("删除组 + 其全部成员：不存在空壳组，也不误伤其他组", () => {
@@ -404,6 +419,16 @@ describe("removeNodes 级联：空组即删与归属剥离", () => {
     useCanvasStore.getState().removeNodes(["g1", "a"], { skipHistory: true });
 
     expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g2", "b"]);
+  });
+
+  it("成员同时在删除清单与组级联路径下只删一次（集合幂等）", () => {
+    useCanvasStore.setState({
+      nodes: [group("g"), member("a", "g"), member("b", "g")],
+    });
+
+    useCanvasStore.getState().removeNodes(["g", "a"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual([]);
   });
 
   it("撤销快照完整回放级联删除前的现场（组与成员一起复活）", () => {

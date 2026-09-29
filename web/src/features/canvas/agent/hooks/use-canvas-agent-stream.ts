@@ -23,7 +23,7 @@ import type {
   ToolCallView,
 } from "@/features/canvas/agent/types";
 import { drainUserActions } from "@/features/canvas/agent/user-action-tracker";
-import { applyConfirmSelections, collectConfirmTargetNodeIds } from "@/features/canvas/agent/utils/confirm-selection";
+import { applyConfirmSelections, collectConfirmTargetNodeIds, expandGroupDeletionIds } from "@/features/canvas/agent/utils/confirm-selection";
 import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { resolveResponseError } from "@/lib/api/error-message";
@@ -102,10 +102,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
   /** 挂起确认卡片并等待用户决定：设置画布幻影蒙层并聚焦目标节点 */
   const requestConfirmation = useCallback((calls: AgentToolCall[]) => {
     return new Promise<ConfirmDecision>((resolve) => {
-      const targetNodeIds = collectConfirmTargetNodeIds(
-        calls,
-        useCanvasStore.getState().nodes.map((n) => n.id)
-      );
+      const nodes = useCanvasStore.getState().nodes;
+      const targetNodeIds = collectConfirmTargetNodeIds(calls, nodes);
       if (targetNodeIds.length > 0) {
         useCanvasStore.getState().setAgentPreview(targetNodeIds);
         getCanvasAgentRuntime()?.focusNodes(targetNodeIds);
@@ -113,7 +111,19 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       confirmResolveRef.current = resolve;
       setPendingConfirm({
         id: uid(),
-        calls: calls.map((c) => ({ id: c.id, name: c.name, args: JSON.stringify(c.args) })),
+        // 勾选卡按「实际删除集合」呈现：delete_nodes 的组 id 展开为组 + 全体成员
+        // （容器型语义，删组连带成员），回写时 applyConfirmSelections 再按勾选翻译
+        calls: calls.map((c) => {
+          if (c.name !== "delete_nodes") return { id: c.id, name: c.name, args: JSON.stringify(c.args) };
+          const listed = Array.isArray((c.args as { nodeIds?: unknown }).nodeIds)
+            ? (c.args as { nodeIds: unknown[] }).nodeIds.filter((x): x is string => typeof x === "string")
+            : [];
+          return {
+            id: c.id,
+            name: c.name,
+            args: JSON.stringify({ ...c.args, nodeIds: expandGroupDeletionIds(nodes, listed) }),
+          };
+        }),
         targetNodeIds,
       });
     });
@@ -328,7 +338,11 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
             // 等待确认期间被 新对话/停止/切换 会话终止则不再续轮
             if (!streamingRef.current) break;
             if (decision.approved) {
-              const { calls: execCalls, skipped, dropped } = applyConfirmSelections(confirmCalls, decision.selections);
+              const { calls: execCalls, skipped, dropped } = applyConfirmSelections(
+                confirmCalls,
+                decision.selections,
+                useCanvasStore.getState().nodes,
+              );
               const confirmedResults = execCalls.map(executeCanvasToolCall);
               // 被勾掉的子项在结果文本里说明，供模型了解只执行了勾选部分
               for (const r of confirmedResults) {

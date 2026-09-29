@@ -395,16 +395,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     maybePushHistory(options);
     set((s) => {
       const toDelete = new Set(nodeIds);
-      // 先移除待删节点，再做归属剥离与空组判定——待删成员不能再给自己的组续命。
-      // 删除组节点时仅清空成员的 groupId 归属，成员本身存活
-      const stripped = s.nodes
-        .filter((n) => !toDelete.has(n.id))
-        .map((n) => {
-          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
-            return { ...n, data: { ...n.data, groupId: undefined } } as AnyNode;
-          }
-          return n;
-        });
+      // 容器型语义：删组连带成员——组成员并入待删集合，成员的连线随边清理一并移除；
+      // 想保留内容只拆壳走「取消编组」，不在此处
+      for (const n of s.nodes) {
+        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
+          toDelete.add(n.id);
+        }
+      }
+      // 空组即删：先移除待删节点再判空——待删成员不能给自己的组续命
+      const stripped = s.nodes.filter((n) => !toDelete.has(n.id));
       // 成员全部被删除的组也随之移除（空组即删，唯一口径见 pruneEmptyGroups）
       const nodes = pruneEmptyGroups(stripped);
       // 级联删除的空组也要参与边清理与编辑态清理（组不连边、不承载编辑态，
