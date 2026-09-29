@@ -3,7 +3,8 @@
  *
  * downloadResultsWithHeartbeat：下载阶段没有轮询心跳，大文件下载可能远超心跳间隔，
  * 不推进 updatedAt 的话僵尸清理会把下载中的任务误判为卡死、重置重跑并再次提交
- * 上游（重复生成、重复计费）。
+ * 上游（重复生成、重复计费）。下载本身受 body idle + overall 超时约束（见 storage/download），
+ * 心跳只负责在合法长下载期间标记执行者存活，不会再为无限挂起的传输续命。
  *
  * finalizeGeneratedResult：「下载落盘 → 空结果判失败 → safe 终态写入 → 收尾日志」
  * 的单源编排——此前 executor（首次执行）与 resume-polling（恢复轮询）各持一份对称
