@@ -21,6 +21,7 @@
 
 import { z } from "zod";
 import { loadJson } from "@server/services/json-loader";
+import { logger } from "@server/core/logger";
 
 // 预设
 
@@ -182,6 +183,56 @@ export function expandShared(data: HostMap): HostMap {
  */
 const expandedCache = new WeakMap<object, HostMap>();
 
+/** host 键特异性：通配符（* ?）越少越特异，精确名（0）最先命中 */
+function hostSpecificity(key: string): number {
+  return (key.match(/[*?]/g) ?? []).length;
+}
+
+/**
+ * host 键按特异性重排（稳定排序，同级保持声明顺序）。
+ * 匹配是 first-hit-wins，此排序使命中结果与 JSON 键顺序无关：
+ * 精确名与窄通配优先于宽通配，配置书写顺序不再影响运行时行为。
+ */
+function sortHostKeysBySpecificity(data: HostMap): HostMap {
+  const out: HostMap = {};
+  const hostKeys: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith("_")) out[key] = value;
+    else hostKeys.push(key);
+  }
+  hostKeys.sort((a, b) => hostSpecificity(a) - hostSpecificity(b));
+  for (const key of hostKeys) out[key] = data[key];
+  return out;
+}
+
+/**
+ * host 键重叠告警：两键的代表样本互命中即视为可能重叠。
+ * 代表样本 = 把 * 换成 "a"、? 换成 "1"（保守启发式，漏报可接受；命中顺序已由
+ * 特异性排序确定，重叠只意味着命中结果可能不符合配置书写意图，故仅告警不阻断）。
+ * 内部键（_default/_shared 等）不参与。
+ */
+function warnOverlappingHostKeys(data: HostMap): void {
+  const keys = Object.keys(data).filter((k) => !k.startsWith("_"));
+  const samples = new Map(
+    keys.map((k) => [
+      k,
+      k.split("|").map((p) => p.trim().replaceAll("*", "a").replaceAll("?", "1")),
+    ])
+  );
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const a = keys[i]!;
+      const b = keys[j]!;
+      const overlaps =
+        samples.get(a)!.some((s) => matchPatternKey(b, s)) ||
+        samples.get(b)!.some((s) => matchPatternKey(a, s));
+      if (overlaps) {
+        logger.warn({ keys: [a, b] }, "model-ui.json host keys overlap; most specific key wins");
+      }
+    }
+  }
+}
+
 function loadRaw(): HostMap {
   // 校验经 validate 参数纳入加载成功语义（首载结构非法 fail-fast；
   // 热更非法由 json-loader 记 warn 服务旧缓存）。
@@ -195,7 +246,8 @@ function loadRaw(): HostMap {
   });
   const cached = expandedCache.get(raw);
   if (cached) return cached;
-  const expanded = expandShared(raw);
+  const expanded = sortHostKeysBySpecificity(expandShared(raw));
+  warnOverlappingHostKeys(expanded);
   expandedCache.set(raw, expanded);
   return expanded;
 }
