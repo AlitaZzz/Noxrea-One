@@ -7,8 +7,8 @@
 // ── Mock URL.createObjectURL / revokeObjectURL ──────────────────
 if (typeof URL.createObjectURL === "undefined") {
   let counter = 0;
-  URL.createObjectURL = (blob: Blob) => `blob:mock/${counter++}`;
-  URL.revokeObjectURL = (url: string) => {};
+  URL.createObjectURL = () => `blob:mock/${counter++}`;
+  URL.revokeObjectURL = () => {};
 }
 
 // ── Mock atob / btoa (jsdom provides these, but node doesn't) ──

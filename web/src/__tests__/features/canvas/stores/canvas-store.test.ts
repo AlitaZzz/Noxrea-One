@@ -16,8 +16,8 @@
  * 历史压栈全部显式调用 store.push，canvas-store 的写操作用 skipHistory。
  */
 
-import { beforeEach,describe, expect, it, vi } from "vitest";
 import type { Edge } from "@xyflow/react";
+import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";

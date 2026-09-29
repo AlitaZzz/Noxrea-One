@@ -15,7 +15,6 @@ import AppShell from "@/components/layout/AppShell";
 import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { MenuDivider,MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
@@ -37,7 +36,6 @@ export default function ProjectListPage() {
   const coverTargetRef = useRef<string | null>(null);
   const [coverUploadingId, setCoverUploadingId] = useState<string | null>(null);
   const renameProject = useProjectStore((s) => s.renameProject);
-  const updateCover = useProjectStore((s) => s.updateCover);
   const user = useCurrentUser();
   const { t, i18n } = useTranslation();
   const projects = useProjectStore((s) => s.projects);

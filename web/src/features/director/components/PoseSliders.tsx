@@ -6,7 +6,7 @@
 "use client";
 
 import { Slider } from "antd";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { groupJoints } from "@/features/director/entities/joint-config";
@@ -18,7 +18,7 @@ interface Props {
   syncRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export default function PoseSliders({ characterId: _characterId, values, onChange, syncRef }: Props) {
+export default function PoseSliders({ values, onChange, syncRef }: Props) {
   const { t } = useTranslation();
   const groups = groupJoints();
   const [localVals, setLocalVals] = useState<Record<string, number>>({ ...values });

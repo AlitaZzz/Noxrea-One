@@ -5,7 +5,7 @@
  * 素材库、生成、上传、拖放、旋转、宫格等全部走同一算法。
  */
 
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { NODE_DISPLAY_MAX, NODE_TITLE_HEIGHT } from "@/lib/constants";
 
