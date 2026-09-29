@@ -23,6 +23,7 @@ import { finalizeGeneratedResult } from "./download-results";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
 import type { HydratedGenerationTask } from "@server/crud/task";
+import type { StopSignal } from "./loop";
 
 /**
  * 执行单个任务的生命周期：
@@ -30,9 +31,10 @@ import type { HydratedGenerationTask } from "@server/crud/task";
  *
  * 同步/异步判定由 CapabilityService 内部的 TaskManager.submitAndWait 完成，
  * Executor 不再感知异步流程（对齐 Python 架构）。
+ * stopSignal 贯穿全程：恢复轮询感知停机，上游请求经 route signal 在停机收尾时被中止。
  */
-export async function executeTask(task: HydratedGenerationTask): Promise<void> {
-  // 已有 upstreamTaskId 说明上游受理过（典型场景：被僵尸清理重置后重新认领）。
+export async function executeTask(task: HydratedGenerationTask, stopSignal: StopSignal): Promise<void> {
+  // 已有 upstreamTaskId 说明上游受理过（典型场景：异步任务被僵尸清理重置后重新认领）。
   // 此时必须恢复轮询而不是再提交一次——否则上游会重复生成、重复计费，旧任务还会
   // 变成无人接收的孤儿。首次执行时该字段为空，照常走提交流程。
   if (task.upstreamTaskId) {
@@ -42,7 +44,7 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       upstreamTaskId: task.upstreamTaskId,
       retryCount: task.retryCount,
     });
-    await resumeAsyncPolling(task);
+    await resumeAsyncPolling(task, stopSignal);
     return;
   }
 
@@ -115,6 +117,7 @@ export async function executeTask(task: HydratedGenerationTask): Promise<void> {
       taskId: task.id,
       startedAt: task.startedAt,
       params: rawParams,
+      signal: stopSignal.signal,
     };
 
     // SSRF 校验 + DNS pinning

@@ -16,6 +16,8 @@ export interface CapabilityContext {
   taskId: string;
   /** 认领时间戳：供 TaskManager 校验本执行者仍持有任务所有权 */
   startedAt: Date | null;
+  /** Worker 停机中止信号：传给 TaskManager 的上游请求与轮询 */
+  signal?: AbortSignal;
 }
 
 export interface CapabilityParams {

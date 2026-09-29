@@ -21,6 +21,8 @@ export interface RouteContext {
   startedAt: Date | null;
   config?: Record<string, unknown>;
   params: Record<string, unknown>;
+  /** Worker 停机中止信号：贯穿到上游请求与轮询，停机收尾时中止在途调用 */
+  signal?: AbortSignal;
 }
 
 /**
@@ -49,6 +51,7 @@ export async function routeGenerate(ctx: RouteContext): Promise<GenerationResult
       userId: ctx.userId,
       taskId: ctx.taskId,
       startedAt: ctx.startedAt,
+      signal: ctx.signal,
     },
     ctx.params as Record<string, unknown> & { prompt: string }
   );

@@ -6,7 +6,7 @@
  * - Worker 循环异步运行（p-limit 并发，不阻塞事件循环）
  */
 import { bootstrap } from "@server/core/bootstrap";
-import { workerLoop } from "@server/services/worker/loop";
+import { workerLoop, type StopSignal } from "@server/services/worker/loop";
 import { prisma } from "@server/core/database/client";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
@@ -24,7 +24,12 @@ async function main(): Promise<void> {
   await startServer();
 
   // 3. 启动 Worker 循环（异步，不阻塞事件循环）
-  const stopSignal = { stopped: false };
+  const shutdownController = new AbortController();
+  const stopSignal: StopSignal = {
+    stopped: false,
+    signal: shutdownController.signal,
+    abort: () => shutdownController.abort(),
+  };
   const workerPromise = workerLoop(stopSignal).catch((err) => {
     logger.error({ err }, "Worker loop crashed");
   });
@@ -44,11 +49,13 @@ async function main(): Promise<void> {
 
     taskWatcher.dispose();
 
-    // 4c. 等待 Worker 排空在途任务（最多等 WORKER_DRAIN_TIMEOUT 秒）
-    const drainTimeout = getConfig().WORKER_DRAIN_TIMEOUT * 1000;
+    // 4c. 等 Worker 排空在途任务。排空超时的强制收尾由 workerLoop 内部完成：
+    //     abort 在途上游请求/轮询后再等一个窗口让 Promise 落定（约 2×WORKER_DRAIN_TIMEOUT），
+    //     这里只设更大的进程退出兜底时限
+    const exitBound = getConfig().WORKER_DRAIN_TIMEOUT * 1000 * 3;
     await Promise.race([
       workerPromise,
-      new Promise<void>((r) => setTimeout(r, drainTimeout)),
+      new Promise<void>((r) => setTimeout(r, exitBound)),
     ]);
 
     // 4d. 断开数据库

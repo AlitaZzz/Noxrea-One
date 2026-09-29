@@ -17,7 +17,11 @@ import { logger } from "@server/core/logger";
 import pLimit from "p-limit";
 
 export interface StopSignal {
-  readonly stopped: boolean;
+  stopped: boolean;
+  /** 停机中止信号：drain 超时后 abort()，在途上游请求 / 轮询据此终止 */
+  readonly signal: AbortSignal;
+  /** 强制收尾：中止所有在途上游请求与轮询（受控停机的最后一步） */
+  abort(): void;
 }
 
 /**
@@ -60,9 +64,22 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
 
   const scheduleTask = (
     task: HydratedGenerationTask,
-    operation: (task: HydratedGenerationTask) => Promise<void>,
+    operation: (task: HydratedGenerationTask, stopSignal: StopSignal) => Promise<void>,
   ) => {
-    const promise = limit(() => operation(task))
+    const promise = limit(() => {
+      // 排空超时 abort 后不再启动「已领取但尚未开始」的任务：保持 processing，
+      // 交由重启恢复策略收口（同步任务判失败不重提、异步任务恢复轮询）。
+      // 否则 aborted 信号下的提交会因请求中止被分类成网络错误，写出误导性终态。
+      // 停机排空期（stopped 但未 abort）不拦截——礼让窗口内照常启动执行。
+      if (stopSignal.signal.aborted) {
+        logEvent("worker.loop", {
+          stage: "schedule_skipped_after_abort",
+          taskId: task.id,
+        });
+        return Promise.resolve();
+      }
+      return operation(task, stopSignal);
+    })
       .catch((err) => {
         logger.error({ err, taskId: task.id }, "Task execution error");
       })
@@ -73,11 +90,12 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
     inFlight.add(promise);
   };
 
-  // 0. 启动时恢复未完成任务。恢复轮询与新任务共用同一调度器，
+  // 0. 启动时处理未完成任务。恢复轮询与新任务共用同一调度器，
   // 避免启动恢复绕过 WORKER_MAX_CONCURRENCY。
-  const { recovered, asyncTasks } = await recoverProcessingTasks();
-  if (recovered > 0) {
-    logEvent("worker.loop", { stage: "recovered", count: recovered });
+  // 同步任务在恢复时直接判失败（中断的同步任务不重新提交，见 recoverProcessingTasks）
+  const { interrupted, asyncTasks } = await recoverProcessingTasks();
+  if (interrupted > 0) {
+    logEvent("worker.loop", { stage: "interrupted_sync_failed", count: interrupted });
   }
 
   if (asyncTasks.length > 0) {
@@ -135,18 +153,33 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
     );
   }
 
-  // 优雅停机：排空运行中与队列中的任务
+  // 优雅停机：先礼后兵——先等在途任务排空（至多 WORKER_DRAIN_TIMEOUT），
+  // 未排空则 abort 在途上游请求/轮询强制收尾，再给一次有界窗口让 Promise 落定
   logEvent("worker.loop", { stage: "draining", inFlight: inFlight.size });
 
   if (inFlight.size > 0) {
+    const drainMs = cfg.WORKER_DRAIN_TIMEOUT * 1000;
     const drained = Promise.allSettled([...inFlight]);
-    let drainTimeout: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<void>((resolve) => {
-      drainTimeout = setTimeout(resolve, cfg.WORKER_DRAIN_TIMEOUT * 1000);
+      timer = setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, drainMs);
     });
 
     await Promise.race([drained, timeout]);
-    if (drainTimeout !== undefined) clearTimeout(drainTimeout);
+    if (timer !== undefined) clearTimeout(timer);
+
+    if (timedOut) {
+      logEvent("worker.loop", { stage: "drain_timeout_abort", inFlight: inFlight.size });
+      stopSignal.abort();
+      await Promise.race([
+        Promise.allSettled([...inFlight]),
+        new Promise<void>((resolve) => setTimeout(resolve, drainMs)),
+      ]);
+    }
   }
 
   logEvent("worker.loop", { stage: "stopped" });

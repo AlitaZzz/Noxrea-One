@@ -154,8 +154,8 @@ class LlmCapabilityService implements CapabilityService {
     });
 
     // 同步执行段单源（fetch + 超时/网络分类 + HTTP 错误翻译），
-    // 此前在能力内自写：超时与网络失败裸抛无分类
-    const outcome = await fetchUpstream(req, ctx.taskId, "capability.llm");
+    // 此前在能力内自写：超时与网络失败裸抛无分类；signal 贯穿停机中止
+    const outcome = await fetchUpstream(req, ctx.taskId, "capability.llm", ctx.signal);
 
     if (outcome.kind === "failure") {
       throw new GenerationFailureError(outcome.error, outcome.errorCode);

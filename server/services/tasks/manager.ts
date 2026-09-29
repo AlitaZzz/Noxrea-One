@@ -47,6 +47,8 @@ export interface SubmitAndWaitInput {
   buildRequest: () => { url: string; method: string; headers: Record<string, string>; body?: unknown };
   /** 解析同步响应 */
   parseResponse: (data: unknown) => { urls: string[]; text?: string };
+  /** Worker 停机中止信号：中止在途提交请求与轮询 */
+  signal?: AbortSignal;
   pollInterval?: number;
   maxPollAttempts?: number;
   initialDelay?: number;
@@ -73,6 +75,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     baseUrl,
     apiKey,
     channelConfig,
+    signal,
     pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL,
     maxPollAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
     initialDelay = cfg.WORKER_ASYNC_POLL_INITIAL_DELAY,
@@ -96,7 +99,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     body: req.body,
   });
 
-  const outcome = await fetchUpstream(req, taskId);
+  const outcome = await fetchUpstream(req, taskId, "taskmgr", signal);
 
   if (outcome.kind === "failure") {
     return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
@@ -117,6 +120,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
         channelConfig,
         model,
         pollInterval, maxPollAttempts, initialDelay,
+        signal,
       });
     }
 
@@ -176,6 +180,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       channelConfig,
       model,
       pollInterval, maxPollAttempts, initialDelay,
+      signal,
     });
   }
 
@@ -213,12 +218,14 @@ interface PollInput {
   pollInterval: number;
   maxPollAttempts: number;
   initialDelay: number;
+  /** Worker 停机中止信号 */
+  signal?: AbortSignal;
 }
 
 async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   const {
     taskId, startedAt, protocol, capability, baseUrl, apiKey,
-    upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay,
+    upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay, signal,
   } = input;
 
   // 若协议完全不支持轮询，直接失败，避免无限 pending
@@ -262,8 +269,8 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     error: "Task ownership lost",
   });
   const logWriteFailed = (attempt: number | string, err: unknown) => {
-    // 写库失败不能静默吞掉：upstreamTaskId 落不了盘，进程重启后
-    // recoverProcessingTasks 会把任务当作同步任务重新提交上游（重复生成、重复计费）
+    // 写库失败不能静默吞掉：upstreamTaskId 落不了盘，进程重启后恢复不到轮询态，
+    // 任务会被按中断策略判失败（不重新提交，见 recoverProcessingTasks）
     logEvent("taskmgr", {
       level: "warn",
       stage: "processing_write_failed",
@@ -296,8 +303,9 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   if (!persisted) {
     // 重试耗尽仍写不进去——不判死：上游已受理（必然计费），此刻判死等于让用户
     // 付费却拿不到结果。upstreamTaskId 保留在内存中继续轮询，随心跳周期重试落盘；
-    // DB 恢复后落盘成功，进程重启不再重复提交。整个轮询期都失败时重启仍会重新
-    // 提交上游（at-least-once 的剩余窗口），相比判死丢弃已计费结果优先保交付。
+    // DB 恢复后落盘成功，进程重启走恢复轮询不重提上游。若重启时仍未落盘，任务按
+    // 中断策略直接判失败（不重新提交，见 recoverProcessingTasks）——宁可让用户
+    // 收到失败文案，也不重复生成、重复计费。
     persistPending = true;
     logEvent("taskmgr", { level: "warn", stage: "processing_persist_deferred", taskId });
   }
@@ -334,6 +342,11 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       }
     },
     shouldStop: async () => {
+      // Worker 停机强制收尾（drain 超时后的 abort）：轮询立即终止
+      if (signal?.aborted) {
+        logEvent("taskmgr", { stage: "poll_stopped", taskId, reason: "shutdown_abort" });
+        return true;
+      }
       // isTaskCancelled 自身吞 DB 错误视为未取消
       if (await isTaskCancelled(taskId)) {
         logEvent("taskmgr", { stage: "poll_cancelled", taskId });

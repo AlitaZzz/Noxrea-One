@@ -102,6 +102,7 @@ export abstract class PollingCapabilityService implements CapabilityService {
       channelConfig: endpointCfg,
       buildRequest: () => req,
       parseResponse: (data) => this.parseResponse(protocol, data),
+      signal: ctx.signal,
     });
 
     if (result.status === "cancelled") {

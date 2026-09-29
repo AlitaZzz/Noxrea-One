@@ -23,10 +23,21 @@ vi.mock("@server/core/logger/utils", () => ({ logEvent: mocks.logEvent }));
 vi.mock("@server/core/logger", () => ({ logger: { error: mocks.loggerError } }));
 
 import { sleepWithStopSignal, workerLoop } from "./loop";
+import type { StopSignal } from "./loop";
 import type { HydratedGenerationTask } from "@server/crud/task";
 
 function task(id: string): HydratedGenerationTask {
   return { id } as HydratedGenerationTask;
+}
+
+/** 完整形态的停机信号：stopped 置位 + 可 abort 的 signal，与 index.ts 的构造一致 */
+function makeStopSignal(): StopSignal {
+  const controller = new AbortController();
+  return {
+    stopped: false,
+    signal: controller.signal,
+    abort: () => controller.abort(),
+  };
 }
 
 function config(overrides: Record<string, number> = {}) {
@@ -46,7 +57,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.getConfig.mockReturnValue(config());
-  mocks.recoverProcessingTasks.mockResolvedValue({ recovered: 0, asyncTasks: [] });
+  mocks.recoverProcessingTasks.mockResolvedValue({ interrupted: 0, asyncTasks: [] });
   mocks.cleanupZombieTasks.mockResolvedValue(0);
   mocks.claimPendingTasks.mockResolvedValue([]);
   mocks.executeTask.mockResolvedValue(undefined);
@@ -59,7 +70,7 @@ afterEach(() => {
 
 describe("sleepWithStopSignal", () => {
   it("正常超时路径同时清理 timeout 与 stop 检查 interval", async () => {
-    const promise = sleepWithStopSignal(1000, 10, { stopped: false });
+    const promise = sleepWithStopSignal(1000, 10, makeStopSignal());
 
     await vi.advanceTimersByTimeAsync(1000);
     await promise;
@@ -68,7 +79,7 @@ describe("sleepWithStopSignal", () => {
   });
 
   it("停机信号路径同时清理 timeout 与 stop 检查 interval", async () => {
-    const stopSignal = { stopped: false };
+    const stopSignal = makeStopSignal();
     const promise = sleepWithStopSignal(1000, 10, stopSignal);
 
     stopSignal.stopped = true;
@@ -81,7 +92,7 @@ describe("sleepWithStopSignal", () => {
 
 describe("workerLoop", () => {
   it("只按空闲并发槽认领任务，而不是每次都认领最大并发数", async () => {
-    const stopSignal = { stopped: false };
+    const stopSignal = makeStopSignal();
     let resolveExecution!: () => void;
     mocks.executeTask.mockImplementation(
       () => new Promise<void>((resolve) => {
@@ -102,14 +113,15 @@ describe("workerLoop", () => {
     stopSignal.stopped = true;
     await vi.advanceTimersByTimeAsync(20);
     await loop;
+    expect(stopSignal.signal.aborted).toBe(false);
   });
 
   it("启动恢复的异步轮询也进入同一个 p-limit 调度器", async () => {
     mocks.getConfig.mockReturnValue(config({ WORKER_MAX_CONCURRENCY: 1 }));
-    const stopSignal = { stopped: false };
+    const stopSignal = makeStopSignal();
     const resumptions: Array<() => void> = [];
     mocks.recoverProcessingTasks.mockResolvedValue({
-      recovered: 0,
+      interrupted: 0,
       asyncTasks: [task("resume-1"), task("resume-2")],
     });
     mocks.resumeAsyncPolling.mockImplementation(
@@ -131,6 +143,58 @@ describe("workerLoop", () => {
     resumptions[1]();
     stopSignal.stopped = true;
     await vi.advanceTimersByTimeAsync(20);
+    await loop;
+  });
+
+  it("排空超时后 abort 在途任务并等收尾窗口落定（A1）", async () => {
+    const stopSignal = makeStopSignal();
+    mocks.executeTask.mockImplementation(
+      (_task: HydratedGenerationTask, signal: StopSignal) =>
+        new Promise<void>((resolve) => {
+          // 在途任务感知停机：signal abort 即落定（对应上游请求被中止）
+          signal.signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    mocks.claimPendingTasks.mockResolvedValueOnce([task("task-1")]);
+
+    const loop = workerLoop(stopSignal);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.executeTask).toHaveBeenCalledWith(task("task-1"), stopSignal);
+
+    stopSignal.stopped = true;
+    // 等过 drain 超时（0.01s）→ 触发 abort
+    await vi.advanceTimersByTimeAsync(30);
+    expect(stopSignal.signal.aborted).toBe(true);
+
+    // abort 使在途任务落定，收尾窗口内 loop 正常退出
+    await vi.advanceTimersByTimeAsync(30);
+    await loop;
+  });
+
+  it("abort 后不再启动排队的任务，保持 processing 交重启恢复", async () => {
+    mocks.getConfig.mockReturnValue(config({ WORKER_MAX_CONCURRENCY: 1 }));
+    const stopSignal = makeStopSignal();
+    // 单并发槽：task-1 在途，task-2 排队；任务挂到 abort 才落定（模拟长上游请求）
+    mocks.claimPendingTasks.mockResolvedValueOnce([task("task-1"), task("task-2")]);
+    mocks.executeTask.mockImplementation(
+      (_task: HydratedGenerationTask, signal: StopSignal) =>
+        new Promise<void>((resolve) => {
+          signal.signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+
+    const loop = workerLoop(stopSignal);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.executeTask).toHaveBeenCalledTimes(1);
+
+    stopSignal.stopped = true;
+    // 等过 drain 超时（0.01s）→ abort → task-1 在途任务落定并释放槽位
+    await vi.advanceTimersByTimeAsync(30);
+    expect(stopSignal.signal.aborted).toBe(true);
+
+    // task-2 启动被守卫拦截：executeTask 不得再被调用，任务保持 processing
+    await vi.advanceTimersByTimeAsync(30);
+    expect(mocks.executeTask).toHaveBeenCalledTimes(1);
     await loop;
   });
 });

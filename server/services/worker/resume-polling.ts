@@ -21,12 +21,12 @@ import type { HydratedGenerationTask } from "@server/crud/task";
 import type { StopSignal } from "./loop";
 
 /**
- * 恢复异步任务轮询（Worker 重启时调用）。
+ * 恢复异步任务轮询（Worker 重启时调用 / executor 对已有 upstreamTaskId 任务的执行路径）。
  * 使用 undici.request 替代 fetch 确保代理和超时生效。
  */
 export function resumeAsyncPolling(
   task: HydratedGenerationTask,
-  stopSignal: StopSignal = { stopped: false },
+  stopSignal: StopSignal,
 ): Promise<void> {
   const taskId = task.id;
   const upstreamTaskId = task.upstreamTaskId!;
