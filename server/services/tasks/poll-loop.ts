@@ -138,11 +138,26 @@ export async function pollUpstreamTask(input: PollLoopInput): Promise<PollOutcom
     }
   }
 
-  // 超时：上游可能仍在生成，专门错误码供前端提示
-  const lastInfo = lastPollData ? ` - 上游最后返回: ${JSON.stringify(lastPollData)}` : "";
+  // 超时：上游可能仍在生成，专门错误码供前端提示。
+  // 完整 lastPollData 只进日志；对外文案只保留稳定身份与单行短摘要，
+  // 与 manager 的 raw_sample 边界一致——上游调试信息、signed URL 等不得进入用户可见错误
+  if (lastPollData !== undefined) {
+    logEvent(logChannel, {
+      level: "warn",
+      stage: "poll_timeout_last",
+      taskId,
+      body: lastPollData,
+      maxLen: Infinity,
+    });
+  }
+  const lastSummary = lastPollData !== undefined
+    ? extractUpstreamMessage(lastPollData).slice(0, 200)
+    : "";
   return {
     kind: "failed",
-    error: `异步轮询超时（upstream_task_id=${upstreamTaskId}）${lastInfo}`,
+    error: lastSummary
+      ? `异步轮询超时（upstream_task_id=${upstreamTaskId}）- 上游最后提示: ${lastSummary}`
+      : `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,
     errorCode: "generation.poll_timeout",
   };
 }
