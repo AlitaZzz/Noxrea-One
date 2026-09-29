@@ -36,7 +36,8 @@ export type UpstreamFetchOutcome =
 export async function fetchUpstream(
   req: UpstreamRequest,
   taskId: string,
-  logChannel = "taskmgr"
+  logChannel = "taskmgr",
+  signal?: AbortSignal
 ): Promise<UpstreamFetchOutcome> {
   try {
     const response = await fetchWithTimeout(req.url, {
@@ -44,6 +45,7 @@ export async function fetchUpstream(
       headers: req.headers,
       body: req.body ? JSON.stringify(req.body) : undefined,
       timeoutMs: getWorkerApiTimeout(),
+      signal,
     });
 
     if (!response.ok) {
@@ -64,7 +66,13 @@ export async function fetchUpstream(
     return { kind: "data", data };
   } catch (err: unknown) {
     const e = err as Error & { code?: string; cause?: { code?: string; message?: string } };
-    if (e.name === "TimeoutError" || e.code === "UND_ERR_HEADERS_TIMEOUT") {
+    // 超时统一分类：headers 阶段（fetchWithTimeout / undici 原生 headersTimeout）与
+    // body 阶段（body idle / overall 看门狗、undici 原生 bodyTimeout）都属 generation.timeout
+    if (
+      e.name === "TimeoutError" ||
+      e.code === "UND_ERR_HEADERS_TIMEOUT" ||
+      e.code === "UND_ERR_BODY_TIMEOUT"
+    ) {
       return {
         kind: "failure",
         error: "API call timed out",

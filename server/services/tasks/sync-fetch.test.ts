@@ -77,6 +77,18 @@ describe("fetchUpstream", () => {
     });
   });
 
+  it("UND_ERR_BODY_TIMEOUT（body 阶段超时，name 非 TimeoutError）→ generation.timeout", async () => {
+    const err = new Error("overall request timeout after 600000ms");
+    (err as Error & { code?: string }).code = "UND_ERR_BODY_TIMEOUT";
+    stubFetch(() => Promise.reject(err));
+    const outcome = await fetchUpstream(req, "t1");
+    expect(outcome).toEqual({
+      kind: "failure",
+      error: "API call timed out",
+      errorCode: "generation.timeout",
+    });
+  });
+
   it("其余异常 → generation.network_error，cause 细节拼进文案", async () => {
     const err = new TypeError("fetch failed");
     (err as Error & { cause?: unknown }).cause = { code: "ECONNREFUSED" };

@@ -73,6 +73,10 @@ const configSchema = z.object({
   HTTP_TIMEOUT_POLL: z.coerce.number().positive().default(15),
   HTTP_TIMEOUT_API: z.coerce.number().positive().default(120),
   HTTP_TIMEOUT_ASYNC: z.coerce.number().positive().default(30),
+  /** fetchWithTimeout 的默认 body idle 超时（秒）：响应体内相邻数据块的最大空闲 */
+  HTTP_BODY_IDLE_TIMEOUT: z.coerce.number().positive().default(60),
+  /** 单次结果下载总时长上限（秒）：防慢滴漏响应长期占用下载与 Worker 槽位 */
+  DOWNLOAD_TOTAL_TIMEOUT: z.coerce.number().positive().default(600),
 
   // Dev escape
   ALLOW_INSECURE_SECRETS: z

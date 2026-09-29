@@ -68,6 +68,8 @@ export async function downloadAndSave(
 
       // TCP 建连阶段超时（内置 15s，绕过 undici 默认的 10s 连接超时）
       const CONNECT_TIMEOUT_MS = 15_000;
+      /** body 相邻数据块最大空闲：CDN 正常传输 chunk 间隔远小于此，超时即视为传输停摆 */
+      const DOWNLOAD_BODY_IDLE_MS = 30_000;
 
       const MAX_DL_RETRIES = 3;
       let lastErr: unknown;
@@ -78,6 +80,9 @@ export async function downloadAndSave(
           const response = await fetchWithTimeout(cdnUrl, {
             scene: "dl",
             connectTimeoutMs: CONNECT_TIMEOUT_MS,
+            // body idle：传输停摆及时终止；overall：防慢滴漏长期占用（上限仍受 MAX_UPLOAD_SIZE_MB 约束）
+            bodyIdleTimeoutMs: DOWNLOAD_BODY_IDLE_MS,
+            overallTimeoutMs: cfg.DOWNLOAD_TOTAL_TIMEOUT * 1000,
           });
 
           // 4xx（非 429）属于确定性失败，不重试
