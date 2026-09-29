@@ -32,6 +32,7 @@ import {
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
 import { createEdge } from "@/features/canvas/node-defaults";
+import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
@@ -44,7 +45,7 @@ import {
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
-import { DEFAULT_NODE_HEIGHT, EventNames,isGenerating } from "@/lib/constants";
+import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
@@ -884,7 +885,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         </div>
       )}
 
-      {data.source !== "upload" && <ConnectionSideRail side="left" type="target" />}
+      {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
+      {acceptsInput(NODE_TYPE.VIDEO, data.source) && <ConnectionSideRail side="left" type="target" />}
       <ConnectionSideRail side="right" type="source" />
       {previewOpen && src && createPortal(
         <MediaPreviewOverlay

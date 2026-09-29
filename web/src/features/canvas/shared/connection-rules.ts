@@ -6,6 +6,11 @@
  * （节点本体悬停反馈）三处共用本模块，保证「拖拽中看到的反馈」与「松手后的实际
  * 结果」一致——包括多选扇出、类型校验、自连与已连去重。
  *
+ * 可迠除类型外还受节点能力约束：上传来源（source === "upload"）的图片/视频是
+ * 纯素材，不渲染输入轨、不能作为连线目标（acceptsInput）。这条能力规则是节点
+ * 组件渲染输入轨的同一判定（ImageNode / VideoNode 左轨），轨道渲染与连线判定
+ * 共用单一实现，不会出现「反馈亮绿灯却建不出边」或反向的漏网。
+ *
  * 多选扇出语义：发起端节点处于多选集合（≥2 非组节点）中且对端不在集合内时，
  * 扩展为「所有选中节点 ↔ 对端」。类型校验是全有或全无：任一选中节点与对端
  * 类型不可连则整体拒绝（与创建菜单「全部参与节点兼容才启用」同口径），不做
@@ -25,8 +30,24 @@ export interface ConnectionRuleState {
 }
 
 /**
+ * 节点能否作为连线目标：上传来源的图片/视频是纯素材（无输入，只能作源）。
+ * 这是节点能力规则（输入轨是否存在）的唯一口径，连线判定与节点组件的
+ * 输入轨渲染共用本函数。
+ */
+export function acceptsInput(type: string | undefined, source: string | undefined): boolean {
+  if (type !== NODE_TYPE.IMAGE && type !== NODE_TYPE.VIDEO) return true;
+  return source !== "upload";
+}
+
+/** acceptsInput 的节点形态便捷封装（连线判定路径用） */
+export function nodeAcceptsInput(node: AnyNode): boolean {
+  return acceptsInput(node.type, (node.data as { source?: string } | undefined)?.source);
+}
+
+/**
  * 批量扇出（输出方向）：参与集 → target 的全部候选对。
- * 类型校验全有或全无——任一参与节点与 target 类型不可连即整体返回空；
+ * target 须可作连线目标（nodeAcceptsInput）；类型校验全有或全无——任一参与
+ * 节点与 target 类型不可连即整体返回空；
  * target 在参与集内（拖回选区 / 拖到自己组成员）同样返回空（取消语义）；
  * 不查已存在连线（去重由建边时统一处理）。
  */
@@ -36,13 +57,14 @@ export function buildFanoutPairs(
 ): { source: string; target: string }[] {
   if (participants.length === 0) return [];
   if (participants.some((p) => p.id === target.id)) return [];
+  if (!nodeAcceptsInput(target)) return [];
   if (!participants.every((p) => canConnect(p.type, target.type))) return [];
   return participants.map((p) => ({ source: p.id, target: target.id }));
 }
 
 /**
  * 批量扇入（输入方向）：source → 参与集的全部候选对，是 buildFanoutPairs 的镜像。
- * 同样全有或全无——任一参与节点与 source 类型不可连即整体返回空；
+ * 同样全有或全无——任一参与节点不可作连线目标或与 source 类型不可连即整体返回空；
  * source 在参与集内（拖回自己组成员）返回空（取消语义）；不查已存在连线。
  */
 export function buildFanInPairs(
@@ -51,13 +73,14 @@ export function buildFanInPairs(
 ): { source: string; target: string }[] {
   if (participants.length === 0) return [];
   if (participants.some((p) => p.id === source.id)) return [];
-  if (!participants.every((p) => canConnect(source.type, p.type))) return [];
+  if (!participants.every((p) => nodeAcceptsInput(p) && canConnect(source.type, p.type))) return [];
   return participants.map((p) => ({ source: source.id, target: p.id }));
 }
 
 /**
  * 计算一次 src → tgt 连接在多选扇出语义下的全部候选对。
- * 排除自连；类型校验为全有或全无——扇出时任一选中节点与对端不可连即返回空
+ * 排除自连；对端须可作连线目标（nodeAcceptsInput）；类型校验为全有或全无——
+ * 扇出时任一选中节点与对端不可连即返回空
  * （整体拒绝），不做兼容子集的部分建边；不查已存在连线（去重由建边时统一处理）。
  */
 export function buildConnectionPairs(
@@ -78,9 +101,9 @@ export function buildConnectionPairs(
   if (selected.length > 1 && inSelection(src) && !inSelection(tgt)) {
     return buildFanoutPairs(selected, tgt);
   } else if (selected.length > 1 && inSelection(tgt) && !inSelection(src)) {
-    if (!selected.every((t) => canConnect(src.type, t.type))) return [];
+    if (!selected.every((t) => nodeAcceptsInput(t) && canConnect(src.type, t.type))) return [];
     for (const t of selected) pairs.push({ source: src.id, target: t.id });
-  } else if (src.id !== tgt.id && canConnect(src.type, tgt.type)) {
+  } else if (src.id !== tgt.id && nodeAcceptsInput(tgt) && canConnect(src.type, tgt.type)) {
     pairs.push({ source: src.id, target: tgt.id });
   }
   return pairs;

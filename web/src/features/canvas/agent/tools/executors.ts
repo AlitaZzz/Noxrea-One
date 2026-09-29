@@ -25,6 +25,7 @@ import {
   directorNode as createDirectorNode,
   duplicateNode,
 } from "@/features/canvas/node-defaults";
+import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
@@ -237,6 +238,10 @@ function execCreateNode(args: ToolArgs): ExecOutcome {
       }
       if (!canConnect(source.type, targetNode.type)) {
         skipped.push(`${raw}（${source.type} → ${targetNode.type} 不符合连线规则）`);
+        continue;
+      }
+      if (!nodeAcceptsInput(targetNode)) {
+        skipped.push(`${raw}（目标节点是上传素材，不能作为连线目标）`);
         continue;
       }
       seenPairs.add(pairKey);
@@ -584,6 +589,10 @@ function execConnectNodes(args: ToolArgs): ExecOutcome {
     if (!canConnect(sourceNode.type, targetNode.type)) {
       const allowed = VALID_CONNECTION_OUTPUTS[sourceNode.type ?? ""] ?? [];
       errors.push(`${source} → ${target} 不符合连线规则（${sourceNode.type} 可连出：${allowed.join("/")}）`);
+      continue;
+    }
+    if (!nodeAcceptsInput(targetNode)) {
+      errors.push(`${source} → ${target} 目标节点是上传素材，不能作为连线目标`);
       continue;
     }
     seenPairs.add(pairKey);

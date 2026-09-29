@@ -15,6 +15,7 @@
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
+import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -291,7 +292,9 @@ function pasteNodes(
     .filter(({ source, target }) => {
       if (!nodeById.has(source) || !nodeById.has(target)) return false;
       // 跨画布粘贴时集外节点的类型可能与原边不匹配，按连接规则再校验一次
-      if (!canConnect(nodeById.get(source)!.type, nodeById.get(target)!.type)) return false;
+      // （含节点能力：上传素材不能作为连线目标，与画布交互同一口径）
+      const srcNode = nodeById.get(source)!, tgtNode = nodeById.get(target)!;
+      if (!canConnect(srcNode.type, tgtNode.type) || !nodeAcceptsInput(tgtNode)) return false;
       const key = `${source}→${target}`;
       if (existingPairs.has(key)) return false;
       existingPairs.add(key);

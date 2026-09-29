@@ -25,13 +25,13 @@ import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
+import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
 import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
-import { EventNames } from "@/lib/constants";
-import { isGenerating } from "@/lib/constants";
+import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 
@@ -570,7 +570,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       )}
       </div>
 
-      {data.source !== "upload" && <ConnectionSideRail side="left" type="target" zIndex={999} />}
+      {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
+      {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" zIndex={999} />}
       <ConnectionSideRail side="right" type="source" zIndex={999} />
     </div>
     {previewOpen && createPortal(

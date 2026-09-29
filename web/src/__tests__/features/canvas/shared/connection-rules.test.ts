@@ -206,4 +206,54 @@ describe("connectionWouldCreate", () => {
     const self = makeState([makeNode("a")]);
     expect(connectionWouldCreate("a", "a", self)).toBe(false);
   });
+
+  // ── 节点能力：上传来源的图片/视频是纯素材，不能作为连线目标 ──
+  // （acceptsInput 是节点输入轨渲染的同一口径，回归「反馈亮绿灯却建不出边」）
+  it("上传来源的图片/视频作为目标：类型可连也不产生新边（反馈应显示 blocked）", () => {
+    const upImg = makeNode("up-img", NODE_TYPE.IMAGE, false, { source: "upload" });
+    const upVideo = makeNode("up-video", NODE_TYPE.VIDEO, false, { source: "upload" });
+    const txt = makeNode("txt", NODE_TYPE.TEXT);
+    // TEXT → IMAGE/VIDEO 类型可连，但目标无输入轨
+    const state = makeState([txt, upImg, upVideo]);
+    expect(connectionWouldCreate("txt", "up-img", state)).toBe(false);
+    expect(connectionWouldCreate("txt", "up-video", state)).toBe(false);
+  });
+
+  it("派生 / 生成来源的图片、上传来源的文本/音频：仍可作为目标", () => {
+    const derived = makeNode("d", NODE_TYPE.IMAGE, false, { source: "derived" });
+    const generated = makeNode("g", NODE_TYPE.IMAGE, false, { source: "generate" });
+    const upText = makeNode("ut", NODE_TYPE.TEXT, false, { source: "upload" });
+    const state = makeState([
+      makeNode("txt", NODE_TYPE.TEXT),
+      derived,
+      generated,
+      upText,
+    ]);
+    expect(connectionWouldCreate("txt", "d", state)).toBe(true);
+    expect(connectionWouldCreate("txt", "g", state)).toBe(true);
+    expect(connectionWouldCreate("txt", "ut", state)).toBe(true);
+  });
+
+  it("多选扇出到上传素材目标：整体拒绝", () => {
+    const state = makeState([
+      makeNode("a", NODE_TYPE.TEXT, true),
+      makeNode("b", NODE_TYPE.TEXT, true),
+      makeNode("up-img", NODE_TYPE.IMAGE, false, { source: "upload" }),
+    ]);
+    expect(buildConnectionPairs("a", "up-img", state.nodes)).toEqual([]);
+    expect(buildFanoutPairs(
+      state.nodes.filter((n) => n.selected),
+      state.nodes.find((n) => n.id === "up-img")!
+    )).toEqual([]);
+  });
+
+  it("多选扇入到含上传素材的选中集：整体拒绝", () => {
+    const src = makeNode("txt", NODE_TYPE.TEXT);
+    const state = makeState([
+      makeNode("a", NODE_TYPE.IMAGE, true),
+      makeNode("up-img", NODE_TYPE.IMAGE, true, { source: "upload" }),
+    ]);
+    expect(buildConnectionPairs("txt", "a", state.nodes)).toEqual([]);
+    expect(buildFanInPairs(src, state.nodes.filter((n) => n.selected))).toEqual([]);
+  });
 });
