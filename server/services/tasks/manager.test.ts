@@ -1,7 +1,8 @@
 /**
  * 任务管理器回归测试。
  * 锁定 submitAndWait 全分支：同步完成 / 提交失败 / HTTP 错误提取 task_id 升级轮询 /
- * 提交后已取消 / 无结果无 task_id / 守卫拒绝 / 落盘推迟续轮询 / 不支持轮询 / signal 贯穿。
+ * 提交后已取消 / 无结果无 task_id / 守卫拒绝 / 落盘推迟续轮询 / 不支持轮询 /
+ * 预算耗尽重入队（exhausted → requeued / 烧完落终态）/ signal 贯穿。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   markTaskProcessing: vi.fn(),
   isTaskCancelled: vi.fn(),
   touchTaskHeartbeat: vi.fn(),
+  requeueProcessingAsyncTask: vi.fn(),
   pollUpstreamTask: vi.fn(),
 }));
 
@@ -32,6 +34,7 @@ vi.mock("@server/crud/task", () => ({
   markTaskProcessing: mocks.markTaskProcessing,
   isTaskCancelled: mocks.isTaskCancelled,
   touchTaskHeartbeat: mocks.touchTaskHeartbeat,
+  requeueProcessingAsyncTask: mocks.requeueProcessingAsyncTask,
 }));
 vi.mock("@server/services/tasks/poll-loop", () => ({
   pollUpstreamTask: mocks.pollUpstreamTask,
@@ -74,6 +77,7 @@ beforeEach(() => {
     WORKER_ASYNC_POLL_INTERVAL: 1,
     WORKER_ASYNC_POLL_MAX_ATTEMPTS: 3,
     WORKER_ASYNC_POLL_INITIAL_DELAY: 0,
+    WORKER_MAX_RETRIES: 2,
   });
   mocks.isTaskCancelled.mockResolvedValue(false);
   mocks.markTaskProcessing.mockResolvedValue(true);
@@ -240,6 +244,43 @@ describe("submitAndWait", () => {
       errorCode: "generation.poll_timeout",
     });
     expect(result.error).not.toContain("{");
+  });
+
+  it("轮询预算耗尽 → requeueProcessingAsyncTask 重入队，返回 requeued", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
+    protocol.extractTaskId.mockReturnValue("up-1");
+    mocks.pollUpstreamTask.mockResolvedValue({
+      kind: "exhausted",
+      error: "异步轮询超时（upstream_task_id=up-1）",
+      errorCode: "generation.poll_timeout",
+    });
+    mocks.requeueProcessingAsyncTask.mockResolvedValue(true);
+
+    const result = await submitAndWait(makeInput());
+
+    expect(result).toEqual({ status: "requeued", urls: [] });
+    // 守卫参数：所有权令牌 startedAt + retryCount 预算（WORKER_MAX_RETRIES）
+    expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
+  });
+
+  it("预算耗尽且重入队被拒（retryCount 烧完）→ 落 poll_timeout 终态失败", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
+    protocol.extractTaskId.mockReturnValue("up-1");
+    mocks.pollUpstreamTask.mockResolvedValue({
+      kind: "exhausted",
+      error: "异步轮询超时（upstream_task_id=up-1）",
+      errorCode: "generation.poll_timeout",
+    });
+    mocks.requeueProcessingAsyncTask.mockResolvedValue(false);
+
+    const result = await submitAndWait(makeInput());
+
+    expect(result).toEqual({
+      status: "failed",
+      urls: [],
+      error: "异步轮询超时（upstream_task_id=up-1）",
+      errorCode: "generation.poll_timeout",
+    });
   });
 
   it("signal 贯穿提交请求与轮询", async () => {

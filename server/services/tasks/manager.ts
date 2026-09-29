@@ -14,12 +14,13 @@ import {
   markTaskProcessing,
   isTaskCancelled,
   touchTaskHeartbeat,
+  requeueProcessingAsyncTask,
 } from "@server/crud/task";
 import { defaultPollUrl, type ProtocolService } from "@server/services/protocols/base";
 import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 
 export interface SubmitAndWaitResult {
-  status: "completed" | "failed" | "cancelled";
+  status: "completed" | "failed" | "cancelled" | "requeued";
   urls: string[];
   text?: string;
   error?: string;
@@ -227,6 +228,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     taskId, startedAt, protocol, capability, baseUrl, apiKey,
     upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay, signal,
   } = input;
+  const cfg = getConfig();
 
   // 若协议完全不支持轮询，直接失败，避免无限 pending
   if (!protocol.buildPollUrl && !protocol.parsePollResponse) {
@@ -372,5 +374,20 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
       return { status: "cancelled", urls: [] };
     case "lost":
       return ownershipLost();
+    case "exhausted": {
+      // 预算耗尽 ≠ 上游失败：任务重置 pending 重新认领后走恢复轮询
+      //（upstreamTaskId 已固化，天然不重提上游），retryCount 预算封顶。
+      const requeued = await requeueProcessingAsyncTask(taskId, startedAt, cfg.WORKER_MAX_RETRIES);
+      if (requeued) {
+        logEvent("taskmgr", {
+          stage: "poll_exhausted_requeued",
+          taskId,
+          upstreamTaskId,
+        });
+        return { status: "requeued", urls: [] };
+      }
+      // 预算烧完（或所有权已丢——守卫会让终态写入自然失败）才真正终态失败
+      return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
+    }
   }
 }

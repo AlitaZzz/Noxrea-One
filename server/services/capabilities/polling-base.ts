@@ -19,6 +19,7 @@ import { submitAndWait } from "@server/services/tasks/manager";
 import {
   GenerationCancelledError,
   GenerationFailureError,
+  GenerationRequeuedError,
 } from "@server/services/tasks/failure";
 import { logEvent } from "@server/core/logger/utils";
 
@@ -107,6 +108,10 @@ export abstract class PollingCapabilityService implements CapabilityService {
 
     if (result.status === "cancelled") {
       throw new GenerationCancelledError();
+    }
+
+    if (result.status === "requeued") {
+      throw new GenerationRequeuedError();
     }
 
     if (result.status === "failed") {

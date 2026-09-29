@@ -173,6 +173,19 @@ export function extractFailureCode(err: unknown): { code?: string } {
 }
 
 /**
+ * 轮询预算耗尽但上游未到终态，任务已重置 pending 等待重新认领恢复轮询。
+ * 能力服务收到该信号时抛出；executor 捕获后结束本次执行、不写任何终态
+ * （任务在队列里会再次被认领，继续轮询同一个上游任务）。
+ */
+export class GenerationRequeuedError extends Error {
+  constructor() {
+    super("Poll budget exhausted, task requeued for resume polling");
+    this.name = "GenerationRequeuedError";
+    Object.setPrototypeOf(this, GenerationRequeuedError.prototype);
+  }
+}
+
+/**
  * 上游错误的统一翻译：「上游自带可读文案时原样回传（不附错误码，前端原样展示）；
  * 取不到时回退兜底文案 + 错误码（由前端本地化）」。该规则此前在 manager、
  * audio、llm 中各自实现，统一收敛于此。
