@@ -165,7 +165,6 @@ export function createGroupNode(
     position,
     data: { label: label || "" } as GroupNodeData,
     style: { width: size.width, height: size.height },
-    className: "react-flow__node-group",
   };
 }
 

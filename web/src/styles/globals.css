@@ -134,18 +134,18 @@ select:focus-visible,
 .canvas-container.middle-panning .react-flow__node { cursor: grabbing !important; }
 .react-flow__node { font-family: inherit; }
 /* 选中节点提升至最上层，但组节点例外（组始终作为底层容器，避免盖住成员） */
-.react-flow__node.selected:not(.react-flow__node-group) {
+.react-flow__node.selected:not(.react-flow__node-group-node) {
   z-index: 1000 !important;
 }
 /* 组节点沉到连线（边层 SVG）之下：React Flow 中节点层整体绘制在边层之上，
    组的大矩形会盖住组内节点之间的连线，点击连线会先命中组节点，
    导致组内连线无法选中。边层仅描边接收事件（visibleStroke），
    组内空白处仍会穿透到组节点，选中组的交互不受影响。
-   .react-flow__node-group-node 是 React Flow 按 type=group-node 自动生成的 class，
-   与 createGroupNode 手动加的 .react-flow__node-group 双保险 */
-.react-flow__node-group.react-flow__node,
-.react-flow__node-group.react-flow__node.selected,
-.react-flow__node.react-flow__node-group-node {
+   .react-flow__node-group-node 是 React Flow 按 type=group-node 自动生成的
+   派生类（渲染挂钩随 type 派生，不手动挂类、不入持久化数据——xyflow 库存
+   保留类 .react-flow__node-group 带 padding/width/text-align: center 会泄漏） */
+.react-flow__node.react-flow__node-group-node,
+.react-flow__node.react-flow__node-group-node.selected {
   z-index: -1 !important;
 }
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
@@ -323,15 +323,15 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 }
 
 /* Group node: completely invisible container */
-.react-flow__node-group.react-flow__node,
-.react-flow__node-group.react-flow__node.selected {
+.react-flow__node.react-flow__node-group-node,
+.react-flow__node.react-flow__node-group-node.selected {
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
   background: transparent !important;
   padding: 0 !important;
 }
-.react-flow__node-group .react-flow__resize-control {
+.react-flow__node-group-node .react-flow__resize-control {
   z-index: 10;
 }
 /* ============================================================
@@ -490,7 +490,6 @@ body > .ant-app { line-height: inherit !important; }
 .react-flow__node-video-node { overflow: visible !important; }
 .react-flow__node-text-node { overflow: visible !important; }
 /* 组节点：连接轨道（GroupConnectRail）贴组框边缘外侧渲染，不能被节点壳裁剪 */
-.react-flow__node-group.react-flow__node,
 .react-flow__node.react-flow__node-group-node { overflow: visible !important; }
 
 /* ── 节点连接轨道（ConnectionSideRail）──
