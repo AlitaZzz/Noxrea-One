@@ -123,6 +123,27 @@ export function memberRailWidth(
 }
 
 /**
+ * 拖拽节点落组的归属判定（拖入高亮与 drag stop 共用的唯一口径）：
+ * 以节点中心点做「包含即归属」——中心仍在原组内则归属不变；
+ * 离开原组 / 原组已不存在时按落点重新判定（一次拖拽完成跨组换组或脱离）。
+ * node 传拖拽中的实时节点（React Flow 回调给的 position 即最新位置），
+ * nodes 只用于读取组节点（拖拽中组的几何不变）。
+ */
+export function resolveDropGroupId(nodes: AnyNode[], node: AnyNode): string | undefined {
+  const size = measureNode(node);
+  const center = {
+    x: node.position.x + size.width / 2,
+    y: node.position.y + size.height / 2,
+  };
+  const oldGroupId = node.type !== NODE_TYPE.GROUP ? node.data?.groupId : undefined;
+  const oldGroup = oldGroupId
+    ? nodes.find((n) => n.type === NODE_TYPE.GROUP && n.id === oldGroupId)
+    : undefined;
+  if (oldGroup && groupContainsPoint(oldGroup, center)) return oldGroupId;
+  return findGroupAtPoint(nodes, center);
+}
+
+/**
  * 返回包含该点的最上层组 id（数组靠后绘制在上层，自后向前找第一个命中），
  * 未命中返回 undefined。供「包含即归属」判定共用：drag stop 拖入归组、
  * 组内落点创建节点（handleCreateConnectedNode）。

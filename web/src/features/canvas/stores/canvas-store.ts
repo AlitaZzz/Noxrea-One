@@ -202,6 +202,11 @@ interface CanvasState {
   setAgentPreview: (ids: string[]) => void;
   clearAgentPreview: () => void;
 
+  // 拖入组高亮：节点拖拽中「松手将加入的组」id（组边框高亮的宿主），
+  // 瞬态交互反馈，不落库、不进撤销历史，拖拽结束即清空
+  dragOverGroupId: string | null;
+  setDragOverGroup: (id: string | null) => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -355,6 +360,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const id = s[key];
         if (id && removedIds.has(id)) patch[key] = null;
       }
+      // 高亮宿主组被删（如拖拽中的异步删除）：一并清空，避免残留高亮
+      if (s.dragOverGroupId && removedIds.has(s.dragOverGroupId)) patch.dragOverGroupId = null;
       return patch;
     });
     saveManager.markDirtyImmediate();
@@ -441,6 +448,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
   clearAgentPreview: () => {
     set((s) => (s.agentPreviewNodeIds.length ? { agentPreviewNodeIds: [] } : s));
+  },
+
+  dragOverGroupId: null,
+  setDragOverGroup: (id) => {
+    set((s) => (s.dragOverGroupId === id ? s : { dragOverGroupId: id }));
   },
 
   snapToGrid: false,

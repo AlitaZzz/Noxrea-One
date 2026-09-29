@@ -25,6 +25,8 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
+  // 拖入高亮：拖拽中的节点松手将加入本组（瞬态字段，见 canvas-store.dragOverGroupId）
+  const dragOver = useCanvasStore((s) => s.dragOverGroupId === id);
   // Dynamic min size + member count.
   // 只派生 GroupNode 真正依赖的原始值（成员外接矩形、成员数），用 useShallow
   // 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
@@ -84,6 +86,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
         className={`
           node-body flex-1 rounded-lg pointer-events-none
           ${selected ? "node-selected" : ""}
+          ${dragOver ? "node-drag-over" : ""}
         `}
         style={{ background: colorPreset.fill }}
       />

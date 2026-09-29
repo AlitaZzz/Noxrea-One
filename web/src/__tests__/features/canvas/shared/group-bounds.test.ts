@@ -13,6 +13,7 @@ import {
   memberRailWidth,
   pruneEmptyGroups,
   refitGroupRects,
+  resolveDropGroupId,
 } from "@/features/canvas/shared/group-bounds";
 import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
@@ -214,6 +215,42 @@ describe("memberRailWidth（成员轨道不伸出组边界）", () => {
 
   it("成员不存在（id 幽灵）不夹取", () => {
     expect(memberRailWidth([g], "ghost", "right")).toBe(RAIL_WIDTH);
+  });
+});
+
+describe("resolveDropGroupId（拖入归属判定：高亮与 drag stop 共用口径）", () => {
+  // 组 g (0,0) 400×300，组 h (1000,0) 400×300；成员 100×50
+  const g = group("g", 0, 0, 400, 300);
+  const h = group("h", 1000, 0, 400, 300);
+  const memberAt = (id: string, x: number, y: number, gid?: string) =>
+    node(id, x, y, 100, 50, { type: "text-node", data: { groupId: gid } });
+
+  it("中心仍在原组内：归属不变，返回原组 id（不产生新高亮）", () => {
+    const m = memberAt("a", 100, 100, "g");
+    expect(resolveDropGroupId([g, h, m], m)).toBe("g");
+  });
+
+  it("拖出原组到空白：返回 undefined（脱离）", () => {
+    const m = memberAt("a", 600, 0, "g");
+    expect(resolveDropGroupId([g, h, m], m)).toBeUndefined();
+  });
+
+  it("拖入另一组：返回目标组 id（拖入高亮宿主）", () => {
+    const m = memberAt("a", 1150, 100, "g");
+    expect(resolveDropGroupId([g, h, m], m)).toBe("h");
+  });
+
+  it("节点大部分面积在组内但中心在外：不归属（中心点口径）", () => {
+    // 中心 x = 350+50 = 400 恰在组右缘（含边界）→ 归属；再外移即脱离
+    const onEdge = memberAt("a", 350, 100, undefined);
+    expect(resolveDropGroupId([g, onEdge], onEdge)).toBe("g");
+    const outside = memberAt("a", 355, 100, undefined);
+    expect(resolveDropGroupId([g, outside], outside)).toBeUndefined();
+  });
+
+  it("原组已删（幽灵 groupId）：按落点重新判定，不因幽灵 id 兜底", () => {
+    const m = memberAt("a", 1150, 100, "ghost");
+    expect(resolveDropGroupId([g, h, m], m)).toBe("h");
   });
 });
 

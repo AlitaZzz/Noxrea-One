@@ -81,7 +81,7 @@ import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel"
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
-import { findGroupAtPoint, groupContainsPoint, pruneEmptyGroups, refitGroupRects } from "@/features/canvas/shared/group-bounds";
+import { findGroupAtPoint, pruneEmptyGroups, refitGroupRects, resolveDropGroupId } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -791,13 +791,26 @@ export default function InfiniteCanvas() {
   const handleNodeDragStart = useCallback(() => {
     pushHistory(takeCanvasSnapshot());
     canvasInteraction.onNodeDragStart();
+    // 拖入高亮随每次拖拽重新开始计算（上一轮残留即刻清空）
+    useCanvasStore.getState().setDragOverGroup(null);
   }, [pushHistory, canvasInteraction]);
+
+  // 拖入组高亮：拖拽中实时以「落点归属」同口径（resolveDropGroupId）计算
+  // 松手将加入的组，组边框高亮反馈归属结果；组节点拖拽不参与。
+  // 只在归属「将变化」时高亮：悬停在自己当前组内归属不变，高亮即噪音
+  const handleNodeDrag = useCallback((_: unknown, rawNode: AnyNode) => {
+    if (rawNode.type === NODE_TYPE.GROUP) return;
+    const { nodes, setDragOverGroup } = useCanvasStore.getState();
+    const next = resolveDropGroupId(nodes, rawNode);
+    setDragOverGroup(next && next !== rawNode.data?.groupId ? next : null);
+  }, []);
 
   const handleNodeDragStop = useCallback(
     (_: unknown, rawNode: AnyNode) => {
       canvasInteraction.onNodeDragStop();
       markDirtyImmediate();
       setAlignmentGuides([]);
+      useCanvasStore.getState().setDragOverGroup(null);
 
       const allNodes = useCanvasStore.getState().nodes;
       // 以 store 中的最终位置为准：拖组时成员位置由组 delta 同步，
@@ -805,24 +818,9 @@ export default function InfiniteCanvas() {
       const draggedNode = allNodes.find((n) => n.id === rawNode.id) ?? rawNode;
       if (draggedNode.type === NODE_TYPE.GROUP) return;
 
-      const nodeW = Number(draggedNode.style?.width) || draggedNode.width || 0;
-      const nodeH = Number(draggedNode.style?.height) || draggedNode.height || 0;
-      const center = {
-        x: draggedNode.position.x + nodeW / 2,
-        y: draggedNode.position.y + nodeH / 2,
-      };
-
-      // 统一判定归属（group-bounds 的「包含即归属」口径，与组内落点创建节点共用）：
-      // 中心点仍在原组内 → 不变；离开原组 / 原组已不存在 →
-      // 按落点重新判定（一次拖拽即可完成跨组换组或脱离）
+      // 统一判定归属（resolveDropGroupId，与拖入高亮共用同一口径）
       const oldGroupId = draggedNode.data?.groupId;
-      const oldGroup = oldGroupId
-        ? allNodes.find((n) => n.type === NODE_TYPE.GROUP && n.id === oldGroupId)
-        : undefined;
-      let nextGroupId: string | undefined = oldGroupId;
-      if (!oldGroup || !groupContainsPoint(oldGroup, center)) {
-        nextGroupId = findGroupAtPoint(allNodes, center);
-      }
+      const nextGroupId = resolveDropGroupId(allNodes, draggedNode);
 
       if (nextGroupId === oldGroupId) return;
 
@@ -1025,6 +1023,7 @@ export default function InfiniteCanvas() {
         onConnectEnd={handleConnectEnd}
         isValidConnection={isValidConnection}
         onViewportChange={handleViewportChange}
+        onNodeDrag={handleNodeDrag}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
