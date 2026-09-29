@@ -45,6 +45,24 @@ export function nodeAcceptsInput(node: AnyNode): boolean {
 }
 
 /**
+ * 边不变量清洗：剔除「target 节点存在但不接受输入」的边。target 没有输入轨时
+ * xyflow 渲染该边会因找不到 Handle 抛 error #008，故「边的 target 必须可接受
+ * 输入」是 store 数据的前置条件。指向不存在节点的悬空边由 removeNodes /
+ * 落库清理负责，不在此扩大口径。restoreFromProject 用它清洗连线能力规则
+ * （acceptsInput）确立之前落库的历史数据。
+ */
+export function pruneEdgesToCapability<T extends { target: string }>(
+  nodes: AnyNode[],
+  edges: readonly T[]
+): T[] {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  return edges.filter((e) => {
+    const target = nodeById.get(e.target);
+    return !target || nodeAcceptsInput(target);
+  });
+}
+
+/**
  * 批量扇出（输出方向）：参与集 → target 的全部候选对。
  * target 须可作连线目标（nodeAcceptsInput）；类型校验全有或全无——任一参与
  * 节点与 target 类型不可连即整体返回空；

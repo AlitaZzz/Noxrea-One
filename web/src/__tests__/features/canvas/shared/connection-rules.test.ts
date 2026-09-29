@@ -7,6 +7,7 @@ import {
   type ConnectionRuleState,
   connectionWouldCreate,
   pairsWouldCreate,
+  pruneEdgesToCapability,
 } from "@/features/canvas/shared/connection-rules";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
@@ -255,5 +256,47 @@ describe("connectionWouldCreate", () => {
     ]);
     expect(buildConnectionPairs("txt", "a", state.nodes)).toEqual([]);
     expect(buildFanInPairs(src, state.nodes.filter((n) => n.selected))).toEqual([]);
+  });
+});
+
+describe("pruneEdgesToCapability", () => {
+  // 回归「加载历史项目时报 xyflow error #008」：连线能力规则（acceptsInput）
+  // 确立之前，拖线到上传素材会建边落库；restoreFromProject 入口清洗这类脏边
+  it("target 为上传素材图片/视频的边被剔除，合法边保留", () => {
+    const nodes = [
+      makeNode("txt", NODE_TYPE.TEXT),
+      makeNode("up-img", NODE_TYPE.IMAGE, false, { source: "upload" }),
+      makeNode("up-video", NODE_TYPE.VIDEO, false, { source: "upload" }),
+      makeNode("derived-img", NODE_TYPE.IMAGE, false, { source: "derived" }),
+    ];
+    const edges = [
+      { source: "txt", target: "up-img" },
+      { source: "txt", target: "up-video" },
+      { source: "txt", target: "derived-img" },
+      { source: "up-img", target: "txt" }, // 上传素材作为 source 合法
+    ];
+    expect(pruneEdgesToCapability(nodes, edges)).toEqual([
+      { source: "txt", target: "derived-img" },
+      { source: "up-img", target: "txt" },
+    ]);
+  });
+
+  it("target 节点不存在的悬空边不在此处理（removeNodes / 落库清理的职责）", () => {
+    const nodes = [makeNode("txt", NODE_TYPE.TEXT)];
+    const edges = [{ source: "txt", target: "gone" }];
+    expect(pruneEdgesToCapability(nodes, edges)).toEqual(edges);
+  });
+
+  it("无边可剔时返回空数组；非图片/视频 target 不受能力规则约束", () => {
+    const nodes = [
+      makeNode("txt", NODE_TYPE.TEXT, false, { source: "upload" }),
+      makeNode("aud", NODE_TYPE.AUDIO, false, { source: "upload" }),
+    ];
+    expect(pruneEdgesToCapability(nodes, [])).toEqual([]);
+    const edges = [
+      { source: "a", target: "txt" },
+      { source: "b", target: "aud" },
+    ];
+    expect(pruneEdgesToCapability(nodes, edges)).toEqual(edges);
   });
 });

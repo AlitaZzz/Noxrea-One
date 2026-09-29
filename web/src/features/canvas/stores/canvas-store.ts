@@ -7,6 +7,7 @@
 import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
+import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
 import { pruneEmptyGroups } from "@/features/canvas/shared/group-bounds";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { BackgroundType, ViewportState } from "@/features/canvas/types";
@@ -549,12 +550,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     //    （group-node → .react-flow__node-group-node），不属于持久化数据；
     //    旧数据曾借 xyflow 库存保留类 react-flow__node-group 挂样式钩，
     //    会把库存 text-align/padding 泄漏进节点。
+    // 3. 边能力清洗：落库数据可能包含「连线能力规则（acceptsInput）确立之前」
+    //    拖到上传素材上建出的边；target 无输入轨，渲染时 xyflow 找不到 Handle
+    //    会抛 error #008。清洗后全库可依赖「边的 target 必可接受输入」前置条件
+    //    （见 connection-rules 的 pruneEdgesToCapability）。
     const nodes = pruneEmptyGroups(
       (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
     );
+    const edges = pruneEdgesToCapability(nodes, (data.edges || []) as Edge[]);
     set({
       nodes,
-      edges: (data.edges || []) as Edge[],
+      edges,
       viewport: vp,
       background: data.background || DEFAULT_BACKGROUND,
       minimapVisible: data.minimapVisible !== false,
