@@ -1,7 +1,7 @@
 /**
  * 异步任务恢复轮询回归测试。
- * 锁定：终态编排分派（completed → finalize / failed → 透传 / stopped → 不写）、
- * 解析失败的兜底失败、停机与取消进入 shouldStop。
+ * 锁定：终态编排分派（completed → finalize / failed → 透传 / exhausted → 重入队
+ * 或烧完落终态 / stopped → 不写）、解析失败的兜底失败、停机与取消进入 shouldStop。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   safeFailTask: vi.fn(),
   isTaskCancelled: vi.fn(),
   touchTaskHeartbeat: vi.fn(),
+  requeueProcessingAsyncTask: vi.fn(),
   pollUpstreamTask: vi.fn(),
   finalizeGeneratedResult: vi.fn(),
   logEvent: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@server/crud/task", () => ({
   safeFailTask: mocks.safeFailTask,
   isTaskCancelled: mocks.isTaskCancelled,
   touchTaskHeartbeat: mocks.touchTaskHeartbeat,
+  requeueProcessingAsyncTask: mocks.requeueProcessingAsyncTask,
 }));
 vi.mock("@server/services/tasks/poll-loop", () => ({ pollUpstreamTask: mocks.pollUpstreamTask }));
 vi.mock("./download-results", () => ({ finalizeGeneratedResult: mocks.finalizeGeneratedResult }));
@@ -67,7 +69,11 @@ const protocol = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue({ WORKER_ASYNC_POLL_MAX_ATTEMPTS: 3, WORKER_ASYNC_POLL_INTERVAL: 1 });
+  mocks.getConfig.mockReturnValue({
+    WORKER_ASYNC_POLL_MAX_ATTEMPTS: 3,
+    WORKER_ASYNC_POLL_INTERVAL: 1,
+    WORKER_MAX_RETRIES: 2,
+  });
   mocks.getProvider.mockResolvedValue({ baseUrl: "http://upstream.test/", apiKey: "key", protocol: "openai" });
   mocks.getProtocol.mockReturnValue(protocol);
   mocks.resolveProviderEndpoints.mockReturnValue(undefined);
@@ -125,6 +131,40 @@ describe("resumeAsyncPolling", () => {
 
     expect(mocks.safeFailTask).not.toHaveBeenCalled();
     expect(mocks.finalizeGeneratedResult).not.toHaveBeenCalled();
+  });
+
+  it("预算耗尽 → requeueProcessingAsyncTask 重入队（不重提上游），不写终态", async () => {
+    mocks.pollUpstreamTask.mockResolvedValue({
+      kind: "exhausted",
+      error: "异步轮询超时（upstream_task_id=up-1）",
+      errorCode: "generation.poll_timeout",
+    });
+    mocks.requeueProcessingAsyncTask.mockResolvedValue(true);
+
+    await resumeAsyncPolling(makeTask(), makeStopSignal());
+
+    // 守卫参数：所有权令牌 startedAt + retryCount 预算（WORKER_MAX_RETRIES）
+    expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
+    expect(mocks.safeFailTask).not.toHaveBeenCalled();
+    expect(mocks.finalizeGeneratedResult).not.toHaveBeenCalled();
+  });
+
+  it("预算耗尽且重入队被拒（retryCount 烧完）→ 落 poll_timeout 终态", async () => {
+    mocks.pollUpstreamTask.mockResolvedValue({
+      kind: "exhausted",
+      error: "异步轮询超时（upstream_task_id=up-1）",
+      errorCode: "generation.poll_timeout",
+    });
+    mocks.requeueProcessingAsyncTask.mockResolvedValue(false);
+
+    await resumeAsyncPolling(makeTask(), makeStopSignal());
+
+    expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
+    expect(mocks.safeFailTask).toHaveBeenCalledWith(
+      "task-1",
+      { error: "异步轮询超时（upstream_task_id=up-1）", errorCode: "generation.poll_timeout" },
+      { startedAt: STARTED_AT }
+    );
   });
 
   it("provider 解析失败 → 兜底失败任务，文案带原因", async () => {

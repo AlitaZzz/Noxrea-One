@@ -15,6 +15,7 @@ import {
   safeFailTask,
   isTaskCancelled,
   touchTaskHeartbeat,
+  requeueProcessingAsyncTask,
 } from "@server/crud/task";
 import { finalizeGeneratedResult } from "./download-results";
 import type { HydratedGenerationTask } from "@server/crud/task";
@@ -134,6 +135,18 @@ async function _doResumePoll(
   }
 
   if (outcome.kind === "failed") {
+    await _failTask(task, outcome.error, outcome.errorCode);
+    return;
+  }
+
+  if (outcome.kind === "exhausted") {
+    // 预算耗尽 ≠ 上游失败：重置 pending 重新认领后继续恢复轮询（不重提上游）；
+    // retryCount 预算烧完时 requeue 返回 false，才落 poll_timeout 终态
+    const requeued = await requeueProcessingAsyncTask(taskId, task.startedAt, cfg.WORKER_MAX_RETRIES);
+    if (requeued) {
+      logEvent("resume_poll", { stage: "poll_exhausted_requeued", taskId, upstreamTaskId });
+      return;
+    }
     await _failTask(task, outcome.error, outcome.errorCode);
     return;
   }

@@ -52,6 +52,7 @@ import { executeTask } from "./executor";
 import {
   GenerationFailureError,
   GenerationCancelledError,
+  GenerationRequeuedError,
 } from "@server/services/tasks/failure";
 import type { StopSignal } from "./loop";
 import type { HydratedGenerationTask } from "@server/crud/task";
@@ -154,6 +155,15 @@ describe("executeTask", () => {
 
   it("GenerationCancelledError → 不写任何失败终态", async () => {
     mocks.routeGenerate.mockRejectedValue(new GenerationCancelledError());
+
+    await executeTask(makeTask(), makeStopSignal());
+
+    expect(mocks.safeFailTask).not.toHaveBeenCalled();
+    expect(mocks.safeCompleteTask).not.toHaveBeenCalled();
+  });
+
+  it("GenerationRequeuedError → 不写终态（任务已重置 pending，等待重新认领）", async () => {
+    mocks.routeGenerate.mockRejectedValue(new GenerationRequeuedError());
 
     await executeTask(makeTask(), makeStopSignal());
 

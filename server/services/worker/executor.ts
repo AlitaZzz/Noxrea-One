@@ -15,6 +15,7 @@ import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/ser
 import {
   GenerationFailureError,
   GenerationCancelledError,
+  GenerationRequeuedError,
   extractFailureCode,
 } from "@server/services/tasks/failure";
 import { buildContext } from "./context";
@@ -170,6 +171,12 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
     // 直接结束本次执行，不把取消冒充为生成失败
     if (err instanceof GenerationCancelledError) {
       logEvent("executor", { stage: "cancelled", taskId: task.id });
+      return;
+    }
+    // 轮询预算耗尽已重置 pending：结束本次执行不写终态，任务会被重新认领
+    // 恢复轮询同一个上游任务（retryCount 预算烧完时 requeue 返回 false 走终态失败）
+    if (err instanceof GenerationRequeuedError) {
+      logEvent("executor", { stage: "poll_requeued", taskId: task.id });
       return;
     }
     const errorMsg = (err as Error)?.message ?? "Unknown error";
