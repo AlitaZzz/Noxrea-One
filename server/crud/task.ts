@@ -153,6 +153,35 @@ export async function claimPendingTasks(limit = 10) {
 // 僵尸任务清理
 // 超过最大重试次数的任务直接判死；未超限则重置为 pending 并递增 retryCount
 
+/** 异步任务重入轮询队列的统一写入口径：僵尸清理与轮询预算耗尽的重入队共用，
+    保证「重置 pending + retryCount+1」的业务规则只有一处实现 */
+function asyncRequeueData() {
+  return {
+    status: "pending",
+    error: null,
+    retryCount: { increment: 1 },
+    updatedAt: new Date(),
+  };
+}
+
+/**
+ * 轮询预算耗尽的重入队：把仍持有所有权的 processing 异步任务重置 pending，
+ * 重新认领后走恢复轮询（upstreamTaskId 已固化，绝不重提上游）。
+ * 原子守卫：startedAt 所有权令牌 + retryCount 预算（>= maxRetries 时拒绝，
+ * 预算烧完由调用方落 poll_timeout 终态）。
+ */
+export async function requeueProcessingAsyncTask(
+  taskId: string,
+  startedAt: Date | null,
+  maxRetries: number
+): Promise<boolean> {
+  const { count } = await prisma.generationTask.updateMany({
+    where: { id: taskId, status: "processing", startedAt, retryCount: { lt: maxRetries } },
+    data: asyncRequeueData(),
+  });
+  return count > 0;
+}
+
 export async function cleanupZombieTasks(
   stuckMinutes: number,
   maxRetries: number
@@ -212,12 +241,7 @@ export async function cleanupZombieTasks(
       retryCount: { lt: maxRetries },
       upstreamTaskId: { not: null },
     },
-    data: {
-      status: "pending",
-      error: null,
-      retryCount: { increment: 1 },
-      updatedAt: new Date(),
-    },
+    data: asyncRequeueData(),
   });
 
   const interruptedWhere = {

@@ -23,7 +23,12 @@ vi.mock("@server/core/logger/utils", () => ({
   errText: (err: unknown) => String(err),
 }));
 
-import { cleanupZombieTasks, recoverProcessingTasks, touchTaskHeartbeat } from "./task";
+import {
+  cleanupZombieTasks,
+  recoverProcessingTasks,
+  touchTaskHeartbeat,
+  requeueProcessingAsyncTask,
+} from "./task";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -58,6 +63,36 @@ describe("touchTaskHeartbeat", () => {
       "task",
       expect.objectContaining({ stage: "heartbeat_write_failed", taskId: "task-1" }),
     );
+  });
+});
+
+describe("requeueProcessingAsyncTask（M7：轮询预算耗尽重入队）", () => {
+  const startedAt = new Date("2026-01-01T00:00:00.000Z");
+
+  it("守卫命中 → 重置 pending 且 retryCount+1，返回 true", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(requeueProcessingAsyncTask("task-1", startedAt, 2)).resolves.toBe(true);
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "task-1",
+        status: "processing",
+        startedAt,
+        retryCount: { lt: 2 },
+      },
+      data: {
+        status: "pending",
+        error: null,
+        retryCount: { increment: 1 },
+        updatedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it("retryCount 预算烧完或所有权丢失（守卫未命中）→ 返回 false", async () => {
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(requeueProcessingAsyncTask("task-1", startedAt, 2)).resolves.toBe(false);
   });
 });
 
