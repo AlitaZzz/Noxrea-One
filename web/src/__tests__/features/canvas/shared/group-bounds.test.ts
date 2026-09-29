@@ -10,10 +10,12 @@ import {
   groupContainsPoint,
   groupMembers,
   isGroupMember,
+  memberRailWidth,
+  pruneEmptyGroups,
   refitGroupRects,
 } from "@/features/canvas/shared/group-bounds";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
+import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
 
 function node(id: string, x: number, y: number, w: number, h: number, extra?: Record<string, unknown>): AnyNode {
   return {
@@ -62,17 +64,10 @@ describe("computeFittedGroupRect", () => {
     expect(computeFittedGroupRect(g, members)).toBeNull();
   });
 
-  it("无成员时收缩到最小尺寸（保持左上角）", () => {
+  it("前置契约：空组即删，不再有空组收缩路径（空成员数组为非法输入）", () => {
+    // 组必有成员（pruneEmptyGroups 在三处归属减少入口统一删除空组），
+    // 此处只验证非法输入下不会产生收缩到最小尺寸的旧行为
     const g = group("g1", 123, 456, 800, 600);
-    const rect = computeFittedGroupRect(g, [])!;
-    expect(rect.x).toBe(123);
-    expect(rect.y).toBe(456);
-    expect(rect.width).toBe(GROUP_NODE_MIN_WIDTH);
-    expect(rect.height).toBe(GROUP_NODE_MIN_HEIGHT);
-  });
-
-  it("无成员且已是最小尺寸时返回 null", () => {
-    const g = group("g1", 123, 456, GROUP_NODE_MIN_WIDTH, GROUP_NODE_MIN_HEIGHT);
     expect(computeFittedGroupRect(g, [])).toBeNull();
   });
 });
@@ -119,6 +114,106 @@ describe("isGroupMember / groupMembers", () => {
     expect(groupMembers(nodes, "missing")).toEqual([]);
     expect(isGroupMember(nodes[0], "g")).toBe(true);
     expect(isGroupMember(nodes[5], "g")).toBe(false);
+  });
+});
+
+describe("pruneEmptyGroups（空组即删）", () => {
+  it("删除没有任何成员的组，有成员的组保留", () => {
+    const nodes = [
+      group("empty", 0, 0, 100, 100),
+      node("a", 0, 0, 50, 50, { type: "text-node", data: { groupId: "kept" } }),
+      group("kept", 0, 0, 200, 200),
+    ];
+    const out = pruneEmptyGroups(nodes);
+    expect(out.map((n) => n.id)).toEqual(["a", "kept"]);
+  });
+
+  it("无空组时返回原数组引用（零拷贝快路径）", () => {
+    const nodes = [
+      node("a", 0, 0, 50, 50, { type: "text-node", data: { groupId: "g" } }),
+      group("g", 0, 0, 100, 100),
+    ];
+    expect(pruneEmptyGroups(nodes)).toBe(nodes);
+  });
+
+  it("没有组的数组返回原引用", () => {
+    const nodes = [node("a", 0, 0, 50, 50, { type: "text-node" })];
+    expect(pruneEmptyGroups(nodes)).toBe(nodes);
+  });
+
+  it("成员归属被剥空即视为空组（removeNodes 先剥离后判空的依据）", () => {
+    const nodes = [
+      node("a", 0, 0, 50, 50, { type: "text-node", data: { groupId: undefined } }),
+      group("g", 0, 0, 100, 100),
+    ];
+    expect(pruneEmptyGroups(nodes).map((n) => n.id)).toEqual(["a"]);
+  });
+
+  it("组节点带的 groupId 不算成员归属（不存在嵌套组，空组全删）", () => {
+    const nodes = [
+      // nested 是组节点，即便 data.groupId 指向外层也不能免外层于删除；
+      // 它自己也没有成员，同样被删
+      node("nested", 0, 0, 50, 50, { type: NODE_TYPE.GROUP, data: { groupId: "outer" } }),
+      group("outer", 0, 0, 300, 300),
+    ];
+    const out = pruneEmptyGroups(nodes);
+    expect(out).toEqual([]);
+  });
+
+  it("多个组只删空的，顺序保持不变", () => {
+    const nodes = [
+      group("g1", 0, 0, 100, 100),
+      node("a", 0, 0, 50, 50, { type: "text-node", data: { groupId: "g2" } }),
+      group("g2", 0, 0, 100, 100),
+      group("g3", 0, 0, 100, 100),
+      node("b", 10, 10, 50, 50, { type: "text-node", data: { groupId: "g1" } }),
+    ];
+    expect(pruneEmptyGroups(nodes).map((n) => n.id)).toEqual(["g1", "a", "g2", "b"]);
+  });
+});
+
+describe("memberRailWidth（成员轨道不伸出组边界）", () => {
+  // 组 (0,0) 400×300；成员一律 100×50
+  const g = group("g", 0, 0, 400, 300);
+  const memberAt = (id: string, x: number, gid?: string) =>
+    node(id, x, 0, 100, 50, { type: "text-node", data: { groupId: gid ?? "g" } });
+
+  it("无组归属的节点不夹取，返回全宽", () => {
+    const nodes = [g, memberAt("free", 100, undefined)];
+    // free 的 data.groupId 为 undefined
+    expect(memberRailWidth(nodes, "free", "right")).toBe(RAIL_WIDTH);
+    expect(memberRailWidth(nodes, "free", "left")).toBe(RAIL_WIDTH);
+  });
+
+  it("幽灵 groupId（组已被删）不夹取", () => {
+    const nodes = [g, memberAt("orphan", 100, "missing")];
+    expect(memberRailWidth(nodes, "orphan", "right")).toBe(RAIL_WIDTH);
+  });
+
+  it("贴边成员（净距恰为 GROUP_NODE_PADDING）条带夹到 40", () => {
+    // 右缘 360，组右缘 400 → 净距 40
+    const nodes = [g, memberAt("flush", 260)];
+    expect(memberRailWidth(nodes, "flush", "right")).toBe(GROUP_NODE_PADDING);
+    // 左侧净距 260 → 上限夹取
+    expect(memberRailWidth(nodes, "flush", "left")).toBe(RAIL_WIDTH);
+  });
+
+  it("净距介于 padding 与全宽之间时条带精确到净距；超出全宽夹到上限", () => {
+    // 右缘 340 → 净距 60
+    expect(memberRailWidth([g, memberAt("mid", 240)], "mid", "right")).toBe(60);
+    // 右缘 200 → 净距 200，不夹
+    expect(memberRailWidth([g, memberAt("far", 100)], "far", "right")).toBe(RAIL_WIDTH);
+  });
+
+  it("组被手动缩小到成员之外（净距 ≤ 0，无外界可守）不夹取", () => {
+    // 组右缘 350，成员右缘 360 → 净距 -10
+    const shrunk = group("shrunk", 250, 0, 100, 300);
+    const nodes = [shrunk, memberAt("out", 260, "shrunk")];
+    expect(memberRailWidth(nodes, "out", "right")).toBe(RAIL_WIDTH);
+  });
+
+  it("成员不存在（id 幽灵）不夹取", () => {
+    expect(memberRailWidth([g], "ghost", "right")).toBe(RAIL_WIDTH);
   });
 });
 

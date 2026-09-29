@@ -81,7 +81,7 @@ import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel"
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
-import { findGroupAtPoint, groupContainsPoint, refitGroupRects } from "@/features/canvas/shared/group-bounds";
+import { findGroupAtPoint, groupContainsPoint, pruneEmptyGroups, refitGroupRects } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -834,12 +834,12 @@ export default function InfiniteCanvas() {
           : n
       );
 
-      // 组框随成员变化自适应（group-bounds.refitGroupRects）：
-      // 加入 → 扩张覆盖成员（只扩不缩）；脱离后变空 → 收缩到最小尺寸
+      // 成员全部脱离的旧组：空组即删（唯一口径见 pruneEmptyGroups），
+      // 组框重算对已删除的组自然跳过
       const touchedGroupIds = new Set<string>();
       if (oldGroupId) touchedGroupIds.add(oldGroupId);
       if (nextGroupId) touchedGroupIds.add(nextGroupId);
-      const finalNodes = refitGroupRects(withMembership, touchedGroupIds);
+      const finalNodes = refitGroupRects(pruneEmptyGroups(withMembership), touchedGroupIds);
 
       setNodes(finalNodes);
     },
@@ -1060,8 +1060,9 @@ export default function InfiniteCanvas() {
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
         // 连线吸附半径：xyflow 的吸附判定取「指针到 Handle 中心」的距离，Handle 中心
-        // 在轨道正中（离节点边缘 RAIL_WIDTH/2），要整条轨道（最远到四角）都能吸附落线，
-        // 取轨道外接圆半径。放大是安全的——React Flow 在半径内取「最近」的 Handle
+        // 在轨道正中（离节点边缘 RAIL_WIDTH/2）。半径盖住可见圆点加余量即可，不能取
+        // 轨道外接圆——那会让磁吸远及边缘外 ~97px，相邻轨道（组与成员仅隔
+        // GROUP_NODE_PADDING）吸附圈重叠、恒抢错目标；半径内取「最近」的 Handle
         connectionRadius={RAIL_CONNECT_RADIUS}
         connectionLineComponent={ConnectionFlowLine}
         defaultEdgeOptions={{

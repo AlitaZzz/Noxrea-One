@@ -8,7 +8,7 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
-import { groupMembers, isGroupMember } from "@/features/canvas/shared/group-bounds";
+import { groupMembers, isGroupMember, pruneEmptyGroups } from "@/features/canvas/shared/group-bounds";
 import { measureNode } from "@/features/canvas/shared/tidy-layout";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -70,24 +70,8 @@ export function useGroupOperations() {
         return n;
       });
 
-      // 成员被重新编组后变空的旧组：收缩到最小尺寸，避免留下巨大空壳
-      const memberCountByGroup = new Map<string, number>();
-      for (const n of updatedNodes) {
-        const gid = (n.data as { groupId?: string }).groupId;
-        if (gid) memberCountByGroup.set(gid, (memberCountByGroup.get(gid) ?? 0) + 1);
-      }
-      const collapsedNodes = updatedNodes.map((n): AnyNode => {
-        if (n.type !== NODE_TYPE.GROUP || n.id === groupNode.id) return n;
-        if ((memberCountByGroup.get(n.id) ?? 0) > 0) return n;
-        const { width: gw, height: gh } = measureNode(n);
-        if (gw <= GROUP_NODE_MIN_WIDTH && gh <= GROUP_NODE_MIN_HEIGHT) return n;
-        return {
-          ...n,
-          style: { ...n.style, width: GROUP_NODE_MIN_WIDTH, height: GROUP_NODE_MIN_HEIGHT },
-        } as AnyNode;
-      });
-
-      store.setNodes([{ ...groupNode, selected: true }, ...collapsedNodes]);
+      // 成员被重新编组后变空的旧组：空组即删（与其他成员离开路径同一口径）
+      store.setNodes(pruneEmptyGroups([{ ...groupNode, selected: true }, ...updatedNodes]));
       markDirtyImmediate();
     }
 

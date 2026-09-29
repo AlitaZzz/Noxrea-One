@@ -129,7 +129,8 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
 };
 
 // ── 连接轨道（Handle）与连线端点 ──
-// 连接轨道悬浮于节点边缘外侧：宽 RAIL_WIDTH、高 min(节点高, RAIL_HEIGHT)，
+// 连接轨道悬浮于节点边缘外侧：宽 RAIL_WIDTH（组内成员按组边界夹窄，见
+// group-bounds.memberRailWidth）、高 min(节点高, 80px)（globals.css），
 // 圆点（直径 RAIL_DOT）静止于贴节点边缘的偏移位（RAIL_REST_OFFSET），hover 时
 // 在 ±RAIL_FOLLOW_LIMIT 屏幕像素内二维跟随鼠标——纯视觉反馈，连线锚点恒为
 // 节点边缘垂直正中（参考 open-ai-canvas：按鼠标落点比例取 Y 会让多线沿边散开，
@@ -138,15 +139,20 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
 //   - 已建立连线：getHandlePosition(center=false) → 轨道外侧边缘 → 收回 轨道宽
 //   - 拖拽预览线：getHandlePosition(center=true)  → 轨道中心      → 收回 半轨道宽
 export const RAIL_WIDTH = 80;
-export const RAIL_HEIGHT = 80;
 export const RAIL_DOT = 20;
 export const RAIL_FOLLOW_LIMIT = 30;
 export const RAIL_REST_OFFSET = 25;
+/** 圆点静止位与节点边缘的净距（轨道中心离边缘 RAIL_WIDTH/2，圆点从中心向
+ *  边缘偏 RAIL_REST_OFFSET，净距为二者之差）。轨道因组边界夹窄时，静止偏移
+ *  随中心前移等量收缩以保持此净距不变（见 use-rail-dot-follow） */
+export const RAIL_DOT_EDGE_GAP = RAIL_WIDTH / 2 - RAIL_REST_OFFSET;
 
-/** 拖线吸附半径（React Flow connectionRadius）。xyflow 默认 20px 是按老式小圆点设计的；
- *  吸附判定取「指针到 Handle 中心」的距离，而 Handle 中心在轨道正中，要整条轨道
- *  （最远到四角）都能吸附落线，需取轨道的外接圆半径 */
-export const RAIL_CONNECT_RADIUS = Math.hypot(RAIL_WIDTH, RAIL_HEIGHT) / 2;
+/** 拖线吸附半径（React Flow connectionRadius）。判定取「指针到 Handle 中心」
+ *  的距离，而轨道中心悬在节点边缘外半个轨道宽（40px）——半径只需以轨道中心
+ *  为原点盖住可见圆点（直径 RAIL_DOT）加余量即可。此前取轨道外接圆半径
+ *  （~57px）导致磁吸最远及边缘外 ~97px，组与成员轨道中心仅隔
+ *  GROUP_NODE_PADDING=40，两个吸附圈几乎完全重叠、恒抢错目标。 */
+export const RAIL_CONNECT_RADIUS = 30;
 
 /** 通用 Handle（非轨道，如框选外框 Handle）直径，经 --handle-size 注入 CSS */
 export const HANDLE_SIZE = 24;

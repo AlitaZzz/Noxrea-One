@@ -494,13 +494,15 @@ body > .ant-app { line-height: inherit !important; }
 .react-flow__node.react-flow__node-group-node { overflow: visible !important; }
 
 /* ── 节点连接轨道（ConnectionSideRail）──
-   轨道本体是 React Flow 的 Handle：透明的命中区贴在节点边缘外侧（宽 80px、
-   高 min(节点高, 80px)），圆点是轨道内的子元素，静止于贴节点边缘的偏移位，
-   hover 轨道时在 ±30px 内二维跟随鼠标（纯视觉反馈，连线锚点恒为节点边缘垂直
-   正中，见 ConnectionSideRail.tsx 与 constants.ts）。transform 由 JS 内联驱动
-   （跟随位移 + focus 缩放），CSS 不参与定位。圆点直径取 --rail-dot-size（RAIL_DOT）。 */
+   轨道本体是 React Flow 的 Handle：透明的命中区贴在节点边缘外侧（高
+   min(节点高, 80px)，宽 var(--rail-width, 80px)——组内成员按所属组边界
+   夹窄，见 ConnectionSideRail 与 group-bounds.memberRailWidth），圆点是
+   轨道内的子元素，静止于贴节点边缘的偏移位，hover 轨道时在条带界限内二维
+   跟随鼠标（纯视觉反馈，连线锚点恒为节点边缘垂直正中，见 ConnectionSideRail
+   与 constants.ts）。transform 由 JS 内联驱动（跟随位移 + focus 缩放），
+   CSS 不参与定位。圆点直径取 --rail-dot-size（RAIL_DOT）。 */
 .react-flow__handle.connection-rail {
-  width: 80px !important;
+  width: var(--rail-width, 80px) !important;
   height: min(100%, 80px) !important;
   border: none !important;
   border-radius: 0 !important;

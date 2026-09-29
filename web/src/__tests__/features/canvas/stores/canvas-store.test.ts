@@ -22,6 +22,7 @@ import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/project/types";
+import { NODE_TYPE } from "@/lib/constants";
 
 function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unknown>[] = []): HistorySnapshot {
   const nodes = Array.from({ length: nodesCount }, (_, i) => ({
@@ -343,6 +344,93 @@ describe("删除节点时同步清空节点级 UI 态", () => {
     expect(s.nodes.map((n) => n.id)).toEqual(["keep"]);
     expect(s.multiExpandedNodeId).toBe("keep");
     expect(s.annotatingNodeId).toBe("keep");
+  });
+});
+
+describe("removeNodes 级联：空组即删与归属剥离", () => {
+  function member(id: string, groupId?: string): AnyNode {
+    return {
+      id, type: "text-node",
+      position: { x: 0, y: 0 },
+      data: { groupId, label: id },
+    } as unknown as AnyNode;
+  }
+
+  function group(id: string): AnyNode {
+    return {
+      id, type: NODE_TYPE.GROUP,
+      position: { x: 0, y: 0 },
+      data: { label: id },
+      style: { width: 200, height: 120 },
+    } as unknown as AnyNode;
+  }
+
+  it("删除组的最后一个成员时组一并删除（空组即删）", () => {
+    useCanvasStore.setState({ nodes: [group("g"), member("a", "g")] });
+
+    useCanvasStore.getState().removeNodes(["a"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual([]);
+  });
+
+  it("只删部分成员时组保留", () => {
+    useCanvasStore.setState({
+      nodes: [group("g"), member("a", "g"), member("b", "g")],
+    });
+
+    useCanvasStore.getState().removeNodes(["a"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g", "b"]);
+  });
+
+  it("删除组节点本身时成员存活且归属剥离", () => {
+    useCanvasStore.setState({ nodes: [group("g"), member("a", "g")] });
+
+    useCanvasStore.getState().removeNodes(["g"], { skipHistory: true });
+
+    const nodes = useCanvasStore.getState().nodes;
+    expect(nodes.map((n) => n.id)).toEqual(["a"]);
+    expect((nodes[0].data as { groupId?: string }).groupId).toBeUndefined();
+  });
+
+  it("删除组 + 其全部成员：不存在空壳组，也不误伤其他组", () => {
+    useCanvasStore.setState({
+      nodes: [
+        group("g1"), member("a", "g1"),
+        group("g2"), member("b", "g2"),
+      ],
+    });
+
+    useCanvasStore.getState().removeNodes(["g1", "a"], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g2", "b"]);
+  });
+
+  it("撤销快照完整回放级联删除前的现场（组与成员一起复活）", () => {
+    useCanvasStore.setState({ nodes: [group("g"), member("a", "g")] });
+    const before = takeCanvasSnapshot();
+    useHistoryStore.getState().push(before);
+
+    useCanvasStore.getState().removeNodes(["a"], { skipHistory: true });
+    expect(useCanvasStore.getState().nodes).toHaveLength(0);
+
+    const restored = useHistoryStore.getState().undo(takeCanvasSnapshot());
+    expect(restored).toBe(before);
+    expect(restored!.nodes.map((n: AnyNode) => n.id)).toEqual(["g", "a"]);
+  });
+
+  it("restoreFromProject 归一化落库数据：历史遗留空组在加载时清除，有成员的组保留", () => {
+    useCanvasStore.getState().restoreFromProject("p1", {
+      nodes: [
+        group("legacy-empty"),
+        group("kept"),
+        member("a", "kept"),
+      ],
+    });
+
+    const nodes = useCanvasStore.getState().nodes;
+    expect(nodes.map((n) => n.id)).toEqual(["kept", "a"]);
+    expect(useCanvasStore.getState().viewportSyncCount).toBeGreaterThan(0);
   });
 });
 

@@ -7,6 +7,7 @@
 import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
+import { pruneEmptyGroups } from "@/features/canvas/shared/group-bounds";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
@@ -326,23 +327,33 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     maybePushHistory(options);
     set((s) => {
       const toDelete = new Set(nodeIds);
-      // 删除组节点时，仅清空成员节点的 groupId 归属，不删除成员本身
-      const nodes = s.nodes.map((n) => {
-        if (toDelete.has(n.id)) return n;
-        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
-          return { ...n, data: { ...n.data, groupId: undefined } } as AnyNode;
-        }
-        return n;
-      });
+      // 先移除待删节点，再做归属剥离与空组判定——待删成员不能再给自己的组续命。
+      // 删除组节点时仅清空成员的 groupId 归属，成员本身存活
+      const stripped = s.nodes
+        .filter((n) => !toDelete.has(n.id))
+        .map((n) => {
+          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
+            return { ...n, data: { ...n.data, groupId: undefined } } as AnyNode;
+          }
+          return n;
+        });
+      // 成员全部被删除的组也随之移除（空组即删，唯一口径见 pruneEmptyGroups）
+      const nodes = pruneEmptyGroups(stripped);
+      // 级联删除的空组也要参与边清理与编辑态清理（组不连边、不承载编辑态，
+      // 属于防御性一致，不会误删成员相关状态）
+      const removedIds = new Set(toDelete);
+      for (const n of stripped) {
+        if (n.type === NODE_TYPE.GROUP && !nodes.includes(n)) removedIds.add(n.id);
+      }
       const patch: Partial<CanvasState> = {
-        nodes: nodes.filter((n) => !toDelete.has(n.id)),
+        nodes,
         edges: s.edges.filter(
-          (e) => !toDelete.has(e.source) && !toDelete.has(e.target)
+          (e) => !removedIds.has(e.source) && !removedIds.has(e.target)
         ),
       };
       for (const key of NODE_UI_STATE_KEYS) {
         const id = s[key];
-        if (id && toDelete.has(id)) patch[key] = null;
+        if (id && removedIds.has(id)) patch[key] = null;
       }
       return patch;
     });
@@ -451,8 +462,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     _canvasProjectId = projectId;
     const vp = data.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
+    // 边界归一化：落库数据可能产生于「空组即删」不变量确立之前（旧规则允许
+    // 空壳组收缩存活）。服务端数据在进画布的唯一入口清洗一次，保证加载后
+    // 全库可依赖「组必有成员」前置条件，各处不再散布空组防御。
+    const nodes = pruneEmptyGroups(
+      (data.nodes || []).map((n) => ({ ...n, data: { ...n.data } }) as AnyNode),
+    );
     set({
-      nodes: (data.nodes || []).map((n) => ({ ...n, data: { ...n.data } }) as AnyNode),
+      nodes,
       edges: (data.edges || []) as Edge[],
       viewport: vp,
       background: data.background || DEFAULT_BACKGROUND,
