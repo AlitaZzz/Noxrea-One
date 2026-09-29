@@ -15,7 +15,9 @@ export type PollOutcome =
   | { kind: "completed"; urls: string[]; text?: string }
   | { kind: "failed"; error: string; errorCode?: string }
   | { kind: "stopped" }
-  | { kind: "lost" };
+  | { kind: "lost" }
+  /** 本方轮询预算耗尽，但上游未到终态（或状态未知）——不是上游失败，调用方应入队重轮询 */
+  | { kind: "exhausted"; error: string; errorCode?: string };
 
 /** 长轮询尾部降频阈值：达到该尝试次数后轮询间隔翻倍（慢任务减少无效请求频率） */
 const POLL_BACKOFF_TRIGGER_ATTEMPT = 60;
@@ -138,7 +140,10 @@ export async function pollUpstreamTask(input: PollLoopInput): Promise<PollOutcom
     }
   }
 
-  // 超时：上游可能仍在生成，专门错误码供前端提示。
+  // 预算耗尽：上游可能仍在生成（最后一次 2xx 体常见为 pending/in_progress），
+  // 这是我们自己的等待预算耗尽，不是上游失败——上游已受理且在计费，
+  // 判终态失败等于让用户付费拿不到结果。返回 exhausted 交调用方入队重轮询
+  // （恢复轮询不重提上游，预算由 retryCount 封顶）。
   // 完整 lastPollData 只进日志；对外文案只保留稳定身份与单行短摘要，
   // 与 manager 的 raw_sample 边界一致——上游调试信息、signed URL 等不得进入用户可见错误
   if (lastPollData !== undefined) {
@@ -154,7 +159,7 @@ export async function pollUpstreamTask(input: PollLoopInput): Promise<PollOutcom
     ? extractUpstreamMessage(lastPollData).slice(0, 200)
     : "";
   return {
-    kind: "failed",
+    kind: "exhausted",
     error: lastSummary
       ? `异步轮询超时（upstream_task_id=${upstreamTaskId}）- 上游最后提示: ${lastSummary}`
       : `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,

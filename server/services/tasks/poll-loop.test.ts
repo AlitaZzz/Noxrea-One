@@ -1,6 +1,6 @@
 /**
  * 上游轮询核心测试：永久性 4xx 透传响应体中的上游文案、
- * 5xx 不判死（耗尽次数按超时失败）、2xx 交由协议层判定。
+ * 5xx 不判死（预算耗尽返回 exhausted 交调用方重轮询）、2xx 交由协议层判定。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -72,26 +72,26 @@ describe("pollUpstreamTask", () => {
     });
   });
 
-  it("5xx 不判死，耗尽次数后按超时失败（5xx 错误体只进日志，不进对外摘要）", async () => {
+  it("5xx 不判死，预算耗尽返回 exhausted 交调用方重轮询（5xx 错误体只进日志）", async () => {
     fetchWithTimeout.mockResolvedValue(jsonResponse(502, { error: "bad gateway" }));
     const outcome = await pollUpstreamTask(makeInput());
     expect(fetchWithTimeout).toHaveBeenCalledTimes(2);
     expect(outcome).toEqual({
-      kind: "failed",
+      kind: "exhausted",
       error: "异步轮询超时（upstream_task_id=u-1）",
       errorCode: "generation.poll_timeout",
     });
   });
 
-  it("轮询超时的对外错误不泄露完整上游 JSON（R3 回归）", async () => {
+  it("预算耗尽的对外错误不泄露完整上游 JSON（R3 回归）", async () => {
     // 上游 payload 携带签名 URL 等敏感字段且结构巨大：parsePollResponse 缺省视为 pending，
     // 耗尽后走超时路径——error 只能是稳定文案，完整 payload 只允许进日志
     fetchWithTimeout.mockResolvedValue(
       jsonResponse(200, { result: { url: "https://cdn.example.com/x?sig=SECRET" }, metadata: { a: "b" } })
     );
     const outcome = await pollUpstreamTask(makeInput());
-    expect(outcome.kind).toBe("failed");
-    if (outcome.kind === "failed") {
+    expect(outcome.kind).toBe("exhausted");
+    if (outcome.kind === "exhausted") {
       expect(outcome.error).not.toContain("SECRET");
       expect(outcome.error).not.toContain("metadata");
       expect(outcome.errorCode).toBe("generation.poll_timeout");
