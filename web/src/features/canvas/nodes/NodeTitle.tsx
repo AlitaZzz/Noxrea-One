@@ -5,6 +5,8 @@
  * 约定：title 既是标题栏显示文案，也是进入编辑时的初值 —— 两者同源，
  * 避免出现「点开后输入框里的初值和标题栏显示不一致」。
  * 需要「显示带派生信息、编辑纯名字」的场景（如分组节点的成员数）用 display 覆盖显示文案。
+ *
+ * 交互：标题栏兼作拖拽把手（cursor-grab，按住可拖动节点），双击或点铅笔进入编辑。
  */
 "use client";
 
@@ -107,7 +109,7 @@ export default function NodeTitle({
 
   return (
     <div
-      className={`ui-select-none group/title flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
+      className={`ui-select-none group/title cursor-grab active:cursor-grabbing flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
       style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}
     >
       {editing ? (
@@ -147,7 +149,7 @@ export default function NodeTitle({
             {display ?? title}
           </MidTruncate>
           <EditOutlined
-            className="nodrag shrink-0 text-white/30 transition-colors group-hover/title:text-white/70"
+            className="cursor-pointer shrink-0 text-white/30 transition-colors group-hover/title:text-white/70"
             style={{ fontSize: 10 }}
             onClick={startEdit}
           />

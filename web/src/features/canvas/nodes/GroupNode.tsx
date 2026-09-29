@@ -5,12 +5,12 @@
  */
 "use client";
 
-import { GroupOutlined } from "@ant-design/icons";
 import type { NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 
+import { GroupIcon } from "@/components/ui/icons/canvas/GroupIcon";
 import GroupConnectRail from "@/features/canvas/controls/GroupConnectRail";
 import { isGroupMember } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -72,7 +72,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
           用户一改名就永远走 label 分支，成员增减后计数不再更新 */}
       <NodeTitle
         nodeId={id}
-        icon={<GroupOutlined className="shrink-0" style={{ color: "#ffffff" }} />}
+        icon={<GroupIcon className="shrink-0" style={{ color: "#ffffff" }} />}
         title={data.label}
         display={
           data.label

@@ -5,8 +5,9 @@
  * 语义色统一引用 lib/constants 的 NODE_TYPE_COLOR（小地图与节点 handle 同源），
  * 避免历史上 TYPE_COLORS 与 NODE_TYPE_COLOR 并存的双数据源问题。
  */
-import { GroupOutlined, PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import { PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 
+import { GroupIcon } from "@/components/ui/icons/canvas/GroupIcon";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
@@ -45,7 +46,7 @@ export function getNodeTypeIcon(type: string) {
     case NODE_TYPE.IMAGE:    return <PictureOutlined style={s} />;
     case NODE_TYPE.VIDEO:    return <VideoCameraOutlined style={s} />;
     case NODE_TYPE.DIRECTOR: return <PartitionOutlined style={s} />;
-    case NODE_TYPE.GROUP:    return <GroupOutlined style={s} />;
+    case NODE_TYPE.GROUP:    return <GroupIcon style={s} />;
     case NODE_TYPE.AUDIO:    return <WaveIcon style={s} />;
     default:                 return <PictureOutlined style={s} />;
   }
