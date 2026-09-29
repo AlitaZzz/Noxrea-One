@@ -84,6 +84,7 @@ import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWoul
 import { findGroupAtPoint, pruneEmptyGroups, refitGroupRects, resolveDropGroupId } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
+import { computeSelectionFrame } from "@/features/canvas/shared/selection-frame";
 import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -91,7 +92,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { EDGE_BASE_COLOR, GROUP_NODE_PADDING, HANDLE_SIZE, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { EDGE_BASE_COLOR, GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -173,21 +174,9 @@ export default function InfiniteCanvas() {
     return selected.every((n) => n.type === NODE_TYPE.GROUP);
   }, [nodes]);
 
-  // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle
-  const selectionFrame = useMemo(() => {
-    const sel = nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
-    if (sel.length < 2) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const n of sel) {
-      const w = Number(n.style?.width) || n.measured?.width || 200;
-      const h = Number(n.style?.height) || n.measured?.height || 120;
-      minX = Math.min(minX, n.position.x);
-      minY = Math.min(minY, n.position.y);
-      maxX = Math.max(maxX, n.position.x + w);
-      maxY = Math.max(maxY, n.position.y + h);
-    }
-    return { ids: sel.map((n) => n.id), bbox: { x: minX, y: minY, width: maxX - minX, height: maxY - minY } };
-  }, [nodes]);
+  // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle。
+  // bbox 计算的唯一口径在 shared/selection-frame（同时用于成员轨道钳制）
+  const selectionFrame = useMemo(() => computeSelectionFrame(nodes), [nodes]);
 
   // 组节点批量输出轨道不再由这里渲染：它渲染在 GroupNode 的节点 DOM 内
   // （GroupConnectRail），显隐才能走标准 Handle 规则（hover/选中/按住），
@@ -1011,7 +1000,8 @@ export default function InfiniteCanvas() {
       <BatchConnectContext.Provider value={batchConnectHandlers}>
       <ReactFlow
         data-interaction={canvasInteraction.mode}
-        style={{ "--handle-size": `${HANDLE_SIZE}px`, "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties}
+        data-multiselect={selectionFrame ? "true" : undefined}
+        style={{ "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties}
         nodes={nodes}
         edges={edges}
         nodeTypes={RF_NODE_TYPES}
@@ -1347,8 +1337,9 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )})}
 
-        {/* 批量连线 Handle（框选外框专用，右缘 = 输出方向）：≥2 个非组节点选中时，
-            锚点在外框右缘正中，参与集 = 选中节点，常显（外框不是节点，无显隐规则可依托）。
+        {/* 批量连线轨道（框选外框专用，右缘 = 输出方向）：≥2 个非组节点选中时，
+            条带锚在外框右缘正中、自此向右延伸，参与集 = 选中节点，常显（外框不是
+            节点，无显隐规则可依托）。条带高取常量 RAIL_WIDTH（外框恒高于 80px）。
             组节点的批量轨道由 GroupNode 内部的 GroupConnectRail 渲染 */}
         {selectionFrame && (
           <BatchConnectHandle

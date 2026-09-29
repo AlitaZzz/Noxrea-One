@@ -1,7 +1,7 @@
 /**
  * 批量连线拖拽逻辑（双向）：从「参与集」整体拖线接到目标。
  * 两个消费者共用同一实现，只差外壳渲染：
- * - BatchConnectHandle（框选外框）：ViewportPortal 圆点 Handle，常显，
+ * - BatchConnectHandle（框选外框）：ViewportPortal 内的条带+圆点轨道，常显，
  *   输出方向（参与集 → 目标）；
  * - GroupConnectRail（组节点左/右缘）：渲染在组节点 DOM 内的连接轨道，
  *   显隐走标准 Handle 规则（hover / 选中 / 按住），右缘扇出、左缘扇入。

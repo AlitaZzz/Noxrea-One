@@ -230,7 +230,6 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
   // Info display
   const cropW = Math.round(crop.w * (naturalSize.w || displaySize.w));
   const cropH = Math.round(crop.h * (naturalSize.h || displaySize.h));
-  const activePreset = ASPECT_PRESETS.find((p) => p.value === aspect);
 
   const handleStyle: React.CSSProperties = {
     position: "absolute",

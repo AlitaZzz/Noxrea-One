@@ -1,7 +1,7 @@
 /**
  * 视频生成面板的派生数据与副作用逻辑。
- * 根据当前画布连接关系计算上游参考（图片 / 文本 / 音频 / 视频）、最终 prompt、
- * 生成中状态与计时清理。面板参数（prompt / 模型等）为受控模式：
+ * 根据当前画布连接关系计算上游参考（图片 / 文本 / 音频 / 视频）、最终 prompt
+ * 与生成中状态。面板参数（prompt / 模型等）为受控模式：
  * 唯一数据源是节点 genSettings（由面板 writeGenSettings 写入），本 hook 仅消费只读输入。
  *
  * 参考排序架构（单一数据源 + 派生合并）：
@@ -10,7 +10,7 @@
  *   任意时刻首帧即正确；排序只在同类型内生效，跨类型拖放被禁止。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
@@ -40,11 +40,6 @@ export interface VideoGenPanelDerived {
   references: ReferenceItem[];
   finalPrompt: string;
   isGenerating: boolean;
-  elapsed: number;
-  error: string;
-  setElapsed: React.Dispatch<React.SetStateAction<number>>;
-  setError: React.Dispatch<React.SetStateAction<string>>;
-  timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
 }
 
 export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerived {
@@ -180,18 +175,6 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
 
-  const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState("");
-
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Cleanup timer on unmount。
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
   return {
     refImages,
     refOrder,
@@ -203,10 +186,5 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     references,
     finalPrompt,
     isGenerating,
-    elapsed,
-    error,
-    setElapsed,
-    setError,
-    timerRef,
   };
 }

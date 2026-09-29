@@ -162,7 +162,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const {
     refOrder, audioOrder, refVideoOrder,
     upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
-    elapsed, error, setElapsed, setError, timerRef,
   } = useVideoGenPanel({ nodeId, prompt });
 
   // 同类内拖拽排序（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
@@ -367,34 +366,33 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     const provider = providers.find((c) => c.id === entry.providerId);
     if (!provider) return;
 
-    setError("");
     // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
     // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
     // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时 submitTask 会
     // 主动取消已创建的后端任务，不产生孤儿任务。
     const generationRunId = ++generationRunRef.current;
     setSubmitting(true);
-    setElapsed(0);
     const isTextToVideo = refMode === "text";
     retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: isTextToVideo ? [] : refOrder, refAudios: isTextToVideo ? [] : audioOrder, refVideos: isTextToVideo ? [] : refVideoOrder, refMode, n, entry, provider };
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
 
     try {
+      // 失败文案已在 submitTask 内解析；提交失败全程未写 taskBinding，无需清理
       const errMsg = await submitTask(generationRunId);
 
       if (generationRunId !== generationRunRef.current) return;
 
-      if (errMsg === null) {
-        setError("");
-      } else {
-        // 失败：全程未写 taskBinding，无需清理；错误文案已在 submitTask 内解析
-        setError(errMsg);
+      if (errMsg !== null) {
+        notification.error({
+          title: i18n.t("generation.failed"),
+          description: errMsg,
+          placement: "bottomRight",
+          duration: 15,
+          key: `generation-failed-${nodeId}`,
+        });
       }
     } finally {
-      // 仅当自己仍是最新一轮时收尾：清计时器、复位取消态。取消后再立即生成时
-      // timerRef 已属于新一轮，旧轮收尾误清会把新计时冻结在当前值
+      // 仅当自己仍是最新一轮时收尾复位取消态
       if (generationRunId === generationRunRef.current) {
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         setSubmitting(false);
       }
     }
@@ -419,8 +417,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       markDirtyImmediate();
       dropPendingHistory();
     }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setError("");
     setSubmitting(false);
   };
 

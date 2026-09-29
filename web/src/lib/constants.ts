@@ -154,9 +154,6 @@ export const RAIL_DOT_EDGE_GAP = RAIL_WIDTH / 2 - RAIL_REST_OFFSET;
  *  GROUP_NODE_PADDING=40，两个吸附圈几乎完全重叠、恒抢错目标。 */
 export const RAIL_CONNECT_RADIUS = 30;
 
-/** 通用 Handle（非轨道，如框选外框 Handle）直径，经 --handle-size 注入 CSS */
-export const HANDLE_SIZE = 24;
-
 function insetBy(
   position: string | undefined,
   x: number,
