@@ -1,6 +1,7 @@
 /**
  * OpenAI 视频生成协议。
  * 构建视频生成的上游请求；响应/轮询解析逻辑在 shared.ts（与 image 共用）。
+ * 上游暂不支持取消任务，不实现 buildCancelRequest（骨架与接入说明见 protocols/base）。
  */
 
 import type {

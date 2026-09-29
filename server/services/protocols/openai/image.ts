@@ -1,6 +1,7 @@
 /**
  * OpenAI 图片生成协议。
  * 构建图片生成的上游请求；响应/轮询解析逻辑在 shared.ts（与 video 共用）。
+ * 上游暂不支持取消任务，不实现 buildCancelRequest（骨架与接入说明见 protocols/base）。
  */
 
 import type {

@@ -10,6 +10,7 @@ import type { TerminalTaskState } from "@server/services/tasks/watcher";
 import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { taskWatcher } from "@server/services/tasks/watcher";
+import { cancelUpstreamTask } from "@server/services/tasks/upstream-cancel";
 import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
@@ -191,6 +192,17 @@ router.on(["POST", "DELETE"], "/api/generate/task/:id/cancel", async (c) => {
   // 守卫拒绝 = 检查与写入之间任务已终态（如恰好完成），不能谎报 cancelled
   const cancelled = await cancelTask(taskId);
   if (!cancelled) return failCode(400, "generate.task_already_finished");
+
+  // 本地终态已落库：best-effort 取消上游（协议未声明取消能力或失败只记日志）
+  await cancelUpstreamTask({
+    taskId: task.id,
+    userId: task.userId,
+    upstreamTaskId: task.upstreamTaskId,
+    protocol: task.protocol,
+    capability: task.type,
+    model: task.model,
+    providerId: (task.config as Record<string, unknown> | null)?.providerId,
+  });
   return c.json(ok(null, "cancelled"));
 });
 

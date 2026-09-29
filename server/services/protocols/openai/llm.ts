@@ -1,6 +1,7 @@
 /**
  * OpenAI LLM 协议。
  * 实现 OpenAI LLM 文本补全的上游请求构建与响应解析。
+ * 上游暂不支持取消任务，不实现 buildCancelRequest（骨架与接入说明见 protocols/base）。
  */
 
 import type {

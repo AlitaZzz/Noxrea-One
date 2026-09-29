@@ -6,6 +6,7 @@
  * 当前 ark 渠道按「提交即同步返回产物」对接（submitAndWait 同步解析；
  * model-ui.json 亦无 ark 轮询端点配置）。若未来接入火山方舟原生异步
  * 任务 API，需在此补齐轮询三件套（可复用 openai/shared 的实现）。
+ * 上游暂不支持取消任务，不实现 buildCancelRequest（骨架与接入说明见 protocols/base）。
  */
 
 import type { ProtocolRequestResult, ProtocolService } from "@server/services/protocols/base";

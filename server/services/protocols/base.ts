@@ -94,6 +94,21 @@ export interface ProtocolService {
 
   /** 解析轮询响应 */
   parsePollResponse?(data: unknown): PollResult;
+
+  /**
+   * 构建取消上游任务的请求（可选能力）。
+   * 现状（2026-09 决策）：各上游暂时不支持取消任务，所有协议均不实现本能力，
+   * 仅保留此骨架——取消退化为仅本地终态。后续接入某个上游的取消端点前，
+   * 必须先核实其真实端点与语义，再在对应协议类补实现。
+   * 取消调用是 best-effort：失败只记日志，绝不影响本地取消语义。
+   */
+  buildCancelRequest?(
+    baseUrl: string,
+    upstreamTaskId: string,
+    apiKey: string,
+    channelConfig?: Record<string, unknown>,
+    capability?: string
+  ): ProtocolRequestResult;
 }
 
 /** 协议注册表 */
