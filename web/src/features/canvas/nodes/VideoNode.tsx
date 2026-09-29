@@ -59,6 +59,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
+  // 画布交互状态（连线 / 拖动让位 hover 预览用，真相源在 store 状态机）
+  const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = App.useApp();
   // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
@@ -73,6 +75,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const seekBarRef = useRef<HTMLDivElement>(null);
   const volumeBarRef = useRef<HTMLDivElement>(null);
+  /** 当前播放是否由 hover 预览触发（用户点击播放后置 false）：
+   *  连线 / 拖动让位逻辑只停 hover 预览，不碰用户主动播放 */
+  const hoverPlayingRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   /**
    * 音量：0~1。= 0 等价于静音；切换静音时用 lastVolume 记住上次非零值。
@@ -93,8 +98,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    // 点击播放是用户手势：解除静音降级，允许带声播放
+    // 点击播放是用户手势：解除静音降级，允许带声播放；
+    // 用户接管播放后，不再是 hover 预览（连线/拖动让位逻辑不再管它）
     setAutoplayMuted(false);
+    hoverPlayingRef.current = false;
     if (v.paused) { v.play(); setPlaying(true); }
     else { v.pause(); setPlaying(false); }
   }, []);
@@ -150,13 +157,29 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   /** 鼠标扫过一排视频节点时会连续误触播放，延迟 300ms 只对真正的停留作出响应 */
   const HOVER_PLAY_DELAY = 300;
 
+  // 连线 / 拖动进行中：hover 预览整体让位——拖线悬停或拖动节点时视频不该自行开播
+  // （交互状态机瞬态真相源在 store，节点组件与 InfiniteCanvas 共用同一状态）
+  const interactionBusy =
+    interaction.mode === "connecting" || interaction.mode === "dragging-nodes";
+
+  useEffect(() => {
+    if (!interactionBusy) return;
+    // 未触发的 hover 延迟一并取消
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    // 已在 hover 预览中的立即停播归零（与 mouseleave 同语义）；用户主动播放不动
+    if (!hoverPlayingRef.current) return;
+    hoverPlayingRef.current = false;
+    const v = videoRef.current;
+    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
+  }, [interactionBusy]);
+
   const handleMouseEnter = useCallback(() => {
-    if (capturingFrame() || busy) return;
+    if (capturingFrame() || busy || interactionBusy) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     hoverTimerRef.current = setTimeout(() => {
       hoverTimerRef.current = null;
       // 延迟期间可能已打开选帧 / 截取面板
-      if (capturingFrame() || busy) return;
+      if (capturingFrame() || busy || interactionBusy) return;
       const v = videoRef.current;
       if (v && v.paused) {
         // 每次悬停都先尝试带声播放：浏览器对带声自动播放的放行条件是「页面有过任意交互」
@@ -164,16 +187,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         // 降级不做成粘性——否则首个节点会永久锁死在静音，直到用户手动碰音量。
         v.muted = false;
         setAutoplayMuted(false);
-        v.play().then(() => setPlaying(true)).catch(() => {
+        v.play().then(() => { hoverPlayingRef.current = true; setPlaying(true); }).catch(() => {
           v.muted = true;
           setAutoplayMuted(true);
-          v.play().then(() => setPlaying(true)).catch(() => {});
+          v.play().then(() => { hoverPlayingRef.current = true; setPlaying(true); }).catch(() => {});
         });
       }
     }, HOVER_PLAY_DELAY);
-  }, [capturingFrame, busy]);
+  }, [capturingFrame, busy, interactionBusy]);
   const handleMouseLeave = useCallback(() => {
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    hoverPlayingRef.current = false;
     if (capturingFrame() || busy) return;
     const v = videoRef.current;
     if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }

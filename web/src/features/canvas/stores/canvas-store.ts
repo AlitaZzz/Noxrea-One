@@ -207,6 +207,10 @@ interface CanvasState {
   dragOverGroupId: string | null;
   setDragOverGroup: (id: string | null) => void;
 
+  // 画布交互状态机（瞬态）：不落库、不进撤销历史，事件派发见 dispatchInteraction
+  interaction: CanvasInteraction;
+  dispatchInteraction: (action: InteractionAction) => void;
+
   // Snap to grid
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
@@ -246,6 +250,65 @@ export const NODE_UI_STATE_KEYS = [
 ] as const;
 
 type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
+
+// ── 画布交互状态机（瞬态；真相源在 store，节点组件可按需读取）──
+// 把「画布当前处于哪种交互」建模为一组互斥状态：状态互斥、不存在未定义组合，
+// 与交互相关的 UI 可见性（handle、节点工具栏、生成面板、光标）全部从状态派生。
+// 状态放在 store（而非组件内 reducer）：节点组件（如 VideoNode 在连线 / 拖动
+// 期间抑制 hover 预览）与 InfiniteCanvas 共用同一状态，无需再逐层传递。
+
+/** 非瞬时交互状态：空闲/点击选中、框选选中。拖动中会记住进入前的状态 */
+type StableInteractionMode = "idle" | "box-selecting";
+
+/** 画布交互状态（互斥） */
+export type CanvasInteraction =
+  /** 空闲或点击选中：正常显示选中态 UI（工具栏 / 生成面板 / 选中 handle） */
+  | { mode: "idle" }
+  /** 框选（Shift 拖拽）产生的选中：只做高亮，不显示选中态 UI，直到下次点击 */
+  | { mode: "box-selecting" }
+  /** 拖动节点中：隐藏 handle / 工具栏 / 生成面板，避免跟随节点飘动；prev 用于松手后恢复 */
+  | { mode: "dragging-nodes"; prev: StableInteractionMode }
+  /** 拖拽连线中：画布保持十字准星光标 */
+  | { mode: "connecting" };
+
+export type InteractionAction =
+  | { type: "selection-start" }
+  | { type: "click" }
+  | { type: "node-drag-start" }
+  | { type: "node-drag-stop" }
+  | { type: "connect-start" }
+  | { type: "connect-end" };
+
+function interactionReducer(state: CanvasInteraction, action: InteractionAction): CanvasInteraction {
+  switch (action.type) {
+    case "selection-start":
+      return state.mode === "box-selecting" ? state : { mode: "box-selecting" };
+
+    // 单击节点或点击空白：视为「点击选中」，恢复正常显示
+    case "click":
+      return state.mode === "idle" ? state : { mode: "idle" };
+
+    // 记录进入拖动前的状态，松手后原样恢复：
+    // 框选一批节点后再拖动，松手仍属于批量选中态；单击选中后拖动则恢复空闲态
+    case "node-drag-start": {
+      if (state.mode === "dragging-nodes") return state;
+      const prev: StableInteractionMode = state.mode === "box-selecting" ? "box-selecting" : "idle";
+      return { mode: "dragging-nodes", prev };
+    }
+
+    case "node-drag-stop":
+      return state.mode === "dragging-nodes" ? { mode: state.prev } : state;
+
+    case "connect-start":
+      return state.mode === "connecting" ? state : { mode: "connecting" };
+
+    case "connect-end":
+      return state.mode === "connecting" ? { mode: "idle" } : state;
+
+    default:
+      return state;
+  }
+}
 
 /** 节点级 UI 态快照形状（各键值为宿主节点 id 或 null） */
 export type NodeUiStateSnapshot = { [K in NodeUiStateKey]: string | null };
@@ -453,6 +516,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   dragOverGroupId: null,
   setDragOverGroup: (id) => {
     set((s) => (s.dragOverGroupId === id ? s : { dragOverGroupId: id }));
+  },
+
+  interaction: { mode: "idle" },
+  // 无变化的派发返回原状态引用，订阅方选择器相等即不重渲染
+  dispatchInteraction: (action) => {
+    set((s) => ({ interaction: interactionReducer(s.interaction, action) }));
   },
 
   snapToGrid: false,
