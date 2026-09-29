@@ -200,12 +200,17 @@ export async function cleanupZombieTasks(
     }
   }
 
-  // 2. 未超限 → 重置为 pending，retryCount + 1
+  // 2. 未超限的僵尸任务按是否已有上游受理分流：
+  //    - 同步任务（无 upstreamTaskId）：不重置重跑——重跑等于再次提交上游（重复生成、
+  //      重复计费）。直接终态 failed，前台收到明确错误（中断的同步任务不重新提交）。
+  //    - 异步任务（有 upstreamTaskId）：重置 pending 重新认领后走恢复轮询，天然不重提上游，
+  //      retryCount 预算只对异步任务生效。
   const retried = await prisma.generationTask.updateMany({
     where: {
       status: "processing",
       updatedAt: { lt: cutoff },
       retryCount: { lt: maxRetries },
+      upstreamTaskId: { not: null },
     },
     data: {
       status: "pending",
@@ -215,7 +220,45 @@ export async function cleanupZombieTasks(
     },
   });
 
-  return deadCount + retried.count;
+  const interruptedWhere = {
+    status: "processing",
+    updatedAt: { lt: cutoff },
+    upstreamTaskId: null,
+  };
+  // 与死分支同模式：先取候选 ID，写入时点复查谓词，读回按 ID + status 精确圈定
+  // 本次写入的行——若直接复用 interruptedWhere 读回，updatedAt 已被写入推到 now
+  // （不再 < cutoff），查询恒为空，广播永远发不出去
+  const interruptedCandidates = await prisma.generationTask.findMany({
+    where: interruptedWhere,
+    select: { id: true },
+  });
+  let interruptedCount = 0;
+  if (interruptedCandidates.length > 0) {
+    const interruptedIds = interruptedCandidates.map((t) => t.id);
+    const interrupted = await prisma.generationTask.updateMany({
+      where: { id: { in: interruptedIds }, ...interruptedWhere },
+      data: {
+        status: "failed",
+        error: "任务执行中断，为避免重复提交上游已放弃重试",
+        errorCode: "generation.interrupted_no_resubmit",
+        completedAt: now,
+        updatedAt: now,
+      },
+    });
+    interruptedCount = interrupted.count;
+    if (interrupted.count > 0) {
+      // 广播终态：只读回真正被本次写入判失败的行
+      const rows = await prisma.generationTask.findMany({
+        where: { id: { in: interruptedIds }, status: "failed" },
+        select: TERMINAL_FIELDS_SELECT,
+      });
+      for (const row of rows) {
+        publishTaskTerminal(toTerminalState(deserializeTerminalRow(row)));
+      }
+    }
+  }
+
+  return deadCount + retried.count + interruptedCount;
 }
 
 /** 心跳间隔（ms）：轮询期间推进 updatedAt 的频率，须远小于 WORKER_STUCK_TIMEOUT */
@@ -260,10 +303,11 @@ export async function touchTaskHeartbeat(
 /**
  * 将 processing 状态的任务分类处理：
  * - 有 upstreamTaskId 的异步任务：保持 processing，由 Worker 单独恢复轮询
- * - 无 upstreamTaskId 的同步任务：重置为 pending，重新执行
+ * - 无 upstreamTaskId 的同步任务：无法恢复轮询，重跑等于重新提交上游（重复生成、
+ *   重复计费）。直接终态 failed——中断的同步任务不重新提交（与僵尸清理同一策略）。
  */
 export async function recoverProcessingTasks(): Promise<{
-  recovered: number; // 同步任务重置为 pending
+  interrupted: number; // 同步任务直接判失败（不重新提交）
   asyncTasks: HydratedGenerationTask[]; // 异步任务需要继续轮询
 }> {
   const allProcessing = await prisma.generationTask.findMany({
@@ -281,15 +325,21 @@ export async function recoverProcessingTasks(): Promise<{
     }
   }
 
-  // 同步任务重置为 pending
   if (syncIds.length > 0) {
+    const now = new Date();
     await prisma.generationTask.updateMany({
       where: { id: { in: syncIds } },
-      data: { status: "pending", error: null, updatedAt: new Date() },
+      data: {
+        status: "failed",
+        error: "任务执行中断（进程重启），为避免重复提交上游已放弃重试",
+        errorCode: "generation.interrupted_no_resubmit",
+        completedAt: now,
+        updatedAt: now,
+      },
     });
   }
 
-  return { recovered: syncIds.length, asyncTasks: asyncTasks.map(deserializeTask) };
+  return { interrupted: syncIds.length, asyncTasks: asyncTasks.map(deserializeTask) };
 }
 
 // 终态写入（completed / failed / cancelled）
