@@ -48,14 +48,16 @@ export async function getSessionMessages(sessionId: number, projectId?: string):
   return api<AgentMessageDto[]>(`/api/agent/sessions/${sessionId}/messages${query}`);
 }
 
-/** 删除会话。 */
-export async function deleteSession(sessionId: number): Promise<void> {
-  await api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
+/** 删除会话。projectId 供服务端做项目绑定校验（会话不允许跨项目操作）。 */
+export async function deleteSession(sessionId: number, projectId?: string): Promise<void> {
+  const query = projectId != null ? `?projectId=${encodeURIComponent(projectId)}` : "";
+  await api(`/api/agent/sessions/${sessionId}${query}`, { method: "DELETE" });
 }
 
-/** 重命名会话。 */
-export async function renameSession(sessionId: number, title: string): Promise<void> {
-  await api(`/api/agent/sessions/${sessionId}`, {
+/** 重命名会话。projectId 供服务端做项目绑定校验（会话不允许跨项目操作）。 */
+export async function renameSession(sessionId: number, title: string, projectId?: string): Promise<void> {
+  const query = projectId != null ? `?projectId=${encodeURIComponent(projectId)}` : "";
+  await api(`/api/agent/sessions/${sessionId}${query}`, {
     method: "PATCH",
     body: JSON.stringify({ title }),
   });

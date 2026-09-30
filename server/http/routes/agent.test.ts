@@ -185,4 +185,93 @@ describe("Agent 项目绑定（R-AGENT-01 第二道防线）", () => {
     expect(response.headers.get("Content-Type")).toContain("text/event-stream");
     expect(mocks.runCompletionStream).toHaveBeenCalledTimes(1);
   });
+
+  it("跨项目读取会话详情（GET /:id）：403", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pB");
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "agent.session_project_mismatch" });
+  });
+
+  it("项目一致读取会话详情：放行", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pA");
+
+    expect(response.status).toBe(200);
+  });
+
+  it("跨项目重命名会话（PATCH /:id）：403，不落改名", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pB", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "renamed" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "agent.session_project_mismatch" });
+    expect(mocks.renameSession).not.toHaveBeenCalled();
+  });
+
+  it("项目一致重命名会话：放行", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+    mocks.renameSession.mockResolvedValue(true);
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pA", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "renamed" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.renameSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("跨项目删除会话（DELETE /:id）：403，不落删除", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+    const deleteSession = await import("@server/crud/agent");
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pB", {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "agent.session_project_mismatch" });
+    expect(vi.mocked(deleteSession.deleteSession)).not.toHaveBeenCalled();
+  });
+
+  it("项目一致删除会话：放行", async () => {
+    mocks.getSession.mockResolvedValue(BOUND);
+    const deleteSession = await import("@server/crud/agent");
+    vi.mocked(deleteSession.deleteSession).mockResolvedValue({ count: 1 });
+
+    const response = await router.request("/api/agent/sessions/1?projectId=pA", {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(deleteSession.deleteSession)).toHaveBeenCalledTimes(1);
+  });
+
+  it("会话不存在（GET/PATCH/DELETE）：统一 404，且不做项目绑定判定", async () => {
+    mocks.getSession.mockResolvedValue(null);
+
+    const got = await router.request("/api/agent/sessions/404?projectId=pA");
+    const patched = await router.request("/api/agent/sessions/404?projectId=pA", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "x" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const deleted = await router.request("/api/agent/sessions/404?projectId=pA", {
+      method: "DELETE",
+    });
+
+    expect(got.status).toBe(404);
+    expect(patched.status).toBe(404);
+    expect(deleted.status).toBe(404);
+  });
 });

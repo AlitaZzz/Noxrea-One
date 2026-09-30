@@ -48,6 +48,7 @@ beforeEach(() => {
   mocks.getSessionMessages.mockResolvedValue([]);
   mocks.createSession.mockResolvedValue({ id: 1, title: "t" });
   mocks.renameSession.mockResolvedValue(undefined);
+  mocks.deleteSession.mockResolvedValue(undefined);
 });
 
 /** 渲染 hook 并返回常用桩 */
@@ -306,5 +307,214 @@ describe("会话身份世代围栏（R-AGENT-01/02）", () => {
     });
     expect(result.current.sessions).toHaveLength(1);
     expect(result.current.sessions[0]?.id).toBe(5);
+  });
+});
+
+describe("delete / rename 生命周期围栏（R-AGENT-03）", () => {
+  const A_MSG = [{ id: 1, role: "user", content: "A 的消息" }];
+  const LIST_A_B = [
+    { id: 11, title: "A", updatedAt: new Date().toISOString() },
+    { id: 22, title: "B 标题", updatedAt: new Date().toISOString() },
+  ];
+
+  it("删除会话 A 在途时切到 B：迟到响应以实时身份判定，不清空当前会话", async () => {
+    const deleteA = deferred<void>();
+    mocks.deleteSession.mockImplementationOnce(() => deleteA.promise);
+    const { result, props } = setup();
+    mocks.listSessions.mockResolvedValue(LIST_A_B);
+
+    await act(async () => {
+      await result.current.loadSessions();
+    });
+    await act(async () => {
+      await result.current.loadHistory(11); // 当前在 A：deleteChat 闭包捕获此身份
+    });
+    expect(result.current.chatId).toBe(11);
+
+    let deletePromise!: Promise<void>;
+    act(() => {
+      deletePromise = result.current.deleteChat(11); // DELETE 在途
+    });
+    await act(async () => {
+      await result.current.loadHistory(22); // 删除期间切到 B
+    });
+    expect(result.current.chatId).toBe(22);
+
+    await act(async () => {
+      deleteA.resolve();
+      await deletePromise;
+    });
+
+    // 旧实现用闭包 chatId（仍为 11）判定 → 误触发 newChat 清空 B；
+    // 现以门闸实时身份（22）判定：B 的消息保留、身份保留
+    expect(result.current.chatId).toBe(22);
+    expect(props.onClearMessages).toHaveBeenCalledTimes(1); // 仅 mount effect 调用过
+    // A 从列表移除（服务端已确认删除，函数式过滤无条件执行）
+    expect(result.current.sessions.find((s) => s.id === 11)).toBeUndefined();
+  });
+
+  it("删除当前会话仍正常开新对话（回归保护），projectId 随请求传递", async () => {
+    const { result, props } = setup({ projectId: "pA" });
+    mocks.listSessions.mockResolvedValue(LIST_A_B);
+    await act(async () => {
+      await result.current.loadSessions();
+    });
+    await act(async () => {
+      await result.current.loadHistory(11);
+    });
+    expect(result.current.chatId).toBe(11);
+
+    await act(async () => {
+      await result.current.deleteChat(11);
+    });
+
+    expect(result.current.chatId).toBeNull();
+    // mount effect 的 onClearMessages + newChat 的 onClearMessages
+    expect(props.onClearMessages).toHaveBeenCalledTimes(2);
+    expect(result.current.sessions.find((s) => s.id === 11)).toBeUndefined();
+    expect(mocks.deleteSession).toHaveBeenCalledWith(11, "pA");
+  });
+
+  it("重命名会话 A 在途时切到 B：迟到响应不改写 B 的标题", async () => {
+    const renameA = deferred<void>();
+    mocks.renameSession.mockImplementationOnce(() => renameA.promise);
+    const { result } = setup();
+    mocks.listSessions.mockResolvedValue(LIST_A_B);
+
+    // 先把列表应用到 sessions state：loadHistory 的 chatTitle 从列表按 id 查找
+    await act(async () => {
+      await result.current.loadSessions();
+    });
+    await act(async () => {
+      await result.current.loadHistory(11); // chatId=11、chatTitle="A"
+    });
+    expect(result.current.chatTitle).toBe("A");
+
+    let renamePromise!: Promise<void>;
+    act(() => {
+      renamePromise = result.current.renameChat("A 的新标题");
+    });
+    await act(async () => {
+      await result.current.loadHistory(22); // 切到 B
+    });
+    expect(result.current.chatTitle).toBe("B 标题");
+
+    await act(async () => {
+      renameA.resolve();
+      await renamePromise;
+    });
+
+    // 迟到的重命名响应不写进已切换的 B（旧实现无条件 setChatTitle 会覆盖）
+    expect(result.current.chatTitle).toBe("B 标题");
+  });
+
+  it("删除会话 A 与读取 A 历史并发：迟到的历史响应不重新挂载已删会话", async () => {
+    const historyA = deferred<typeof A_MSG>();
+    // 按会话 id 精确挂起：A 的历史在途，B 的正常返回
+    mocks.getSessionMessages.mockImplementation((sid: number) =>
+      sid === 11 ? historyA.promise : Promise.resolve([]));
+    const { result, onLoadMessages } = setup();
+    mocks.listSessions.mockResolvedValue(LIST_A_B);
+
+    await act(async () => {
+      await result.current.loadHistory(22); // 当前在 B
+    });
+    expect(result.current.chatId).toBe(22);
+    expect(onLoadMessages).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      void result.current.loadHistory(11); // 点开 A 的历史（在途）
+    });
+    await act(async () => {
+      await result.current.deleteChat(11); // 删除 A：服务端确认
+    });
+    // 删除不（应）打断当前会话 B
+    expect(result.current.chatId).toBe(22);
+
+    await act(async () => {
+      historyA.resolve(A_MSG); // A 的历史迟到
+      await Promise.resolve();
+    });
+
+    // 世代未变（delete 不是身份变更）但目标已删除：不 adopt、不灌入消息
+    expect(onLoadMessages).toHaveBeenCalledTimes(1);
+    expect(result.current.chatId).toBe(22);
+    mocks.getSessionMessages.mockRestore();
+  });
+
+  it("删除会话 A 后，更早发起的会话列表迟到响应不再复活 A", async () => {
+    const staleList = deferred<Array<{ id: number; title: string; updatedAt: string }>>();
+    mocks.listSessions.mockImplementationOnce(() => staleList.promise);
+    const { result } = setup();
+
+    act(() => {
+      void result.current.loadSessions(); // 列表读取在途（响应含 A）
+    });
+    await act(async () => {
+      await result.current.deleteChat(11); // 删除 A：列表世代递增 + 本地过滤
+    });
+    expect(result.current.sessions).toEqual([]);
+
+    await act(async () => {
+      staleList.resolve(LIST_A_B); // 删除前的服务端快照迟到（含 A）
+    });
+
+    expect(result.current.sessions.find((s) => s.id === 11)).toBeUndefined();
+  });
+
+  it("切项目后旧项目在途的删除响应不触发新对话、不碰新项目状态", async () => {
+    const deleteA = deferred<void>();
+    mocks.deleteSession.mockImplementationOnce(() => deleteA.promise);
+    const { result, props, rerender } = setup({ projectId: "pA" });
+    mocks.listSessions.mockResolvedValue(LIST_A_B);
+
+    await act(async () => {
+      await result.current.loadSessions();
+    });
+    await act(async () => {
+      await result.current.loadHistory(11);
+    });
+    expect(result.current.chatId).toBe(11);
+
+    act(() => {
+      void result.current.deleteChat(11); // DELETE 在途
+    });
+    rerender({ ...props, projectId: "pB" }); // 切项目：门闸 reset
+    await act(async () => {});
+    expect(result.current.chatId).toBeNull();
+
+    await act(async () => {
+      deleteA.resolve();
+      await Promise.resolve();
+    });
+
+    // 门闸 current 已被切项目清空：迟到的删除不再触发 newChat
+    // （旧实现闭包 chatId===11 会误触发：onClearMessages 变三次）
+    expect(result.current.chatId).toBeNull();
+    // 挂载时 projectId effect + 切项目 effect 各一次；旧实现会多出 newChat 的第三次
+    expect(props.onClearMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it("切项目后旧项目在途的重命名响应不改写新项目标题", async () => {
+    const renameA = deferred<void>();
+    mocks.renameSession.mockImplementationOnce(() => renameA.promise);
+    const { result, props, rerender } = setup({ projectId: "pA" });
+
+    await act(async () => {
+      await result.current.loadHistory(11);
+    });
+    act(() => {
+      void result.current.renameChat("A 的新标题");
+    });
+    rerender({ ...props, projectId: "pB" });
+    await act(async () => {});
+
+    await act(async () => {
+      renameA.resolve();
+      await Promise.resolve();
+    });
+
+    // 切项目已把 chatTitle 重置为 null：迟到的重命名不写回
+    expect(result.current.chatTitle).toBeNull();
   });
 });

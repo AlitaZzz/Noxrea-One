@@ -91,6 +91,11 @@ router.get("/api/agent/sessions/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
   if (!session) return failCode(404, "agent.session_not_found");
+  // 项目绑定：与 messages / stream 同一防线（R-AGENT-03），
+  // 项目级会话不允许凭 userId 跨项目读取
+  if (!assertProjectBinding(session, c.req.query("projectId") || undefined)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
   return c.json(ok(session));
 });
 
@@ -110,6 +115,12 @@ router.patch("/api/agent/sessions/:id", async (c) => {
   }
   const parsed = renameSchema.safeParse(body);
   if (!parsed.success) return failCode(422, "common.invalid_request");
+  const session = await getSession(id, userId);
+  if (!session) return failCode(404, "agent.session_not_found");
+  // 项目绑定：重命名前校验会话归属（R-AGENT-03）
+  if (!assertProjectBinding(session, c.req.query("projectId") || undefined)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
   await renameSession(id, userId, parsed.data.title);
   return c.json(ok({ ok: true }));
 });
@@ -120,6 +131,12 @@ router.delete("/api/agent/sessions/:id", async (c) => {
   const userId = auth.user.id;
 
   const id = Number(c.req.param("id"));
+  const session = await getSession(id, userId);
+  if (!session) return failCode(404, "agent.session_not_found");
+  // 项目绑定：删除前校验会话归属（R-AGENT-03）
+  if (!assertProjectBinding(session, c.req.query("projectId") || undefined)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
   await deleteSession(id, userId);
   return c.json(ok({ ok: true }));
 });
