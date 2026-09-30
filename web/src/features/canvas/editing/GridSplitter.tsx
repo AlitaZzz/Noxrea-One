@@ -10,6 +10,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
 import { canvasToBlob, computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
@@ -31,12 +32,13 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
         const pieceW = img.naturalWidth / cols;
         const pieceH = img.naturalHeight / rows;
 
-        // Get original node position for grid layout
+        // Get original node position for grid layout（绝对坐标视图：源节点可能是组成员）
         const store = useCanvasStore.getState();
-        const origNode = store.nodes.find((n) => n.id === sourceId);
+        const absNodes = toAbsoluteNodes(store.nodes);
+        const origNode = absNodes.find((n) => n.id === sourceId);
         const layout = computeDerivedGrid(origNode, pieceW, pieceH, cols);
         // 目标区域被占（上一批切分 / 用户手动摆放）时整批平移到空区域
-        const origin = findDerivedBatchOrigin(store.nodes, origNode, layout, rows * cols);
+        const origin = findDerivedBatchOrigin(absNodes, origNode, layout, rows * cols);
         layout.baseX = origin.x;
         layout.baseY = origin.y;
 

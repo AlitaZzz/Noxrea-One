@@ -11,6 +11,7 @@ import { BaseEdge, type ConnectionLineComponentProps,getBezierPath, Position } f
 import { Fragment, useEffect } from "react";
 
 import { connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
+import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, getNodeBox, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EDGE_BASE_COLOR, insetHandleCenter, NODE_TYPE } from "@/lib/constants";
@@ -67,7 +68,9 @@ export default function ConnectionFlowLine({
     const flowX = (pointerX - vp.x) / zoom;
     const flowY = (pointerY - vp.y) / zoom;
     const { nodes } = useCanvasStore.getState();
-    const sourceType = nodes.find((n) => n.id === fromNodeId)?.type;
+    // 几何判定统一在绝对坐标空间（成员 position 是组内相对坐标）
+    const nodeById = buildNodeIndex(nodes);
+    const sourceType = nodeById.get(fromNodeId ?? "")?.type;
     if (!sourceType) {
       clearConnectionTilt();
       return;
@@ -80,8 +83,8 @@ export default function ConnectionFlowLine({
     //          的 isValidConnection（connection-rules 口径：类型 / 自连 / 已连去重
     //          / 多选扇出全有或全无聚合），此处再兜一道源 === 目标排除。
     if (toNodeId && connectionStatus !== null) {
-      const n = nodes.find((m) => m.id === toNodeId);
-      const box = n ? getNodeBox(n) : null;
+      const n = nodeById.get(toNodeId);
+      const box = n ? getNodeBox(n, nodeById) : null;
       if (n && box) {
         const connectable = connectionStatus === "valid" && n.id !== fromNodeId;
         applyConnectionTilt(
@@ -106,7 +109,7 @@ export default function ConnectionFlowLine({
           isReverseDrag ? fromNodeId : hit.id,
           { nodes, edges }
         );
-      const box = getNodeBox(hit)!;
+      const box = getNodeBox(hit, nodeById)!;
       applyConnectionTilt(
         { id: hit.id, box },
         { x: flowX, y: flowY },
@@ -126,9 +129,11 @@ export default function ConnectionFlowLine({
   if (fromNode?.id && fromNode.selected) {
     const side = isReverseDrag ? "left" : "right";
     const bundleEnd = toPosition ?? (fromPosition === Position.Right ? Position.Left : Position.Right);
-    for (const n of useCanvasStore.getState().nodes) {
+    const bundleNodes = useCanvasStore.getState().nodes;
+    const bundleById = buildNodeIndex(bundleNodes);
+    for (const n of bundleNodes) {
       if (!n.selected || n.type === NODE_TYPE.GROUP || n.id === fromNode.id) continue;
-      const a = nodeEdgeAnchor(n, side);
+      const a = nodeEdgeAnchor(n, side, bundleById);
       if (!a) continue;
       const [p] = getBezierPath({
         sourceX: a.x,

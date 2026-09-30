@@ -8,7 +8,12 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
-import { pruneEmptyGroups } from "@/features/canvas/shared/group-bounds";
+import {
+  buildNodeIndex,
+  migrateCanvasNodes,
+  nodeAbsolutePosition,
+  pruneEmptyGroups,
+} from "@/features/canvas/shared/group-bounds";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { BackgroundType, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
@@ -396,10 +401,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     maybePushHistory(options);
     set((s) => {
       const toDelete = new Set(nodeIds);
-      // 容器型语义：删组连带成员——组成员并入待删集合，成员的连线随边清理一并移除；
-      // 想保留内容只拆壳走「取消编组」，不在此处
+      // 容器型语义：删父连带子（组是唯一有子节点的容器——组不嵌套组，单遍即可；
+      // 想保留内容只拆壳走「取消编组」，不在此处）
       for (const n of s.nodes) {
-        if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && toDelete.has(n.data.groupId)) {
+        if (n.parentId && toDelete.has(n.parentId)) {
           toDelete.add(n.id);
         }
       }
@@ -544,18 +549,22 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const vp = data.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
     // 边界归一化：服务端数据在进画布的唯一入口清洗一次。
-    // 1. 空组清洗：落库数据可能产生于「空组即删」不变量确立之前（旧规则
+    // 1. 旧数据迁移：历史落库的 groupId + 绝对坐标 / 更早的 parentId + extent
+    //    存档，统一规范化为「parentId + 相对坐标」单一模型（幂等，见 group-bounds）；
+    // 2. 空组清洗：落库数据可能产生于「空组即删」不变量确立之前（旧规则
     //    允许空壳组收缩存活），清洗后全库可依赖「组必有成员」前置条件；
-    // 2. className 剥离：渲染挂钩类随 type 由 React Flow 自动派生
+    // 3. className 剥离：渲染挂钩类随 type 由 React Flow 自动派生
     //    （group-node → .react-flow__node-group-node），不属于持久化数据；
     //    旧数据曾借 xyflow 库存保留类 react-flow__node-group 挂样式钩，
     //    会把库存 text-align/padding 泄漏进节点。
-    // 3. 边能力清洗：落库数据可能包含「连线能力规则（acceptsInput）确立之前」
+    // 4. 边能力清洗：落库数据可能包含「连线能力规则（acceptsInput）确立之前」
     //    拖到上传素材上建出的边；target 无输入轨，渲染时 xyflow 找不到 Handle
     //    会抛 error #008。清洗后全库可依赖「边的 target 必可接受输入」前置条件
     //    （见 connection-rules 的 pruneEdgesToCapability）。
     const nodes = pruneEmptyGroups(
-      (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
+      migrateCanvasNodes(
+        (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
+      ),
     );
     const edges = pruneEdgesToCapability(nodes, (data.edges || []) as Edge[]);
     set({
@@ -615,9 +624,12 @@ export function findFreePosition(
   const { x: cx, y: cy } = center;
   const nodes = useCanvasStore.getState().nodes;
 
-  // 偏移次数 = 与锚点区域重叠的节点数（忽略远处节点，避免把新节点推出锚点）
+  // 偏移次数 = 与锚点区域重叠的节点数（忽略远处节点，避免把新节点推出锚点）。
+  // 重叠判定在绝对坐标空间：组成员的 position 是组内相对坐标，先换算。
+  const nodeById = buildNodeIndex(nodes);
   const overlapCount = nodes.filter((n) => {
-    const r = nodeRectOf(n, { width: 200, height: 120 });
+    const abs = nodeAbsolutePosition(n, nodeById);
+    const r = nodeRectOf({ ...n, position: abs }, { width: 200, height: 120 });
     return (
       r.x < cx + nodeSize.width / 2 &&
       r.x + r.width > cx - nodeSize.width / 2 &&

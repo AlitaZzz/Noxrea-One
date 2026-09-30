@@ -21,6 +21,7 @@
 
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { createAudioNode, createEdge, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
+import { absoluteNodeOf, buildNodeIndex, nodeAbsolutePosition, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
 import {
@@ -227,13 +228,15 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
     const anchor = sink.anchor;
     const a = store.getNodes().find((n) => n.id === anchor.nodeId);
     if (a) {
+      // 锚点定位统一在绝对坐标空间（成员 position 是组内相对坐标）
+      const abs = nodeAbsolutePosition(a, buildNodeIndex(store.getNodes()));
       cursor = {
         side: anchor.side,
         gap: anchor.gap,
         x: anchor.side === "left"
-          ? a.position.x - anchor.gap
-          : a.position.x + ((a.style?.width as number) || DEFAULT_NODE_WIDTH) + anchor.gap,
-        y: a.position.y,
+          ? abs.x - anchor.gap
+          : abs.x + ((a.style?.width as number) || DEFAULT_NODE_WIDTH) + anchor.gap,
+        y: abs.y,
         h: (a.style?.height as number) || DEFAULT_NODE_WIDTH,
       };
     }
@@ -329,12 +332,18 @@ function resolvePosition(
 ): { x: number; y: number } {
   if (p.item.position) return p.item.position;
   if (sink.kind === "derived-node") {
-    return resolveDerivedPosition(sourceNode, undefined, {
-      nodes: [...storeNodes, ...batchNodes],
-      size: p.kind === "audio"
-        ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
-        : computeNodeSize(p.nw, p.nh),
-    });
+    // 派生落位在绝对坐标空间进行：源节点与避让集先换算为绝对坐标视图
+    // （lib 层几何函数不感知分组模型）
+    return resolveDerivedPosition(
+      sourceNode ? absoluteNodeOf(sourceNode, storeNodes) : undefined,
+      undefined,
+      {
+        nodes: toAbsoluteNodes([...storeNodes, ...batchNodes]),
+        size: p.kind === "audio"
+          ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
+          : computeNodeSize(p.nw, p.nh),
+      },
+    );
   }
   if (cursor) {
     const { width, height } = p.kind === "audio"

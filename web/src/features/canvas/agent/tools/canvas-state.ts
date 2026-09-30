@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /** 标题兜底截断（标题一般很短，仅防异常超长） */
@@ -33,20 +34,26 @@ export interface SerializedCanvasState {
   edges: Array<{ source: string; target: string }>;
 }
 
-/** 序列化当前画布名册（随用户消息与工具续轮发送） */
+/**
+ * 序列化当前画布名册（随用户消息与工具续轮发送）。
+ * 坐标语义是世界坐标（与服务端工具定义一致）：成员 position 是组内相对坐标，
+ * 序列化前换算为绝对坐标。
+ */
 export function serializeCanvasState(): SerializedCanvasState {
   const store = useCanvasStore.getState();
   const vp = getLiveViewport();
 
   // 选中节点排最前：结构性截断时选中节点详情永不丢失，其余保持原顺序
   const ordered = [...store.nodes].sort((a, b) => Number(b.selected ?? false) - Number(a.selected ?? false));
+  const nodeById = buildNodeIndex(store.nodes);
   const nodes = ordered.map((n) => {
     const data = n.data as Record<string, unknown>;
+    const abs = nodeAbsolutePosition(n, nodeById);
     const out: SerializedCanvasState["nodes"][number] = {
       id: n.id,
       type: n.type ?? "unknown",
-      x: Math.round(n.position.x),
-      y: Math.round(n.position.y),
+      x: Math.round(abs.x),
+      y: Math.round(abs.y),
       w: Math.round((n.style?.width as number) ?? 200),
       h: Math.round((n.style?.height as number) ?? 120),
     };

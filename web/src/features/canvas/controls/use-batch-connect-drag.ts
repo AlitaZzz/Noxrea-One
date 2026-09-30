@@ -82,11 +82,11 @@ export function useBatchConnectDrag({
     const anchorSide = direction === "output" ? "right" : "left";
     dragRef.current = { startX: e.clientX, startY: e.clientY };
     onDragStart();
-    const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+    const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n] as const));
     const sources = participantIds
       .map((id) => nodeById.get(id))
       .flatMap((n) => {
-        const a = n ? nodeEdgeAnchor(n, anchorSide) : null;
+        const a = n ? nodeEdgeAnchor(n, anchorSide, nodeById) : null;
         return a ? [a] : [];
       });
     setPreview({ sources, to: screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
@@ -102,14 +102,14 @@ export function useBatchConnectDrag({
     function feedbackAt(to: { x: number; y: number }) {
       const state = useCanvasStore.getState();
       const hit = findNodeAtFlowPoint(state.nodes, to);
-      const box = hit ? getNodeBox(hit) : null;
+      const byId = new Map(state.nodes.map((n) => [n.id, n] as const));
+      const box = hit ? getNodeBox(hit, byId) : null;
       if (!hit || !box) {
         clearConnectionTilt();
         return;
       }
       // 判定与落点同口径：对端在参与集内（拖回选区/自己组成员 = 取消）
       // 或任一参与节点类型不可连都产生空对集 → blocked；已连全重复同样 blocked
-      const byId = new Map(state.nodes.map((n) => [n.id, n]));
       const participants = participantIds.flatMap((id) => {
         const n = byId.get(id);
         return n ? [n] : [];

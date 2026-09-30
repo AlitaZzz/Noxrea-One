@@ -16,6 +16,7 @@ import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
+import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -91,11 +92,9 @@ export function copySelection(): boolean {
     nodes.filter((n) => n.type === NODE_TYPE.GROUP && selSet.has(n.id)).map((n) => n.id)
   );
   const expanded = selectedGroupIds.size
-    ? nodes.filter((n) => {
-        if (selSet.has(n.id)) return true;
-        const gid = (n.data as { groupId?: string } | undefined)?.groupId;
-        return n.type !== NODE_TYPE.GROUP && gid !== undefined && selectedGroupIds.has(gid);
-      })
+    ? nodes.filter(
+        (n) => selSet.has(n.id) || (n.parentId !== undefined && selectedGroupIds.has(n.parentId)),
+      )
     : nodes.filter((n) => selSet.has(n.id));
   // 与复制集相关的连线一并入剪贴板（任一端在集内）：集内端点粘贴时重映射到
   // 副本；副本模式只还原上游外部边（集外 source 指向原上游），下游外部边
@@ -127,8 +126,10 @@ export function duplicateSelection(): boolean {
   if (selIds.length === 0) return false;
   const selSet = new Set(selIds);
   const sel = useCanvasStore.getState().nodes.filter((n) => selSet.has(n.id));
-  const minX = Math.min(...sel.map((n) => n.position.x));
-  const minY = Math.min(...sel.map((n) => n.position.y));
+  // 落点基准取选中内容的绝对包围盒左上角（成员 position 是组内相对坐标）
+  const absSel = toAbsoluteNodes(sel);
+  const minX = Math.min(...absSel.map((n) => n.position.x));
+  const minY = Math.min(...absSel.map((n) => n.position.y));
   if (!copySelection()) return false;
   // 副本只保留上游连线（含集内边），下游外部连线不还原——副本是开新分支
   return pasteClipboard({ x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP }, { includeExternalEdges: true });
@@ -219,9 +220,13 @@ export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: nu
 }
 
 /**
- * 粘贴核心：以剪贴板节点为源派生新节点（新 id、剥离瞬时状态、组归属重映射）、
+ * 粘贴核心：以剪贴板节点为源派生新节点（新 id、剥离瞬时状态、parentId 重映射）、
  * 整体平移到 at 落位并选中；相关连线还原——集内端点指向副本，副本模式额外
  * 还原上游外部边（集外 source 指向原节点），跨画布不存在的端点丢弃该边。
+ *
+ * 落位语义（Sub Flow 模型）：剪贴板内成员的 position 是组内相对坐标，包围盒与
+ * 平移在绝对坐标空间计算；父组在剪贴板内时成员保持相对坐标（视觉随新父落位），
+ * 原父不在剪贴板内则成员展平为顶层（按绝对坐标落位）。
  */
 function pasteNodes(
   clipNodes: AnyNode[],
@@ -231,38 +236,40 @@ function pasteNodes(
 ): boolean {
   if (clipNodes.length === 0) return false;
 
-  // 原 id → 副本 id 的映射：连线重映射要用，先于 duplicateNode 建立
+  // 原 id → 副本 id 的映射：连线重映射要用，先于落位建立
   const idMap = new Map<string, string>();
-  // 以 at 为基准整体平移，保持内部相对布局不被打乱
-  const minX = Math.min(...clipNodes.map((n) => n.position.x));
-  const minY = Math.min(...clipNodes.map((n) => n.position.y));
-  let newNodes: AnyNode[] = clipNodes.map((n) => {
+
+  // 第一遍：克隆并建立 id 映射（duplicateNode 已剥离 parentId 等瞬时/归属状态）
+  const clones = clipNodes.map((n) => {
     const cloned = duplicateNode(n, { x: 0, y: 0 });
-    cloned.position = {
-      x: at.x + (n.position.x - minX),
-      y: at.y + (n.position.y - minY),
-    };
     idMap.set(n.id, cloned.id);
     return cloned;
   });
 
-  // 重映射组归属：剪贴板内含组节点时，成员副本指向粘贴出的新组；
-  // 原组不在本次剪贴板内则解除归属，避免副本「串」到画布上的原组
-  // （否则拖原组会带着粘贴副本跑、原组成员计数虚增）。
-  const groupIdMap = new Map<string, string>();
+  // 剪贴板内的组节点 → 副本组：随迁成员的 parentId 重映射到新组
+  const parentIdMap = new Map<string, string>();
   clipNodes.forEach((orig) => {
-    if (orig.type === NODE_TYPE.GROUP) groupIdMap.set(orig.id, idMap.get(orig.id)!);
+    if (orig.type === NODE_TYPE.GROUP) parentIdMap.set(orig.id, idMap.get(orig.id)!);
   });
-  newNodes = newNodes.map((n) => {
-    if (n.type === NODE_TYPE.GROUP) return n;
-    const gid = (n.data as { groupId?: string } | undefined)?.groupId;
-    if (!gid) return n;
-    const mapped = groupIdMap.get(gid);
-    if (mapped) {
-      return { ...n, data: { ...n.data, groupId: mapped } } as AnyNode;
+
+  // 第二遍：落位。整体平移基准 = 剪贴板内容的绝对包围盒左上角
+  const absNodes = toAbsoluteNodes(clipNodes);
+  const minX = Math.min(...absNodes.map((n) => n.position.x));
+  const minY = Math.min(...absNodes.map((n) => n.position.y));
+  const newNodes: AnyNode[] = clones.map((cloned, i) => {
+    const orig = clipNodes[i];
+    const mappedParentId = orig.parentId ? parentIdMap.get(orig.parentId) : undefined;
+    if (mappedParentId) {
+      // 父随迁：相对坐标原样保留，视觉随副本组整体落位
+      cloned.parentId = mappedParentId;
+      return cloned;
     }
-    const { groupId: _omit, ...rest } = n.data as Record<string, unknown>;
-    return { ...n, data: rest } as AnyNode;
+    const abs = absNodes[i].position;
+    cloned.position = {
+      x: at.x + (abs.x - minX),
+      y: at.y + (abs.y - minY),
+    };
+    return cloned;
   });
 
   // 先落节点再还原连线：节点表必须包含刚创建的副本（边的集内端点已重映射

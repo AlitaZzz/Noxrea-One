@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, getNodeBox, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import type { AnyNode } from "@/features/canvas/types";
+import { NODE_TYPE } from "@/lib/constants";
 
 /** 构造仅含命中测试所需字段（id / position / style 尺寸）的最小节点 */
 function makeNode(
@@ -9,7 +11,8 @@ function makeNode(
   x: number,
   y: number,
   width: number,
-  height: number
+  height: number,
+  extra?: Partial<Pick<AnyNode, "parentId">>
 ): AnyNode {
   return {
     id,
@@ -17,18 +20,28 @@ function makeNode(
     position: { x, y },
     style: { width, height },
     data: {},
+    ...extra,
   } as unknown as AnyNode;
 }
 
 describe("getNodeBox", () => {
   it("取 style 声明的盒尺寸", () => {
-    const box = getNodeBox(makeNode("a", 10, 20, 100, 50));
+    const n = makeNode("a", 10, 20, 100, 50);
+    const box = getNodeBox(n, buildNodeIndex([n]));
     expect(box).toEqual({ x: 10, y: 20, width: 100, height: 50 });
+  });
+
+  it("成员的命中盒换算为绝对坐标（组原点 + 相对位置）", () => {
+    const group = makeNode("g", 100, 200, 500, 400);
+    group.type = NODE_TYPE.GROUP;
+    const member = makeNode("m", 10, 20, 100, 50, { parentId: "g" });
+    const index = buildNodeIndex([group, member]);
+    expect(getNodeBox(member, index)).toEqual({ x: 110, y: 220, width: 100, height: 50 });
   });
 
   it("未声明数值尺寸的节点不参与命中", () => {
     const noSize = { id: "b", type: "text", position: { x: 0, y: 0 }, data: {} } as unknown as AnyNode;
-    expect(getNodeBox(noSize)).toBeNull();
+    expect(getNodeBox(noSize, buildNodeIndex([noSize]))).toBeNull();
   });
 
   it("style 未声明尺寸时兜底 xyflow 实测尺寸（上传媒体加载窗口期）", () => {
@@ -39,7 +52,7 @@ describe("getNodeBox", () => {
       measured: { width: 320, height: 180 },
       data: {},
     } as unknown as AnyNode;
-    expect(getNodeBox(measuring)).toEqual({ x: 5, y: 8, width: 320, height: 180 });
+    expect(getNodeBox(measuring, buildNodeIndex([measuring]))).toEqual({ x: 5, y: 8, width: 320, height: 180 });
     expect(findNodeAtFlowPoint([measuring], { x: 100, y: 90 })?.id).toBe("m");
   });
 });
@@ -47,13 +60,22 @@ describe("getNodeBox", () => {
 describe("nodeEdgeAnchor", () => {
   it("左/右锚点为该侧边缘垂直正中（与已建立连线锚点口径一致）", () => {
     const n = makeNode("a", 10, 20, 100, 50);
-    expect(nodeEdgeAnchor(n, "left")).toEqual({ x: 10, y: 45 });
-    expect(nodeEdgeAnchor(n, "right")).toEqual({ x: 110, y: 45 });
+    const index = buildNodeIndex([n]);
+    expect(nodeEdgeAnchor(n, "left", index)).toEqual({ x: 10, y: 45 });
+    expect(nodeEdgeAnchor(n, "right", index)).toEqual({ x: 110, y: 45 });
+  });
+
+  it("成员锚点按绝对坐标计算", () => {
+    const group = makeNode("g", 50, 50, 400, 300);
+    group.type = NODE_TYPE.GROUP;
+    const member = makeNode("m", 20, 40, 100, 50, { parentId: "g" });
+    const index = buildNodeIndex([group, member]);
+    expect(nodeEdgeAnchor(member, "right", index)).toEqual({ x: 170, y: 115 });
   });
 
   it("无有效盒尺寸（未渲染）返回 null", () => {
     const noSize = { id: "b", type: "text", position: { x: 0, y: 0 }, data: {} } as unknown as AnyNode;
-    expect(nodeEdgeAnchor(noSize, "right")).toBeNull();
+    expect(nodeEdgeAnchor(noSize, "right", buildNodeIndex([noSize]))).toBeNull();
   });
 });
 
@@ -63,6 +85,16 @@ describe("findNodeAtFlowPoint", () => {
     expect(findNodeAtFlowPoint(nodes, { x: 50, y: 25 })?.id).toBe("a");
     expect(findNodeAtFlowPoint(nodes, { x: 100, y: 50 })?.id).toBe("a");
     expect(findNodeAtFlowPoint(nodes, { x: 101, y: 25 })).toBeNull();
+  });
+
+  it("成员按绝对坐标参与命中（相对坐标不含组原点时也能命中）", () => {
+    const group = makeNode("g", 1000, 1000, 400, 300);
+    group.type = NODE_TYPE.GROUP;
+    const member = makeNode("m", 10, 10, 100, 50, { parentId: "g" });
+    const nodes = [group, member];
+    // 绝对中心 (1060, 1035)；相对坐标 (10,10) 处不命中
+    expect(findNodeAtFlowPoint(nodes, { x: 1060, y: 1035 })?.id).toBe("m");
+    expect(findNodeAtFlowPoint(nodes, { x: 10, y: 10 })).toBeNull();
   });
 
   it("重叠时数组靠后的节点绘制在上层、优先命中", () => {
@@ -83,7 +115,7 @@ describe("findNodeAtFlowPoint", () => {
   it("组节点不参与命中：组内空白视为画布空白，组内子节点正常命中", () => {
     const group = {
       id: "g",
-      type: "group-node",
+      type: NODE_TYPE.GROUP,
       position: { x: 0, y: 0 },
       style: { width: 500, height: 400 },
       data: {},

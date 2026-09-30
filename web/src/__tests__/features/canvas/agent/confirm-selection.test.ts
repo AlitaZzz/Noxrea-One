@@ -21,13 +21,13 @@ const plainNodes = ["n1", "n2", "n3", "a", "b", "c"].map((id) => ({
   data: { label: id },
 })) as unknown as AnyNode[];
 
-/** 组 g1 成员 m1/m2；组 g2 成员 m3 */
+/** 组 g1 成员 m1/m2；组 g2 成员 m3（成员归属 = parentId） */
 const groupedNodes = [
   { id: "g1", type: NODE_TYPE.GROUP, position: { x: 0, y: 0 }, data: {} },
   { id: "g2", type: NODE_TYPE.GROUP, position: { x: 0, y: 0 }, data: {} },
-  { id: "m1", type: "text-node", position: { x: 0, y: 0 }, data: { groupId: "g1" } },
-  { id: "m2", type: "text-node", position: { x: 0, y: 0 }, data: { groupId: "g1" } },
-  { id: "m3", type: "text-node", position: { x: 0, y: 0 }, data: { groupId: "g2" } },
+  { id: "m1", type: "text-node", position: { x: 0, y: 0 }, parentId: "g1", data: {} },
+  { id: "m2", type: "text-node", position: { x: 0, y: 0 }, parentId: "g1", data: {} },
+  { id: "m3", type: "text-node", position: { x: 0, y: 0 }, parentId: "g2", data: {} },
   { id: "free", type: "text-node", position: { x: 0, y: 0 }, data: {} },
 ] as unknown as AnyNode[];
 

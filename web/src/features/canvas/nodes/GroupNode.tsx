@@ -28,28 +28,21 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   // 拖入高亮：拖拽中的节点松手将加入本组（瞬态字段，见 canvas-store.dragOverGroupId）
   const dragOver = useCanvasStore((s) => s.dragOverGroupId === id);
   // Dynamic min size + member count.
-  // 只派生 GroupNode 真正依赖的原始值（成员外接矩形、成员数），用 useShallow
+  // 只派生 GroupNode 真正依赖的原始值（成员相对矩形、成员数），用 useShallow
   // 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
   // （如选中状态、无关节点位移）都重渲染整个组。
+  // 成员 position 是组内相对坐标，直接与组框尺寸比较即可。
   const { childMaxX, childMaxY, memberCount } = useCanvasStore(
     useShallow((s) => {
       const nodes = s.nodes;
-      // gx/gy 为循环内累加用的组自身位置（成员坐标换算成组内相对值），
-      // 不进返回值——组自身平移不改变成员相对几何，无需触发本组件重渲染
-      let gx = 0, gy = 0;
       let maxX = 0, maxY = 0;
       let count = 0;
       for (const n of nodes) {
-        if (n.id === id) {
-          gx = n.position.x;
-          gy = n.position.y;
-          continue;
-        }
         if (isGroupMember(n, id)) {
           const w = Number(n.style?.width) || 0;
           const h = Number(n.style?.height) || 0;
-          const x = n.position.x - gx + w;
-          const y = n.position.y - gy + h;
+          const x = n.position.x + w;
+          const y = n.position.y + h;
           if (x > maxX) maxX = x;
           if (y > maxY) maxY = y;
           count++;

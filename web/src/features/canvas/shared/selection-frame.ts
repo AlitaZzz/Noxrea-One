@@ -4,6 +4,9 @@
  * 外扩 GROUP_NODE_PADDING），右缘挂批量连线轨道（BatchConnectHandle）。
  * bbox 计算与 InfiniteCanvas 外框渲染同一实现（本模块是唯一口径）。
  *
+ * 几何统一在绝对坐标空间：组内成员 position 是组内相对坐标，经 nodeById
+ * 换算后参与 bbox 与轨道钳制计算。
+ *
  * 外框对成员轨道的钳制与组框同一条规则（见 group-bounds.memberRailWidth）：
  * 容器边缘即成员条带外界。最贴边成员与框缘的净距恒为 GROUP_NODE_PADDING，
  * 条带被夹到 [0, RAIL_WIDTH]，圆点静止位 / 跟随范围随宽度等比收缩
@@ -16,6 +19,7 @@
 import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
 
+import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
 import { measureNode } from "./tidy-layout";
 
 export interface SelectionFrame {
@@ -27,13 +31,15 @@ export interface SelectionFrame {
 export function computeSelectionFrame(nodes: AnyNode[]): SelectionFrame | null {
   const sel = nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
   if (sel.length < 2) return null;
+  const nodeById = buildNodeIndex(nodes);
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of sel) {
+    const abs = nodeAbsolutePosition(n, nodeById);
     const s = measureNode(n);
-    minX = Math.min(minX, n.position.x);
-    minY = Math.min(minY, n.position.y);
-    maxX = Math.max(maxX, n.position.x + s.width);
-    maxY = Math.max(maxY, n.position.y + s.height);
+    minX = Math.min(minX, abs.x);
+    minY = Math.min(minY, abs.y);
+    maxX = Math.max(maxX, abs.x + s.width);
+    maxY = Math.max(maxY, abs.y + s.height);
   }
   return {
     ids: sel.map((n) => n.id),
@@ -53,11 +59,13 @@ export function frameRailWidth(
   if (!frame || !frame.ids.includes(memberId)) return RAIL_WIDTH;
   const member = nodes.find((n) => n.id === memberId);
   if (!member) return RAIL_WIDTH;
+  const nodeById = buildNodeIndex(nodes);
+  const abs = nodeAbsolutePosition(member, nodeById);
   const mSize = measureNode(member);
   const clearance =
     side === "right"
-      ? frame.bbox.x + frame.bbox.width + GROUP_NODE_PADDING - (member.position.x + mSize.width)
-      : member.position.x - (frame.bbox.x - GROUP_NODE_PADDING);
+      ? frame.bbox.x + frame.bbox.width + GROUP_NODE_PADDING - (abs.x + mSize.width)
+      : abs.x - (frame.bbox.x - GROUP_NODE_PADDING);
   if (clearance <= 0) return RAIL_WIDTH;
   return Math.min(RAIL_WIDTH, clearance);
 }

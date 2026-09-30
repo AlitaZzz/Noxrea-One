@@ -90,16 +90,12 @@ export interface MediaGenFields {
 // ============================================================
 
 /**
- * 逻辑分组字段：节点始终使用绝对坐标，组仅通过 groupId 标记归属，
- * 不再依赖 React Flow 的 parentId / 相对坐标嵌套。
+ * 分组采用 React Flow 官方 Sub Flow 模型：父子关系由节点顶层字段
+ * `parentId` 表达（唯一结构关系），子节点 position 为组内相对坐标。
+ * data 层不再携带任何归属字段（旧数据在 restoreFromProject 入口由
+ * migrateCanvasNodes 一次性迁移）。
  */
-export interface GroupableData {
-  /** 所属组的节点 id；未分组时为 undefined */
-  groupId?: string;
-  [key: string]: unknown;
-}
-
-export type TextNodeData = GroupableData & {
+export type TextNodeData = {
   /** 展示标题。文本无资源文件名语义（导出文件名直接用 label），故不设 alt 字段 */
   label: string;
   content: string; // 富文本 HTML，仅供编辑器渲染
@@ -112,7 +108,7 @@ export type TextNodeData = GroupableData & {
 
 // 注意：node data 采用扁平 type 别名（而非与 interface 交叉），
 // 以获得隐式索引签名，满足 React Flow 基础 Node 的 Record<string, unknown> 约束。
-export type ImageNodeData = GroupableData & {
+export type ImageNodeData = {
   label: string;
   src: string;
   lockAspectRatio: boolean;
@@ -143,7 +139,7 @@ export type ImageNodeData = GroupableData & {
   pendingNaturalSize?: { width: number; height: number };
 };
 
-export type VideoNodeData = GroupableData & {
+export type VideoNodeData = {
   label: string;
   src: string;
   naturalWidth: number;
@@ -166,7 +162,7 @@ export type VideoNodeData = GroupableData & {
   hasAudio?: boolean;
 };
 
-export type AudioNodeData = GroupableData & {
+export type AudioNodeData = {
   /** 展示标题 */
   label: string;
   /** 音频资源地址（复用 src 字段名以继承 save-manager 哈希收集） */
@@ -234,7 +230,7 @@ export interface DirectorStateData {
   }>;
 }
 
-export type DirectorNodeData = GroupableData & {
+export type DirectorNodeData = {
   label: string;
   /** 节点创建时间戳（ms），资源管理器等列表展示用 */
   createdAt?: number;

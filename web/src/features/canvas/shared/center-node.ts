@@ -2,6 +2,7 @@
  * 「把某个节点居中定位到画布（视口）中心」的公共工具。
  *
  * - getNodeCenter(node)：纯函数，返回节点几何中心的世界坐标。
+ *   传入节点的 position 必须是绝对坐标（成员先经 absoluteNodeOf 换算）。
  *   尺寸优先取实测值（node.measured），其次是 node.width/height，
  *   全部缺失时才回退到 200，避免回退猜测造成视口偏移。
  * - useCenterNode()：Hook，返回一个以给定节点为中心对齐视口的回调。
@@ -12,6 +13,8 @@
 import { useReactFlow } from "@xyflow/react";
 import { useCallback } from "react";
 
+import { absoluteNodeOf } from "@/features/canvas/shared/group-bounds";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 
 /** 节点实测尺寸回退值（未测量到的兜底猜测） */
@@ -34,7 +37,9 @@ export function useCenterNode() {
   const { setCenter } = useReactFlow();
   return useCallback(
     (node: AnyNode) => {
-      const { x, y } = getNodeCenter(node);
+      // 成员 position 是组内相对坐标，先换算为绝对坐标视图
+      const abs = absoluteNodeOf(node, useCanvasStore.getState().nodes);
+      const { x, y } = getNodeCenter(abs);
       setCenter(x, y, { zoom: 1.0, duration: 300 });
     },
     [setCenter],

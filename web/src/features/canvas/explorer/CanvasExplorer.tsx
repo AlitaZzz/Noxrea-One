@@ -187,6 +187,7 @@ function CanvasElementsView() {
   );
 
   // 构建大纲树：组节点作为可折叠容器，成员嵌套在内；未分组节点按类型分组。
+  // 成员归属唯一口径是 parentId（Sub Flow 结构关系）
   const tree = useMemo(() => {
     const groupNodes: AnyNode[] = [];
     const membersByGroup = new Map<string, AnyNode[]>();
@@ -201,13 +202,13 @@ function CanvasElementsView() {
     }
     for (const n of nodes) {
       if (n.type === NODE_TYPE.GROUP) continue;
-      const gid = (n.data as { groupId?: string })?.groupId;
-      if (gid && groupIds.has(gid)) {
-        const list = membersByGroup.get(gid);
+      const pid = n.parentId;
+      if (pid && groupIds.has(pid)) {
+        const list = membersByGroup.get(pid);
         if (list) list.push(n);
-        else membersByGroup.set(gid, [n]);
+        else membersByGroup.set(pid, [n]);
       } else {
-        // 孤儿节点（groupId 指向不存在的组）按未分组兜底
+        // 孤儿节点（parentId 指向不存在的组）按未分组兜底
         ungrouped.push(n);
       }
     }

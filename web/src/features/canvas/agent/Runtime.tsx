@@ -10,6 +10,8 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect } from "react";
 
 import { applyTidyLayout } from "@/features/canvas/hooks/use-tidy-animation";
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 
 export interface CanvasAgentRuntime {
@@ -46,10 +48,13 @@ export default function CanvasAgentRuntimeBridge() {
       focusNode: (node) => {
         const w = (node.style?.width as number) ?? 200;
         const h = (node.style?.height as number) ?? 200;
-        rf.setCenter(node.position.x + w / 2, node.position.y + h / 2, { zoom: 1.0, duration: 300 });
+        // 视口跳转语义是世界坐标：成员 position 是组内相对坐标，先换算
+        const abs = nodeAbsolutePosition(node, buildNodeIndex(useCanvasStore.getState().nodes));
+        rf.setCenter(abs.x + w / 2, abs.y + h / 2, { zoom: 1.0, duration: 300 });
       },
       focusNodes: (nodeIds) => {
         if (!nodeIds.length) return;
+        // fitView 内部按节点绝对矩形取景，Sub Flow 成员天然正确
         void rf.fitView({ nodes: nodeIds.map((id) => ({ id })), duration: 300, padding: 0.3 });
       },
       tidyCanvas: (opts) =>

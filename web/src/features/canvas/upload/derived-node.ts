@@ -12,6 +12,7 @@ import {
   createImageNode,
   createVideoNode,
 } from "@/features/canvas/node-defaults";
+import { absoluteNodeOf, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import type { AnyEdge, AnyNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
@@ -19,7 +20,6 @@ import { stripMediaExtension } from "@/lib/utils/file-name";
 import {
   computeNodeSize,
   findDerivedSlot,
-  type LayoutNode,
   nodeRectOf,
 } from "@/lib/utils/image-utils";
 
@@ -61,15 +61,17 @@ export function resolveDerivedLabel(
 
 /** 派生落位的碰撞上下文：传入后按「宫格找空位」计算，避免与现有节点重叠 */
 export interface DerivedCollision {
-  /** 需要避开的节点（画布现有节点，可含同批已落位节点） */
-  nodes: LayoutNode[];
+  /** 需要避开的节点（画布现有节点，可含同批已落位的节点） */
+  nodes: AnyNode[];
   /** 新节点的显示尺寸 */
   size: { width: number; height: number };
 }
 
 /**
  * 派生节点位置：显式 override 优先，否则按宫格找空位
- * （源节点右侧基准点起行优先扫描，被占则顺延到下一空格）。
+ * （源节点右侧基准点起行优先扫描，被占则顺延到下一空位）。
+ * 落位在绝对坐标空间进行：源节点与避让集先换算为绝对坐标视图
+ * （lib 层几何函数不感知分组模型）。
  */
 export function resolveDerivedPosition(
   origNode: AnyNode | undefined,
@@ -77,7 +79,11 @@ export function resolveDerivedPosition(
   collision: DerivedCollision,
 ): { x: number; y: number } {
   if (positionOverride) return positionOverride;
-  return findDerivedSlot(collision.nodes, origNode, collision.size);
+  const absNodes = toAbsoluteNodes(collision.nodes);
+  const absSource = origNode
+    ? absNodes.find((n) => n.id === origNode.id) ?? origNode
+    : undefined;
+  return findDerivedSlot(absNodes, absSource, collision.size);
 }
 
 /**
@@ -99,7 +105,11 @@ export function spawnPromptDerivedNode(
   const node = nodeFactory({ x: 0, y: 0 });
   // 以节点默认显示尺寸做宫格找空位：重复「创作」/模板派生不再叠在同一处
   const rect = nodeRectOf(node);
-  node.position = findDerivedSlot(storeApi.nodes, source, { width: rect.width, height: rect.height });
+  node.position = findDerivedSlot(
+    toAbsoluteNodes(storeApi.nodes),
+    absoluteNodeOf(source, storeApi.nodes),
+    { width: rect.width, height: rect.height },
+  );
   const gen = node.data.genSettings;
   if (gen) gen.prompt = prompt;
   if (options?.label) node.data.label = options.label;

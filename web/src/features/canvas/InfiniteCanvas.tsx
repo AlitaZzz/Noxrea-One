@@ -81,7 +81,7 @@ import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel"
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
-import { findGroupAtPoint, pruneEmptyGroups, refitGroupRects, resolveDropGroupId } from "@/features/canvas/shared/group-bounds";
+import { buildNodeIndex, findGroupAtPoint, nodeAbsolutePosition, pruneEmptyGroups, refitGroupRects, resolveDropGroupId } from "@/features/canvas/shared/group-bounds";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { computeSelectionFrame } from "@/features/canvas/shared/selection-frame";
@@ -152,14 +152,13 @@ export default function InfiniteCanvas() {
 
   // 整理需要至少 2 个顶层块（组连同成员算一个块），否则菜单置灰
   const tidyDisabled = useMemo(() => {
+    // parentId 是唯一结构关系：成员（有 parentId 且父存在）不算顶层块
     const groupIds = new Set(
       nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
     );
-    const topLevel = nodes.filter((n) => {
-      if (n.type === NODE_TYPE.GROUP) return true;
-      const gid = (n.data as { groupId?: string } | undefined)?.groupId;
-      return !gid || !groupIds.has(gid);
-    });
+    const topLevel = nodes.filter(
+      (n) => n.type === NODE_TYPE.GROUP || !n.parentId || !groupIds.has(n.parentId),
+    );
     return topLevel.length < 2;
   }, [nodes]);
 
@@ -383,7 +382,9 @@ export default function InfiniteCanvas() {
 
       const applied = applyNodeChanges(changes, currentNodes);
 
-      // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附与组跟随共用）
+      // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附共用）。
+      // 组移动带动成员由 React Flow Sub Flow 原生处理（成员相对坐标不变、
+      // 绝对位置随父重算），这里只处理单个被拖节点的吸附。
       const positionChanges = changes.filter(
         (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> =>
           c.type === "position" && c.dragging === true,
@@ -399,54 +400,36 @@ export default function InfiniteCanvas() {
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
 
-      // 提前检测正在被拖拽的组节点（可能同时拖多个组），并收集各自成员节点 ID。
-      // 成员节点在分组拖动时只需跟随平移，不应被独立磁吸，否则会导致累积偏移。
-      const draggedGroups = positionChanges
-        .map((c) => currentNodes.find((n) => n.id === c.id))
-        .filter((n): n is AnyNode => n?.type === NODE_TYPE.GROUP);
-      const draggedGroupIds = new Set(draggedGroups.map((g) => g.id));
-      const groupChildIds = new Set<string>();
-      if (draggedGroups.length > 0) {
-        for (const n of currentNodes) {
-          if (n.type !== NODE_TYPE.GROUP && n.data?.groupId && draggedGroupIds.has(n.data.groupId)) {
-            groupChildIds.add(n.id);
-          }
-        }
-      }
-
-      // 性能关键：未变化的节点保持原引用（返回 n 本身），仅对位置真正变化的节点
-      // 创建新对象引用。否则每帧对全部节点 spread 重建，React Flow 会认为所有节点
-      // 都变了而全量重渲染，拖拽时开销巨大。
       if (snapToGrid) {
-        appliedNodes = applied.map((n) => {
-          // 分组成员节点在分组拖动时：丢弃 React Flow 的多选位移，使用原始位置，
-          // 后面会通过 delta 同步平移，避免双倍位移破坏布局间距。
-          if (groupChildIds.has(n.id)) {
-            const original = currentNodes.find((orig) => orig.id === n.id);
-            return original ?? n;
-          }
+        // 吸附与对齐判定统一在绝对坐标空间：成员 position 是组内相对坐标，
+        // 先换算为绝对值，吸附结果再换回相对坐标写回
+        const nodeById = buildNodeIndex(currentNodes);
+        const absPositionOf = (n: AnyNode) => nodeAbsolutePosition(n, nodeById);
 
-          let posX = n.position.x;
-          let posY = n.position.y;
-
-          // 拖拽中的节点：仅单选时尝试节点间对齐吸附，多选直接移动不吸附（避免 O(n²) 且多选对齐意义不大）
-          if (draggedNodeIds.has(n.id) && draggedNodeIds.size === 1) {
+        if (draggedNodeIds.size === 1) {
+          const draggedId = positionChanges[0].id;
+          const dragged = applied.find((n) => n.id === draggedId);
+          if (!dragged) {
+            appliedNodes = applied;
+          } else {
+            // 父节点在拖拽中不动（拖成员时组未被拖拽），绝对位置 = 父位置 + 相对位置
+            const absPos = absPositionOf(dragged);
             const nodeSize = {
-              width: Number(n.style?.width) || Number(n.measured?.width) || 200,
-              height: Number(n.style?.height) || Number(n.measured?.height) || 120,
+              width: Number(dragged.style?.width) || Number(dragged.measured?.width) || 200,
+              height: Number(dragged.style?.height) || Number(dragged.measured?.height) || 120,
             };
             // 空间分区：只对可能产生吸附的邻近节点构建边界，大幅降低大画布下每帧开销
-            const dragBounds = { id: n.id, position: { x: posX, y: posY }, ...nodeSize };
+            const dragBounds = { id: draggedId, position: absPos, ...nodeSize };
             const nodeBounds = applied
-              .filter((m) => m.id === n.id || isAlignmentCandidate(dragBounds, {
+              .filter((m) => m.id !== draggedId && isAlignmentCandidate(dragBounds, {
                 id: m.id,
-                position: { x: m.position.x, y: m.position.y },
+                position: absPositionOf(m),
                 width: Number(m.style?.width) || Number(m.measured?.width) || 200,
                 height: Number(m.style?.height) || Number(m.measured?.height) || 120,
               }, snapThreshold, LAYOUT_GAP))
               .map((m) => ({
                 id: m.id,
-                position: { x: m.position.x, y: m.position.y },
+                position: absPositionOf(m),
                 width: Number(m.style?.width) || Number(m.measured?.width) || 200,
                 height: Number(m.style?.height) || Number(m.measured?.height) || 120,
               }));
@@ -458,66 +441,49 @@ export default function InfiniteCanvas() {
               LAYOUT_GAP,
             );
 
-            if (result.snapX !== null) {
-              posX = result.snapX;
-            } else {
-              posX = Math.round(posX / snapGridSize) * snapGridSize;
-            }
-
-            if (result.snapY !== null) {
-              posY = result.snapY;
-            } else {
-              posY = Math.round(posY / snapGridSize) * snapGridSize;
-            }
-
+            let absX = result.snapX ?? Math.round(absPos.x / snapGridSize) * snapGridSize;
+            let absY = result.snapY ?? Math.round(absPos.y / snapGridSize) * snapGridSize;
             newGuides = result.guides;
-          } else if (!draggedNodeIds.has(n.id)) {
-            // 非拖拽变更（如 dimension 等）：保持 store 中的位置，避免释放鼠标时被未吸附的位置覆盖
-            const original = currentNodes.find((orig) => orig.id === n.id);
-            posX = original?.position.x ?? posX;
-            posY = original?.position.y ?? posY;
+            const parent = dragged.parentId ? nodeById.get(dragged.parentId) : undefined;
+            if (parent) {
+              absX -= parent.position.x;
+              absY -= parent.position.y;
+            }
+            // 位置未变化则复用原引用，避免无关节点重渲染
+            if (dragged.position.x === absX && dragged.position.y === absY) {
+              appliedNodes = applied;
+            } else {
+              appliedNodes = applied.map((n) =>
+                n.id === draggedId ? { ...n, position: { x: absX, y: absY } } : n,
+              );
+            }
           }
-          // 多选拖动时：跳过节点间对齐吸附，但照常跟随 React Flow 移动（posX/posY 保持 n.position 的拖拽值）
-
-          // 位置未变化则复用原引用，避免无关节点重渲染
-          if (n.position.x === posX && n.position.y === posY) return n;
-          return {
-            ...n,
-            position: { x: posX, y: posY },
-          };
-        });
+        } else if (draggedNodeIds.size > 1) {
+          // 多选拖动：跳过节点间对齐吸附（避免 O(n²) 且多选对齐意义不大），
+          // 照常跟随 React Flow 移动；未拖拽节点保持 store 位置
+          appliedNodes = applied.map((n) => {
+            if (draggedNodeIds.has(n.id)) return n;
+            const original = nodeById.get(n.id);
+            return original && (original.position.x !== n.position.x || original.position.y !== n.position.y)
+              ? { ...n, position: original.position }
+              : n;
+          });
+        } else {
+          // 非拖拽批次（如拖拽结束的 dragging:false 汇总、dimension 变更）：
+          // 保持 store 中的位置，避免释放鼠标时被未吸附的位置覆盖
+          appliedNodes = applied.map((n) => {
+            const original = nodeById.get(n.id);
+            return original && (original.position.x !== n.position.x || original.position.y !== n.position.y)
+              ? { ...n, position: original.position }
+              : n;
+          });
+        }
       } else {
-        // snapToGrid 关闭：仍需处理分组子节点，避免 React Flow 多选位移 + delta 双倍移动
-        appliedNodes = applied.map((n) => {
-          if (groupChildIds.has(n.id)) {
-            const original = currentNodes.find((orig) => orig.id === n.id);
-            return original ?? n;
-          }
-          return n;
-        });
+        // snapToGrid 关闭：位置变更原样采用（含组拖动的成员自动跟随）
+        appliedNodes = applied;
       }
 
-      // 拖动组节点时，手动把同 groupId 的成员节点同步平移相同 delta（支持多组同拖，
-      // 每个组按自身 delta 平移各自成员）。关键：delta 必须基于分组节点吸附后的
-      // 最终位置来计算，而非 React Flow 报告的原始位置，否则分组与成员之间
-      // 会产生累积偏移。
-      let finalNodes = appliedNodes;
-      if (draggedGroups.length > 0) {
-        finalNodes = appliedNodes.map((n) => {
-          if (n.type === NODE_TYPE.GROUP) return n;
-          const gid = n.data?.groupId;
-          if (!gid || !draggedGroupIds.has(gid)) return n;
-          const groupNode = currentNodes.find((g) => g.id === gid);
-          const snappedGroup = appliedNodes.find((g) => g.id === gid);
-          if (!groupNode || !snappedGroup) return n;
-          const deltaX = snappedGroup.position.x - groupNode.position.x;
-          const deltaY = snappedGroup.position.y - groupNode.position.y;
-          if (deltaX === 0 && deltaY === 0) return n;
-          return { ...n, position: { x: n.position.x + deltaX, y: n.position.y + deltaY } };
-        });
-      }
-
-      setNodes(finalNodes);
+      setNodes(appliedNodes);
       setAlignmentGuides(newGuides);
 
       // Only mark dirty for position changes (user drag).
@@ -693,7 +659,20 @@ export default function InfiniteCanvas() {
         y: newNode.position.y + newH / 2,
       });
       if (joinedGroupId) {
-        newNode = { ...newNode, data: { ...newNode.data, groupId: joinedGroupId } } as AnyNode;
+        const group = useCanvasStore
+          .getState()
+          .nodes.find((n) => n.id === joinedGroupId);
+        if (group) {
+          // 归组：绝对落点换算为组内相对坐标 + parentId 结构关系
+          newNode = {
+            ...newNode,
+            parentId: joinedGroupId,
+            position: {
+              x: newNode.position.x - group.position.x,
+              y: newNode.position.y - group.position.y,
+            },
+          } as AnyNode;
+        }
       }
 
       addNodes([newNode]);
@@ -719,15 +698,16 @@ export default function InfiniteCanvas() {
   );
 
   /** 菜单期间的束线预览锚点：按 sourceNodeIds 逐节点取右/左边缘正中
-   *  （多选扇出每个选中节点一根，单节点即一根），无有效盒尺寸的节点跳过 */
+   *  （多选扇出每个选中节点一根，单节点即一根），无有效盒尺寸的节点跳过。
+   *  锚点统一在绝对坐标空间计算（成员 position 是组内相对坐标） */
   const pendingPreviewAnchors = useMemo(() => {
     if (!pendingConnectionCreate) return [];
-    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    const nodeById = buildNodeIndex(nodes);
     const side = pendingConnectionCreate.direction === "output" ? "right" : "left";
     return pendingConnectionCreate.sourceNodeIds
       .map((id) => nodeById.get(id))
       .flatMap((n) => {
-        const anchor = n ? nodeEdgeAnchor(n, side) : null;
+        const anchor = n ? nodeEdgeAnchor(n, side, nodeById) : null;
         return anchor ? [anchor] : [];
       });
   }, [pendingConnectionCreate, nodes]);
@@ -791,7 +771,7 @@ export default function InfiniteCanvas() {
     if (rawNode.type === NODE_TYPE.GROUP) return;
     const { nodes, setDragOverGroup } = useCanvasStore.getState();
     const next = resolveDropGroupId(nodes, rawNode);
-    setDragOverGroup(next && next !== rawNode.data?.groupId ? next : null);
+    setDragOverGroup(next && next !== rawNode.parentId ? next : null);
   }, []);
 
   const handleNodeDragStop = useCallback(
@@ -802,30 +782,40 @@ export default function InfiniteCanvas() {
       useCanvasStore.getState().setDragOverGroup(null);
 
       const allNodes = useCanvasStore.getState().nodes;
-      // 以 store 中的最终位置为准：拖组时成员位置由组 delta 同步，
-      // React Flow 内部状态与 store 可能不一致
+      // 以 store 中的最终位置为准：React Flow 回调里的快照可能滞后
       const draggedNode = allNodes.find((n) => n.id === rawNode.id) ?? rawNode;
       if (draggedNode.type === NODE_TYPE.GROUP) return;
 
-      // 统一判定归属（resolveDropGroupId，与拖入高亮共用同一口径）
-      const oldGroupId = draggedNode.data?.groupId;
-      const nextGroupId = resolveDropGroupId(allNodes, draggedNode);
+      // 统一判定归属（resolveDropGroupId，与拖入高亮共用同一口径；
+      // 成员中心以绝对坐标判定）
+      const oldParentId = draggedNode.parentId;
+      const nextParentId = resolveDropGroupId(allNodes, draggedNode);
 
-      if (nextGroupId === oldGroupId) return;
+      if (nextParentId === oldParentId) return;
 
       // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
       // 否则会把"拖动前"状态重复压栈，导致撤销/重做丢失真正的组外状态。
-      const withMembership = allNodes.map((n) =>
-        n.id === draggedNode.id
-          ? ({ ...n, data: { ...n.data, groupId: nextGroupId } } as AnyNode)
-          : n
-      );
+      // 归属变化伴随坐标换算：加入新组 → 绝对位置换算为组内相对；脱离 → 换算回绝对
+      const nodeById = buildNodeIndex(allNodes);
+      const absPos = nodeAbsolutePosition(draggedNode, nodeById);
+      const withMembership = allNodes.map((n) => {
+        if (n.id !== draggedNode.id) return n;
+        let position = absPos;
+        const newParent = nextParentId ? nodeById.get(nextParentId) : undefined;
+        if (newParent) {
+          position = {
+            x: absPos.x - newParent.position.x,
+            y: absPos.y - newParent.position.y,
+          };
+        }
+        return { ...n, parentId: nextParentId, position } as AnyNode;
+      });
 
       // 成员全部脱离的旧组：空组即删（唯一口径见 pruneEmptyGroups），
       // 组框重算对已删除的组自然跳过
       const touchedGroupIds = new Set<string>();
-      if (oldGroupId) touchedGroupIds.add(oldGroupId);
-      if (nextGroupId) touchedGroupIds.add(nextGroupId);
+      if (oldParentId) touchedGroupIds.add(oldParentId);
+      if (nextParentId) touchedGroupIds.add(nextParentId);
       const finalNodes = refitGroupRects(pruneEmptyGroups(withMembership), touchedGroupIds);
 
       setNodes(finalNodes);

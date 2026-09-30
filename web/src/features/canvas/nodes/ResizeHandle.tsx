@@ -9,8 +9,11 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback, useRef } from "react";
 
 import { ResizeCornerIcon } from "@/components/ui/icons/canvas/ResizeCornerIcon";
-import { takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { shiftGroupMembers } from "@/features/canvas/shared/group-bounds";
+import { markDirty, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import type { AnyNode } from "@/features/canvas/types";
+import { NODE_TYPE } from "@/lib/constants";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -69,6 +72,11 @@ export default function ResizeHandle({
       const curW = Number(currentNode.style?.width) || rect.width / zoom;
       const curH = Number(currentNode.style?.height) || rect.height / zoom;
 
+      // 组节点 resize：top/left 角拖动会改变组自身 position，成员（相对坐标）
+      // 会跟着视觉位移。对齐官方 XYResizer 行为，拖动帧同步补偿成员相对位置
+      // （成员减去组原点位移量，保持视觉位置不动），单次 setNodes 批量写入。
+      const isGroupResize = currentNode.type === NODE_TYPE.GROUP;
+
       startRef.current = {
         x: e.clientX,
         y: e.clientY,
@@ -120,6 +128,28 @@ export default function ResizeHandle({
         // 只在尺寸真的变化时记一笔：被最小尺寸卡住时不应留下空历史
         if (newW !== startRef.current.w || newH !== startRef.current.h) {
           changedRef.current = true;
+        }
+
+        if (isGroupResize) {
+          // 组：单次 setNodes 合并写组尺寸/位置与成员补偿——复用 refitGroupRects
+          // 同一条「框动内容不动」原语 shiftGroupMembers；右下角拖动位移为 0，
+          // 成员原样（shiftGroupMembers 零位移快路径返回原引用）
+          const originDx = newX - startRef.current.px;
+          const originDy = newY - startRef.current.py;
+          const s = useCanvasStore.getState();
+          let next: AnyNode[] = s.nodes.map((n) =>
+            n.id === nodeId
+              ? ({
+                  ...n,
+                  style: { ...n.style, width: newW, height: newH },
+                  position: { x: newX, y: newY },
+                } as AnyNode)
+              : n,
+          );
+          next = shiftGroupMembers(next, nodeId, originDx, originDy);
+          s.setNodes(next);
+          markDirty();
+          return;
         }
 
         useCanvasStore.getState().updateNodeVisual(nodeId, {

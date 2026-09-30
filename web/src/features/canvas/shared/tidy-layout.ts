@@ -5,9 +5,10 @@
  * - grid：行列网格，按读序填充，适合彼此无连线的素材板
  * - layer：分层布局，一列 = 一个拓扑层，上游在左、下游在右，适合有连线的画布
  *
- * 布局的原子单位是「块」而非单个节点：一个分组（groupId）连同其成员
- * 视为一个整体块参与排序与平移，成员保持相对位置 —— 因为组框的坐标是
- * 独立的，单独移动成员会让成员脱离组框。
+ * 布局的原子单位是「块」而非单个节点：一个分组（parentId 结构关系）连同其
+ * 成员视为一个整体块参与排序。组节点是顶层节点、成员 position 是组内相对
+ * 坐标——移动组块只需产出组节点的新位置，成员相对偏移不变、视觉随组移动，
+ * 因此 positions 结果只包含组节点与未分组节点。
  *
  * 只产出坐标，不修改入参、不触碰 store，由调用方负责压栈 / 落库 / 动画。
  */
@@ -47,7 +48,8 @@ export interface TidyOptions {
 }
 
 export interface TidyResult {
-  /** nodeId → 新坐标（世界坐标） */
+  /** nodeId → 新坐标（世界坐标）。只含组节点与未分组节点：成员相对坐标不变，
+   *  视觉位置随所属组节点移动 */
   positions: Map<string, { x: number; y: number }>;
   /** 位置实际发生变化的节点数；为 0 表示无需整理 */
   movedCount: number;
@@ -58,12 +60,14 @@ export interface Size {
   height: number;
 }
 
-/** 布局单元：一个独立节点，或一个「组 + 成员」整体块 */
+/** 布局单元：一个独立节点，或一个「组 + 成员」整体块（成员随组平移） */
 interface LayoutUnit {
   /** 块原点对应的节点 id（组块为组节点 id） */
   id: string;
-  /** 块内所有节点相对块原点的偏移（组节点自身偏移为 0,0） */
+  /** 块内需要产出新位置的节点（组块只有组节点自身；成员相对坐标不变） */
   offsets: Array<{ id: string; dx: number; dy: number }>;
+  /** 组块的成员 id（供连线端点映射到块：跨组成员边等价于组块间的依赖边） */
+  memberIds: string[];
   width: number;
   height: number;
   x: number;
@@ -84,15 +88,10 @@ export function measureNode(node: AnyNode): Size {
   };
 }
 
-/** 读取逻辑分组归属；组节点自身不参与分组，恒为 undefined */
-function getGroupId(node: AnyNode): string | undefined {
-  if (node.type === NODE_TYPE.GROUP) return undefined;
-  return (node.data as { groupId?: string } | undefined)?.groupId;
-}
-
 /**
  * 收集布局单元。
- * 分组 → 一个块（组节点 + 成员）；未分组节点 → 独立块。
+ * 分组 → 一个块（组节点自身产出位置；成员相对偏移决定块的尺寸与内容）；
+ * 未分组节点 → 独立块。parentId 指向不存在的组时按未分组处理（脏数据兜底）。
  */
 function collectUnits(nodes: AnyNode[]): LayoutUnit[] {
   const units: LayoutUnit[] = [];
@@ -100,48 +99,44 @@ function collectUnits(nodes: AnyNode[]): LayoutUnit[] {
     nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
   );
 
-  // 组块
+  // 组块：组节点 position 是绝对坐标；成员 position 是组内相对坐标
   for (const group of nodes) {
     if (group.type !== NODE_TYPE.GROUP) continue;
-    const gx = group.position.x;
-    const gy = group.position.y;
     const gSize = measureNode(group);
 
-    const offsets: Array<{ id: string; dx: number; dy: number }> = [
-      { id: group.id, dx: 0, dy: 0 },
-    ];
+    const memberIds: string[] = [];
     let contentW = 0;
     let contentH = 0;
-
     for (const n of nodes) {
       if (n.type === NODE_TYPE.GROUP) continue;
-      if (getGroupId(n) !== group.id) continue;
+      if (n.parentId !== group.id) continue;
+      memberIds.push(n.id);
       const s = measureNode(n);
-      offsets.push({ id: n.id, dx: n.position.x - gx, dy: n.position.y - gy });
-      contentW = Math.max(contentW, n.position.x - gx + s.width);
-      contentH = Math.max(contentH, n.position.y - gy + s.height);
+      contentW = Math.max(contentW, n.position.x + s.width);
+      contentH = Math.max(contentH, n.position.y + s.height);
     }
 
     units.push({
       id: group.id,
-      offsets,
-      // 组框必须包住成员：取「组框尺寸」与「成员外接矩形 + padding」的较大者
+      offsets: [{ id: group.id, dx: 0, dy: 0 }],
+      memberIds,
+      // 组块必须容得下成员：取「组框尺寸」与「成员相对外接 + padding」的较大者
       width: Math.max(gSize.width, contentW + GROUP_NODE_PADDING),
       height: Math.max(gSize.height, contentH + GROUP_NODE_PADDING),
-      x: gx,
-      y: gy,
+      x: group.position.x,
+      y: group.position.y,
     });
   }
 
-  // 独立节点；groupId 指向不存在的组时按未分组处理（脏数据兜底）
+  // 独立节点；parentId 指向不存在的组时按未分组处理（脏数据兜底）
   for (const n of nodes) {
     if (n.type === NODE_TYPE.GROUP) continue;
-    const gid = getGroupId(n);
-    if (gid && groupIds.has(gid)) continue;
+    if (n.parentId && groupIds.has(n.parentId)) continue;
     const s = measureNode(n);
     units.push({
       id: n.id,
       offsets: [{ id: n.id, dx: 0, dy: 0 }],
+      memberIds: [],
       width: s.width,
       height: s.height,
       x: n.position.x,
@@ -201,7 +196,8 @@ function packWithDagre(
   const placed = new Map<string, { x: number; y: number }>();
   if (units.length === 0) return placed;
 
-  // —— 构建块级依赖图（组成员映射到组块；组内连线、自环、悬空边忽略）——
+  // —— 构建块级依赖图（连线端点映射到所在块：成员边映射为组块间的边；
+  // 组内连线、自环、悬空边忽略）——
   const outgoing = new Map<string, Set<string>>();
   const indegree = new Map<string, number>();
   for (const u of units) {
@@ -210,7 +206,8 @@ function packWithDagre(
   }
   const unitOfNode = new Map<string, string>();
   for (const u of units) {
-    for (const o of u.offsets) unitOfNode.set(o.id, u.id);
+    unitOfNode.set(u.id, u.id);
+    for (const m of u.memberIds) unitOfNode.set(m, u.id);
   }
   for (const e of edges) {
     const s = unitOfNode.get(e.source);

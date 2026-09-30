@@ -13,6 +13,7 @@ import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
 import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
 import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
+import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
 import { computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
@@ -263,12 +264,14 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
       // 以源节点为基准，用统一派生网格布局错开摆放（显示尺寸 + 间隙），避免新节点互相遮挡
       const store = useCanvasStore.getState();
-      const origNode = store.nodes.find((n) => n.id === sourceId);
+      // 绝对坐标视图：源节点可能是组成员（lib 层几何函数不感知分组模型）
+      const absNodes = toAbsoluteNodes(store.nodes);
+      const origNode = absNodes.find((n) => n.id === sourceId);
       // 多视角按接近方形的宫格排布：4 视角用 2×2，8/12 视角用多行 4 列，避免横着平铺
       const COLS = COUNT <= 4 ? 2 : 4;
       const layout = computeDerivedGrid(origNode, frameW, frameH, COLS);
       // 目标区域被占（上一批截图 / 用户手动摆放）时整批平移到空区域
-      const origin = findDerivedBatchOrigin(store.nodes, origNode, layout, COUNT);
+      const origin = findDerivedBatchOrigin(absNodes, origNode, layout, COUNT);
       layout.baseX = origin.x;
       layout.baseY = origin.y;
 

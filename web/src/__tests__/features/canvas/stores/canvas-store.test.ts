@@ -353,7 +353,8 @@ describe("removeNodes 级联：空组即删与删组连带成员（容器型）"
     return {
       id, type: "text-node",
       position: { x: 0, y: 0 },
-      data: { groupId, label: id },
+      data: { label: id },
+      parentId: groupId,
     } as unknown as AnyNode;
   }
 

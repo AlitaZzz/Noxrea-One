@@ -26,6 +26,7 @@ import {
   duplicateNode,
 } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
@@ -655,17 +656,20 @@ function execDuplicateNode(args: ToolArgs): ExecOutcome {
   const store = useCanvasStore.getState();
   const snapSize = getSnapSize(store);
   const s = nodeSize(node);
-  // 以原节点中心为锚找空位，吸附后换算为相对原节点的偏移（duplicateNode 按 offset 平移）
+  // 以原节点中心（世界坐标）为锚找空位，吸附后换算为相对原节点的偏移
+  // （duplicateNode 按 offset 平移；成员的相对坐标加上同一偏移后仍正确——
+  // 偏移在两个坐标系中等价）
+  const absPos = nodeAbsolutePosition(node, buildNodeIndex(store.nodes));
   const p = findFreePosition(s, {
-    x: node.position.x + s.width / 2,
-    y: node.position.y + s.height / 2,
+    x: absPos.x + s.width / 2,
+    y: absPos.y + s.height / 2,
   });
   const copy = duplicateNode(node, {
     x: snapValue(p.x, snapSize) - node.position.x,
     y: snapValue(p.y, snapSize) - node.position.y,
   });
-  // 与画布复制粘贴同款语义：单节点副本不继承组归属，否则会「串」到原组
-  delete (copy.data as Record<string, unknown>).groupId;
+  // 单节点副本不继承结构归属（duplicateNode 已统一剥离 parentId），
+  // 否则会「串」到原组
   store.addNodes([copy], { skipHistory: true });
 
   return { content: `已复制节点 ${nodeId} → ${copy.id}（位于原节点旁）。`, mutated: true };
@@ -677,7 +681,8 @@ function execMoveNode(args: ToolArgs): ExecOutcome {
   if (!nodeId) return { content: "缺少 nodeId。", mutated: false, failed: true };
 
   const nodes = useCanvasStore.getState().nodes;
-  const node = nodes.find((n) => n.id === nodeId);
+  const nodeById = buildNodeIndex(nodes);
+  const node = nodeById.get(nodeId);
   if (!node) return { content: `节点 ${nodeId} 不存在。`, mutated: false, failed: true };
 
   const size = nodeSize(node);
@@ -687,21 +692,30 @@ function execMoveNode(args: ToolArgs): ExecOutcome {
   const x = num(args.x);
   const y = num(args.y);
   if (x != null || y != null) {
-    target = { x: x ?? node.position.x, y: y ?? node.position.y };
+    // 工具坐标语义是世界坐标（服务端 definitions.ts 契约）
+    const abs = nodeAbsolutePosition(node, nodeById);
+    target = { x: x ?? abs.x, y: y ?? abs.y };
   } else if (alignTo === "center") {
     const c = getViewportCenter();
     target = { x: c.x - size.width / 2, y: c.y - size.height / 2 };
   } else if (alignTo) {
-    const ref = nodes.find((n) => n.id === alignTo);
+    const ref = nodeById.get(alignTo);
     if (!ref) return { content: `对齐目标节点 ${alignTo} 不存在。`, mutated: false, failed: true };
     const rs = nodeSize(ref);
-    target = { x: ref.position.x + rs.width + 60, y: ref.position.y };
+    const refAbs = nodeAbsolutePosition(ref, nodeById);
+    target = { x: refAbs.x + rs.width + 60, y: refAbs.y };
   }
 
   if (!target) return { content: "请提供 x/y 或 alignTo。", mutated: false, failed: true };
 
+  // 目标是世界坐标：成员换算为组内相对坐标写回
+  const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+  const position = parent
+    ? { x: target.x - parent.position.x, y: target.y - parent.position.y }
+    : target;
+
   useCanvasStore.getState().setNodes(
-    nodes.map((n) => (n.id === nodeId ? { ...n, position: target! } : n)),
+    nodes.map((n) => (n.id === nodeId ? { ...n, position } : n)),
   );
   markDirtyImmediate();
   return { content: `已移动节点 ${nodeId} 到 (${Math.round(target.x)}, ${Math.round(target.y)})。`, mutated: true };

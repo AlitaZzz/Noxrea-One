@@ -189,7 +189,11 @@ export function duplicateNode(
   //   保留会让副本永远停在「生成中」遮罩，并连带全局禁用撤销 / 重做。
   // - upload：上传进度 / 失败原因与 previewUrl（blob: URL）同样属于原节点，
   //   原节点上传结束后管道会 revoke 该 URL，副本会指向已回收的地址。
+  // - parentId：结构归属与几何绑定（相对坐标随归属失效），统一剥离；
+  //   需要归属的调用方（如整组粘贴）显式重映射到副本组，避免副本「串」到
+  //   画布上的原组（拖原组带着副本跑、原组成员计数虚增）。
   // 已完成的静态内容（src / content / genSettings 等）保持不变。
+  delete cloned.parentId;
   if (cloned.data) {
     delete cloned.data.taskBinding;
     const upload = cloned.data.upload as

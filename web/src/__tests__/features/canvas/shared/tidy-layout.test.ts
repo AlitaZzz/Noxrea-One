@@ -21,14 +21,15 @@ function node(
   y: number,
   width = 200,
   height = 120,
-  groupId?: string,
+  parentId?: string,
 ): AnyNode {
   return {
     id,
     type: NODE_TYPE.IMAGE,
     position: { x, y },
     style: { width, height },
-    data: groupId ? { label: id, groupId } : { label: id },
+    data: { label: id },
+    parentId,
   } as unknown as AnyNode;
 }
 
@@ -157,7 +158,7 @@ describe("computeTidyLayout 网格模式", () => {
 // ── 分组整体平移 ──────────────────────────────────────────
 
 describe("computeTidyLayout 分组", () => {
-  it("组成员随组块整体平移，相对偏移保持不变", () => {
+  it("组块只产出组节点位置，成员相对坐标不变（视觉随组移动）", () => {
     const nodes = [
       groupNode("g", 0, 0, 400, 300),
       node("m1", 40, 60, 100, 80, "g"),
@@ -165,14 +166,14 @@ describe("computeTidyLayout 分组", () => {
       node("o", 1000, 1000),
     ];
     const r = computeTidyLayout(nodes, [], { mode: "grid" });
+    // positions 只包含组节点与未分组节点；成员随组移动，不单独产出
+    expect(r.positions.has("g")).toBe(true);
+    expect(r.positions.has("o")).toBe(true);
+    expect(r.positions.has("m1")).toBe(false);
+    expect(r.positions.has("m2")).toBe(false);
     const g = r.positions.get("g")!;
-    const m1 = r.positions.get("m1")!;
-    const m2 = r.positions.get("m2")!;
-
-    expect(m1.x - g.x).toBe(40);
-    expect(m1.y - g.y).toBe(60);
-    expect(m2.x - g.x).toBe(200);
-    expect(m2.y - g.y).toBe(160);
+    const o = r.positions.get("o")!;
+    expect(o.x).toBeGreaterThan(g.x);
   });
 
   it("组成员不参与顶层排序（不会被单独插到组外）", () => {
@@ -182,14 +183,14 @@ describe("computeTidyLayout 分组", () => {
       node("a", 2000, 2000),
     ];
     const r = computeTidyLayout(nodes, [], { mode: "grid", maxRowWidth: 10_000 });
-    // 只有 2 个顶层块：组 与 a
-    expect(r.positions.size).toBe(3);
+    // 只有 2 个顶层块：组 与 a（成员不单独产出位置）
+    expect(r.positions.size).toBe(2);
     const pos = posOf(nodes, r.positions);
     expect(pos("g").y).toBe(pos("a").y);
     expect(pos("a").x).toBeGreaterThan(pos("g").x);
   });
 
-  it("groupId 指向不存在的组时按未分组处理", () => {
+  it("parentId 指向不存在的组时按未分组处理", () => {
     const nodes = [node("a", 0, 0), node("b", 500, 400, 200, 120, "ghost")];
     const r = computeTidyLayout(nodes, [], { mode: "grid" });
     expect(r.positions.has("b")).toBe(true);

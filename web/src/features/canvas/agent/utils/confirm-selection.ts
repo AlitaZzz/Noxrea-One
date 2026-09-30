@@ -89,8 +89,8 @@ export function applyConfirmSelections(
       for (const id of display) {
         if (inArgs.has(id) || !kept.has(id)) continue;
         const member = nodes.find((n) => n.id === id);
-        const gid = member && member.type !== NODE_TYPE.GROUP ? member.data?.groupId : undefined;
-        if (gid && !kept.has(gid)) effective.push(id);
+        const pid = member && member.type !== NODE_TYPE.GROUP ? member.parentId : undefined;
+        if (pid && !kept.has(pid)) effective.push(id);
       }
       // 用户在卡上勾掉的项数（按展开集计）
       skipped[call.id] = display.filter((id) => !kept.has(id)).length;
