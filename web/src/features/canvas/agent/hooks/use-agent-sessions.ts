@@ -90,15 +90,20 @@ export function useAgentSessions(opts: {
     [gate, message, opts.projectId]
   );
 
-  /** 加载历史消息（切换会话时调用） */
+  /** 加载历史消息（切换会话在途读取：登记世代，返回后校验身份未变才允许应用） */
   const loadHistory = useCallback(
     async (sessionId: number) => {
       // 先停掉当前会话的流式回合，避免回复继续追加进即将加载的另一份消息列表
       opts.onStopStream();
       // 切会话后旧会话期间积累的用户操作不应带进新会话
       clearUserActions();
+      // 登记在途读取（递增世代）：期间发生任何身份变更（切项目 / 新对话 /
+      // 更晚的切会话 / 新会话创建成功）都会使本次响应失效
+      const gen = gate.beginLoad();
       try {
-        const data = await agentApi.getSessionMessages(sessionId);
+        const data = await agentApi.getSessionMessages(sessionId, opts.projectId);
+        // 世代已变：陈旧响应整体丢弃——绝不写 UI / 门闸 / chatId（R-AGENT-01 根因围栏）
+        if (!gate.isCurrent(gen)) return;
         // ghost 清理：回复型工具（promoteTextToContent）的回执行不进入 UI
         // （回复文本已在 assistant content 里）
         const messageUserCallIds = new Set(
@@ -133,12 +138,17 @@ export function useAgentSessions(opts: {
           }
           return [msg];
         });
+        // 应用前再停一次流：await 期间可能又发起了对新会话的流式回合，
+        // 身份即将切换，不允许任何流跨过本次历史应用继续运行
+        opts.onStopStream();
         opts.onLoadMessages(loaded);
         const found = sessions.find((s) => s.id === sessionId);
         gate.adopt({ id: sessionId, title: found?.title ?? null });
         setChatId(sessionId);
         setChatTitle(found?.title ?? null);
       } catch (e) {
+        // 世代已变的失败静默：用户早已切走，报错提示只是噪音
+        if (!gate.isCurrent(gen)) return;
         message.error(agentError(e, i18n.t("agent.loadHistoryFailed")));
       }
     },
@@ -155,15 +165,22 @@ export function useAgentSessions(opts: {
     setChatTitle(null);
   }, [gate, opts]);
 
-  /** 拉取历史会话列表（按 updatedAt 倒序） */
+  /**
+   * 拉取历史会话列表（按 updatedAt 倒序）。
+   * 纯读取不登记世代（避免孤儿化在途的会话创建）：快照当前世代，返回后仅当
+   * 项目身份未再变更（切项目 / 新对话会 reset 递增）才应用（R-AGENT-02 围栏）。
+   */
   const loadSessions = useCallback(async () => {
+    const gen = gate.generation;
     try {
       const data = await agentApi.listSessions(opts.projectId);
+      if (!gate.isCurrent(gen)) return;
       setSessions(data ?? []);
     } catch (e) {
+      if (!gate.isCurrent(gen)) return;
       message.error(agentError(e, i18n.t("agent.loadSessionsFailed")));
     }
-  }, [message, opts.projectId]);
+  }, [gate, message, opts.projectId]);
 
   /** 删除会话；若删的是当前会话则顺带开新对话 */
   const deleteChat = useCallback(

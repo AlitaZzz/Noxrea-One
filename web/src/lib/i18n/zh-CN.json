@@ -1003,6 +1003,7 @@
     },
     "agent": {
       "session_not_found": "会话不存在",
+      "session_project_mismatch": "会话不属于当前项目，请刷新后重试",
       "session_id_required": "缺少 sessionId",
       "provider_not_found": "未找到可用的模型供应商",
       "upstream_failed": "模型调用失败，请稍后重试",

@@ -30,6 +30,19 @@ const router = new Hono();
 
 // ── 会话 CRUD ──
 
+/**
+ * 会话级端点的项目绑定校验（R-AGENT-01 第二道防线）。
+ * 项目级会话（createSession 已绑定 projectId）不允许只凭 userId 跨项目使用：
+ * 前端竞态即使错拿了他项目会话，服务端也拒绝续用，上下文污染在服务端截断。
+ * projectId 为 null 的会话未绑定项目（当前产品不创建，API 保留），无从校验即放行。
+ */
+function assertProjectBinding(
+  session: { projectId: string | null },
+  requestProjectId: string | undefined
+): boolean {
+  return session.projectId == null || session.projectId === requestProjectId;
+}
+
 const createSessionSchema = z.object({
   projectId: z.string().nullable().optional(),
   title: z.string().optional(),
@@ -119,6 +132,10 @@ router.get("/api/agent/sessions/:id/messages", async (c) => {
   const id = Number(c.req.param("id"));
   const session = await getSession(id, userId);
   if (!session) return failCode(404, "agent.session_not_found");
+  // 项目绑定：客户端声明当前项目，与服务端归属比对
+  if (!assertProjectBinding(session, c.req.query("projectId") || undefined)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
   const messages = await listMessages(id);
   return c.json(ok(messages));
 });
@@ -181,6 +198,8 @@ async function finishTurn(opts: {
 // ── 流式对话端点 ──
 
 const streamSchema = z.object({
+  /** 前端当前项目 ID：项目绑定校验用 */
+  projectId: z.string().optional(),
   content: z.string().default(""),
   refImages: z.array(z.string()).optional(),
   /** 前端序列化的画布状态快照（随用户消息与工具结果续轮发送，始终为最新状态） */
@@ -211,6 +230,11 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
   }
   const parsed = streamSchema.safeParse(payload);
   if (!parsed.success) return failCode(422, "common.invalid_request");
+
+  // 项目绑定校验必须在建流之前：绑定不符返回干净的 403 JSON，不进 SSE
+  if (!assertProjectBinding(session, parsed.data.projectId)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
 
   return createSseResponse(c.req.raw, async ({ emit, signal }) => {
       // ★ 立即 flush thinking，前端马上显示"思考中…"
@@ -287,6 +311,8 @@ router.post("/api/agent/sessions/:id/stream", async (c) => {
 // ── 工具结果回传端点 ──
 
 const toolResultSchema = z.object({
+  /** 前端当前项目 ID：项目绑定校验用 */
+  projectId: z.string().optional(),
   /** 本轮执行的全部工具结果（通常一个，多调时不丢结果） */
   results: z.array(z.object({
     toolCallId: z.string().min(1),
@@ -317,6 +343,11 @@ router.post("/api/agent/sessions/:id/tool-result", async (c) => {
   }
   const parsed = toolResultSchema.safeParse(body);
   if (!parsed.success) return failCode(422, "common.invalid_request");
+
+  // 项目绑定校验必须在建流之前：绑定不符返回干净的 403 JSON，不进 SSE
+  if (!assertProjectBinding(session, parsed.data.projectId)) {
+    return failCode(403, "agent.session_project_mismatch");
+  }
 
   const providerId = c.req.query("providerId");
   const model = c.req.query("model");

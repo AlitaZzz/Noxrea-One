@@ -139,3 +139,59 @@ describe("session-gate 竞态修复", () => {
     expect(gate.current?.id).toBe(9);
   });
 });
+
+describe("session-gate 在途读取围栏（R-AGENT-01/02）", () => {
+  it("beginLoad 递增世代：更早的世代快照失效", () => {
+    const gate = createSessionGate();
+    const gen0 = gate.generation;
+
+    const gen1 = gate.beginLoad();
+
+    expect(gen1).not.toBe(gen0);
+    expect(gate.isCurrent(gen0)).toBe(false);
+    expect(gate.isCurrent(gen1)).toBe(true);
+  });
+
+  it("adopt / reset 使 beginLoad 登记的在途读取失效", () => {
+    const gate = createSessionGate();
+
+    const genLoad = gate.beginLoad();
+    gate.adopt({ id: 1, title: null });
+    expect(gate.isCurrent(genLoad)).toBe(false);
+
+    const genLoad2 = gate.beginLoad();
+    gate.reset();
+    expect(gate.isCurrent(genLoad2)).toBe(false);
+  });
+
+  it("ensure 挂载成功递增世代：发起更早的在途读取按陈旧丢弃（后发生的意图胜出）", async () => {
+    let resolveCreate!: (s: { id: number; title?: string | null }) => void;
+    const createSession = vi.fn(
+      () => new Promise<{ id: number; title?: string | null }>((r) => (resolveCreate = r))
+    );
+    const gate = createSessionGate();
+
+    const genBefore = gate.generation;
+    const pending = gate.ensure(createSession); // 发送在途
+    resolveCreate(session(7));
+    await pending; // 挂载成功，世代递增
+
+    expect(gate.current?.id).toBe(7);
+    expect(gate.isCurrent(genBefore)).toBe(false);
+  });
+
+  it("loadHistory 登记在途读取使在途创建孤儿化：切会话意图胜出，发送被放弃", async () => {
+    let resolveCreate!: (s: { id: number; title?: string | null }) => void;
+    const createSession = vi.fn(
+      () => new Promise<{ id: number; title?: string | null }>((r) => (resolveCreate = r))
+    );
+    const gate = createSessionGate();
+
+    const pending = gate.ensure(createSession); // 发送在途
+    gate.beginLoad(); // 用户切会话
+    resolveCreate(session(7));
+
+    expect(await pending).toBeNull();
+    expect(gate.current).toBeNull();
+  });
+});

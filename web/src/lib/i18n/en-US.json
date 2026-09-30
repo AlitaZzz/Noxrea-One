@@ -1003,6 +1003,7 @@
     },
     "agent": {
       "session_not_found": "Session not found",
+      "session_project_mismatch": "Session does not belong to the current project, please refresh",
       "session_id_required": "sessionId is required",
       "provider_not_found": "No available model provider",
       "upstream_failed": "Model call failed, please try again later",

@@ -15,6 +15,7 @@ import {
   currentLeaseToken,
   destroyRoom,
   EMPTY_ROOM_GRACE_MS,
+  gateCount,
   isCurrentLease,
   joinCanvasRoom,
   leaveCanvasRoom,
@@ -305,5 +306,62 @@ describe("withProjectGate 每项目写临界区", () => {
       throw new Error("lease lost");
     });
     await expect(err).rejects.toThrow("lease lost");
+  });
+});
+
+describe("withProjectGate 条目生命周期（RR-03）", () => {
+  /** 清理发生在完成后的微任务链上：推进一个宏任务确保全部落地 */
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("gate 完成后条目被清理：Map 不随项目数无限增长", async () => {
+    for (let i = 0; i < 5; i++) {
+      await withProjectGate(`p-clean-${i}`, async () => i);
+    }
+
+    await flush();
+    expect(gateCount()).toBe(0);
+  });
+
+  it("前序失败同样清理", async () => {
+    await expect(
+      withProjectGate("p-err", async () => {
+        throw new Error("boom");
+      })
+    ).rejects.toThrow("boom");
+
+    await flush();
+    expect(gateCount()).toBe(0);
+  });
+
+  it("排队中的前序完成不误删条目：后继仍串行排队（误删会让 g3 与 g2 并发）", async () => {
+    const order: string[] = [];
+    const b1 = deferred();
+    const b2 = deferred();
+
+    const g1 = withProjectGate("p1", async () => {
+      order.push("g1");
+      await b1.promise;
+    });
+    const g2 = withProjectGate("p1", async () => {
+      order.push("g2");
+      await b2.promise;
+    });
+
+    // g1 完成（清理微任务触发），此时 g2 仍占用临界区
+    b1.resolve();
+    await g1;
+    await flush();
+
+    // 若清理误删了 g2 的条目，g3 会立即执行与 g2 重叠
+    const g3 = withProjectGate("p1", async () => {
+      order.push("g3");
+    });
+    b2.resolve();
+    await g2;
+    await g3;
+
+    expect(order).toEqual(["g1", "g2", "g3"]);
+    await flush();
+    expect(gateCount()).toBe(0);
   });
 });

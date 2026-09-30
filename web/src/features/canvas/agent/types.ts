@@ -8,6 +8,8 @@
 
 export interface StreamAgentOptions {
   sessionId: number;
+  /** 当前项目 ID：服务端校验会话的项目绑定（项目级会话不允许跨项目使用） */
+  projectId?: string;
   modelId: string;
   /** 供应商 id（providerId/modelName 稳定键的前半），缺省时由后端按模型名解析 */
   providerId?: string;
@@ -24,6 +26,8 @@ export interface StreamAgentOptions {
 
 export interface ToolResultOptions {
   sessionId: number;
+  /** 当前项目 ID：服务端校验会话的项目绑定（项目级会话不允许跨项目使用） */
+  projectId?: string;
   modelId: string;
   providerId?: string;
   /** 本轮执行的全部工具结果 */

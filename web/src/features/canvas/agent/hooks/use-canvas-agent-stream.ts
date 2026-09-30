@@ -273,6 +273,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         abortRef.current = ctrl;
         const res = await agentApi.streamAgent({
           sessionId,
+          projectId,
           modelId,
           providerId,
           content: trimmed,
@@ -409,6 +410,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           abortRef.current = ctrl2;
           const res2 = await agentApi.submitToolResults({
             sessionId,
+            projectId,
             modelId,
             providerId,
             results: results.map((r) => ({ toolCallId: r.toolCallId, result: r.content })),
@@ -451,7 +453,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
         );
       }
     },
-    [appendMessage, patchNote, sessions, runStream, modelId, providerId, requestConfirmation]
+    [appendMessage, patchNote, sessions, runStream, modelId, providerId, projectId, requestConfirmation]
   );
 
   return {

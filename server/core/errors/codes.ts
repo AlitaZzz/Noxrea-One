@@ -100,6 +100,8 @@ export const ERROR_CODES = [
   // ── Agent ──
   /** 会话不存在 */
   "agent.session_not_found",
+  /** 会话不属于请求声明的项目：项目级会话不允许跨项目使用 */
+  "agent.session_project_mismatch",
   /** 缺少 sessionId */
   "agent.session_id_required",
   /** 未找到可用的模型供应商 */

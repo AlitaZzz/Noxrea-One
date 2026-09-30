@@ -191,14 +191,27 @@ export function currentLeaseToken(projectId: string): number | null {
  * 轮换前、落库在快照读后」，让新页面拿着已过期的快照进入编辑——临界区把
  * 该窗口压缩为零（写要么整体先于握手、结果可见于快照，要么整体在后、被
  * 租约校验拒绝）。
+ *
+ * 条目生命周期（RR-03）：gate 完成后，仅当条目仍是自己写入的 tail 时才移除。
+ * 期间若有新 gate 排队并覆盖条目，说明临界区仍有排队者，条目归新 tail 清理——
+ * 身份比对保证绝不误删使用中的临界区队列（误删会让后续写入与前序并发）。
  */
 const gates = new Map<string, Promise<void>>();
 
 export function withProjectGate<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
   const tail = gates.get(projectId) ?? Promise.resolve();
   const run = tail.then(fn, fn);
-  gates.set(projectId, run.then(() => undefined, () => undefined));
+  const next = run.then(() => undefined, () => undefined);
+  gates.set(projectId, next);
+  void next.then(() => {
+    if (gates.get(projectId) === next) gates.delete(projectId);
+  });
   return run;
+}
+
+/** 在途 / 待清理的项目 gate 条目数（测试观察口：RR-03 泄漏防护，生产路径不调用） */
+export function gateCount(): number {
+  return gates.size;
 }
 
 /** 测试辅助：清空全部房间与临界区状态 */

@@ -42,9 +42,10 @@ export async function listSessions(projectId?: string): Promise<AgentSessionDto[
   return api<AgentSessionDto[]>(url);
 }
 
-/** 获取会话历史消息。 */
-export async function getSessionMessages(sessionId: number): Promise<AgentMessageDto[]> {
-  return api<AgentMessageDto[]>(`/api/agent/sessions/${sessionId}/messages`);
+/** 获取会话历史消息。projectId 供服务端做项目绑定校验（会话不允许跨项目使用）。 */
+export async function getSessionMessages(sessionId: number, projectId?: string): Promise<AgentMessageDto[]> {
+  const query = projectId != null ? `?projectId=${encodeURIComponent(projectId)}` : "";
+  return api<AgentMessageDto[]>(`/api/agent/sessions/${sessionId}/messages${query}`);
 }
 
 /** 删除会话。 */
@@ -67,6 +68,7 @@ export async function streamAgent(opts: StreamAgentOptions): Promise<Response> {
   const params = new URLSearchParams({ model: opts.modelId });
   if (opts.providerId) params.set("providerId", opts.providerId);
   const body: Record<string, unknown> = { content: opts.content };
+  if (opts.projectId != null) body.projectId = opts.projectId;
   if (opts.refImages?.length) body.refImages = opts.refImages;
   if (opts.canvasState !== undefined) body.canvasState = opts.canvasState;
   if (opts.userActions !== undefined) body.userActions = opts.userActions;
@@ -89,6 +91,7 @@ export async function submitToolResults(opts: ToolResultOptions): Promise<Respon
       method: "POST",
       body: JSON.stringify({
         results: opts.results,
+        ...(opts.projectId != null ? { projectId: opts.projectId } : {}),
         ...(opts.canvasState !== undefined ? { canvasState: opts.canvasState } : {}),
         ...(opts.userActions !== undefined ? { userActions: opts.userActions } : {}),
       }),
