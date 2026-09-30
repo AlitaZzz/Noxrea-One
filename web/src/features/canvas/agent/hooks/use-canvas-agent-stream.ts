@@ -4,6 +4,23 @@
  * 回传本轮全部工具结果并继续流式接收，直到无工具调用为止。
  * 前端不管理消息历史，后端全权负责上下文构建；
  * 画布状态快照随用户消息与工具续轮上传，模型在任何一轮看到的都是画布最新状态。
+ *
+ * ── 回合世代令牌（AGENT-06 根因修复）──
+ * streamingRef / isStreaming / abortRef / 空占位清理是跨回合共享的生命周期状态。
+ * 旧实现里「失效事件」与「回合自身的 finally」都无条件写它们：回合 A 被停止后，
+ * 其异步续体（abort 拒绝要穿过浏览器内部任务边界，到达时机不保证）可能晚于新回合
+ * B 启动——A 的 finally 会复位 B 的流式状态、清掉 B 的空占位（此后 B 的 delta 按
+ * id 查找落空被静默丢弃，整轮输出丢失）、把 A 的错误渲染进 B 的气泡；续轮循环
+ * 守卫读共享标志 streamingRef 还会被 B 翻回 true，把已停止的 A 复活成僵尸回合，
+ * 继续执行工具并用新 AbortController 覆写 abortRef（停止按钮从此 abort 不到 B）。
+ *
+ * 现在每次 sendChat 捕获发起时的世代号 turnGen，一个异步回合续体只允许修改属于
+ * 自己的生命周期状态：
+ * - 失效事件（stopStream：手动停止 / 新对话 / 切会话 / 切项目统一走它）递增世代
+ *   并同步完成全局复位，是唯一允许在世代失配下写共享状态的一方；
+ * - 回合自身的 finally / catch 错误渲染 / 占位清理一律先校验世代，失配即整体
+ *   跳过——旧续体在结构上失格，而非时序上碰巧没赶上；
+ * - abortRef 只在世代校验通过后才允许覆写，恒指向当前活跃回合的控制器。
  */
 "use client";
 
@@ -62,6 +79,12 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
 
   const abortRef = useRef<AbortController | null>(null);
   const streamingRef = useRef(false);
+  /**
+   * 回合世代令牌：sendChat 发起时递增并捕获快照；失效事件（stopStream，含
+   * 手动停止 / 新对话 / 切会话 / 切项目）再次递增世代使在途回合全部失格。
+   * 世代失配的续体不得读写任何共享生命周期状态（见文件头 AGENT-06 说明）。
+   */
+  const turnGenRef = useRef(0);
 
   const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
@@ -129,24 +152,34 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
     });
   }, []);
 
+  /**
+   * 统一失效入口：手动停止、新对话、切会话（loadHistory 前后各一次）、切项目
+   * 全部经此收口。递增世代使所有在途回合续体失格，并同步完成全局复位——
+   * 世代递增与全局复位必须成对出现，失配续体迟到的 finally 依赖这一点
+   * 跳过清理（否则 streamingRef 将永久卡在 true）。
+   */
+  const stopStream = useCallback(() => {
+    turnGenRef.current += 1;
+    abortRef.current?.abort();
+    streamingRef.current = false;
+    setIsStreaming(false);
+    clearPendingPlaceholders();
+    respondToConfirm({ approved: false });
+  }, [clearPendingPlaceholders, respondToConfirm]);
+
   const sessions = useAgentSessions({
     onClearMessages: () => setMessages([]),
-    onStopStream: () => {
-      abortRef.current?.abort();
-      streamingRef.current = false;
-      setIsStreaming(false);
-      clearPendingPlaceholders();
-      respondToConfirm({ approved: false });
-    },
+    onStopStream: stopStream,
     onLoadMessages: (loaded: ChatMessage[]) => setMessages(loaded),
     projectId,
   });
 
-  /** 发起单次流式请求（初始消息或工具结果续轮），解析 SSE 事件 */
+  /** 发起单次流式请求（初始消息或工具结果续轮），解析 SSE 事件。
+      占位气泡由 sendChat 统一预创建并传入 id——本函数只 patch、不新建。 */
   const runStream = useCallback(
     async (
       res: Response,
-      placeholderId?: string
+      placeholderId: string
     ): Promise<{ hasTool: boolean; toolCalls: ToolCallView[]; assistantId: string; text: string }> => {
       if (!res.ok) throw new Error(await resolveResponseError(res, "agent.request_failed"));
       if (!res.body) throw new Error("no stream body");
@@ -155,8 +188,7 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       let accToolCalls: ToolCallView[] = [];
       let doneHasTool = false;
 
-      const assistantId = placeholderId ?? uid();
-      if (!placeholderId) appendMessage({ id: assistantId, role: "assistant", content: "" });
+      const assistantId = placeholderId;
 
       const patchAssistant = (patch: Partial<ChatMessage>) => {
         setMessages((prev) => {
@@ -213,22 +245,18 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       if (accToolCalls.length > 0) patchAssistant({ toolCalls: accToolCalls });
       return { hasTool: doneHasTool, toolCalls: accToolCalls, assistantId, text: accText };
     },
-    [appendMessage]
+    []
   );
-
-  const stopStream = useCallback(() => {
-    abortRef.current?.abort();
-    streamingRef.current = false;
-    setIsStreaming(false);
-    clearPendingPlaceholders();
-    respondToConfirm({ approved: false });
-  }, [clearPendingPlaceholders, respondToConfirm]);
 
   /** 发送一条用户消息并驱动整个对话（含工具续轮） */
   const sendChat = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || streamingRef.current) return;
+
+      // 登记本回合世代：此后本续体的一切生命周期写入都以世代校验为前提
+      const turnGen = ++turnGenRef.current;
+      const isMyTurn = () => turnGenRef.current === turnGen;
 
       const turnId = uid();
       appendMessage({ id: uid(), role: "user", content: trimmed, turnId });
@@ -238,8 +266,11 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       setIsStreaming(true);
 
       const sessionId = await sessions.ensureSession(trimmed);
-      // 等待期间被 新对话 / 停止 / 切换项目 取消则直接结束
-      if (!sessionId || !streamingRef.current) {
+      // 等待期间被 新对话 / 停止 / 切会话 / 切项目 失效：失效方已完成全局复位，
+      // 本续体已失格，静默退出——世代失配后连 streamingRef 都不能再碰
+      if (!isMyTurn()) return;
+      if (!sessionId) {
+        // 本回合自身的会话创建失败（回合仍然在位）：恢复非流式状态
         streamingRef.current = false;
         setIsStreaming(false);
         return;
@@ -270,6 +301,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       try {
         // 初始流式请求：随消息上传画布状态快照
         const ctrl = new AbortController();
+        // 上方世代校验与本行之间无 await：单线程下不可能失配，
+        // abortRef 恒指向当前活跃回合的控制器
         abortRef.current = ctrl;
         const res = await agentApi.streamAgent({
           sessionId,
@@ -283,11 +316,16 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           signal: ctrl.signal,
         });
 
+        // 迟到响应（abort 被网络层/mock 忽略时响应仍可能送达）：本回合已失效，
+        // 响应整体丢弃——占位已由失效事件清理，本续体无权再做任何事
+        if (!isMyTurn()) return;
         let result = await runStream(res, placeholderId);
 
         // 工具续轮循环
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          if (!streamingRef.current) break;
+          // 守卫必须读本回合世代而非共享 streamingRef：后者会被新回合置回
+          // true，读它会把已停止的本回合复活成僵尸（继续执行工具、覆写 abortRef）
+          if (!isMyTurn()) break;
           if (!result.hasTool) {
             if (!result.text && !result.toolCalls.length) {
               // setState updater 是延迟执行的：result 在后续轮次会被重新赋值，
@@ -336,8 +374,9 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           if (results.some((r) => r.mutated)) turn.mutated = true;
           if (confirmCalls.length > 0) {
             const decision = await requestConfirmation(confirmCalls);
-            // 等待确认期间被 新对话/停止/切换 会话终止则不再续轮
-            if (!streamingRef.current) break;
+            // 等待确认期间被 新对话/停止/切换 会话失效则不再续轮：
+            // 按本回合世代判断，共享 streamingRef 已会被新回合翻回 true
+            if (!isMyTurn()) break;
             if (decision.approved) {
               const { calls: execCalls, skipped, dropped } = applyConfirmSelections(
                 confirmCalls,
@@ -407,6 +446,8 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           appendMessage({ id: nextPlaceholderId, role: "assistant", content: "", turnId });
 
           const ctrl2 = new AbortController();
+          // 循环顶部/确认后的世代校验到这里全部同步：失配续体进不了本行，
+          // abortRef 不会被僵尸回合覆写（否则停止按钮将 abort 不到活跃回合）
           abortRef.current = ctrl2;
           const res2 = await agentApi.submitToolResults({
             sessionId,
@@ -421,17 +462,23 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
             signal: ctrl2.signal,
           });
 
+          // 迟到的续轮响应：本回合已失效，丢弃响应（下一轮守卫同样会拦，
+          // 这里提前退出避免无意义的 result 读取）
+          if (!isMyTurn()) break;
           result = await runStream(res2, nextPlaceholderId);
         }
         // 轮数打满仍有工具调用：明确收尾，避免气泡永远挂着未执行的 chip
-        if (result.hasTool) {
+        //（仅本回合仍在位时；失配续体连这条提示也无权写）
+        if (isMyTurn() && result.hasTool) {
           patchNote(result.assistantId, i18n.t("agent.toolRoundLimitReached"));
         }
         finishTurnHistory();
       } catch (err: unknown) {
         finishTurnHistory();
         const isAbort = err instanceof Error && err.name === "AbortError";
-        if (!isAbort) {
+        // 错误渲染前校验世代：旧回合迟到的错误绝不写进（可能已属于新回合的）
+        // 空占位气泡——世代失配时本回合的错误随回合一起作废
+        if (!isAbort && isMyTurn()) {
           const msg = err instanceof Error ? err.message : i18n.t("agent.chatFailed");
           // 错误只渲染到气泡内：patch 最后一个空的 assistant 占位
           setMessages((prev) => {
@@ -446,14 +493,17 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
           });
         }
       } finally {
-        streamingRef.current = false;
-        setIsStreaming(false);
-        setMessages((prev) =>
-          prev.filter((m) => !(m.role === "assistant" && !m.content && !m.toolCalls))
-        );
+        // 世代失配 = 失效事件已同步复位过全局状态，本续体不得再碰：
+        // 旧回合的迟到 finally 复位新回合的 streamingRef / 清掉新回合的占位，
+        // 正是 AGENT-06 的根因路径
+        if (isMyTurn()) {
+          streamingRef.current = false;
+          setIsStreaming(false);
+          clearPendingPlaceholders();
+        }
       }
     },
-    [appendMessage, patchNote, sessions, runStream, modelId, providerId, projectId, requestConfirmation]
+    [appendMessage, patchNote, clearPendingPlaceholders, sessions, runStream, modelId, providerId, projectId, requestConfirmation]
   );
 
   return {

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   streamGenerationTask: vi.fn(),
   fetchTasksStatus: vi.fn(),
+  cancelGenerationTask: vi.fn(),
   loadMediaDimensions: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@/features/canvas/api/generation-api", async (importOriginal) => {
     generationApi: {
       streamGenerationTask: mocks.streamGenerationTask,
       fetchTasksStatus: mocks.fetchTasksStatus,
+      cancelGenerationTask: mocks.cancelGenerationTask,
     },
   };
 });
@@ -191,5 +193,68 @@ describe("useSseTaskMonitor", () => {
     expect(useHistoryStore.getState().undoStack.length).toBe(0);
     useCanvasStore.getState().updateNodeData("c1", { content: "x" }, undefined, { forceHistory: true });
     expect(useHistoryStore.getState().undoStack.length).toBe(1);
+  });
+
+  /**
+   * GEN-02 生成任务生命周期语义锁定（2026-09 定案，语义说明见
+   * use-sse-task-monitor scanAndConnect 处注释）：
+   * 删除节点只断开本地 SSE 流，绝不取消任务；撤销复活后 monitor 重连续跑。
+   * 此组测试防止未来按「删除即取消」的旧审计思路回归。
+   */
+  describe("GEN-02 语义锁定：删除节点不取消任务", () => {
+    it("删除生成中节点：下一次扫描只断开本地流，绝不调用 cancelGenerationTask", async () => {
+      addWatchedNode("n1", "t1");
+      // 永不返回的流（连接挂起中），signal 是唯一可观测的断开信号
+      mocks.streamGenerationTask.mockReturnValue(new Promise<Response>(() => {}));
+      renderHook(() => useSseTaskMonitor(notif));
+      await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(1));
+      const firstSignal = mocks.streamGenerationTask.mock.calls[0][1] as AbortSignal;
+      expect(firstSignal.aborted).toBe(false);
+
+      // 模拟节点删除：键盘/Agent/组级联删除最终都表现为节点从 store 消失
+      act(() => {
+        useCanvasStore.setState({ nodes: [], edges: [] });
+      });
+
+      // 下一次扫描（3s 周期）应断开无消费者的本地流；任务本身不被取消
+      await waitFor(() => expect(firstSignal.aborted).toBe(true), { timeout: 6000 });
+      expect(mocks.cancelGenerationTask).not.toHaveBeenCalled();
+    }, 15_000);
+
+    it("删除后撤销复活：binding 随快照恢复，monitor 重连续跑，终态照常落地", async () => {
+      addWatchedNode("n1", "t1");
+      // 快照：撤销要恢复的节点（含 taskBinding）
+      const revivedNode = { ...useCanvasStore.getState().nodes[0] };
+      mocks.streamGenerationTask
+        .mockResolvedValueOnce(stalledResponse())
+        .mockResolvedValueOnce(
+          sseResponse(terminalFrame({
+            taskId: "t1", status: "completed",
+            resultUrls: ["/api/files/1/cc/z.png"], resultSizes: [9],
+          })),
+        );
+      renderHook(() => useSseTaskMonitor(notif));
+      await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(1));
+      const firstSignal = mocks.streamGenerationTask.mock.calls[0][1] as AbortSignal;
+
+      // 删除：只断流，不取消
+      act(() => {
+        useCanvasStore.setState({ nodes: [], edges: [] });
+      });
+      await waitFor(() => expect(firstSignal.aborted).toBe(true), { timeout: 6000 });
+      expect(mocks.cancelGenerationTask).not.toHaveBeenCalled();
+
+      // 撤销复活：节点与 binding 一起回来，monitor 按 taskId 重连并拿到终态
+      act(() => {
+        useCanvasStore.setState({ nodes: [revivedNode] });
+      });
+      await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(2), { timeout: 6000 });
+      await waitFor(() => {
+        const data = useCanvasStore.getState().nodes[0].data as Record<string, unknown>;
+        expect(data.src).toBe("/api/files/1/cc/z.png");
+        expect(data.taskBinding).toBeUndefined();
+      });
+      expect(mocks.cancelGenerationTask).not.toHaveBeenCalled();
+    }, 20_000);
   });
 });

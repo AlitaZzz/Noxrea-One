@@ -187,6 +187,22 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       }
       // 任务已从画布消失（节点被删 / taskBinding 被清/换）：这些流已无人消费，
       // 但服务端会一直推送心跳，必须主动断开，否则连接与内存都挂着。
+      //
+      // ── GEN-02 生成任务生命周期语义（2026-09 定案，此处禁止加取消）──
+      // 断开本地流 ≠ 取消任务。任务宿命独立于节点存亡：任务一旦提交，
+      // 除非用户显式取消（cancelGenerationTask 的合法调用方只有生成面板的
+      // 取消/重新生成入口，以及 useGenerationSubmit 提交窗口的 owner fencing），
+      // worker 会一直执行到终态。删除节点只是解除消费关系——撤销复活节点时
+      // taskBinding 随快照恢复，scanAndConnect 会按 taskId 重连续跑或补取终态，
+      // 结果不丢。误删+撤销因此零浪费；即使不撤销，任务结果也保存在服务端。
+      // 为什么不能在这里「节点消失即取消」：
+      // 1. 切换项目时旧项目任务同样从画布消失（binding 随项目数据持久化，
+      //    切回后继续消费），按消失取消会误杀正常任务；
+      // 2. 上游 provider 普遍无取消能力（见 server/services/protocols/*，R4），
+      //    processing 阶段取消省不回积分，只会毁掉撤销复活的能力；
+      // 3. 该语义与参考实现 open-ai-canvas-main 一致（其节点删除只清 UI 态，
+      //    "A historical taskId is not a lock"）。
+      // 语义锁定测试：__tests__/hooks/use-sse-task-monitor.test.ts「GEN-02 语义锁定」组。
       for (const [id, ctrl] of sseCtrlsRef.current) {
         if (activeTaskIds.has(id)) continue;
         ctrl.abort();

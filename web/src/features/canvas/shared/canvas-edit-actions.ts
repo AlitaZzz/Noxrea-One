@@ -404,7 +404,10 @@ export function selectAllNodes(): void {
   store.setNodes(store.nodes.map((n) => ({ ...n, selected: true })));
 }
 
-/** 删除当前选中的节点与连线 */
+/** 删除当前选中的节点与连线。
+    不取消节点关联的生成任务：任务生命周期独立于节点存亡，删除只解除消费关系，
+    撤销复活后 monitor 按 binding 自动重连续跑（语义与原因详见
+    use-sse-task-monitor scanAndConnect 处的「GEN-02 生成任务生命周期语义」注释）。 */
 export function deleteSelection(): void {
   const nodeIds = getSelectedNodeIds();
   const edgeIds = getSelectedEdgeIds();
