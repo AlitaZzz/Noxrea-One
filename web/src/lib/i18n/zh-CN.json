@@ -985,8 +985,7 @@
       "task_not_found": "任务不存在",
       "task_already_finished": "任务已结束",
       "submit_failed": "提交生成任务失败",
-      "no_task_id": "服务端未返回任务 ID",
-      "missing_model_config": "缺少模型配置"
+      "no_task_id": "服务端未返回任务 ID"
     },
     "generation": {
       "timeout": "调用服务商超时，请稍后重试",

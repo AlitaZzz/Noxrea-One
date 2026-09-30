@@ -6,8 +6,8 @@
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
-import { Button, Popover, Tooltip } from "antd";
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { App, Button, Popover, Tooltip } from "antd";
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
@@ -19,16 +19,11 @@ import { generationApi } from "@/features/canvas/api/generation-api";
 import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import type { HistorySnapshot } from "@/features/project/types";
-import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
-import type { ModelProvider } from "@/lib/types/models";
-import { type ModelOption } from "@/lib/types/models";
 
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
@@ -47,6 +42,7 @@ import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import { spawnPromptDerivedNode } from "../upload/derived-node";
+import { useGenerationSubmit } from "./use-generation-submit";
 
 interface Props { nodeId: string; }
 
@@ -207,69 +203,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
   }, [canvasNodes, nodeId]);
 
-  // 参数值在 params 缓存未就绪时为 undefined，由 submitTask 的 hasField 守卫决定是否上报
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; quality?: string; resolution?: string; ratio?: string; refImages: string[]; n?: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", refImages: [] as string[], entry: null, provider: null });
-
-  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
-  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
-  /** 使取消或新一轮生成中的旧异步流程失效 */
-  const generationRunRef = useRef(0);
-
-  /**
-   * 回滚 handleGenerate 压入的预生成快照。
-   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，
-   * 说明它已不是栈顶，此时放弃弹出，避免误删无关快照导致撤销行为错乱。
-   */
-  const dropPendingHistory = useCallback(() => {
-    const pushed = pushedSnapshotRef.current;
-    pushedSnapshotRef.current = null;
-    if (pushed) useHistoryStore.getState().popIfTop(pushed);
-  }, []);
-
-  // ── Submit generation task (SSE handled by InfiniteCanvas) ──
-  const submitTask = async (runId: number): Promise<string | null> => {
-    const { entry, provider, prompt: p, quality: q, resolution, ratio: r, refImages: refs, n: num } = retryRef.current;
-    if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
-    try {
-      if (runId !== generationRunRef.current) return null;
-      const res = await generationApi.submitGenerationTask({
-        type: "image",
-        prompt: p.trim(),
-        model: entry.name,
-        providerId: entry.providerId,
-        quality: hasField(fields, "quality") ? q : undefined,
-        resolution: hasField(fields, "resolution") ? resolution : undefined,
-        ratio: hasField(fields, "ratio") ? r : undefined,
-        n: hasField(fields, "n") ? num : undefined,
-        refImages: refs.length > 0 ? refs : undefined,
-        nodeId,
-      });
-      if (!res.ok) {
-        const body = parseErrorBody(await res.json().catch(() => null));
-        return resolveApiError(body, res.status, "generate.submit_failed");
-      }
-      const json = await res.json();
-      const taskId = json.data?.id;
-      if (!taskId) return i18n.t("error.generate.no_task_id");
-
-      // 取消可能发生在请求返回前：主动取消已经创建的后端任务，避免留下孤儿任务
-      if (runId !== generationRunRef.current) {
-        await generationApi.cancelGenerationTask(taskId).catch(() => {});
-        return null;
-      }
-
-      // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
-      // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
-      const depthBefore = useHistoryStore.getState().undoStack.length;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
-      const stack = useHistoryStore.getState().undoStack;
-      pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
-      await flushAndWait();
-      return null;
-    } catch (e: unknown) {
-      return e instanceof Error ? e.message : "Failed to submit task";
-    }
-  };
+  // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
+  // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
+  // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
+  const { notification } = App.useApp();
+  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
 
   /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId);
@@ -284,30 +222,55 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
     // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
     // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
-    // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时 submitTask 会
+    // 提交期间按钮取消态由 submitting 驱动；owner 失效时 submitWithOwner 会
     // 主动取消已创建的后端任务，不产生孤儿任务。
-    const generationRunId = ++generationRunRef.current;
+    const runId = beginRun();
     setSubmitting(true);
     // preset 令牌在提交前展开为模板全文（任务记录保存可读全文；模板热更新每次生效）
     try {
       const submittedPrompt = await expandPresetTokens(finalPrompt);
-      if (generationRunId !== generationRunRef.current) return;
-      retryRef.current = { count: 0, prompt: submittedPrompt, modelKey, quality, resolution, ratio, refImages: refOrder, n, entry, provider };
+      if (!isCurrent(runId)) return;
+      const outcome = await submitWithOwner({
+        runId,
+        nodeId,
+        request: () => generationApi.submitGenerationTask({
+          type: "image",
+          prompt: submittedPrompt.trim(),
+          model: entry.name,
+          providerId: entry.providerId,
+          quality: hasField(fields, "quality") ? quality : undefined,
+          resolution: hasField(fields, "resolution") ? resolution : undefined,
+          ratio: hasField(fields, "ratio") ? ratio : undefined,
+          n: hasField(fields, "n") ? n : undefined,
+          refImages: refOrder.length > 0 ? refOrder : undefined,
+          nodeId,
+        }),
+      });
 
-      const errMsg = await submitTask(generationRunId);
-
-      if (generationRunId !== generationRunRef.current) return;
-      if (errMsg === null) {
-        // 生成成功：绑定已带真实 taskId 落库，SSE 由 InfiniteCanvas 监控
+      if (!isCurrent(runId)) return;
+      if (outcome.status === "failed") {
+        notification.error({
+          title: i18n.t("generation.failed"),
+          description: outcome.error,
+          placement: "bottomRight",
+          duration: 15,
+          key: `generation-failed-${nodeId}`,
+        });
       }
-      // 失败：全程未写 taskBinding，无需清理；错误文案已在 submitTask 内解析
+      // stale：owner 已失效，任务已被静默取消，不提示不写状态
     } catch (error: unknown) {
-      if (generationRunId !== generationRunRef.current) return;
-      console.error("Image generation preparation failed:", error);
+      if (!isCurrent(runId)) return;
+      notification.error({
+        title: i18n.t("generation.failed"),
+        description: error instanceof Error ? error.message : "",
+        placement: "bottomRight",
+        duration: 15,
+        key: `generation-failed-${nodeId}`,
+      });
     } finally {
       // 仅当自己仍是最新一轮时复位：被取消的轮次由 handleCancel 复位，
       // 避免旧流程收尾误关新一轮提交的取消态
-      if (generationRunId === generationRunRef.current) setSubmitting(false);
+      if (isCurrent(runId)) setSubmitting(false);
     }
   };
 
@@ -315,8 +278,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     // 取消分两种：生成中（binding 处于进行中态）才取消后端任务并回滚本轮快照；
     // 提交在途（本轮 binding 尚未写入，节点上至多是上一轮已结束任务的遗留绑定）
     // 只需失效提交流程——误清会删掉上一轮 succeeded 绑定、误弹上一轮的快照
-    // 丢一步撤销历史。孤儿任务由 submitTask 检测 runId 失效后主动取消
-    ++generationRunRef.current;
+    // 丢一步撤销历史。孤儿任务由 submitWithOwner 检测 owner 失效后主动取消
+    invalidate();
     if (isGenerating) {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;

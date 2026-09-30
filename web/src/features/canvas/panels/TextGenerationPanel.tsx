@@ -8,7 +8,7 @@
 
 import { PlusOutlined } from "@ant-design/icons";
 import { App, Button, Tooltip } from "antd";
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
@@ -17,14 +17,10 @@ import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import type { HistorySnapshot } from "@/features/project/types";
-import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
@@ -38,6 +34,7 @@ import type { ReferenceItem } from "../shared/reference";
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
+import { useGenerationSubmit } from "./use-generation-submit";
 
 interface Props {
   nodeId: string;
@@ -306,26 +303,15 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   /** 参考区添加：上传图片 / 音频 / 视频 -> 新建对应参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId, { accept: "image/*,video/*,audio/*" });
 
-  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
-  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
-  /** 使取消或新一轮生成中的旧异步流程失效 */
-  const generationRunRef = useRef(0);
   /**
    * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
    * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
    */
   const [submitting, setSubmitting] = useState(false);
-
-  /**
-   * 回滚 handleGenerate 压入的预生成快照。
-   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，说明它已不是栈顶，
-   * 此时放弃弹出，避免误删无关快照导致撤销行为错乱。
-   */
-  const dropPendingHistory = useCallback(() => {
-    const pushed = pushedSnapshotRef.current;
-    pushedSnapshotRef.current = null;
-    if (pushed) useHistoryStore.getState().popIfTop(pushed);
-  }, []);
+  // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
+  // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
+  // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
+  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
 
   const handleGenerate = async () => {
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey || isGenerating || submitting) return;
@@ -334,53 +320,44 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
 
     // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
     // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
-    // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时主动取消已创建的后端任务。
-    const generationRunId = ++generationRunRef.current;
+    // 提交期间按钮取消态由 submitting 驱动；owner 失效时 submitWithOwner 会
+    // 主动取消已创建的后端任务，不产生孤儿任务。
+    const runId = beginRun();
     setSubmitting(true);
     try {
       // preset 令牌在提交前展开为模板全文（任务记录保存可读全文；模板热更新每次生效）
       const submittedPrompt = await expandPresetTokens(finalPrompt);
-      if (generationRunId !== generationRunRef.current) return;
+      if (!isCurrent(runId)) return;
       // 与 image/video 链路完全同构：prompt 落任务级文本列、参考图落 ref_images 列。
       // messages 的构造（含多模态组装与 base64 转换）由后端 llm service 归一化完成
-      const res = await generationApi.submitGenerationTask({
-        type: "llm",
-        prompt: submittedPrompt,
-        model: entry.name,
-        providerId: entry.providerId,
+      const outcome = await submitWithOwner({
+        runId,
         nodeId,
-        refImages: refOrder.length > 0 ? refOrder : undefined,
-        refAudios: audioOrder.length > 0 ? audioOrder : undefined,
-        refVideos: refVideoOrder.length > 0 ? refVideoOrder : undefined,
+        request: () => generationApi.submitGenerationTask({
+          type: "llm",
+          prompt: submittedPrompt,
+          model: entry.name,
+          providerId: entry.providerId,
+          nodeId,
+          refImages: refOrder.length > 0 ? refOrder : undefined,
+          refAudios: audioOrder.length > 0 ? audioOrder : undefined,
+          refVideos: refVideoOrder.length > 0 ? refVideoOrder : undefined,
+        }),
       });
-      const json = await res.json();
 
-      // 取消可能发生在请求返回前：主动取消已经创建的后端任务，避免留下孤儿任务
-      if (generationRunId !== generationRunRef.current) {
-        const taskId = json?.data?.id;
-        if (taskId) await generationApi.cancelGenerationTask(taskId).catch(() => {});
-        return;
+      if (!isCurrent(runId)) return;
+      if (outcome.status === "failed") {
+        notification.error({
+          title: t("generation.failed"),
+          description: outcome.error,
+          placement: "bottomRight",
+          duration: 15,
+          key: `generation-failed-${nodeId}`,
+        });
       }
-
-      if (json.code !== 200) {
-        throw new Error(
-          resolveApiError(parseErrorBody(json), res.status, "generate.submit_failed")
-        );
-      }
-
-      const taskId: string | undefined = json.data?.id;
-      if (!taskId) throw new Error(i18n.t("error.generate.no_task_id"));
-
-      // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
-      // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
-      const depthBefore = useHistoryStore.getState().undoStack.length;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
-      const stack = useHistoryStore.getState().undoStack;
-      pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
-      await flushAndWait();
+      // stale：owner 已失效，任务已被静默取消，不提示不写状态
     } catch (err: unknown) {
-      // 取消引发的失败不提示；全程未写 taskBinding，无需清理状态
-      if (generationRunId !== generationRunRef.current) return;
+      if (!isCurrent(runId)) return;
       notification.error({
         title: t("generation.failed"),
         description: err instanceof Error ? err.message : "",
@@ -391,16 +368,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     } finally {
       // 仅当自己仍是最新一轮时复位：被取消的轮次由 handleCancel 复位，
       // 避免旧流程收尾误关新一轮提交的取消态
-      if (generationRunId === generationRunRef.current) setSubmitting(false);
+      if (isCurrent(runId)) setSubmitting(false);
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     // 取消分两种：生成中（binding 处于进行中态）才取消后端任务并回滚本轮快照；
     // 提交在途（本轮 binding 尚未写入，节点上至多是上一轮已结束任务的遗留绑定）
     // 只需失效提交流程——误清会删掉上一轮 succeeded 绑定、误弹上一轮的快照
-    // 丢一步撤销历史。孤儿任务由 submitTask 检测 runId 失效后主动取消
-    ++generationRunRef.current;
+    // 丢一步撤销历史。孤儿任务由 submitWithOwner 检测 owner 失效后主动取消
+    invalidate();
     if (isGenerating) {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const tid = (node?.data as TextNodeData)?.taskBinding?.taskId;

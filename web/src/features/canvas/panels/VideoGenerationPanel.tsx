@@ -21,16 +21,11 @@ import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
 import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
-import { flushAndWait, markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import type { HistorySnapshot } from "@/features/project/types";
-import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
-import type { ModelProvider } from "@/lib/types/models";
-import { type ModelOption } from "@/lib/types/models";
 
 import AudioRefCard from "../shared/AudioRefCard";
 import ImageRefCard from "../shared/ImageRefCard";
@@ -42,6 +37,7 @@ import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-
 import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
+import { useGenerationSubmit } from "./use-generation-submit";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -217,16 +213,16 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return i18n.exists(key) ? i18n.t(key) : undefined;
   };
 
-  // 参数值在 params 缓存未就绪时为 undefined，由 submitTask 的 hasField 守卫决定是否上报
-  const retryRef = useRef<{ count: number; prompt: string; modelKey: string; resolution?: string; ratio?: string; seconds?: number; generateAudio?: boolean; refImages: string[]; refAudios: string[]; refVideos: string[]; refMode: string; n?: number; entry: ModelOption | null; provider: ModelProvider | null }>({ count: 0, prompt: "", modelKey: "", refImages: [] as string[], refAudios: [] as string[], refVideos: [] as string[], refMode: "", entry: null, provider: null });
-  /** 使取消或新一轮生成中的旧异步流程失效 */
-  const generationRunRef = useRef(0);
   /**
    * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
    * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
    */
   const [submitting, setSubmitting] = useState(false);
+  // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
+  // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
+  // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
   const { notification } = App.useApp();
+  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
@@ -291,73 +287,11 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     });
   }
 
-  // ── Submit generation task (SSE handled by InfiniteCanvas) ──
-  const submitTask = async (runId: number): Promise<string | null> => {
-    const { entry, provider, prompt: p, resolution: res, ratio: r, seconds: sec, generateAudio: audio, refImages: refs, refAudios: auds, refVideos: vids, refMode: rm, n: num } = retryRef.current;
-    if (!entry || !provider) return i18n.t("error.generate.missing_model_config");
-    try {
-      const res2 = await generationApi.submitGenerationTask({
-        type: "video",
-        prompt: p.trim(),
-        model: entry.name,
-        providerId: entry.providerId,
-        resolution: hasField(fields, "resolution") ? res : undefined,
-        ratio: hasField(fields, "ratio") ? r : undefined,
-        seconds: hasField(fields, "seconds") ? sec : undefined,
-        generateAudio: hasField(fields, "generateAudio") ? audio : undefined,
-        n: hasField(fields, "n") ? num : undefined,
-        refImages: refs.length > 0 ? refs : undefined,
-        refAudios: auds.length > 0 ? auds : undefined,
-        refVideos: vids.length > 0 ? vids : undefined,
-        refMode: rm || undefined,
-        nodeId,
-      });
-      if (!res2.ok) {
-        const body = parseErrorBody(await res2.json().catch(() => null));
-        return resolveApiError(body, res2.status, "generate.submit_failed");
-      }
-      const json = await res2.json();
-      const taskId = json.data?.id;
-      if (!taskId) return i18n.t("error.generate.no_task_id");
-
-      // 取消可能发生在请求返回前：主动取消已经创建的后端任务，避免留下孤儿任务
-      if (runId !== generationRunRef.current) {
-        await generationApi.cancelGenerationTask(taskId).catch(() => {});
-        return null;
-      }
-
-      // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
-      // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
-      const depthBefore = useHistoryStore.getState().undoStack.length;
-      useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
-      const stack = useHistoryStore.getState().undoStack;
-      pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
-      await flushAndWait();
-      return null;
-    } catch (e: unknown) {
-      return e instanceof Error ? e.message : "Failed to submit task";
-    }
-  };
-
   /**
    * 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点。
    * 参考连上后 allowedRefModes 会包含 full，下面的参考方式纠偏会自动切出「文生视频」。
    */
   const handleRefUpload = useRefUpload(nodeId);
-
-  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
-  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
-
-  /**
-   * 回滚 handleGenerate 压入的预生成快照。
-   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，说明它已不是栈顶，
-   * 此时放弃弹出，避免误删无关快照导致撤销行为错乱。
-   */
-  const dropPendingHistory = useCallback(() => {
-    const pushed = pushedSnapshotRef.current;
-    pushedSnapshotRef.current = null;
-    if (pushed) useHistoryStore.getState().popIfTop(pushed);
-  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !modelKey || isGenerating || submitting) return;
@@ -368,31 +302,49 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
     // 任务创建前置：拿到真实 taskId 之前不写 taskBinding，杜绝空 taskId 中间态
     // 被自动保存落库（刷新后监控扫描按 taskId 过滤会跳过该节点，遮罩永久卡死）。
-    // 提交期间按钮取消态由 submitting 驱动；取消（runId 失效）时 submitTask 会
+    // 提交期间按钮取消态由 submitting 驱动；owner 失效时 submitWithOwner 会
     // 主动取消已创建的后端任务，不产生孤儿任务。
-    const generationRunId = ++generationRunRef.current;
+    const runId = beginRun();
     setSubmitting(true);
     const isTextToVideo = refMode === "text";
-    retryRef.current = { count: 0, prompt: finalPrompt, modelKey, resolution, ratio, seconds, generateAudio, refImages: isTextToVideo ? [] : refOrder, refAudios: isTextToVideo ? [] : audioOrder, refVideos: isTextToVideo ? [] : refVideoOrder, refMode, n, entry, provider };
 
     try {
-      // 失败文案已在 submitTask 内解析；提交失败全程未写 taskBinding，无需清理
-      const errMsg = await submitTask(generationRunId);
+      const outcome = await submitWithOwner({
+        runId,
+        nodeId,
+        request: () => generationApi.submitGenerationTask({
+          type: "video",
+          prompt: finalPrompt.trim(),
+          model: entry.name,
+          providerId: entry.providerId,
+          resolution: hasField(fields, "resolution") ? resolution : undefined,
+          ratio: hasField(fields, "ratio") ? ratio : undefined,
+          seconds: hasField(fields, "seconds") ? seconds : undefined,
+          generateAudio: hasField(fields, "generateAudio") ? generateAudio : undefined,
+          n: hasField(fields, "n") ? n : undefined,
+          refImages: !isTextToVideo && refOrder.length > 0 ? refOrder : undefined,
+          refAudios: !isTextToVideo && audioOrder.length > 0 ? audioOrder : undefined,
+          refVideos: !isTextToVideo && refVideoOrder.length > 0 ? refVideoOrder : undefined,
+          refMode: refMode || undefined,
+          nodeId,
+        }),
+      });
 
-      if (generationRunId !== generationRunRef.current) return;
+      if (!isCurrent(runId)) return;
 
-      if (errMsg !== null) {
+      if (outcome.status === "failed") {
         notification.error({
           title: i18n.t("generation.failed"),
-          description: errMsg,
+          description: outcome.error,
           placement: "bottomRight",
           duration: 15,
           key: `generation-failed-${nodeId}`,
         });
       }
+      // stale：owner 已失效，任务已被静默取消，不提示不写状态
     } finally {
       // 仅当自己仍是最新一轮时收尾复位取消态
-      if (generationRunId === generationRunRef.current) {
+      if (isCurrent(runId)) {
         setSubmitting(false);
       }
     }
@@ -402,9 +354,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     // 取消分两种：生成中（binding 处于进行中态）才取消后端任务并回滚本轮快照；
     // 提交在途（本轮 binding 尚未写入，节点上至多是上一轮已结束任务的遗留绑定）
     // 只需失效提交流程——无状态可清，误清会删掉上一轮 succeeded 绑定、误弹
-    // 上一轮的快照丢一步撤销历史。孤儿任务由 submitTask 检测 runId 失效后
+    // 上一轮的快照丢一步撤销历史。孤儿任务由 submitWithOwner 检测 owner 失效后
     // 主动取消
-    ++generationRunRef.current;
+    invalidate();
     if (isGenerating) {
       const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
       const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;

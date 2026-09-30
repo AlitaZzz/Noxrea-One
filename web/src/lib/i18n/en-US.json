@@ -985,8 +985,7 @@
       "task_not_found": "Task not found",
       "task_already_finished": "Task already finished",
       "submit_failed": "Failed to submit the generation task",
-      "no_task_id": "The server did not return a task ID",
-      "missing_model_config": "No model configured"
+      "no_task_id": "The server did not return a task ID"
     },
     "generation": {
       "timeout": "The provider request timed out, please try again later",
