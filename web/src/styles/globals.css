@@ -73,6 +73,11 @@ select:focus-visible,
   --canvas-app-bg: #0c0c0e;
   --canvas-header-bg: #151518;
   --canvas-bg: #1d1d21;
+  /* 节点主体底色（空态 / 媒体衬底）：纯平 --canvas-bg 在大面积节点上显得死板，
+     纵向 -5 灰阶的微渐变（顶部受光）提供「面」的方向性；渐变中点 ≈ #1c1c20，
+     与 --canvas-bg 的明度锚点重合，bg < bg-hover < bg-active 层级不受影响。
+     仅供节点 body 使用；面板 / 按钮等小面积表面仍用纯色 --canvas-bg。 */
+  --canvas-node-bg: linear-gradient(180deg, #1e1e22, #19191d);
   --canvas-bg-hover: #26262b;
   --canvas-bg-active: #323238;
   --canvas-bg-elevated: #1d1d21;

@@ -715,7 +715,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
         `}
-        style={{ background: hasVideo ? "transparent" : "var(--canvas-bg, #262626)" }}
+        style={{ background: hasVideo ? "transparent" : "var(--canvas-node-bg)" }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}

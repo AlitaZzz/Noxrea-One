@@ -35,7 +35,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
       {/* Body */}
       <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
         ${selected ? "node-selected" : ""}`}
-        style={{ background: "var(--canvas-bg)" }}>
+        style={{ background: "var(--canvas-node-bg)" }}>
         {agentGhost && <AgentGhostOverlay />}
         <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
           <PartitionOutlined className="text-5xl" />

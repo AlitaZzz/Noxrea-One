@@ -380,7 +380,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           ${isMulti ? "overflow-visible" : "overflow-hidden"}
           ${selected ? "node-selected" : ""}
         `}
-        style={{ background: hasImage ? "transparent" : "var(--canvas-bg, #262626)" }}
+        style={{ background: hasImage ? "transparent" : "var(--canvas-node-bg)" }}
       >
         {agentGhost && <AgentGhostOverlay />}
         {isMulti && !expanded && (
