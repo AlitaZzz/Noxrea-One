@@ -27,7 +27,8 @@
     "postinstall": "prisma generate"
   },
   "overrides": {
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.14",
+    "three": "^0.186.1"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
