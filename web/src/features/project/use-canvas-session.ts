@@ -29,7 +29,7 @@ import {
   SSE_WATCHDOG_TIMEOUT_MS,
 } from "@/lib/sse";
 
-import { getCanvasLease, setCanvasLease } from "./canvas-lease";
+import { clearCanvasLease, getCanvasLease, setCanvasLease } from "./canvas-lease";
 import { saveManager } from "./save-manager";
 import { useProjectStore } from "./store";
 
@@ -78,12 +78,12 @@ export function handleEvictEvent(
  * - 未持有租约（初始加载）：采纳服务端快照与租约——adoptProject 同步 upsert
  *   摘要进列表，restoreFromProject 恢复画布内容（程序化写入，不进 agent
  *   动作历史），撤销历史归零（避免撤销穿透到上一个项目）。
- * - 已持有同令牌（断线重连）：编辑权仍有效。revision 领先即本页断线期间的
- *   离线写入已落库——只同步版本，绝不恢复内容（保护本地未保存编辑）。
- * - 已持不同令牌且未过期：服务端已把租约重新签发给本页（空置超宽限后房间
- *   重建 / SPA 返回——令牌轮换只发生在 fresh join，本轮握手即重新签发凭证）。
- *   无缝续接：更新令牌、内容不动（保护本地未保存编辑）。已过期则绝不静默
- *   夺回：与 evict 同等收尾——同步版本 + notifyEvicted。
+ * - 已持有同令牌（断线重连）：编辑权从未离开本页。revision 领先即本页断线
+ *   期间的离线写入已落库——只同步版本，绝不恢复内容（保护本地未保存编辑）。
+ * - 已持不同令牌：服务端发生过 fresh join 轮换，编辑权曾易主。令牌轮换不能
+ *   证明本页内存画布仍对应当前租约的权威快照（SPA 离开期间他人推进内容 /
+ *   断线窗口错过 evict），绝不静默续接：与 evict 同等收尾——同步版本 +
+ *   notifyEvicted，过期弹窗引导刷新，刷新后重走采纳路径以服务端为准。
  * - 载荷不合法 / 项目 id 不一致 / 映射失败：协议错误（服务端契约保证形状，
  *   理论不可达）——按传输失败处理，不标记过期（非编辑权变更）。
  */
@@ -114,12 +114,13 @@ export function handleCanvasHandshake(
     }
     if (held === lease) return "adopted";
 
-    if (saveManager.isExpired()) {
-      saveManager.notifyEvicted();
-      return "expired";
-    }
-    setCanvasLease(projectId, lease);
-    return "adopted";
+    // 令牌不同 = 服务端发生过 fresh join 轮换 = 编辑权曾易主。本页可能错过
+    // evict（断线窗口恰逢他人 fresh join、房间超宽限重建后重连），令牌轮换
+    // 只证明「编辑权曾离开本页」，不能证明本页内存画布仍对应当前租约的权威
+    // 快照——绝不静默续接：与 evict 同等收尾（同步版本 + notifyEvicted），
+    // 过期弹窗引导刷新，刷新后槽位为空、重走采纳路径以服务端为准。
+    saveManager.notifyEvicted();
+    return "expired";
   }
 
   // 首次进入 / 跨项目返回：先恢复内容（恢复抛错时槽位未持有，重连握手重走
@@ -146,6 +147,16 @@ export function useCanvasSession(projectId: string): CanvasSessionStatus {
 
   useEffect(() => {
     if (!projectId) return;
+
+    // 会话开始即作废本项目的残留租约（同项目重新进入画布页 / 切项目后回到
+    // 本项目）：离开期间服务端令牌可能已被轮换（他人 fresh join / 空置宽限后
+    // 房间重建），本地内存的画布内容不再对应权威快照——旧凭证绝不允许「无缝
+    // 续接」，重进必然经握手采纳（restore 服务端快照）。放在 effect 开始而非
+    // unmount cleanup：离开后项目列表页的 flushAndWait、pagehide 的 keepalive
+    // 兜底都发生在租约仍有效时（清得太早会让离开路径的兜底保存拿不到租约），
+    // 而「再次进入」时这些保存早已收尾，时序安全。同一会话内的断线重连不重建
+    // effect，租约保留——这正是「活跃会话重连」与「新会话开始」的分界线。
+    clearCanvasLease(projectId);
 
     let disposed = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;

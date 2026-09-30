@@ -5,16 +5,20 @@
  *   - 握手采纳（初始加载）：adoptProject upsert 摘要、restoreFromProject 程序化
  *     恢复内容、撤销历史归零、持有租约令牌——编辑权与内容原子绑定。
  *   - 采纳失败不留半持有租约：adoptProject 返回 null → 拒绝握手且未持有令牌。
- *   - 断线重连（同令牌）：编辑权仍有效——只同步领先版本，绝不恢复内容
+ *   - 断线重连（同令牌）：编辑权从未离开本页——只同步领先版本，绝不恢复内容
  *     （保护本地未保存编辑），不重置撤销历史。
- *   - 令牌不同：本页已知失效 → 与 evict 同等收尾（同步版本 + notifyEvicted，
- *     不静默夺回编辑权）；未失效 → 服务端已重新签发（空置超宽限后房间重建 /
- *     SPA 返回），无缝续接——更新令牌与版本，内容不动（保护本地未保存编辑）。
+ *   - 令牌不同：服务端发生过 fresh join 轮换，编辑权曾易主。无论本页是否
+ *     错过 evict、saveManager 是否已知过期，一律与 evict 同等收尾（同步版本
+ *     + notifyEvicted，不静默续接）——令牌轮换不能证明本地画布仍对应权威
+ *     快照（SPA 离开期间他人推进内容 / 房间重建后重连），唯一出口是刷新后
+ *     重走采纳路径。
  *   - evict：同步服务端 revision（store 内有单调保护）并联动 saveManager 停用保存。
  *   - 协议防御：载荷不合法 / 项目 id 不一致 → 拒绝且不误标过期（协议错误
  *     ≠ 编辑权变更，由连接层按传输失败收敛）。
+ * @vitest-environment jsdom
  */
 
+import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -24,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   notifyEvicted: vi.fn(),
   updateProjectRevision: vi.fn(),
   adoptProject: vi.fn(),
-  saveExpired: false,
 }));
 
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
@@ -46,7 +49,6 @@ vi.mock("@/features/canvas/agent/user-action-tracker", () => ({
 vi.mock("@/features/project/save-manager", () => ({
   saveManager: {
     notifyEvicted: (...args: unknown[]) => mocks.notifyEvicted(...args),
-    isExpired: () => mocks.saveExpired,
   },
 }));
 
@@ -59,7 +61,8 @@ vi.mock("@/features/project/store", () => ({
   },
 }));
 
-// 事件处理器不触网；连接层（useCanvasSession）不在本套件覆盖范围
+// 事件处理器不触网（apiStream / readSseStream 为桩，供 useCanvasSession
+// 会话边界用例挂载 hook 而不建立真实连接）
 vi.mock("@/lib/api/client", () => ({ apiStream: vi.fn() }));
 vi.mock("@/lib/sse", () => ({
   readSseStream: vi.fn(),
@@ -69,10 +72,11 @@ vi.mock("@/lib/sse", () => ({
 }));
 
 // 租约模块零依赖，用真实实现锁定持有 / keyed 读取语义
-import { getCanvasLease, resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
+import { clearCanvasLease, getCanvasLease, resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
 import {
   handleCanvasHandshake,
   handleEvictEvent,
+  useCanvasSession,
 } from "@/features/project/use-canvas-session";
 
 const ADOPTED = { id: "p1", name: "A", revision: 4, nodes: [], edges: [] };
@@ -92,7 +96,6 @@ describe("画布会话事件处理", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetCanvasLease();
-    mocks.saveExpired = false;
     mocks.runSuppressed.mockImplementation((fn: () => void) => fn());
     mocks.adoptProject.mockReturnValue(ADOPTED);
   });
@@ -190,31 +193,22 @@ describe("画布会话事件处理", () => {
       expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
     });
 
-    it("令牌不同且本页已知失效（断线期间被接管）：按 evict 收尾，不静默夺回", () => {
+    it.each([
+      "SPA 离开期间他人推进内容（房间超宽限重建后重进）",
+      "断线窗口错过 evict（断线期间被接管，重连拿到新令牌）",
+    ])("令牌不同（%s）：一律按 evict 收尾，绝不静默续接", () => {
       const data = { lease: 99, project: { ...VALID_PAYLOAD.project, revision: 9 } };
-      mocks.saveExpired = true;
 
       expect(handleCanvasHandshake("p1", data)).toBe("expired");
 
       expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
       expect(mocks.notifyEvicted).toHaveBeenCalledTimes(1);
-      expect(mocks.restoreFromProject).not.toHaveBeenCalled();
-      // 已失效页面不得更新槽位令牌：编辑权已属他人，唯一出口是刷新
-      expect(getCanvasLease("p1")).toBe(42);
-    });
-
-    it("令牌不同但未失效（空置超宽限后重新签发 / SPA 返回）：无缝续接", () => {
-      const data = { lease: 99, project: { ...VALID_PAYLOAD.project, revision: 9 } };
-
-      expect(handleCanvasHandshake("p1", data)).toBe("adopted");
-
-      // 更新令牌与版本；本地未保存编辑保护：不恢复内容、不重置历史、不驱逐
-      expect(getCanvasLease("p1")).toBe(99);
-      expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
-      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      // 绝不静默续接：不恢复内容、不重置历史、不重新采纳
       expect(mocks.restoreFromProject).not.toHaveBeenCalled();
       expect(mocks.clearHistory).not.toHaveBeenCalled();
       expect(mocks.adoptProject).not.toHaveBeenCalled();
+      // 编辑权曾易主，旧槽位不得被新令牌覆盖：唯一出口是刷新后重走采纳
+      expect(getCanvasLease("p1")).toBe(42);
     });
 
     it("单租约槽位：切换项目后旧项目令牌不再可寻址（keyed 读取天然惰性）", () => {
@@ -223,6 +217,38 @@ describe("画布会话事件处理", () => {
       expect(handleCanvasHandshake("p2", data)).toBe("adopted");
 
       expect(getCanvasLease("p2")).toBe(7);
+      expect(getCanvasLease("p1")).toBeNull();
+    });
+  });
+
+  describe("租约生命周期（clearCanvasLease）", () => {
+    it("keyed 清除：只清指定项目，其他项目槽位不受影响", () => {
+      setCanvasLease("p1", 42);
+
+      clearCanvasLease("p2");
+
+      expect(getCanvasLease("p1")).toBe(42);
+    });
+
+    it("清除后重进：旧租约作废，握手必然重走采纳路径（restore 服务端快照）", () => {
+      setCanvasLease("p1", 10); // 上次会话的旧令牌
+      clearCanvasLease("p1");
+
+      expect(handleCanvasHandshake("p1", VALID_PAYLOAD)).toBe("adopted");
+      // 走的是采纳分支：恢复服务端内容 + 归零撤销历史 + 持有新令牌
+      expect(mocks.restoreFromProject).toHaveBeenCalledTimes(1);
+      expect(mocks.clearHistory).toHaveBeenCalledTimes(1);
+      expect(getCanvasLease("p1")).toBe(VALID_PAYLOAD.lease);
+    });
+  });
+
+  describe("useCanvasSession（会话边界）", () => {
+    it("会话开始即作废同项目残留租约：重进不可能无缝续接（RR-02 根因）", () => {
+      setCanvasLease("p1", 10); // 模拟上次会话残留的令牌
+
+      renderHook(() => useCanvasSession("p1"));
+
+      // effect setup 同步清租约——本次握手的 held 必为 null，走采纳路径
       expect(getCanvasLease("p1")).toBeNull();
     });
   });

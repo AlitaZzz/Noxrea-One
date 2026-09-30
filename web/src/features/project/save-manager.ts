@@ -465,11 +465,6 @@ class SaveManager {
     this.markExpired();
   }
 
-  /** 当前是否处于编辑权失效态（握手判定消费：已知失效的页面不得以新握手静默夺回编辑权） */
-  isExpired(): boolean {
-    return this.expired;
-  }
-
   /** 全局只注册一次页面生命周期与网络状态监听 */
   private registerFlushOnce(): void {
     if (this.registered) return;
