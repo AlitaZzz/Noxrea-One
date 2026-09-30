@@ -1,9 +1,10 @@
 /**
  * 画布页面（/canvas/[projectId]）。
- * 以 URL 上的项目 ID 作为项目身份的唯一真相源：拉取该项目并恢复到画布状态，
- * 装配 ReactFlowProvider、AppShell 与画布主体，并挂载两个页面级浮层：
- * 快捷键说明弹窗、Director 全屏编辑器。
- * ID 缺失、或项目不存在 / 不属于当前用户时回退到 /project。
+ * 以 URL 上的项目 ID 作为项目身份的唯一真相源。画布初始内容由 SSE 原子握手
+ * 下发（轮换租约 + 快照读，见 use-canvas-session）：会话 ready 才放行渲染，
+ * 页面不再单独发 GET 拉取项目。装配 ReactFlowProvider、AppShell 与画布主体，
+ * 并挂载两个页面级浮层：快捷键说明弹窗、Director 全屏编辑器。
+ * ID 缺失、或项目不存在 / 会话无法建立时回退到 /project。
  */
 "use client";
 
@@ -18,7 +19,6 @@ import AppModal from "@/components/ui/AppModal";
 import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useAssetsStore } from "@/features/assets/store";
-import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
 import {
@@ -26,7 +26,6 @@ import {
   promptTemplatesQueryOptions,
 } from "@/features/canvas/shared/prompt-presets";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
 import { useCanvasSession } from "@/features/project/use-canvas-session";
@@ -55,20 +54,32 @@ export default function CanvasPage({
   const directorOverlayOpen = useCanvasStore((s) => s.directorOverlayOpen);
   const setDirectorOverlayOpen = useCanvasStore((s) => s.setDirectorOverlayOpen);
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
-  // 记录「已成功加载并恢复到画布」的项目 ID：
-  // 用它与 URL 上的 projectId 比较得到加载态，切换项目时会自动回到 Loading，
-  // 避免短暂渲染上一个项目的画布内容，也避免在 effect 体内同步 setState。
-  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
-  // 持久化设置（模型库 / 素材库 / 预设目录）的加载态：与项目数据并行拉取，
+  // 编辑权会话：SSE 原子握手成功（租约签发 + 初始内容恢复完成）即 ready。
+  // 页面在 ready 前只渲染加载门——未取得编辑权与内容前不暴露画布，
+  // 也不存在「先驱逐他人再慢慢加载」的窗口。
+  const session = useCanvasSession(projectId);
+  // 持久化设置（模型库 / 素材库 / 预设目录）的加载态：与会话并行就绪，
   // 全部就绪才放行画布——面板与 chip 挂载时数据必然齐，不存在空态竞态；
   // 失败停在 loading 显示重试（网络恢复后可继续），不带着空数据进画布
   const [settingsStatus, setSettingsStatus] = useState<"loading" | "ready" | "failed">("loading");
   // 会话过期（画布编辑权被其他页面实例取得）：唯一出口是刷新页面
   const sessionExpired = useSessionExpiredStore((s) => s.expired);
 
-  // 编辑权事件流：其他标签页 / 浏览器进入即抢占，本页立即收到 evict 弹提示，
-  // 不等到保存撞 409 才发现。本 hook 独立于项目加载，抢占感知尽可能早。
-  useCanvasSession(projectId);
+  // URL 是项目身份的真相源：同步进 store 作为激活会话标记
+  useEffect(() => {
+    if (!projectId) {
+      window.location.href = "/project";
+      return;
+    }
+    useProjectStore.getState().setActiveProject(projectId);
+  }, [projectId]);
+
+  // 会话终态：项目不存在（404）/ 会话无法建立 → 回项目列表
+  useEffect(() => {
+    if (session === "missing" || session === "error") {
+      window.location.href = "/project";
+    }
+  }, [session]);
 
   const queryClient = useQueryClient();
   // 纯拉取（不碰 React state，结果由调用方决定去向）：模型库 / 素材库 / 预设目录并行拉齐。
@@ -109,32 +120,7 @@ export default function CanvasPage({
   }, [loadSettings]);
 
   // 鉴权初始化已由 (app)/layout.tsx 统一完成；项目列表不在画布页拉取（唯一消费方是 /project 门页）。
-  // URL 是项目身份的真相源：先同步进 store，再从服务器拉取最新项目数据恢复到画布，
-  // 避免多浏览器 / 多 Tab 场景下本地缓存过期导致数据不一致。
-  useEffect(() => {
-    if (!projectId) {
-      window.location.href = "/project";
-      return;
-    }
-    useProjectStore.getState().setActiveProject(projectId);
-    useProjectStore.getState().refreshProject(projectId).then((project) => {
-      if (!project) {
-        window.location.href = "/project";
-        return;
-      }
-      // 后端数据是唯一真相源：刷新后一律以服务端内容渲染画布。
-      // 被抢占期间产生的本地改动随之作废（不再有离线草稿机制兜底）。
-      // 项目恢复是程序化写入，不算用户操作，不进 agent 动作历史；
-      // 恢复完成即切换/加载项目，撤销历史同步归零（避免撤销穿透到上一个项目）。
-      runSuppressed(() => useCanvasStore.getState().restoreFromProject(project.id, project));
-      useHistoryStore.getState().clear();
-      setLoadedProjectId(projectId);
-    }).catch((err) => {
-      // 拉取 / 解析失败时不能停在 "Loading canvas..."，回到项目列表
-      console.error("[canvas] load project failed:", err);
-      window.location.href = "/project";
-    });
-  }, [projectId]);
+  // 项目内容不在页面拉取：SSE 握手首帧即权威快照（use-canvas-session 内完成采纳与恢复）。
 
   // Sync modalOpen when director overlay is open (blocks canvas shortcuts)
   useEffect(() => {
@@ -144,21 +130,18 @@ export default function CanvasPage({
     }
   }, [directorOverlayOpen, setModalOpen]);
 
-  if (loadedProjectId !== projectId) {
-    return <CanvasLoader />;
-  }
-
-  if (settingsStatus !== "ready") {
-    return (
+  // 加载门：会话 ready（租约 + 初始内容就绪）且持久化设置齐备才放行画布。
+  // 画布主体存入 stage：过期弹窗渲染在 return 顶层（加载门之外）——加载期间
+  // 编辑权被其他实例取得（SPA 返回遇上 superseded 只收 evict）时，弹窗必须
+  // 已可见，而不是被加载门挡住导致永久悬置
+  const stage =
+    session !== "ready" || settingsStatus !== "ready" ? (
       <CanvasLoader
         failed={settingsStatus === "failed"}
         onRetry={settingsStatus === "failed" ? retrySettings : undefined}
       />
-    );
-  }
-
-  return (
-    <ReactFlowProvider>
+    ) : (
+      <ReactFlowProvider>
       <AppShell>
         <CanvasWithKeyboard />
       </AppShell>
@@ -218,8 +201,15 @@ export default function CanvasPage({
       {directorOverlayOpen && (
         <DirectorOverlay onClose={() => setDirectorOverlayOpen(false)} />
       )}
+      </ReactFlowProvider>
+    );
 
-      {/* 会话过期：不可关闭，唯一动作是刷新；刷新即新页面实例，重新取得编辑权 */}
+  return (
+    <>
+      {stage}
+
+      {/* 会话过期：渲染在加载门外（stage 之上），加载期间被驱逐也可见。
+          不可关闭，唯一动作是刷新；刷新即新页面实例，重新取得编辑权 */}
       <ConfirmModal
         open={sessionExpired}
         title={t("conflict.title")}
@@ -229,6 +219,6 @@ export default function CanvasPage({
         onOk={() => window.location.reload()}
         onCancel={() => window.location.reload()}
       />
-    </ReactFlowProvider>
+    </>
   );
 }

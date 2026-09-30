@@ -8,7 +8,8 @@
  *   - 删除失败 → 项目回到列表
  *   - 批量删除部分失败 → 只恢复失败项（成功的已真的删除，整表回滚会产生幽灵项目）
  *   - 拉取列表失败 → 保留现有列表，不清空；成功且为空才清空
- *   - 摘要 upsert：单项目拉取后列表带名称与版本（画布顶栏与保存链路的数据源）
+ *   - 采纳握手快照（adoptProject）：合法载荷映射 upsert 进列表（画布顶栏与
+ *     保存链路的数据源）；不合法载荷返回 null 且列表不动
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +19,6 @@ import { ApiError } from "@/lib/api/client";
 const mocks = vi.hoisted(() => ({
   deleteProject: vi.fn(),
   listProjects: vi.fn(),
-  getProject: vi.fn(),
   updateProject: vi.fn(),
   notify: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
@@ -27,7 +27,6 @@ vi.mock("@/features/project/api", () => ({
   projectApi: {
     deleteProject: (...args: unknown[]) => mocks.deleteProject(...args),
     listProjects: (...args: unknown[]) => mocks.listProjects(...args),
-    getProject: (...args: unknown[]) => mocks.getProject(...args),
     createProject: vi.fn(async () => null),
     updateProject: (...args: unknown[]) => mocks.updateProject(...args),
     saveProjectRaw: vi.fn(async () => new Response(null, { status: 200 })),
@@ -59,7 +58,6 @@ describe("project store 删除与列表", () => {
   beforeEach(() => {
     mocks.deleteProject.mockReset();
     mocks.listProjects.mockReset();
-    mocks.getProject.mockReset();
     mocks.updateProject.mockReset();
     mocks.notify.error.mockReset();
     seed();
@@ -178,14 +176,11 @@ describe("project store 删除与列表", () => {
   });
 });
 
-describe("project store 摘要 upsert", () => {
-  beforeEach(() => {
-    mocks.getProject.mockReset();
-  });
-
-  it("单项目拉取后把摘要 upsert 进列表（画布顶栏与保存链路的数据源）", async () => {
+describe("project store 采纳握手快照（adoptProject）", () => {
+  it("合法载荷：映射为完整项目并把摘要 upsert 进列表（列表为空时追加）", () => {
     useProjectStore.setState({ projects: [], activeProjectId: null });
-    mocks.getProject.mockResolvedValue({
+
+    const project = useProjectStore.getState().adoptProject({
       id: "p1",
       name: "A",
       revision: 4,
@@ -193,8 +188,6 @@ describe("project store 摘要 upsert", () => {
       coverUrl: "/api/files/1/ab/cover.png",
       canvasData: { nodes: [{ type: "image-node", data: { src: "/img.png" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 }, background: "dots" },
     });
-
-    const project = await useProjectStore.getState().refreshProject("p1");
 
     expect(project?.nodes).toHaveLength(1);
     const summary = useProjectStore.getState().projects.find((p) => p.id === "p1");
@@ -204,13 +197,29 @@ describe("project store 摘要 upsert", () => {
     expect(summary && "nodes" in summary).toBe(false);
   });
 
-  it("拉取失败返回 null 且不动列表", async () => {
-    mocks.getProject.mockRejectedValue(new ApiError(0, "网络不可达"));
-    useProjectStore.setState({ projects: [{ id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 0 }] });
+  it("已有同 id 摘要时原地替换（刷新名称与版本，不产生重复项）", () => {
+    seed();
 
-    const project = await useProjectStore.getState().refreshProject("p1");
+    useProjectStore.getState().adoptProject({
+      id: "p1",
+      name: "A2",
+      revision: 9,
+      updatedAt: "2026-01-02T00:00:00Z",
+    });
 
-    expect(project).toBeNull();
-    expect(useProjectStore.getState().projects).toHaveLength(1);
+    expect(useProjectStore.getState().projects).toHaveLength(3);
+    const p1 = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(p1).toMatchObject({ id: "p1", name: "A2", revision: 9 });
+  });
+
+  it("不合法载荷返回 null 且列表不动", () => {
+    const before = useProjectStore.getState().projects;
+
+    expect(useProjectStore.getState().adoptProject(null)).toBeNull();
+    expect(useProjectStore.getState().adoptProject("x")).toBeNull();
+    expect(useProjectStore.getState().adoptProject({ name: "A" })).toBeNull(); // 缺 id
+    expect(useProjectStore.getState().adoptProject({ id: "p1" })).toBeNull(); // 缺 name
+
+    expect(useProjectStore.getState().projects).toEqual(before);
   });
 });

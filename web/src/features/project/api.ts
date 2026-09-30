@@ -1,6 +1,7 @@
 /**
  * 画布项目（Project）相关 API 封装。
- * 项目的创建 / 读取 / 重命名 / 删除，以及保存时的 keepalive 原始请求。
+ * 项目的列表 / 创建 / 更新 / 删除，以及保存时的 keepalive 原始请求。
+ * 单项目读取不存在独立接口：画布初始内容经 SSE 握手原子下发（use-canvas-session）。
  */
 import { api, apiRaw } from "@/lib/api/client";
 
@@ -8,10 +9,6 @@ export const projectApi = {
   /** 项目列表（JSON 包裹）。 */
   listProjects: <T = unknown>() =>
     api<T>(`/api/canvas/projects`),
-
-  /** 读取单个项目（JSON 包裹）。 */
-  getProject: <T = unknown>(id: string | number) =>
-    api<T>(`/api/canvas/projects/${id}`),
 
   /** 创建项目。返回类型由调用方泛型指定。 */
   createProject: <T = unknown>(name: string, canvasData?: Record<string, unknown>) =>

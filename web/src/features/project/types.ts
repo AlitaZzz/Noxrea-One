@@ -27,8 +27,9 @@ export interface ProjectSummary {
 }
 
 /**
- * 单项目全量投影（GET /api/canvas/projects/:id）：摘要字段 + 画布内容。
- * 仅画布页恢复流程使用；项目列表（projects 数组）不持有内容。
+ * 单项目全量投影：摘要字段 + 画布内容。
+ * 唯一来源是 SSE 握手首帧下发的服务端快照（use-canvas-session 采纳）；
+ * 项目列表（projects 数组）不持有内容。
  */
 export interface CanvasProject extends ProjectSummary {
   viewport: ViewportState;

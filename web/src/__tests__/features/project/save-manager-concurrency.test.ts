@@ -6,7 +6,9 @@
  *   - 内容有主：保存 / revision 回写一律按 getCanvasProjectId 寻址。
  *   - 保存期间的改动在收尾后补存（pendingSave / flushSave）。
  *   - flushAndWait 可正常返回，不永久挂起。
- *   - 409 = 编辑权已属其他页面实例：进入过期态，停用保存，等待刷新。
+ *   - 保存请求携带 baseRevision + 编辑权租约令牌（fencing token）；无租约不派发。
+ *   - 409 = 租约失效（编辑权已属其他页面实例）：同步服务端版本并无条件进入
+ *     过期态，停用保存，等待刷新——不存在任何重试路径。
  *   - 服务端是唯一真相源：未落库的改动只保留在内存（dirty），不写本地副本。
  *   - resetForProjectSwitch：切换即丢弃未派发的尾部编辑，派发状态清空。
  */
@@ -80,6 +82,8 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
   };
 });
 
+// 租约模块零依赖，用真实实现锁定 keyed 读取语义
+import { resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
 import { saveManager } from "@/features/project/save-manager";
 
 /** 私有方法需要直接驱动，才能精确构造并发时序 */
@@ -98,8 +102,6 @@ function resetSaveState() {
     saveTimer: ReturnType<typeof setTimeout> | null;
     dirtySince: number | null;
     pendingDelay: number;
-    hasSuccessfulSave: boolean;
-    inFlightBaseRevision: number | null;
   };
   if (s.saveTimer) clearTimeout(s.saveTimer);
   s.saveTimer = null;
@@ -110,8 +112,6 @@ function resetSaveState() {
   s.dirtySince = null;
   s.pendingDelay = 2000;
   s.offline = false;
-  s.hasSuccessfulSave = false;
-  s.inFlightBaseRevision = null;
   for (const k of Object.keys(mocks.revisions)) delete mocks.revisions[k];
 }
 
@@ -128,6 +128,41 @@ describe("SaveManager 并发保存", () => {
     mocks.canvasProjectId = "p1";
     mocks.snapshotNodes = [{ id: "n1", data: {} }];
     resetSaveState();
+    // 默认已通过握手取得编辑权；专项用例自行改写租约状态
+    resetCanvasLease();
+    setCanvasLease("p1", 42);
+  });
+
+  it("保存请求携带 baseRevision 与编辑权租约令牌（fencing token）", async () => {
+    mocks.revisions["p1"] = 7;
+    mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
+
+    saveManager.markDirty();
+    await priv.save(false);
+
+    const body = JSON.parse(mocks.saveProjectRaw.mock.calls[0][1] as string);
+    expect(body.baseRevision).toBe(7);
+    expect(body.lease).toBe(42);
+    // 成功后本地版本推进到服务端版本 + 1
+    expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 8);
+  });
+
+  it("无租约不派发保存（编辑权未取得 / 租约属于其他项目），保持 dirty", async () => {
+    mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
+
+    // 握手未完成：没有任何租约
+    resetCanvasLease();
+    saveManager.markDirty();
+    await priv.save(false);
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+    expect((saveManager as unknown as { dirty: boolean }).dirty).toBe(true);
+
+    // 租约 keyed 寻址：令牌属于 p2 时 p1 同样不可写
+    setCanvasLease("p2", 9);
+    saveManager.markDirty();
+    await priv.save(false);
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+    expect((saveManager as unknown as { dirty: boolean }).dirty).toBe(true);
   });
 
   it("保存中再次 save 不并发请求，改动在当前保存收尾后补存", async () => {
@@ -270,7 +305,7 @@ describe("SaveManager 并发保存", () => {
     expect(s.dirty).toBe(true);
   });
 
-  it("409 冲突：进入过期态，停用后续保存", async () => {
+  it("409（租约失效）：同步版本并无条件过期，仅发一次请求不重试", async () => {
     mocks.saveProjectRaw.mockResolvedValue({
       ok: false,
       status: 409,
@@ -281,6 +316,8 @@ describe("SaveManager 并发保存", () => {
     const p = priv.save(false);
     await p;
 
+    // 无重试路径：同步版本 + 过期，一次请求即收敛
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1);
     expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 5);
     expect(mocks.markSessionExpired).toHaveBeenCalled();
 
@@ -366,7 +403,7 @@ describe("SaveManager 并发保存", () => {
   });
 
   it("过期态随画布切换重置：保存通道恢复可用，UI 弹窗状态解除", async () => {
-    // 409 无 revision 载荷：不触发首次保存重试（重试语义由上方专项用例覆盖）
+    // 409 无 revision 载荷：同步不了版本，但过期语义不变（不重试）
     mocks.saveProjectRaw.mockResolvedValue({
       ok: false,
       status: 409,
@@ -415,89 +452,6 @@ describe("SaveManager 并发保存", () => {
     const st = saveManager as unknown as { expired: boolean; dirty: boolean };
     expect(st.expired).toBe(false);
     expect(st.dirty).toBe(false);
-  });
-
-  it("首次保存 409（上一任 holder 迟到落库）：同步版本后原地重试一次，不进入过期态", async () => {
-    // 抢占瞬间竞态：本实例刚取得编辑权（fresh join，无 evict），首存 409 来自
-    // 上一任 holder 尚在途的保存。此时锁进过期弹窗会丢弃用户刚做的编辑。
-    let calls = 0;
-    mocks.saveProjectRaw.mockImplementation(() => {
-      calls++;
-      return calls === 1
-        ? Promise.resolve({
-            ok: false,
-            status: 409,
-            json: async () => ({ error: "canvas_revision_conflict", ctx: { revision: 6 } }),
-          })
-        : Promise.resolve({ ok: true, status: 200 });
-    });
-
-    saveManager.markDirty();
-    await priv.save(false);
-
-    expect(calls).toBe(2);
-    // 重试请求必须携带 409 响应回传的服务端版本，而非本地陈旧版本
-    const retryBody = JSON.parse(mocks.saveProjectRaw.mock.calls[1][1] as string);
-    expect(retryBody.baseRevision).toBe(6);
-    expect(mocks.markSessionExpired).not.toHaveBeenCalled();
-    expect((saveManager as unknown as { expired: boolean }).expired).toBe(false);
-    // 成功后本地版本推进到服务端版本 + 1
-    expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 7);
-  });
-
-  it("重试后仍 409：真冲突，进入过期态且不再继续重试", async () => {
-    mocks.saveProjectRaw.mockResolvedValue({
-      ok: false,
-      status: 409,
-      json: async () => ({ error: "canvas_revision_conflict", ctx: { revision: 6 } }),
-    });
-
-    saveManager.markDirty();
-    await priv.save(false);
-
-    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(2);
-    expect(mocks.markSessionExpired).toHaveBeenCalled();
-    expect((saveManager as unknown as { expired: boolean }).expired).toBe(true);
-  });
-
-  it("已成功保存过之后的 409：其他窗口真实编辑，直接过期不重试", async () => {
-    mocks.saveProjectRaw
-      .mockResolvedValueOnce({ ok: true, status: 200 })
-      .mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: "canvas_revision_conflict", ctx: { revision: 6 } }),
-      });
-
-    saveManager.markDirty();
-    await priv.save(false); // 首存成功，本实例已确立编辑权
-    saveManager.markDirty();
-    await priv.save(false); // 后续保存撞 409
-
-    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(2);
-    expect(mocks.markSessionExpired).toHaveBeenCalled();
-    expect((saveManager as unknown as { expired: boolean }).expired).toBe(true);
-  });
-
-  it("在途保存期间 isOwnInFlightRevision 命中自己刚落库的版本（重连 sync 误判排除依据）", async () => {
-    const first = gatedResponse();
-    mocks.revisions["p1"] = 5; // baseRevision = 5，落库后服务端版本 = 6
-    mocks.saveProjectRaw.mockImplementation(() => first.gate.then(() => ({ ok: true, status: 200 })));
-
-    saveManager.markDirty();
-    const p = priv.save(false);
-    await vi.waitFor(() => expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1));
-
-    expect(saveManager.isOwnInFlightRevision("p1", 6)).toBe(true);
-    expect(saveManager.isOwnInFlightRevision("p1", 5)).toBe(false);
-    expect(saveManager.isOwnInFlightRevision("p1", 7)).toBe(false);
-    // 内容所有者不匹配时不命中
-    expect(saveManager.isOwnInFlightRevision("p2", 6)).toBe(false);
-
-    first.release();
-    await p;
-    // 保存收尾后不再命中
-    expect(saveManager.isOwnInFlightRevision("p1", 6)).toBe(false);
   });
 
   // 离线 / 恢复在线的用例在 save-manager-offline.test.ts（需要 jsdom 的 window 事件）

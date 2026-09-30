@@ -12,10 +12,10 @@
  *
  * 职责：
  *  - dirty 状态管理（trailing save queue，只保存最终最新状态）
- *  - save: PUT /api/canvas/projects/{id}
+ *  - save: PUT /api/canvas/projects/{id}（携带 baseRevision + 编辑权租约令牌）
  *  - flushSave / flushOnHide：页面存活场景的紧急保存（普通请求，无 64KB 限制）
  *  - flushOnUnload：页面真正卸载前的兜底（keepalive，受 64KB 请求体上限约束）
- *  - 错误处理与重试
+ *  - 错误处理：失败保持 dirty 继续重试；409 即租约失效，无条件进入过期态
  *
  * 不依赖 React component 生命周期。
  * 仅支持登录用户，画布不允许游客访问。
@@ -24,6 +24,7 @@
 import { getCanvasProjectId, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
+import { getCanvasLease } from "@/features/project/canvas-lease";
 import { saveMutex } from "@/features/project/save-mutex";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
@@ -134,18 +135,14 @@ class SaveManager {
   /** 是否离线：离线时暂停自动保存，恢复在线后立即补存 */
   private offline = false;
   /**
-   * 编辑权已失效：其他页面实例取得了本画布的编辑权（保存收到 409 或 SSE 收到 evict）。
-   * 同页写通道已由 saveMutex 串行化且卸载兜底不再并发第二个请求，
-   * 409 不可能来自本窗口——唯一例外是抢占瞬间上一任 holder 的迟到落库
-   * （首存撞上时按 409 回传版本重试一次，见 saveToApi），停用一切后续保存，
-   * 由过期弹窗引导刷新。
-   * 刷新即新页面实例，重新取得编辑权并以服务端内容为准，故期间的本地改动不作保留。
+   * 编辑权已失效：其他页面实例的握手轮换了租约令牌（保存收到 409 或 SSE 收到
+   * evict）。同页写通道已由 saveMutex 串行化且卸载兜底不再并发第二个请求，
+   * 而持有效租约期间服务端 revision 只因本页写入前进——409 结构上只能来自
+   * 租约失效。此后内容无处可写（服务端会拒绝旧令牌），停用一切后续保存，
+   * 由过期弹窗引导刷新。刷新即新页面实例，重新握手取得编辑权并以服务端
+   * 内容为准，故期间的本地改动不作保留。
    */
   private expired = false;
-  /** 本页面实例是否已成功落库过一次（首存 409 重试资格的判据） */
-  private hasSuccessfulSave = false;
-  /** 在途保存请求携带的 baseRevision（重连 sync 误判排除依据，save 收尾清空） */
-  private inFlightBaseRevision: number | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
@@ -199,8 +196,6 @@ class SaveManager {
     const clearExpired = options?.clearExpired ?? true;
     this.dirty = false;
     this.expired = clearExpired ? false : this.expired;
-    // 首存重试资格随「窗口 × 项目」重置：切换后重新加入房间，迟到落库竞态可再次出现
-    this.hasSuccessfulSave = false;
     this.dirtySince = null;
     this.pendingSave = null;
     this.pendingDelay = SAVE_DELAY;
@@ -366,7 +361,6 @@ class SaveManager {
       }
     } finally {
       this.saving = false;
-      this.inFlightBaseRevision = null;
       this.resolveSave?.();
     }
 
@@ -398,16 +392,21 @@ class SaveManager {
     projectId: string,
     canvasData: CanvasData,
     opts: { keepalive: boolean; skipUnauthorized: boolean },
-    allowConflictRetry = true,
   ): Promise<void> {
     // 文件引用账本的重算由服务端权威判定（updateProject 内比较新旧画布引用），
     // 前端不再携带引用指纹，避免客户端 bug 影响服务端账本正确性。
-    // 每次更新都携带保存前的版本；服务端校验后递增，防止迟到请求回退引用账本。
+    // 每次更新都携带保存前的版本与编辑权租约令牌（fencing token）；服务端
+    // 在写临界区内校验后递增，被接管的旧持有者的迟到请求会被结构性拒绝。
     // 在互斥锁内、请求发出前一刻读取，保证同页写通道严格串行。
     const baseRevision = currentRevision(projectId);
-    this.inFlightBaseRevision = baseRevision;
+    const lease = getCanvasLease(projectId);
+    // 无租约即无编辑权：理论上不可达（画布有主必先经握手取得租约），
+    // 抛错走 save() 的 catch 恢复 dirty，绝不发出必被拒绝的请求。
+    if (lease === null) {
+      throw new Error(`[SaveManager] no editor lease for project ${projectId}`);
+    }
 
-    const body = JSON.stringify({ baseRevision, canvasData });
+    const body = JSON.stringify({ baseRevision, lease, canvasData });
 
     const res = await projectApi.saveProjectRaw(
       projectId,
@@ -423,27 +422,15 @@ class SaveManager {
       if (res.status === 401) return;
 
       if (res.status === 409) {
-        // 409 即该画布的编辑权已属其他页面实例（同页写通道已由 saveMutex 串行化、
-        // 卸载兜底不再并发第二个请求）。同步服务端版本，并按派发所有者归属结局：
-        // owner 未变 → 进入过期态，停用本窗口后续保存；
-        // owner 已切换（409 迟到）→ 冲突属于旧项目，绝不把过期态带给新进入的画布。
+        // 409 即租约令牌已被其他页面实例的握手轮换（持有效租约期间服务端
+        // revision 只因本页写入前进，冲突在结构上不可能发生）。同步服务端
+        // 版本，并按派发所有者归属结局：owner 未变 → 无条件进入过期态，
+        // 停用本窗口后续保存；owner 已切换（409 迟到）→ 冲突属于旧项目，
+        // 绝不把过期态带给新进入的画布。不存在任何重试路径。
         const respBody = parseErrorBody(await res.json().catch(() => null));
         const conflictRevision = respBody?.ctx?.revision;
         if (typeof conflictRevision === "number") {
           useProjectStore.getState().updateProjectRevision(projectId, conflictRevision);
-        }
-        // 抢占瞬间的迟到落库竞态：上一任 holder 的在途保存恰在本实例取得编辑权后
-        // 落库，此时 409 不代表本窗口编辑权失效。本实例尚无成功保存且未收到 evict
-        // （SSE 仍认同本窗口）时，按 409 回传版本原地重试一次；再冲突才是真冲突。
-        // 已成功保存过的实例不重试：此后 409 只能来自其他窗口的真实编辑。
-        if (
-          allowConflictRetry &&
-          !this.hasSuccessfulSave &&
-          !this.expired &&
-          typeof conflictRevision === "number" &&
-          getCanvasProjectId() === projectId
-        ) {
-          return this.saveToApi(projectId, canvasData, opts, false);
         }
         if (getCanvasProjectId() === projectId) {
           this.markExpired();
@@ -454,7 +441,6 @@ class SaveManager {
     }
 
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
-    this.hasSuccessfulSave = true;
     useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
   }
 
@@ -471,28 +457,17 @@ class SaveManager {
   }
 
   /**
-   * SSE 过期事件（evict / sync 判定落后）联动：编辑权已被其他页面实例取得，
-   * 本窗口尚未撞 409。与 409 路径同等收尾——停用全部保存路径，
+   * SSE 过期事件（evict / 握手判定租约已易主）联动：编辑权已被其他页面实例
+   * 取得，本窗口尚未撞 409。与 409 路径同等收尾——停用全部保存路径，
    * 避免过期弹窗出现后仍发出必 409 的保存请求。
    */
   notifyEvicted(): void {
     this.markExpired();
   }
 
-  /**
-   * 该版本是否恰为当前在途保存的落库结果。
-   * 断线重连 sync 帧排除自身误判用：保存响应未返回期间重连，sync 推送的
-   * revision = 本地 known + 1，正是本窗口自己刚提交的保存，不能判为他人编辑。
-   * 互斥锁等待窗口（baseRevision 尚未读取）返回 false——此时无法判定，
-   * 误判由 409 路径兜底。
-   */
-  isOwnInFlightRevision(projectId: string, revision: number): boolean {
-    return (
-      this.saving &&
-      this.inFlightBaseRevision !== null &&
-      revision === this.inFlightBaseRevision + 1 &&
-      getCanvasProjectId() === projectId
-    );
+  /** 当前是否处于编辑权失效态（握手判定消费：已知失效的页面不得以新握手静默夺回编辑权） */
+  isExpired(): boolean {
+    return this.expired;
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */

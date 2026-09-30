@@ -131,14 +131,6 @@ async function fetchProjects(): Promise<ProjectSummary[] | null> {
   return null;
 }
 
-async function fetchProjectById(id: string): Promise<CanvasProject | null> {
-  try {
-    const data = await projectApi.getProject<ServerProjectDetail>(id);
-    return data ? mapServerDetail(data) : null;
-  } catch { /* offline or error */ }
-  return null;
-}
-
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
     const data = await projectApi.createProject<ServerProjectDetail>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
@@ -179,7 +171,7 @@ interface ProjectState {
   activeProjectId: string | null;
 
   activeProject: () => ProjectSummary | undefined;
-  refreshProject: (id: string) => Promise<CanvasProject | null>;
+  adoptProject: (payload: unknown) => CanvasProject | null;
   createProject: (name?: string) => Promise<CanvasProject>;
   renameProject: (id: string, name: string) => void;
   updateCover: (id: string, coverUrl: string | null) => void;
@@ -199,17 +191,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return projects.find((p) => p.id === activeProjectId);
   },
 
-  refreshProject: async (id) => {
-    const fresh = await fetchProjectById(id);
-    if (!fresh) return null;
-    // upsert 摘要：直接经 URL 进画布时列表可能为空，需插入；
-    // 画布顶栏的名称与保存链路的 revision 都从这里来
+  /**
+   * 采纳 SSE 握手下发的服务端项目快照（原子握手的数据面）。
+   * 映射为完整项目并 upsert 摘要进列表（直接经 URL 进画布时列表可能为空；
+   * 画布顶栏的名称与保存链路的 revision 都从这里来），返回映射结果供
+   * restoreFromProject 恢复画布。载荷不合法返回 null，调用方按连接失败收敛。
+   */
+  adoptProject: (payload) => {
+    if (typeof payload !== "object" || payload === null) return null;
+    const detail = payload as ServerProjectDetail;
+    if (typeof detail.id !== "string" || detail.id.length === 0 || typeof detail.name !== "string") {
+      return null;
+    }
+    const project = mapServerDetail(detail);
     set((s) => ({
-      projects: s.projects.some((p) => p.id === id)
-        ? s.projects.map((p) => (p.id === id ? toSummary(fresh) : p))
-        : [...s.projects, toSummary(fresh)],
+      projects: s.projects.some((p) => p.id === project.id)
+        ? s.projects.map((p) => (p.id === project.id ? toSummary(project) : p))
+        : [...s.projects, toSummary(project)],
     }));
-    return fresh;
+    return project;
   },
 
   createProject: async (name) => {

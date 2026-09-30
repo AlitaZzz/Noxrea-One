@@ -17,4 +17,7 @@ export const canvasUpdateSchema = z.object({
   coverUrl: z.string().max(2000).nullable().optional(),
   // 仅改名（无 canvasData）可省略；带 canvasData 的画布保存必须携带，由路由层强制校验
   baseRevision: z.number().int().min(1).optional(),
+  // 编辑权租约令牌（fencing token）：与 baseRevision 配对，由路由层强制校验；
+  // 服务端在写临界区内比对当前令牌，被接管的旧持有者凭旧令牌写入会被拒绝
+  lease: z.number().int().min(1).optional(),
 });

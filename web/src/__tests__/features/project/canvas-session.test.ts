@@ -1,122 +1,229 @@
 /**
- * 画布编辑会话事件处理测试。
- * evict：立即进入过期态并同步服务端 revision，联动停用保存；
- * sync：仅在服务端 revision 更新时收敛过期（断线期间错过的变更），
- *   项目尚未加载时忽略（首次加载的内容本就取自服务端最新快照）。
+ * 画布编辑会话事件处理回归测试（handshake / evict）。
+ *
+ * 覆盖核心不变量：
+ *   - 握手采纳（初始加载）：adoptProject upsert 摘要、restoreFromProject 程序化
+ *     恢复内容、撤销历史归零、持有租约令牌——编辑权与内容原子绑定。
+ *   - 采纳失败不留半持有租约：adoptProject 返回 null → 拒绝握手且未持有令牌。
+ *   - 断线重连（同令牌）：编辑权仍有效——只同步领先版本，绝不恢复内容
+ *     （保护本地未保存编辑），不重置撤销历史。
+ *   - 令牌不同：本页已知失效 → 与 evict 同等收尾（同步版本 + notifyEvicted，
+ *     不静默夺回编辑权）；未失效 → 服务端已重新签发（空置超宽限后房间重建 /
+ *     SPA 返回），无缝续接——更新令牌与版本，内容不动（保护本地未保存编辑）。
+ *   - evict：同步服务端 revision（store 内有单调保护）并联动 saveManager 停用保存。
+ *   - 协议防御：载荷不合法 / 项目 id 不一致 → 拒绝且不误标过期（协议错误
+ *     ≠ 编辑权变更，由连接层按传输失败收敛）。
  */
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSessionExpiredStore } from "@/features/project/session-expired-store";
-import { useProjectStore } from "@/features/project/store";
-import { handleCanvasSessionEvent } from "@/features/project/use-canvas-session";
-
 const mocks = vi.hoisted(() => ({
+  restoreFromProject: vi.fn(),
+  clearHistory: vi.fn(),
+  runSuppressed: vi.fn(),
   notifyEvicted: vi.fn(),
-  isOwnInFlightRevision: vi.fn<(projectId: string, revision: number) => boolean>(() => false),
+  updateProjectRevision: vi.fn(),
+  adoptProject: vi.fn(),
+  saveExpired: false,
 }));
 
-vi.mock("@/features/project/save-manager", async () => {
-  // 模拟真实联动链：notifyEvicted 内部会停用保存并置会话过期态，
-  // 否则 mock 掉 saveManager 后 expired 无处置位
-  const { useSessionExpiredStore } = await import("@/features/project/session-expired-store");
-  return {
-    saveManager: {
-      notifyEvicted: () => {
-        mocks.notifyEvicted();
-        useSessionExpiredStore.getState().markExpired();
-      },
-      isOwnInFlightRevision: (...args: unknown[]) => mocks.isOwnInFlightRevision(...(args as [string, number])),
-    },
-  };
-});
+vi.mock("@/features/canvas/stores/canvas-store", () => ({
+  useCanvasStore: {
+    getState: () => ({ restoreFromProject: mocks.restoreFromProject }),
+  },
+}));
 
-beforeEach(() => {
-  mocks.notifyEvicted.mockClear();
-  mocks.isOwnInFlightRevision.mockClear();
-  mocks.isOwnInFlightRevision.mockReturnValue(false);
-  useSessionExpiredStore.setState({ expired: false });
-  useProjectStore.setState({
-    projects: [{ id: "p1", revision: 2 } as never],
-  });
-});
+vi.mock("@/features/canvas/stores/history-store", () => ({
+  useHistoryStore: {
+    getState: () => ({ clear: mocks.clearHistory }),
+  },
+}));
 
-describe("handleCanvasSessionEvent", () => {
-  it("evict：进入过期态，本地 revision 同步到服务端版本，联动停用保存", () => {
-    handleCanvasSessionEvent("p1", "evict", { revision: 5 });
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(5);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
-  });
+vi.mock("@/features/canvas/agent/user-action-tracker", () => ({
+  runSuppressed: (fn: () => void) => mocks.runSuppressed(fn),
+}));
 
-  it("evict：无 revision 载荷也进入过期态", () => {
-    handleCanvasSessionEvent("p1", "evict", {});
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(2);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
-  });
+vi.mock("@/features/project/save-manager", () => ({
+  saveManager: {
+    notifyEvicted: (...args: unknown[]) => mocks.notifyEvicted(...args),
+    isExpired: () => mocks.saveExpired,
+  },
+}));
 
-  it("sync：服务端 revision 更新时收敛过期（断线期间错过的变更）并联动停用保存", () => {
-    handleCanvasSessionEvent("p1", "sync", { revision: 3 });
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(3);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
-  });
+vi.mock("@/features/project/store", () => ({
+  useProjectStore: {
+    getState: () => ({
+      updateProjectRevision: (...args: unknown[]) => mocks.updateProjectRevision(...args),
+      adoptProject: (...args: unknown[]) => mocks.adoptProject(...args),
+    }),
+  },
+}));
 
-  it("sync：服务端 revision 与本地一致时无副作用", () => {
-    handleCanvasSessionEvent("p1", "sync", { revision: 2 });
-    expect(useSessionExpiredStore.getState().expired).toBe(false);
-    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
-  });
+// 事件处理器不触网；连接层（useCanvasSession）不在本套件覆盖范围
+vi.mock("@/lib/api/client", () => ({ apiStream: vi.fn() }));
+vi.mock("@/lib/sse", () => ({
+  readSseStream: vi.fn(),
+  SSE_CONNECT_TIMEOUT_MS: 30_000,
+  SSE_WATCHDOG_CHECK_MS: 5_000,
+  SSE_WATCHDOG_TIMEOUT_MS: 30_000,
+}));
 
-  it("sync：服务端 revision 更旧（store 单调保护）不进入过期态", () => {
-    handleCanvasSessionEvent("p1", "sync", { revision: 1 });
-    expect(useSessionExpiredStore.getState().expired).toBe(false);
-    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(2);
-    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
-  });
+// 租约模块零依赖，用真实实现锁定持有 / keyed 读取语义
+import { getCanvasLease, resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
+import {
+  handleCanvasHandshake,
+  handleEvictEvent,
+} from "@/features/project/use-canvas-session";
 
-  it("sync：项目尚未加载（不在 store）时忽略，不误判过期", () => {
-    // 直接打开 / 刷新画布页：SSE sync 帧可能先于项目数据到达 store，
-    // 此时无法判定落后，必须忽略，否则 revision > 0 恒真会把刚打开的页面锁进过期弹窗
-    useProjectStore.setState({ projects: [] });
-    handleCanvasSessionEvent("p1", "sync", { revision: 9 });
-    expect(useSessionExpiredStore.getState().expired).toBe(false);
-    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
-  });
+const ADOPTED = { id: "p1", name: "A", revision: 4, nodes: [], edges: [] };
 
-  it("sync：revision 恰为本地在途保存的落库版本时排除误判，不进入过期态", () => {
-    // 保存响应未返回期间 SSE 闪断重连：sync 推送的 revision = known + 1，
-    // 正是本窗口自己刚提交的保存，不是他人编辑
-    mocks.isOwnInFlightRevision.mockReturnValue(true);
-    handleCanvasSessionEvent("p1", "sync", { revision: 3 });
-    expect(useSessionExpiredStore.getState().expired).toBe(false);
-    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
-    // revision 不代写：保存若失败版本不能凭空前进，由保存响应自行回写
-    expect(useProjectStore.getState().projects.find((p) => p.id === "p1")?.revision).toBe(2);
+const VALID_PAYLOAD = {
+  lease: 42,
+  project: {
+    id: "p1",
+    name: "A",
+    revision: 4,
+    updatedAt: "2026-01-01T00:00:00Z",
+    canvasData: { nodes: [], edges: [] },
+  },
+};
+
+describe("画布会话事件处理", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetCanvasLease();
+    mocks.saveExpired = false;
+    mocks.runSuppressed.mockImplementation((fn: () => void) => fn());
+    mocks.adoptProject.mockReturnValue(ADOPTED);
   });
 
-  it("sync：在途保存判定不命中时仍按他人编辑收敛过期", () => {
-    mocks.isOwnInFlightRevision.mockReturnValue(false);
-    handleCanvasSessionEvent("p1", "sync", { revision: 3 });
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(mocks.notifyEvicted).toHaveBeenCalled();
+  describe("evict（编辑权被其他页面实例取得）", () => {
+    it("同步服务端 revision 并联动 saveManager 停用保存", () => {
+      handleEvictEvent("p1", { revision: 5 });
+
+      expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 5);
+      expect(mocks.notifyEvicted).toHaveBeenCalledTimes(1);
+    });
+
+    it("无 revision / 非数字 revision：仍停用保存，但不写版本", () => {
+      handleEvictEvent("p1", {});
+      handleEvictEvent("p1", { revision: "5" });
+
+      expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
+      expect(mocks.notifyEvicted).toHaveBeenCalledTimes(2);
+    });
   });
 
-  it("evict：即使命中在途保存也立即过期（evict 是权威信号，不做排除）", () => {
-    mocks.isOwnInFlightRevision.mockReturnValue(true);
-    handleCanvasSessionEvent("p1", "evict", { revision: 3 });
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
+  describe("handshake（初始加载：采纳快照与租约）", () => {
+    it("采纳快照并持有租约：恢复内容（程序化写入）、撤销历史归零", () => {
+      expect(handleCanvasHandshake("p1", VALID_PAYLOAD)).toBe("adopted");
+
+      expect(mocks.adoptProject).toHaveBeenCalledWith(VALID_PAYLOAD.project);
+      expect(mocks.runSuppressed).toHaveBeenCalledTimes(1);
+      expect(mocks.restoreFromProject).toHaveBeenCalledWith("p1", ADOPTED);
+      expect(mocks.clearHistory).toHaveBeenCalledTimes(1);
+      expect(getCanvasLease("p1")).toBe(42);
+      // 采纳路径是取得编辑权，不是被驱逐
+      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      // 采纳路径不按「重连版本同步」写版本
+      expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
+    });
+
+    it("采纳失败（映射不出项目）：拒绝握手且不遗留半持有的租约", () => {
+      mocks.adoptProject.mockReturnValue(null);
+
+      expect(handleCanvasHandshake("p1", VALID_PAYLOAD)).toBe("rejected");
+
+      expect(getCanvasLease("p1")).toBeNull();
+      expect(mocks.restoreFromProject).not.toHaveBeenCalled();
+      expect(mocks.clearHistory).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["lease 缺失", { project: VALID_PAYLOAD.project }],
+      ["lease 非正整数", { lease: 0, project: VALID_PAYLOAD.project }],
+      ["lease 非整数", { lease: 1.5, project: VALID_PAYLOAD.project }],
+      ["project 缺失", { lease: 42 }],
+      ["project.id 为空", { lease: 42, project: { ...VALID_PAYLOAD.project, id: "" } }],
+      ["project.name 缺失", { lease: 42, project: { id: "p1", updatedAt: "2026-01-01T00:00:00Z" } }],
+      ["updatedAt 缺失", { lease: 42, project: { id: "p1", name: "A" } }],
+    ])("载荷不合法（%s）：拒绝且不误标过期、不持有租约", (_label, data) => {
+      expect(handleCanvasHandshake("p1", data)).toBe("rejected");
+
+      // 协议错误 ≠ 编辑权变更：不触发驱逐联动，由连接层按传输失败收敛
+      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      expect(mocks.adoptProject).not.toHaveBeenCalled();
+      expect(getCanvasLease("p1")).toBeNull();
+    });
+
+    it("协议防御：握手项目与订阅项目不一致 → 拒绝", () => {
+      const data = { lease: 42, project: { ...VALID_PAYLOAD.project, id: "p2" } };
+
+      expect(handleCanvasHandshake("p1", data)).toBe("rejected");
+
+      expect(mocks.adoptProject).not.toHaveBeenCalled();
+      expect(getCanvasLease("p1")).toBeNull();
+    });
   });
 
-  it("未知事件名与陈旧事件（前面的 event 行未被 data 覆盖）不误触发", () => {
-    handleCanvasSessionEvent("p1", "", { revision: 9 });
-    expect(useSessionExpiredStore.getState().expired).toBe(false);
-    expect(mocks.notifyEvicted).not.toHaveBeenCalled();
-  });
+  describe("handshake（断线重连：已持有租约）", () => {
+    beforeEach(() => {
+      setCanvasLease("p1", 42);
+    });
 
-  it("revision 载荷非数字时 evict 仍进入过期态（容错）", () => {
-    handleCanvasSessionEvent("p1", "evict", { revision: "9" as unknown as number });
-    expect(useSessionExpiredStore.getState().expired).toBe(true);
-    expect(mocks.notifyEvicted).toHaveBeenCalledWith();
+    it("同令牌 + revision 领先：仅同步版本，不恢复内容、不重置历史", () => {
+      const data = { lease: 42, project: { ...VALID_PAYLOAD.project, revision: 9 } };
+
+      expect(handleCanvasHandshake("p1", data)).toBe("adopted");
+
+      expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
+      expect(mocks.adoptProject).not.toHaveBeenCalled();
+      expect(mocks.restoreFromProject).not.toHaveBeenCalled(); // 保护本地未保存编辑
+      expect(mocks.clearHistory).not.toHaveBeenCalled();
+      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+    });
+
+    it("同令牌 + revision 非数字：接受握手，不同步版本", () => {
+      const data = { lease: 42, project: { id: "p1", name: "A", updatedAt: "2026-01-01T00:00:00Z" } };
+
+      expect(handleCanvasHandshake("p1", data)).toBe("adopted");
+      expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
+    });
+
+    it("令牌不同且本页已知失效（断线期间被接管）：按 evict 收尾，不静默夺回", () => {
+      const data = { lease: 99, project: { ...VALID_PAYLOAD.project, revision: 9 } };
+      mocks.saveExpired = true;
+
+      expect(handleCanvasHandshake("p1", data)).toBe("expired");
+
+      expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
+      expect(mocks.notifyEvicted).toHaveBeenCalledTimes(1);
+      expect(mocks.restoreFromProject).not.toHaveBeenCalled();
+      // 已失效页面不得更新槽位令牌：编辑权已属他人，唯一出口是刷新
+      expect(getCanvasLease("p1")).toBe(42);
+    });
+
+    it("令牌不同但未失效（空置超宽限后重新签发 / SPA 返回）：无缝续接", () => {
+      const data = { lease: 99, project: { ...VALID_PAYLOAD.project, revision: 9 } };
+
+      expect(handleCanvasHandshake("p1", data)).toBe("adopted");
+
+      // 更新令牌与版本；本地未保存编辑保护：不恢复内容、不重置历史、不驱逐
+      expect(getCanvasLease("p1")).toBe(99);
+      expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
+      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      expect(mocks.restoreFromProject).not.toHaveBeenCalled();
+      expect(mocks.clearHistory).not.toHaveBeenCalled();
+      expect(mocks.adoptProject).not.toHaveBeenCalled();
+    });
+
+    it("单租约槽位：切换项目后旧项目令牌不再可寻址（keyed 读取天然惰性）", () => {
+      const data = { lease: 7, project: { ...VALID_PAYLOAD.project, id: "p2" } };
+
+      expect(handleCanvasHandshake("p2", data)).toBe("adopted");
+
+      expect(getCanvasLease("p2")).toBe(7);
+      expect(getCanvasLease("p1")).toBeNull();
+    });
   });
 });
