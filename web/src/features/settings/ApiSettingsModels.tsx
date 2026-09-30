@@ -15,14 +15,13 @@ import {
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { Input } from "antd";
+import { Dropdown, Input } from "antd";
 import type { ComponentType, CSSProperties } from "react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { useModelStore } from "@/lib/model-store";
@@ -239,39 +238,27 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
         >
           <PlusOutlined />
         </AppButton>
-        <MenuPopover
-          trigger={
-            <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.batch")}>
-              <EllipsisOutlined />
-            </AppButton>
-          }
+        <Dropdown
+          trigger={["click"]}
           open={batchOpen}
           onOpenChange={setBatchOpen}
-          content={
-            filter === "all" ? (
-              <MenuItem dimmed>{t("modelConfig.batchNeedFilter")}</MenuItem>
-            ) : (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    setBatchOpen(false);
-                    batchSelectAll();
-                  }}
-                >
-                  {t("modelConfig.batchSelectShown")}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setBatchOpen(false);
-                    batchClear();
-                  }}
-                >
-                  {t("modelConfig.batchClearShown")}
-                </MenuItem>
-              </>
-            )
-          }
-        />
+          menu={{
+            items: filter === "all"
+              ? [{ key: "hint", label: t("modelConfig.batchNeedFilter"), disabled: true }]
+              : [
+                  { key: "selectAll", label: t("modelConfig.batchSelectShown") },
+                  { key: "clear", label: t("modelConfig.batchClearShown") },
+                ],
+            onClick: ({ key }) => {
+              if (key === "selectAll") batchSelectAll();
+              else if (key === "clear") batchClear();
+            },
+          }}
+        >
+          <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.batch")}>
+            <EllipsisOutlined />
+          </AppButton>
+        </Dropdown>
       </div>
 
       {/* 手动添加输入行（＋ 按钮展开） */}

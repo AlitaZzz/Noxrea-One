@@ -16,7 +16,7 @@ import {
   StepBackwardOutlined,
   StepForwardOutlined,
 } from "@ant-design/icons";
-import { Button, Popover, Tooltip } from "antd";
+import { Button, Dropdown, Popover, Tooltip } from "antd";
 import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -37,7 +37,6 @@ import { VerticalLayoutIcon } from "@/components/ui/icons/canvas/VerticalLayoutI
 import { VideoToPromptIcon } from "@/components/ui/icons/canvas/VideoToPromptIcon";
 import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
@@ -76,14 +75,19 @@ function GridPicker({ nodeId }: { nodeId: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       {[2, 3, 4, 5].map((n) => (
-        <MenuItem key={n} onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}>
+        <button
+          key={n}
+          type="button"
+          className="panel-item-btn"
+          onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}
+        >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <GridSplitIcon style={{ fontSize: 16 }} />
             {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}×{n}
           </span>
-        </MenuItem>
+        </button>
       ))}
-      <MenuDivider />
+      <div className="panel-divider" />
       <div style={{ padding: "4px 4px 0" }}>
         <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("node.gridCustom")}</div>
         <div className="text-xs mb-1 text-center" style={{ color: "var(--canvas-text)" }}>
@@ -131,7 +135,7 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     [nodeId]
   );
   return (
-    <div className="menu-popover">
+    <div className="panel-popover">
       <div className="text-xs mb-2 px-1" style={{ color: "var(--canvas-text-muted)" }}>{t("node.groupColor")}</div>
       <div className="grid grid-cols-5 gap-2">
         {GROUP_COLOR_KEYS.map((key) => {
@@ -267,23 +271,28 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               onClick={() => dispatchNodeAction(nodeId, "panorama")} />
           </Tooltip>
           {/* Edit */}
-          <MenuPopover
+          <Dropdown
             open={transformOpen}
             onOpenChange={setTransformOpen}
             placement="bottom"
-            trigger={
-              <Tooltip title={t("node.transform")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
-              </Tooltip>
-            }
-            content={
-              <>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RotateRightOutlined style={{ fontSize: 16 }} /> {t("node.rotate90")}</span></MenuItem>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipHorizontal size={16} /> {t("node.flipH")}</span></MenuItem>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><FlipVertical size={16} /> {t("node.flipV")}</span></MenuItem>
-              </>
-            }
-          />
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "rot90", icon: <RotateRightOutlined style={{ fontSize: 16 }} />, label: t("node.rotate90") },
+                { key: "flipH", icon: <FlipHorizontal size={16} />, label: t("node.flipH") },
+                { key: "flipV", icon: <FlipVertical size={16} />, label: t("node.flipV") },
+              ],
+              onClick: ({ key }) => {
+                if (key === "rot90") dispatchNodeAction(nodeId, "transform", { op: "rot90" });
+                else if (key === "flipH") dispatchNodeAction(nodeId, "transform", { op: "flipH" });
+                else if (key === "flipV") dispatchNodeAction(nodeId, "transform", { op: "flipV" });
+              },
+            }}
+          >
+            <Tooltip title={t("node.transform")}>
+              <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
+            </Tooltip>
+          </Dropdown>
           <Tooltip title={t("node.crop")}>
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<Crop size={16} />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
@@ -292,19 +301,25 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             <Button type="text" size="middle" style={{ padding: 8 }} icon={<ImageAnnotationIcon style={{ fontSize: 16 }} />} disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "annotate")} />
           </Tooltip>
-          <MenuPopover
+          <Popover
             open={gridOpen}
             onOpenChange={setGridOpen}
             placement="bottom"
-            trigger={
-              <Tooltip title={t("node.gridSplit")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}>
-                  <GridSplitIcon />
-                </Button>
-              </Tooltip>
+            trigger={["click"]}
+            arrow={false}
+            styles={{ container: { padding: 0, background: "transparent" } }}
+            content={
+              <div className="panel-popover">
+                <GridPicker nodeId={nodeId} />
+              </div>
             }
-            content={<GridPicker nodeId={nodeId} />}
-          />
+          >
+            <Tooltip title={t("node.gridSplit")}>
+              <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}>
+                <GridSplitIcon />
+              </Button>
+            </Tooltip>
+          </Popover>
           {/* AI */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <Tooltip title={t("angle.editor")}>
@@ -323,23 +338,27 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
               disabled={!assetSrc} />
           </Tooltip>
-          <MenuPopover
+          <Popover
             open={creationOpen}
             onOpenChange={setCreationOpen}
             placement="bottomLeft"
+            trigger={["click"]}
+            arrow={false}
             overlayClassName="creation-menu-popover"
-            trigger={
-              <Tooltip title={t("node.creation")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />} disabled={!assetSrc} />
-              </Tooltip>
-            }
+            styles={{ container: { padding: 0, background: "transparent" } }}
             content={
-              <PresetMenuContent
-                catalog={templateCatalog}
-                onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
-              />
+              <div className="panel-popover">
+                <PresetMenuContent
+                  catalog={templateCatalog}
+                  onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
+                />
+              </div>
             }
-          />
+          >
+            <Tooltip title={t("node.creation")}>
+              <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />} disabled={!assetSrc} />
+            </Tooltip>
+          </Popover>
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
@@ -358,35 +377,28 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       {nodeType === NODE_ACTIONS.VIDEO && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <MenuPopover
+          <Dropdown
             open={captureOpen}
             onOpenChange={setCaptureOpen}
             placement="bottom"
-            trigger={
-              <Tooltip title={t("node.captureFrame")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<FrameCaptureIcon />} disabled={!assetSrc} />
-              </Tooltip>
-            }
-            content={
-              <>
-                <MenuItem onClick={() => { setCaptureOpen(false); onOpenFrameStrip(nodeId); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <FrameCaptureIcon style={{ fontSize: 16 }} /> {t("capture.currentFrame")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: 0 }); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <StepBackwardOutlined style={{ fontSize: 16 }} /> {t("capture.firstFrame")}
-                  </span>
-                </MenuItem>
-                <MenuItem onClick={() => { setCaptureOpen(false); dispatchNodeAction(nodeId, "capture-frame", { time: -1 }); }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <StepForwardOutlined style={{ fontSize: 16 }} /> {t("capture.lastFrame")}
-                  </span>
-                </MenuItem>
-              </>
-            }
-          />
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "current", icon: <FrameCaptureIcon style={{ fontSize: 16 }} />, label: t("capture.currentFrame") },
+                { key: "first", icon: <StepBackwardOutlined style={{ fontSize: 16 }} />, label: t("capture.firstFrame") },
+                { key: "last", icon: <StepForwardOutlined style={{ fontSize: 16 }} />, label: t("capture.lastFrame") },
+              ],
+              onClick: ({ key }) => {
+                if (key === "current") onOpenFrameStrip(nodeId);
+                else if (key === "first") dispatchNodeAction(nodeId, "capture-frame", { time: 0 });
+                else if (key === "last") dispatchNodeAction(nodeId, "capture-frame", { time: -1 });
+              },
+            }}
+          >
+            <Tooltip title={t("node.captureFrame")}>
+              <Button type="text" size="middle" style={{ padding: 8 }} icon={<FrameCaptureIcon />} disabled={!assetSrc} />
+            </Tooltip>
+          </Dropdown>
           {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
           <Tooltip title={t("clip.menu")}>
             <Button
@@ -535,34 +547,33 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               />
             </Tooltip>
           </Popover>
-          <MenuPopover
+          <Dropdown
             open={layoutOpen}
             onOpenChange={setLayoutOpen}
             placement="bottom"
-            trigger={
-              <Tooltip title={t("common.layout")}>
-                <Button
-                  type="text"
-                  size="middle"
-                  style={{ padding: 8 }}
-                  icon={<GroupGridIcon />}
-                />
-              </Tooltip>
-            }
-            content={
-              <>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><GridLayoutIcon style={{ fontSize: 16 }} /> {t("node.gridLayout")}</span>
-                </MenuItem>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><HorizontalLayoutIcon style={{ fontSize: 16 }} /> {t("node.horizontalLayout")}</span>
-                </MenuItem>
-                <MenuItem onClick={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><VerticalLayoutIcon style={{ fontSize: 16 }} /> {t("node.verticalLayout")}</span>
-                </MenuItem>
-              </>
-            }
-          />
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "grid", icon: <GridLayoutIcon style={{ fontSize: 16 }} />, label: t("node.gridLayout") },
+                { key: "horizontal", icon: <HorizontalLayoutIcon style={{ fontSize: 16 }} />, label: t("node.horizontalLayout") },
+                { key: "vertical", icon: <VerticalLayoutIcon style={{ fontSize: 16 }} />, label: t("node.verticalLayout") },
+              ],
+              onClick: ({ key }) => {
+                if (key === "grid") dispatchNodeAction(nodeId, "layout", { mode: "grid" });
+                else if (key === "horizontal") dispatchNodeAction(nodeId, "layout", { mode: "horizontal" });
+                else if (key === "vertical") dispatchNodeAction(nodeId, "layout", { mode: "vertical" });
+              },
+            }}
+          >
+            <Tooltip title={t("common.layout")}>
+              <Button
+                type="text"
+                size="middle"
+                style={{ padding: 8 }}
+                icon={<GroupGridIcon />}
+              />
+            </Tooltip>
+          </Dropdown>
           <Tooltip title={t("common.ungroup")}>
             <Button
               type="text"

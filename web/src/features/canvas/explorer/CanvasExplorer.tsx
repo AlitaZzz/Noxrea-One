@@ -22,7 +22,6 @@ import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import FilterIcon from "@/components/ui/icons/common/FilterIcon";
-import { MenuDivider } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetGrid from "@/features/assets/components/AssetGrid";
 import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
@@ -652,7 +651,7 @@ function AssetsView() {
           placement="bottomRight"
           styles={{ container: { padding: 0, background: "transparent" } }}
           content={
-            <div className="menu-popover asset-filter-popover">
+            <div className="panel-popover asset-filter-popover">
               <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
               {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
                 <label key={st.key} className="filter-row">
@@ -668,7 +667,7 @@ function AssetsView() {
                   </Checkbox>
                 </label>
               ))}
-              {typeFilter.length > 0 && <MenuDivider />}
+              {typeFilter.length > 0 && <div className="panel-divider" />}
               {typeFilter.length > 0 && (
                 <div className="filter-row" onClick={() => setTypeFilter([])} style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>
                   {t("asset.filterClear")}

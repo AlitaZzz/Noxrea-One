@@ -8,14 +8,13 @@
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
-import { App, Drawer, Tooltip } from "antd";
+import { App, Drawer, Dropdown, Popover, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import ChatSectionView from "@/features/canvas/agent/components/ChatSectionView";
 import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
 import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
@@ -175,16 +174,19 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               <NewChatIcon />
             </button>
           </Tooltip>
-          <MenuPopover
+          <Popover
             open={historyOpen}
             onOpenChange={(o) => {
               setHistoryOpen(o);
               if (o) void loadSessions();
             }}
             placement="bottomRight"
+            trigger={["click"]}
+            arrow={false}
             overlayClassName="chat-history-popover"
+            styles={{ container: { padding: 0, background: "transparent" } }}
             content={
-              <div className="chat-history-body">
+              <div className="panel-popover chat-history-body">
                 <div className="chat-history-title">{t("agent.historyTitle")}</div>
                 <div className="chat-history-list">
                   {sessions.length === 0 ? (
@@ -225,14 +227,13 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                 </div>
               </div>
             }
-            trigger={
-              <Tooltip title={t("agent.historyTitle")} placement="bottom">
-                <button type="button" className="chat-header-btn" aria-label={t("agent.historyTitle")} onClick={() => setHistoryOpen((v) => !v)}>
-                  <HistoryIcon />
-                </button>
-              </Tooltip>
-            }
-          />
+          >
+            <Tooltip title={t("agent.historyTitle")} placement="bottom">
+              <button type="button" className="chat-header-btn" aria-label={t("agent.historyTitle")} onClick={() => setHistoryOpen((v) => !v)}>
+                <HistoryIcon />
+              </button>
+            </Tooltip>
+          </Popover>
         </div>
       }
       styles={{
@@ -316,29 +317,23 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   <span className="chat-composer-model-label">{t("agent.modelLoadFailed")}</span>
                 </button>
               ) : (
-                <MenuPopover
+                <Dropdown
                   open={modelOpen}
                   onOpenChange={setModelOpen}
                   placement="topRight"
-                  trigger={
-                    <button type="button" className="chat-composer-model" aria-label={t("agent.selectModelAria")}>
-                      <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
-                      <ChevronDownIcon />
-                    </button>
-                  }
-                  content={modelOptions.map((m) => (
-                    <MenuItem
-                      key={m.value}
-                      selected={activeOption?.value === m.value}
-                      onClick={() => {
-                        setAgentModel(m.value);
-                        setModelOpen(false);
-                      }}
-                    >
-                      {m.label}
-                    </MenuItem>
-                  ))}
-                />
+                  trigger={["click"]}
+                  menu={{
+                    items: modelOptions.map((m) => ({ key: m.value, label: m.label })),
+                    selectable: true,
+                    selectedKeys: activeOption ? [activeOption.value] : [],
+                    onClick: ({ key }) => setAgentModel(key),
+                  }}
+                >
+                  <button type="button" className="chat-composer-model" aria-label={t("agent.selectModelAria")}>
+                    <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
+                    <ChevronDownIcon />
+                  </button>
+                </Dropdown>
               )}
               <button
                 type="button"

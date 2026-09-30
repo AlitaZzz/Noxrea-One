@@ -12,13 +12,13 @@
 
 import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import { App, Popover } from "antd";
+import type { MenuProps } from "antd";
+import { App, Menu, Popover } from "antd";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuDivider, MenuItem } from "@/components/ui/MenuPopover";
 import {
   copyImageSrcToClipboard,
   copySelection,
@@ -148,13 +148,63 @@ export default function CanvasContextMenu(props: Props) {
   };
 
   /** 画布级操作：整理 + 重置视图，仅 canvas 上下文使用 */
-  const canvasActions = (
-    <>
-      <MenuDivider />
-      <MenuItem dimmed={props.tidyDisabled} onClick={() => { props.onTidy(); hide(); }}><AppstoreOutlined /> {t("canvas.tidy")}</MenuItem>
-      <MenuItem onClick={() => { props.onResetView(); hide(); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
-    </>
-  );
+  const canvasActions: MenuProps["items"] = [
+    { type: "divider" },
+    { key: "tidy", icon: <AppstoreOutlined />, label: t("canvas.tidy"), disabled: props.tidyDisabled },
+    { key: "fit", icon: <ExpandOutlined />, label: t("canvas.fit") },
+  ];
+
+  /** 三种上下文的条目统一为 antd Menu items；key → 动作分发见 onMenuClick */
+  const menuItems: MenuProps["items"] =
+    kind === "create"
+      ? [
+          { key: "g-add", type: "group", label: <div style={GROUP_LABEL_STYLE}>{t("node.add")}</div> },
+          { key: "add-text", icon: <TextIcon />, label: t("node.text") },
+          { key: "add-image", icon: <PictureOutlined />, label: t("node.image") },
+          { key: "add-video", icon: <VideoCameraOutlined />, label: t("node.video") },
+          { key: "add-audio", icon: <WaveIcon />, label: t("node.audio") },
+          { key: "add-director", icon: <PartitionOutlined />, label: t("node.director") },
+        ]
+      : kind === "canvas"
+        ? [
+            { key: "upload", icon: <UploadOutlined />, label: t("common.upload") },
+            { type: "divider" },
+            { key: "paste", icon: <SnippetsOutlined />, label: t("common.paste"), extra: <span style={SHORTCUT_STYLE}>{modKey("V")}</span> },
+            { key: "selectAll", icon: <SelectOutlined />, label: t("common.selectAll"), extra: <span style={SHORTCUT_STYLE}>{modKey("A")}</span>, disabled: !hasNodes },
+            ...canvasActions,
+            { type: "divider" },
+            { key: "undo", icon: <UndoOutlined />, label: t("common.undo"), extra: <span style={SHORTCUT_STYLE}>{modKey("Z")}</span>, disabled: !canUndo },
+            { key: "redo", icon: <RedoOutlined />, label: t("common.redo"), extra: <span style={SHORTCUT_STYLE}>{modKey("Shift+Z")}</span>, disabled: !canRedo },
+          ]
+        : [
+            { key: "copy", icon: <CopyOutlined />, label: t("common.copyNode"), extra: <span style={SHORTCUT_STYLE}>{modKey("C")}</span>, disabled: !hasSelection },
+            ...(singleImageSrc ? [{ key: "copyImage", icon: <PictureOutlined />, label: t("node.copyImage") }] : []),
+            { key: "duplicate", icon: <PlusSquareOutlined />, label: t("common.duplicate"), extra: <span style={SHORTCUT_STYLE}>{modKey("D")}</span>, disabled: !hasSelection },
+            { key: "paste", icon: <SnippetsOutlined />, label: t("common.paste"), extra: <span style={SHORTCUT_STYLE}>{modKey("V")}</span> },
+            { type: "divider" },
+            { key: "delete", icon: <DeleteOutlined />, label: t("common.delete"), extra: <span style={SHORTCUT_STYLE}>Delete</span>, disabled: !hasSelection },
+          ];
+
+  const onMenuClick = ({ key }: { key: string }) => {
+    switch (key) {
+      case "add-text": props.onAddText(); hide(); break;
+      case "add-image": props.onAddImage(); hide(); break;
+      case "add-video": props.onAddVideo(); hide(); break;
+      case "add-audio": props.onAddAudio(); hide(); break;
+      case "add-director": props.onAddDirector(); hide(); break;
+      case "upload": hide(); void handleUpload(); break;
+      case "paste": void handleMenuPaste(); break;
+      case "selectAll": selectAllNodes(); hide(); break;
+      case "tidy": props.onTidy(); hide(); break;
+      case "fit": props.onResetView(); hide(); break;
+      case "undo": undoAction(); hide(); break;
+      case "redo": redoAction(); hide(); break;
+      case "copy": copySelection(); hide(); break;
+      case "copyImage": void handleCopyImage(); break;
+      case "duplicate": duplicateSelection(); hide(); break;
+      case "delete": deleteSelection(); hide(); break;
+    }
+  };
 
   return (
     <>
@@ -171,43 +221,13 @@ export default function CanvasContextMenu(props: Props) {
         onOpenChange={(v) => { if (!v) hide(); }}
         styles={{ container: { padding: 0, background: "transparent" } }}
         content={
-          <div ref={menuRef} className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
-            {kind === "create" && (
-              <>
-                <div style={GROUP_LABEL_STYLE}>{t("node.add")}</div>
-                <MenuItem onClick={() => { props.onAddText(); hide(); }}><TextIcon /> {t("node.text")}</MenuItem>
-                <MenuItem onClick={() => { props.onAddImage(); hide(); }}><PictureOutlined /> {t("node.image")}</MenuItem>
-                <MenuItem onClick={() => { props.onAddVideo(); hide(); }}><VideoCameraOutlined /> {t("node.video")}</MenuItem>
-                <MenuItem onClick={() => { props.onAddAudio(); hide(); }}><WaveIcon /> {t("node.audio")}</MenuItem>
-                <MenuItem onClick={() => { props.onAddDirector(); hide(); }}><PartitionOutlined /> {t("node.director")}</MenuItem>
-              </>
-            )}
-
-            {kind === "canvas" && (
-              <>
-                <MenuItem onClick={() => { hide(); void handleUpload(); }}><UploadOutlined /> {t("common.upload")}</MenuItem>
-                <MenuDivider />
-                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>{modKey("V")}</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
-                <MenuItem dimmed={!hasNodes} iconRight={<span style={SHORTCUT_STYLE}>{modKey("A")}</span>} onClick={() => { selectAllNodes(); hide(); }}><SelectOutlined /> {t("common.selectAll")}</MenuItem>
-                {canvasActions}
-                <MenuDivider />
-                <MenuItem dimmed={!canUndo} iconRight={<span style={SHORTCUT_STYLE}>{modKey("Z")}</span>} onClick={() => { undoAction(); hide(); }}><UndoOutlined /> {t("common.undo")}</MenuItem>
-                <MenuItem dimmed={!canRedo} iconRight={<span style={SHORTCUT_STYLE}>{modKey("Shift+Z")}</span>} onClick={() => { redoAction(); hide(); }}><RedoOutlined /> {t("common.redo")}</MenuItem>
-              </>
-            )}
-
-            {kind === "node" && (
-              <>
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>{modKey("C")}</span>} onClick={() => { copySelection(); hide(); }}><CopyOutlined /> {t("common.copyNode")}</MenuItem>
-                {singleImageSrc !== null && (
-                  <MenuItem onClick={() => { void handleCopyImage(); }}><PictureOutlined /> {t("node.copyImage")}</MenuItem>
-                )}
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>{modKey("D")}</span>} onClick={() => { duplicateSelection(); hide(); }}><PlusSquareOutlined /> {t("common.duplicate")}</MenuItem>
-                <MenuItem iconRight={<span style={SHORTCUT_STYLE}>{modKey("V")}</span>} onClick={() => { void handleMenuPaste(); }}><SnippetsOutlined /> {t("common.paste")}</MenuItem>
-                <MenuDivider />
-                <MenuItem dimmed={!hasSelection} iconRight={<span style={SHORTCUT_STYLE}>Delete</span>} onClick={() => { deleteSelection(); hide(); }}><DeleteOutlined /> {t("common.delete")}</MenuItem>
-              </>
-            )}
+          <div ref={menuRef} className="panel-popover">
+            <Menu
+              items={menuItems}
+              onClick={onMenuClick}
+              selectable={false}
+              style={{ border: 0, background: "transparent", minWidth: 148 }}
+            />
           </div>
         }
       >

@@ -88,6 +88,7 @@ export function directorTheme() {
       colorBgTextHover: "#26262b",
       colorBgTextActive: "#323238",
       controlItemBgHover: "#2a2a2f",
+      controlItemBgActive: "#2a2a2f",
       controlItemBgActiveHover: "#2a2a2f",
       // 注意：这里刻意不覆写 colorTextLightSolid —— Tooltip 的文字也用它，
       // 改成深色会让深底 Tooltip 不可读；主色按钮的深色字由 Button.primaryColor 单独处理。
@@ -119,6 +120,32 @@ export function directorTheme() {
       // Tag 字号在 v6 内部由 fontSizeSM 派生（tagFontSize = fontSizeSM），设 13 对齐设计语言
       Tag: { fontSizeSM: 13 },
       Tree: { nodeSelectedBg: "#26262b" },
+      // 菜单（antd Dropdown/Menu 全量接管自绘菜单后的唯一菜单语言）：
+      // 颜色对齐 --menu-bg / --menu-item-hover / --canvas-text 族；
+      // 弹层壳（padding/描边/圆角/最小宽）无组件 token，由 globals.css 的
+      // .ant-dropdown-menu 覆写块统一声明。
+      Menu: {
+        popupBg: "#1f1f23",          // 同 --menu-bg
+        itemBg: "transparent",       // 条目透明，容器承担底色
+        itemColor: "#e7e7ec",        // 同 --canvas-text
+        itemHoverBg: "#2a2a2f",      // 同 --menu-item-hover
+        itemHoverColor: "#e7e7ec",
+        itemActiveBg: "#2a2a2f",
+        itemSelectedBg: "#2a2a2f",
+        itemSelectedColor: "#e7e7ec",
+        itemDisabledColor: "#76767f", // 同 --canvas-text-dim
+        // 画布是鼠标驱动的纵向列表菜单，去掉左侧选中指示条
+        activeBarBorderWidth: 0,
+        itemBorderRadius: 6,
+        // 独立 <Menu>（右键菜单）与 Dropdown 弹层条目同高同隙：
+        // Dropdown 条目高由全局 controlHeight 派生（32px），两区统一收敛到 30px
+        // + 1px 条目间距（Dropdown 侧由 globals.css 覆写 padding-block 配对）
+        itemHeight: 30,
+        itemMarginBlock: 1,
+        itemMarginInline: 4,
+        itemPaddingInline: 10,
+        groupTitleColor: "#95959e",   // 同 --canvas-text-muted
+      },
       // 注意：Modal 的 padding 类（contentPadding/headerPadding…）是 v6 内部 token，
       // 无法在组件层配置；全站弹窗壳语言统一在 AppModal 的默认 styles 里声明。
       Slider: {

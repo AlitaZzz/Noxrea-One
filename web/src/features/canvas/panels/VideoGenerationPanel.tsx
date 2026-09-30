@@ -6,7 +6,7 @@
 "use client";
 
 import { DownOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Button, Popover, Tooltip } from "antd";
+import { App, Button, Dropdown, Popover, Tooltip } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -15,7 +15,6 @@ import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
 import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
 import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
 import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
@@ -427,93 +426,92 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
-        <MenuPopover
-          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
-          trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
-              <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
-              <span className="truncate">
-                {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-              </span>
-            </Button>
-          }
-          content={allModels.map((m) => (
-            <MenuItem key={m.value} onClick={() => selectModel(m.value)} selected={modelKey === m.value}>
-              <span className="flex items-center gap-1.5">
-                <ModelIcon model={m.name} className="size-4 shrink-0" />
-                <span className="truncate">{m.name}</span>
-                {m.providerName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.providerName}</span> : null}
-              </span>
-            </MenuItem>
-          ))}
-        />
+        <Dropdown
+          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft" trigger={["click"]}
+          menu={{
+            items: allModels.map((m) => ({
+              key: m.value,
+              icon: <ModelIcon model={m.name} className="size-4 shrink-0" />,
+              label: m.name,
+              extra: m.providerName ? <span className="max-w-24 truncate text-xs opacity-50">{m.providerName}</span> : undefined,
+            })),
+            selectable: true,
+            selectedKeys: [modelKey],
+            onClick: ({ key }) => selectModel(key),
+          }}
+        >
+          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
+            <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
+            <span className="truncate">
+              {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
+            </span>
+          </Button>
+        </Dropdown>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         {refModeOptions.length > 0 && (
-          <MenuPopover
+          <Dropdown
             open={refModeOpen}
             onOpenChange={setRefModeOpen}
             placement="bottomLeft"
-            trigger={
-              <Button size="small" type="text"
-                className="gen-panel-btn flex items-center justify-between gap-1.5 rounded text-sm"
-                style={{ width: 120 }}>
-                <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
-                  {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
-                  {refMode === "first-last" && <VideoFrameIcon style={{ fontSize: 14 }} />}
-                  {refMode === "image" && <VideoCameraIcon style={{ fontSize: 14 }} />}
-                  {refMode === "text" && <TextToVideoIcon style={{ fontSize: 14 }} />}
-                  {t(`video.refMode.${refMode}`)}
-                </span>
-                <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
-              </Button>
-            }
-            content={
-              <>
-                <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("video.refModeTitle")}</div>
-                {refModeOptions.map((m: string) => {
+            trigger={["click"]}
+            menu={{
+              items: [
+                {
+                  key: "refModeTitle",
+                  type: "group",
+                  label: (
+                    <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
+                      {t("video.refModeTitle")}
+                    </div>
+                  ),
+                },
+                ...refModeOptions.map((m: string) => {
                   const allowed = allowedRefModes.includes(m);
-                  return (
-                  <MenuItem key={m} selected={refMode === m} disabled={!allowed}
-                    tooltip={allowed ? undefined : refModeDisabledReason(m)}
-                    onClick={() => { if (allowed) { setRefMode(m); setRefModeOpen(false); } }}>
-                    {m === "full" && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <VideoRefIcon style={{ fontSize: 14 }} />
-                        {t(`video.refMode.${m}`)}
-                      </span>
-                    )}
-                    {m === "first-last" && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <VideoFrameIcon style={{ fontSize: 14 }} />
-                        {t(`video.refMode.${m}`)}
-                      </span>
-                    )}
-                    {m === "image" && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <VideoCameraIcon style={{ fontSize: 14 }} />
-                        {t(`video.refMode.${m}`)}
-                      </span>
-                    )}
-                    {m === "text" && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <TextToVideoIcon style={{ fontSize: 14 }} />
-                        {t(`video.refMode.${m}`)}
-                      </span>
-                    )}
-                    {m !== "full" && m !== "first-last" && m !== "image" && m !== "text" && t(`video.refMode.${m}`)}
-                  </MenuItem>
-                  );
-                })}
-              </>
-            }
-          />
+                  const modeIcon =
+                    m === "full" ? <VideoRefIcon style={{ fontSize: 14 }} />
+                    : m === "first-last" ? <VideoFrameIcon style={{ fontSize: 14 }} />
+                    : m === "image" ? <VideoCameraIcon style={{ fontSize: 14 }} />
+                    : m === "text" ? <TextToVideoIcon style={{ fontSize: 14 }} />
+                    : undefined;
+                  const labelText = t(`video.refMode.${m}`);
+                  return {
+                    key: m,
+                    icon: modeIcon,
+                    label: allowed ? labelText : (
+                      // 禁用原因沿行悬停展示：antd 禁用条目只拦截点击，hover 仍生效
+                      <Tooltip title={refModeDisabledReason(m)} placement="right">
+                        <span>{labelText}</span>
+                      </Tooltip>
+                    ),
+                    disabled: !allowed,
+                  };
+                }),
+              ],
+              selectable: true,
+              selectedKeys: [refMode],
+              onClick: ({ key }) => setRefMode(key),
+            }}
+          >
+            <Button size="small" type="text"
+              className="gen-panel-btn flex items-center justify-between gap-1.5 rounded text-sm"
+              style={{ width: 120 }}>
+              <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
+                {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
+                {refMode === "first-last" && <VideoFrameIcon style={{ fontSize: 14 }} />}
+                {refMode === "image" && <VideoCameraIcon style={{ fontSize: 14 }} />}
+                {refMode === "text" && <TextToVideoIcon style={{ fontSize: 14 }} />}
+                {t(`video.refMode.${refMode}`)}
+              </span>
+              <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
+            </Button>
+          </Dropdown>
         )}
         {refModeOptions.length > 0 && (
           <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         )}
         <Popover
           content={
-            <div className="menu-popover" style={{ width: 360, padding: 6 }}>
+            <div className="panel-popover" style={{ width: 360 }}>
               <ParamFields fields={fields} values={fieldValues} onChange={setField} />
             </div>
           }

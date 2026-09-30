@@ -6,13 +6,12 @@
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
-import { App, Button, Popover, Tooltip } from "antd";
+import { App, Button, Dropdown, Popover, Tooltip } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
 import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
-import { MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
@@ -394,30 +393,31 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
         style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
-        <MenuPopover
-          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft"
-          trigger={
-            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
-              <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
-              <span className="truncate">
-                {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-              </span>
-            </Button>
-          }
-          content={allModels.map((m) => (
-            <MenuItem key={m.value} onClick={() => { setModelKey(m.value); recordLastModel("image", m.value); setModelOpen(false); }} selected={modelKey === m.value}>
-              <span className="flex items-center gap-1.5">
-                <ModelIcon model={m.name} className="size-4 shrink-0" />
-                <span className="truncate">{m.name}</span>
-                {m.providerName ? <span className="ml-auto max-w-24 shrink-0 truncate text-xs opacity-50">{m.providerName}</span> : null}
-              </span>
-            </MenuItem>
-          ))}
-        />
+        <Dropdown
+          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft" trigger={["click"]}
+          menu={{
+            items: allModels.map((m) => ({
+              key: m.value,
+              icon: <ModelIcon model={m.name} className="size-4 shrink-0" />,
+              label: m.name,
+              extra: m.providerName ? <span className="max-w-24 truncate text-xs opacity-50">{m.providerName}</span> : undefined,
+            })),
+            selectable: true,
+            selectedKeys: [modelKey],
+            onClick: ({ key }) => { setModelKey(key); recordLastModel("image", key); },
+          }}
+        >
+          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
+            <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
+            <span className="truncate">
+              {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
+            </span>
+          </Button>
+        </Dropdown>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         <Popover
           content={
-            <div className="menu-popover" style={{ width: 360, padding: 6 }}>
+            <div className="panel-popover" style={{ width: 360 }}>
               <ParamFields fields={fields} values={fieldValues} onChange={setField} />
             </div>
           }
@@ -430,23 +430,26 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           </Button>
         </Popover>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        <MenuPopover
+        <Popover
           open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
+          trigger={["click"]} arrow={false}
           overlayClassName="creation-menu-popover"
-          trigger={
-            <Tooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
-              <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
-                <PresetIcon />
-              </Button>
-            </Tooltip>
-          }
+          styles={{ container: { padding: 0, background: "transparent" } }}
           content={
-            <PresetMenuContent
-              catalog={promptTemplateCatalog}
-              onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
-            />
+            <div className="panel-popover">
+              <PresetMenuContent
+                catalog={promptTemplateCatalog}
+                onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+              />
+            </div>
           }
-        />
+        >
+          <Tooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
+            <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
+              <PresetIcon />
+            </Button>
+          </Tooltip>
+        </Popover>
         <div className="flex-1" />
         <PrimaryActionButton
           cancel={isGenerating || submitting}

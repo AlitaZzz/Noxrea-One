@@ -9,8 +9,6 @@
 
 import { useTranslation } from "react-i18next";
 
-import { MenuItem } from "@/components/ui/MenuPopover";
-
 import { localizeText, presetIconOf, type PromptTemplateCatalog } from "./prompt-presets";
 
 interface Props {
@@ -38,7 +36,7 @@ export default function PresetMenuContent({ catalog, onSelect }: Props) {
                 .map((entry) => {
                   const Icon = presetIconOf(entry.id);
                   return (
-                    <MenuItem key={entry.id} onClick={() => onSelect(entry.id)}>
+                    <button key={entry.id} type="button" className="panel-item-btn" onClick={() => onSelect(entry.id)}>
                       <span className="flex items-center gap-2">
                         <Icon className="size-4 shrink-0" />
                         <span className="flex flex-col leading-tight">
@@ -46,7 +44,7 @@ export default function PresetMenuContent({ catalog, onSelect }: Props) {
                           <span className="menu-item-description">{localizeText(entry.description, i18n.language)}</span>
                         </span>
                       </span>
-                    </MenuItem>
+                    </button>
                   );
                 })}
             </div>

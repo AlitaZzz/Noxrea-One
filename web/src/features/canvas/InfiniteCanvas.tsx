@@ -38,12 +38,11 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
-import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import type { AssetItem } from "@/features/assets/types";
+import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
-import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
@@ -201,7 +200,6 @@ export default function InfiniteCanvas() {
   // 当前激活项目（agent 等子组件按 projectId 寻址）
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
-  const authUser = useCurrentUser();
   const { t } = useTranslation();
 
   const [editName, setEditName] = useState(projectName);
@@ -1079,9 +1077,35 @@ export default function InfiniteCanvas() {
                 pointerEvents: "auto",
               }}
             >
-              <MenuPopover
+              <UserMenuPopover
                 open={toolbarMenuOpen}
                 onOpenChange={setToolbarMenuOpen}
+                placement="bottomLeft"
+                items={[
+                  { key: "home", label: t("project.home") },
+                  { type: "divider" },
+                  { key: "new", label: t("project.new") },
+                  { key: "delete", label: t("project.delete") },
+                ]}
+                onItemClick={(key) => {
+                  if (key === "home") {
+                    void (async () => {
+                      await flushAndWait();
+                      router.push("/project");
+                    })();
+                  } else if (key === "new") {
+                    void (async () => {
+                      await flushAndWait();
+                      await useProjectStore.getState().createProject();
+                      // 画布身份以 URL 为准：router.replace 触发页面层拉取并恢复，
+                      // loader 门随后放行新画布（恢复入口收口在 page.tsx）
+                      router.replace(`/canvas/${useProjectStore.getState().activeProjectId}`);
+                    })();
+                  } else if (key === "delete") {
+                    setDeleteConfirmOpen(true);
+                  }
+                }}
+                onLogout={() => setLogoutConfirmOpen(true)}
                 trigger={
                   <div className="flex shrink-0 cursor-pointer items-center gap-1 hover:bg-white/10 rounded px-0.5 py-0.5 transition-colors">
                     <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
@@ -1089,43 +1113,6 @@ export default function InfiniteCanvas() {
                       className="shrink-0 transition-transform duration-200"
                       style={{ color: "var(--canvas-text-dim)", width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
                     />
-                  </div>
-                }
-                placement="bottomLeft"
-                content={
-                  <div className="select-none">
-                    <div className="flex items-center gap-2 px-1 py-1.5">
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-                        style={{ background: "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
-                        {authUser?.avatarUrl ? (
-                          <img src={authUser.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          (authUser?.username || t("auth.defaultUser"))[0].toUpperCase()
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate" style={{ color: "var(--canvas-text)" }}>
-                          {authUser?.username || "Guest"}
-                        </div>
-                      </div>
-                    </div>
-                    <MenuDivider />
-                    <MenuItem onClick={async () => { setToolbarMenuOpen(false); await flushAndWait(); router.push("/project"); }}>{t("project.home")}</MenuItem>
-                    <MenuDivider />
-                    <MenuItem onClick={async () => {
-                        setToolbarMenuOpen(false);
-                        await flushAndWait();
-                        await useProjectStore.getState().createProject();
-                        // 画布身份以 URL 为准：router.replace 触发页面层拉取并恢复，
-                        // loader 门随后放行新画布（恢复入口收口在 page.tsx）
-                        router.replace(`/canvas/${useProjectStore.getState().activeProjectId}`);
-                      }}>{t("project.new")}</MenuItem>
-                    <MenuItem onClick={() => { setToolbarMenuOpen(false); setDeleteConfirmOpen(true); }}>{t("project.delete")}</MenuItem>
-                    <MenuDivider />
-                    <MenuItem onClick={() => {
-                        setToolbarMenuOpen(false);
-                        setLogoutConfirmOpen(true);
-                      }}>{t("auth.logout")}</MenuItem>
                   </div>
                 }
               />

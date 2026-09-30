@@ -483,7 +483,6 @@ export default function AssetsModal({ open, onClose }: Props) {
         style={{ maxWidth: 1600 }}
       >
         <style>{`
-          .menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }
         `}</style>
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
           {/* Main content：面包屑/工具条、批量条与网格 */}

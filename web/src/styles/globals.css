@@ -1357,39 +1357,51 @@ body > .ant-app { line-height: inherit !important; }
   background: var(--canvas-bg-hover) !important;
   color: var(--canvas-text) !important;
 }
-/* 下拉菜单内图标统一 16px（lucide 默认 24 已被 size 覆盖；AntD/自绘跟随 font-size） */
-.menu-popover { font-size: 16px; }
+/* ── 菜单体系（antd Dropdown/Menu 全量接管）────────────────────────────
+   颜色与条目尺寸由 theme.ts 的 Menu 组件 token 提供（条目文字 14px 为 antd
+   默认，条目规则自带 fontSize，壳上写字号是死的，故不声明）；
+   弹层壳（padding/描边/圆角/最小宽）无组件 token，在此统一声明。
+   双类选择器（.ant-dropdown .ant-dropdown-menu）压过 antd 运行时注入的
+   同特异性规则（cssinjs 晚于本文件加载，同特异性会按源序落败）。
+   多列预设网格、筛选面板等非列表弹层走 antd Popover + .panel-popover 壳。 */
+.ant-dropdown .ant-dropdown-menu {
+  padding: 6px;
+  min-width: 160px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+}
+.ant-dropdown .ant-dropdown-menu-item-divider { margin: 3px 6px; background: var(--menu-border); }
+/* 条目间呼吸空隙：globals 覆写实测可压过 antd cssinjs 注入规则（:where 哈希前缀
+   不增加特异性），无需 !important */
+.ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item { margin-block: 2px; }
+/* 选中态文字不跟随主色（antd 在 Dropdown 样式区写死 colorPrimary 且未暴露 token）：
+   选中 = 中性底（全局 controlItemBgActive）+ 正常文字，与 Tree/Select 选中语义一致 */
+.ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item.ant-dropdown-menu-item-selected {
+  color: var(--canvas-text) !important;
+}
 
 /* 节点上传/参考按钮 */
 .node-upload-btn { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); border: none; cursor: pointer; transition: background .15s, color .15s; }
 .node-upload-btn:hover { background: var(--canvas-bg-active); color: var(--canvas-text); }
 
-/* 全局菜单样式(Director Dock + Canvas Toolbar 共用) */
-.menu-item-btn {
-  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
-  background: transparent; border: none; cursor: pointer; padding: 6px 12px;
-  font-size: 13px; border-radius: 6px;
-}
-.menu-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
-.menu-item-btn.selected { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
-/* 禁用（dimmed）菜单项：hover 时不高亮背景、文字保持灰色 */
-.menu-popover-item { user-select: none; -webkit-user-select: none; }
-.menu-popover-item.menu-item-disabled .menu-item-btn:hover { background: transparent !important; color: var(--canvas-text-dim) !important; }
-.menu-divider { height: 1px; background: var(--menu-border); margin: 2px 6px; }
-.menu-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); user-select: none; -webkit-user-select: none; }
+/* 自定义面板弹层（多列预设网格 / 筛选 / 历史列表等借用菜单外观的非列表弹层） */
+.panel-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); user-select: none; -webkit-user-select: none; }
+.panel-item-btn { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: none; cursor: pointer; padding: 6px 12px; font-size: 13px; border-radius: 6px; }
+.panel-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
+.panel-divider { height: 1px; background: var(--menu-border); margin: 3px 6px; }
 /* 分组标题（创作菜单等）：小号弱化文字，条目下的两行说明文字 */
 .menu-group-label { padding: 6px 12px 2px; font-size: 11px; color: var(--canvas-text-muted); }
 .menu-item-description { font-size: 11px; color: var(--canvas-text-dim); }
 /* 创作菜单：分组 + 两行条目，宽度随列数自适应（列宽固定，避免长描述把弹层撑得过宽）；
    多列布局由目录数据的 group.column 声明，列数任意，宽度按 224px 等分 */
-.creation-menu-popover .menu-popover { width: max-content; }
+.creation-menu-popover .panel-popover { width: max-content; }
 .preset-menu-columns { display: flex; gap: 6px; }
 .preset-menu-col { width: 288px; }
 .preset-menu-columns.multi .preset-menu-col { width: 224px; }
 
 /* 历史对话弹层：320px 宽，配色沿用 canvas 变量族 */
 .chat-history-popover { min-width: 300px !important; width: 320px !important; }
-.chat-history-popover .menu-popover {
+.chat-history-popover .panel-popover {
   padding: 0; min-width: 0; width: 100%;
   background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 16px;
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
@@ -1438,7 +1450,7 @@ body > .ant-app { line-height: inherit !important; }
   opacity: 1; pointer-events: auto;
 }
 
-/* 风格筛选弹层：直接复用右键菜单外观（.menu-popover），仅加宽并定义行样式 */
+/* 风格筛选弹层：面板壳（.panel-popover），仅加宽并定义行样式 */
 .asset-filter-popover { min-width: 210px; }
 .asset-filter-popover .filter-row {
   display: flex;

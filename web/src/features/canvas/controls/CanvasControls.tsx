@@ -13,7 +13,8 @@ import {
   ZoomOutOutlined,
 } from "@ant-design/icons";
 import { useReactFlow, useViewport } from "@xyflow/react";
-import { Button, InputNumber, Tooltip } from "antd";
+import type { MenuProps } from "antd";
+import { Button,Dropdown, InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,7 +23,6 @@ import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
 import { MapPinIcon } from "@/components/ui/icons/canvas/MapPinIcon";
 import { PanelIcon } from "@/components/ui/icons/canvas/PanelIcon";
 import { ShortcutIcon } from "@/components/ui/icons/canvas/ShortcutIcon";
-import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { BackgroundType } from "@/features/canvas/types";
@@ -94,27 +94,32 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   const zoomPercent = Math.round(viewport.zoom * 100);
 
-  const zoomMenu = (
-    <div style={{ width: 170 }}>
-      <div style={{ marginBottom: 4 }}>
-        <InputNumber
-          size="small" controls={false}
-          min={Math.round(MIN_ZOOM * 100)} max={Math.round(MAX_ZOOM * 100)}
-          value={inputZoom} placeholder="100" autoFocus
-          className="zoom-input"
-          style={{ width: "100%" }}
-          suffix={<span style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>%</span>}
-          onChange={(v) => { if (v != null) setInputZoom(v); }}
-          onPressEnter={() => handleZoomInput(inputZoom)} />
-      </div>
-      <MenuItem onClick={() => { zoomIn(); setZoomOpen(false); }}><ZoomInOutlined /> {t("canvas.zoom.in")}</MenuItem>
-      <MenuItem onClick={() => { zoomOut(); setZoomOpen(false); }}><ZoomOutOutlined /> {t("canvas.zoom.out")}</MenuItem>
-      <MenuItem onClick={() => { fitView({ duration: 300 }); setZoomOpen(false); }}><ExpandOutlined /> {t("canvas.fit")}</MenuItem>
-      <MenuDivider />
-      <MenuItem onClick={() => handleZoomTo(50)}>{t("canvas.zoom.to50")}</MenuItem>
-      <MenuItem onClick={() => handleZoomTo(100)}>{t("canvas.zoom.to100")}</MenuItem>
-    </div>
-  );
+  const zoomItems: NonNullable<MenuProps["items"]> = [
+    {
+      key: "zoom-input",
+      type: "group",
+      label: (
+        <div style={{ width: 170, paddingBottom: 4 }}>
+          <InputNumber
+            size="small" controls={false}
+            min={Math.round(MIN_ZOOM * 100)} max={Math.round(MAX_ZOOM * 100)}
+            value={inputZoom} placeholder="100" autoFocus
+            className="zoom-input"
+            style={{ width: "100%" }}
+            suffix={<span style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>%</span>}
+            onChange={(v) => { if (v != null) setInputZoom(v); }}
+            onPressEnter={() => handleZoomInput(inputZoom)} />
+        </div>
+      ),
+    },
+    { type: "divider" },
+    { key: "in", icon: <ZoomInOutlined />, label: t("canvas.zoom.in") },
+    { key: "out", icon: <ZoomOutOutlined />, label: t("canvas.zoom.out") },
+    { key: "fit", icon: <ExpandOutlined />, label: t("canvas.fit") },
+    { type: "divider" },
+    { key: "50", label: t("canvas.zoom.to50") },
+    { key: "100", label: t("canvas.zoom.to100") },
+  ];
 
   return (
     <>
@@ -174,17 +179,23 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       </Tooltip>
 
       {/* Background picker */}
-      <MenuPopover open={bgOpen} onOpenChange={setBgOpen}
-        trigger={
-          <Tooltip title={t("common.background")}>
-            <Button size="small" type="text" className="canvas-ctrl-btn" icon={<BgColorsOutlined />} />
-          </Tooltip>
-        }
+      <Dropdown
+        open={bgOpen}
+        onOpenChange={setBgOpen}
         placement="top"
-        content={(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
-          <MenuItem key={bg} onClick={() => { setBackground(bg); setBgOpen(false); }}>{t(`canvas.background.${bg}`)}</MenuItem>
-        ))}
-      />
+        trigger={["click"]}
+        menu={{
+          items: (["dots", "grid", "blank"] as BackgroundType[]).map((bg) => ({
+            key: bg,
+            label: t(`canvas.background.${bg}`),
+          })),
+          onClick: ({ key }) => setBackground(key as BackgroundType),
+        }}
+      >
+        <Tooltip title={t("common.background")}>
+          <Button size="small" type="text" className="canvas-ctrl-btn" icon={<BgColorsOutlined />} />
+        </Tooltip>
+      </Dropdown>
       {/* Language toggle */}
       <LanguageToggle />
 
@@ -200,52 +211,69 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
       <span className="canvas-toolbar-sep" style={{ height: 18 }} />
 
-      {/* Shortcuts — 快捷键速查，随按钮锚定弹出（与背景/缩放菜单同交互） */}
-      <MenuPopover open={shortcutsOpen} onOpenChange={setShortcutsOpen} placement="top"
-        trigger={
-          <Tooltip title={t("shortcuts.title")}>
-            <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} />
-          </Tooltip>
-        }
+      {/* Shortcuts — 快捷键速查，随按钮锚定弹出（与背景/缩放菜单同交互）。
+          多列速查表是面板而非列表菜单，走 antd Popover + panel-popover 壳 */}
+      <Popover
+        open={shortcutsOpen}
+        onOpenChange={setShortcutsOpen}
+        placement="top"
+        trigger={["click"]}
+        arrow={false}
+        styles={{ container: { padding: 0, background: "transparent" } }}
         content={
-          <div className="flex gap-10 p-6 select-none" style={{ color: "var(--canvas-text-dim)" }}>
-            {[
-              { title: t("shortcuts.zoom"), items: [[modKey("="), t("shortcuts.desc.zoomin")], [modKey("-"), t("shortcuts.desc.zoomout")], [modKey("0"), t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
-              { title: t("shortcuts.pan"), items: [[t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan")], [t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan")]] },
-              { title: t("shortcuts.edit"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion")], [modKey("C"), t("shortcuts.desc.copy")], [modKey("V"), t("shortcuts.desc.paste")], [modKey("Z"), t("shortcuts.desc.undo")], [modKey("Shift+Z"), t("shortcuts.desc.redo")], ["Delete", t("shortcuts.desc.delete")]] },
-              { title: t("shortcuts.group"), items: [[modKey("G"), t("shortcuts.desc.group")], [modKey("Shift+G"), t("shortcuts.desc.ungroup")]] },
-              { title: t("shortcuts.other"), items: [[modKey("A"), t("shortcuts.desc.selectall")], [modKey("M"), t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
-            ].map((group, i, arr) => (
-              <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-[var(--canvas-border-light)] pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
-                <div className="text-[var(--canvas-text-muted)] text-sm font-medium mb-3">{group.title}</div>
-                {group.items.map(([key, desc]) => (
-                  <div key={key} className="flex items-center justify-between gap-3 py-2">
-                    <kbd className="bg-[var(--canvas-bg-active)] px-2.5 py-1 rounded text-sm font-mono text-[var(--canvas-text)] whitespace-nowrap">{key}</kbd>
-                    <span className="text-sm text-right">{desc}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
+          <div className="panel-popover" style={{ padding: 0 }}>
+            <div className="flex gap-10 p-6 select-none" style={{ color: "var(--canvas-text-dim)" }}>
+              {[
+                { title: t("shortcuts.zoom"), items: [[modKey("="), t("shortcuts.desc.zoomin")], [modKey("-"), t("shortcuts.desc.zoomout")], [modKey("0"), t("shortcuts.desc.reset")], [t("shortcuts.key.scroll"), t("shortcuts.desc.scroll")]] },
+                { title: t("shortcuts.pan"), items: [[t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan")], [t("shortcuts.key.middleDrag"), t("shortcuts.desc.pan")]] },
+                { title: t("shortcuts.edit"), items: [[t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion")], [modKey("C"), t("shortcuts.desc.copy")], [modKey("V"), t("shortcuts.desc.paste")], [modKey("Z"), t("shortcuts.desc.undo")], [modKey("Shift+Z"), t("shortcuts.desc.redo")], ["Delete", t("shortcuts.desc.delete")]] },
+                { title: t("shortcuts.group"), items: [[modKey("G"), t("shortcuts.desc.group")], [modKey("Shift+G"), t("shortcuts.desc.ungroup")]] },
+                { title: t("shortcuts.other"), items: [[modKey("A"), t("shortcuts.desc.selectall")], [modKey("M"), t("shortcuts.desc.minimap")], [t("shortcuts.key.shiftClick"), t("shortcuts.desc.multiselect")], ["Escape", t("shortcuts.desc.esc")], ["?", t("shortcuts.desc.help")]] },
+              ].map((group, i, arr) => (
+                <div key={group.title} className={`${i < arr.length - 1 ? "border-r border-[var(--canvas-border-light)] pr-10" : ""}`} style={{ width: 200, flexShrink: 0 }}>
+                  <div className="text-[var(--canvas-text-muted)] text-sm font-medium mb-3">{group.title}</div>
+                  {group.items.map(([key, desc]) => (
+                    <div key={key} className="flex items-center justify-between gap-3 py-2">
+                      <kbd className="bg-[var(--canvas-bg-active)] px-2.5 py-1 rounded text-sm font-mono text-[var(--canvas-text)] whitespace-nowrap">{key}</kbd>
+                      <span className="text-sm text-right">{desc}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         }
-      />
+      >
+        <Tooltip title={t("shortcuts.title")}>
+          <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} />
+        </Tooltip>
+      </Popover>
 
       {/* Agent 对话 */}
       {/* Zoom display + menu */}
-      <MenuPopover
+      <Dropdown
         open={zoomOpen}
         onOpenChange={(v) => {
           setZoomOpen(v);
           if (v) setInputZoom(Math.round(viewport.zoom * 100));
         }}
         placement="top"
-        trigger={
-          <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
-            {zoomPercent}%
-          </Button>
-        }
-        content={zoomMenu}
-      />
+        trigger={["click"]}
+        menu={{
+          items: zoomItems,
+          onClick: ({ key }) => {
+            if (key === "in") zoomIn();
+            else if (key === "out") zoomOut();
+            else if (key === "fit") fitView({ duration: 300 });
+            else if (key === "50") handleZoomTo(50);
+            else if (key === "100") handleZoomTo(100);
+          },
+        }}
+      >
+        <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
+          {zoomPercent}%
+        </Button>
+      </Dropdown>
     </div>
     </>
   );

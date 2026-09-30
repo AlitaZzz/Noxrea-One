@@ -3,7 +3,7 @@ import "@photo-sphere-viewer/core/index.css";
 import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Viewer } from "@photo-sphere-viewer/core";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
-import { Button, Tooltip } from "antd";
+import { Button, Dropdown, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,7 +11,6 @@ import { AspectRatioIcon } from "@/components/ui/icons/canvas/AspectRatioIcon";
 import { Grid4Icon } from "@/components/ui/icons/canvas/Grid4Icon";
 import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
 import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
-import { MenuDivider, MenuItem, MenuPopover } from "@/components/ui/MenuPopover";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -397,27 +396,28 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* 画面比例：选择截图输出比例，同时显示对应取景框 */}
-        <MenuPopover
+        <Dropdown
           open={aspectOpen}
           onOpenChange={setAspectOpen}
           placement="bottom"
-          trigger={
-            <Tooltip title={t("panorama.aspect")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<AspectRatioIcon />} disabled={loading} />
-            </Tooltip>
-          }
-          content={
-            <>
-              <MenuItem selected={aspect === "original"} onClick={() => setAspect("original")}>
-                {t("panorama.aspectOriginal")}
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem selected={aspect === "16:9"} onClick={() => setAspect("16:9")}>16:9</MenuItem>
-              <MenuItem selected={aspect === "9:16"} onClick={() => setAspect("9:16")}>9:16</MenuItem>
-              <MenuItem selected={aspect === "21:9"} onClick={() => setAspect("21:9")}>21:9</MenuItem>
-            </>
-          }
-        />
+          trigger={["click"]}
+          menu={{
+            items: [
+              { key: "original", label: t("panorama.aspectOriginal") },
+              { type: "divider" },
+              { key: "16:9", label: "16:9" },
+              { key: "9:16", label: "9:16" },
+              { key: "21:9", label: "21:9" },
+            ],
+            selectable: true,
+            selectedKeys: [aspect],
+            onClick: ({ key }) => setAspect(key as typeof aspect),
+          }}
+        >
+          <Tooltip title={t("panorama.aspect")}>
+            <Button type="text" size="middle" style={{ padding: 8 }} icon={<AspectRatioIcon />} disabled={loading} />
+          </Tooltip>
+        </Dropdown>
 
         {/* 三分构图线开关 */}
         <Tooltip title={t("panorama.toggleGrid")}>

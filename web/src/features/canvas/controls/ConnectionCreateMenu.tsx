@@ -5,12 +5,11 @@
 "use client";
 
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { Popover } from "antd";
+import { Dropdown } from "antd";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
-import { MenuItem } from "@/components/ui/MenuPopover";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
 
 export interface PendingConnectionCreate {
@@ -47,43 +46,40 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
 
   return (
     <>
-      <Popover
+      <Dropdown
         open
-        trigger={[]}
+        trigger={["click"]}
         placement="bottomLeft"
-        arrow={false}
-        getPopupContainer={() => document.body}
         onOpenChange={(v) => { if (!v) onClose(); }}
-        styles={{ container: { padding: 0, background: "transparent" } }}
-        content={
-          <div className="menu-popover flex flex-col gap-0.5 rounded-lg shadow-xl" style={{ padding: 8 }}>
-            <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
-              {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
-            </div>
-            {nodeOptions.map((opt) => {
+        menu={{
+          items: [
+            {
+              key: "hint",
+              type: "group",
+              label: (
+                <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
+                  {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
+                </div>
+              ),
+            },
+            ...nodeOptions.map((opt) => {
               // 批量连线：仅当全部参与节点都兼容该类型时才启用，
               // 保证点击后所有选中节点都会接上新节点（与单节点行为一致）
               const disabled =
                 pending.direction === "output"
                   ? !pending.sourceNodeTypes.every((t) => canConnect(t, opt.type))
                   : !pending.sourceNodeTypes.every((t) => canConnectToInput(t, opt.type));
-              return (
-                <MenuItem
-                  key={opt.type}
-                  dimmed={disabled}
-                  onClick={() => {
-                    if (!disabled) {
-                      onSelect(opt.type);
-                      onClose();
-                    }
-                  }}
-                >
-                  {opt.icon} {opt.label}
-                </MenuItem>
-              );
-            })}
-          </div>
-        }
+              return { key: opt.type, icon: opt.icon, label: opt.label, disabled };
+            }),
+          ],
+          onClick: ({ key }) => {
+            const opt = nodeOptions.find((o) => o.type === key);
+            if (opt) {
+              onSelect(opt.type);
+              onClose();
+            }
+          },
+        }}
       >
         <span
           style={{
@@ -93,7 +89,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
             width: 1, height: 1, pointerEvents: "none",
           }}
         />
-      </Popover>
+      </Dropdown>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
     </>
   );

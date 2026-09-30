@@ -6,7 +6,7 @@
 "use client";
 
 import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Popover } from "antd";
+import { App } from "antd";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import SettingsModal from "@/features/auth/components/SettingsModal";
+import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import { flushAndWait } from "@/features/canvas/stores/canvas-store";
@@ -113,54 +114,41 @@ export default function ProjectListPage() {
           <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{projects.length}</span>
         </div>
 
-        <Popover
-          content={
-            <div className="flex flex-col p-2 gap-0.5" style={{ margin: -12, background: "var(--canvas-bg)", borderRadius: 8, minWidth: 180 }}>
-              <style>{`.avatar-menu-item:hover { background: var(--canvas-bg-hover) !important; }`}</style>
-              <div className="flex items-center gap-2 px-1 py-1.5">
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
-                  {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.username || t("auth.defaultUser"))[0].toUpperCase()}
-                </div>
-                <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username}</span>
-              </div>
-              <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
-              <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
-                style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent" }}
-                onClick={() => { setAvatarOpen(false); setSettingsOpen(true); }}>
-                {t("auth.accountSettings")}
-              </button>
-              <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
-              <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-2"
-                style={{ color: "var(--canvas-text)", border: "none", cursor: "pointer", background: "transparent", width: "100%" }}
-                onClick={() => { const newLang = i18n.language === "zh" ? "en" : "zh"; useAuthStore.getState().savePreference("language", newLang); setAvatarOpen(false); }}>
-<span>{i18n.language === "zh" ? "简体中文" : "English"}</span><span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>
-              </button>
-              <div style={{ height: 1, background: "var(--canvas-border)", margin: "2px 6px" }} />
-              <button className="avatar-menu-item text-left px-3 py-1.5 text-sm rounded transition-colors"
-                style={{ color: "var(--canvas-text-dim)", border: "none", cursor: "pointer", background: "transparent" }}
-                onClick={() => { setAvatarOpen(false); useAuthStore.getState().logout().finally(() => router.push("/login")); }}>
-                {t("auth.logout")}
-              </button>
-            </div>
-          }
-          trigger="click"
-          placement="bottomRight"
+        <UserMenuPopover
           open={avatarOpen}
           onOpenChange={setAvatarOpen}
-        >
-          {/* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */}
-          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--canvas-bg-elevated)" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                (user?.username || "U")[0].toUpperCase()
-              )}
+          placement="bottomRight"
+          items={[
+            { key: "settings", label: t("auth.accountSettings") },
+            {
+              key: "lang",
+              label: i18n.language === "zh" ? "简体中文" : "English",
+              extra: <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>,
+            },
+          ]}
+          onItemClick={(key) => {
+            if (key === "settings") {
+              setSettingsOpen(true);
+            } else if (key === "lang") {
+              useAuthStore.getState().savePreference("language", i18n.language === "zh" ? "en" : "zh");
+            }
+          }}
+          onLogout={() => useAuthStore.getState().logout().finally(() => router.push("/login"))}
+          trigger={
+            /* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */
+            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--canvas-bg-elevated)" }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  (user?.username || "U")[0].toUpperCase()
+                )}
+              </div>
+              <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || t("auth.defaultUser")}</span>
+              <ChevronDownIcon style={{ color: "var(--canvas-text-dim)", width: 10, height: 10 }} />
             </div>
-            <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || t("auth.defaultUser")}</span>
-            <ChevronDownIcon style={{ color: "var(--canvas-text-dim)", width: 10, height: 10 }} />
-          </div>
-        </Popover>
+          }
+        />
       </div>
 
       {/* Grid */}

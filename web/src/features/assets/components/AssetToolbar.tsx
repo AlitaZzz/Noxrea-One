@@ -10,16 +10,13 @@ import {
   SearchOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { Checkbox, Input, Popover, Tooltip } from "antd";
+import { Checkbox, Dropdown, Input, Popover, Tooltip } from "antd";
 import { useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import FilterIcon from "@/components/ui/icons/common/FilterIcon";
 import ManageIcon from "@/components/ui/icons/common/ManageIcon";
-import { MenuItem } from "@/components/ui/MenuPopover";
-import { useLayerOverlay } from "@/components/ui/modal/layer-context";
 import type { AssetType } from "@/features/assets/types";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
@@ -45,11 +42,6 @@ export default function AssetToolbar({
   multiSelect = false, onToggleMultiSelect,
 }: Props) {
   const { t } = useTranslation();
-  const layerOverlay = useLayerOverlay();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // 搜索默认收起为一颗图标，点击后输入框向左展开；失焦且内容为空时自动收回。
   const [searchOpen, setSearchOpen] = useState(false);
@@ -67,20 +59,8 @@ export default function AssetToolbar({
     }
   };
 
-  const handleMenuEnter = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
-    }
-    setMenuOpen(true);
-  };
-  const handleMenuLeave = () => {
-    closeTimer.current = setTimeout(() => setMenuOpen(false), 150);
-  };
-
   const filterContent = (
-    <div className="menu-popover asset-filter-popover">
+    <div className="panel-popover asset-filter-popover">
       <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>
         {t("asset.filter")}
       </div>
@@ -104,7 +84,7 @@ export default function AssetToolbar({
       ))}
       {categories.length > 0 && (
         <>
-          <div className="menu-divider" />
+          <div className="panel-divider" />
           <div
             className="filter-row"
             onClick={() => onCategoriesChange([])}
@@ -193,50 +173,27 @@ export default function AssetToolbar({
         </Tooltip>
       </Popover>
 
-      {/* 新建下拉 */}
-      <div
-        className="relative"
-        onMouseEnter={handleMenuEnter}
-        onMouseLeave={handleMenuLeave}
+      {/* 新建下拉：hover 触发（antd 自带 enter/leave 延迟），禁用项走 antd 默认禁用样式 */}
+      <Dropdown
+        trigger={["hover"]}
+        placement="bottomRight"
+        mouseLeaveDelay={0.15}
+        menu={{
+          items: [
+            { key: "createFolder", icon: <FolderAddOutlined />, label: t("asset.createFolder"), disabled: !canCreateFolder },
+            { key: "upload", icon: <UploadOutlined />, label: t("asset.uploadTitle") },
+          ],
+          onClick: ({ key }) => {
+            if (key === "createFolder") onCreateFolder?.();
+            else if (key === "upload") onUpload?.();
+          },
+        }}
       >
-        <AppButton ref={triggerRef} variant="primary">
+        <AppButton variant="primary">
           <PlusOutlined />
           {t("asset.create")}
         </AppButton>
-        {menuOpen && createPortal(
-          <div
-            className="flex flex-col p-2 gap-0.5 rounded-lg shadow-lg border"
-            onMouseEnter={handleMenuEnter}
-            onMouseLeave={handleMenuLeave}
-            style={{
-              position: "fixed",
-              top: menuPos.top,
-              left: menuPos.left,
-              // 需高于资产卡片的多选框（z-10），否则菜单会盖在卡片上时被勾选框压住
-              zIndex: 1050,
-              background: "var(--canvas-bg)",
-              borderColor: "var(--canvas-border)",
-              minWidth: 160,
-              pointerEvents: "auto",
-            }}
-          >
-            <style>{`.menu-popover-item:not(.menu-item-disabled):hover { background: var(--canvas-bg-hover) !important; }`}</style>
-            <MenuItem
-              onClick={canCreateFolder ? () => { setMenuOpen(false); onCreateFolder?.(); } : undefined}
-              dimmed={!canCreateFolder}
-              iconRight={!canCreateFolder ? <span style={{ opacity: 0.35 }} /> : undefined}
-            >
-              <FolderAddOutlined /> {t("asset.createFolder")}
-            </MenuItem>
-            <MenuItem
-              onClick={() => { setMenuOpen(false); onUpload?.(); }}
-            >
-              <UploadOutlined /> {t("asset.uploadTitle")}
-            </MenuItem>
-          </div>,
-          layerOverlay || document.body
-        )}
-      </div>
+      </Dropdown>
     </div>
   );
 }

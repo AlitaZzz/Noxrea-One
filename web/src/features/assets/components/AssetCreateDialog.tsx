@@ -500,7 +500,9 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
             <Select
               value={category}
               onChange={(v) => setCategory(v)}
-              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+              // label 用 ReactNode：rc-select 仅对字符串 label 回退原生 title（悬停出现
+              // 浏览器气泡提示），节点化后不再生成 title 属性，也不引入任何 Tooltip
+              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: <span>{t(opt.labelKey)}</span> }))}
               style={{ width: "100%" }}
             />
           </div>
