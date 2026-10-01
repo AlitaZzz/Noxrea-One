@@ -128,6 +128,28 @@ UI 基础层：
 - 不包含领域规则。
 - 不处理具体业务流程。
 
+**当前已有出口**（新增通用能力前先查这里，禁止重复实现）：
+
+| 类别 | 出口 |
+| --- | --- |
+| 按钮与动作 | `AppButton`（原生元素 + CSS 类，变体 primary/default/ghost/danger）、`NavButton`、`IconActionButton`（圆形图标主操作，含 loading / cancel 态）、`DialogActions`（弹窗底部「取消 + 主行动」区） |
+| 弹窗 | `AppModal`（全站弹窗基座，内含 layer 层级系统）、`ConfirmModal`（二次确认） |
+| 表单字段 | `ParamFields`（声明式参数渲染：segmented/select/slider/switch/number）、`ParamSummary`、`AppInput`、`AppNumberInput`、`AppCheckbox` |
+| 提示与浮层 | `AppTooltip`、`AppPopover`、`AppEmpty`、`TaskErrorDetail`（长文折叠详情） |
+| 选择与取值 | `AppDropdown`、`AppMenu`、`AppSlider`、`AppColorPicker` |
+| 容器与列表 | `AppDrawer`、`VirtualList`、`WheelGuard` |
+| 展示 | `AppDescriptions`、`AppTypography` |
+| 图标资产 | `icons/`（纯 SVG，无业务规则，可被各层直接引用） |
+
+出口分两种写法，按代价选择：
+
+- 已有 CSS 语言覆盖的能力（如按钮）用**原生元素 + 语义 CSS 类**实现，不包第三方壳。
+- 交互复杂、自研代价高的能力（Tooltip / Slider / ColorPicker / Dropdown 等）由出口**隔离第三方实现**：对外只认 `App*`，替换底层库时只改出口文件。
+
+出口的公共契约由项目定义，不直接导出第三方完整 Props、组件对象或事件对象。颜色、勾选与菜单选择等回调返回普通值或项目声明的数据；第三方类型与转换只在 UI 实现内部使用。
+
+`ParamFields` / `ParamSummary` 只消费已解析的展示描述。模型默认值、提交字段判断、翻译约定与自适应比例语义由 `features/model/param-fields.ts` 处理，UI 层不反向依赖领域适配器。
+
 ### 4. 第三方 UI 库使用规范
 
 第三方 UI 库属于基础实现层。
@@ -139,6 +161,13 @@ UI 基础层：
 3. 核心业务领域新增代码优先通过 UI 基础层获取通用 UI 能力。
 4. 已存在代码逐步优化，不进行无业务价值的大规模迁移。
 5. 不为了追求形式上的架构纯净进行过度抽象。
+
+**强制约束**（由 `eslint.config.mjs` 保证，违反无法合入）：
+
+- 核心业务领域（`src/features/canvas/**`）禁止直接 `import` 第三方 UI 库的 UI 组件，必须走八.3 的 `App*` 出口。
+- 例外：`App`（`App.useApp()`）是通知入口，不算 UI 组件依赖。
+- 非核心目录（assets / director / settings / auth / project）不受此约束，避免无业务价值的迁移。
+- 跨层依赖由 `boundaries/dependencies` 以 error 级别强制：app → feature → ui → lib，反向依赖直接报错。
 
 ### 5. 组件归属判断
 

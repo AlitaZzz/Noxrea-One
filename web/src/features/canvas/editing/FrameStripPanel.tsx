@@ -11,10 +11,12 @@
 "use client";
 
 import { CloseOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -25,7 +27,6 @@ import { SEEK_MARGIN_S } from "@/lib/constants";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, ratioFromClientX } from "./clip-range";
-import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
@@ -242,7 +243,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+        <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
         <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.captureFrame")}</span>
       </div>
 
@@ -306,20 +307,20 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
-        <Tooltip
+        <AppTooltip
           title={t("capture.truncated", {
             actual: formatTime(duration),
             declared: formatTime(declaredDuration),
           })}
         >
           <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
-        </Tooltip>
+        </AppTooltip>
       )}
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
-      <PrimaryActionButton onClick={handleCapture} disabled={!ready} />
+      <IconActionButton onClick={handleCapture} disabled={!ready} />
     </div>
   );
 }

@@ -16,10 +16,17 @@ import {
   RightOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { App, Button, Checkbox, Drawer, Empty, Input, Popover, Tooltip } from "antd";
+import { App } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppCheckbox from "@/components/ui/AppCheckbox";
+import AppDrawer from "@/components/ui/AppDrawer";
+import AppEmpty from "@/components/ui/AppEmpty";
+import AppInput from "@/components/ui/AppInput";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import FilterIcon from "@/components/ui/icons/common/FilterIcon";
 import { createAssetNode } from "@/features/assets/add-asset";
@@ -51,57 +58,29 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
   const [activeTab, setActiveTab] = useState<string>("elements");
 
   return (
-    <Drawer
+    <AppDrawer
       className="canvas-sidebar"
       open={open}
       onClose={onClose}
       mask={false}
       placement="left"
-      size={DRAWER_WIDTH}
+      width={DRAWER_WIDTH}
       styles={{
         // header 规格走 globals.css 的 .ant-drawer-header 统一规则
         body: {
           background: "var(--canvas-bg)",
           padding: 0,
+          display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
         },
-        section: {
+        panel: {
           borderRight: "1px solid var(--canvas-border)",
         },
       }}
       // 关闭按钮用 antd 内置（与 AgentDrawer 一致，hover 规则见 globals.css 的 .ant-drawer-close）
-      closable={{
-        placement: "start",
-        "aria-label": t("common.close"),
-      }}
+      closePlacement="start"
+      closeLabel={t("common.close")}
       title={null}
     >
-      <style>{`
-        .canvas-sidebar .ant-drawer-body { display:flex; flex-direction:column; height:100%; overflow:hidden; }
-        .canvas-sidebar .ant-input-affix-wrapper {
-          background: var(--canvas-bg-elevated) !important;
-          border-color: var(--canvas-border) !important;
-          color: var(--canvas-text) !important;
-          border-radius: 8px !important;
-          height: 32px !important;
-        }
-        .canvas-sidebar .ant-input {
-          background: transparent !important;
-          color: var(--canvas-text) !important;
-          font-size: 13px !important;
-          height: 30px !important;
-        }
-        .canvas-sidebar .ant-input-affix-wrapper:hover,
-        .canvas-sidebar .ant-input-affix-wrapper:focus,
-        .canvas-sidebar .ant-input-affix-wrapper-focused {
-          border-color: var(--canvas-border) !important;
-          box-shadow: none !important;
-        }
-        .canvas-sidebar .ant-drawer-content-wrapper { border-right: 1px solid var(--canvas-border) !important; }
-        .canvas-sidebar ::-webkit-scrollbar { width:4px; }
-        .canvas-sidebar ::-webkit-scrollbar-track { background:transparent; }
-        .canvas-sidebar ::-webkit-scrollbar-thumb { background:var(--canvas-border); border-radius:2px; }
-      `}</style>
-
       <div className="canvas-sidebar flex flex-col h-full select-none">
         {/* Tab 切换器 */}
         <div className="flex items-center border-b flex-shrink-0" style={{ borderColor: "var(--canvas-border)" }}>
@@ -141,7 +120,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
           </div>
         </div>
       </div>
-    </Drawer>
+    </AppDrawer>
   );
 }
 // ── 元素视图 ──
@@ -265,7 +244,7 @@ function CanvasElementsView() {
     <div className="flex flex-col h-full">
       {/* 搜索：与资产页同规格（高 32、搜索图标前缀、可清除） */}
       <div className="flex items-center px-4 py-3 flex-shrink-0">
-        <Input
+        <AppInput
           size="small"
           placeholder={t("canvas.searchPlaceholder")}
           prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
@@ -278,9 +257,9 @@ function CanvasElementsView() {
       </div>
       <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
         {nodes.length === 0 ? (
-          <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
+          <AppEmpty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
         ) : !hasMatch ? (
-          <Empty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("common.noData")}</span>} />
+          <AppEmpty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("common.noData")}</span>} />
         ) : (
           <>
             {/* 组：可折叠容器，成员嵌套在其下 */}
@@ -517,16 +496,16 @@ function ElementItemImpl(props: ElementItemProps) {
         <div className="flex items-center gap-1.5 min-w-0 h-5">
           <span className="flex-1 truncate text-[13px] leading-5 font-medium">{label || `Node ${node.id}`}</span>
           {failed ? (
-            <Tooltip title={t("common.statusFailed")}>
+            <AppTooltip title={t("common.statusFailed")}>
               <span
                 className="shrink-0 rounded-full"
                 style={{ width: 6, height: 6, background: "var(--canvas-danger)" }}
               />
-            </Tooltip>
+            </AppTooltip>
           ) : generating ? (
-            <Tooltip title={t("common.generating")}>
+            <AppTooltip title={t("common.generating")}>
               <LoadingOutlined className="shrink-0" spin style={{ fontSize: 12, color: "var(--canvas-accent)" }} />
-            </Tooltip>
+            </AppTooltip>
           ) : null}
         </div>
         {metaLine && (
@@ -636,7 +615,7 @@ function AssetsView() {
     <div className="canvas-asset-drawer flex flex-col h-full">
       {/* 搜索栏 + 风格筛选 */}
       <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
-        <Input
+        <AppInput
           size="small"
           placeholder={t("asset.search")}
           prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
@@ -646,25 +625,25 @@ function AssetsView() {
           style={{ height: 32 }}
           className="flex-1"
         />
-        <Popover
+        <AppPopover
           trigger="click"
           placement="bottomRight"
-          styles={{ container: { padding: 0, background: "transparent" } }}
+          contentStyle={{ padding: 0, background: "transparent" }}
           content={
             <div className="panel-popover asset-filter-popover">
               <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
               {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
                 <label key={st.key} className="filter-row">
-                  <Checkbox
+                  <AppCheckbox
                     checked={typeFilter.includes(st.key)}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       setTypeFilter((prev) =>
-                        e.target.checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
+                        checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
                       );
                     }}
                   >
                     {t(st.labelKey)}
-                  </Checkbox>
+                  </AppCheckbox>
                 </label>
               ))}
               {typeFilter.length > 0 && <div className="panel-divider" />}
@@ -676,19 +655,21 @@ function AssetsView() {
             </div>
           }
         >
-          <Tooltip title={t("asset.filter")}>
-            <Button
-              size="small"
-              type="text"
-              icon={<FilterIcon style={{ fontSize: 16 }} />}
+          <AppTooltip title={t("asset.filter")}>
+            <AppButton
+              size="sm"
+              variant="ghost"
+              iconOnly
               style={{
                 height: 32,
                 background: typeFilter.length > 0 ? "rgba(255,255,255,0.16)" : undefined,
               }}
               className="canvas-ctrl-btn"
-            />
-          </Tooltip>
-        </Popover>
+            >
+              <FilterIcon style={{ fontSize: 16 }} />
+            </AppButton>
+          </AppTooltip>
+        </AppPopover>
       </div>
 
       {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。

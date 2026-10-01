@@ -1,15 +1,16 @@
-﻿/**
+/**
  * 节点详情查看弹窗（调试用）。
  * 以只读方式展示选中节点的 ID、类型、坐标、尺寸及原始 JSON 数据。
  */
 "use client";
 
 import type { Node } from "@xyflow/react";
-import { Descriptions, Typography } from "antd";
 
+import AppDescriptions from "@/components/ui/AppDescriptions";
 import AppModal from "@/components/ui/AppModal";
+import AppTypography from "@/components/ui/AppTypography";
 
-const { Paragraph } = Typography;
+const { Paragraph } = AppTypography;
 
 interface NodeInspectorProps {
   open: boolean;
@@ -35,16 +36,12 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
       width={520}
       styles={{ body: { padding: "16px 24px 24px" } }}
     >
-      <Descriptions column={1} size="small" bordered className="mb-3">
-        <Descriptions.Item label="ID">{node.id}</Descriptions.Item>
-        <Descriptions.Item label="Type">{node.type}</Descriptions.Item>
-        <Descriptions.Item label="Position">
-          x: {Math.round(node.position.x)}, y: {Math.round(node.position.y)}
-        </Descriptions.Item>
-        <Descriptions.Item label="Size">
-          {node.style?.width ? `${node.style.width} × ${node.style.height || "auto"}` : "default"}
-        </Descriptions.Item>
-      </Descriptions>
+      <AppDescriptions column={1} size="small" bordered className="mb-3" items={[
+        { key: "id", label: "ID", children: node.id },
+        { key: "type", label: "Type", children: node.type },
+        { key: "position", label: "Position", children: `x: ${Math.round(node.position.x)}, y: ${Math.round(node.position.y)}` },
+        { key: "size", label: "Size", children: node.style?.width ? `${node.style.width} × ${node.style.height || "auto"}` : "default" },
+      ]} />
 
       <div className="text-xs text-zinc-500 mb-1">Raw JSON:</div>
       <Paragraph

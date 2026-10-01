@@ -7,18 +7,22 @@
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
-import { App, Button, Dropdown, Popover, Tooltip } from "antd";
+import { App } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppDropdown from "@/components/ui/AppDropdown";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
-import { ModelIcon } from "@/components/ui/ModelIcon";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import { ModelIcon } from "@/features/model/ModelIcon";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 
@@ -420,16 +424,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               </Fragment>
             ))}
             {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-            <Tooltip title={t("common.reference")}>
-              <Button size="small" type="text"
+            <AppTooltip title={t("common.reference")}>
+              <AppButton size="sm" variant="ghost"
                 className="flex items-center justify-center rounded transition-colors flex-shrink-0"
                 style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
                 onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
                 onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
                 onClick={handleRefUpload}>
                 <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-              </Button>
-            </Tooltip>
+              </AppButton>
+            </AppTooltip>
           </div>
         <MentionPrompt
           references={references}
@@ -439,7 +443,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
-          <Dropdown
+          <AppDropdown
             open={modelOpen}
             onOpenChange={setModelOpen}
             placement="bottomLeft"
@@ -456,23 +460,23 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               onClick: ({ key }) => { setModelKey(key); recordLastModel("text", key); },
             }}
           >
-            <Button
-              size="small"
-              type="text"
+            <AppButton
+              size="sm"
+              variant="ghost"
               className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
             >
               <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
               <span className="truncate">
                 {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
               </span>
-            </Button>
-          </Dropdown>
+            </AppButton>
+          </AppDropdown>
           <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-          <Popover
+          <AppPopover
             open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
             trigger={["click"]} arrow={false}
-            overlayClassName="creation-menu-popover"
-            styles={{ container: { padding: 0, background: "transparent" } }}
+            popupClassName="creation-menu-popover"
+            contentStyle={{ padding: 0, background: "transparent" }}
             content={
               <div className="panel-popover">
                 <PresetMenuContent
@@ -482,14 +486,14 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               </div>
             }
           >
-            <Tooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
-              <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
+            <AppTooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
+              <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
                 <PresetIcon />
-              </Button>
-            </Tooltip>
-          </Popover>
+              </AppButton>
+            </AppTooltip>
+          </AppPopover>
           <div className="flex-1" />
-          <PrimaryActionButton
+          <IconActionButton
             cancel={isGenerating || submitting}
             disabled={!isGenerating && !submitting && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
             onClick={isGenerating || submitting ? handleCancel : handleGenerate}

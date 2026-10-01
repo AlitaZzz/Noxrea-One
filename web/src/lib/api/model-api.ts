@@ -1,5 +1,8 @@
 /**
  * 模型配置（Model Config）相关 API 封装：供应商与模型的管理、能力开关与模型列表拉取。
+ *
+ * 归属说明：lib/model-store 与 settings 界面共同消费它，
+ * 放在 features 会让 lib 反向依赖 feature，故归属 lib/api。
  */
 import { api, apiRaw } from "@/lib/api/client";
 

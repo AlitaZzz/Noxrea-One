@@ -16,7 +16,7 @@ export type ParamFieldType = "segmented" | "select" | "slider" | "switch" | "num
 export interface ParamField {
   name: string;
   type: ParamFieldType;
-  /** 标签 i18n key；省略时渲染器按 param.<name> 推导 */
+  /** 标签 i18n key；省略时由模型领域适配器按 param.<name> 推导 */
   label?: string;
   order: number;
   options?: (string | number)[];

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import DialogActions from "@/components/ui/DialogActions";
 
 interface Props {
   open: boolean;
@@ -51,10 +52,9 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
       className="app-dialog"
       destroyOnHidden
       footer={
-        <div className="app-dialog-footer">
-          <AppButton onClick={() => { setName(""); onClose(); }}>{t("common.cancel")}</AppButton>
+        <DialogActions onCancel={() => { setName(""); onClose(); }}>
           <AppButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</AppButton>
-        </div>
+        </DialogActions>
       }
     >
       <Input

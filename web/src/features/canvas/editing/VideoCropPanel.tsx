@@ -8,16 +8,16 @@
 
 import { CloseOutlined, UndoOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
-import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-
-import PrimaryActionButton from "./PrimaryActionButton";
 
 interface Props {
   nodeId: string;
@@ -231,22 +231,22 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+          <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
           <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.crop")}</span>
         </div>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {ASPECT_PRESETS.map((p) => (
-          <Button
+          <AppButton
             key={p.label}
-            type="text"
-            size="middle"
-            style={{ padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
+            variant="ghost"
+            // 高度锁 32px：沿用原 antd size="middle" 的尺寸，避免预设按钮换行
+            style={{ height: 32, padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
             onClick={() => handleAspectChange(p.value)}
           >
             {t(p.label)}
-          </Button>
+          </AppButton>
         ))}
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
@@ -257,14 +257,14 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
-        <Tooltip title={t("crop.reset")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<UndoOutlined />} onClick={handleReset} />
-        </Tooltip>
+        <AppTooltip title={t("crop.reset")}>
+          <AppButton variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></AppButton>
+        </AppTooltip>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
-        <PrimaryActionButton onClick={handleConfirm} disabled={!imgLoaded} />
+        <IconActionButton onClick={handleConfirm} disabled={!imgLoaded} />
       </WheelGuard>
       </RfNodeToolbar>
 

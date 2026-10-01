@@ -1,6 +1,9 @@
 /**
  * 模型品牌图标。
  * 按模型名（支持 "provider/model" 整串）匹配品牌图标，未命中时回退到通用机器人图标。
+ *
+ * 归属说明：品牌映射表是模型领域知识，被 settings（配置）与 canvas（使用）共同消费，
+ * 因此放在中立的 features/model 切片，避免 settings 与 canvas 互相依赖。
  */
 import { RobotOutlined } from "@ant-design/icons";
 import type { ComponentType, CSSProperties } from "react";

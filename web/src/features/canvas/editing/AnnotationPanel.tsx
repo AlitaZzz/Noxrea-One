@@ -7,10 +7,14 @@
 
 import { BorderOutlined, CloseOutlined, DeleteOutlined, FontSizeOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
-import { Button, ColorPicker, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppColorPicker from "@/components/ui/AppColorPicker";
+import AppSlider from "@/components/ui/AppSlider";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { BrushSizeIcon } from "@/components/ui/icons/canvas/BrushSizeIcon";
 import { RedoIcon } from "@/components/ui/icons/canvas/RedoIcon";
 import { SmartEditBrushToolIcon } from "@/components/ui/icons/canvas/SmartEditBrushToolIcon";
@@ -19,8 +23,6 @@ import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
-
-import PrimaryActionButton from "./PrimaryActionButton";
 
 
 interface Props {
@@ -492,71 +494,59 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+          <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
           <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("annotation.title")}</span>
         </div>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* Mode buttons */}
-        <Tooltip title={t("annotation.mode.brush")}>
-          <Button
-            type="text"
-            size="middle"
-            style={{ padding: 8, ...(mode === "brush" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            icon={<SmartEditBrushToolIcon style={{ fontSize: 16 }} />}
+        <AppTooltip title={t("annotation.mode.brush")}>
+          <AppButton variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "brush" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
             onClick={() => setMode("brush")}
-          />
-        </Tooltip>
-        <Tooltip title={t("annotation.mode.rect")}>
-          <Button
-            type="text"
-            size="middle"
-            style={{ padding: 8, ...(mode === "rect" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            icon={<BorderOutlined />}
+          ><SmartEditBrushToolIcon style={{ fontSize: 16 }} /></AppButton>
+        </AppTooltip>
+        <AppTooltip title={t("annotation.mode.rect")}>
+          <AppButton variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "rect" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
             onClick={() => setMode("rect")}
-          />
-        </Tooltip>
-        <Tooltip title={t("annotation.mode.text")}>
-          <Button
-            type="text"
-            size="middle"
-            style={{ padding: 8, ...(mode === "text" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            icon={<FontSizeOutlined />}
+          ><BorderOutlined /></AppButton>
+        </AppTooltip>
+        <AppTooltip title={t("annotation.mode.text")}>
+          <AppButton variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "text" ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
             onClick={() => setMode("text")}
-          />
-        </Tooltip>
+          ><FontSizeOutlined /></AppButton>
+        </AppTooltip>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* Color picker */}
-        <Tooltip title={t("annotation.color")}>
-          <ColorPicker value={color} onChangeComplete={(c) => setColor(c.toHexString())} size="small" format="hex" />
-        </Tooltip>
+        <AppTooltip title={t("annotation.color")}>
+          <AppColorPicker value={color} onChangeComplete={setColor} size="small" />
+        </AppTooltip>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* Brush size slider */}
         <div className="flex items-center gap-1.5" style={{ width: 90 }}>
           <BrushSizeIcon />
-          <Slider min={1} max={50} value={brushSize} tooltip={{ open: false }} onChange={(v) => setBrushSize(v as number)} style={{ width: 60, margin: 0 }} />
+          <AppSlider min={1} max={50} value={brushSize} showTooltip={false} onChange={setBrushSize} style={{ width: 60, margin: 0 }} />
           <span className="text-[10px] font-medium" style={{ color: "var(--canvas-text-dim)", minWidth: 16 }}>{brushSize}</span>
         </div>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* Undo / Redo */}
-        <Tooltip title={t("annotation.undo")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<UndoIcon />} disabled={!canUndo} onClick={handleUndo} />
-        </Tooltip>
-        <Tooltip title={t("annotation.redo")}>
-          <Button type="text" size="middle" style={{ padding: 8 }} icon={<RedoIcon />} disabled={!canRedo} onClick={handleRedo} />
-        </Tooltip>
+        <AppTooltip title={t("annotation.undo")}>
+          <AppButton variant="ghost" iconOnly disabled={!canUndo} onClick={handleUndo} ><UndoIcon /></AppButton>
+        </AppTooltip>
+        <AppTooltip title={t("annotation.redo")}>
+          <AppButton variant="ghost" iconOnly disabled={!canRedo} onClick={handleRedo} ><RedoIcon /></AppButton>
+        </AppTooltip>
 
         <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
         {/* 保存：反色 ↑（与截取/变速工具栏确认键一致） */}
-        <PrimaryActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />
+        <IconActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />
       </WheelGuard>
       </RfNodeToolbar>
 

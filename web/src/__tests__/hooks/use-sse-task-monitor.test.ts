@@ -114,6 +114,7 @@ describe("useSseTaskMonitor", () => {
       expect(data.naturalHeight).toBe(50);
     });
     await waitFor(() => expect(notif.success).toHaveBeenCalledTimes(1));
+    expect(notif.success).toHaveBeenCalledWith(expect.objectContaining({ key: "generation-result-n1-t1" }));
     expect(notif.error).not.toHaveBeenCalled();
     // 终态回填走 skipHistory：不产生撤销历史
     expect(useHistoryStore.getState().undoStack.length).toBe(0);

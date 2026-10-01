@@ -10,11 +10,7 @@
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-/** 秒数格式化：59s 内 "12s"，超过 "1m05s" */
-function formatElapsed(totalSeconds: number) {
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  return `${Math.floor(totalSeconds / 60)}m${String(totalSeconds % 60).padStart(2, "0")}s`;
-}
+import { formatElapsed } from "@/lib/utils/format-elapsed";
 
 function GeneratingOverlay({
   text,

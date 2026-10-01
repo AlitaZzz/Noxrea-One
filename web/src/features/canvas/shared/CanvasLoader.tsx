@@ -5,8 +5,9 @@
  */
 "use client";
 
-import { Button } from "antd";
 import { useTranslation } from "react-i18next";
+
+import AppButton from "@/components/ui/AppButton";
 
 interface Props {
   /** 设置拉取失败：展示失败文案与重试按钮 */
@@ -33,9 +34,9 @@ export default function CanvasLoader({ failed = false, onRetry }: Props) {
           <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>
             {t("canvas.loadFailed")}
           </span>
-          <Button size="small" onClick={onRetry}>
+          <AppButton size="sm" onClick={onRetry}>
             {t("canvas.retry")}
-          </Button>
+          </AppButton>
         </div>
       )}
     </div>

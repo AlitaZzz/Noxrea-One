@@ -12,11 +12,12 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
-import { App, Tooltip } from "antd";
+import { App } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
+import AppTooltip from "@/components/ui/AppTooltip";
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
 import { useAssetsStore } from "@/features/assets/store";
@@ -723,14 +724,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         {agentGhost && <AgentGhostOverlay />}
         {data.source === "upload" && hasVideo && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("common.replace")}>
+            <AppTooltip title={t("common.replace")}>
               <button
                 className="app-overlay-btn app-overlay-btn--sm"
                 onClick={handleUpload}
               >
                 <UploadOutlined />
               </button>
-            </Tooltip>
+            </AppTooltip>
           </div>
         )}
         {data.upload?.uploading ? (

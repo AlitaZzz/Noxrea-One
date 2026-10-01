@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import DialogActions from "@/components/ui/DialogActions";
 
 interface Props {
   open: boolean;
@@ -50,10 +51,9 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
       afterOpenChange={handleAfterOpenChange}
       width={380}
       footer={
-        <div className="app-dialog-footer">
-          {!hideCancel && <AppButton onClick={onCancel} disabled={confirmLoading}>{cancelText ?? t("common.cancel")}</AppButton>}
+        <DialogActions onCancel={onCancel} cancelText={cancelText} cancelDisabled={confirmLoading} hideCancel={hideCancel}>
           <AppButton variant="primary" loading={confirmLoading} onClick={onOk} ref={okRef}>{okText ?? t("common.confirm")}</AppButton>
-        </div>
+        </DialogActions>
       }
     >
       <p className="app-dialog-text">{content}</p>

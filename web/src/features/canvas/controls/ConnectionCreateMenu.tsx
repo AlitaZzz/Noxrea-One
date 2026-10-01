@@ -5,9 +5,9 @@
 "use client";
 
 import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { Dropdown } from "antd";
 import { useTranslation } from "react-i18next";
 
+import AppDropdown from "@/components/ui/AppDropdown";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
@@ -46,7 +46,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
 
   return (
     <>
-      <Dropdown
+      <AppDropdown
         open
         trigger={["click"]}
         placement="bottomLeft"
@@ -89,7 +89,7 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
             width: 1, height: 1, pointerEvents: "none",
           }}
         />
-      </Dropdown>
+      </AppDropdown>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
     </>
   );

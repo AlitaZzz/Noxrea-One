@@ -6,10 +6,14 @@
  */
 "use client";
 
-import { App, Button, ColorPicker, Slider } from "antd";
+import { App } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppColorPicker from "@/components/ui/AppColorPicker";
+import AppSlider from "@/components/ui/AppSlider";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
 import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
 import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
@@ -19,7 +23,6 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
-import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 
 interface LightingState {
@@ -133,7 +136,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
         ...(colorTab === "temp" ? { kelvin } : { color: state.color }),
       });
       if (!template) {
-        notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight", duration: 6 });
+        notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight", duration: 6, key: `lighting-failed-${nodeId}` });
         return;
       }
       const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
@@ -160,13 +163,14 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           {t("lighting.title")}
         </span>
         {/* 与资产弹窗关闭按钮同款：✕ 字形 + 次级文字色，悬停底色走 canvas-toolbar 按钮规则 */}
-        <Button
-          type="text"
+        <AppButton
+          variant="ghost"
           aria-label="close"
           onClick={onClose}
           style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
-          icon={<span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>}
-        />
+        >
+          <span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>
+        </AppButton>
       </div>
       <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
 
@@ -211,7 +215,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
             <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <Slider
+              <AppSlider
                 min={10}
                 max={100}
                 step={1}
@@ -219,7 +223,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                 onChange={(v) => update("intensity", Number(v))}
                 className="min-w-0 flex-1"
                 style={{ margin: 0 }}
-                tooltip={{ open: false }}
+                showTooltip={false}
               />
               <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
               <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--canvas-text-dim)" }} />
@@ -269,7 +273,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
             <div className="flex h-9 items-center">
               {colorTab === "temp" ? (
                 <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-                  <Slider
+                  <AppSlider
                     min={KELVIN_MIN}
                     max={KELVIN_MAX}
                     step={100}
@@ -277,7 +281,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                     onChange={(v) => handleKelvin(Number(v))}
                     className="min-w-0 flex-1"
                     style={{ margin: 0 }}
-                    tooltip={{ open: false }}
+                    showTooltip={false}
                     // 色温带：渐变铺满整条轨道（rail），已填充段透明保持色带完整可见
                     styles={{ rail: { background: "linear-gradient(to right, #FFB253, #3499FF)" }, track: { background: "transparent" } }}
                   />
@@ -307,11 +311,10 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                 </div>
               ) : (
                 <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-                  <ColorPicker
+                  <AppColorPicker
                     value={state.color}
-                    onChangeComplete={(c) => update("color", c.toHexString())}
+                    onChangeComplete={(color) => update("color", color)}
                     size="small"
-                    format="hex"
                   />
                   <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{state.color}</span>
                 </div>
@@ -353,7 +356,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           <ResetIcon style={{ width: 13, height: 13 }} />
           {t("lighting.reset")}
         </button>
-        <PrimaryActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
+        <IconActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
       </div>
     </div>
   );

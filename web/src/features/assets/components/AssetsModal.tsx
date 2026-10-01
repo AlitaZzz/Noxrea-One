@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import DialogActions from "@/components/ui/DialogActions";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
@@ -687,10 +688,9 @@ export default function AssetsModal({ open, onClose }: Props) {
           destroyOnHidden
           width={400}
           footer={
-            <div className="app-dialog-footer">
-              <AppButton onClick={() => setRenamingFolder(null)} disabled={folderRenameSaving}>{t("common.cancel")}</AppButton>
+            <DialogActions onCancel={() => setRenamingFolder(null)} cancelDisabled={folderRenameSaving}>
               <AppButton variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</AppButton>
-            </div>
+            </DialogActions>
           }
         >
           <Input
@@ -750,8 +750,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           destroyOnHidden
           width={400}
           footer={
-            <div className="app-dialog-footer">
-              <AppButton onClick={() => setBatchMoveOpen(false)} disabled={batchMoving}>{t("common.cancel")}</AppButton>
+            <DialogActions onCancel={() => setBatchMoveOpen(false)} cancelDisabled={batchMoving}>
               <AppButton
                 variant="primary"
                 loading={batchMoving}
@@ -760,7 +759,7 @@ export default function AssetsModal({ open, onClose }: Props) {
               >
                 {t("common.confirm")}
               </AppButton>
-            </div>
+            </DialogActions>
           }
         >
           <TreeSelect
@@ -792,14 +791,13 @@ export default function AssetsModal({ open, onClose }: Props) {
           destroyOnHidden
           width={400}
           footer={
-            <div className="app-dialog-footer">
-              <AppButton onClick={() => setBatchTypeOpen(false)} disabled={batchTypeSaving}>{t("common.cancel")}</AppButton>
+            <DialogActions onCancel={() => setBatchTypeOpen(false)} cancelDisabled={batchTypeSaving}>
               <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
                   <AppButton variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
                 </span>
               </Tooltip>
-            </div>
+            </DialogActions>
           }
         >
           <Select

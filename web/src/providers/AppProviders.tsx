@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { useAuthStore } from "@/features/auth/store";
+import { setUnauthorizedHandler } from "@/lib/api/client";
 import { setGlobalMessageApi } from "@/lib/global-message";
 import { setGlobalNotificationApi } from "@/lib/global-notification";
 import { loadUploadFormats } from "@/lib/upload-formats";
@@ -35,6 +36,15 @@ function MessageApiRegistrar() {
   return null;
 }
 
+/** 401 的登出动作属于 auth feature，由 app 层注入给 lib/api/client，避免 lib 反向依赖 feature */
+function UnauthorizedHandlerRegistrar() {
+  const logout = useAuthStore((s) => s.logout);
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+  }, [logout]);
+  return null;
+}
+
 /** 已登录后预热上传格式白名单（失败静默回落兜底值），供各上传入口同步读取。
  *  未登录不发：接口要求鉴权，未登录预热是必败请求（登录页上的 401 噪音）。 */
 function UploadFormatsWarmup() {
@@ -53,6 +63,7 @@ function AntConfigProvider({ children }: { children: ReactNode }) {
     >
       <AntApp>
         <MessageApiRegistrar />
+        <UnauthorizedHandlerRegistrar />
         <UploadFormatsWarmup />
         {children}
       </AntApp>

@@ -24,6 +24,8 @@ const eslintConfig = defineConfig([
         { type: "feature", pattern: "features" },
         { type: "ui", pattern: "components/ui" },
         { type: "store", pattern: "**/stores/*" },
+        // lib 必须在元素表里声明：否则 policies 中引用 { type: "lib" } 的策略全部静默失效。
+        { type: "lib", pattern: "lib" },
       ],
       // 排除测试文件，避免测试中的跨层 mock 产生误报。
       "boundaries/ignore": ["**/*.test.ts", "**/*.test.tsx"],
@@ -60,35 +62,54 @@ const eslintConfig = defineConfig([
       // ── 架构分层约束（eslint-plugin-boundaries）──────────────────────
       // dependencies 规则：默认禁止一切跨层依赖，仅放开白名单策略。
       // 上层可依赖下层，禁止反向（如 lib 禁止依赖 feature/ui/app）。
+      // 存量违规已清零，故提级为 error：新增跨层依赖无法合入。
       "boundaries/dependencies": [
-        "warn",
+        "error",
         {
           default: "disallow",
+          // v6 起 allow/disallow 必须用 from/to 包装，裸元素选择器会被忽略（此前 5 条策略全部静默失效）。
           policies: [
             // app 可依赖一切
             {
               from: { element: { type: "app" } },
-              allow: { element: [{ type: "app" }, { type: "feature" }, { type: "ui" }, { type: "lib" }, { type: "store" }] },
+              allow: [
+                { to: { element: { type: "app" } } },
+                { to: { element: { type: "feature" } } },
+                { to: { element: { type: "ui" } } },
+                { to: { element: { type: "lib" } } },
+                { to: { element: { type: "store" } } },
+              ],
             },
             // feature 可依赖 ui / lib / store，禁止依赖 app
             {
               from: { element: { type: "feature" } },
-              allow: { element: [{ type: "ui" }, { type: "lib" }, { type: "store" }, { type: "feature" }] },
+              allow: [
+                { to: { element: { type: "ui" } } },
+                { to: { element: { type: "lib" } } },
+                { to: { element: { type: "store" } } },
+                { to: { element: { type: "feature" } } },
+              ],
             },
             // ui 仅可依赖 lib，禁止依赖 feature / app
             {
               from: { element: { type: "ui" } },
-              allow: { element: [{ type: "lib" }, { type: "ui" }] },
+              allow: [
+                { to: { element: { type: "lib" } } },
+                { to: { element: { type: "ui" } } },
+              ],
             },
             // store 仅可依赖 lib
             {
               from: { element: { type: "store" } },
-              allow: { element: [{ type: "lib" }, { type: "store" }] },
+              allow: [
+                { to: { element: { type: "lib" } } },
+                { to: { element: { type: "store" } } },
+              ],
             },
             // lib 为最底层，禁止依赖任何上层
             {
               from: { element: { type: "lib" } },
-              allow: { element: [{ type: "lib" }] },
+              allow: [{ to: { element: { type: "lib" } } }],
             },
           ],
         },
@@ -123,6 +144,41 @@ const eslintConfig = defineConfig([
               message: "React 组件/Hook 内一律 App.useApp() 解构 notification；此 wrapper 仅供 store、工具函数等非 React 上下文使用（CLAUDE.md 七）",
             },
           ],
+        },
+      ],
+    },
+  },
+  // 核心业务领域禁止直接依赖 antd UI 组件（见 web/CLAUDE.md 八、九）。
+  // 例外：App 是 App.useApp() 的通知入口，规范第七条要求 React 侧统一走它，不算 UI 组件依赖。
+  // 非核心目录（assets / director / settings / auth / project）保持允许，避免无业务价值的迁移。
+  {
+    files: ["src/features/canvas/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value='antd'] > ImportSpecifier:not([imported.name='App'])",
+          message: "核心领域禁止直连 antd UI 组件，请改用 components/ui 的 App* 出口（web/CLAUDE.md 八）",
+        },
+        {
+          selector: "ImportDeclaration[source.value='antd'] > :matches(ImportDefaultSpecifier, ImportNamespaceSpecifier)",
+          message: "核心领域仅允许从 antd 具名导入 App 通知入口；UI 组件请使用 App* 出口",
+        },
+        {
+          selector: "ImportDeclaration[source.value=/^antd\\//]",
+          message: "核心领域禁止通过 antd 子路径导入实现，请使用 App* 出口",
+        },
+        {
+          selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value=/^antd($|\\/)/]",
+          message: "核心领域禁止重新导出 antd 实现，请使用 App* 出口",
+        },
+        {
+          selector: "ImportExpression[source.value=/^antd($|\\/)/]",
+          message: "核心领域禁止动态导入 antd 实现，请使用 App* 出口",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value=/^antd($|\\/)/]",
+          message: "核心领域禁止 require antd 实现，请使用 App* 出口",
         },
       ],
     },

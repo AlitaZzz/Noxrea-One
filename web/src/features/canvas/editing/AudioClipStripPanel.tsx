@@ -13,11 +13,12 @@
 "use client";
 
 import { CloseOutlined } from "@ant-design/icons";
-import { Button } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import WaveSurfer from "wavesurfer.js";
 
+import AppButton from "@/components/ui/AppButton";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { FRAME_TRACK_WIDTH } from "@/features/canvas/hooks/use-frame-sprite";
 import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -26,7 +27,6 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_NODE_COLOR, SEEK_MARGIN_S } from "@/lib/constants";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
-import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
 
@@ -402,7 +402,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+        <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
         <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("clip.menu")}</span>
       </div>
 
@@ -491,7 +491,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
-      <PrimaryActionButton onClick={handleConfirm} disabled={!rangeValid} />
+      <IconActionButton onClick={handleConfirm} disabled={!rangeValid} />
     </div>
   );
 }

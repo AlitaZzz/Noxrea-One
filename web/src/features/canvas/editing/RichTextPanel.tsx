@@ -7,7 +7,6 @@
 
 import { type Editor,useEditorState } from "@tiptap/react";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
-import { Button, Tooltip } from "antd";
 import {
   Bold,
   Heading1,
@@ -22,6 +21,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppTooltip from "@/components/ui/AppTooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 
 interface Props {
@@ -72,86 +73,54 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
       }}
     >
       {/* 行内格式 */}
-      <Tooltip title={t("richText.bold")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.bold)}
-          icon={<Bold size={16} />}
+      <AppTooltip title={t("richText.bold")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(active.bold)}
           onClick={() => editor.chain().focus().toggleBold().run()}
-        />
-      </Tooltip>
-      <Tooltip title={t("richText.italic")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.italic)}
-          icon={<Italic size={16} />}
+        ><Bold size={16} /></AppButton>
+      </AppTooltip>
+      <AppTooltip title={t("richText.italic")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(active.italic)}
           onClick={() => editor.chain().focus().toggleItalic().run()}
-        />
-      </Tooltip>
+        ><Italic size={16} /></AppButton>
+      </AppTooltip>
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 段落类型 — 平铺，无需二级菜单 */}
-      <Tooltip title={t("richText.paragraph")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(!active.headingLevel)}
-          icon={<Type size={16} />}
+      <AppTooltip title={t("richText.paragraph")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(!active.headingLevel)}
           onClick={() => editor.chain().focus().setParagraph().run()}
-        />
-      </Tooltip>
+        ><Type size={16} /></AppButton>
+      </AppTooltip>
       {HEADING_BUTTONS.map(({ level, Icon }) => (
-        <Tooltip key={level} title={t(`richText.heading${level}`)}>
-          <Button
-            type="text"
-            size="middle"
-            style={btnStyle(active.headingLevel === level)}
-            icon={<Icon size={16} />}
+        <AppTooltip key={level} title={t(`richText.heading${level}`)}>
+          <AppButton variant="ghost" iconOnly            style={btnStyle(active.headingLevel === level)}
             onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
-          />
-        </Tooltip>
+          ><Icon size={16} /></AppButton>
+        </AppTooltip>
       ))}
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 块级结构 */}
-      <Tooltip title={t("richText.bulletList")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.bulletList)}
-          icon={<List size={16} />}
+      <AppTooltip title={t("richText.bulletList")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(active.bulletList)}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-        />
-      </Tooltip>
-      <Tooltip title={t("richText.orderedList")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.orderedList)}
-          icon={<ListOrdered size={16} />}
+        ><List size={16} /></AppButton>
+      </AppTooltip>
+      <AppTooltip title={t("richText.orderedList")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(active.orderedList)}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        />
-      </Tooltip>
-      <Tooltip title={t("richText.blockquote")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(active.blockquote)}
-          icon={<Quote size={16} />}
+        ><ListOrdered size={16} /></AppButton>
+      </AppTooltip>
+      <AppTooltip title={t("richText.blockquote")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(active.blockquote)}
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        />
-      </Tooltip>
-      <Tooltip title={t("richText.horizontalRule")}>
-        <Button
-          type="text"
-          size="middle"
-          style={btnStyle(false)}
-          icon={<Minus size={16} />}
+        ><Quote size={16} /></AppButton>
+      </AppTooltip>
+      <AppTooltip title={t("richText.horizontalRule")}>
+        <AppButton variant="ghost" iconOnly          style={btnStyle(false)}
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
-        />
-      </Tooltip>
+        ><Minus size={16} /></AppButton>
+      </AppTooltip>
 
     </WheelGuard>
     </RfNodeToolbar>

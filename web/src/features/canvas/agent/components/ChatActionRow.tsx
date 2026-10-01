@@ -5,10 +5,10 @@
 "use client";
 
 import { CheckOutlined, CloseOutlined, LoadingOutlined } from "@ant-design/icons";
-import { Tooltip } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppTooltip from "@/components/ui/AppTooltip";
 import { actionRowText, TOOL_META } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
 
@@ -49,9 +49,9 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
   return (
     <div className="chat-action-row">
       <span className="chat-action-icon">{meta?.icon}</span>
-      <Tooltip title={text} placement="top">
+      <AppTooltip title={text} placement="top">
         <span className="chat-action-text">{text}</span>
-      </Tooltip>
+      </AppTooltip>
       <span className={`chat-action-status${status === "error" ? " is-error" : ""}${status === "pending" ? " is-pending" : ""}`}>
         {status === "ok" && <CheckOutlined />}
         {status === "pending" && <LoadingOutlined spin />}

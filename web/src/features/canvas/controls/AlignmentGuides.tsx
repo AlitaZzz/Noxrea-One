@@ -7,7 +7,6 @@
 import { useReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 
-import { AlignmentGuidesOverlay } from "@/components/ui/AlignmentGuidesOverlay";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
 
 interface Props {
@@ -42,7 +41,17 @@ export default function AlignmentGuides({ guides }: Props) {
   if (guides.length === 0) return null;
 
   return (
-    <AlignmentGuidesOverlay>
+    <svg
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        zIndex: 100,
+        overflow: "visible",
+      }}
+    >
       {screenLines.map((line) => (
         <line
           key={line.key}
@@ -57,6 +66,6 @@ export default function AlignmentGuides({ guides }: Props) {
           shapeRendering="crispEdges"
         />
       ))}
-    </AlignmentGuidesOverlay>
+    </svg>
   );
 }

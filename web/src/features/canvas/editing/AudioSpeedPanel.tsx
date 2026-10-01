@@ -6,10 +6,12 @@
 "use client";
 
 import { CaretDownOutlined, CaretUpOutlined, CloseOutlined } from "@ant-design/icons";
-import { Button, InputNumber, Slider } from "antd";
 import { useTranslation } from "react-i18next";
 
-import PrimaryActionButton from "./PrimaryActionButton";
+import AppButton from "@/components/ui/AppButton";
+import AppNumberInput from "@/components/ui/AppNumberInput";
+import AppSlider from "@/components/ui/AppSlider";
+import IconActionButton from "@/components/ui/IconActionButton";
 
 interface AudioSpeedPanelProps {
   /** 草稿倍率（拖动/输入中实时变化） */
@@ -34,7 +36,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
     <>
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onCancel} />
+        <AppButton variant="ghost" iconOnly onClick={onCancel} ><CloseOutlined /></AppButton>
         <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.audioSpeed")}</span>
       </div>
 
@@ -44,12 +46,12 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
           flex-1 在自适应容器里会坍缩为 0，滑杆必须靠显式宽度撑起） */}
       <div className="flex h-8 w-[180px] shrink-0 items-center gap-2 px-2">
         <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>0.1x</span>
-        <Slider
+        <AppSlider
           min={SPEED_MIN}
           max={SPEED_MAX}
           step={SPEED_STEP}
           value={speed}
-          tooltip={{ open: false }}
+          showTooltip={false}
           onChange={(v) => onSpeedChange(Math.round(v * 100) / 100)}
           style={{ width: "100%", margin: 0 }}
         />
@@ -61,7 +63,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
         className="flex h-8 shrink-0 items-center overflow-hidden rounded-lg pl-2 pr-0"
         style={{ background: "var(--canvas-bg-hover)" }}
       >
-        <InputNumber
+        <AppNumberInput
           size="small"
           min={SPEED_MIN}
           max={SPEED_MAX}
@@ -74,26 +76,26 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
           suffix="×"
         />
         <div className="flex h-full w-5 shrink-0 flex-col overflow-hidden">
-          <Button
-            type="text"
-            size="small"
+          <AppButton
+            variant="ghost"
             style={{ height: 16, padding: 0 }}
-            icon={<CaretUpOutlined style={{ fontSize: 10 }} />}
             onClick={stepUp}
-          />
-          <Button
-            type="text"
-            size="small"
+          >
+            <CaretUpOutlined style={{ fontSize: 10 }} />
+          </AppButton>
+          <AppButton
+            variant="ghost"
             style={{ height: 16, padding: 0 }}
-            icon={<CaretDownOutlined style={{ fontSize: 10 }} />}
             onClick={stepDown}
-          />
+          >
+            <CaretDownOutlined style={{ fontSize: 10 }} />
+          </AppButton>
         </div>
       </div>
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
       {/* 确认：↑ 反色箭头 */}
-      <PrimaryActionButton onClick={onApply} />
+      <IconActionButton onClick={onApply} />
     </>
   );
 }

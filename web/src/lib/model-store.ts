@@ -5,13 +5,13 @@
  */
 import { create } from "zustand";
 
-import { modelApi } from "@/features/settings/api";
 import { ApiError } from "@/lib/api/client";
 import {
   isRecord,
   parseErrorBody,
   resolveApiError,
 } from "@/lib/api/error-message";
+import { modelApi } from "@/lib/api/model-api";
 import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";

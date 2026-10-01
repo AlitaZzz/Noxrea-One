@@ -15,7 +15,16 @@ export const BASE = "";
 // ── 全局 401 处理 ──
 // 凭据存于 httpOnly cookie（服务端登录/注册时 Set-Cookie 下发），
 // 请求自动携带，前端不再管理 token。
-// 循环依赖: auth-store → api/client，所以 useAuthStore 必须动态 import
+// 登出动作属于 auth feature：lib 不得反向依赖 feature，故由上层注入处理函数
+// （注册方见 AppProviders），而非在此 import store。
+type UnauthorizedHandler = () => Promise<void> | void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/** 注入 401 时的登出处理，由 app 层用 auth store 的 logout 注册 */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  unauthorizedHandler = handler;
+}
 export class UnauthorizedError extends Error {
   constructor() {
     super("Unauthorized");
@@ -42,11 +51,10 @@ async function handleUnauthorized() {
     return;
   }
 
-  // 统一走 store.logout()：服务端过期 httpOnly cookie（JS 无法清除）+ 清用户态与本地缓存。
+  // 统一走注入的 logout：服务端过期 httpOnly cookie（JS 无法清除）+ 清用户态与本地缓存。
   // 必须等 cookie 清除完成再跳转：带着残留 cookie 进入受保护页会再次触发 401，形成跳转循环。
   try {
-    const { useAuthStore } = await import("@/features/auth/store");
-    await useAuthStore.getState().logout();
+    await unauthorizedHandler?.();
   } catch {
     // 登出清凭据失败不阻塞跳转
   }

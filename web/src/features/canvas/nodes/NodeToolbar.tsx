@@ -16,11 +16,14 @@ import {
   StepBackwardOutlined,
   StepForwardOutlined,
 } from "@ant-design/icons";
-import { Button, Dropdown, Popover, Tooltip } from "antd";
 import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppDropdown from "@/components/ui/AppDropdown";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { ClipTrimIcon } from "@/components/ui/icons/canvas/ClipTrimIcon";
 import { GridLayoutIcon } from "@/components/ui/icons/canvas/GridLayoutIcon";
 import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
@@ -188,20 +191,20 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   const unsaveAssetsByUrls = useAssetsStore((s) => s.unsaveAssetsByUrls);
   const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetUrls.has(assetSrc));
   return (
-    <Tooltip title={isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}>
-      <Button
-        type="text"
-        size="middle"
-        style={{ padding: 8 }}
+    <AppTooltip title={isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}>
+      <AppButton
+        variant="ghost"
+        iconOnly
         disabled={!assetSrc}
-        icon={isInAssets ? <StarFilled style={{ color: "var(--canvas-warning)" }} /> : <StarOutlined />}
         onClick={() => {
           if (!assetSrc) return;
           if (isInAssets) void unsaveAssetsByUrls([assetSrc]);
           else dispatchNodeAction(nodeId, "save-asset");
         }}
-      />
-    </Tooltip>
+      >
+        {isInAssets ? <StarFilled style={{ color: "var(--canvas-warning)" }} /> : <StarOutlined />}
+      </AppButton>
+    </AppTooltip>
   );
 }
 
@@ -250,15 +253,11 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
     >
       {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
       {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
-        <Tooltip title={t("common.info")}>
-          <Button
-            type="text"
-            size="middle"
-            style={{ padding: 8 }}
-            icon={<InfoCircleOutlined />}
+        <AppTooltip title={t("common.info")}>
+          <AppButton variant="ghost" iconOnly            style={{ padding: 8 }}
             onClick={handleInfo}
-          />
-        </Tooltip>
+          ><InfoCircleOutlined /></AppButton>
+        </AppTooltip>
       )}
 
       {/* Image node actions */}
@@ -266,12 +265,12 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           {/* 全景 */}
-          <Tooltip title={t("node.panorama")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<PanoramaIcon />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "panorama")} />
-          </Tooltip>
+          <AppTooltip title={t("node.panorama")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "panorama")} ><PanoramaIcon /></AppButton>
+          </AppTooltip>
           {/* Edit */}
-          <Dropdown
+          <AppDropdown
             open={transformOpen}
             onOpenChange={setTransformOpen}
             placement="bottom"
@@ -289,63 +288,57 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               },
             }}
           >
-            <Tooltip title={t("node.transform")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<RotateRightOutlined />} disabled={!assetSrc} />
-            </Tooltip>
-          </Dropdown>
-          <Tooltip title={t("node.crop")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Crop size={16} />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} />
-          </Tooltip>
-          <Tooltip title={t("annotation.title")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ImageAnnotationIcon style={{ fontSize: 16 }} />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "annotate")} />
-          </Tooltip>
-          <Popover
+            <AppTooltip title={t("node.transform")}>
+              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><RotateRightOutlined /></AppButton>
+            </AppTooltip>
+          </AppDropdown>
+          <AppTooltip title={t("node.crop")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} ><Crop size={16} /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("annotation.title")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "annotate")} ><ImageAnnotationIcon style={{ fontSize: 16 }} /></AppButton>
+          </AppTooltip>
+          <AppPopover
             open={gridOpen}
             onOpenChange={setGridOpen}
             placement="bottom"
             trigger={["click"]}
             arrow={false}
-            styles={{ container: { padding: 0, background: "transparent" } }}
+            contentStyle={{ padding: 0, background: "transparent" }}
             content={
               <div className="panel-popover">
                 <GridPicker nodeId={nodeId} />
               </div>
             }
           >
-            <Tooltip title={t("node.gridSplit")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} disabled={!assetSrc}>
+            <AppTooltip title={t("node.gridSplit")}>
+              <AppButton variant="ghost" iconOnly disabled={!assetSrc}>
                 <GridSplitIcon />
-              </Button>
-            </Tooltip>
-          </Popover>
+              </AppButton>
+            </AppTooltip>
+          </AppPopover>
           {/* AI */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("angle.editor")}>
-            <Button type="text" size="middle" style={{ padding: 8 }}
-              icon={<MultiAngleIcon />}
-              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} />
-          </Tooltip>
-          <Tooltip title={t("lighting.title")}>
-            <Button type="text" size="middle" style={{ padding: 8 }}
-              icon={<LightingIcon />}
-              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} />
-          </Tooltip>
-          <Tooltip title={t("node.reversePrompt")}>
-            <Button type="text" size="middle" style={{ padding: 8 }}
-              icon={<ImageToPromptIcon style={{ fontSize: 16 }} />}
-              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
-              disabled={!assetSrc} />
-          </Tooltip>
-          <Popover
+          <AppTooltip title={t("angle.editor")}>
+            <AppButton variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("lighting.title")}>
+            <AppButton variant="ghost" iconOnly              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} ><LightingIcon /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("node.reversePrompt")}>
+            <AppButton variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
+              disabled={!assetSrc} ><ImageToPromptIcon style={{ fontSize: 16 }} /></AppButton>
+          </AppTooltip>
+          <AppPopover
             open={creationOpen}
             onOpenChange={setCreationOpen}
             placement="bottomLeft"
             trigger={["click"]}
             arrow={false}
-            overlayClassName="creation-menu-popover"
-            styles={{ container: { padding: 0, background: "transparent" } }}
+            popupClassName="creation-menu-popover"
+            contentStyle={{ padding: 0, background: "transparent" }}
             content={
               <div className="panel-popover">
                 <PresetMenuContent
@@ -355,21 +348,21 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               </div>
             }
           >
-            <Tooltip title={t("node.creation")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<Wand2 size={16} />} disabled={!assetSrc} />
-            </Tooltip>
-          </Popover>
+            <AppTooltip title={t("node.creation")}>
+              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><Wand2 size={16} /></AppButton>
+            </AppTooltip>
+          </AppPopover>
           {/* Export */}
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
-          <Tooltip title={t("common.download")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
-          <Tooltip title={t("node.previewFullscreen")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
-          </Tooltip>
+          <AppTooltip title={t("common.download")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("node.previewFullscreen")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></AppButton>
+          </AppTooltip>
         </>
       )}
 
@@ -377,7 +370,7 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       {nodeType === NODE_ACTIONS.VIDEO && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Dropdown
+          <AppDropdown
             open={captureOpen}
             onOpenChange={setCaptureOpen}
             placement="bottom"
@@ -395,61 +388,45 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               },
             }}
           >
-            <Tooltip title={t("node.captureFrame")}>
-              <Button type="text" size="middle" style={{ padding: 8 }} icon={<FrameCaptureIcon />} disabled={!assetSrc} />
-            </Tooltip>
-          </Dropdown>
+            <AppTooltip title={t("node.captureFrame")}>
+              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><FrameCaptureIcon /></AppButton>
+            </AppTooltip>
+          </AppDropdown>
           {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
-          <Tooltip title={t("clip.menu")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<ClipTrimIcon style={{ fontSize: 16 }} />}
+          <AppTooltip title={t("clip.menu")}>
+            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
               disabled={!assetSrc}
               onClick={() => onOpenClipStrip(nodeId)}
-            />
-          </Tooltip>
+            ><ClipTrimIcon style={{ fontSize: 16 }} /></AppButton>
+          </AppTooltip>
           {/* 画面裁剪：与图片节点同语义（源像素矩形重编码为派生视频） */}
-          <Tooltip title={t("node.crop")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<Crop size={16} />}
+          <AppTooltip title={t("node.crop")}>
+            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
               disabled={!assetSrc}
               onClick={() => dispatchNodeAction(nodeId, "crop-video")}
-            />
-          </Tooltip>
-          <Tooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<WaveIcon />}
+            ><Crop size={16} /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>
+            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
               disabled={!assetSrc || videoHasAudio === false}
               onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
-            />
-          </Tooltip>
-          <Tooltip title={t("node.reversePrompt")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<VideoToPromptIcon style={{ fontSize: 16 }} />}
+            ><WaveIcon /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("node.reversePrompt")}>
+            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
               disabled={!assetSrc}
-            />
-          </Tooltip>
+            ><VideoToPromptIcon style={{ fontSize: 16 }} /></AppButton>
+          </AppTooltip>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
-          <Tooltip title={t("common.download")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
-          <Tooltip title={t("node.previewFullscreen")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<ExpandOutlined />} disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} />
-          </Tooltip>
+          <AppTooltip title={t("common.download")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("node.previewFullscreen")}>
+            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></AppButton>
+          </AppTooltip>
         </>
       )}
 
@@ -470,33 +447,25 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
           ) : (
             <>
               <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-              <Tooltip title={t("clip.menu")}>
-                <Button
-                  type="text"
-                  size="middle"
-                  style={{ padding: 8 }}
-                  icon={<ClipTrimIcon style={{ fontSize: 16 }} />}
+              <AppTooltip title={t("clip.menu")}>
+                <AppButton variant="ghost" iconOnly                  style={{ padding: 8 }}
                   disabled={!assetSrc}
                   onClick={() => onOpenAudioClip(nodeId)}
-                />
-              </Tooltip>
-              <Tooltip title={t("node.audioSpeed")}>
-                <Button
-                  type="text"
-                  size="middle"
-                  style={{ padding: 8 }}
-                  icon={<SpeedIcon />}
+                ><ClipTrimIcon style={{ fontSize: 16 }} /></AppButton>
+              </AppTooltip>
+              <AppTooltip title={t("node.audioSpeed")}>
+                <AppButton variant="ghost" iconOnly                  style={{ padding: 8 }}
                   disabled={!assetSrc}
                   onClick={() => {
                     setSpeedDraft(1);
                     setSpeedMode(true);
                   }}
-                />
-              </Tooltip>
-              <Tooltip title={t("common.download")}>
-                <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!assetSrc}
-                  onClick={() => dispatchNodeAction(nodeId, "download")} />
-              </Tooltip>
+                ><SpeedIcon /></AppButton>
+              </AppTooltip>
+              <AppTooltip title={t("common.download")}>
+                <AppButton variant="ghost" iconOnly disabled={!assetSrc}
+                  onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
+              </AppTooltip>
             </>
           )}
         </>
@@ -506,14 +475,14 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       {nodeType === NODE_ACTIONS.TEXT && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Tooltip title={t("common.copy")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<Copy size={16} />} disabled={!textContent}
-              onClick={() => dispatchNodeAction(nodeId, "copy")} />
-          </Tooltip>
-          <Tooltip title={t("common.download")}>
-            <Button type="text" size="middle" style={{ padding: 8 }} icon={<DownloadOutlined />} disabled={!textContent}
-              onClick={() => dispatchNodeAction(nodeId, "download")} />
-          </Tooltip>
+          <AppTooltip title={t("common.copy")}>
+            <AppButton variant="ghost" iconOnly disabled={!textContent}
+              onClick={() => dispatchNodeAction(nodeId, "copy")} ><Copy size={16} /></AppButton>
+          </AppTooltip>
+          <AppTooltip title={t("common.download")}>
+            <AppButton variant="ghost" iconOnly disabled={!textContent}
+              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
+          </AppTooltip>
         </>
       )}
 
@@ -521,33 +490,28 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       {nodeType === NODE_ACTIONS.GROUP && (
         <>
           <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <Popover
+          <AppPopover
             trigger="click"
             placement="bottom"
-            styles={{ container: { padding: 0, background: "transparent" } }}
+            contentStyle={{ padding: 0, background: "transparent" }}
             content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
           >
-            <Tooltip title={t("node.groupColor")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8 }}
-                icon={
-                  <span
-                    style={{
-                      display: "block",
-                      width: 16,
-                      height: 16,
-                      borderRadius: "50%",
-                      background: getGroupColor(groupColor).border,
-                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
-                    }}
-                  />
-                }
-              />
-            </Tooltip>
-          </Popover>
-          <Dropdown
+            <AppTooltip title={t("node.groupColor")}>
+              <AppButton variant="ghost" iconOnly>
+                <span
+                  style={{
+                    display: "block",
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    background: getGroupColor(groupColor).border,
+                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+                  }}
+                />
+              </AppButton>
+            </AppTooltip>
+          </AppPopover>
+          <AppDropdown
             open={layoutOpen}
             onOpenChange={setLayoutOpen}
             placement="bottom"
@@ -565,27 +529,19 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
               },
             }}
           >
-            <Tooltip title={t("common.layout")}>
-              <Button
-                type="text"
-                size="middle"
-                style={{ padding: 8 }}
-                icon={<GroupGridIcon />}
-              />
-            </Tooltip>
-          </Dropdown>
-          <Tooltip title={t("common.ungroup")}>
-            <Button
-              type="text"
-              size="middle"
-              style={{ padding: 8 }}
-              icon={<UngroupIcon />}
+            <AppTooltip title={t("common.layout")}>
+              <AppButton variant="ghost" iconOnly                style={{ padding: 8 }}
+              ><GroupGridIcon /></AppButton>
+            </AppTooltip>
+          </AppDropdown>
+          <AppTooltip title={t("common.ungroup")}>
+            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
               onClick={(e) => {
                 e.stopPropagation();
                 window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
               }}
-            />
-          </Tooltip>
+            ><UngroupIcon /></AppButton>
+          </AppTooltip>
         </>
       )}
     </div>

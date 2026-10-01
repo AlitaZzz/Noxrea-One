@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import DialogActions from "@/components/ui/DialogActions";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
@@ -363,12 +364,11 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
             <span />
           )}
           {/* 右：操作按钮 */}
-          <div className="app-dialog-footer">
-            <AppButton onClick={() => { reset(); onClose(); }}>{t("common.cancel")}</AppButton>
+          <DialogActions onCancel={() => { reset(); onClose(); }}>
             <AppButton variant="primary" loading={saving} disabled={saveDisabled} onClick={handleSave}>
               {t("common.save")}
             </AppButton>
-          </div>
+          </DialogActions>
         </div>
       }
     >

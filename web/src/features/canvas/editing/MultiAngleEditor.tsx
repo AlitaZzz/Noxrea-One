@@ -5,10 +5,13 @@
  */
 "use client";
 
-import { App, Button, Slider } from "antd";
+import { App } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppSlider from "@/components/ui/AppSlider";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -16,7 +19,6 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
-import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 
 interface Props {
@@ -95,7 +97,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
     try {
       const template = await getPromptTemplate("angle", { azimuth, elevation, zoom });
       if (!template) {
-        notification.error({ title: t("angle.generateFailed"), placement: "bottomRight", duration: 6 });
+        notification.error({ title: t("angle.generateFailed"), placement: "bottomRight", duration: 6, key: `angle-failed-${nodeId}` });
         return;
       }
       const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
@@ -126,13 +128,14 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
           <MultiAngleIcon className="h-4 w-4" />
           {t("angle.editorTitle")}
         </span>
-        <Button
-          type="text"
+        <AppButton
+          variant="ghost"
           aria-label="close"
           onClick={onClose}
           style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
-          icon={<span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>}
-        />
+        >
+          <span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>
+        </AppButton>
       </div>
       <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
 
@@ -170,7 +173,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.azimuth")}</span>
             <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <Slider
+              <AppSlider
                 min={0}
                 max={359}
                 step={1}
@@ -178,7 +181,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                 onChange={(v) => setAzimuth(Number(v))}
                 className="min-w-0 flex-1"
                 style={{ margin: 0 }}
-                tooltip={{ open: false }}
+                showTooltip={false}
               />
               <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
               <input
@@ -223,7 +226,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                     zIndex: 1,
                   }}
                 />
-                <Slider
+                <AppSlider
                   min={-90}
                   max={90}
                   step={1}
@@ -231,7 +234,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                   onChange={(v) => setElevation(Number(v))}
                   className="relative"
                   style={{ margin: 0, width: "100%" }}
-                  tooltip={{ open: false }}
+                  showTooltip={false}
                   styles={{ track: { background: "transparent" }, handle: { zIndex: 2 } }}
                 />
               </div>
@@ -308,7 +311,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
         >
           {t("angle.reset")}
         </button>
-        <PrimaryActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
+        <IconActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
       </div>
     </div>
   );

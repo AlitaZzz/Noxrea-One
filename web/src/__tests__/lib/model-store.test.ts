@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   notify: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock("@/features/settings/api", () => ({
+vi.mock("@/lib/api/model-api", () => ({
   modelApi: {
     updateProvider: (...args: unknown[]) => mocks.updateProvider(...args),
     deleteProvider: (...args: unknown[]) => mocks.deleteProvider(...args),

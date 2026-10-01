@@ -8,9 +8,9 @@
 
 import { createElement, useEffect, useRef } from "react";
 
+import TaskErrorDetail from "@/components/ui/TaskErrorDetail";
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
-import TaskErrorDetail from "@/features/canvas/shared/TaskErrorDetail";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
@@ -91,8 +91,9 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       ) => {
         if (notifiedTasksRef.current.has(taskId)) return;
         notifiedTasksRef.current.add(taskId);
-        if (kind === "success") notifRef.current.success(payload);
-        else notifRef.current.error(payload);
+        const options = { ...payload, key: `generation-result-${nodeId}-${taskId}` };
+        if (kind === "success") notifRef.current.success(options);
+        else notifRef.current.error(options);
       };
 
       // LLM 文本结果：从 resultText 更新 content

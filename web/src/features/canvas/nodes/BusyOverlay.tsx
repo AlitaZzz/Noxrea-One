@@ -8,11 +8,7 @@
 
 import { useEffect, useState } from "react";
 
-/** 秒数格式化：59s 内 "47s"，超过 "1m05s"（与 GeneratingOverlay 同款式） */
-function formatElapsed(totalSeconds: number) {
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  return `${Math.floor(totalSeconds / 60)}m${String(totalSeconds % 60).padStart(2, "0")}s`;
-}
+import { formatElapsed } from "@/lib/utils/format-elapsed";
 
 export default function BusyOverlay({
   label,

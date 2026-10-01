@@ -6,23 +6,28 @@
 "use client";
 
 import { DownOutlined, PlusOutlined } from "@ant-design/icons";
-import { App, Button, Dropdown, Popover, Tooltip } from "antd";
+import { App } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppDropdown from "@/components/ui/AppDropdown";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
 import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
 import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
 import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
 import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
-import { ModelIcon } from "@/components/ui/ModelIcon";
+import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import PrimaryActionButton from "@/features/canvas/editing/PrimaryActionButton";
-import ParamFields, { fieldDefaults, hasField, ParamSummary } from "@/features/canvas/panels/ParamFields";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import { ModelIcon } from "@/features/model/ModelIcon";
+import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
@@ -101,7 +106,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const refModeOptions = modelParams?.capabilities?.refMode?.options ?? [];
 
   // fields 为唯一数据源：渲染控件 + 默认值
-  const fields = modelParams?.fields ?? [];
+  const fields = Array.isArray(modelParams?.fields) ? modelParams.fields : [];
+  const fieldViews = toParamFieldViews(fields, t);
   const fieldValues: Record<string, unknown> = { resolution, ratio, seconds, generateAudio, n };
   const setField = (name: string, value: unknown) => {
     if (name === "resolution") writeGenSettings(nodeId, { resolution: value });
@@ -407,16 +413,16 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </Fragment>
           ))}
           {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-          <Tooltip title={t("common.reference")}>
-            <Button size="small" type="text"
+          <AppTooltip title={t("common.reference")}>
+            <AppButton size="sm" variant="ghost"
               className="flex items-center justify-center rounded transition-colors flex-shrink-0"
               style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
               onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
               onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
               onClick={handleRefUpload}>
               <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-            </Button>
-          </Tooltip>
+            </AppButton>
+          </AppTooltip>
         </div>
       <MentionPrompt
         references={references}
@@ -426,7 +432,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
         style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
       />
       <div className="flex items-center gap-2">
-        <Dropdown
+        <AppDropdown
           open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft" trigger={["click"]}
           menu={{
             items: allModels.map((m) => ({
@@ -440,16 +446,16 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             onClick: ({ key }) => selectModel(key),
           }}
         >
-          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
+          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
             <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
             <span className="truncate">
               {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
             </span>
-          </Button>
-        </Dropdown>
+          </AppButton>
+        </AppDropdown>
         <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         {refModeOptions.length > 0 && (
-          <Dropdown
+          <AppDropdown
             open={refModeOpen}
             onOpenChange={setRefModeOpen}
             placement="bottomLeft"
@@ -479,9 +485,9 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                     icon: modeIcon,
                     label: allowed ? labelText : (
                       // 禁用原因沿行悬停展示：antd 禁用条目只拦截点击，hover 仍生效
-                      <Tooltip title={refModeDisabledReason(m)} placement="right">
+                      <AppTooltip title={refModeDisabledReason(m)} placement="right">
                         <span>{labelText}</span>
-                      </Tooltip>
+                      </AppTooltip>
                     ),
                     disabled: !allowed,
                   };
@@ -492,7 +498,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               onClick: ({ key }) => setRefMode(key),
             }}
           >
-            <Button size="small" type="text"
+            <AppButton size="sm" variant="ghost"
               className="gen-panel-btn flex items-center justify-between gap-1.5 rounded text-sm"
               style={{ width: 120 }}>
               <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
@@ -503,28 +509,28 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 {t(`video.refMode.${refMode}`)}
               </span>
               <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
-            </Button>
-          </Dropdown>
+            </AppButton>
+          </AppDropdown>
         )}
         {refModeOptions.length > 0 && (
           <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
         )}
-        <Popover
+        <AppPopover
           content={
             <div className="panel-popover" style={{ width: 360 }}>
-              <ParamFields fields={fields} values={fieldValues} onChange={setField} />
+              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
             </div>
           }
           trigger="click" placement="bottomLeft"
-          styles={{ container: { padding: 0, background: "transparent" } }}
+          contentStyle={{ padding: 0, background: "transparent" }}
         >
-          <Button size="small" type="text" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
+          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
             <ParamsIcon style={{ color: "#ffffff" }} />
-            <ParamSummary fields={fields} values={fieldValues} />
-          </Button>
-        </Popover>
+            <ParamSummary fields={fieldViews} values={fieldValues} />
+          </AppButton>
+        </AppPopover>
         <div className="flex-1" />
-        <PrimaryActionButton
+        <IconActionButton
           cancel={isGenerating || submitting}
           disabled={!isGenerating && !submitting && (!prompt.trim() || !modelKey)}
           onClick={isGenerating || submitting ? handleCancel : handleGenerate}

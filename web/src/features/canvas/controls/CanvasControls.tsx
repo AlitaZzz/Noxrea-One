@@ -13,11 +13,15 @@ import {
   ZoomOutOutlined,
 } from "@ant-design/icons";
 import { useReactFlow, useViewport } from "@xyflow/react";
-import type { MenuProps } from "antd";
-import { Button,Dropdown, InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppDropdown from "@/components/ui/AppDropdown";
+import type { AppMenuProps } from "@/components/ui/AppMenu";
+import AppNumberInput from "@/components/ui/AppNumberInput";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { MagnetIcon } from "@/components/ui/icons/canvas/MagnetIcon";
 import { MapPinIcon } from "@/components/ui/icons/canvas/MapPinIcon";
@@ -37,17 +41,17 @@ function LanguageToggle() {
     useAuthStore.getState().savePreference("language", next);
   };
   return (
-    <Tooltip title={t("common.switchLanguage")}>
-      <Button
-        size="small"
-        type="text"
+    <AppTooltip title={t("common.switchLanguage")}>
+      <AppButton
+        size="sm"
+        variant="ghost"
         className="canvas-ctrl-btn"
         onClick={toggle}
         style={{ fontSize: 12, fontWeight: 600, minWidth: 28 }}
       >
         {lang === "zh" ? "EN" : "中"}
-      </Button>
-    </Tooltip>
+      </AppButton>
+    </AppTooltip>
   );
 }
 
@@ -94,13 +98,13 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   const zoomPercent = Math.round(viewport.zoom * 100);
 
-  const zoomItems: NonNullable<MenuProps["items"]> = [
+  const zoomItems: NonNullable<AppMenuProps["items"]> = [
     {
       key: "zoom-input",
       type: "group",
       label: (
         <div style={{ width: 170, paddingBottom: 4 }}>
-          <InputNumber
+          <AppNumberInput
             size="small" controls={false}
             min={Math.round(MIN_ZOOM * 100)} max={Math.round(MAX_ZOOM * 100)}
             value={inputZoom} placeholder="100" autoFocus
@@ -123,14 +127,6 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   return (
     <>
-      {/* .canvas-ctrl-btn 的交互样式已收敛到 globals.css 的「统一图标按钮」，这里只留输入框 */}
-      <style>{`
-        .zoom-input.ant-input-number:hover,
-        .zoom-input.ant-input-number-focused {
-          border-color: var(--canvas-border, #3a3a3a) !important;
-          box-shadow: none !important;
-        }
-      `}</style>
       <div
         className="canvas-ctrl-bar flex items-center gap-1 px-1.5 rounded-lg shadow-lg w-fit"
         style={{
@@ -146,40 +142,47 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       >
         {/* Canvas Explorer — 最左侧主面板开关。
             按钮同时有图标和文字「面板」，再挂 tooltip 属于重复提示，去掉 */}
-        <Button
-          size="small"
-          type="text"
+        <AppButton
+          size="sm"
+          variant="ghost"
           className={`canvas-ctrl-btn${canvasExplorerOpen ? " canvas-ctrl-active" : ""}`}
-          icon={<PanelIcon />}
+          aria-pressed={canvasExplorerOpen}
           onClick={onOpenCanvasExplorer}
         >
+          <PanelIcon />
           {t("canvas.panel")}
-        </Button>
+        </AppButton>
 
         {/* Minimap toggle */}
-        <Tooltip title={minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}>
-          <Button
-            size="small"
-            type="text"
+        <AppTooltip title={minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}>
+          <AppButton
+            size="sm"
+            variant="ghost"
+            iconOnly
             className={`canvas-ctrl-btn ${minimapVisible ? "canvas-ctrl-active" : ""}`}
-            icon={<MapPinIcon />}
+            aria-pressed={minimapVisible}
             onClick={() => { toggleMinimap(); }}
-          />
-        </Tooltip>
+          >
+            <MapPinIcon />
+          </AppButton>
+        </AppTooltip>
 
         {/* Snap to grid toggle */}
-        <Tooltip title={snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}>
-          <Button
-            size="small"
-            type="text"
+        <AppTooltip title={snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}>
+          <AppButton
+            size="sm"
+            variant="ghost"
+            iconOnly
             className={`canvas-ctrl-btn ${snapToGrid ? "canvas-ctrl-active" : ""}`}
-            icon={<MagnetIcon />}
+            aria-pressed={snapToGrid}
             onClick={() => { toggleSnapToGrid(); }}
-          />
-      </Tooltip>
+          >
+            <MagnetIcon />
+          </AppButton>
+      </AppTooltip>
 
       {/* Background picker */}
-      <Dropdown
+      <AppDropdown
         open={bgOpen}
         onOpenChange={setBgOpen}
         placement="top"
@@ -192,34 +195,34 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           onClick: ({ key }) => setBackground(key as BackgroundType),
         }}
       >
-        <Tooltip title={t("common.background")}>
-          <Button size="small" type="text" className="canvas-ctrl-btn" icon={<BgColorsOutlined />} />
-        </Tooltip>
-      </Dropdown>
+        <AppTooltip title={t("common.background")}>
+          <AppButton size="sm" variant="ghost" iconOnly className="canvas-ctrl-btn"><BgColorsOutlined /></AppButton>
+        </AppTooltip>
+      </AppDropdown>
       {/* Language toggle */}
       <LanguageToggle />
 
       {/* API Settings */}
-      <Tooltip title={t("modelConfig.apiSettings")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ApiOutlined />} onClick={onOpenSettings} />
-      </Tooltip>
+      <AppTooltip title={t("modelConfig.apiSettings")}>
+        <AppButton size="sm" variant="ghost" iconOnly className="canvas-ctrl-btn" onClick={onOpenSettings}><ApiOutlined /></AppButton>
+      </AppTooltip>
 
       {/* My Assets */}
-      <Tooltip title={t("common.assets")}>
-        <Button size="small" type="text" className="canvas-ctrl-btn" icon={<AssetsIcon />} onClick={onOpenAssets} />
-      </Tooltip>
+      <AppTooltip title={t("common.assets")}>
+        <AppButton size="sm" variant="ghost" iconOnly className="canvas-ctrl-btn" onClick={onOpenAssets}><AssetsIcon /></AppButton>
+      </AppTooltip>
 
       <span className="canvas-toolbar-sep" style={{ height: 18 }} />
 
       {/* Shortcuts — 快捷键速查，随按钮锚定弹出（与背景/缩放菜单同交互）。
           多列速查表是面板而非列表菜单，走 antd Popover + panel-popover 壳 */}
-      <Popover
+      <AppPopover
         open={shortcutsOpen}
         onOpenChange={setShortcutsOpen}
         placement="top"
         trigger={["click"]}
         arrow={false}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={
           <div className="panel-popover" style={{ padding: 0 }}>
             <div className="flex gap-10 p-6 select-none" style={{ color: "var(--canvas-text-dim)" }}>
@@ -244,14 +247,14 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           </div>
         }
       >
-        <Tooltip title={t("shortcuts.title")}>
-          <Button size="small" type="text" className="canvas-ctrl-btn" icon={<ShortcutIcon style={{ width: 16, height: 16 }} />} />
-        </Tooltip>
-      </Popover>
+        <AppTooltip title={t("shortcuts.title")}>
+          <AppButton size="sm" variant="ghost" iconOnly className="canvas-ctrl-btn"><ShortcutIcon style={{ width: 16, height: 16 }} /></AppButton>
+        </AppTooltip>
+      </AppPopover>
 
       {/* Agent 对话 */}
       {/* Zoom display + menu */}
-      <Dropdown
+      <AppDropdown
         open={zoomOpen}
         onOpenChange={(v) => {
           setZoomOpen(v);
@@ -270,10 +273,10 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           },
         }}
       >
-        <Button size="small" type="text" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
+        <AppButton size="sm" variant="ghost" className="canvas-ctrl-btn" style={{ minWidth: 48, fontVariantNumeric: "tabular-nums" }}>
           {zoomPercent}%
-        </Button>
-      </Dropdown>
+        </AppButton>
+      </AppDropdown>
     </div>
     </>
   );

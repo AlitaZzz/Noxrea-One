@@ -7,10 +7,10 @@
 "use client";
 
 import { CloseOutlined, ExclamationCircleOutlined, RedoOutlined } from "@ant-design/icons";
-import { Tooltip } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppTooltip from "@/components/ui/AppTooltip";
 import { discardNodeUpload, retryNodeUpload } from "@/features/canvas/upload";
 import type { UploadErrorInfo } from "@/lib/utils/upload";
 
@@ -71,18 +71,18 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
         </span>
         <div className="mt-1">
           {error.retryable ? (
-            <Tooltip title={t("file.uploadRetry")}>
+            <AppTooltip title={t("file.uploadRetry")}>
               <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => void handleRetry()}>
                 <RedoOutlined />
               </button>
-            </Tooltip>
+            </AppTooltip>
           ) : (
             // 业务错误（体积超限 / 类型不支持）重试无意义，只留一个移除入口
-            <Tooltip title={t("file.uploadDiscard")}>
+            <AppTooltip title={t("file.uploadDiscard")}>
               <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => discardNodeUpload(nodeId)}>
                 <CloseOutlined />
               </button>
-            </Tooltip>
+            </AppTooltip>
           )}
         </div>
       </div>

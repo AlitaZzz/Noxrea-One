@@ -12,11 +12,13 @@
 
 import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import type { MenuProps } from "antd";
-import { App, Menu, Popover } from "antd";
+import { App } from "antd";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AppMenuProps } from "@/components/ui/AppMenu";
+import AppMenu from "@/components/ui/AppMenu";
+import AppPopover from "@/components/ui/AppPopover";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
 import {
@@ -148,14 +150,14 @@ export default function CanvasContextMenu(props: Props) {
   };
 
   /** 画布级操作：整理 + 重置视图，仅 canvas 上下文使用 */
-  const canvasActions: MenuProps["items"] = [
+  const canvasActions: AppMenuProps["items"] = [
     { type: "divider" },
     { key: "tidy", icon: <AppstoreOutlined />, label: t("canvas.tidy"), disabled: props.tidyDisabled },
     { key: "fit", icon: <ExpandOutlined />, label: t("canvas.fit") },
   ];
 
   /** 三种上下文的条目统一为 antd Menu items；key → 动作分发见 onMenuClick */
-  const menuItems: MenuProps["items"] =
+  const menuItems: AppMenuProps["items"] =
     kind === "create"
       ? [
           { key: "g-add", type: "group", label: <div style={GROUP_LABEL_STYLE}>{t("node.add")}</div> },
@@ -208,7 +210,7 @@ export default function CanvasContextMenu(props: Props) {
 
   return (
     <>
-      <Popover
+      <AppPopover
         // 位置或上下文变化时强制重建：rc-trigger 只在打开状态变化时计算一次对齐，
         // 无法感知 trigger 锚点（下面那个 1x1 span）的坐标变化。
         // 若不加 key，菜单已打开时右键新位置会出现「store 更新了但浮层停在原处」。
@@ -219,10 +221,10 @@ export default function CanvasContextMenu(props: Props) {
         arrow={false}
         getPopupContainer={() => document.body}
         onOpenChange={(v) => { if (!v) hide(); }}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={
           <div ref={menuRef} className="panel-popover">
-            <Menu
+            <AppMenu
               items={menuItems}
               onClick={onMenuClick}
               selectable={false}
@@ -239,7 +241,7 @@ export default function CanvasContextMenu(props: Props) {
             width: 1, height: 1, pointerEvents: "none",
           }}
         />
-      </Popover>
+      </AppPopover>
     </>
   );
 }

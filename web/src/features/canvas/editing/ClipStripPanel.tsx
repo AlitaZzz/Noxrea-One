@@ -12,10 +12,12 @@
 "use client";
 
 import { CloseOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppTooltip from "@/components/ui/AppTooltip";
+import IconActionButton from "@/components/ui/IconActionButton";
 import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -25,7 +27,6 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
-import PrimaryActionButton from "./PrimaryActionButton";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
 
@@ -664,7 +665,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button type="text" size="middle" style={{ padding: 8 }} icon={<CloseOutlined />} onClick={onClose} />
+        <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
         <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("clip.menu")}</span>
       </div>
 
@@ -770,21 +771,21 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
 
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
-        <Tooltip
+        <AppTooltip
           title={t("capture.truncated", {
             actual: formatTime(duration),
             declared: formatTime(declaredDuration),
           })}
         >
           <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
-        </Tooltip>
+        </AppTooltip>
       )}
 
       <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致）；转码/缓冲未就绪时整段禁用，
           避免可点击却静默无响应 */}
-      <PrimaryActionButton onClick={handleConfirm} disabled={!rangeValid} />
+      <IconActionButton onClick={handleConfirm} disabled={!rangeValid} />
     </div>
   );
 }

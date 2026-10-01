@@ -22,8 +22,8 @@ import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { ModelIcon } from "@/components/ui/ModelIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
+import { ModelIcon } from "@/features/model/ModelIcon";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo, ModelProvider } from "@/lib/types/models";
 

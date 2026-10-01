@@ -16,11 +16,11 @@ import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
 import AppModal from "@/components/ui/AppModal";
-import CanvasLoader from "@/components/ui/CanvasLoader";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
+import CanvasLoader from "@/features/canvas/shared/CanvasLoader";
 import {
   PROMPT_TEMPLATES_QUERY_KEY,
   promptTemplatesQueryOptions,

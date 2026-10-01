@@ -13,11 +13,11 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
-import { Tooltip } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
+import AppTooltip from "@/components/ui/AppTooltip";
 import { useAssetsStore } from "@/features/assets/store";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
@@ -385,26 +385,26 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         {agentGhost && <AgentGhostOverlay />}
         {isMulti && !expanded && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("common.expand")}>
+            <AppTooltip title={t("common.expand")}>
               <button
                 className="app-overlay-btn app-overlay-btn--sm"
                 onClick={toggleExpand}
               >
                 <FullscreenOutlined />
               </button>
-            </Tooltip>
+            </AppTooltip>
           </div>
         )}
         {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <Tooltip title={t("common.replace")}>
+            <AppTooltip title={t("common.replace")}>
               <button
                 className="app-overlay-btn app-overlay-btn--sm"
                 onClick={handleUpload}
               >
                 <UploadOutlined />
               </button>
-            </Tooltip>
+            </AppTooltip>
           </div>
         )}
         {data.upload?.uploading ? (
@@ -456,33 +456,33 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
                           {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
                           <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
-                            <Tooltip title={t("common.download")}>
+                            <AppTooltip title={t("common.download")}>
                               <button
                                 className="app-overlay-btn app-overlay-btn--sm"
                                 onClick={() => handleDownloadUrl(url)}
                               >
                                 <DownloadOutlined />
                               </button>
-                            </Tooltip>
+                            </AppTooltip>
                             {!isMain && (
-                              <Tooltip title={t("node.setAsMain")}>
+                              <AppTooltip title={t("node.setAsMain")}>
                                 <button
                                   className="app-overlay-btn app-overlay-btn--sm"
                                   onClick={() => handleSetMain(url)}
                                 >
                                   <CrownOutlined />
                                 </button>
-                              </Tooltip>
+                              </AppTooltip>
                             )}
                             {isMain && (
-                              <Tooltip title={t("common.collapse")}>
+                              <AppTooltip title={t("common.collapse")}>
                                 <button
                                   className="app-overlay-btn app-overlay-btn--sm"
                                   onClick={toggleExpand}
                                 >
                                   <FullscreenOutlined />
                                 </button>
-                              </Tooltip>
+                              </AppTooltip>
                             )}
                           </div>
                         </div>

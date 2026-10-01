@@ -696,6 +696,49 @@ body > .ant-app { line-height: inherit !important; }
   color: var(--canvas-text);
 }
 
+.zoom-input.ant-input-number:hover,
+.zoom-input.ant-input-number-focused {
+  border-color: var(--canvas-border, #3a3a3a) !important;
+  box-shadow: none !important;
+}
+
+.canvas-sidebar .ant-input-affix-wrapper {
+  background: var(--canvas-bg-elevated) !important;
+  border-color: var(--canvas-border) !important;
+  color: var(--canvas-text) !important;
+  border-radius: 8px !important;
+  height: 32px !important;
+}
+.canvas-sidebar .ant-input {
+  background: transparent !important;
+  color: var(--canvas-text) !important;
+  font-size: 13px !important;
+  height: 30px !important;
+}
+.canvas-sidebar .ant-input-affix-wrapper:hover,
+.canvas-sidebar .ant-input-affix-wrapper:focus,
+.canvas-sidebar .ant-input-affix-wrapper-focused {
+  border-color: var(--canvas-border) !important;
+  box-shadow: none !important;
+}
+.canvas-sidebar ::-webkit-scrollbar { width: 4px; }
+.canvas-sidebar ::-webkit-scrollbar-track { background: transparent; }
+.canvas-sidebar ::-webkit-scrollbar-thumb { background: var(--canvas-border); border-radius: 2px; }
+
+.app-btn.param-option {
+  height: auto;
+  min-height: 36px;
+  padding: 4px 8px;
+  white-space: normal;
+  border: 1px solid var(--canvas-border-light);
+  color: var(--canvas-text-muted);
+}
+.app-btn.param-option[aria-pressed="true"] {
+  background: var(--canvas-bg-hover);
+  border-color: var(--canvas-text);
+  color: var(--canvas-text);
+}
+
 /* 破坏性操作：红是唯一危险语义，不要用主色顶替 */
 .app-btn--danger {
   background: transparent;
@@ -991,7 +1034,7 @@ body > .ant-app { line-height: inherit !important; }
    调用方类名不变，新增代码统一用 .app-icon-btn。 */
 .app-icon-btn,
 .canvas-toolbar-btn.ant-btn-text,
-.canvas-ctrl-btn.ant-btn-text,
+.canvas-ctrl-btn,
 .gen-panel-btn {
   display: inline-flex;
   align-items: center;
@@ -1015,8 +1058,8 @@ body > .ant-app { line-height: inherit !important; }
 .app-icon-btn:active,
 .canvas-toolbar-btn.ant-btn-text:hover,
 .canvas-toolbar-btn.ant-btn-text:active,
-.canvas-ctrl-btn.ant-btn-text:hover,
-.canvas-ctrl-btn.ant-btn-text:active,
+.canvas-ctrl-btn:not(:disabled):hover,
+.canvas-ctrl-btn:not(:disabled):active,
 .gen-panel-btn:hover,
 .gen-panel-btn:active {
   background: var(--canvas-bg-hover) !important;
@@ -1024,7 +1067,7 @@ body > .ant-app { line-height: inherit !important; }
 }
 /* 激活态（开关已启用）：与 hover 同色，语义是状态不是悬停 */
 .app-icon-btn.is-active,
-.canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
+.canvas-ctrl-btn.canvas-ctrl-active {
   background: var(--canvas-bg-hover) !important;
   color: var(--canvas-text) !important;
 }
@@ -1033,9 +1076,9 @@ body > .ant-app { line-height: inherit !important; }
    玻璃材质的 hover 是「把玻璃本身提亮一档」：白色低透明度叠加，无论背后
    画布是亮是暗，色块与玻璃的材质关系始终一致（macOS 风格的 frost lift）。
    只作用于毛玻璃条内；实色工具条（.canvas-toolbar-btn 等）仍用实色。 */
-.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text:hover,
-.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text:active,
-.canvas-ctrl-bar .canvas-ctrl-btn.ant-btn-text.canvas-ctrl-active {
+.canvas-ctrl-bar .canvas-ctrl-btn:not(:disabled):hover,
+.canvas-ctrl-bar .canvas-ctrl-btn:not(:disabled):active,
+.canvas-ctrl-bar .canvas-ctrl-btn.canvas-ctrl-active {
   background: rgba(255, 255, 255, 0.12) !important;
   color: var(--canvas-text) !important;
 }
@@ -1350,10 +1393,13 @@ body > .ant-app { line-height: inherit !important; }
 }
 .light-panel-mini-tab.active { background: var(--canvas-text); color: var(--canvas-bg); }
 /* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
-.canvas-toolbar .ant-btn { font-size: 16px; }
+.canvas-toolbar .ant-btn,
+.canvas-toolbar .app-btn { font-size: 16px; }
 /* 工具栏按钮 hover 与按下同色：点击不再闪一层更深底色（排除 disabled，避免禁用态被点亮） */
 .canvas-toolbar .ant-btn:not(:disabled):hover,
-.canvas-toolbar .ant-btn:not(:disabled):active {
+.canvas-toolbar .ant-btn:not(:disabled):active,
+.canvas-toolbar .app-btn:not(:disabled):hover,
+.canvas-toolbar .app-btn:not(:disabled):active {
   background: var(--canvas-bg-hover) !important;
   color: var(--canvas-text) !important;
 }

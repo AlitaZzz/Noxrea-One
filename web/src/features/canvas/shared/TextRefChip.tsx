@@ -6,9 +6,9 @@
  */
 "use client";
 
-import { Tooltip } from "antd";
 import { memo } from "react";
 
+import AppTooltip from "@/components/ui/AppTooltip";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
@@ -27,7 +27,7 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
   const reveal = useRevealCanvasNode();
 
   return (
-    <Tooltip
+    <AppTooltip
       title={
         <div style={{ maxWidth: 280, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {content}
@@ -52,7 +52,7 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
             if (edge) store.removeEdges([edge.id]);
           }}>✕</button>
       </div>
-    </Tooltip>
+    </AppTooltip>
   );
 }
 
