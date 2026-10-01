@@ -5,15 +5,16 @@
  * 提交后调用 auth store 完成登录或注册并跳转回根路由分流。
  * 视觉统一到应用品牌色（石墨深色 + 青柠 #c7f43d），动效均为纯 CSS/轻量 JS 自实现。
  */
+
 "use client";
 
-import { App } from "antd";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
 import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
 import i18n from "@/lib/i18n/config";
@@ -413,7 +414,7 @@ function RightPanel({
 export default function LoginPage() {
   const router = useRouter();
   const authStore = useAuthStore();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
 
   // 全局 401 登出跳转而来：读取 client.ts 留下的标记，展示一次性「会话过期」提示
   useEffect(() => {

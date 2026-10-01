@@ -3,13 +3,15 @@
  * 在固定圆形取景框内支持拖拽平移与滚轮 / 滑块缩放，
  * 确认后按固定输出分辨率导出并上传，回传头像 URL。
  */
+
 "use client";
 
-import { App,Button } from "antd";
 import { useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { uploadOne } from "@/features/canvas/upload";
 import { canvasToBlob } from "@/lib/utils/image-utils";
 
@@ -25,7 +27,7 @@ const OUTPUT = 200; // output resolution
 
 export default function AvatarCropModal({ open, file, onDone, onClose }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -150,8 +152,8 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
             className="flex-1" style={{ accentColor: "#c7f43d" }} />
         </div>
         <div className="flex gap-2 w-full">
-          <Button onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("common.cancel")}</Button>
-          <Button type="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</Button>
+          <AppButton onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("common.cancel")}</AppButton>
+          <AppButton variant="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</AppButton>
         </div>
       </div>
     </AppModal>

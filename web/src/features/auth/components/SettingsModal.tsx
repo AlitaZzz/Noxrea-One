@@ -3,16 +3,20 @@
  * 展示当前登录用户的用户名（登录身份，不可修改），修改头像（经裁剪弹窗上传）与登录密码，
  * 保存后同步更新 auth store 中的用户信息。与模型 / 渠道配置无关。
  */
+
 "use client";
 
 import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
-import { App,Button, Input } from "antd";
 import { useRef,useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppInput from "@/components/ui/AppInput";
 import AppModal from "@/components/ui/AppModal";
+import AppPasswordInput from "@/components/ui/AppPasswordInput";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { type UserInfo } from "@/features/auth/user-cache";
 import { api } from "@/lib/api/client";
@@ -26,7 +30,7 @@ interface Props {
 
 export default function SettingsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const user = useAuthStore((s) => s.user);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -51,7 +55,6 @@ export default function SettingsModal({ open, onClose }: Props) {
   }
 
   const is = { background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border-light)", color: "var(--canvas-text)", borderRadius: 8 };
-
 
   const handleSave = async () => {
     setSaving(true);
@@ -110,26 +113,26 @@ export default function SettingsModal({ open, onClose }: Props) {
         {/* Username（登录身份，不可修改） */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.username")}</div>
-          <Input prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={user?.username ?? ""} disabled style={is} />
+          <AppInput prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={user?.username ?? ""} disabled style={is} />
         </div>
 
         {/* Old Password */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.currentPassword")}</div>
-          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
-            iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
+          <AppPasswordInput prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
+            renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
         {/* New Password */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.newPassword")}</div>
-          <Input.Password prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
-            iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
+          <AppPasswordInput prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
+            renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
         </div>
 
-        <Button type="primary" size="large" onClick={handleSave} loading={saving} block>
+        <AppButton variant="primary" size="md" onClick={handleSave} loading={saving} block>
           {t("auth.saveChanges")}
-        </Button>
+        </AppButton>
       </div>
       <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
     </AppModal>

@@ -4,6 +4,7 @@
  * 多选时只显示已选数量（批量操作在网格上方的批量条）；
  * 未选中时展示空态提示。
  */
+
 "use client";
 
 import {
@@ -17,12 +18,13 @@ import {
   SelectOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { App, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
@@ -238,7 +240,7 @@ function TagEditor({
             }}
           />
         ) : asset.tags.length >= MAX_TAGS ? (
-          <Tooltip title={t("asset.tagLimit", { max: MAX_TAGS })}>
+          <AppTooltip title={t("asset.tagLimit", { max: MAX_TAGS })}>
             <span
               className="inline-flex items-center gap-1 rounded text-xs cursor-not-allowed"
               style={{
@@ -251,7 +253,7 @@ function TagEditor({
               <PlusOutlined style={{ fontSize: 9 }} />
               {addLabel}
             </span>
-          </Tooltip>
+          </AppTooltip>
         ) : (
           <button
             type="button"
@@ -297,7 +299,7 @@ function PromptEditor({
   onUpdatePrompt: Props["onUpdatePrompt"];
 }) {
   const { t } = useTranslation();
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -365,7 +367,7 @@ function PromptEditor({
             </>
           ) : (
             <>
-              <Tooltip title={copied ? t("common.copied") : t("common.copy")}>
+              <AppTooltip title={copied ? t("common.copied") : t("common.copy")}>
                 <button
                   type="button"
                   onClick={copy}
@@ -377,7 +379,7 @@ function PromptEditor({
                 >
                   {copied ? <CheckOutlined style={{ fontSize: 11 }} /> : <CopyOutlined style={{ fontSize: 11 }} />}
                 </button>
-              </Tooltip>
+              </AppTooltip>
               <button
                 type="button"
                 onClick={startEdit}

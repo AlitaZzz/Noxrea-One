@@ -3,6 +3,7 @@
  * 能力筛选 chips + 搜索 + 批量菜单 + 手动添加，虚拟列表按「已启用 / 可用」分组渲染；
  * 每行四个能力 pill 直接点选开关，无需切换 tab（取代旧的 tab + checkbox 两步操作）。
  */
+
 "use client";
 
 import {
@@ -15,12 +16,13 @@ import {
   SearchOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { Dropdown, Input } from "antd";
 import type { ComponentType, CSSProperties } from "react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppDropdown from "@/components/ui/AppDropdown";
+import AppInput from "@/components/ui/AppInput";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { ModelIcon } from "@/features/model/ModelIcon";
@@ -220,7 +222,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
 
       {/* 搜索 + 批量 + 手动添加 */}
       <div className="flex items-center gap-1.5 px-4 py-2.5">
-        <Input
+        <AppInput
           allowClear
           prefix={<SearchOutlined style={{ color: "var(--canvas-text-muted)" }} />}
           placeholder={t("modelConfig.searchModel")}
@@ -238,7 +240,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
         >
           <PlusOutlined />
         </AppButton>
-        <Dropdown
+        <AppDropdown
           trigger={["click"]}
           open={batchOpen}
           onOpenChange={setBatchOpen}
@@ -258,13 +260,13 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
           <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.batch")}>
             <EllipsisOutlined />
           </AppButton>
-        </Dropdown>
+        </AppDropdown>
       </div>
 
       {/* 手动添加输入行（＋ 按钮展开） */}
       {adding && (
         <div className="flex items-center gap-1.5 px-4 pb-2.5">
-          <Input
+          <AppInput
             autoFocus
             placeholder={t("modelConfig.addModelPlaceholder")}
             value={newModelName}

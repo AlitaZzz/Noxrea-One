@@ -2,13 +2,14 @@
  * 新建文件夹弹窗。
  * 仅收集文件夹名称并回调创建，重名等失败情况由父级返回布尔值后在此提示。
  */
+
 "use client";
 
-import { Input } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppInput from "@/components/ui/AppInput";
 import AppModal from "@/components/ui/AppModal";
 import DialogActions from "@/components/ui/DialogActions";
 
@@ -57,7 +58,7 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
         </DialogActions>
       }
     >
-      <Input
+      <AppInput
         value={name}
         onChange={(e) => { setName(e.target.value.slice(0, 20)); setError(""); }}
         onPressEnter={handleCreate}

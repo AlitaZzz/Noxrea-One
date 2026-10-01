@@ -4,18 +4,23 @@
  * 统一处理分页加载、搜索筛选、批量选择与批量删除 / 移动 / 改类型、
  * 文件夹增删改，以及「插入画布」（经 createAssetNode 转成画布节点）。
  */
+
 "use client";
 
 import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
-import { App, Input, Select, Tooltip, TreeSelect } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppInput from "@/components/ui/AppInput";
 import AppModal from "@/components/ui/AppModal";
+import AppSelect from "@/components/ui/AppSelect";
+import AppTooltip from "@/components/ui/AppTooltip";
+import AppTreeSelect from "@/components/ui/AppTreeSelect";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import DialogActions from "@/components/ui/DialogActions";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
@@ -39,7 +44,7 @@ interface Props {
 
 export default function AssetsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const folders = useAssetsStore((s) => s.folders);
   const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
   const addFolder = useAssetsStore((s) => s.addFolder);
@@ -339,7 +344,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     return (
       <>
         {m.pre}
-        <span className="ant-select-tree-match">{m.hit}</span>
+        <span className="app-tree-match">{m.hit}</span>
         {m.post}
       </>
     );
@@ -530,7 +535,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
               {/* 单选时工具条行显示「已选 1 项」chip；多选由批量条承接，避免两处重复 */}
               {selectedIds.size === 1 && (
-                <Tooltip title={t("asset.clearSelection")}>
+                <AppTooltip title={t("asset.clearSelection")}>
                   <button
                     type="button"
                     onClick={clearSelection}
@@ -544,7 +549,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                     {t("asset.selectedN", { count: selectedIds.size })}
                     <CloseOutlined style={{ fontSize: 10, color: "var(--canvas-text-muted)" }} />
                   </button>
-                </Tooltip>
+                </AppTooltip>
               )}
 
               <AssetToolbar
@@ -578,7 +583,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                     </span>
                     <span className="bulk-select-label">{t("asset.selectedN", { count: selectedIds.size })}</span>
                   </button>
-                  <Tooltip title={t("asset.clearSelection")}>
+                  <AppTooltip title={t("asset.clearSelection")}>
                     <AppButton
                       size="sm"
                       iconOnly
@@ -588,7 +593,7 @@ export default function AssetsModal({ open, onClose }: Props) {
                     >
                       <CloseOutlined style={{ fontSize: 11 }} />
                     </AppButton>
-                  </Tooltip>
+                  </AppTooltip>
                   <div className="flex-1" />
                   <button
                     type="button"
@@ -693,7 +698,7 @@ export default function AssetsModal({ open, onClose }: Props) {
             </DialogActions>
           }
         >
-          <Input
+          <AppInput
             value={folderRenameValue}
             onChange={(e) => { setFolderRenameValue(e.target.value.slice(0, 50)); setFolderRenameError(""); }}
             onPressEnter={handleRenameFolderConfirm}
@@ -762,20 +767,19 @@ export default function AssetsModal({ open, onClose }: Props) {
             </DialogActions>
           }
         >
-          <TreeSelect
+          <AppTreeSelect
             className="folder-tree-select"
             value={batchMoveTarget}
             onChange={(v) => setBatchMoveTarget(v)}
             style={{ width: "100%" }}
             placeholder={t("asset.folderPickerPlaceholder")}
             allowClear
-            showSearch
-            notFoundContent={t("common.noData")}
+            searchable
+            emptyContent={t("common.noData")}
             onSearch={onMoveTreeSearch}
-            treeDefaultExpandAll
-            listHeight={280}
-            treeNodeFilterProp="label"
-            treeData={moveTreeData}
+            expandAll
+            popupHeight={280}
+            nodes={moveTreeData}
           />
         </AppModal>
 
@@ -792,21 +796,21 @@ export default function AssetsModal({ open, onClose }: Props) {
           width={400}
           footer={
             <DialogActions onCancel={() => setBatchTypeOpen(false)} cancelDisabled={batchTypeSaving}>
-              <Tooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
+              <AppTooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
                 <span>
                   <AppButton variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
                 </span>
-              </Tooltip>
+              </AppTooltip>
             </DialogActions>
           }
         >
-          <Select
+          <AppSelect
             value={batchTypeValue}
             onChange={(v) => setBatchTypeValue(v)}
             style={{ width: "100%" }}
             placeholder={t("asset.typePlaceholder")}
             allowClear
-            options={ASSET_CATEGORIES.filter((c) => c.key !== "all").map((cat) => ({ value: cat.key, label: t(cat.labelKey) }))}
+            options={ASSET_CATEGORIES.filter((c): c is typeof c & { key: AssetType } => c.key !== "all").map((cat) => ({ value: cat.key, label: t(cat.labelKey) }))}
           />
         </AppModal>
 

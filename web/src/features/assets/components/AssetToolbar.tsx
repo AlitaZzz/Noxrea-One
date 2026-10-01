@@ -2,6 +2,7 @@
  * 资产库顶部工具条。
  * 右侧依次为：可向左展开的搜索图标、多选模式开关、筛选下拉（多选分类）、新建下拉。
  */
+
 "use client";
 
 import {
@@ -10,11 +11,15 @@ import {
   SearchOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { Checkbox, Dropdown, Input, Popover, Tooltip } from "antd";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppCheckbox from "@/components/ui/AppCheckbox";
+import AppDropdown from "@/components/ui/AppDropdown";
+import AppInput, { type AppInputHandle } from "@/components/ui/AppInput";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
 import FilterIcon from "@/components/ui/icons/common/FilterIcon";
 import ManageIcon from "@/components/ui/icons/common/ManageIcon";
 import type { AssetType } from "@/features/assets/types";
@@ -45,7 +50,7 @@ export default function AssetToolbar({
 
   // 搜索默认收起为一颗图标，点击后输入框向左展开；失焦且内容为空时自动收回。
   const [searchOpen, setSearchOpen] = useState(false);
-  const inputRef = useRef<React.ComponentRef<typeof Input>>(null);
+  const inputRef = useRef<AppInputHandle>(null);
   const searchExpanded = searchOpen || search.trim() !== "";
 
   const toggleSearch = () => {
@@ -68,18 +73,18 @@ export default function AssetToolbar({
         (category): category is typeof category & { key: AssetType } => category.key !== "all",
       ).map((cat) => (
         <label key={cat.key} className="filter-row">
-          <Checkbox
+          <AppCheckbox
             checked={categories.includes(cat.key)}
-            onChange={(e) => {
+            onChange={(checked) => {
               onCategoriesChange(
-                e.target.checked
+                checked
                   ? [...categories, cat.key]
                   : categories.filter((k) => k !== cat.key),
               );
             }}
           >
             {t(cat.labelKey)}
-          </Checkbox>
+          </AppCheckbox>
         </label>
       ))}
       {categories.length > 0 && (
@@ -99,13 +104,10 @@ export default function AssetToolbar({
 
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {/* 清除 × 让到固定搜索图标的左侧，避免两个图标叠在输入框右缘 */}
-      <style>{`.asset-search-input .ant-input-clear-icon { inset-inline-end: 40px; }`}</style>
-
       {/* 搜索：收起态仅图标，展开态图标固定在右端、输入框向左生长 */}
       <div className="relative shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH, height: ICON_WIDTH }}>
         {searchExpanded && (
-          <Input
+          <AppInput
             ref={inputRef}
             placeholder={t("asset.search")}
             value={search}
@@ -125,7 +127,7 @@ export default function AssetToolbar({
             }}
           />
         )}
-        <Tooltip title={t("asset.search")}>
+        <AppTooltip title={t("asset.search")}>
           <button
             type="button"
             // 阻止按下时输入框失焦：否则空内容会先自动收回、click 又展开，宽度抖一下
@@ -137,11 +139,11 @@ export default function AssetToolbar({
           >
             <SearchOutlined />
           </button>
-        </Tooltip>
+        </AppTooltip>
       </div>
 
       {/* 管理 / 多选模式：开启后卡片勾选框常驻、单击卡片直接增减选择（≥2 项弹出批量操作条） */}
-      <Tooltip title={multiSelect ? t("asset.exitManage") : t("asset.manage")}>
+      <AppTooltip title={multiSelect ? t("asset.exitManage") : t("asset.manage")}>
         <button
           type="button"
           className={`app-icon-btn app-icon-btn--md${multiSelect ? " is-active" : ""}`}
@@ -152,16 +154,16 @@ export default function AssetToolbar({
         >
           <ManageIcon style={{ fontSize: 18 }} />
         </button>
-      </Tooltip>
+      </AppTooltip>
 
       {/* 筛选：多选分类，选中任一分类后按钮常驻高亮 */}
-      <Popover
+      <AppPopover
         trigger="click"
         placement="bottomRight"
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={filterContent}
       >
-        <Tooltip title={t("asset.filter")}>
+        <AppTooltip title={t("asset.filter")}>
           <button
             type="button"
             className={`app-icon-btn app-icon-btn--md${categories.length > 0 ? " is-active" : ""}`}
@@ -170,14 +172,14 @@ export default function AssetToolbar({
           >
             <FilterIcon />
           </button>
-        </Tooltip>
-      </Popover>
+        </AppTooltip>
+      </AppPopover>
 
-      {/* 新建下拉：hover 触发（antd 自带 enter/leave 延迟），禁用项走 antd 默认禁用样式 */}
-      <Dropdown
+      {/* 新建菜单悬停触发，禁用项由 UI 出口处理。 */}
+      <AppDropdown
         trigger={["hover"]}
         placement="bottomRight"
-        mouseLeaveDelay={0.15}
+        closeDelay={0.15}
         menu={{
           items: [
             { key: "createFolder", icon: <FolderAddOutlined />, label: t("asset.createFolder"), disabled: !canCreateFolder },
@@ -193,7 +195,7 @@ export default function AssetToolbar({
           <PlusOutlined />
           {t("asset.create")}
         </AppButton>
-      </Dropdown>
+      </AppDropdown>
     </div>
   );
 }

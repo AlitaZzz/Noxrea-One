@@ -3,18 +3,22 @@
  * 支持多文件选择与拖入，限并发上传并展示单文件进度，
  * 宽高 / 时长等元数据由服务端落盘时探测入库，这里只负责上传与批量创建资产。
  */
+
 "use client";
 
 import { CloseOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { App, Progress, Select, TreeSelect } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
 import AppModal from "@/components/ui/AppModal";
+import AppProgress from "@/components/ui/AppProgress";
+import AppSelect from "@/components/ui/AppSelect";
+import AppTreeSelect from "@/components/ui/AppTreeSelect";
 import DialogActions from "@/components/ui/DialogActions";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
@@ -70,7 +74,7 @@ interface Props {
 
 export default function AssetCreateDialog({ open, onClose, onCreate, folders, defaultFolderId = null }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [category, setCategory] = useState<AssetType>("other");
   const [saveFolderId, setSaveFolderId] = useState<string | null>(null);
@@ -309,14 +313,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
 
   // 保存位置树：与移动弹窗共用 useFolderTree（个人资产库为根 + 普通文件夹递归），
   // 可搜索折叠 TreeSelect，命中片段白色高亮。
-  // title 始终返回元素：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
   const renderFolderTitle = useCallback((name: string) => {
     const m = splitMatch(name, folderTreeQuery);
     if (!m) return <>{name}</>;
     return (
       <>
         {m.pre}
-        <span className="ant-select-tree-match">{m.hit}</span>
+        <span className="app-tree-match">{m.hit}</span>
         {m.post}
       </>
     );
@@ -431,14 +434,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     {/* 上传进行中 → 进度圈 */}
                     {f.status === "uploading" && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        {/* percent 到 100 时 antd 会自动切到 success 并画对勾；
-                            此处字节发完仍在等服务端落盘，显式指定 active 保持百分比显示 */}
-                        <Progress
-                          type="circle"
-                          percent={f.uploadProgress}
+                        {/* 字节发完仍在等服务端落盘，保持进度显示。 */}
+                        <AppProgress
+                          shape="circle"
+                          value={f.uploadProgress}
                           size={48}
-                          strokeColor="#fff"
-                          railColor="rgb(var(--on-media-rgb) / 0.2)"
+                          color="#fff"
+                          trackColor="rgb(var(--on-media-rgb) / 0.2)"
                           status="active"
                         />
                       </div>
@@ -477,32 +479,29 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
             <label className="block text-xs text-white/40 mb-2">
               {t("asset.saveLocation")} <span className="text-red-400">*</span>
             </label>
-            <TreeSelect
+            <AppTreeSelect
               className="folder-tree-select"
               value={saveFolderId}
-              onChange={(v) => setSaveFolderId((v as string | null) ?? null)}
+              onChange={(v) => setSaveFolderId(v ?? null)}
               placeholder={t("asset.saveLocationPlaceholder")}
               style={{ width: "100%" }}
               allowClear
-              showSearch
-              notFoundContent={t("common.noData")}
+              searchable
+              emptyContent={t("common.noData")}
               onSearch={onTreeSearch}
-              treeDefaultExpandAll
-              listHeight={280}
-              treeNodeFilterProp="label"
-              treeData={folderTreeData}
+              expandAll
+              popupHeight={280}
+              nodes={folderTreeData}
             />
           </div>
 
           {/* Category */}
           <div>
             <label className="block text-xs text-white/40 mb-2">{t("asset.type")}</label>
-            <Select
+            <AppSelect
               value={category}
               onChange={(v) => setCategory(v)}
-              // label 用 ReactNode：rc-select 仅对字符串 label 回退原生 title（悬停出现
-              // 浏览器气泡提示），节点化后不再生成 title 属性，也不引入任何 Tooltip
-              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: <span>{t(opt.labelKey)}</span> }))}
+              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
               style={{ width: "100%" }}
             />
           </div>

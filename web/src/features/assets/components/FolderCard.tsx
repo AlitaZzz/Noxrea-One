@@ -3,12 +3,13 @@
  * 展示文件夹名与资产数量，点击进入、悬停显示重命名 / 删除按钮，纯展示组件。
  * 操作按钮复用统一图标按钮类 .app-icon-btn（hover 与按下同色），不另立样式。
  */
+
 "use client";
 
 import { DeleteOutlined, EditOutlined, FolderOutlined } from "@ant-design/icons";
-import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
 import type { AssetFolder } from "@/features/assets/types";
 
 interface Props {
@@ -36,22 +37,22 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
       {(onDelete || onRename) && (
         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           {onRename && (
-            <Button
-              type="text"
-              size="small"
+            <AppButton
+              variant="ghost"
+              size="sm"
               className="app-icon-btn"
-              icon={<EditOutlined />}
+              iconOnly
               onClick={stop(onRename)}
-            />
+            ><EditOutlined /></AppButton>
           )}
           {onDelete && (
-            <Button
-              type="text"
-              size="small"
+            <AppButton
+              variant="ghost"
+              size="sm"
               className="app-icon-btn"
-              icon={<DeleteOutlined />}
+              iconOnly
               onClick={stop(onDelete)}
-            />
+            ><DeleteOutlined /></AppButton>
           )}
         </div>
       )}

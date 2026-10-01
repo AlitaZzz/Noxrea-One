@@ -4,6 +4,7 @@
  * 详情 = 连接信息（Base URL / 密钥掩码按需揭示）+ 模型能力管理（ApiSettingsModels）。
  * 属全局模型配置能力，与画布本身无依赖关系。
  */
+
 "use client";
 
 import {
@@ -14,14 +15,15 @@ import {
   EditOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { App, Drawer } from "antd";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppDrawer from "@/components/ui/AppDrawer";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import ApiSettingsForm from "@/features/settings/ApiSettingsForm";
 import ApiSettingsModels from "@/features/settings/ApiSettingsModels";
@@ -37,7 +39,7 @@ interface Props {
     key 由父组件绑定 provider.id，切换供应商时状态自动重置。 */
 function ConnectionInfo({ provider }: { provider: ModelProvider }) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const fetchProviderApiKey = useModelStore((s) => s.fetchProviderApiKey);
 
   const [revealed, setRevealed] = useState(false);
@@ -131,7 +133,7 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
 
 export default function ApiSettingsDrawer({ open, onClose }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const providers = useModelStore((s) => s.providers);
   const presets = useModelStore((s) => s.presets);
@@ -202,16 +204,15 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   return (
     <>
-      <Drawer
+      <AppDrawer
         open={open}
         onClose={onClose}
-        size={780}
+        width={780}
         placement="right"
         destroyOnHidden
         className="api-drawer"
-        // 头部与其余抽屉统一：antd header（title + 内置 closable 关闭按钮），
-        // hover 规则见 globals.css 的 .ant-drawer-close，不再自绘头部
-        closable={{ placement: "end", "aria-label": t("common.close") }}
+        closePlacement="end"
+        closeLabel={t("common.close")}
         title={
           <div className="flex items-center gap-2">
             <ApiOutlined style={{ color: "var(--canvas-text-dim)" }} />
@@ -221,9 +222,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           </div>
         }
         styles={{
-          // header 规格走 globals.css 的 .ant-drawer-header 统一规则
           body: { background: "var(--canvas-bg)", padding: 0 },
-          section: { borderLeft: "1px solid #2c2c31" },
+          panel: { borderLeft: "1px solid #2c2c31" },
         }}
       >
         <div className="flex h-full flex-col" style={{ color: "var(--canvas-text)" }}>
@@ -377,7 +377,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           </div>
         </div>
         </div>
-      </Drawer>
+      </AppDrawer>
       <ConfirmModal
         open={deleteOpen}
         zIndex={1050}

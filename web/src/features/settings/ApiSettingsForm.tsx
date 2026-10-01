@@ -3,16 +3,20 @@
  * 占据右栏整体（带返回），不再内联挤压模型列表。
  * 编辑态密钥预填掩码：眼睛按需拉明文、复制按需拉明文，留空提交则保持不变。
  */
+
 "use client";
 
 import { ArrowLeftOutlined,CopyOutlined } from "@ant-design/icons";
-import { App, Input, Select } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppInput from "@/components/ui/AppInput";
+import AppPasswordInput from "@/components/ui/AppPasswordInput";
+import AppSelect from "@/components/ui/AppSelect";
 import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
 import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider, ProviderPreset } from "@/lib/types/models";
 
@@ -28,7 +32,7 @@ interface Props {
 
 export default function ApiSettingsForm({ mode, provider, presets, onDone, onCancel }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const addProvider = useModelStore((s) => s.addProvider);
   const updateProvider = useModelStore((s) => s.updateProvider);
   const fetchProviderApiKey = useModelStore((s) => s.fetchProviderApiKey);
@@ -130,7 +134,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
         <div className="flex flex-col gap-4" style={{ maxWidth: 560 }}>
             <div className="flex flex-col gap-1">
               <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("common.name")}</span>
-              <Input
+              <AppInput
                 placeholder={t("modelConfig.myApi")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -139,7 +143,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.baseUrl")}</span>
-              <Input
+              <AppInput
                 placeholder="https://api.openai.com/v1"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
@@ -148,7 +152,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocolLabel")}</span>
-                <Select
+                <AppSelect
                   value={protocol}
                   onChange={setProtocol}
                   options={[
@@ -159,7 +163,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.preset")}</span>
-                <Select
+                <AppSelect
                   placeholder={t("modelConfig.preset")}
                   options={presets.map((p) => ({ label: p.name, value: p.name }))}
                   onChange={(presetName) => {
@@ -174,7 +178,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
             <div className="flex flex-col gap-1">
               <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.apiKey")}</span>
               <div className="flex gap-1.5">
-                <Input.Password
+                <AppPasswordInput
                   className="flex-1"
                   placeholder={mode === "edit" ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
                   value={apiKey}
@@ -182,8 +186,9 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                     setApiKey(e.target.value);
                     setKeyDirty(true);
                   }}
-                  visibilityToggle={{ visible: keyVisible, onVisibleChange: handleKeyVisibleChange }}
-                  iconRender={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
+                  visible={keyVisible}
+                  onVisibleChange={handleKeyVisibleChange}
+                  renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
                 />
                 {mode === "edit" && (
                   <AppButton size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>

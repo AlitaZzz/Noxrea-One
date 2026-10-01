@@ -1,6 +1,6 @@
 /**
  * 用户菜单薄壳：头像菜单的共享骨架（画布页左上角 / 项目页右上角共用），
- * 基于 antd Dropdown + Menu（全站菜单统一 antd 语言后的收口点之一）。
+ * 通过项目菜单出口统一交互与外观。
  * 统一「用户信息行 + 分割线 + 页面自定条目 + 分割线 + 退出登录」的结构；
  * 用户行以 group 条目挂进 Menu（label 为自定义 JSX，自带配色；静态不可点）。
  *
@@ -9,23 +9,24 @@
  * onLogout 由页面决定收尾（画布先弹确认框，项目页直接登出跳登录页）。
  * 放在 auth 特性层而非 components/ui：ui 层禁止依赖 feature（useCurrentUser）。
  */
+
 "use client";
 
-import type { MenuProps } from "antd";
-import { Dropdown } from "antd";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppDropdown from "@/components/ui/AppDropdown";
+import type { AppMenuItem } from "@/components/ui/AppMenu";
 import { useCurrentUser } from "@/features/auth/UserContext";
 
 export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  trigger: ReactNode;
+  trigger: ReactElement;
   /** 弹出方位：画布工具栏（左上角）用 bottomLeft，项目页头像（右上角）用 bottomRight */
   placement?: "bottomLeft" | "bottomRight";
   /** 中段业务条目：画布=项目主页/新建/删除，项目页=账户设置/语言切换 */
-  items: NonNullable<MenuProps["items"]>;
+  items: AppMenuItem[];
   /** 中段条目点击（按 key 分发；退出登录走 onLogout，不经此处） */
   onItemClick: (key: string) => void;
   /** 退出登录动作：页面自持（确认框 / 直接登出 + 跳转目标） */
@@ -34,7 +35,7 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
   const { t } = useTranslation();
   const user = useCurrentUser();
 
-  const menuItems: NonNullable<MenuProps["items"]> = [
+  const menuItems: AppMenuItem[] = [
     {
       key: "user",
       type: "group",
@@ -65,7 +66,7 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
   ];
 
   return (
-    <Dropdown
+    <AppDropdown
       open={open}
       onOpenChange={onOpenChange}
       trigger={["click"]}
@@ -79,6 +80,6 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
       }}
     >
       {trigger}
-    </Dropdown>
+    </AppDropdown>
   );
 }

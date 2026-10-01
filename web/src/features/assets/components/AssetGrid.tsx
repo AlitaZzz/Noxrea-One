@@ -3,14 +3,15 @@
  * 混合渲染文件夹卡片与资产卡片，通过哨兵元素触发无限滚动加载，
  * 并处理加载中 / 空态 / 加载失败重试三种状态。
  */
+
 "use client";
 
 import { LoadingOutlined } from "@ant-design/icons";
-import { Spin } from "antd";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppButton from "@/components/ui/AppButton";
+import AppSpinner from "@/components/ui/AppSpinner";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
@@ -85,7 +86,7 @@ export default function AssetGrid({
   if (loading && !hasContent) {
     return (
       <div className="flex items-center justify-center h-full min-h-[200px]">
-        <Spin indicator={limeIndicator} />
+        <AppSpinner indicator={limeIndicator} />
       </div>
     );
   }
@@ -120,7 +121,7 @@ export default function AssetGrid({
           弹窗与抽屉两个滚动容器复用，避免各自实现浮层。 */}
       {loading && hasContent && (
         <div className="grid-loading-overlay">
-          <Spin indicator={limeIndicator} />
+          <AppSpinner indicator={limeIndicator} />
         </div>
       )}
       <div
@@ -158,7 +159,7 @@ export default function AssetGrid({
       </div>
       {/* Sentinel + loading indicator */}
       <div ref={sentinelRef} className="flex items-center justify-center py-3">
-        {loadingMore && <Spin size="small" indicator={limeIndicator} />}
+        {loadingMore && <AppSpinner size="small" indicator={limeIndicator} />}
         {loadError && !loadingMore && onRetry && (
           <AppButton variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}
