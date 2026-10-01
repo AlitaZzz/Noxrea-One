@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { textToTiptapHtml } from "./text-to-html";
+import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 
 describe("textToTiptapHtml", () => {
   it("转义 HTML 特殊字符（含双引号）", () => {

@@ -5,9 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { textToDoc } from "./MentionPrompt";
-import { filterCatalogByTarget, type PromptTemplateCatalog } from "./prompt-presets";
-import type { ReferenceItem } from "./reference";
+import { textToDoc } from "@/features/canvas/shared/MentionPrompt";
+import { filterCatalogByTarget, type PromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
+import type { ReferenceItem } from "@/features/canvas/shared/reference";
 
 const ref: ReferenceItem = {
   kind: "image",
