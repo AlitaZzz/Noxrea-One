@@ -1,6 +1,6 @@
 /**
  * Director 主题单一来源。
- * 集中维护 Ant Design 深色 token 与组件级覆写，供 AppProviders 装配，
+ * 集中维护 Ant Design 深色 token 与组件级覆写，供 AppUiProvider 装配，
  * 避免主题配置散落在组件内部难以统一调整。
  */
 

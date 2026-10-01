@@ -1,40 +1,25 @@
 /**
  * 全局 Provider 聚合层。
- * 统一装配 React Query 客户端、Ant Design 深色主题、
- * 全局 message/notification API 注册（供 React 树外代码调用）以及 <html lang> 语言同步。
+ * 装配 React Query、项目 UI Provider、业务启动任务与 <html lang> 语言同步。
  */
 "use client";
 
 import "@/lib/i18n/config";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { App as AntApp, ConfigProvider } from "antd";
 import { ReactNode, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
+import AppUiProvider from "@/components/ui/AppUiProvider";
 import { useAuthStore } from "@/features/auth/store";
 import { setUnauthorizedHandler } from "@/lib/api/client";
-import { setGlobalMessageApi } from "@/lib/global-message";
-import { setGlobalNotificationApi } from "@/lib/global-notification";
 import { loadUploadFormats } from "@/lib/upload-formats";
-import { directorTheme } from "@/styles/theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000 },
   },
 });
-
-/** 在组件内获取 message/notification API 并暴露给全局，供 api.ts 等 React 树外的代码使用 */
-function MessageApiRegistrar() {
-  const { message, notification } = AntApp.useApp();
-  useEffect(() => {
-    setGlobalMessageApi(message);
-    setGlobalNotificationApi(notification);
-  }, [message, notification]);
-  return null;
-}
 
 /** 401 的登出动作属于 auth feature，由 app 层注入给 lib/api/client，避免 lib 反向依赖 feature */
 function UnauthorizedHandlerRegistrar() {
@@ -55,22 +40,6 @@ function UploadFormatsWarmup() {
   return null;
 }
 
-function AntConfigProvider({ children }: { children: ReactNode }) {
-  return (
-    <ConfigProvider
-      theme={directorTheme()}
-      getPopupContainer={getLayerPopupContainer}
-    >
-      <AntApp>
-        <MessageApiRegistrar />
-        <UnauthorizedHandlerRegistrar />
-        <UploadFormatsWarmup />
-        {children}
-      </AntApp>
-    </ConfigProvider>
-  );
-}
-
 /** 同步当前语言到 <html lang>，随语言切换实时更新 */
 function HtmlLangSync() {
   const { i18n } = useTranslation();
@@ -83,10 +52,12 @@ function HtmlLangSync() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <AntConfigProvider>
+      <AppUiProvider>
+        <UnauthorizedHandlerRegistrar />
+        <UploadFormatsWarmup />
         <HtmlLangSync />
         {children}
-      </AntConfigProvider>
+      </AppUiProvider>
     </QueryClientProvider>
   );
 }
