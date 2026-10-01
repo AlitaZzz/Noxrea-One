@@ -9,6 +9,7 @@ import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput, M
 import { ApiError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
+import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 
 // --- Helpers ---
 
@@ -57,6 +58,7 @@ function toIntId(id: string): number | undefined {
 
 /** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
 function notifyFailure(e: unknown, fallbackKey: string) {
+  if (e instanceof SessionChangedError) return;
   showGlobalNotification().error({
     title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
     placement: "bottomRight",
@@ -99,19 +101,21 @@ export async function fetchAssetPage(
   cursor?: string | null,
   limit: number = ASSET_PAGE_SIZE,
 ): Promise<{ items: AssetItem[]; total: number; nextCursor: string | null }> {
+  const session = captureSession();
   let typeParam: string | undefined;
   if (filters.category && filters.category !== "all") {
     typeParam = Array.isArray(filters.category) ? filters.category.join(",") : filters.category;
   }
 
-  const data = await assetApi.listAssets({
+  const data = await session.run(() => assetApi.listAssets({
     folderId: toIntId(filters.folderId || ""),
     type: typeParam,
     search: filters.search || undefined,
     scope: filters.scope || "personal",
     cursor: cursor || undefined,
     limit,
-  });
+  }));
+  session.assertCurrent();
   return {
     items: (data.items || []).map(dtoToAsset),
     total: data.total,
@@ -166,7 +170,7 @@ interface AssetsState {
 
 /**
  * initialize 的在途 promise：并发调用（StrictMode 双挂载 / 多调用方）共享同一次拉取。
- * 失败时清空以保留「initialized=false 可重试」语义；store 是模块单例，无重置路径。
+ * 在途引用随会话重置；失败后允许重试。
  */
 let assetsInitInFlight: Promise<void> | null = null;
 
@@ -197,9 +201,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
   initialize: () => {
     if (get().initialized) return Promise.resolve();
-    assetsInitInFlight ??= (async () => {
+    if (assetsInitInFlight) return assetsInitInFlight;
+    const session = captureSession();
+    const pending = (async () => {
       try {
-        const summary = await assetApi.bootstrap("personal");
+        const summary = await session.run(() => assetApi.bootstrap("personal"));
+        session.assertCurrent();
         set({
           folders: (summary?.folders || []).map(dtoToFolder),
           initialized: true,
@@ -209,18 +216,20 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         // 失败保持 initialized=false：门页在 settle 后凭它判失败并重试
       }
     })().finally(() => {
-      assetsInitInFlight = null;
+      if (assetsInitInFlight === pending) assetsInitInFlight = null;
     });
-    return assetsInitInFlight;
+    assetsInitInFlight = pending;
+    return pending;
   },
 
   // --- Asset CRUD ---
 
   addAsset: async (input) => {
+    const session = captureSession();
     const scope = input.scope || "personal";
     let data: { item: AssetItemDto; counters: AssetCountersDto };
     try {
-      data = await assetApi.createAsset({
+      data = await session.run(() => assetApi.createAsset({
         name: input.name,
         type: input.type,
         mediaType: input.mediaType,
@@ -231,7 +240,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         sourceType: input.sourceType,
         folderId: toIntId(input.folderId || "") ?? null,
         scope,
-      });
+      }));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "asset.create_failed");
       return null;
@@ -245,6 +255,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   addAssetsBatch: async (inputs) => {
+    const session = captureSession();
     // 服务端单批上限为 ASSET_BATCH_LIMIT，超量批次在此分片提交并合并结果，避免整批被拒。
     const items: AssetItem[] = [];
     let skippedCount = 0;
@@ -257,7 +268,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         skipped: AssetSkippedDto[];
       };
       try {
-        data = await assetApi.createAssetsBatch(
+        data = await session.run(() => assetApi.createAssetsBatch(
           chunk.map((input) => ({
             name: input.name,
             type: input.type,
@@ -270,11 +281,14 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
             folderId: toIntId(input.folderId || "") ?? null,
             scope: input.scope || "personal",
           })),
-        );
+        ));
+        session.assertCurrent();
       } catch (e) {
         // 已入库的前序分片保留；重复来源在重试时会被后端跳过，整体重试是安全的。
         notifyFailure(e, "asset.create_failed");
-        return { ok: false, items, skippedCount };
+        return e instanceof SessionChangedError
+          ? { ok: false, items: [], skippedCount: 0 }
+          : { ok: false, items, skippedCount };
       }
 
       const chunkItems = data.items.map(dtoToAsset);
@@ -299,6 +313,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   updateAsset: async (id, patch) => {
+    const session = captureSession();
     const intId = toIntId(id);
     if (!intId) return false;
 
@@ -311,7 +326,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (Object.keys(body).length === 0) return false;
 
     try {
-      const data = await assetApi.updateAsset(intId, body);
+      const data = await session.run(() => assetApi.updateAsset(intId, body));
+      session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
       return true;
@@ -322,11 +338,13 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeAssetsBatch: async (ids) => {
+    const session = captureSession();
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length === 0) return { ok: false };
 
     try {
-      const data = await assetApi.deleteAssetsBatch(intIds);
+      const data = await session.run(() => assetApi.deleteAssetsBatch(intIds));
+      session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
       if (data.sourceUrls.length > 0) {
@@ -343,9 +361,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   unsaveAssetsByUrls: async (urls) => {
+    const session = captureSession();
     if (urls.length === 0) return false;
     try {
-      const data = await assetApi.deleteAssetsBySource(urls);
+      const data = await session.run(() => assetApi.deleteAssetsBySource(urls));
+      session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
       if (data.sourceUrls.length > 0) {
@@ -362,6 +382,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   updateAssetsBatch: async (ids, updates) => {
+    const session = captureSession();
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length === 0) return { ok: false };
 
@@ -371,7 +392,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (Object.keys(body).length === 0) return { ok: false };
 
     try {
-      const data = await assetApi.updateAssetsBatch(intIds, body);
+      const data = await session.run(() => assetApi.updateAssetsBatch(intIds, body));
+      session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
       return { ok: true, total: data.counters.total };
@@ -384,6 +406,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   // --- Folder CRUD ---
 
   addFolder: async (name, scope, parentId) => {
+    const session = captureSession();
     const existing = get().folders.some(
       (folder) =>
         folder.scope === scope &&
@@ -393,7 +416,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (existing) return { status: "duplicate" };
 
     try {
-      const folder = dtoToFolder(await assetApi.createFolder(name, scope, toIntId(parentId || "")));
+      const folder = dtoToFolder(await session.run(() => assetApi.createFolder(name, scope, toIntId(parentId || ""))));
+      session.assertCurrent();
       set((state) => ({ folders: [...state.folders, folder] }));
       return { status: "created", folder };
     } catch (e) {
@@ -403,6 +427,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   renameFolder: async (id, name) => {
+    const session = captureSession();
     const intId = toIntId(id);
     if (!intId) return { status: "failed" };
 
@@ -418,7 +443,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (duplicate) return { status: "duplicate" };
 
     try {
-      const updated = dtoToFolder(await assetApi.updateFolder(intId, name));
+      const updated = dtoToFolder(await session.run(() => assetApi.updateFolder(intId, name)));
+      session.assertCurrent();
       set((state) => ({
         folders: state.folders.map((folder) => (folder.id === id ? { ...folder, name: updated.name } : folder)),
       }));
@@ -430,12 +456,14 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeFolder: async (id) => {
+    const session = captureSession();
     const intId = toIntId(id);
     if (!intId) return false;
 
     let data: { sourceUrls: string[]; counters: AssetCountersDto };
     try {
-      data = await assetApi.deleteFolder(intId);
+      data = await session.run(() => assetApi.deleteFolder(intId));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "asset.folder_delete_failed");
       return false;
@@ -485,6 +513,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     return get().folders.find((folder) => folder.scope === scope && folder.kind === "uncategorized");
   },
 }));
+
+onSessionChange(() => {
+  assetsInitInFlight = null;
+  useAssetsStore.setState({ folders: [], initialized: false, knownAssetUrls: new Set(), libraryVersion: 0 });
+});
 
 /**
  * 计算每个文件夹的递归资产数量（含其所有子文件夹）。

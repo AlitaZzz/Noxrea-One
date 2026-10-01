@@ -14,10 +14,12 @@ import {
 import { modelApi } from "@/lib/api/model-api";
 import { showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
+import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";
 
 /** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
 function notifyFailure(e: unknown, fallbackKey: string) {
+  if (e instanceof SessionChangedError) return;
   showGlobalNotification().error({
     title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
     placement: "bottomRight",
@@ -97,7 +99,7 @@ interface ModelState {
 
 /**
  * initialize 的在途 promise：并发调用（StrictMode 双挂载 / 多调用方）共享同一次拉取。
- * 失败时清空以保留「initialized=false 可重试」语义；store 是模块单例，无重置路径。
+ * 在途引用随会话重置；失败后允许重试。
  */
 let modelInitInFlight: Promise<void> | null = null;
 
@@ -110,28 +112,35 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
   initialize: () => {
     if (get().initialized) return Promise.resolve();
-    modelInitInFlight ??= (async () => {
+    if (modelInitInFlight) return modelInitInFlight;
+    const session = captureSession();
+    const pending = (async () => {
       try {
-        const providers = await modelApi.fetchProviders<ModelProvider[]>();
+        const providers = await session.run(() => modelApi.fetchProviders<ModelProvider[]>());
+        session.assertCurrent();
         if (!Array.isArray(providers)) throw new Error("unexpected providers payload");
         // API 返回 camelCase，与前端 ModelProvider 类型一致，直接使用
         set({ providers, initialized: true, initializeFailed: false });
-        await get().fetchPresets();
+        await session.run(() => get().fetchPresets());
+        session.assertCurrent();
         // 拉取模型参数配置（fields 为唯一数据源）
         try {
-          const params = await modelApi.fetchModelParams<ModelParamsMap>();
+          const params = await session.run(() => modelApi.fetchModelParams<ModelParamsMap>());
+          session.assertCurrent();
           if (isRecord(params)) set({ modelParamsCache: params });
         } catch {
           // 模型参数拉取失败不阻塞
         }
-      } catch {
+      } catch (e) {
+        if (e instanceof SessionChangedError) return;
         // 失败不置 initialized：与「已初始化（空列表）」区分，后续调用 initialize() 可重试
         set({ initializeFailed: true });
       }
     })().finally(() => {
-      modelInitInFlight = null;
+      if (modelInitInFlight === pending) modelInitInFlight = null;
     });
-    return modelInitInFlight;
+    modelInitInFlight = pending;
+    return pending;
   },
 
   findModelParams: (providerId: string, modelName: string, capability: string) => {
@@ -166,8 +175,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   fetchPresets: async () => {
+    const session = captureSession();
     try {
-      const presets = await modelApi.fetchPresets<ProviderPreset[]>();
+      const presets = await session.run(() => modelApi.fetchPresets<ProviderPreset[]>());
+      session.assertCurrent();
       if (Array.isArray(presets)) set({ presets });
     } catch {
       // 预设拉取失败不阻塞：下拉为空，用户手敲 base_url
@@ -175,9 +186,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   addProvider: async (name, baseUrl, apiKey, protocol) => {
+    const session = captureSession();
     let data: { id: string };
     try {
-      data = await modelApi.createProvider(name, baseUrl, apiKey, protocol);
+      data = await session.run(() => modelApi.createProvider(name, baseUrl, apiKey, protocol));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.provider_add_failed");
       return false;
@@ -189,6 +202,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   updateProvider: async (id, patch) => {
+    const session = captureSession();
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
@@ -196,7 +210,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
     if (patch.protocol !== undefined) body.protocol = patch.protocol;
     // 校验业务结果：此前无论成败都合并本地状态，UI 还提示「已更新」
     try {
-      await modelApi.updateProvider(id, body);
+      await session.run(() => modelApi.updateProvider(id, body));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.provider_update_failed");
       return false;
@@ -216,10 +231,13 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   fetchProviderApiKey: async (id) => {
+    const session = captureSession();
     try {
-      const data = await modelApi.fetchProviderApiKey(id);
+      const data = await session.run(() => modelApi.fetchProviderApiKey(id));
+      session.assertCurrent();
       return data.apiKey;
     } catch (e) {
+      if (e instanceof SessionChangedError) throw e;
       throw new Error(
         e instanceof ApiError
           ? e.message
@@ -229,8 +247,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   deleteProvider: async (id) => {
+    const session = captureSession();
     try {
-      await modelApi.deleteProvider(id);
+      await session.run(() => modelApi.deleteProvider(id));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.provider_delete_failed");
       return false;
@@ -240,9 +260,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   addModel: async (providerId, name) => {
+    const session = captureSession();
     let data: { id: string };
     try {
-      data = await modelApi.addModel(providerId, name);
+      data = await session.run(() => modelApi.addModel(providerId, name));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.model_add_failed");
       return false;
@@ -256,9 +278,11 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   deleteModel: async (providerId, modelId) => {
+    const session = captureSession();
     // 失败不动本地：行还在列表里，用户可重试（失败原因由 store 统一提示）
     try {
-      await modelApi.deleteModel(providerId, modelId);
+      await session.run(() => modelApi.deleteModel(providerId, modelId));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.model_delete_failed");
       return false;
@@ -272,6 +296,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   toggleModelCapability: async (providerId, modelId, cap) => {
+    const session = captureSession();
     const providers = get().providers;
     const ch = providers.find((c) => c.id === providerId);
     if (!ch) return false;
@@ -282,7 +307,8 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
     // 失败不动本地：此前先写后忘，勾选看起来生效、刷新就回滚
     try {
-      await modelApi.setModelCapability(providerId, modelId, caps);
+      await session.run(() => modelApi.setModelCapability(providerId, modelId, caps));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.model_capability_failed");
       return false;
@@ -299,8 +325,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   setProviderModels: async (providerId, models) => {
+    const session = captureSession();
     try {
-      await modelApi.setProviderModels(providerId, models);
+      await session.run(() => modelApi.setProviderModels(providerId, models));
+      session.assertCurrent();
     } catch (e) {
       notifyFailure(e, "model_config.models_set_failed");
       return false;
@@ -324,8 +352,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
     };
     let reload: ModelProvider[];
     try {
-      reload = await modelApi.fetchProviders<ModelProvider[]>();
-    } catch {
+      reload = await session.run(() => modelApi.fetchProviders<ModelProvider[]>());
+      session.assertCurrent();
+    } catch (e) {
+      if (e instanceof SessionChangedError) return false;
       // 写入已成功，只是重新拉取列表失败：不能算写失败（那会让 UI 提示与事实相反）
       applyLocally();
       return true;
@@ -339,6 +369,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   },
 
   fetchModels: async (providerId) => {
+    const session = captureSession();
     const ch = get().providers.find((c) => c.id === providerId);
     if (!ch) {
       return fetchModelsFailure(i18n.t("error.models.provider_not_found_in_store"));
@@ -347,13 +378,16 @@ export const useModelStore = create<ModelState>((set, get) => ({
       return fetchModelsFailure(i18n.t("error.models.provider_no_base_url"));
     }
     try {
-      const res = await modelApi.fetchModelsList(providerId);
+      const res = await session.run(() => modelApi.fetchModelsList(providerId));
+      session.assertCurrent();
 
       // 先尝试解析响应体——网关异常时可能是 HTML 而非 JSON，需兜底
       let json: unknown = null;
       try {
-        json = await res.json();
-      } catch {
+        json = await session.run(() => res.json());
+        session.assertCurrent();
+      } catch (e) {
+        if (e instanceof SessionChangedError) throw e;
         json = null;
       }
       const errorBody = parseErrorBody(json);
@@ -402,15 +436,22 @@ export const useModelStore = create<ModelState>((set, get) => ({
           merged.push({ name: f.name, capabilities: [] });
         }
       }
-      const applied = await get().setProviderModels(providerId, merged);
+      const applied = await session.run(() => get().setProviderModels(providerId, merged));
+      session.assertCurrent();
       // setProviderModels 内部已提示失败原因，这里只把结果透传给调用方
       if (!applied) {
         return fetchModelsFailure(i18n.t("error.model_config.models_set_failed"));
       }
       return { success: true };
     } catch (e: unknown) {
+      if (e instanceof SessionChangedError) return { success: false };
       console.error("Fetch models failed:", e);
       return fetchModelsFailure(e instanceof Error ? e.message : i18n.t("error.unknown"));
     }
   },
 }));
+
+onSessionChange(() => {
+  modelInitInFlight = null;
+  useModelStore.setState({ providers: [], presets: [], modelParamsCache: {}, initialized: false, initializeFailed: false });
+});

@@ -6,10 +6,11 @@
 import { create } from "zustand";
 
 import { authApi } from "@/features/auth/api";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, UnauthorizedError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { setAppLanguage } from "@/lib/i18n/config";
+import { captureSession, changeSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 
 import { parseUserCookie, USER_COOKIE,type UserInfo } from "./user-cache";
 
@@ -41,7 +42,7 @@ const LOGOUT_CLEAR_TIMEOUT_MS = 3000;
 
 /**
  * initialize 的在途 promise：并发调用（StrictMode 双挂载）共享同一次 /me。
- * store 是模块单例且 initialized 无重置路径，模块级变量安全。
+ * 会话变化时解除在途引用，旧请求不能更新新会话。
  */
 let authInitInFlight: Promise<void> | null = null;
 
@@ -64,56 +65,64 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: () => {
     if (get().initialized) return Promise.resolve();
-    authInitInFlight ??= (async () => {
+    if (authInitInFlight) return authInitInFlight;
+    const session = captureSession();
+    const pending = (async () => {
       set({ loading: true });
       try {
-        const user = await authApi.me<UserInfo>();
-        if (user) {
-          set({ user });
-        }
-      } catch {
-        // Not logged in — guest mode
+        const user = await session.run(() => authApi.me<UserInfo>());
+        session.assertCurrent();
+        set({ user, loading: false, initialized: true });
+      } catch (e) {
+        if (session.signal.aborted) return;
+        set({ ...(e instanceof UnauthorizedError ? { user: null } : {}), loading: false, initialized: true });
       }
-      set({ loading: false, initialized: true });
     })().finally(() => {
-      authInitInFlight = null;
+      if (authInitInFlight === pending) authInitInFlight = null;
     });
-    return authInitInFlight;
+    authInitInFlight = pending;
+    return pending;
   },
 
   login: async (rawUsername, rawPassword) => {
+    const session = captureSession();
     const username = rawUsername.trim().toLowerCase();
     // 密码不做 trim：空格是合法密码字符，静默裁剪会让「注册时按裁剪值存储、
     // 登录时按原值提交」产生不一致
     // 凭据由服务端登录接口 Set-Cookie 下发（httpOnly），前端不再保存 token
     let data: { user: UserInfo };
     try {
-      data = await authApi.login<{ user: UserInfo }>(username, rawPassword);
+      data = await session.run(() => authApi.login<{ user: UserInfo }>(username, rawPassword));
+      session.assertCurrent();
     } catch (e) {
+      if (e instanceof SessionChangedError) throw e;
       throw new Error(
         e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.login_failed")
       );
     }
     if (data?.user) {
-      set({ user: data.user });
+      set({ user: data.user, loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.login_failed"));
     }
   },
 
   register: async (rawUsername, rawPassword) => {
+    const session = captureSession();
     const username = rawUsername.trim().toLowerCase();
     // 同 login：密码不裁剪
     let data: { user: UserInfo };
     try {
-      data = await authApi.register<{ user: UserInfo }>(username, rawPassword);
+      data = await session.run(() => authApi.register<{ user: UserInfo }>(username, rawPassword));
+      session.assertCurrent();
     } catch (e) {
+      if (e instanceof SessionChangedError) throw e;
       throw new Error(
         e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.register_failed")
       );
     }
     if (data?.user) {
-      set({ user: data.user });
+      set({ user: data.user, loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.register_failed"));
     }
@@ -122,16 +131,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     // 服务端过期 httpOnly cookie（JS 无法清除）；本地同步清用户态与缓存。
     // 返回 promise 供调用方等待：cookie 未清除前导航，proxy.ts 会按 cookie 有效性放行/拦截。
+    if (!get().user) changeSession();
+    set({ user: null, loading: false, initialized: true });
     const done = authApi.logout();
-    set({ user: null });
     // 请求挂起时超时放行；登出失败（网络错误等）不影响本地清态，静默吞掉
+    let timeout: ReturnType<typeof setTimeout>;
     return Promise.race([
       done.catch(() => undefined),
-      new Promise<never>((resolve) => setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS)),
-    ]).then(() => undefined);
+      new Promise<void>((resolve) => { timeout = setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS); }),
+    ]).then(() => undefined).finally(() => clearTimeout(timeout));
   },
 
   savePreference: async (key, value) => {
+    const session = captureSession();
     const user = get().user;
     if (!user) return;
     const prev = user[key];
@@ -142,8 +154,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
       // 校验结果：此前无论成败都保留本地值，刷新后偏好会静默回退
-      await authApi.updateMe({ [key]: value });
+      await session.run(() => authApi.updateMe({ [key]: value }));
+      session.assertCurrent();
     } catch (e) {
+      if (session.signal.aborted) return;
       // 仅当失败的是最新一次修改时才回滚：并发保存（如双击切换）后，
       // 旧请求迟到失败不能覆盖新值
       const cur = get().user;
@@ -161,4 +175,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 }));
 
 // user 的任何变化（登录 / 偏好更新 / 回滚 / 登出）统一落盘缓存
-useAuthStore.subscribe((state) => cacheUser(state.user));
+useAuthStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id) changeSession();
+  cacheUser(state.user);
+});
+onSessionChange(() => { authInitInFlight = null; });

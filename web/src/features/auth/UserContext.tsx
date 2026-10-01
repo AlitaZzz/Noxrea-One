@@ -16,9 +16,10 @@ export function CachedUserProvider({ user, children }: { user: UserInfo | null; 
   return <CachedUserContext.Provider value={user}>{children}</CachedUserContext.Provider>;
 }
 
-/** 当前用户：store（/me 校正后）优先，否则回退到 SSR 注入的 cookie 缓存 */
+/** SSR 缓存仅用于首次恢复前；恢复或登出后 store 的 null 也是权威值。 */
 export function useCurrentUser(): UserInfo | null {
   const storeUser = useAuthStore((s) => s.user);
+  const initialized = useAuthStore((s) => s.initialized);
   const cachedUser = useContext(CachedUserContext);
-  return storeUser ?? cachedUser;
+  return initialized ? storeUser : storeUser ?? cachedUser;
 }

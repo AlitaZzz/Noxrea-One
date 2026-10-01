@@ -21,6 +21,7 @@ import { ApiError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
 import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
+import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 import { isOffline } from "@/lib/utils/upload";
 
 // ===== API helpers =====
@@ -213,9 +214,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createProject: async (name) => {
+    const session = captureSession();
     const count = get().projects.length;
     const projectName = name || `Project ${count + 1}`;
-    const project = await apiCreateProject(projectName);
+    const project = await session.run(() => apiCreateProject(projectName));
+    session.assertCurrent();
     if (project) {
       set((s) => ({ projects: [...s.projects, toSummary(project)], activeProjectId: project.id }));
       return project;
@@ -224,6 +227,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   renameProject: (id, name) => {
+    const session = captureSession();
     if (rejectOffline()) return;
     const prevName = get().projects.find((p) => p.id === id)?.name;
     // 乐观更新，失败回滚：此前无论响应码如何都留在本地，刷新后名称又变回去
@@ -234,9 +238,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       try {
         // 与画布保存共用同一条写互斥锁。改名是纯元数据：服务端不做版本校验也不递增
         // revision，因此不存在改名引发的版本冲突（409 只属于画布内容保存）。
-        const updated = await saveMutex.runExclusive(() =>
-          projectApi.updateProject(id, { name }),
-        );
+        const updated = await session.run(() => saveMutex.runExclusive(() =>
+          session.run(() => projectApi.updateProject(id, { name })),
+        ));
+        session.assertCurrent();
 
         if (typeof updated?.revision === "number") {
           get().updateProjectRevision(id, updated.revision);
@@ -244,6 +249,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
         throw new Error(resolveApiError(null, undefined, "project.rename_failed"));
       } catch (e) {
+        if (e instanceof SessionChangedError) return;
         if (prevName !== undefined) {
           set((s) => ({
             projects: s.projects.map((p) => (p.id === id ? { ...p, name: prevName } : p)),
@@ -255,6 +261,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateCover: (id, coverUrl) => {
+    const session = captureSession();
     if (rejectOffline()) return;
     const prev = get().projects.find((p) => p.id === id);
     // 乐观更新，失败回滚；封面是纯元数据（同改名：不参与版本判定）
@@ -265,15 +272,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     void (async () => {
       try {
-        const updated = await saveMutex.runExclusive(() =>
-          projectApi.updateProject(id, { coverUrl }),
-        );
+        const updated = await session.run(() => saveMutex.runExclusive(() =>
+          session.run(() => projectApi.updateProject(id, { coverUrl })),
+        ));
+        session.assertCurrent();
         if (typeof updated?.revision === "number") {
           get().updateProjectRevision(id, updated.revision);
           return;
         }
         throw new Error(resolveApiError(null, undefined, "project.cover_failed"));
       } catch (e) {
+        if (e instanceof SessionChangedError) return;
         if (prev) {
           set((s) => ({
             projects: s.projects.map((p) =>
@@ -287,6 +296,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProject: (id) => {
+    const session = captureSession();
     if (rejectOffline()) return;
     // 失败回滚用：删除是破坏性操作，不能「假删成功」
     const snapshot = get().projects;
@@ -300,6 +310,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
     void (async () => {
       const { ok, message } = await apiDeleteProject(id);
+      if (session.signal.aborted) return;
       if (ok) return;
       notifyError(message ?? resolveApiError(null, undefined, "project.delete_failed"));
       set({ projects: snapshot, activeProjectId: snapshotActiveId });
@@ -307,6 +318,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProjects: (ids) => {
+    const session = captureSession();
     if (rejectOffline()) return;
     const snapshot = get().projects;
     const snapshotActiveId = get().activeProjectId;
@@ -320,6 +332,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
     void (async () => {
       const results = await Promise.all(ids.map((id) => apiDeleteProject(id)));
+      if (session.signal.aborted) return;
       const failedIds = new Set(ids.filter((_, i) => !results[i].ok));
       if (failedIds.size === 0) return;
       notifyError(results.find((r) => !r.ok)?.message ?? resolveApiError(null, undefined, "project.delete_failed"));
@@ -352,10 +365,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   refreshProjects: async () => {
+    const session = captureSession();
     const projects = await fetchProjects();
+    if (session.signal.aborted) return;
     // 拉取失败：保留现有列表，宁可展示过期数据也不能清空
     // （空列表会让用户以为项目被删）
     if (!projects) return;
     set({ projects });
   },
 }));
+
+onSessionChange(() => {
+  useProjectStore.setState({ projects: [], activeProjectId: null });
+});
