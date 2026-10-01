@@ -109,6 +109,7 @@ export function directorTheme() {
         inputFontSizeSM: 13,
       },
       Select: {
+        fontSize: 13,
         colorBgContainer: "#1d1d21",
         // 控件高度 36（v6 默认取 controlHeight 32），选中项底色并入 hover 语言 #26262b
         selectHeight: 36,

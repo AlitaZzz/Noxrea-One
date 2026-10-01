@@ -24,6 +24,6 @@ function toNodes(nodes: AppTreeNode[]): AppTreeNode[] {
 }
 
 export default function AppTreeSelect({ nodes, value, searchable, expandAll, popupHeight, emptyContent, ...props }: AppTreeSelectProps) {
-  return <TreeSelect<string | undefined> {...props} value={value ?? undefined} treeData={toNodes(nodes)} showSearch={searchable}
+  return <TreeSelect<string | null | undefined> {...props} value={value} onChange={(next) => props.onChange?.(next ?? undefined)} treeData={toNodes(nodes)} showSearch={searchable}
     treeDefaultExpandAll={expandAll} listHeight={popupHeight} notFoundContent={emptyContent} treeNodeFilterProp="label" />;
 }
