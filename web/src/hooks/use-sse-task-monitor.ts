@@ -15,6 +15,7 @@ import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
 import { TASK_STATUS_BATCH_SIZE } from "@/lib/constants";
+import type { NotificationApi, NotificationOptions } from "@/lib/feedback";
 import i18n from "@/lib/i18n/config";
 import { readSseStream,SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -50,9 +51,9 @@ function resolveTaskError(evt: { error?: string; errorCode?: string }): string {
  * 扫描画布中有 pendingAction/task_id 标记的节点，建立 SSE 流
  * 监听生成任务完成/失败，自动更新节点数据。
  *
- * @param notif  antd App.useApp() 返回的 notification 实例，用于展示生成结果通知
+ * @param notif 项目通知接口，用于展示生成结果通知
  */
-export function useSseTaskMonitor(notif: { success: Function; error: Function }) {
+export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "error">) {
   const notifRef = useRef(notif);
   useEffect(() => { notifRef.current = notif; }, [notif]);
   const sseCtrlsRef = useRef<Map<string, AbortController>>(new Map());
@@ -82,12 +83,7 @@ export function useSseTaskMonitor(notif: { success: Function; error: Function })
       // 失败类通知必须走 error 通道（红色/错误图标），不能与成功混用
       const notifyOnce = (
         kind: "success" | "error",
-        payload: {
-          title: string;
-          description?: React.ReactNode;
-          placement: string;
-          duration: number;
-        }
+        payload: NotificationOptions
       ) => {
         if (notifiedTasksRef.current.has(taskId)) return;
         notifiedTasksRef.current.add(taskId);

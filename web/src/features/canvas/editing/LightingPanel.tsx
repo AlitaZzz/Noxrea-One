@@ -4,9 +4,9 @@
  * 右侧亮度（滑杆 + 数值框联动，10-100）、颜色、主光源六向预设。
  * 点生成后参数交由后端 lighting 模板插值成提示词，派生图片节点预填（链路同「创作」）。
  */
+
 "use client";
 
-import { App } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +17,7 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
 import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
 import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -80,7 +81,7 @@ interface Props {
 
 export default function LightingPanel({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);
   const [viewMode, setViewMode] = useState<OrbitViewMode>("perspective");

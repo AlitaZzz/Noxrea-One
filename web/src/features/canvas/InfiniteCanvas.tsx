@@ -5,6 +5,7 @@
  * （生成面板、侧边栏、资产库、对话面板、渠道配置抽屉、右键菜单）。
  * 自身只做编排与状态桥接，具体业务下沉到各 hook 与子组件。
  */
+
 "use client";
 
 import "@xyflow/react/dist/style.css";
@@ -28,7 +29,6 @@ import {
   SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
-import { App } from "antd";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,6 +38,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsModal from "@/features/assets/components/AssetsModal";
 import type { AssetItem } from "@/features/assets/types";
@@ -113,7 +114,7 @@ const RF_EDGE_TYPES = {
 export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
-  const { message, notification: notif } = App.useApp();
+  const { message, notification: notif } = useAppFeedback();
   useSseTaskMonitor(notif);
 
   // Canvas state
@@ -160,8 +161,6 @@ export default function InfiniteCanvas() {
     );
     return topLevel.length < 2;
   }, [nodes]);
-
-
 
   // 内置多选外框只在真正「多选」时才有意义：
   // - 单选时它只是把节点再包一圈（还带 40px 外扩），与节点自身描边重复，反而干扰；

@@ -3,10 +3,10 @@
  * 负责提示词输入（支持 @ 引用其他节点）、模型与画质 / 分辨率 / 比例 / 张数等参数配置，
  * 提交生成任务并把参数持久化到节点数据，生成结果回填当前节点或派生新节点。
  */
+
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
-import { App } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -18,6 +18,7 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
 import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -211,7 +212,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
   // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
 
   /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */

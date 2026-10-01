@@ -3,12 +3,13 @@
  * 处理复制 / 粘贴 / 再制、删除、全选、撤销重做与编组等键盘操作，
  * 并在存在生成中节点时禁用撤销重做。
  */
+
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import { App } from "antd";
 import { useEffect, useRef } from "react";
 
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   copySelection,
   deleteSelection,
@@ -32,7 +33,7 @@ import i18n from "@/lib/i18n/config";
  * Global keyboard shortcuts for the canvas.
  */
 export function useCanvasKeyboard() {
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
 
   const resetViewport = useCanvasStore((s) => s.resetViewport);

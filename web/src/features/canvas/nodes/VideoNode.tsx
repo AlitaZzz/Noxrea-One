@@ -3,6 +3,7 @@
  * 内置轻量播放器（播放/暂停、静音、进度条拖拽），支持视频上传与拖入、
  * 生成中状态展示，以及「选帧截取生成图片节点」操作。
  */
+
 "use client";
 
 import {
@@ -12,7 +13,6 @@ import {
   VideoCameraOutlined,
 } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
-import { App } from "antd";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import AppTooltip from "@/components/ui/AppTooltip";
 import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
 import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAssetsStore } from "@/features/assets/store";
 import {
   captureFrame as captureFrameApi,
@@ -63,7 +64,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   // 画布交互状态（连线 / 拖动让位 hover 预览用，真相源在 store 状态机）
   const interaction = useCanvasStore((s) => s.interaction);
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
@@ -153,8 +154,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     const s = useCanvasStore.getState();
     return s.frameCaptureNodeId === id || s.clipCaptureNodeId === id;
   }, [id]);
-
-
 
   /** 鼠标扫过一排视频节点时会连续误触播放，延迟 300ms 只对真正的停留作出响应 */
   const HOVER_PLAY_DELAY = 300;

@@ -3,10 +3,10 @@
  * 展示当前用户的全部画布项目（新建卡片 + 项目网格），支持新建、打开、重命名、删除；
  * 顶部头像菜单提供账户设置入口与语言偏好切换、退出登录。
  */
+
 "use client";
 
 import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@ant-design/icons";
-import { App } from "antd";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +15,7 @@ import AppShell from "@/components/layout/AppShell";
 import AppButton from "@/components/ui/AppButton";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
@@ -26,7 +27,7 @@ import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
 
 export default function ProjectListPage() {
   const router = useRouter();
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);

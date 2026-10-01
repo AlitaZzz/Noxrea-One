@@ -1,13 +1,17 @@
-﻿/**
+/**
  * 3D 导演台场景全局设置面板。
  * 调节环境天空色、地面显隐与透明度、网格与标签显示等场景级参数，
  * 变更直接作用于 director 运行时。
  */
+
 "use client";
 
-import { ColorPicker, InputNumber,Slider, Switch } from "antd";
 import { useTranslation } from "react-i18next";
 
+import AppColorPicker from "@/components/ui/AppColorPicker";
+import AppNumberInput from "@/components/ui/AppNumberInput";
+import AppSlider from "@/components/ui/AppSlider";
+import AppSwitch from "@/components/ui/AppSwitch";
 import { useDirectorStore } from "@/features/director/director-store";
 
 function SliderRow({ label, min, max, step = 1, value, disabled, format, onChange }: {
@@ -19,9 +23,9 @@ function SliderRow({ label, min, max, step = 1, value, disabled, format, onChang
     <div className="dir-field">
       {label && <label className="dir-label">{label}</label>}
       <div className="flex items-center gap-3">
-        <Slider min={min} max={max} step={step} value={value} disabled={disabled}
+        <AppSlider min={min} max={max} step={step} value={value} disabled={disabled}
           style={{ flex: 1, margin: 0 }}
-          tooltip={{ formatter: (v) => format ? format(v as number) : String(v) }}
+          formatTooltip={(v) => format ? format(v as number) : String(v)}
           onChange={(v) => onChange(v as number)} />
         <div className="dir-valbox">{format ? format(value) : value}</div>
       </div>
@@ -33,7 +37,7 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   return (
     <div className="flex items-center justify-between py-1">
       <span className="toggle-label">{label}</span>
-      <Switch size="small" checked={checked} onChange={onChange} />
+      <AppSwitch size="small" checked={checked} onChange={onChange} />
     </div>
   );
 }
@@ -57,7 +61,7 @@ export default function ScenePanel() {
             {(["x","y","z"] as const).map((k) => (
               <div key={k} className="dir-fld flex-1">
                 <span className="dir-ax">{k.toUpperCase()}</span>
-                <InputNumber size="small" className="dir-inputnum flex-1" controls={false}
+                <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
                   value={parseFloat(sceneState.pos[k].toFixed(2))} step={0.01}
                   onChange={(v) => v != null && runtime?.setScenePos?.(k, v)} />
               </div>
@@ -71,7 +75,7 @@ export default function ScenePanel() {
             {(["x","y","z"] as const).map((k) => (
               <div key={k} className="dir-fld flex-1">
                 <span className="dir-ax">{k.toUpperCase()}</span>
-                <InputNumber size="small" className="dir-inputnum flex-1" controls={false}
+                <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
                   value={Math.round(sceneState.rot[k])} step={1}
                   onChange={(v) => v != null && runtime?.setSceneRot?.(k, v)} />
               </div>
@@ -81,8 +85,8 @@ export default function ScenePanel() {
 
         <div className="dir-field">
           <label className="dir-label">{t("director.skyColor")}</label>
-          <ColorPicker size="small" value={sceneState.sky}
-            onChange={(c) => runtime?.setSkyColor(c.toHexString())} />
+          <AppColorPicker size="small" value={sceneState.sky}
+            onChange={(hex) => runtime?.setSkyColor(hex)} />
         </div>
       </div>
 

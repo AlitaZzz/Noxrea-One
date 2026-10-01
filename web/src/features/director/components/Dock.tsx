@@ -1,14 +1,17 @@
-﻿/**
+/**
  * 3D 导演台底部工具坞。
  * 提供变换模式切换（选择 / 移动 / 旋转 / 缩放）、添加角色 / 道具 / 相机、
  * 镜头预设选择与出图渲染等操作入口。
  */
+
 "use client";
 
-import { App,InputNumber, Popover, Tooltip } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppNumberInput from "@/components/ui/AppNumberInput";
+import AppPopover from "@/components/ui/AppPopover";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/ui/icons/director/DirCubeIcon";
 import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
@@ -23,6 +26,7 @@ import { DirScaleIcon } from "@/components/ui/icons/director/DirScaleIcon";
 import { DirShotIcon } from "@/components/ui/icons/director/DirShotIcon";
 import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { DirVideoIcon } from "@/components/ui/icons/director/DirVideoIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { groupedPresets } from "@/features/director/core/camera-presets";
 import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 
@@ -67,7 +71,7 @@ function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
       </div>
       <div className="flex items-center gap-2 mb-2" style={{ fontSize: 12 }}>
         <span style={{ color: "var(--dir-dim)" }}>{t("director.spacing")}</span>
-        <InputNumber size="small" min={0.5} max={5} step={0.1} value={spacing}
+        <AppNumberInput size="small" min={0.5} max={5} step={0.1} value={spacing}
           style={{ flex: 1, background: "var(--dir-panel2)", border: "1px solid transparent", borderRadius: 8, color: "var(--dir-txt)" }}
           onChange={(v) => { if (v != null) setSpacing(v); }} />
       </div>
@@ -95,7 +99,7 @@ function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
 
 export default function Dock() {
   const { t } = useTranslation();
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   const runtime = useDirectorStore((s) => s.runtime);
   const transformMode = useDirectorStore((s) => s.transformMode);
   const ratio = useDirectorStore((s) => s.ratio);
@@ -117,14 +121,14 @@ export default function Dock() {
   }, [runtime, notification]);
 
   const dockBtn = (icon: string, title: string, onClick: () => void, active = false, hideTooltip = false) => (
-    <Tooltip title={title} key={title} mouseEnterDelay={0.5} open={hideTooltip ? false : undefined}>
+    <AppTooltip title={title} key={title} hoverDelay={0.5} open={hideTooltip ? false : undefined}>
       {/* 复用统一图标按钮：hover / active / 激活态都在 CSS 里，不再用 JS 改 style */}
       <button
         onClick={onClick}
         className={`app-icon-btn app-icon-btn--lg${active ? " is-active" : ""}`}
         aria-pressed={active}
       >{S(icon)}</button>
-    </Tooltip>
+    </AppTooltip>
   );
 
   const menuItem = (icon: string, label: string, onClick: () => void, checked = false, hasSub = false) => (
@@ -158,35 +162,35 @@ export default function Dock() {
       <span style={{ width: 1, height: 22, background: "var(--dir-line2)", margin: "0 4px" }} />
 
       {/* 添加角色/模型 */}
-      <Popover trigger="click" zIndex={1050} placement="top"
+      <AppPopover trigger="click" zIndex={1050} placement="top"
         open={addMenuOpen} onOpenChange={setAddMenuOpen}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={menuContent(
           <>
             {BODY_KEYS.map((k) => menuItem("person", t(`director.body.${k}`), () => { runtime?.addCharacter(k); closeAddMenu(); }))}
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
-            <Popover trigger="hover" zIndex={1050} placement="rightTop"
-              styles={{ container: { padding: 0, background: "transparent" } }}
+            <AppPopover trigger="hover" zIndex={1050} placement="rightTop"
+              contentStyle={{ padding: 0, background: "transparent" }}
               content={<CrowdForm runtime={runtime as DirectorRuntime} />}>
               <div>{menuItem("group", t("director.crowd"), () => {}, false, true)}</div>
-            </Popover>
+            </AppPopover>
             <div className="h-px mx-1 my-1.5" style={{ background: "var(--dir-line2)" }} />
-            <Popover trigger="hover" zIndex={1050} placement="rightTop"
-              styles={{ container: { padding: 0, background: "transparent" } }}
+            <AppPopover trigger="hover" zIndex={1050} placement="rightTop"
+              contentStyle={{ padding: 0, background: "transparent" }}
               content={menuContent(
                 <>{GEO_KEYS.map((k) => menuItem("cube", t(`director.prop.${k}`), () => { runtime?.addProp(k); closeAddMenu(); }))}</>, 150
               )}>
               <div>{menuItem("cube", t("director.geometry"), () => {}, false, true)}</div>
-            </Popover>
+            </AppPopover>
           </>
         )}>
         <div>{dockBtn("person", t("director.addCharacter"), () => {}, false, addMenuOpen)}</div>
-      </Popover>
+      </AppPopover>
 
       {/* 全景图 */}
-      <Popover trigger="click" zIndex={1050} placement="top"
+      <AppPopover trigger="click" zIndex={1050} placement="top"
         open={panoMenuOpen} onOpenChange={setPanoMenuOpen}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={menuContent(
         <label className="flex items-center gap-[11px] px-3 py-[9px] rounded-lg text-[13px] cursor-pointer hover:bg-[var(--menu-item-hover)]"
           style={{ color: "var(--dir-txt)" }}>
@@ -196,12 +200,12 @@ export default function Dock() {
         </label>, 160
       )}>
         <div>{dockBtn("image", t("director.panorama"), () => {}, false, panoMenuOpen)}</div>
-      </Popover>
+      </AppPopover>
 
       {/* 添加机位 */}
-      <Popover trigger="click" zIndex={1050} placement="top"
+      <AppPopover trigger="click" zIndex={1050} placement="top"
         open={camMenuOpen} onOpenChange={setCamMenuOpen}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={menuContent(
         cameraPresets.map((g) => (
           <div key={g.name}>
@@ -211,20 +215,20 @@ export default function Dock() {
         )), 184
       )}>
         <div>{dockBtn("video", t("director.addCameraPreset"), () => {}, false, camMenuOpen)}</div>
-      </Popover>
+      </AppPopover>
 
       {/* 分隔 */}
       <span style={{ width: 1, height: 22, background: "var(--dir-line2)", margin: "0 4px" }} />
 
       {/* 取景比例 */}
-      <Popover trigger="click" zIndex={1050} placement="top"
+      <AppPopover trigger="click" zIndex={1050} placement="top"
         open={ratioMenuOpen} onOpenChange={setRatioMenuOpen}
-        styles={{ container: { padding: 0, background: "transparent" } }}
+        contentStyle={{ padding: 0, background: "transparent" }}
         content={menuContent(
         RATIOS.map(([v, l]) => menuItem("", l, () => { runtime?.setRatio(v); setRatioMenuOpen(false); }, ratio === v))
       , 150)}>
         <div>{dockBtn("frame", t("director.frameRatio"), () => {}, false, ratioMenuOpen)}</div>
-      </Popover>
+      </AppPopover>
 
       {/* 截图 */}
       {dockBtn("shot", t("director.screenshot"), handleShot, false)}

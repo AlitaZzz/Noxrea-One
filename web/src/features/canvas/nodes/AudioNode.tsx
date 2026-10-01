@@ -3,15 +3,16 @@
  * 承载音频上传与拖入、生成中状态展示，内嵌 AudioWaveform 波形播放器，
  * 并把解析出的时长回填到节点数据供标题栏显示。
  */
+
 "use client";
 
 import { UploadOutlined } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
-import { App } from "antd";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
   extractAudioClip as extractAudioClipApi,
@@ -39,7 +40,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
   // src / duration 唯一真相是 data（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
   const duration = data.duration || 0;

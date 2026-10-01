@@ -1,15 +1,18 @@
-﻿/**
+/**
  * 3D 导演台左侧场景大纲。
  * 树形列出场景中的实体与镜头，支持搜索、重命名、显隐切换、多选与删除。
  */
+
 "use client";
 
 import { DeleteOutlined } from "@ant-design/icons";
-import { Button,Input, Tooltip } from "antd";
 import { useEffect, useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
+import AppButton from "@/components/ui/AppButton";
+import AppInput from "@/components/ui/AppInput";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { DirCameraIcon } from "@/components/ui/icons/director/DirCameraIcon";
 import { DirCaretIcon } from "@/components/ui/icons/director/DirCaretIcon";
 import { DirCubeIcon } from "@/components/ui/icons/director/DirCubeIcon";
@@ -74,7 +77,7 @@ export default function Outliner() {
     <div className="flex flex-col h-full">
       {/* 搜索框 */}
       <div className="mb-[14px]">
-        <Input allowClear size="small" placeholder={t("director.search")}
+        <AppInput allowClear size="small" placeholder={t("director.search")}
           className="searchbox-input"
           style={{ background: "var(--dir-panel2)", border: "1px solid transparent", borderRadius: 9, color: "var(--dir-txt)", fontSize: 13, padding: "9px 12px" }}
           value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -141,28 +144,28 @@ export default function Outliner() {
                   {(isCrowd || true) && (
                     <>
                       {isCrowd && (
-                        <Tooltip title={t("director.ungroup")}>
+                        <AppTooltip title={t("director.ungroup")}>
                           <button className="inline-flex items-center justify-center p-0.5 rounded bg-transparent border-0 cursor-pointer"
                             style={{ color: "var(--dir-dim)" }}
                             onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                             onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
                             onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }}>⊟</button>
-                        </Tooltip>
+                        </AppTooltip>
                       )}
-                      <Button type="text" size="small"
-                        icon={<span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span>}
+                      <AppButton variant="ghost" size="sm"
+                        iconOnly
                         className="!p-0.5"
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); runtime?.toggleVisible(ent.id); }} />
-                      <Button type="text" size="small"
-                        icon={<DeleteOutlined />}
+                        onClick={(e) => { e.stopPropagation(); runtime?.toggleVisible(ent.id); }} ><span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span></AppButton>
+                      <AppButton variant="ghost" size="sm"
+                        iconOnly
                         className="!p-0.5"
                         style={{ color: "var(--dir-dim)" }}
                         onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"}
                         onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"}
-                        onClick={(e) => { e.stopPropagation(); runtime?.remove(ent.id); }} />
+                        onClick={(e) => { e.stopPropagation(); runtime?.remove(ent.id); }} ><DeleteOutlined /></AppButton>
                     </>
                   )}
                 </span>

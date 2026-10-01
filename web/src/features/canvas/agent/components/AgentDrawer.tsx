@@ -5,10 +5,10 @@
  * 消息按回合分组渲染：工具调用以「图标 + intent 一句话」操作行展示，
  * 删除类/整理画布操作先经确认卡批准，回合结束后可在末尾「撤销此轮」。
  */
+
 "use client";
 
 import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
-import { App } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,6 +19,7 @@ import AppTooltip from "@/components/ui/AppTooltip";
 import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
 import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
 import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ChatSectionView from "@/features/canvas/agent/components/ChatSectionView";
 import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
 import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
@@ -38,7 +39,7 @@ interface Props {
 /** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 工具续轮） */
 export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
   const initializeFailed = useModelStore((s) => s.initializeFailed);

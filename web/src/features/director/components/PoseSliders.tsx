@@ -1,14 +1,15 @@
-﻿/**
+/**
  * 角色骨骼姿态调节滑杆组。
  * 依据关节配置按部位 / 左右分组渲染滑杆，内部维持本地值以保证拖拽流畅，
  * 并通过 syncRef 支持外部（如姿态预设应用后）强制回填。
  */
+
 "use client";
 
-import { Slider } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import AppSlider from "@/components/ui/AppSlider";
 import { groupJoints } from "@/features/director/entities/joint-config";
 
 interface Props {
@@ -47,9 +48,9 @@ export default function PoseSliders({ values, onChange, syncRef }: Props) {
                       <b>{t(`director.joint.label.${j.label}`)}</b>
                       <span className="pose-sld-val">{Math.round(val)}°</span>
                     </div>
-                    <Slider min={j.min} max={j.max} step={1} value={val}
+                    <AppSlider min={j.min} max={j.max} step={1} value={val}
                       style={{ margin: 0 }}
-                      tooltip={{ open: false }}
+                      showTooltip={false}
                       onChange={(v) => { setLocalVals((prev) => ({ ...prev, [j.key]: v as number })); onChange(j.key, v as number); }} />
                   </div>
                 );

@@ -4,10 +4,10 @@
  * 组间竖线分隔；排序只在同类型内生效（跨类型拖放禁止），多模态参考可 @ 引用。
  * 负责提示词输入（含文本预设令牌）与文本模型选择，以流式方式接收生成结果并写回节点内容。
  */
+
 "use client";
 
 import { PlusOutlined } from "@ant-design/icons";
-import { App } from "antd";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +17,7 @@ import AppPopover from "@/components/ui/AppPopover";
 import AppTooltip from "@/components/ui/AppTooltip";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -54,7 +55,7 @@ interface ModelOption {
 const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
   const providers = useModelStore((s) => s.providers);
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
 
   const allModels = useMemo(() => providers
     .flatMap((c) =>

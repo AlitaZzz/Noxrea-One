@@ -8,11 +8,11 @@
  * 双击负责「创建」，右键负责「对已有内容的操作」，两者职责不重叠。
  * 编辑类动作统一取自 canvas-edit-actions，与键盘快捷键共用同一份实现。
  */
+
 "use client";
 
 import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useReactFlow } from "@xyflow/react";
-import { App } from "antd";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,6 +21,7 @@ import AppMenu from "@/components/ui/AppMenu";
 import AppPopover from "@/components/ui/AppPopover";
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
 import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   copyImageSrcToClipboard,
   copySelection,
@@ -59,7 +60,7 @@ const SHORTCUT_STYLE = { fontSize: 12, color: "var(--canvas-text-muted)" } as co
 
 export default function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const { x, y, visible, kind, hide } = useContextMenuStore();
   // 菜单坐标是屏幕坐标，粘贴落点需要的是画布坐标
   const { screenToFlowPosition } = useReactFlow();

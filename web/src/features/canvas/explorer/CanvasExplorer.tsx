@@ -4,6 +4,7 @@
  * 下半部为资产快捷区：分页浏览资产文件夹与素材，支持悬浮预览并拖入画布成节点。
  * 以 antd Drawer 实现，不绑定具体方位，可在主题层调整为左 / 右 / 上下布局。
  */
+
 "use client";
 
 import {
@@ -16,7 +17,6 @@ import {
   RightOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { App } from "antd";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -29,6 +29,7 @@ import AppPopover from "@/components/ui/AppPopover";
 import AppTooltip from "@/components/ui/AppTooltip";
 import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
 import FilterIcon from "@/components/ui/icons/common/FilterIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetGrid from "@/features/assets/components/AssetGrid";
 import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
@@ -530,7 +531,7 @@ const ElementItem = memo(ElementItemImpl);
 // ── 资产视图 ──
 function AssetsView() {
   const { t, i18n } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const lang = i18n.language;
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);

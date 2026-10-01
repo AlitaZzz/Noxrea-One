@@ -5,8 +5,9 @@
  * @vitest-environment jsdom
  */
 import { act,renderHook, waitFor } from "@testing-library/react";
-import { App as AntApp } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { TestFeedbackProvider } from "@/test-utils/TestFeedbackProvider";
 
 const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
@@ -109,7 +110,7 @@ describe("useCanvasAgentStream", () => {
       sseResponse([`event: error\ndata: ${JSON.stringify({ error: "raw boom", errorCode: "agent.provider_not_found" })}\n\n`]),
     );
 
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
     await act(async () => {
       await result.current.sendChat("hi");
     });
@@ -131,7 +132,7 @@ describe("useCanvasAgentStream", () => {
     );
     mocks.submitToolResults.mockResolvedValue(sseResponse(doneFrame([])));
 
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
     await act(async () => {
       await result.current.sendChat("hi");
     });
@@ -170,7 +171,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("场景A：stop → send B → A 的响应与 finally 迟到，B 的流式状态与占位不被污染", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const defs = mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     await startTurnAwaitingStream(result, "A");
     expect(result.current.isStreaming).toBe(true);
@@ -208,7 +209,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("场景B：A 的迟到错误不得显示到 B，B 继续正常工作", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const defs = mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     const a = controllableSse();
     await startTurnAwaitingStream(result, "A");
@@ -248,7 +249,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("场景B'：A 的请求 promise 迟到 reject（非流内错误）同样不得显示到 B", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const defs = mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     await startTurnAwaitingStream(result, "A");
 
@@ -280,7 +281,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("场景C：B 完成后 A 的 finally 才进入，B 的最终状态零变化且无残留锁", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const defs = mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     await startTurnAwaitingStream(result, "A");
     act(() => result.current.stopStream());
@@ -323,7 +324,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const streamDefs = mockDeferredStreams(mocks.streamAgent);
     const toolDefs = mockDeferredStreams(mocks.submitToolResults);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     // A round1：message_user 工具 → 回传 submitToolResults（挂起）
     await act(async () => {
@@ -373,7 +374,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("newChat 使在途回合失格：旧回合迟到响应不得污染后续对话", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     const defs = mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     await startTurnAwaitingStream(result, "A");
     act(() => result.current.newChat());
@@ -404,7 +405,7 @@ describe("useCanvasAgentStream 回合世代隔离（AGENT-06）", () => {
   it("重入守卫：流式进行中再次 sendChat 不开启第二个回合", async () => {
     mocks.createSession.mockResolvedValue({ id: 7, title: "hi" });
     mockDeferredStreams(mocks.streamAgent);
-    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: AntApp });
+    const { result } = renderHook(() => useCanvasAgentStream("model-x"), { wrapper: TestFeedbackProvider });
 
     await startTurnAwaitingStream(result, "A");
     await startTurnAwaitingStream(result, "B");

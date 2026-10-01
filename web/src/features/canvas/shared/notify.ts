@@ -4,13 +4,13 @@
  * 形状由节点事件链路约定（clip.busy / error.<code> / 底部右侧 placement），
  * 放在 canvas shared 层供各节点的处理函数复用同一实现。
  */
-import { App } from "antd";
+
 import type { TFunction } from "i18next";
 
-type NotificationApi = ReturnType<typeof App.useApp>["notification"];
+import type { NotificationApi } from "@/lib/feedback";
 
 /** busy 拒绝提示：面板保持打开、选区原样保留可重试时的唯一反馈。
-    key 按节点区分（antd 的 key 全局生效）：同节点连点去重替换，跨节点互不顶替 */
+    key 按节点区分：同节点连点去重替换，跨节点互不顶替 */
 export function notifyNodeBusy(
   notification: NotificationApi,
   t: TFunction,

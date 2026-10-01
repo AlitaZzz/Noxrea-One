@@ -3,9 +3,9 @@
  * 左列 3D 轨道球（共享 OrbitScene3D，相机标记 + 景别缩放），右列方位角 / 俯仰 / 景别 + 预设机位。
  * 点生成后参数交由后端 angle 模板插值成提示词，派生图片节点预填（链路同打光面板）。
  */
+
 "use client";
 
-import { App } from "antd";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +13,7 @@ import AppButton from "@/components/ui/AppButton";
 import AppSlider from "@/components/ui/AppSlider";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -57,7 +58,7 @@ const DEFAULT_ZOOM = 1;
 
 export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
 
   const [azimuth, setAzimuth] = useState(DEFAULT_AZIMUTH);
   const [elevation, setElevation] = useState(DEFAULT_ELEVATION);

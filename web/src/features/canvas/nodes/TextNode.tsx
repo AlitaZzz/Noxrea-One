@@ -5,6 +5,7 @@
  * 内容采用 Tiptap 富文本编辑：content 存 HTML 供编辑器渲染，
  * plainText 存纯文本供下游节点消费，复制 / 下载时序列化为 Markdown。
  */
+
 "use client";
 
 import Placeholder from "@tiptap/extension-placeholder";
@@ -12,11 +13,11 @@ import { Markdown } from "@tiptap/markdown";
 import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type NodeProps } from "@xyflow/react";
-import { App } from "antd";
 import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -32,7 +33,7 @@ import ResizeHandle from "./ResizeHandle";
 
 function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const content = data.content || "";
   const plainText = data.plainText || "";
   // 编辑态由 store 全局驱动（与裁剪/标注模式一致），进入编辑时隐藏节点工具条

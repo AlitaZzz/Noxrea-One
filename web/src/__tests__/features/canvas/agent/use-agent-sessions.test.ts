@@ -8,8 +8,9 @@
  * @vitest-environment jsdom
  */
 import { act, renderHook } from "@testing-library/react";
-import { App as AntApp } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { TestFeedbackProvider } from "@/test-utils/TestFeedbackProvider";
 
 const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
@@ -62,7 +63,7 @@ function setup(overrides?: { projectId?: string; onLoadMessages?: ReturnType<typ
   };
   const rendered = renderHook((p: typeof props) => useAgentSessions(p), {
     initialProps: props,
-    wrapper: AntApp,
+    wrapper: TestFeedbackProvider,
   });
   return { ...rendered, props, onLoadMessages };
 }
@@ -105,7 +106,7 @@ describe("useAgentSessions.loadHistory", () => {
         onLoadMessages,
         projectId: undefined,
       }),
-      { wrapper: AntApp },
+      { wrapper: TestFeedbackProvider },
     );
 
     await act(async () => {
@@ -150,7 +151,7 @@ describe("useAgentSessions.loadHistory", () => {
         onLoadMessages,
         projectId: undefined,
       }),
-      { wrapper: AntApp },
+      { wrapper: TestFeedbackProvider },
     );
 
     await act(async () => {

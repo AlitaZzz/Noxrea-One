@@ -1,16 +1,23 @@
-﻿/**
+/**
  * 3D 导演台右侧属性检视器。
  * 按选中实体类型渲染对应属性：通用变换（位移 / 旋转 / 缩放）、
  * 角色体型与姿态（内嵌 PoseSliders）、群组参数、相机焦距与预览出图等。
  */
+
 "use client";
 
 import { DeleteOutlined } from "@ant-design/icons";
-import { Button, ColorPicker, Input, InputNumber,Select, Slider, Tooltip } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
+import AppButton from "@/components/ui/AppButton";
+import AppColorPicker from "@/components/ui/AppColorPicker";
+import AppInput from "@/components/ui/AppInput";
+import AppNumberInput from "@/components/ui/AppNumberInput";
+import AppSelect from "@/components/ui/AppSelect";
+import AppSlider from "@/components/ui/AppSlider";
+import AppTooltip from "@/components/ui/AppTooltip";
 import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
 import { DirEyeIcon } from "@/components/ui/icons/director/DirEyeIcon";
 import { DirEyeOffIcon } from "@/components/ui/icons/director/DirEyeOffIcon";
@@ -43,7 +50,7 @@ function TripleRow({ label, keys, step = 0.01, deg = false }: {
         {keys.map(({ k, get, set, step: ks }) => (
           <div key={k} className="dir-fld flex-1">
             <span className="dir-ax">{k.toUpperCase()}</span>
-            <InputNumber size="small" className="dir-inputnum flex-1" controls={false}
+            <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
               step={ks ?? step} value={deg ? Math.round(get()) : parseFloat(fmt(get()))}
               onChange={(v) => v != null && set(v as number)} />
           </div>
@@ -101,7 +108,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
         {/* 原生 title 换成系统 Tooltip */}
-        <Tooltip title={t("director.fullscreenExpand")}>
+        <AppTooltip title={t("director.fullscreenExpand")}>
         <button className="dir-cam-expand" onClick={() => {
           const stage = runtime._getStage();
           if (!stage) return;
@@ -111,18 +118,18 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
           });
           setModalUrl(url);
         }}>⤢</button>
-        </Tooltip>
+        </AppTooltip>
       </div>
       <div className="dir-field">
         <label className="dir-label">{t("common.name")}</label>
         <div className="dir-namefld">
-          <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename(entity.id, e.target.value)} />
+          <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename(entity.id, e.target.value)} />
         </div>
       </div>
       {entities.filter((e) => e.type === "camera").length > 1 && (
         <div className="dir-field">
           <label className="dir-label">{t("director.switchCamera")}</label>
-          <Select size="small" className="w-full dir-select" value={entity.id}
+          <AppSelect size="small" className="w-full dir-select" value={entity.id}
             options={entities.filter((e) => e.type === "camera").map((c) => ({ value: c.id, label: c.name }))}
             onChange={(id: string) => runtime.select(id)} />
         </div>
@@ -130,7 +137,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
       <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); refreshPreview(); } }))} />
       <div className="dir-field">
         <label className="dir-label">{t("director.aimTarget")}</label>
-        <Select size="small" className="w-full dir-select" value={aimMode}
+        <AppSelect size="small" className="w-full dir-select" value={aimMode}
           options={aimOpts}
           onChange={(val) => {
             setAimMode(val);
@@ -147,9 +154,9 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
       </div>
       <TripleRow label={t("director.aimCoords")} step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); refreshPreview(); } }))} />
       <div className="dir-field">
-        <div className="flex justify-between items-center dir-label"><span>{t("director.fovAngle")} <Tooltip title={t("director.fovTip")}><span className="text-white/25 cursor-help">ⓘ</span></Tooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
+        <div className="flex justify-between items-center dir-label"><span>{t("director.fovAngle")} <AppTooltip title={t("director.fovTip")}><span className="text-white/25 cursor-help">ⓘ</span></AppTooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
-          <Slider min={20} max={90} step={1} style={{ flex: 1, margin: 0 }} value={ent.cam?.fov || 40} tooltip={{ formatter: (v) => `${v}°` }}
+          <AppSlider min={20} max={90} step={1} style={{ flex: 1, margin: 0 }} value={ent.cam?.fov || 40} formatTooltip={(v) => `${v}°`}
             onChange={(v) => { ent.setFov(v); refreshPreview(); }} />
           <div className="dir-valbox">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
@@ -193,7 +200,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
         <div className="dir-shot-grid">
           {shots.map((shot) => (
             // 卡片名可能被 CSS 截断，tooltip 展示完整名称；操作按钮改用系统 Tooltip
-            <Tooltip key={shot.id} title={shot.name}>
+            <AppTooltip key={shot.id} title={shot.name}>
               <div
                 className="dir-shot-card"
                 data-selected={shot.selected || undefined}
@@ -202,24 +209,24 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                 <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
                 <span className="dir-shot-label">{shot.name}</span>
                 <div className="dir-shot-actions">
-                  <Tooltip title={t("director.sendToCanvasTip")}>
+                  <AppTooltip title={t("director.sendToCanvasTip")}>
                     <button onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
                       <DirSendIcon style={{ width: 14, height: 14 }} />
                     </button>
-                  </Tooltip>
-                  <Tooltip title={t("common.delete")}>
+                  </AppTooltip>
+                  <AppTooltip title={t("common.delete")}>
                     <button onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
                       <DirTrashIcon style={{ width: 14, height: 14 }} />
                     </button>
-                  </Tooltip>
-                  <Tooltip title={t("director.enlargePreview")}>
+                  </AppTooltip>
+                  <AppTooltip title={t("director.enlargePreview")}>
                     <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
                       <DirExpandIcon style={{ width: 14, height: 14 }} />
                     </button>
-                  </Tooltip>
+                  </AppTooltip>
                 </div>
               </div>
-            </Tooltip>
+            </AppTooltip>
           ))}
         </div>
       )}
@@ -281,7 +288,7 @@ export default function Inspector() {
       <div className="dir-rp-pad">
         <div className="flex items-center justify-between mb-1">
           <div><span className="text-[10px] text-white/35">{typeLabel}</span><h3 className="text-sm font-medium text-white/80 truncate">{entity.name}</h3></div>
-          <Tooltip title={t("common.delete")}><Button type="text" size="small" icon={<DeleteOutlined />} style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} /></Tooltip>
+          <AppTooltip title={t("common.delete")}><AppButton variant="ghost" size="sm" iconOnly style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} ><DeleteOutlined /></AppButton></AppTooltip>
         </div>
       </div>
       <div className="dir-ptabs">
@@ -298,7 +305,7 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">{t("common.name")}</label>
             <div className="dir-namefld">
-              <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
+              <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
           <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
@@ -307,17 +314,17 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
-              <Slider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
+              <AppSlider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
                 value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
-                tooltip={{ formatter: (v) => (v as number).toFixed(1) }}
+                formatTooltip={(v) => (v as number).toFixed(1)}
                 onChange={(v) => { const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s, s, s); bumpInspector(); }} />
               <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
           <div className="dir-field">
             <label className="dir-label">{t("director.color")}</label>
-            <ColorPicker size="small" value={entityColor}
-              onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
+            <AppColorPicker size="small" value={entityColor}
+              onChange={(hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>{t("director.visible")}</span>
@@ -331,7 +338,7 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">{t("common.name")}</label>
             <div className="dir-namefld">
-              <Input variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
+              <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
           <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
@@ -340,17 +347,17 @@ export default function Inspector() {
           <div className="dir-field">
             <label className="dir-label">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
-              <Slider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
+              <AppSlider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
                 value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
-                tooltip={{ formatter: (v) => (v as number).toFixed(1) }}
+                formatTooltip={(v) => (v as number).toFixed(1)}
                 onChange={(v) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
               <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
           <div className="dir-field">
             <label className="dir-label">{t("director.color")}</label>
-            <ColorPicker size="small" value={entityColor}
-              onChange={(c) => { const hex = c.toHexString(); runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
+            <AppColorPicker size="small" value={entityColor}
+              onChange={(hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
           <div className="flex items-center justify-between text-xs dir-dim">
             <span>{t("director.visible")}</span>

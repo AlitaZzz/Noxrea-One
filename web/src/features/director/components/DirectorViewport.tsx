@@ -4,14 +4,15 @@
  * 管理角色 / 群组 / 道具 / 相机等实体的增删与场景状态的存取，
  * 并把渲染结果出图后回传画布生成图片节点。是本模块的核心，体量最大。
  */
+
 "use client";
 
-import { App } from "antd";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
 import { NavSvg } from "@/components/ui/icons/director/NavSvg";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
 import { createNodeFromUrl, uploadOne } from "@/features/canvas/upload";
@@ -57,7 +58,7 @@ export default function DirectorViewport() {
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const { notification } = App.useApp();
+  const { notification } = useAppFeedback();
 
   useEffect(() => {
     const viewport = viewportRef.current;

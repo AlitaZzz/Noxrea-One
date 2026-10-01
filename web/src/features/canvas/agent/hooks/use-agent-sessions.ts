@@ -2,11 +2,12 @@
  * Agent 会话管理 hook：会话列表加载与新建 / 切换 / 重命名 / 删除。
  * 与消息流 hook 分离，消息状态通过回调注入以避免双向耦合。
  */
+
 "use client";
 
-import { App } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import type { AgentSessionDto } from "@/features/canvas/agent/api";
 import { agentApi } from "@/features/canvas/agent/api";
 import { createSessionGate } from "@/features/canvas/agent/hooks/session-gate";
@@ -41,7 +42,7 @@ export function useAgentSessions(opts: {
   /** 当前项目 ID，切换项目时自动重置对话 */
   projectId?: string;
 }) {
-  const { message } = App.useApp();
+  const { message } = useAppFeedback();
   const [chatId, setChatId] = useState<number | null>(null);
   const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSessionDto[]>([]);
