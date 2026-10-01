@@ -117,13 +117,12 @@ const eslintConfig = defineConfig([
     },
   },
   // 全局 message/notification wrapper 的使用边界（见根 CLAUDE.md「七、消息通知规范」）。
-  // 策略：白名单制——默认全项目禁止引入 wrapper（React 上下文一律 App.useApp()），
+  // 策略：白名单制——默认全项目禁止引入 wrapper（React 上下文一律 useAppFeedback()），
   // 仅下方 ignores 白名单内的非 React 模块（store / 工具函数 / wrapper 注册方）放行。
   // 新增合法消费者时在此补一行；改配置这个动作本身就是“确认过确实不在 React 上下文”。
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: [
-      "src/providers/AppProviders.tsx",
       "src/features/assets/store.ts",
       "src/features/auth/store.ts",
       "src/features/project/store.ts",
@@ -137,32 +136,26 @@ const eslintConfig = defineConfig([
           paths: [
             {
               name: "@/lib/global-message",
-              message: "React 组件/Hook 内一律 App.useApp() 解构 message；此 wrapper 仅供 store、工具函数等非 React 上下文使用（CLAUDE.md 七）",
+              message: "React 组件/Hook 内一律 useAppFeedback() 解构 message；此 wrapper 仅供非 React 上下文使用（CLAUDE.md 七）",
             },
             {
               name: "@/lib/global-notification",
-              message: "React 组件/Hook 内一律 App.useApp() 解构 notification；此 wrapper 仅供 store、工具函数等非 React 上下文使用（CLAUDE.md 七）",
+              message: "React 组件/Hook 内一律 useAppFeedback() 解构 notification；此 wrapper 仅供非 React 上下文使用（CLAUDE.md 七）",
             },
           ],
         },
       ],
     },
   },
-  // 核心业务领域禁止直接依赖 antd UI 组件（见 web/CLAUDE.md 八、九）。
-  // 例外：App 是 App.useApp() 的通知入口，规范第七条要求 React 侧统一走它，不算 UI 组件依赖。
-  // 非核心目录（assets / director / settings / auth / project）保持允许，避免无业务价值的迁移。
+  // antd 实现及类型只允许在 UI 基础层出现，通知入口也属于 UI 适配。
   {
-    files: ["src/features/canvas/**/*.{ts,tsx}"],
+    files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/hooks/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",
         {
-          selector: "ImportDeclaration[source.value='antd'] > ImportSpecifier:not([imported.name='App'])",
-          message: "核心领域禁止直连 antd UI 组件，请改用 components/ui 的 App* 出口（web/CLAUDE.md 八）",
-        },
-        {
-          selector: "ImportDeclaration[source.value='antd'] > :matches(ImportDefaultSpecifier, ImportNamespaceSpecifier)",
-          message: "核心领域仅允许从 antd 具名导入 App 通知入口；UI 组件请使用 App* 出口",
+          selector: "ImportDeclaration[source.value='antd']",
+          message: "业务代码禁止依赖 antd 实现和类型，请使用 App* 控件或 useAppFeedback（web/CLAUDE.md 八）",
         },
         {
           selector: "ImportDeclaration[source.value=/^antd\\//]",
@@ -175,6 +168,14 @@ const eslintConfig = defineConfig([
         {
           selector: "ImportExpression[source.value=/^antd($|\\/)/]",
           message: "核心领域禁止动态导入 antd 实现，请使用 App* 出口",
+        },
+        {
+          selector: "TSImportType[source.value=/^antd($|\\/)/]",
+          message: "业务代码禁止通过 import() 类型引用 antd，请使用项目接口",
+        },
+        {
+          selector: "JSXAttribute[name.name='className'] Literal[value=/(^|\\s)ant-/]",
+          message: "业务 JSX 使用项目语义类名，第三方类名只允许出现在 UI 实现内",
         },
         {
           selector: "CallExpression[callee.name='require'][arguments.0.value=/^antd($|\\/)/]",

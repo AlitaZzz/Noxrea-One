@@ -1,89 +1,51 @@
 #!/usr/bin/env node
-/**
- * 统计各层对 antd 的直连情况，用于分层治理的进度基线。
- *
- * 用法：
- *   node scripts/count-antd-imports.mjs          输出汇总
- *   node scripts/count-antd-imports.mjs --list   附带文件清单
- *
- * 判定口径：文件中出现 `from 'antd'` 或 `from 'antd/...'` 即计为一次直连。
- * 核心领域（规范第九章）：canvas、agent、workflow、generation、node system、task state，
- * 当前代码里这些能力都落在 features/canvas 子树下，故以 features/canvas 作为核心口径。
- */
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import ts from "typescript";
 
-const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
-const IMPORT_ANTD = /(?:^|[\s;])(?:import|export)[\s\S]*?from\s*['"]antd(?:\/[^'"]*)?['"]/m;
-
-const CORE_PREFIXES = ['features/canvas'];
-
-function walk(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      out.push(...walk(full));
-    } else if (/\.(ts|tsx)$/.test(entry)) {
-      out.push(full);
+const root = fileURLToPath(new URL("../src", import.meta.url));
+const references = [];
+function walk(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const file = join(directory, entry.name);
+    if (entry.isDirectory()) { walk(file); continue; }
+    if (!/\.tsx?$/.test(file)) continue;
+    const filePath = relative(root, file).replaceAll("\\", "/");
+    const ast = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    function visit(node) {
+      let source;
+      let kind = "runtime";
+      let mixedTypes = false;
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+        source = node.moduleSpecifier;
+        if (node.isTypeOnly || node.importClause?.isTypeOnly) kind = "type";
+        else if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+          const items = node.importClause.namedBindings.elements;
+          if (!node.importClause.name && items.length && items.every((item) => item.isTypeOnly)) kind = "type";
+          else mixedTypes = items.some((item) => item.isTypeOnly);
+        }
+      } else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"))) {
+        source = node.arguments[0];
+      } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+        source = node.argument.literal;
+        kind = "type";
+      }
+      if (source && ts.isStringLiteral(source) && /^(antd(?:\/|$)|@ant-design\/icons(?:\/|$))/.test(source.text)) {
+        references.push({ filePath, dependency: source.text.startsWith("antd") ? "antd" : "icons", kind });
+        if (mixedTypes) references.push({ filePath, dependency: source.text.startsWith("antd") ? "antd" : "icons", kind: "type" });
+      }
+      ts.forEachChild(node, visit);
     }
-  }
-  return out;
-}
-
-function isCore(relPath) {
-  const normalized = relPath.split(sep).join('/');
-  return CORE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
-}
-
-function groupOf(relPath) {
-  const normalized = relPath.split(sep).join('/');
-  const [layer, module_] = normalized.split('/');
-  if (layer === 'features') return `features/${module_ ?? '?'}`;
-  return layer;
-}
-
-const files = walk(SRC_DIR)
-  .map((full) => {
-    const relPath = relative(SRC_DIR, full).split(sep).join('/');
-    return { relPath, source: readFileSync(full, 'utf8') };
-  })
-  .filter(({ source }) => IMPORT_ANTD.test(source));
-
-const groups = new Map();
-for (const { relPath } of files) {
-  const group = groupOf(relPath);
-  const bucket = groups.get(group) ?? { total: 0, core: 0, files: [] };
-  bucket.total += 1;
-  if (isCore(relPath)) bucket.core += 1;
-  bucket.files.push(relPath);
-  groups.set(group, bucket);
-}
-
-const sorted = [...groups.entries()].sort((a, b) => b[1].total - a[1].total);
-const total = files.length;
-const core = files.filter(({ relPath }) => isCore(relPath)).length;
-const showList = process.argv.includes('--list');
-
-console.log('antd 直连统计');
-console.log('='.repeat(48));
-const featuresTotal = files.filter(({ relPath }) => relPath.startsWith('features/')).length;
-
-console.log(`总计: ${total} 个文件    核心领域(features/canvas): ${core}`);
-console.log(`业务层(features) 合计: ${featuresTotal}`);
-console.log('-'.repeat(48));
-for (const [group, bucket] of sorted) {
-  console.log(`${group.padEnd(24)} ${String(bucket.total).padStart(3)}  核心 ${bucket.core}`);
-}
-console.log('-'.repeat(48));
-
-if (showList) {
-  for (const [group, bucket] of sorted) {
-    console.log(`\n[${group}]`);
-    for (const file of bucket.files.sort()) {
-      console.log(`  ${isCore(file) ? '*' : ' '} ${file}`);
-    }
+    visit(ast);
   }
 }
+walk(root);
+const implementation = references.filter((item) => item.dependency === "antd" && item.filePath.startsWith("components/ui/"));
+const business = references.filter((item) => item.dependency === "antd" && !item.filePath.startsWith("components/ui/") && !item.filePath.startsWith("__tests__/"));
+const tests = references.filter((item) => item.dependency === "antd" && item.filePath.startsWith("__tests__/"));
+console.log(`antd business: ${business.length}; UI runtime: ${implementation.filter((item) => item.kind === "runtime").length}; UI types: ${implementation.filter((item) => item.kind === "type").length}; tests: ${tests.length}`);
+console.log(`Icon imports (separate dependency): ${references.filter((item) => item.dependency === "icons").length}`);
+if (process.argv.includes("--list")) references.forEach((item) => console.log(`${item.dependency}\t${item.kind}\t${item.filePath}`));
+if (business.length) process.exitCode = 1;

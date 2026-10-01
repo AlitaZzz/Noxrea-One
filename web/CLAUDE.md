@@ -15,7 +15,7 @@
 
 ### 2. 实例获取统一
 
-React 上下文（组件、自定义 Hook）统一通过项目规定的通知实例获取方式调用。
+React 上下文（组件、自定义 Hook）统一通过 `useAppFeedback()` 获取 `message` / `notification`。接口类型由 `lib/feedback.ts` 定义，禁止导出第三方通知实例及类型。
 
 store、工具函数等非 React 上下文使用统一封装方法：
 
@@ -23,6 +23,8 @@ store、工具函数等非 React 上下文使用统一封装方法：
 - `showGlobalNotification()`
 
 禁止在 React 上下文绕过统一入口直接调用全局实例。
+
+`AppUiProvider` 负责主题、浮层容器与通知适配。非 React 入口使用同一适配器；挂载前或卸载期间的消息排队，重新注册后按顺序发送一次，清理仅作用于所属注册。禁止静态第三方通知兜底。
 
 ### 3. 通知规范
 
@@ -134,11 +136,12 @@ UI 基础层：
 | --- | --- |
 | 按钮与动作 | `AppButton`（原生元素 + CSS 类，变体 primary/default/ghost/danger）、`NavButton`、`IconActionButton`（圆形图标主操作，含 loading / cancel 态）、`DialogActions`（弹窗底部「取消 + 主行动」区） |
 | 弹窗 | `AppModal`（全站弹窗基座，内含 layer 层级系统）、`ConfirmModal`（二次确认） |
-| 表单字段 | `ParamFields`（声明式参数渲染：segmented/select/slider/switch/number）、`ParamSummary`、`AppInput`、`AppNumberInput`、`AppCheckbox` |
+| 表单字段 | `ParamFields`（声明式参数渲染：segmented/select/slider/switch/number）、`ParamSummary`、`AppInput`、`AppPasswordInput`、`AppNumberInput`、`AppCheckbox`、`AppSwitch` |
 | 提示与浮层 | `AppTooltip`、`AppPopover`、`AppEmpty`、`TaskErrorDetail`（长文折叠详情） |
-| 选择与取值 | `AppDropdown`、`AppMenu`、`AppSlider`、`AppColorPicker` |
+| 选择与取值 | `AppDropdown`、`AppMenu`、`AppSelect`、`AppTreeSelect`、`AppSlider`、`AppColorPicker` |
 | 容器与列表 | `AppDrawer`、`VirtualList`、`WheelGuard` |
-| 展示 | `AppDescriptions`、`AppTypography` |
+| 展示 | `AppDescriptions`、`AppTypography`、`AppProgress`、`AppSpinner` |
+| 主题与通知 | `AppUiProvider`、`useAppFeedback` |
 | 图标资产 | `icons/`（纯 SVG，无业务规则，可被各层直接引用） |
 
 出口分两种写法，按代价选择：
@@ -158,15 +161,15 @@ UI 基础层：
 
 1. 不禁止使用成熟 UI 库。
 2. 业务代码不应该直接依赖具体 UI 库实现细节。
-3. 核心业务领域新增代码优先通过 UI 基础层获取通用 UI 能力。
-4. 已存在代码逐步优化，不进行无业务价值的大规模迁移。
+3. 所有业务代码通过 UI 基础层获取通用 UI 能力。
+4. 重构直接迁移所有受影响的调用方，不保留旧 API 或临时兼容层。
 5. 不为了追求形式上的架构纯净进行过度抽象。
 
 **强制约束**（由 `eslint.config.mjs` 保证，违反无法合入）：
 
-- 核心业务领域（`src/features/canvas/**`）禁止直接 `import` 第三方 UI 库的 UI 组件，必须走八.3 的 `App*` 出口。
-- 例外：`App`（`App.useApp()`）是通知入口，不算 UI 组件依赖。
-- 非核心目录（assets / director / settings / auth / project）不受此约束，避免无业务价值的迁移。
+- `src/features/**`、`src/app/**`、`src/hooks/**`、`src/lib/**`、`src/providers/**` 禁止导入、重新导出或动态加载 antd 及其子路径，包括类型与 `App` 通知入口。
+- antd 导入只允许出现在 `components/ui` 实现内；图标依赖 `@ant-design/icons` 单独管理。
+- 业务 JSX 使用项目语义类名；antd 专属选择器集中在 `components/ui/antd.css`，主题集中在 `components/ui/theme.ts`。替换 UI 库时，业务契约与流程不需要迁移。
 - 跨层依赖由 `boundaries/dependencies` 以 error 级别强制：app → feature → ui → lib，反向依赖直接报错。
 
 ### 5. 组件归属判断
