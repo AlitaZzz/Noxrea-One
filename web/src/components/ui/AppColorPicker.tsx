@@ -7,9 +7,10 @@ import { ColorPicker } from "antd";
 export interface AppColorPickerProps {
   value: string;
   onChangeComplete?: (color: string) => void;
+  onChange?: (color: string) => void;
   size?: "small" | "middle" | "large";
 }
 
 export default function AppColorPicker(props: AppColorPickerProps) {
-  return <ColorPicker {...props} format="hex" onChangeComplete={(color) => props.onChangeComplete?.(color.toHexString())} />;
+  return <ColorPicker {...props} format="hex" onChange={(color) => props.onChange?.(color.toHexString())} onChangeComplete={(color) => props.onChangeComplete?.(color.toHexString())} />;
 }

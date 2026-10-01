@@ -16,6 +16,7 @@ export interface AppPopoverProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   arrow?: boolean;
+  zIndex?: number;
   popupClassName?: string;
   contentStyle?: CSSProperties;
   getPopupContainer?: (trigger: HTMLElement) => HTMLElement;

@@ -16,8 +16,9 @@ export interface AppTooltipProps {
   children: ReactElement;
   placement?: TooltipPlacement;
   open?: boolean;
+  hoverDelay?: number;
 }
 
-export default function AppTooltip(props: AppTooltipProps) {
-  return <Tooltip {...props} />;
+export default function AppTooltip({ hoverDelay, ...props }: AppTooltipProps) {
+  return <Tooltip {...props} mouseEnterDelay={hoverDelay} />;
 }

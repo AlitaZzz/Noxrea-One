@@ -4,7 +4,7 @@
 "use client";
 
 import { Slider } from "antd";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export interface AppSliderProps {
   value?: number;
@@ -14,11 +14,12 @@ export interface AppSliderProps {
   onChange?: (value: number) => void;
   disabled?: boolean;
   showTooltip?: boolean;
+  formatTooltip?: (value: number) => ReactNode;
   className?: string;
   style?: CSSProperties;
   styles?: { rail?: CSSProperties; track?: CSSProperties; handle?: CSSProperties };
 }
 
-export default function AppSlider({ showTooltip = true, ...props }: AppSliderProps) {
-  return <Slider {...props} tooltip={showTooltip ? undefined : { open: false }} />;
+export default function AppSlider({ showTooltip = true, formatTooltip, ...props }: AppSliderProps) {
+  return <Slider {...props} tooltip={showTooltip ? { formatter: formatTooltip ? (value) => value === undefined ? null : formatTooltip(value) : undefined } : { open: false }} />;
 }

@@ -3,16 +3,24 @@
  */
 "use client";
 
-import { Input } from "antd";
-import type { InputHTMLAttributes, ReactNode } from "react";
+import { Input, type InputRef } from "antd";
+import { type InputHTMLAttributes, type ReactNode, type Ref, useImperativeHandle, useRef } from "react";
 
 export interface AppInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "prefix"> {
   size?: "small" | "middle" | "large";
   variant?: "outlined" | "borderless" | "filled";
   prefix?: ReactNode;
   allowClear?: boolean;
+  showCount?: boolean;
+  status?: "error" | "warning";
+  onPressEnter?: InputHTMLAttributes<HTMLInputElement>["onKeyDown"];
+  ref?: Ref<AppInputHandle>;
 }
 
-export default function AppInput(props: AppInputProps) {
-  return <Input {...props} />;
+export interface AppInputHandle { focus(): void; select(): void }
+
+export default function AppInput({ ref, ...props }: AppInputProps) {
+  const input = useRef<InputRef>(null);
+  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus(), select: () => input.current?.select() }), []);
+  return <Input {...props} ref={input} />;
 }

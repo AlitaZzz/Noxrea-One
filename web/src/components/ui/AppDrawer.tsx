@@ -18,6 +18,7 @@ export interface AppDrawerProps {
   extra?: ReactNode;
   children: ReactNode;
   className?: string;
+  destroyOnHidden?: boolean;
   styles?: { header?: CSSProperties; body?: CSSProperties; panel?: CSSProperties };
 }
 

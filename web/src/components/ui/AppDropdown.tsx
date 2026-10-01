@@ -15,9 +15,10 @@ export interface AppDropdownProps {
   placement?: PopupPlacement;
   trigger?: Exclude<PopupTrigger, "focus">[];
   open?: boolean;
+  closeDelay?: number;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function AppDropdown({ menu, onOpenChange, ...props }: AppDropdownProps) {
-  return <Dropdown {...props} menu={toMenuProps(menu)} onOpenChange={onOpenChange ? (open) => onOpenChange(open) : undefined} />;
+export default function AppDropdown({ menu, onOpenChange, closeDelay, ...props }: AppDropdownProps) {
+  return <Dropdown {...props} mouseLeaveDelay={closeDelay} menu={toMenuProps(menu)} onOpenChange={onOpenChange ? (open) => onOpenChange(open) : undefined} />;
 }
