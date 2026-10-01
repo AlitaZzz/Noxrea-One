@@ -34,6 +34,7 @@ import {
 } from "@/lib/constants";
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
+import { captureSession, onSessionChange } from "@/lib/session-lifecycle";
 import { kindOfBlob } from "@/lib/upload-formats";
 import { stripMediaExtension } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
@@ -144,6 +145,7 @@ function isCurrentUpload(node: AnyNode | undefined, version: number): node is An
  * @returns 占位节点 ID（准备阶段结束即就绪，用于乐观 UI）与全部结束后的汇总 Promise
  */
 export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
+  const session = captureSession();
   // 已离线：不发请求、不建占位，直接以「离线」语义返回空结果（统一覆盖所有上传入口）
   if (isOffline()) {
     showGlobalMessage().error(i18n.t("error.upload.offline"));
@@ -188,6 +190,11 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
     let nh = item.naturalHeight ?? 0;
     if (needsPreview && previewUrl && !(nw > 0 && nh > 0)) {
       const dims = await loadMediaDimensions(previewUrl, kind === "video");
+      if (session.signal.aborted) {
+        for (const entry of prepared) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+        URL.revokeObjectURL(previewUrl);
+        return emptyHandle();
+      }
       nw = dims.w;
       nh = dims.h;
     }
@@ -372,6 +379,9 @@ interface RetryContext {
  * 仅在节点仍留在画布上时存在；重试成功或节点被移除时清理，并释放其本地预览。
  */
 const retryStore = new Map<string, RetryContext>();
+onSessionChange(() => {
+  for (const nodeId of retryStore.keys()) releaseRetryContext(nodeId);
+});
 
 /**
  * 惰性回收重试上下文：节点被删除 / 撤销后其上下文不再可达，
@@ -428,6 +438,7 @@ async function runUploads(
   prepared: Prepared[],
   source: "upload" | "derived",
 ): Promise<UploadSummary> {
+  const session = captureSession();
   const sink = plan.sink;
   const summaryResults: Array<UploadResult | null | undefined> = new Array(plan.items.length);
   let succeeded = 0;
@@ -439,6 +450,7 @@ async function runUploads(
   // 单个任务结束即落库 / 标记失败：完成一个处理一个。
   // 若等整批跑完再统一写入，慢的那个会拖住所有节点，表现为「进度条走完却迟迟不出图」。
   const settleOne = (p: Prepared, r: PromiseSettledResult<UploadResult>) => {
+    if (session.signal.aborted) return;
     // 预览 URL 释放时机：成功 / 回滚 / 节点已消失时立即释放；失败且占位节点保留时
     // 交给节点持有（失败遮罩与重试都要用它），由重试成功或「移除」时释放
     const releasePreview = () => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); };
@@ -557,6 +569,7 @@ async function runUploads(
         const value = await uploadWithRetry(
           p.file,
           (pct) => {
+            if (session.signal.aborted) return;
             plan.onProgress?.(p.itemIndex, pct);
             const targetId = p.node?.id ?? p.replaceId;
             if (!targetId) return;
@@ -581,6 +594,10 @@ async function runUploads(
     plan.concurrency ?? UPLOAD_CONCURRENCY,
   );
 
+  if (session.signal.aborted) {
+    for (const entry of prepared) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    return { succeeded: 0, failed: prepared.length, results: plan.items.map(() => null) };
+  }
   markDirtyImmediate();
 
   // 画布上已有失败节点（自带失败遮罩与重试入口）时不再弹全局汇总，避免重复打扰；
@@ -628,6 +645,7 @@ export async function uploadOne(
  * @returns 是否重试成功
  */
 export async function retryNodeUpload(nodeId: string): Promise<boolean> {
+  const session = captureSession();
   const ctx = retryStore.get(nodeId);
   if (!ctx) return false;
   if (!findNode(nodeId)) {
@@ -647,6 +665,7 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
     const result = await uploadWithRetry(
       toFile(ctx.item),
       (pct) => {
+        if (session.signal.aborted) return;
         if (!isCurrentUpload(findNode(nodeId), version)) return;
         runSuppressed(() => useCanvasStore.getState().updateNodeData(
           nodeId,
@@ -658,6 +677,7 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
       UPLOAD_MAX_RETRIES,
       ctx.source,
     );
+    if (session.signal.aborted) return false;
     if (isCurrentUpload(findNode(nodeId), version)) {
       applyUploadResult(nodeId, result, ctx);
     } else if (ctx.previewUrl) {
@@ -668,6 +688,7 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
     markDirtyImmediate();
     return true;
   } catch (err) {
+    if (session.signal.aborted) return false;
     if (isCurrentUpload(findNode(nodeId), version)) {
       // 重试仍失败：回到失败态，继续保留预览供下次重试
       markUploadFailed(nodeId, version, classifyUploadError(err), ctx.previewUrl);

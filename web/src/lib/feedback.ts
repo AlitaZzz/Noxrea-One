@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { onSessionChange } from "@/lib/session-lifecycle";
+
 export type FeedbackKind = "success" | "error" | "info" | "warning";
 export interface NotificationOptions {
   title: string;
@@ -20,6 +22,7 @@ type FeedbackEvent =
 
 let current: { api: FeedbackApi } | null = null;
 const pending: FeedbackEvent[] = [];
+onSessionChange(() => { pending.length = 0; });
 
 function deliver(api: FeedbackApi, event: FeedbackEvent) {
   if (event.channel === "message") api.message[event.kind](event.payload);

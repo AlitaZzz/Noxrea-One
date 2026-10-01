@@ -7,6 +7,7 @@ import { getLayerPopupContainer } from "@/components/ui/modal/layer-context";
 import { directorTheme } from "@/components/ui/theme";
 import { FeedbackContext } from "@/components/ui/use-app-feedback";
 import { type FeedbackApi, type FeedbackKind, type NotificationOptions, registerFeedback } from "@/lib/feedback";
+import { onSessionChange } from "@/lib/session-lifecycle";
 
 function FeedbackProvider({ children }: { children: ReactNode }) {
   const { message, notification } = App.useApp();
@@ -31,6 +32,10 @@ function FeedbackProvider({ children }: { children: ReactNode }) {
     };
   }, [message, notification]);
   useEffect(() => registerFeedback(feedback), [feedback]);
+  useEffect(() => onSessionChange(() => {
+    message.destroy();
+    notification.destroy();
+  }), [message, notification]);
   return <FeedbackContext.Provider value={feedback}>{children}</FeedbackContext.Provider>;
 }
 

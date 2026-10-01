@@ -7,19 +7,13 @@
 import "@/lib/i18n/config";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppUiProvider from "@/components/ui/AppUiProvider";
 import { useAuthStore } from "@/features/auth/store";
 import { setUnauthorizedHandler } from "@/lib/api/client";
 import { loadUploadFormats } from "@/lib/upload-formats";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
-  },
-});
 
 /** 401 的登出动作属于 auth feature，由 app 层注入给 lib/api/client，避免 lib 反向依赖 feature */
 function UnauthorizedHandlerRegistrar() {
@@ -49,15 +43,26 @@ function HtmlLangSync() {
   return null;
 }
 
-export function AppProviders({ children }: { children: ReactNode }) {
+function SessionProviders({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+  }));
+  useEffect(() => () => { queryClient.clear(); }, [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
-      <AppUiProvider>
-        <UnauthorizedHandlerRegistrar />
-        <UploadFormatsWarmup />
-        <HtmlLangSync />
-        {children}
-      </AppUiProvider>
+      {children}
     </QueryClientProvider>
+  );
+}
+
+export function AppProviders({ children }: { children: ReactNode }) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return (
+    <AppUiProvider>
+      <UnauthorizedHandlerRegistrar />
+      <UploadFormatsWarmup />
+      <HtmlLangSync />
+      <SessionProviders key={userId ?? "guest"}>{children}</SessionProviders>
+    </AppUiProvider>
   );
 }

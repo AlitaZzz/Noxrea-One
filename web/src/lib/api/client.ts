@@ -8,6 +8,7 @@
 import type { ApiErrorBody } from "@/lib/api/error-message";
 import { isRecord, parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
+import { captureSession, onSessionChange } from "@/lib/session-lifecycle";
 
 // 同源请求：/api/* 由 next.config.ts 的 rewrites 透明代理至 server/ 的 Hono 服务
 export const BASE = "";
@@ -32,11 +33,9 @@ export class UnauthorizedError extends Error {
   }
 }
 
-/**
- * 页面会跳转到登录页并重新加载模块，因此该状态无需恢复。
- * 如果未来改为 Refresh Token 自动续期逻辑，需要重新设计此处的状态管理。
- */
+/** 每个会话只派发一次过期处理；身份变化后允许新会话独立处理。 */
 let isHandlingUnauthorized = false;
+onSessionChange(() => { isHandlingUnauthorized = false; });
 
 /** 会话过期跳转登录页的一次性提示标记：模块状态不跨整页导航存活，经 sessionStorage 传递 */
 export const SESSION_EXPIRED_FLAG = "session_expired";
@@ -53,11 +52,14 @@ async function handleUnauthorized() {
 
   // 统一走注入的 logout：服务端过期 httpOnly cookie（JS 无法清除）+ 清用户态与本地缓存。
   // 必须等 cookie 清除完成再跳转：带着残留 cookie 进入受保护页会再次触发 401，形成跳转循环。
+  const logout = (async () => unauthorizedHandler?.())();
+  const session = captureSession();
   try {
-    await unauthorizedHandler?.();
+    await logout;
   } catch {
     // 登出清凭据失败不阻塞跳转
   }
+  if (session.signal.aborted) return;
 
   // 提示由登录页挂载时读取标记展示一次性「会话过期」，跳转本身立即执行
   try {
@@ -108,22 +110,27 @@ export async function api<T = unknown>(
   path: string,
   options: RequestInit & { skipUnauthorized?: boolean } = {}
 ): Promise<T> {
+  const session = captureSession();
   const { skipUnauthorized, ...fetchOptions } = options;
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...fetchOptions,
+      signal: fetchOptions.signal ? AbortSignal.any([fetchOptions.signal, session.signal]) : session.signal,
       headers: {
         "Content-Type": "application/json",
         ...(fetchOptions.headers || {}),
       },
     });
   } catch {
+    session.assertCurrent();
     throw new ApiError(0, i18n.t("error.network_unreachable"));
   }
+  session.assertCurrent();
   if (!skipUnauthorized && checkUnauthorized(res.status)) throw new UnauthorizedError();
   // 响应体可能为空（204）或是网关返回的 HTML，解析失败按 null 处理，不要抛错
   const body = (await res.json().catch(() => null)) as unknown;
+  session.assertCurrent();
   if (!res.ok) {
     const errorBody = parseErrorBody(body);
     throw new ApiError(res.status, resolveApiError(errorBody, res.status), errorBody);
@@ -181,6 +188,7 @@ export function apiUploadWithProgress<T = unknown>(
   formData: FormData,
   onProgress?: (pct: number) => void
 ): Promise<T> {
+  const session = captureSession();
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE}${path}`);
@@ -193,10 +201,10 @@ export function apiUploadWithProgress<T = unknown>(
       if (settled) return;
       const idle = Date.now() - lastActiveAt;
       if (idle <= (bodySent ? UPLOAD_RESPONSE_TIMEOUT_MS : UPLOAD_IDLE_TIMEOUT_MS)) return;
-      settled = true;
-      clearInterval(watcher);
-      xhr.abort();
-      reject(new UploadTransportError("timeout", i18n.t("error.upload.timeout")));
+      settle(() => {
+        xhr.abort();
+        reject(new UploadTransportError("timeout", i18n.t("error.upload.timeout")));
+      });
     }, UPLOAD_WATCH_INTERVAL_MS);
     const touch = () => { lastActiveAt = Date.now(); };
     /** 统一收口：定时器只清理一次，且每个分支只会 resolve / reject 一次 */
@@ -205,6 +213,7 @@ export function apiUploadWithProgress<T = unknown>(
       settled = true;
       clearInterval(watcher);
       window.removeEventListener("offline", onOffline);
+      session.signal.removeEventListener("abort", onSessionAbort);
       fn();
     };
     /**
@@ -218,6 +227,13 @@ export function apiUploadWithProgress<T = unknown>(
       });
     };
     window.addEventListener("offline", onOffline);
+    const onSessionAbort = () => {
+      settle(() => {
+        xhr.abort();
+        reject(session.signal.reason);
+      });
+    };
+    session.signal.addEventListener("abort", onSessionAbort, { once: true });
 
     xhr.upload.onprogress = (e) => {
       touch();
@@ -259,14 +275,17 @@ export async function apiRaw(
   path: string,
   options: RequestInit & { skipUnauthorized?: boolean } = {}
 ): Promise<Response> {
+  const session = captureSession();
   const { skipUnauthorized, ...fetchOptions } = options;
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await session.run(() => fetch(`${BASE}${path}`, {
     ...fetchOptions,
+    signal: fetchOptions.signal ? AbortSignal.any([fetchOptions.signal, session.signal]) : session.signal,
     headers: {
       "Content-Type": "application/json",
       ...(fetchOptions.headers || {}),
     },
-  });
+  }));
+  session.assertCurrent();
   if (!skipUnauthorized) checkUnauthorized(res.status);
   return res;
 }

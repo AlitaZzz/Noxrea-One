@@ -6,10 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import AppUiProvider from "@/components/ui/AppUiProvider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { globalFeedback } from "@/lib/feedback";
+import { changeSession } from "@/lib/session-lifecycle";
 
 const backend = vi.hoisted(() => ({
-  message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  notification: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), destroy: vi.fn() },
+  notification: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), destroy: vi.fn() },
 }));
 vi.mock("antd", () => ({
   App: Object.assign(({ children }: { children: ReactNode }) => children, { useApp: () => backend }),
@@ -20,6 +21,16 @@ vi.mock("@/components/ui/theme", () => ({ directorTheme: () => ({}) }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("project feedback adapter", () => {
+  it("clears old notices on account changes while retaining the feedback instance", () => {
+    const { result } = renderHook(useAppFeedback, { wrapper: AppUiProvider });
+    const feedback = result.current;
+    act(() => changeSession());
+    expect(backend.message.destroy).toHaveBeenCalledTimes(1);
+    expect(backend.notification.destroy).toHaveBeenCalledTimes(1);
+    expect(result.current).toBe(feedback);
+    act(() => feedback.message.success("Welcome"));
+    expect(backend.message.success).toHaveBeenCalledExactlyOnceWith("Welcome");
+  });
   it("preserves rich descriptions, deduplication keys and explicit duration", () => {
     const { result } = renderHook(useAppFeedback, { wrapper: AppUiProvider });
     const description = <b>Detailed failure</b>;

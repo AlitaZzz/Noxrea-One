@@ -12,7 +12,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { runMediaUpload } from "@/features/canvas/upload";
+import { retryNodeUpload, runMediaUpload } from "@/features/canvas/upload";
+import { changeSession } from "@/lib/session-lifecycle";
 import { type UploadErrorInfo, uploadWithRetry } from "@/lib/utils/upload";
 
 // ── 隔离浏览器 / 副作用依赖：本测试只验证「管道 ↔ 画布状态」的交互 ──
@@ -74,8 +75,10 @@ describe("上传管道的失败与落库行为", () => {
   });
 
   it("多文件并发：先完成的立即落库，不等待整批结束", async () => {
+    let finishSlow!: () => void;
+    const slow = new Promise<void>((resolve) => { finishSlow = resolve; });
     vi.mocked(uploadWithRetry).mockImplementation(async (file) => {
-      await new Promise((r) => setTimeout(r, file.name === "slow.png" ? 60 : 5));
+      if (file.name === "slow.png") await slow;
       return { url: `https://cdn/${file.name}`, key: file.name };
     });
 
@@ -91,9 +94,34 @@ describe("上传管道的失败与落库行为", () => {
     });
     expect(dataOf(nodeIds[0])?.src).toBeFalsy();
 
+    finishSlow();
     const summary = await settled;
     expect(summary.succeeded).toBe(2);
     expect(dataOf(nodeIds[0])?.src).toBe("https://cdn/slow.png");
+  });
+
+  it("会话结束后不写回旧上传结果或开始队列里的文件", async () => {
+    let finish!: (value: { url: string; key: string }) => void;
+    vi.mocked(uploadWithRetry).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const { nodeIds, settled } = await runMediaUpload({
+      items: [item("first.png"), item("queued.png")], sink: { kind: "create-node" }, concurrency: 1,
+    });
+    changeSession();
+    finish({ url: "https://cdn/a.png", key: "a" });
+    const result = await settled;
+    expect(result).toMatchObject({ succeeded: 0, failed: 2, results: [null, null] });
+    expect(vi.mocked(uploadWithRetry)).toHaveBeenCalledTimes(1);
+    for (const id of nodeIds) expect(dataOf(id)?.src).toBeFalsy();
+  });
+
+  it("会话结束后释放失败文件的重试上下文", async () => {
+    vi.mocked(uploadWithRetry).mockRejectedValue(new Error("network down"));
+    const { nodeIds, settled } = await runMediaUpload({ items: [item("a.png")], sink: { kind: "create-node" } });
+    await settled;
+    changeSession();
+    vi.mocked(uploadWithRetry).mockClear();
+    expect(await retryNodeUpload(nodeIds[0])).toBe(false);
+    expect(vi.mocked(uploadWithRetry)).not.toHaveBeenCalled();
   });
 
   it("多文件部分失败：失败项留在画布上，成功项正常落库", async () => {

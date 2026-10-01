@@ -9,6 +9,7 @@ import {
   UploadTransportError,
 } from "@/lib/api/client";
 import i18n from "@/lib/i18n/config";
+import { captureSession, SessionChangedError } from "@/lib/session-lifecycle";
 
 /** 上传默认并发数 */
 export const UPLOAD_CONCURRENCY = 3;
@@ -33,6 +34,7 @@ export async function runWithConcurrency<T>(
   tasks: (() => Promise<T>)[],
   concurrency: number = UPLOAD_CONCURRENCY,
 ): Promise<PromiseSettledResult<T>[]> {
+  const session = captureSession();
   const results: PromiseSettledResult<T>[] = new Array(tasks.length);
   let nextIndex = 0;
 
@@ -41,7 +43,8 @@ export async function runWithConcurrency<T>(
       const index = nextIndex++;
       if (index >= tasks.length) break;
       try {
-        const value = await tasks[index]();
+        const value = await session.run(tasks[index]);
+        session.assertCurrent();
         results[index] = { status: "fulfilled", value };
       } catch (reason) {
         results[index] = { status: "rejected", reason };
@@ -86,6 +89,9 @@ export function isOffline(): boolean {
  * 业务错误（code !== 200）不可重试；传输错误按其类别判定；其余按可重试处理。
  */
 export function classifyUploadError(err: unknown): UploadErrorInfo {
+  if (err instanceof SessionChangedError) {
+    return { category: "abort", message: i18n.t("error.upload.aborted"), retryable: false };
+  }
   if (err instanceof UploadBusinessError) {
     return {
       category: "business",
@@ -126,6 +132,7 @@ export async function uploadWithRetry(
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
 ): Promise<UploadResult> {
+  const session = captureSession();
   let lastErr: unknown;
   const sourceQuery = source ? `?source=${source}` : "";
 
@@ -133,11 +140,12 @@ export async function uploadWithRetry(
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const data = await apiUploadWithProgress<UploadResult>(
+      const data = await session.run(() => apiUploadWithProgress<UploadResult>(
         `/api/files/upload${sourceQuery}`,
         formData,
         onProgress,
-      );
+      ));
+      session.assertCurrent();
 
       if (!data?.url) {
         // 2xx 但响应缺少 url 字段：结构异常，不重试
@@ -146,6 +154,7 @@ export async function uploadWithRetry(
 
       return data;
     } catch (err) {
+      session.assertCurrent();
       // 业务错误和鉴权错误不重试，直接抛出
       if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) {
         throw err;
