@@ -7,7 +7,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   /** 设置拉取失败：展示失败文案与重试按钮 */
@@ -19,7 +19,7 @@ interface Props {
 export default function CanvasLoader({ failed = false, onRetry }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4" style={{ background: "var(--canvas-app-bg)" }}>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4" style={{ background: "var(--background)" }}>
       <div className="canvas-clover">
         {[0, 1, 2, 3].map((i) => (
           <span
@@ -31,12 +31,12 @@ export default function CanvasLoader({ failed = false, onRetry }: Props) {
       </div>
       {failed && onRetry && (
         <div className="flex flex-col items-center gap-2">
-          <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>
+          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
             {t("canvas.loadFailed")}
           </span>
-          <AppButton size="sm" onClick={onRetry}>
+          <Button size="sm" onClick={onRetry}>
             {t("canvas.retry")}
-          </AppButton>
+          </Button>
         </div>
       )}
     </div>

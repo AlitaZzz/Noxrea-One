@@ -10,10 +10,10 @@
  */
 "use client";
 
-import { EditOutlined } from "@ant-design/icons";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
-import AppInput from "@/components/ui/AppInput";
+import { EditOutlined } from "@/components/ui/AppIcon";
+import { Input } from "@/components/ui/input";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
@@ -115,10 +115,8 @@ export default function NodeTitle({
       {editing ? (
         <span className="flex items-center gap-0.5 flex-1 min-w-0">
           {icon}
-          <AppInput
-            size="small"
-            variant="borderless"
-            className="nodrag text-[13px] font-medium text-white/80"
+          <Input
+            className="nodrag border-0 bg-transparent text-[13px] font-medium text-white/80 shadow-none focus-visible:ring-0"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={handleSave}
@@ -129,8 +127,8 @@ export default function NodeTitle({
             style={{
               padding: "1px 4px",
               height: 20,
-              background: "var(--canvas-bg)",
-              border: "1px solid var(--canvas-border, #525252)",
+              background: "var(--card)",
+              border: "1px solid var(--border, #525252)",
               borderRadius: 4,
               outline: "none",
               boxShadow: "none",

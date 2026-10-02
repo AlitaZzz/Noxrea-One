@@ -9,7 +9,7 @@ import { type NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { createElement } from "react";
 import { useTranslation } from "react-i18next";
 
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
 
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
 import { type ReferenceItemAttrs, refLabelKey } from "./reference";

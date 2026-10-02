@@ -9,9 +9,8 @@
 import { memo, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
-import { StopIcon } from "@/components/ui/icons/media/StopIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { CloseOutlined, PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 import { useRevealCanvasNode } from "./reveal-node";
@@ -66,7 +65,7 @@ function AudioRefCard({
   return (
     <div
       className={`relative group h-14 w-14 rounded flex items-center justify-center transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
+      style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
       draggable
       onDoubleClick={() => {
         const s = useCanvasStore.getState();
@@ -112,49 +111,59 @@ function AudioRefCard({
         if (playing) stop();
       }}
     >
-      <WaveIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 16, height: 16 }} />
+      <WaveIcon className="pointer-events-none" style={{ color: "var(--foreground)", width: 16, height: 16 }} />
       {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
       <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refAudioLabel", { index: index + 1 })}</span>
       {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
       {hovered && (
-        <button
+        <Button
           type="button"
+          size="icon-sm"
+          variant="ghost"
           aria-label={playing ? t("common.stop") : t("common.play")}
-          className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
+          className="absolute inset-0 m-auto rounded-full bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
           onClick={(e) => {
             e.stopPropagation();
             toggle();
           }}
         >
           {playing ? (
-            <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
+            <StopIcon className="size-4" />
           ) : (
-            <PlayIcon style={{ color: "#fff", width: 16, height: 16 }} />
+            <PlayIcon className="size-4" />
           )}
-        </button>
+        </Button>
       )}
       {/* 播放中不悬停时也显示停止图标，便于随时停止 */}
       {playing && !hovered && (
-        <button
+        <Button
           type="button"
+          size="icon-sm"
+          variant="ghost"
           aria-label={t("common.stop")}
-          className="app-overlay-btn app-overlay-btn--round absolute inset-0 m-auto"
+          className="absolute inset-0 m-auto rounded-full bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
           onClick={(e) => {
             e.stopPropagation();
             stop();
           }}
         >
-          <StopIcon style={{ color: "#fff", width: 16, height: 16 }} />
-        </button>
+          <StopIcon className="size-4" />
+        </Button>
       )}
-      <button
+      <Button
         type="button"
-        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t("common.delete")}
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</button>
+        }}
+      >
+        <CloseOutlined className="size-3" />
+      </Button>
       <audio
         ref={audioRef}
         src={audio.src}

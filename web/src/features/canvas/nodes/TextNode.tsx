@@ -16,7 +16,7 @@ import { type NodeProps } from "@xyflow/react";
 import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { TextIcon } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
@@ -195,7 +195,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         display={data.label || t("node.text")}
         trailing={
           charCount > 0 ? (
-            <span style={charCount > 500 ? { color: "var(--canvas-warning)" } : undefined}>{charCount}</span>
+            <span style={charCount > 500 ? { color: "var(--chart-4)" } : undefined}>{charCount}</span>
           ) : null
         }
       />
@@ -203,7 +203,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
       {/* Body */}
       <div
         className={`node-body relative flex-1 flex flex-col overflow-hidden rounded-lg ${selected ? "node-selected" : ""}`}
-        style={{ background: "var(--canvas-node-bg)" }}
+        style={{ background: "var(--card)" }}
         onDoubleClick={(e) => {
           e.stopPropagation();
           useCanvasStore.getState().setEditingTextNodeId(id);

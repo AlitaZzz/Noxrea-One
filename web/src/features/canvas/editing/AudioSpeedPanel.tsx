@@ -5,13 +5,13 @@
  */
 "use client";
 
-import { CaretDownOutlined, CaretUpOutlined, CloseOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppNumberInput from "@/components/ui/AppNumberInput";
-import AppSlider from "@/components/ui/AppSlider";
+import { CaretDownOutlined, CaretUpOutlined, CloseOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { NumberInput } from "@/components/ui/number-input";
+import { Slider } from "@/components/ui/slider";
 
 interface AudioSpeedPanelProps {
   /** 草稿倍率（拖动/输入中实时变化） */
@@ -36,64 +36,61 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
     <>
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <AppButton variant="ghost" iconOnly onClick={onCancel} ><CloseOutlined /></AppButton>
-        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.audioSpeed")}</span>
+        <Button variant="ghost" iconOnly onClick={onCancel} ><CloseOutlined /></Button>
+        <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.audioSpeed")}</span>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
       {/* 中组：0.1x — 滑杆 — 4.0x（固定宽度：外层工具栏宽度由内容撑开，
           flex-1 在自适应容器里会坍缩为 0，滑杆必须靠显式宽度撑起） */}
       <div className="flex h-8 w-[180px] shrink-0 items-center gap-2 px-2">
-        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>0.1x</span>
-        <AppSlider
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--muted-foreground)" }}>0.1x</span>
+        <Slider
           min={SPEED_MIN}
           max={SPEED_MAX}
           step={SPEED_STEP}
-          value={speed}
-          showTooltip={false}
-          onChange={(v) => onSpeedChange(Math.round(v * 100) / 100)}
-          style={{ width: "100%", margin: 0 }}
+          value={[speed]}
+          onValueChange={([next]) => onSpeedChange(Math.round(next * 100) / 100)}
+          className="w-full"
         />
-        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--canvas-text-dim)" }}>4.0x</span>
+        <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--muted-foreground)" }}>4.0x</span>
       </div>
 
       {/* 右组：数字输入 + 上下步进 */}
       <div
         className="flex h-8 shrink-0 items-center overflow-hidden rounded-lg pl-2 pr-0"
-        style={{ background: "var(--canvas-bg-hover)" }}
+        style={{ background: "var(--accent)" }}
       >
-        <AppNumberInput
-          size="small"
+        <NumberInput
           min={SPEED_MIN}
           max={SPEED_MAX}
           step={SPEED_STEP}
           value={speed}
           controls={false}
-          variant="borderless"
           onChange={(v) => { if (v != null) onSpeedChange(clamp(v)); }}
-          style={{ width: 60, background: "transparent" }}
+          className="h-8 w-[60px] border-0 bg-transparent shadow-none"
           suffix="×"
         />
         <div className="flex h-full w-5 shrink-0 flex-col overflow-hidden">
-          <AppButton
+          <Button
             variant="ghost"
             style={{ height: 16, padding: 0 }}
             onClick={stepUp}
           >
             <CaretUpOutlined style={{ fontSize: 10 }} />
-          </AppButton>
-          <AppButton
+          </Button>
+          <Button
             variant="ghost"
             style={{ height: 16, padding: 0 }}
             onClick={stepDown}
           >
             <CaretDownOutlined style={{ fontSize: 10 }} />
-          </AppButton>
+          </Button>
         </div>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
       {/* 确认：↑ 反色箭头 */}
       <IconActionButton onClick={onApply} />
     </>

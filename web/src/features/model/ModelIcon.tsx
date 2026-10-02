@@ -5,26 +5,26 @@
  * 归属说明：品牌映射表是模型领域知识，被 settings（配置）与 canvas（使用）共同消费，
  * 因此放在中立的 features/model 切片，避免 settings 与 canvas 互相依赖。
  */
-import { RobotOutlined } from "@ant-design/icons";
 import type { ComponentType, CSSProperties } from "react";
 
-import { AgnesIcon } from "@/components/ui/icons/models/AgnesIcon";
-import { ClaudeIcon } from "@/components/ui/icons/models/ClaudeIcon";
-import { DeepSeekIcon } from "@/components/ui/icons/models/DeepSeekIcon";
-import { DoubaoIcon } from "@/components/ui/icons/models/DoubaoIcon";
-import { FluxIcon } from "@/components/ui/icons/models/FluxIcon";
-import { GeminiIcon } from "@/components/ui/icons/models/GeminiIcon";
-import { GLMIcon } from "@/components/ui/icons/models/GLMIcon";
-import { GrokIcon } from "@/components/ui/icons/models/GrokIcon";
-import { HappyHorseIcon } from "@/components/ui/icons/models/HappyHorseIcon";
-import { KimiIcon } from "@/components/ui/icons/models/KimiIcon";
-import { KlingIcon } from "@/components/ui/icons/models/KlingIcon";
-import { MiniMaxIcon } from "@/components/ui/icons/models/MiniMaxIcon";
-import { OpenAIIcon } from "@/components/ui/icons/models/OpenAIIcon";
-import { QwenIcon } from "@/components/ui/icons/models/QwenIcon";
-import { SeedanceIcon } from "@/components/ui/icons/models/SeedanceIcon";
-import { SunoIcon } from "@/components/ui/icons/models/SunoIcon";
-import { ViduIcon } from "@/components/ui/icons/models/ViduIcon";
+import { RobotOutlined } from "@/components/ui/AppIcon";
+import { AgnesIcon } from "@/components/ui/AppIcon";
+import { ClaudeIcon } from "@/components/ui/AppIcon";
+import { DeepSeekIcon } from "@/components/ui/AppIcon";
+import { DoubaoIcon } from "@/components/ui/AppIcon";
+import { FluxIcon } from "@/components/ui/AppIcon";
+import { GeminiIcon } from "@/components/ui/AppIcon";
+import { GLMIcon } from "@/components/ui/AppIcon";
+import { GrokIcon } from "@/components/ui/AppIcon";
+import { HappyHorseIcon } from "@/components/ui/AppIcon";
+import { KimiIcon } from "@/components/ui/AppIcon";
+import { KlingIcon } from "@/components/ui/AppIcon";
+import { MiniMaxIcon } from "@/components/ui/AppIcon";
+import { OpenAIIcon } from "@/components/ui/AppIcon";
+import { QwenIcon } from "@/components/ui/AppIcon";
+import { SeedanceIcon } from "@/components/ui/AppIcon";
+import { SunoIcon } from "@/components/ui/AppIcon";
+import { ViduIcon } from "@/components/ui/AppIcon";
 
 type ModelIconType = ComponentType<{ className?: string; style?: CSSProperties }>;
 

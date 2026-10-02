@@ -6,12 +6,13 @@
 
 "use client";
 
-import { UploadOutlined } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { UploadOutlined } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
@@ -218,19 +219,19 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
         `}
-        style={{ background: "var(--canvas-node-bg)" }}
+        style={{ background: "var(--card)" }}
         onContextMenu={(e) => e.preventDefault()}
       >
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--canvas-node-bg)", borderRadius: 8 }}>
+          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--card)", borderRadius: 8 }}>
             {data.upload?.progress != null ? (
               <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-[var(--canvas-success)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
               </div>
             ) : (
               <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-[var(--canvas-success)] rounded-full animate-pulse" style={{ width: "60%" }} />
+                <div className="h-full bg-[var(--primary)] rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
             )}
             <span className="text-sm text-white/70 font-medium tabular-nums">
@@ -254,12 +255,15 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <WaveIcon className="text-5xl" />
             <span className="text-base text-center">{t("drop.upload")}</span>
-            <button
-              className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
+            <Button
+              type="button"
+              size="lg"
+              variant="secondary"
+              className="nodrag px-6"
               onClick={(e) => { e.stopPropagation(); void handleUpload(); }}
             >
-              <UploadOutlined className="text-lg" /> {t("common.upload")}
-            </button>
+              <UploadOutlined className="size-5" /> {t("common.upload")}
+            </Button>
           </div>
         )}
         {busy && <BusyOverlay label={t("clip.processing")} startedAt={busy.startedAt} />}

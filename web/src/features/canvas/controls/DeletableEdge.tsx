@@ -14,7 +14,6 @@
  */
 "use client";
 
-import { ScissorOutlined } from "@ant-design/icons";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -25,6 +24,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ScissorOutlined } from "@/components/ui/AppIcon";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
@@ -194,7 +194,7 @@ export default function DeletableEdge(props: EdgeProps) {
             // 底线恒为中性灰（强调时提亮一档），彩色只留给流光：
             // 两者同色会糊成一片，流光的水滴形状就看不见了
             stroke: emphasized
-              ? "var(--canvas-text-dim)"
+              ? "var(--muted-foreground)"
               : (style.stroke as string || EDGE_BASE_COLOR),
           }}
         />
@@ -230,9 +230,9 @@ export default function DeletableEdge(props: EdgeProps) {
               justifyContent: "center",
               padding: 0,
               borderRadius: "50%",
-              background: "var(--canvas-bg)",
-              border: "1px solid var(--canvas-border, #525252)",
-              color: "var(--canvas-text)",
+              background: "var(--card)",
+              border: "1px solid var(--border, #525252)",
+              color: "var(--foreground)",
               cursor: "pointer",
             }}
           >

@@ -5,6 +5,9 @@
  */
 "use client";
 
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   CheckOutlined,
   DownloadOutlined,
@@ -15,31 +18,28 @@ import {
   StarOutlined,
   StepBackwardOutlined,
   StepForwardOutlined,
-} from "@ant-design/icons";
-import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "lucide-react";
-import { memo, useCallback, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { ClipTrimIcon } from "@/components/ui/icons/canvas/ClipTrimIcon";
-import { GridLayoutIcon } from "@/components/ui/icons/canvas/GridLayoutIcon";
-import { GridSplitIcon } from "@/components/ui/icons/canvas/GridSplitIcon";
-import { GroupGridIcon } from "@/components/ui/icons/canvas/GroupGridIcon";
-import { HorizontalLayoutIcon } from "@/components/ui/icons/canvas/HorizontalLayoutIcon";
-import { ImageAnnotationIcon } from "@/components/ui/icons/canvas/ImageAnnotationIcon";
-import { ImageToPromptIcon } from "@/components/ui/icons/canvas/ImageToPromptIcon";
-import { LightingIcon } from "@/components/ui/icons/canvas/LightingIcon";
-import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
-import { PanoramaIcon } from "@/components/ui/icons/canvas/PanoramaIcon";
-import { SpeedIcon } from "@/components/ui/icons/canvas/SpeedIcon";
-import { UngroupIcon } from "@/components/ui/icons/canvas/UngroupIcon";
-import { VerticalLayoutIcon } from "@/components/ui/icons/canvas/VerticalLayoutIcon";
-import { VideoToPromptIcon } from "@/components/ui/icons/canvas/VideoToPromptIcon";
-import { FrameCaptureIcon } from "@/components/ui/icons/media/FrameCaptureIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+} from "@/components/ui/AppIcon";
+import { Copy, Crop, FlipHorizontal, FlipVertical, Wand2 } from "@/components/ui/AppIcon";
+import { ClipTrimIcon } from "@/components/ui/AppIcon";
+import { GridLayoutIcon } from "@/components/ui/AppIcon";
+import { GridSplitIcon } from "@/components/ui/AppIcon";
+import { GroupGridIcon } from "@/components/ui/AppIcon";
+import { HorizontalLayoutIcon } from "@/components/ui/AppIcon";
+import { ImageAnnotationIcon } from "@/components/ui/AppIcon";
+import { ImageToPromptIcon } from "@/components/ui/AppIcon";
+import { LightingIcon } from "@/components/ui/AppIcon";
+import { MultiAngleIcon } from "@/components/ui/AppIcon";
+import { PanoramaIcon } from "@/components/ui/AppIcon";
+import { SpeedIcon } from "@/components/ui/AppIcon";
+import { UngroupIcon } from "@/components/ui/AppIcon";
+import { VerticalLayoutIcon } from "@/components/ui/AppIcon";
+import { VideoToPromptIcon } from "@/components/ui/AppIcon";
+import { FrameCaptureIcon } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
@@ -68,53 +68,85 @@ interface NodeToolbarProps {
   onOpenAudioClip: (nodeId: string) => void;
   /** 打开图片打光面板（同上，画布层挂载；与帧序列/片段截取/音频截取互斥） */
   onOpenLighting: (nodeId: string) => void;
+  gridOpen: boolean;
+  onGridOpenChange: (nodeId: string, open: boolean) => void;
+  dismissSignal: number;
 }
 
-/** 宫格切分选择器 — 鼠标划过高亮行列数，点击确认 */
-function GridPicker({ nodeId }: { nodeId: string }) {
+function GridPreview({ size }: { size: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="grid size-7 shrink-0 gap-px rounded-[3px] border border-border/80 bg-border p-px"
+      style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+    >
+      {Array.from({ length: size * size }).map((_, index) => (
+        <span key={index} className="rounded-[1px] bg-muted-foreground/45" />
+      ))}
+    </span>
+  );
+}
+
+/** 宫格切分选择器 — 常用尺寸快捷入口与自定义行列选择 */
+function GridPicker({ nodeId, onSelect }: { nodeId: string; onSelect: () => void }) {
   const { t } = useTranslation();
   const [hover, setHover] = useState({ rows: 0, cols: 0 });
   const MAX = 5;
+  const handleSelect = useCallback(
+    (rows: number, cols: number) => {
+      dispatchNodeAction(nodeId, "grid-split", { rows, cols });
+      onSelect();
+    },
+    [nodeId, onSelect]
+  );
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-sm font-medium">{t("node.gridSplit")}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
       {[2, 3, 4, 5].map((n) => (
-        <button
+        <Button
           key={n}
           type="button"
-          className="panel-item-btn"
-          onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: n, cols: n })}
+          variant="outline"
+          size="sm"
+          className="h-14 justify-start gap-2 rounded-lg border-border/70 bg-background/60 px-2.5 font-normal shadow-none hover:bg-accent hover:text-accent-foreground"
+          onClick={() => handleSelect(n, n)}
         >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <GridSplitIcon style={{ fontSize: 16 }} />
-            {n === 2 ? "4" : n === 3 ? "9" : n === 4 ? "16" : "25"}×{n}
+          <GridPreview size={n} />
+          <span className="flex min-w-0 flex-col items-start gap-0.5">
+            <span className="text-sm">{n}×{n}</span>
+            <span className="text-[11px] text-muted-foreground">{n * n}</span>
           </span>
-        </button>
+        </Button>
       ))}
-      <div className="panel-divider" />
-      <div style={{ padding: "4px 4px 0" }}>
-        <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{t("node.gridCustom")}</div>
-        <div className="text-xs mb-1 text-center" style={{ color: "var(--canvas-text)" }}>
-          {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : t("node.gridSelect")}
+      </div>
+      <div className="space-y-2 rounded-lg border border-border/70 bg-muted/30 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">{t("node.gridCustom")}</span>
+          <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : t("node.gridSelect")}
+          </span>
         </div>
-        <div className="flex justify-center">
-          <div className="inline-grid gap-[1px]" style={{
-            gridTemplateColumns: `repeat(${MAX}, 14px)`,
-            background: "var(--canvas-border)",
-            border: "1px solid var(--canvas-border)",
-          }}>
+        <div className="flex justify-center rounded-md border border-border/70 bg-background p-2">
+          <div
+            className="inline-grid gap-px rounded-sm border border-border bg-border p-px"
+            style={{ gridTemplateColumns: `repeat(${MAX}, 16px)` }}
+            onMouseLeave={() => setHover({ rows: 0, cols: 0 })}
+          >
             {Array.from({ length: MAX * MAX }).map((_, i) => {
               const row = Math.floor(i / MAX) + 1;
               const col = (i % MAX) + 1;
               const active = row <= hover.rows && col <= hover.cols;
               return (
-                <div key={i}
+                <button key={i}
+                  type="button"
+                  aria-label={`${row}×${col}`}
                   onMouseEnter={() => setHover({ rows: row, cols: col })}
-                  onClick={() => dispatchNodeAction(nodeId, "grid-split", { rows: row, cols: col })}
-                  style={{
-                    width: 14, height: 14,
-                    background: active ? "var(--canvas-success)" : "var(--canvas-bg)",
-                    cursor: "pointer",
-                  }}
+                  onFocus={() => setHover({ rows: row, cols: col })}
+                  onClick={() => handleSelect(row, col)}
+                  className={`size-4 rounded-[1px] border-0 p-0 transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? "bg-primary" : "bg-muted hover:bg-accent"}`}
                 />
               );
             })}
@@ -138,44 +170,36 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     [nodeId]
   );
   return (
-    <div className="panel-popover">
-      <div className="text-xs mb-2 px-1" style={{ color: "var(--canvas-text-muted)" }}>{t("node.groupColor")}</div>
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-popover p-2">
+      <div className="px-1 text-xs text-muted-foreground">{t("node.groupColor")}</div>
       <div className="grid grid-cols-5 gap-2">
         {GROUP_COLOR_KEYS.map((key) => {
           const preset = GROUP_COLORS[key];
           const isDefault = key === "default";
           const selected = (current ?? DEFAULT_GROUP_COLOR_KEY) === key;
           return (
-            <button
+            <Button
               key={key}
               type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={() => handlePick(key)}
-              className="relative flex items-center justify-center rounded-full transition-transform hover:scale-110"
+              className="relative size-[26px] rounded-full p-0 transition-transform hover:scale-110"
               style={{
-                width: 26,
-                height: 26,
                 border: `2px solid ${preset.border}`,
                 background: isDefault ? "transparent" : preset.fill,
-                cursor: "pointer",
-                boxShadow: selected ? `0 0 0 2px var(--canvas-bg), 0 0 0 3px ${preset.border}` : "none",
+                boxShadow: selected ? `0 0 0 2px var(--card), 0 0 0 3px ${preset.border}` : "none",
               }}
             >
               {isDefault && (
                 <span
-                  style={{
-                    position: "absolute",
-                    width: 20,
-                    height: 2,
-                    background: "var(--canvas-text-muted)",
-                    transform: "rotate(45deg)",
-                    borderRadius: 1,
-                  }}
+                  className="absolute h-0.5 w-5 rotate-45 rounded-[1px] bg-muted-foreground"
                 />
               )}
               {selected && !isDefault && (
-                <CheckOutlined style={{ fontSize: 12, color: preset.border }} />
+                <CheckOutlined className="size-3" style={{ color: preset.border }} />
               )}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -191,24 +215,35 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   const unsaveAssetsByUrls = useAssetsStore((s) => s.unsaveAssetsByUrls);
   const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetUrls.has(assetSrc));
   return (
-    <AppTooltip title={isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}>
-      <AppButton
-        variant="ghost"
-        iconOnly
-        disabled={!assetSrc}
-        onClick={() => {
-          if (!assetSrc) return;
-          if (isInAssets) void unsaveAssetsByUrls([assetSrc]);
-          else dispatchNodeAction(nodeId, "save-asset");
-        }}
-      >
-        {isInAssets ? <StarFilled style={{ color: "var(--canvas-warning)" }} /> : <StarOutlined />}
-      </AppButton>
-    </AppTooltip>
+    <Tooltip><TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          iconOnly
+          disabled={!assetSrc}
+          onClick={() => {
+            if (!assetSrc) return;
+            if (isInAssets) void unsaveAssetsByUrls([assetSrc]);
+            else dispatchNodeAction(nodeId, "save-asset");
+          }}
+        >
+          {isInAssets ? <StarFilled style={{ color: "var(--chart-4)" }} /> : <StarOutlined />}
+        </Button>
+      </TooltipTrigger><TooltipContent>{isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}</TooltipContent></Tooltip>
   );
 }
 
-function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOpenClipStrip, onOpenAudioClip, onOpenLighting }: NodeToolbarProps) {
+function NodeToolbar({
+  nodeId,
+  nodeType,
+  onShowInspector,
+  onOpenFrameStrip,
+  onOpenClipStrip,
+  onOpenAudioClip,
+  onOpenLighting,
+  gridOpen,
+  onGridOpenChange,
+  dismissSignal,
+}: NodeToolbarProps) {
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
@@ -235,9 +270,32 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
   const { data: templateCatalog } = usePromptTemplateCatalog("image");
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
-  const [gridOpen, setGridOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [groupColorOpen, setGroupColorOpen] = useState(false);
+  const dismissFocusRef = useRef(false);
+  const previousDismissSignal = useRef(dismissSignal);
+  const resetDismissFocus = useCallback(() => {
+    dismissFocusRef.current = false;
+  }, []);
+  const handleMenuCloseAutoFocus = useCallback((event: Event) => {
+    if (dismissFocusRef.current) {
+      dismissFocusRef.current = false;
+      event.preventDefault();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (previousDismissSignal.current === dismissSignal) return;
+    previousDismissSignal.current = dismissSignal;
+    dismissFocusRef.current = true;
+    setCreationOpen(false);
+    setTransformOpen(false);
+    setLayoutOpen(false);
+    setCaptureOpen(false);
+    setGroupColorOpen(false);
+    onGridOpenChange(nodeId, false);
+  }, [dismissSignal, nodeId, onGridOpenChange]);
   const handleInfo = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -248,185 +306,194 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
 
   return (
     <div
-      className="canvas-toolbar flex items-center gap-1 rounded-xl z-20"
-      style={{ height: 50, padding: "6px 10px", whiteSpace: "nowrap" }}
+      className="canvas-toolbar z-20 flex h-[50px] items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5"
     >
       {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
       {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
-        <AppTooltip title={t("common.info")}>
-          <AppButton variant="ghost" iconOnly            style={{ padding: 8 }}
-            onClick={handleInfo}
-          ><InfoCircleOutlined /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly
+              onClick={handleInfo}
+            ><InfoCircleOutlined /></Button>
+          </TooltipTrigger><TooltipContent>{t("common.info")}</TooltipContent></Tooltip>
       )}
 
       {/* Image node actions */}
       {nodeType === NODE_ACTIONS.IMAGE && (
         <>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <div className="mx-1 h-5 w-px bg-border" />
           {/* 全景 */}
-          <AppTooltip title={t("node.panorama")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "panorama")} ><PanoramaIcon /></AppButton>
-          </AppTooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "panorama")} ><PanoramaIcon /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.panorama")}</TooltipContent></Tooltip>
           {/* Edit */}
-          <AppDropdown
-            open={transformOpen}
-            onOpenChange={setTransformOpen}
-            placement="bottom"
-            trigger={["click"]}
-            menu={{
-              items: [
-                { key: "rot90", icon: <RotateRightOutlined style={{ fontSize: 16 }} />, label: t("node.rotate90") },
-                { key: "flipH", icon: <FlipHorizontal size={16} />, label: t("node.flipH") },
-                { key: "flipV", icon: <FlipVertical size={16} />, label: t("node.flipV") },
-              ],
-              onClick: ({ key }) => {
-                if (key === "rot90") dispatchNodeAction(nodeId, "transform", { op: "rot90" });
-                else if (key === "flipH") dispatchNodeAction(nodeId, "transform", { op: "flipH" });
-                else if (key === "flipV") dispatchNodeAction(nodeId, "transform", { op: "flipV" });
-              },
+          <DropdownMenu open={transformOpen} onOpenChange={(open) => {
+            if (open) resetDismissFocus();
+            setTransformOpen(open);
+          }}>
+            <Tooltip><TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" iconOnly disabled={!assetSrc}><RotateRightOutlined /></Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger><TooltipContent>{t("node.transform")}</TooltipContent></Tooltip>
+            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}>
+                <RotateRightOutlined />{t("node.rotate90")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "transform", { op: "flipH" })}>
+                <FlipHorizontal />{t("node.flipH")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "transform", { op: "flipV" })}>
+                <FlipVertical />{t("node.flipV")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} ><Crop size={16} /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.crop")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "annotate")} ><ImageAnnotationIcon style={{ fontSize: 16 }} /></Button>
+            </TooltipTrigger><TooltipContent>{t("annotation.title")}</TooltipContent></Tooltip>
+          <Popover
+            open={gridOpen}
+            onOpenChange={(open) => {
+              if (open) resetDismissFocus();
+              onGridOpenChange(nodeId, open);
             }}
           >
-            <AppTooltip title={t("node.transform")}>
-              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><RotateRightOutlined /></AppButton>
-            </AppTooltip>
-          </AppDropdown>
-          <AppTooltip title={t("node.crop")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} ><Crop size={16} /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("annotation.title")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "annotate")} ><ImageAnnotationIcon style={{ fontSize: 16 }} /></AppButton>
-          </AppTooltip>
-          <AppPopover
-            open={gridOpen}
-            onOpenChange={setGridOpen}
-            placement="bottom"
-            trigger={["click"]}
-            arrow={false}
-            contentStyle={{ padding: 0, background: "transparent" }}
-            content={
-              <div className="panel-popover">
-                <GridPicker nodeId={nodeId} />
-              </div>
-            }
-          >
-            <AppTooltip title={t("node.gridSplit")}>
-              <AppButton variant="ghost" iconOnly disabled={!assetSrc}>
-                <GridSplitIcon />
-              </AppButton>
-            </AppTooltip>
-          </AppPopover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" iconOnly disabled={!assetSrc}>
+                    <GridSplitIcon />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t("node.gridSplit")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent
+              side="bottom"
+              align="center"
+              className="w-80 max-w-[calc(100vw-2rem)] p-3"
+              onCloseAutoFocus={handleMenuCloseAutoFocus}
+            >
+              <GridPicker nodeId={nodeId} onSelect={() => onGridOpenChange(nodeId, false)} />
+            </PopoverContent>
+          </Popover>
           {/* AI */}
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <AppTooltip title={t("angle.editor")}>
-            <AppButton variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("lighting.title")}>
-            <AppButton variant="ghost" iconOnly              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} ><LightingIcon /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("node.reversePrompt")}>
-            <AppButton variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
-              disabled={!assetSrc} ><ImageToPromptIcon style={{ fontSize: 16 }} /></AppButton>
-          </AppTooltip>
-          <AppPopover
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></Button>
+            </TooltipTrigger><TooltipContent>{t("angle.editor")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} ><LightingIcon /></Button>
+            </TooltipTrigger><TooltipContent>{t("lighting.title")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
+                disabled={!assetSrc} ><ImageToPromptIcon style={{ fontSize: 16 }} /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.reversePrompt")}</TooltipContent></Tooltip>
+          <Popover
             open={creationOpen}
-            onOpenChange={setCreationOpen}
-            placement="bottomLeft"
-            trigger={["click"]}
-            arrow={false}
-            popupClassName="creation-menu-popover"
-            contentStyle={{ padding: 0, background: "transparent" }}
-            content={
+            onOpenChange={(open) => {
+              if (open) resetDismissFocus();
+              setCreationOpen(open);
+            }}
+          >
+            <Tooltip open={creationOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" iconOnly disabled={!assetSrc}>
+                    <Wand2 size={16} />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t("node.creation")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent side="bottom" align="start" className="creation-menu-popover w-auto border-0 bg-transparent p-0" onCloseAutoFocus={handleMenuCloseAutoFocus}>
               <div className="panel-popover">
                 <PresetMenuContent
                   catalog={templateCatalog}
                   onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
                 />
               </div>
-            }
-          >
-            <AppTooltip title={t("node.creation")}>
-              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><Wand2 size={16} /></AppButton>
-            </AppTooltip>
-          </AppPopover>
+            </PopoverContent>
+          </Popover>
           {/* Export */}
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <div className="mx-1 h-5 w-px bg-border" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
-          <AppTooltip title={t("common.download")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("node.previewFullscreen")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></AppButton>
-          </AppTooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
+            </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.previewFullscreen")}</TooltipContent></Tooltip>
         </>
       )}
 
       {/* Video node actions */}
       {nodeType === NODE_ACTIONS.VIDEO && (
         <>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <AppDropdown
-            open={captureOpen}
-            onOpenChange={setCaptureOpen}
-            placement="bottom"
-            trigger={["click"]}
-            menu={{
-              items: [
-                { key: "current", icon: <FrameCaptureIcon style={{ fontSize: 16 }} />, label: t("capture.currentFrame") },
-                { key: "first", icon: <StepBackwardOutlined style={{ fontSize: 16 }} />, label: t("capture.firstFrame") },
-                { key: "last", icon: <StepForwardOutlined style={{ fontSize: 16 }} />, label: t("capture.lastFrame") },
-              ],
-              onClick: ({ key }) => {
-                if (key === "current") onOpenFrameStrip(nodeId);
-                else if (key === "first") dispatchNodeAction(nodeId, "capture-frame", { time: 0 });
-                else if (key === "last") dispatchNodeAction(nodeId, "capture-frame", { time: -1 });
-              },
-            }}
-          >
-            <AppTooltip title={t("node.captureFrame")}>
-              <AppButton variant="ghost" iconOnly disabled={!assetSrc} ><FrameCaptureIcon /></AppButton>
-            </AppTooltip>
-          </AppDropdown>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <DropdownMenu open={captureOpen} onOpenChange={(open) => {
+            if (open) resetDismissFocus();
+            setCaptureOpen(open);
+          }}>
+            <Tooltip><TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" iconOnly disabled={!assetSrc}><FrameCaptureIcon /></Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger><TooltipContent>{t("node.captureFrame")}</TooltipContent></Tooltip>
+            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <DropdownMenuItem onSelect={() => onOpenFrameStrip(nodeId)}>
+                <FrameCaptureIcon />{t("capture.currentFrame")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { time: 0 })}>
+                <StepBackwardOutlined />{t("capture.firstFrame")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { time: -1 })}>
+                <StepForwardOutlined />{t("capture.lastFrame")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
-          <AppTooltip title={t("clip.menu")}>
-            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
-              disabled={!assetSrc}
-              onClick={() => onOpenClipStrip(nodeId)}
-            ><ClipTrimIcon style={{ fontSize: 16 }} /></AppButton>
-          </AppTooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly
+                disabled={!assetSrc}
+                onClick={() => onOpenClipStrip(nodeId)}
+              ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
+            </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
           {/* 画面裁剪：与图片节点同语义（源像素矩形重编码为派生视频） */}
-          <AppTooltip title={t("node.crop")}>
-            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
-              disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "crop-video")}
-            ><Crop size={16} /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}>
-            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
-              disabled={!assetSrc || videoHasAudio === false}
-              onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
-            ><WaveIcon /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("node.reversePrompt")}>
-            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
-              disabled={!assetSrc}
-            ><VideoToPromptIcon style={{ fontSize: 16 }} /></AppButton>
-          </AppTooltip>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly
+                disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "crop-video")}
+              ><Crop size={16} /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.crop")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly
+                disabled={!assetSrc || videoHasAudio === false}
+                onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
+              ><WaveIcon /></Button>
+            </TooltipTrigger><TooltipContent>{videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly
+                disabled={!assetSrc}
+              ><VideoToPromptIcon style={{ fontSize: 16 }} /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.reversePrompt")}</TooltipContent></Tooltip>
+          <div className="mx-1 h-5 w-px bg-border" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
-          <AppTooltip title={t("common.download")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("node.previewFullscreen")}>
-            <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-              onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></AppButton>
-          </AppTooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
+            </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!assetSrc}
+                onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></Button>
+            </TooltipTrigger><TooltipContent>{t("node.previewFullscreen")}</TooltipContent></Tooltip>
         </>
       )}
 
@@ -446,26 +513,26 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
             />
           ) : (
             <>
-              <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-              <AppTooltip title={t("clip.menu")}>
-                <AppButton variant="ghost" iconOnly                  style={{ padding: 8 }}
-                  disabled={!assetSrc}
-                  onClick={() => onOpenAudioClip(nodeId)}
-                ><ClipTrimIcon style={{ fontSize: 16 }} /></AppButton>
-              </AppTooltip>
-              <AppTooltip title={t("node.audioSpeed")}>
-                <AppButton variant="ghost" iconOnly                  style={{ padding: 8 }}
-                  disabled={!assetSrc}
-                  onClick={() => {
-                    setSpeedDraft(1);
-                    setSpeedMode(true);
-                  }}
-                ><SpeedIcon /></AppButton>
-              </AppTooltip>
-              <AppTooltip title={t("common.download")}>
-                <AppButton variant="ghost" iconOnly disabled={!assetSrc}
-                  onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
-              </AppTooltip>
+              <div className="mx-1 h-5 w-px bg-border" />
+              <Tooltip><TooltipTrigger asChild>
+                  <Button variant="ghost" iconOnly
+                    disabled={!assetSrc}
+                    onClick={() => onOpenAudioClip(nodeId)}
+                  ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
+                </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild>
+                  <Button variant="ghost" iconOnly
+                    disabled={!assetSrc}
+                    onClick={() => {
+                      setSpeedDraft(1);
+                      setSpeedMode(true);
+                    }}
+                  ><SpeedIcon /></Button>
+                </TooltipTrigger><TooltipContent>{t("node.audioSpeed")}</TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild>
+                  <Button variant="ghost" iconOnly disabled={!assetSrc}
+                    onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
+                </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
             </>
           )}
         </>
@@ -474,74 +541,78 @@ function NodeToolbar({ nodeId, nodeType, onShowInspector, onOpenFrameStrip, onOp
       {/* Text node actions — 复制 / 下载为 Markdown */}
       {nodeType === NODE_ACTIONS.TEXT && (
         <>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <AppTooltip title={t("common.copy")}>
-            <AppButton variant="ghost" iconOnly disabled={!textContent}
-              onClick={() => dispatchNodeAction(nodeId, "copy")} ><Copy size={16} /></AppButton>
-          </AppTooltip>
-          <AppTooltip title={t("common.download")}>
-            <AppButton variant="ghost" iconOnly disabled={!textContent}
-              onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></AppButton>
-          </AppTooltip>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!textContent}
+                onClick={() => dispatchNodeAction(nodeId, "copy")} ><Copy size={16} /></Button>
+            </TooltipTrigger><TooltipContent>{t("common.copy")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly disabled={!textContent}
+                onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
+            </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
         </>
       )}
 
       {/* Group node actions */}
       {nodeType === NODE_ACTIONS.GROUP && (
         <>
-          <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
-          <AppPopover
-            trigger="click"
-            placement="bottom"
-            contentStyle={{ padding: 0, background: "transparent" }}
-            content={<GroupColorPicker nodeId={nodeId} current={groupColor} />}
-          >
-            <AppTooltip title={t("node.groupColor")}>
-              <AppButton variant="ghost" iconOnly>
-                <span
-                  style={{
-                    display: "block",
-                    width: 16,
-                    height: 16,
-                    borderRadius: "50%",
-                    background: getGroupColor(groupColor).border,
-                    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
-                  }}
-                />
-              </AppButton>
-            </AppTooltip>
-          </AppPopover>
-          <AppDropdown
-            open={layoutOpen}
-            onOpenChange={setLayoutOpen}
-            placement="bottom"
-            trigger={["click"]}
-            menu={{
-              items: [
-                { key: "grid", icon: <GridLayoutIcon style={{ fontSize: 16 }} />, label: t("node.gridLayout") },
-                { key: "horizontal", icon: <HorizontalLayoutIcon style={{ fontSize: 16 }} />, label: t("node.horizontalLayout") },
-                { key: "vertical", icon: <VerticalLayoutIcon style={{ fontSize: 16 }} />, label: t("node.verticalLayout") },
-              ],
-              onClick: ({ key }) => {
-                if (key === "grid") dispatchNodeAction(nodeId, "layout", { mode: "grid" });
-                else if (key === "horizontal") dispatchNodeAction(nodeId, "layout", { mode: "horizontal" });
-                else if (key === "vertical") dispatchNodeAction(nodeId, "layout", { mode: "vertical" });
-              },
-            }}
-          >
-            <AppTooltip title={t("common.layout")}>
-              <AppButton variant="ghost" iconOnly                style={{ padding: 8 }}
-              ><GroupGridIcon /></AppButton>
-            </AppTooltip>
-          </AppDropdown>
-          <AppTooltip title={t("common.ungroup")}>
-            <AppButton variant="ghost" iconOnly              style={{ padding: 8 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
-              }}
-            ><UngroupIcon /></AppButton>
-          </AppTooltip>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Popover open={groupColorOpen} onOpenChange={(open) => {
+            if (open) resetDismissFocus();
+            setGroupColorOpen(open);
+          }}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" iconOnly>
+                    <span
+                      style={{
+                        display: "block",
+                        width: 16,
+                        height: 16,
+                        borderRadius: "50%",
+                        background: getGroupColor(groupColor).border,
+                        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.25)",
+                      }}
+                    />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t("node.groupColor")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent side="bottom" align="center" className="w-auto border-0 bg-transparent p-0" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <GroupColorPicker nodeId={nodeId} current={groupColor} />
+            </PopoverContent>
+          </Popover>
+          <DropdownMenu open={layoutOpen} onOpenChange={(open) => {
+            if (open) resetDismissFocus();
+            setLayoutOpen(open);
+          }}>
+            <Tooltip><TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" iconOnly><GroupGridIcon /></Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger><TooltipContent>{t("common.layout")}</TooltipContent></Tooltip>
+            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
+                <GridLayoutIcon />{t("node.gridLayout")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
+                <HorizontalLayoutIcon />{t("node.horizontalLayout")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
+                <VerticalLayoutIcon />{t("node.verticalLayout")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Tooltip><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
+                }}
+              ><UngroupIcon /></Button>
+            </TooltipTrigger><TooltipContent>{t("common.ungroup")}</TooltipContent></Tooltip>
         </>
       )}
     </div>

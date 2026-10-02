@@ -9,10 +9,10 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppSlider from "@/components/ui/AppSlider";
+import { MultiAngleIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { MultiAngleIcon } from "@/components/ui/icons/canvas/MultiAngleIcon";
+import { Slider } from "@/components/ui/slider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -125,20 +125,20 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
       {/* 标题栏（与打光面板同款） */}
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--canvas-text)" }}>
+        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--foreground)" }}>
           <MultiAngleIcon className="h-4 w-4" />
           {t("angle.editorTitle")}
         </span>
-        <AppButton
+        <Button
           variant="ghost"
           aria-label="close"
           onClick={onClose}
           style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
         >
-          <span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>
-        </AppButton>
+          <span style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1 }}>✕</span>
+        </Button>
       </div>
-      <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
+      <div className="h-px w-full" style={{ background: "var(--border)" }} />
 
       <div className="flex gap-3">
         {/* 左列：3D 轨道球（与打光面板同款：视角切换 + 场景铺满剩余高度） */}
@@ -172,19 +172,17 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* 方位角：滑杆 + 数值框联动 */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.azimuth")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <AppSlider
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.azimuth")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+              <Slider
                 min={0}
                 max={359}
                 step={1}
-                value={azimuth}
-                onChange={(v) => setAzimuth(Number(v))}
+                value={[azimuth]}
+                onValueChange={([next]) => setAzimuth(next)}
                 className="min-w-0 flex-1"
-                style={{ margin: 0 }}
-                showTooltip={false}
               />
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
+              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
               <input
                 type="number"
                 min={0}
@@ -206,16 +204,16 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                   setAzimuth(clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--canvas-text-dim)" }}>°</span>
+              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>°</span>
             </div>
           </div>
 
           {/* 俯仰角 */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.elevation")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.elevation")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
               <div className="relative min-w-0 flex-1">
-                {/* 双向轴：填充从中间 0° 出发指向手柄。antd 只会从最小值填充，
+                {/* 双向轴：填充从中间 0° 出发指向手柄。原生轨道只会从最小值填充，
                     隐藏原生轨道填充，自绘一段 0 点→手柄的白条（层级在轨道上、手柄下） */}
                 <div
                   className="pointer-events-none absolute h-1 -translate-y-1/2 rounded-full"
@@ -227,19 +225,16 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                     zIndex: 1,
                   }}
                 />
-                <AppSlider
+                <Slider
                   min={-90}
                   max={90}
                   step={1}
-                  value={elevation}
-                  onChange={(v) => setElevation(Number(v))}
-                  className="relative"
-                  style={{ margin: 0, width: "100%" }}
-                  showTooltip={false}
-                  styles={{ track: { background: "transparent" }, handle: { zIndex: 2 } }}
+                  value={[elevation]}
+                  onValueChange={([next]) => setElevation(next)}
+                  className="relative w-full [&_[data-slot=slider-range]]:bg-transparent [&_[data-slot=slider-thumb]]:z-[2]"
                 />
               </div>
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
+              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
               <input
                 type="number"
                 min={-90}
@@ -259,13 +254,13 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                   setElevation(clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--canvas-text-dim)" }}>°</span>
+              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>°</span>
             </div>
           </div>
 
           {/* 景别：三档分段切换（与打光面板的视角切换同款控件） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.zoom")}</span>
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.zoom")}</span>
             <div className="light-panel-view-toggle w-full">
               {ZOOM_LABELS.map((labelKey, z) => (
                 <button
@@ -282,8 +277,8 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
 
           {/* 预设机位（与打光面板的主光源网格同款，手动改参即取消高亮） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("angle.presets")}</span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--canvas-bg-hover)" }}>
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.presets")}</span>
+            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--accent)" }}>
               {PRESETS.map((p) => {
                 const active = activePreset === p.key;
                 return (
@@ -308,7 +303,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
           type="button"
           onClick={handleReset}
           className="panel-reset-btn flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all"
-          style={{ border: "1px solid var(--canvas-border)", color: "var(--canvas-text-dim)" }}
+          style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
         >
           {t("angle.reset")}
         </button>

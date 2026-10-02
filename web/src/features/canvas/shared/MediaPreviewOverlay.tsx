@@ -9,8 +9,9 @@
  */
 "use client";
 
-import { CloseOutlined,DownloadOutlined, LeftOutlined,RightOutlined } from "@ant-design/icons";
 import { useEffect,useState } from "react";
+
+import { CloseOutlined,DownloadOutlined, LeftOutlined,RightOutlined } from "@/components/ui/AppIcon";
 
 import VideoPlayer from "./VideoPlayer";
 

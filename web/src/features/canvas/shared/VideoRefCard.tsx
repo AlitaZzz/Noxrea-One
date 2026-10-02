@@ -8,6 +8,8 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CloseOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -47,7 +49,7 @@ function VideoRefCard({
   return (
     <div
       className={`relative group h-14 w-14 rounded transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
+      style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
       draggable
       onDoubleClick={() => {
         const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, src);
@@ -98,14 +100,17 @@ function VideoRefCard({
       <video src={`${src}#t=0.1`} className="w-full h-full object-cover rounded pointer-events-none" muted preload="metadata" playsInline draggable={false} />
       {hovered && !dragging && !dragActive && !dragOver && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <video src={src} className="max-w-[240px] max-h-[240px] rounded-lg shadow-2xl" style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)" }} autoPlay muted loop playsInline />
+          <video src={src} className="max-w-[240px] max-h-[240px] rounded-lg shadow-2xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }} autoPlay muted loop playsInline />
         </div>
       )}
       {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
       <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refVideoLabel", { index: index + 1 })}</span>
-      <button
+      <Button
         type="button"
-        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t("common.delete")}
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           // 删除参考 = 断开连线（与图片 / 音频参考一致），显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -115,7 +120,10 @@ function VideoRefCard({
             return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === src;
           });
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</button>
+        }}
+      >
+        <CloseOutlined className="size-3" />
+      </Button>
     </div>
   );
 }

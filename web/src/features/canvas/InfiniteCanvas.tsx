@@ -10,7 +10,6 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { EditOutlined } from "@ant-design/icons";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -34,13 +33,14 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { useTranslation } from "react-i18next";
 
 import OfflineIndicator from "@/components/layout/OfflineIndicator";
+import { EditOutlined } from "@/components/ui/AppIcon";
+import { AgentIcon } from "@/components/ui/AppIcon";
+import { ChevronDownIcon } from "@/components/ui/AppIcon";
+import { DirUploadIcon } from "@/components/ui/AppIcon";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { AgentIcon } from "@/components/ui/icons/canvas/AgentIcon";
-import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
-import { DirUploadIcon } from "@/components/ui/icons/director/DirUploadIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
-import AssetsModal from "@/features/assets/components/AssetsModal";
+import AssetsDialog from "@/features/assets/components/AssetsDialog";
 import type { AssetItem } from "@/features/assets/types";
 import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
@@ -262,6 +262,11 @@ export default function InfiniteCanvas() {
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [canvasExplorerOpen, setCanvasExplorerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [gridMenuNodeId, setGridMenuNodeId] = useState<string | null>(null);
+  const [toolbarDismissSignal, setToolbarDismissSignal] = useState(0);
+  const handleGridMenuOpenChange = useCallback((nodeId: string, open: boolean) => {
+    setGridMenuNodeId(open ? nodeId : null);
+  }, []);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
@@ -821,8 +826,16 @@ export default function InfiniteCanvas() {
   );
 
   const handlePaneClick = useCallback(() => {
+    // React Flow 的 pane 本身不可聚焦；点击画布时主动结束控件焦点，
+    // 让 shadcn 控件的 focus-visible ring 不会残留在控制条上。
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement !== document.body) {
+      activeElement.blur();
+    }
     // 点击空白：视为「点击选中」语义，恢复选中态 UI
     canvasInteraction.onClick();
+    setGridMenuNodeId(null);
+    setToolbarDismissSignal((value) => value + 1);
     // Exit all node editor modes when clicking the canvas pane
     useCanvasStore.getState().closeForeignNodeEditors(null);
     // Deselect all nodes and edges。
@@ -866,6 +879,8 @@ export default function InfiniteCanvas() {
       const nodeId = node.id as string;
       // 单击节点（含修饰键点击）属于点击选择，恢复选中态 UI
       canvasInteraction.onClick();
+      setGridMenuNodeId(null);
+      setToolbarDismissSignal((value) => value + 1);
       // Exit editor modes opened on other nodes
       useCanvasStore.getState().closeForeignNodeEditors(nodeId);
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
@@ -889,7 +904,6 @@ export default function InfiniteCanvas() {
   }, [canvasInteraction]);
 
   useGroupOperations();
-  useCanvasEvents();
   const { addNode } = useAddNode();
   // 从右键/双击菜单新增节点时，锚定到触发菜单的点击点（世界坐标）
   const addNodeAtMenu = useCallback(
@@ -936,6 +950,7 @@ export default function InfiniteCanvas() {
   }, [addNodes, message, t]);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  useCanvasEvents(canvasContainerRef);
   const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);
 
   // ---- Component unmount: browser back, route change → save current state ----
@@ -1057,7 +1072,7 @@ export default function InfiniteCanvas() {
           }
           gap={background === "grid" ? 40 : 20}
           size={background === "dots" ? 1.5 : 0.5}
-          color={"var(--canvas-border-light)"}
+          color={"var(--input)"}
           style={background === "blank" ? { display: "none" } : undefined}
         />
 
@@ -1069,10 +1084,10 @@ export default function InfiniteCanvas() {
               className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
               style={{
                 // 磨砂玻璃：背景 70% 不透明度 + 背景模糊，透出并柔化画布内容
-                background: "color-mix(in srgb, var(--canvas-bg) 70%, transparent)",
+                background: "color-mix(in srgb, var(--card) 70%, transparent)",
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid var(--canvas-border)",
+                border: "1px solid var(--border)",
                 pointerEvents: "auto",
               }}
             >
@@ -1110,16 +1125,16 @@ export default function InfiniteCanvas() {
                     <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
                     <ChevronDownIcon
                       className="shrink-0 transition-transform duration-200"
-                      style={{ color: "var(--canvas-text-dim)", width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
+                      style={{ color: "var(--muted-foreground)", width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
                     />
                   </div>
                 }
               />
-              <div className="w-px h-5 mx-0.5" style={{ background: "var(--canvas-border)" }} />
+              <div className="w-px h-5 mx-0.5" style={{ background: "var(--border)" }} />
               {isEditingName ? (
                 <input
                   className="bg-transparent text-sm outline-none border-none flex-1 min-w-0"
-                  style={{ color: "var(--canvas-text)", height: 24, cursor: "text" }}
+                  style={{ color: "var(--foreground)", height: 24, cursor: "text" }}
                   placeholder={t("project.untitled")}
                   autoFocus
                   value={editName}
@@ -1146,14 +1161,14 @@ export default function InfiniteCanvas() {
                 >
                   <div
                     className="text-sm min-w-0 truncate"
-                    style={{ color: "var(--canvas-text)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
+                    style={{ color: "var(--foreground)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
                     onDoubleClick={() => setIsEditingName(true)}
                   >
                     {editName || "Untitled"}
                   </div>
                   <EditOutlined
                     className="shrink-0 ml-1.5 opacity-0 transition-opacity group-hover/name:opacity-100"
-                    style={{ fontSize: 13, color: "var(--canvas-text-dim)" }}
+                    style={{ fontSize: 13, color: "var(--muted-foreground)" }}
                     onClick={() => setIsEditingName(true)}
                   />
                 </div>
@@ -1177,7 +1192,7 @@ export default function InfiniteCanvas() {
                 style={{
                   // Panel 默认 absolute + bottom/right 定位，改为 relative 才能排进下方的纵向 flex 流
                   position: "relative",
-                  border: "1px solid var(--canvas-border, #3a3a3a)",
+                  border: "1px solid var(--border, #3a3a3a)",
                   width: 180,
                   height: 120,
                   pointerEvents: "auto",
@@ -1308,6 +1323,9 @@ export default function InfiniteCanvas() {
                 onOpenClipStrip={(id) => useCanvasStore.getState().setClipCaptureNodeId(id)}
                 onOpenAudioClip={(id) => useCanvasStore.getState().setAudioClipNodeId(id)}
                 onOpenLighting={(id) => useCanvasStore.getState().setLightingNodeId(id)}
+                gridOpen={gridMenuNodeId === nid}
+                onGridOpenChange={handleGridMenuOpenChange}
+                dismissSignal={toolbarDismissSignal}
               />
             )}
           </RfNodeToolbar>
@@ -1383,6 +1401,7 @@ export default function InfiniteCanvas() {
         title={t("project.delete")}
         content={t("project.deleteConfirm", { name: projectName })}
         okText={t("common.delete")}
+        confirmVariant="destructive"
         cancelText={t("common.cancel")}
         onOk={async () => {
           await flushAndWait();
@@ -1408,7 +1427,7 @@ export default function InfiniteCanvas() {
         onCancel={() => setLogoutConfirmOpen(false)}
       />
 
-      <AssetsModal
+      <AssetsDialog
         open={assetsOpen}
         onClose={() => setAssetsOpen(false)}
       />
@@ -1431,17 +1450,17 @@ export default function InfiniteCanvas() {
       {isFileDragging && (
         <div
           className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md"
-          style={{ background: "color-mix(in srgb, var(--canvas-bg) 55%, transparent)", pointerEvents: "none" }}
+          style={{ background: "color-mix(in srgb, var(--card) 55%, transparent)", pointerEvents: "none" }}
         >
           <div
             className="flex flex-col items-center gap-4 rounded-2xl px-16 py-12"
-            style={{ border: "2px dashed var(--canvas-border-light)", background: "color-mix(in srgb, var(--canvas-bg) 40%, transparent)" }}
+            style={{ border: "2px dashed var(--input)", background: "color-mix(in srgb, var(--card) 40%, transparent)" }}
           >
             <DirUploadIcon
               className="animate-bounce"
-              style={{ width: 56, height: 56, color: "var(--canvas-accent)" }}
+              style={{ width: 56, height: 56, color: "var(--primary)" }}
             />
-            <div className="text-lg font-medium" style={{ color: "var(--canvas-text)" }}>
+            <div className="text-lg font-medium" style={{ color: "var(--foreground)" }}>
               {t("file.dropToAdd")}
             </div>
           </div>

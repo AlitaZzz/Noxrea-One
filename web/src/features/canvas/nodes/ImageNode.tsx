@@ -5,19 +5,20 @@
  */
 "use client";
 
+import { type NodeProps } from "@xyflow/react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+
 import {
   CrownOutlined,
   DownloadOutlined,
   FullscreenOutlined,
   PictureOutlined,
   UploadOutlined,
-} from "@ant-design/icons";
-import { type NodeProps } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
-
-import AppTooltip from "@/components/ui/AppTooltip";
+} from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssetsStore } from "@/features/assets/store";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
@@ -362,227 +363,246 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   return (
     <>
-    <div ref={nodeRef} className="group relative w-full h-full flex flex-col node-tilt">
-      {/* Title */}
-      <NodeTitle
-        nodeId={id}
-        icon={<PictureOutlined className="shrink-0" />}
-        title={data.label}
-        display={data.label || t("node.image")}
-        trailing={hasImage && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
-      />
+      <div ref={nodeRef} className="group relative w-full h-full flex flex-col node-tilt">
+        {/* Title */}
+        <NodeTitle
+          nodeId={id}
+          icon={<PictureOutlined className="shrink-0" />}
+          title={data.label}
+          display={data.label || t("node.image")}
+          trailing={hasImage && data.naturalWidth > 0 ? `${data.naturalWidth}×${data.naturalHeight}` : null}
+        />
 
-      {/* Body wrapper - relative container for body + overlay layer */}
-      <div className="relative flex-1">
-      <div
-        className={`
-          node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
-          ${isMulti ? "overflow-visible" : "overflow-hidden"}
-          ${selected ? "node-selected" : ""}
-        `}
-        style={{ background: hasImage ? "transparent" : "var(--canvas-node-bg)" }}
-      >
-        {agentGhost && <AgentGhostOverlay />}
-        {isMulti && !expanded && (
-          <div className="absolute top-2 right-2 z-20 nodrag">
-            <AppTooltip title={t("common.expand")}>
-              <button
-                className="app-overlay-btn app-overlay-btn--sm"
-                onClick={toggleExpand}
-              >
-                <FullscreenOutlined />
-              </button>
-            </AppTooltip>
-          </div>
-        )}
-        {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
-          <div className="absolute top-2 right-2 z-20 nodrag">
-            <AppTooltip title={t("common.replace")}>
-              <button
-                className="app-overlay-btn app-overlay-btn--sm"
-                onClick={handleUpload}
-              >
-                <UploadOutlined />
-              </button>
-            </AppTooltip>
-          </div>
-        )}
-        {data.upload?.uploading ? (
-          <div className="absolute inset-0 rounded-lg overflow-hidden">
-            {data.upload?.previewUrl && (
-              <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
-            )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
-              {data.upload?.progress != null ? (
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--canvas-success)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
-                </div>
-              ) : (
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--canvas-success)] rounded-full animate-pulse" style={{ width: "60%" }} />
-                </div>
-              )}
-              <span className="text-sm text-white/60 tabular-nums">
-                {t("common.uploading")}
-                {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
-              </span>
+        {/* Body wrapper - relative container for body + overlay layer */}
+        <div className="relative flex-1">
+        <div
+          className={`
+            node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
+            ${isMulti ? "overflow-visible" : "overflow-hidden"}
+            ${selected ? "node-selected" : ""}
+          `}
+          style={{ background: hasImage ? "transparent" : "var(--card)" }}
+        >
+          {agentGhost && <AgentGhostOverlay />}
+          {isMulti && !expanded && (
+            <div className="absolute top-2 right-2 z-20 nodrag">
+              <Tooltip><TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
+                    onClick={toggleExpand}
+                  >
+                    <FullscreenOutlined className="size-4" />
+                  </Button>
+                </TooltipTrigger><TooltipContent>{t("common.expand")}</TooltipContent></Tooltip>
             </div>
-          </div>
-        ) : data.upload?.error ? (
-          <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
-        ) : isGenerating(data.taskBinding) ? (
-          <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />
-        ) : isMulti && hasImage ? (
-            expanded ? (
-              // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）
-              <div className="absolute inset-0 overflow-visible">
-                {data.multiResultUrls!.map((url, i) => {
-                  const isMain = url === src;
-                  const { left, top, z } = multiExpandedLayouts[i] ?? { left: "0px", top: "0px", z: 0 };
-                  return (
-                    <div
-                      key={i}
-                      className="absolute rounded-lg overflow-hidden shadow-xl"
-                      style={{
-                        left,
-                        top,
-                        width: "100%",
-                        height: "100%",
-                        zIndex: z,
-                        background: "var(--canvas-bg)",
-                        outline: "1px solid color-mix(in srgb, var(--canvas-text) 15%, transparent)",
-                      }}
-                    >
-                          <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
-                          {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
-                          <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
-                            <AppTooltip title={t("common.download")}>
-                              <button
-                                className="app-overlay-btn app-overlay-btn--sm"
+          )}
+          {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
+            <div className="absolute top-2 right-2 z-20 nodrag">
+              <Tooltip><TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
+                    onClick={handleUpload}
+                  >
+                    <UploadOutlined className="size-4" />
+                  </Button>
+                </TooltipTrigger><TooltipContent>{t("common.replace")}</TooltipContent></Tooltip>
+            </div>
+          )}
+          {data.upload?.uploading ? (
+            <div className="absolute inset-0 rounded-lg overflow-hidden">
+              {data.upload?.previewUrl && (
+                <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
+                {data.upload?.progress != null ? (
+                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                  </div>
+                ) : (
+                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--primary)] rounded-full animate-pulse" style={{ width: "60%" }} />
+                  </div>
+                )}
+                <span className="text-sm text-white/60 tabular-nums">
+                  {t("common.uploading")}
+                  {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
+                </span>
+              </div>
+            </div>
+          ) : data.upload?.error ? (
+            <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
+          ) : isGenerating(data.taskBinding) ? (
+            <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />
+          ) : isMulti && hasImage ? (
+              expanded ? (
+                // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）
+                <div className="absolute inset-0 overflow-visible">
+                  {data.multiResultUrls!.map((url, i) => {
+                    const isMain = url === src;
+                    const { left, top, z } = multiExpandedLayouts[i] ?? { left: "0px", top: "0px", z: 0 };
+                    return (
+                      <div
+                        key={i}
+                        className="absolute rounded-lg overflow-hidden shadow-xl"
+                        style={{
+                          left,
+                          top,
+                          width: "100%",
+                          height: "100%",
+                          zIndex: z,
+                          background: "var(--card)",
+                          outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
+                        }}
+                      >
+                        <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
+                        {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
+                        <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
+                          <Tooltip><TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
                                 onClick={() => handleDownloadUrl(url)}
                               >
-                                <DownloadOutlined />
-                              </button>
-                            </AppTooltip>
-                            {!isMain && (
-                              <AppTooltip title={t("node.setAsMain")}>
-                                <button
-                                  className="app-overlay-btn app-overlay-btn--sm"
+                                <DownloadOutlined className="size-4" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
+                          {!isMain && (
+                            <Tooltip><TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
                                   onClick={() => handleSetMain(url)}
                                 >
-                                  <CrownOutlined />
-                                </button>
-                              </AppTooltip>
-                            )}
-                            {isMain && (
-                              <AppTooltip title={t("common.collapse")}>
-                                <button
-                                  className="app-overlay-btn app-overlay-btn--sm"
+                                  <CrownOutlined className="size-4" />
+                                </Button>
+                              </TooltipTrigger><TooltipContent>{t("node.setAsMain")}</TooltipContent></Tooltip>
+                          )}
+                          {isMain && (
+                            <Tooltip><TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
                                   onClick={toggleExpand}
                                 >
-                                  <FullscreenOutlined />
-                                </button>
-                              </AppTooltip>
-                            )}
-                          </div>
+                                  <FullscreenOutlined className="size-4" />
+                                </Button>
+                              </TooltipTrigger><TooltipContent>{t("common.collapse")}</TooltipContent></Tooltip>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-            ) : (
-              // 折叠堆叠卡片：排除当前主图，取最多 3 张作为背景卡
-              <div className="relative w-full h-full overflow-visible rounded-lg">
-                {data.multiResultUrls!.filter((u) => u !== src).slice(0, 3).map((url, i) => {
-                  const depth = i + 1;
-                  const left = depth * 12;
-                  const top = depth * 4;
-                  const scale = 1 - depth * 0.035;
-                  const rotate = depth * 2.5;
-                  return (
-                    <div
-                      key={i}
-                      className="absolute rounded-lg overflow-hidden shadow-xl"
-                      style={{
-                        left: `${left}px`,
-                        top: `${top}px`,
-                        width: "100%",
-                        height: "100%",
-                        transform: `scale(${scale}) rotate(${rotate}deg)`,
-                        transformOrigin: "center center",
-                        zIndex: -depth,
-                        background: "var(--canvas-bg)",
-                        outline: "1px solid color-mix(in srgb, var(--canvas-text) 15%, transparent)",
-                      }}
-                    >
-                      <img src={url} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
+                      </div>
+                    );
+                      })}
                     </div>
-                  );
-                })}
-                {/* 主卡：scale=1，在最上层，覆盖大部分面积 */}
-                <div
-                  className="absolute rounded-lg overflow-hidden shadow-2xl"
-                  style={{
-                    left: 0,
-                    top: 0,
-                    width: "100%",
-                    height: "100%",
-                    transform: "scale(1)",
-                    zIndex: 0,
-                  }}
-                >
-                  <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
+              ) : (
+                // 折叠堆叠卡片：排除当前主图，取最多 3 张作为背景卡
+                <div className="relative w-full h-full overflow-visible rounded-lg">
+                  {data.multiResultUrls!.filter((u) => u !== src).slice(0, 3).map((url, i) => {
+                    const depth = i + 1;
+                    const left = depth * 12;
+                    const top = depth * 4;
+                    const scale = 1 - depth * 0.035;
+                    const rotate = depth * 2.5;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute rounded-lg overflow-hidden shadow-xl"
+                        style={{
+                          left: `${left}px`,
+                          top: `${top}px`,
+                          width: "100%",
+                          height: "100%",
+                          transform: `scale(${scale}) rotate(${rotate}deg)`,
+                          transformOrigin: "center center",
+                          zIndex: -depth,
+                          background: "var(--card)",
+                          outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
+                        }}
+                      >
+                        <img src={url} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
+                      </div>
+                    );
+                  })}
+                  {/* 主卡：scale=1，在最上层，覆盖大部分面积 */}
+                  <div
+                    className="absolute rounded-lg overflow-hidden shadow-2xl"
+                    style={{
+                      left: 0,
+                      top: 0,
+                      width: "100%",
+                      height: "100%",
+                      transform: "scale(1)",
+                      zIndex: 0,
+                    }}
+                  >
+                    <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
+                  </div>
                 </div>
-              </div>
+              )
             )
-          )
-        : hasImage ? (
-          <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
-            <PictureOutlined className="text-5xl" />
-            <span className="text-base text-center">{t("drop.upload")}</span>
-            <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
-              onClick={handleUpload}>
-              <UploadOutlined className="text-lg" /> {t("common.upload")}
-            </button>
+          : hasImage ? (
+            <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
+              <PictureOutlined className="text-5xl" />
+              <span className="text-base text-center">{t("drop.upload")}</span>
+              <Button
+                type="button"
+                size="lg"
+                variant="secondary"
+                className="nodrag px-6"
+                onClick={handleUpload}>
+                <UploadOutlined className="size-5" /> {t("common.upload")}
+              </Button>
+            </div>
+          )}
+        </div>
+        {annotateOpen && src && (
+          <div className="pointer-events-none absolute inset-0 overflow-visible">
+            <AnnotationPanel src={src} sourceId={id} onClose={() => setAnnotateOpen(false)} />
           </div>
         )}
-      </div>
-      {annotateOpen && src && (
-        <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <AnnotationPanel src={src} sourceId={id} onClose={() => setAnnotateOpen(false)} />
+        {cropOpen && src && (
+          <div className="pointer-events-none absolute inset-0 overflow-visible">
+            <CropPanel src={src} sourceId={id} onClose={() => setCroppingNodeId(null)} />
+          </div>
+        )}
+        {panoramaOpen && src && (
+          <div className="pointer-events-none absolute inset-0 overflow-visible">
+            <PanoramaPanel
+              src={src}
+              sourceId={id}
+              selected={selected && !multiSelect}
+              onClose={() => setPanoramaOpen(false)}
+            />
+          </div>
+        )}
         </div>
-      )}
-      {cropOpen && src && (
-        <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <CropPanel src={src} sourceId={id} onClose={() => setCroppingNodeId(null)} />
-        </div>
-      )}
-      {panoramaOpen && src && (
-        <div className="pointer-events-none absolute inset-0 overflow-visible">
-          <PanoramaPanel
-            src={src}
-            sourceId={id}
-            selected={selected && !multiSelect}
-            onClose={() => setPanoramaOpen(false)}
-          />
-        </div>
-      )}
-      </div>
 
-      {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
-      {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" zIndex={999} />}
-      <ConnectionSideRail side="right" type="source" zIndex={999} />
-    </div>
-    {previewOpen && createPortal(
-      <MediaPreviewOverlay
-        items={previewList}
-        index={previewIndex}
-        onIndexChange={setPreviewIndex}
-        onClose={() => setPreviewOpen(false)}
-      />,
-      document.body
-    )}
+        {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
+        {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" zIndex={999} />}
+        <ConnectionSideRail side="right" type="source" zIndex={999} />
+      </div>
+      {previewOpen && createPortal(
+        <MediaPreviewOverlay
+          items={previewList}
+          index={previewIndex}
+          onIndexChange={setPreviewIndex}
+          onClose={() => setPreviewOpen(false)}
+        />,
+        document.body
+      )}
     </>
   );
 }

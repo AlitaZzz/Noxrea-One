@@ -4,11 +4,12 @@
  */
 "use client";
 
-import { CheckOutlined, CloseOutlined, LoadingOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppTooltip from "@/components/ui/AppTooltip";
+import { CheckOutlined, CloseOutlined, LoadingOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { actionRowText, TOOL_META } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
 
@@ -49,18 +50,24 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
   return (
     <div className="chat-action-row">
       <span className="chat-action-icon">{meta?.icon}</span>
-      <AppTooltip title={text} placement="top">
-        <span className="chat-action-text">{text}</span>
-      </AppTooltip>
+      <Tooltip><TooltipTrigger asChild>
+          <span className="chat-action-text">{text}</span>
+        </TooltipTrigger><TooltipContent side="top">{text}</TooltipContent></Tooltip>
       <span className={`chat-action-status${status === "error" ? " is-error" : ""}${status === "pending" ? " is-pending" : ""}`}>
         {status === "ok" && <CheckOutlined />}
         {status === "pending" && <LoadingOutlined spin />}
         {(status === "error" || status === "skipped") && <CloseOutlined />}
         {status === "skipped" && <span className="chat-action-skip-text">{t("agent.skipped")}</span>}
       </span>
-      <button type="button" className="chat-action-detail-toggle" onClick={() => setDetailOpen((v) => !v)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="shrink-0 opacity-70"
+        onClick={() => setDetailOpen((v) => !v)}
+      >
         {detailOpen ? t("common.collapse") : t("agent.detail")}
-      </button>
+      </Button>
       {detailOpen && <pre className="chat-tool-detail">{pretty}</pre>}
     </div>
   );

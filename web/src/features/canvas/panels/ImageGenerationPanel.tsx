@@ -6,18 +6,18 @@
 
 "use client";
 
-import { PlusOutlined } from "@ant-design/icons";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { PlusOutlined } from "@/components/ui/AppIcon";
+import { ParamsIcon } from "@/components/ui/AppIcon";
+import { PresetIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
-import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
@@ -351,120 +351,120 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-    <WheelGuard
-      className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
-      style={{
-        background: "var(--canvas-bg, #262626)",
-        border: "1px solid var(--canvas-border, #3a3a3a)",
-        width: 640,
-      }}
-    >
-      <div
-        className="flex gap-2 flex-wrap"
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
-            e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
-            return;
-          }
-          e.dataTransfer.dropEffect = 'move';
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      <WheelGuard
+        className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
+        style={{
+          background: "var(--card, #262626)",
+          border: "1px solid var(--border, #3a3a3a)",
+          width: 640,
         }}
       >
-          {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
-          {refGroups.map((group, i) => (
-            <Fragment key={group.key}>
-              {i > 0 && <RefGroupDivider />}
-              {group.content}
-            </Fragment>
-          ))}
-          {/* 添加参考：方形加号占位，与参考缩略图同行（虚线规格与上传弹窗放置区共用 .dashed-add-zone） */}
-          <AppTooltip title={t("common.reference")}>
-            <button type="button"
-              className="dashed-add-zone flex items-center justify-center rounded flex-shrink-0"
-              style={{ width: 56, height: 56 }}
-              onClick={handleRefUpload}>
-              <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-            </button>
-          </AppTooltip>
-        </div>
-      <MentionPrompt
-        references={references}
-        value={prompt}
-        onChange={setPrompt}
-        placeholder={t("generation.promptPlaceholder")}
-        style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
-      />
-      <div className="flex items-center gap-2">
-        <AppDropdown
-          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft" trigger={["click"]}
-          menu={{
-            items: allModels.map((m) => ({
-              key: m.value,
-              icon: <ModelIcon model={m.name} className="size-4 shrink-0" />,
-              label: m.name,
-              extra: m.providerName ? <span className="max-w-24 truncate text-xs opacity-50">{m.providerName}</span> : undefined,
-            })),
-            selectable: true,
-            selectedKeys: [modelKey],
-            onClick: ({ key }) => { setModelKey(key); recordLastModel("image", key); },
+        <div
+          className="flex gap-2 flex-wrap"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
+              e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
+              return;
+            }
+            e.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
           }}
         >
-          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
-            <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
-            <span className="truncate">
-              {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-            </span>
-          </AppButton>
-        </AppDropdown>
-        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        <AppPopover
-          content={
-            <div className="panel-popover" style={{ width: 360 }}>
-              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
-            </div>
-          }
-          trigger="click" placement="bottomLeft"
-          contentStyle={{ padding: 0, background: "transparent" }}
-        >
-          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
-            <ParamsIcon style={{ color: "#ffffff" }} />
-            <ParamSummary fields={fieldViews} values={fieldValues} />
-          </AppButton>
-        </AppPopover>
-        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        <AppPopover
-          open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
-          trigger={["click"]} arrow={false}
-          popupClassName="creation-menu-popover"
-          contentStyle={{ padding: 0, background: "transparent" }}
-          content={
-            <div className="panel-popover">
-              <PresetMenuContent
-                catalog={promptTemplateCatalog}
-                onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
-              />
-            </div>
-          }
-        >
-          <AppTooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
-            <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
-              <PresetIcon />
-            </AppButton>
-          </AppTooltip>
-        </AppPopover>
-        <div className="flex-1" />
-        <IconActionButton
-          cancel={isGenerating || submitting}
-          disabled={!isGenerating && !submitting && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
-          onClick={isGenerating || submitting ? handleCancel : handleGenerate}
+            {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
+            {refGroups.map((group, i) => (
+              <Fragment key={group.key}>
+                {i > 0 && <RefGroupDivider />}
+                {group.content}
+              </Fragment>
+            ))}
+            {/* 添加参考：方形加号占位，与参考缩略图同行 */}
+            <Tooltip><TooltipTrigger asChild>
+                <button type="button"
+                  className="flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-accent transition-colors hover:border-muted-foreground hover:bg-secondary"
+                  onClick={handleRefUpload}>
+                  <PlusOutlined style={{ fontSize: 18, color: "var(--muted-foreground)" }} />
+                </button>
+              </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
+          </div>
+        <MentionPrompt
+          references={references}
+          value={prompt}
+          onChange={setPrompt}
+          placeholder={t("generation.promptPlaceholder")}
+          style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
-      </div>
-    </WheelGuard>
+        <div className="flex items-center gap-2">
+          <DropdownMenu open={modelOpen} onOpenChange={setModelOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="max-w-[180px] gap-1.5">
+                <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start">
+              {allModels.map((model) => (
+                <DropdownMenuItem
+                  key={model.value}
+                  className={model.value === modelKey ? "bg-accent text-accent-foreground" : undefined}
+                  onSelect={() => { setModelKey(model.value); recordLastModel("image", model.value); }}
+                >
+                  <ModelIcon model={model.name} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                  {model.providerName && <span className="ml-auto max-w-24 truncate text-xs opacity-50">{model.providerName}</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost" className="shrink-0 gap-1">
+                <ParamsIcon className="size-4 shrink-0" />
+                <ParamSummary fields={fieldViews} values={fieldValues} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start" className="w-auto p-0 bg-transparent border-0">
+              <div className="panel-popover" style={{ width: 360 }}>
+                <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          <Popover open={presetOpen} onOpenChange={setPresetOpen}>
+            <Tooltip open={presetOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button size="icon-sm" variant="ghost" className="shrink-0">
+                    <PresetIcon />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t("node.creationPreset")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent side="bottom" align="start" className="creation-menu-popover w-auto p-0 bg-transparent border-0">
+              <div className="panel-popover">
+                <PresetMenuContent
+                  catalog={promptTemplateCatalog}
+                  onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="flex-1" />
+          <IconActionButton
+            cancel={isGenerating || submitting}
+            disabled={!isGenerating && !submitting && ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey)}
+            onClick={isGenerating || submitting ? handleCancel : handleGenerate}
+          />
+        </div>
+      </WheelGuard>
     </>
   );
 });

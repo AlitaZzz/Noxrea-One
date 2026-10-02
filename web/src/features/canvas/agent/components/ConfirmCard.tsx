@@ -8,6 +8,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { ConfirmDecision, PendingConfirmation } from "@/features/canvas/agent/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
@@ -122,16 +124,22 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                   const n = nodesById.get(id);
                   const thumb = nodeThumb(id);
                   return (
-                    <label key={id} className="chat-confirm-item chat-confirm-item-check">
-                      <input
-                        type="checkbox"
+                    <div
+                      key={id}
+                      className="chat-confirm-item chat-confirm-item-check"
+                      onClick={(event) => {
+                        if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, id);
+                      }}
+                    >
+                      <Checkbox
                         checked={checked[c.id]?.has(id) ?? true}
-                        onChange={() => toggle(c.id, id)}
+                        onCheckedChange={() => toggle(c.id, id)}
+                        aria-label={nodeLabel(id)}
                       />
                       {thumb && <img className="chat-confirm-thumb" src={thumb} alt="" />}
                       <span className="chat-confirm-item-label">{nodeLabel(id)}</span>
                       <span className="chat-confirm-item-type">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
@@ -144,14 +152,20 @@ export function ConfirmCard({ pending, onResolve }: Props) {
               <div className="chat-confirm-subtitle">{t("agent.confirmDeleteEdges", { count: c.edges.length })}</div>
               <div className="chat-confirm-list">
                 {c.edges.map((e, i) => (
-                  <label key={`${e.source}-${e.target}-${i}`} className="chat-confirm-item chat-confirm-item-check">
-                    <input
-                      type="checkbox"
+                  <div
+                    key={`${e.source}-${e.target}-${i}`}
+                    className="chat-confirm-item chat-confirm-item-check"
+                    onClick={(event) => {
+                      if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, i);
+                    }}
+                  >
+                    <Checkbox
                       checked={checked[c.id]?.has(i) ?? true}
-                      onChange={() => toggle(c.id, i)}
+                      onCheckedChange={() => toggle(c.id, i)}
+                      aria-label={`${nodeLabel(e.source)} → ${nodeLabel(e.target)}`}
                     />
                     <span className="chat-confirm-item-label">{nodeLabel(e.source)} → {nodeLabel(e.target)}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>
@@ -163,13 +177,13 @@ export function ConfirmCard({ pending, onResolve }: Props) {
           </div>
         );
       })}
-      <div className="chat-confirm-actions">
-        <button type="button" className="chat-confirm-btn chat-confirm-approve" onClick={() => onResolve(buildDecision(true))}>
-          {t("agent.confirmExecute")}
-        </button>
-        <button type="button" className="chat-confirm-btn chat-confirm-deny" onClick={() => onResolve({ approved: false })}>
+      <div className="flex gap-2 mt-2.5">
+        <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => onResolve({ approved: false })}>
           {t("common.cancel")}
-        </button>
+        </Button>
+        <Button type="button" variant="destructive" size="sm" className="flex-1" onClick={() => onResolve(buildDecision(true))}>
+          {t("agent.confirmExecute")}
+        </Button>
       </div>
     </div>
   );

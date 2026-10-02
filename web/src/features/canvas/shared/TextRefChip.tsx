@@ -7,9 +7,11 @@
 "use client";
 
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 
-import AppTooltip from "@/components/ui/AppTooltip";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+import { CloseOutlined, TextIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 import { useRevealCanvasNode } from "./reveal-node";
@@ -24,35 +26,38 @@ export interface TextRefChipProps {
 }
 
 function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
+  const { t } = useTranslation();
   const reveal = useRevealCanvasNode();
 
   return (
-    <AppTooltip
-      title={
-        <div style={{ maxWidth: 280, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {content}
+    <Tooltip><TooltipTrigger asChild>
+        <div
+          className="relative group h-14 w-14 rounded flex items-center justify-center"
+          style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
+          onDoubleClick={() => {
+            const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
+            if (n) reveal(n);
+          }}
+        >
+          <TextIcon className="pointer-events-none" style={{ color: "var(--foreground)", width: 14, height: 15 }} />
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            aria-label={t("common.delete")}
+            className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
+            onClick={() => {
+              const store = useCanvasStore.getState();
+              const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
+              if (edge) store.removeEdges([edge.id]);
+            }}
+          >
+            <CloseOutlined className="size-3" />
+          </Button>
         </div>
-      }
-    >
-      <div
-        className="relative group h-14 w-14 rounded flex items-center justify-center"
-        style={{ background: "var(--canvas-bg-hover)", border: "1px solid var(--canvas-border)" }}
-        onDoubleClick={() => {
-          const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
-          if (n) reveal(n);
-        }}
-      >
-        <TextIcon className="pointer-events-none" style={{ color: "var(--canvas-text)", width: 14, height: 15 }} />
-        <button
-          type="button"
-          className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
-          onClick={() => {
-            const store = useCanvasStore.getState();
-            const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
-            if (edge) store.removeEdges([edge.id]);
-          }}>✕</button>
-      </div>
-    </AppTooltip>
+      </TooltipTrigger><TooltipContent>{<div style={{ maxWidth: 280, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {content}
+        </div>}</TooltipContent></Tooltip>
   );
 }
 

@@ -10,13 +10,13 @@
  */
 "use client";
 
-import { CloseOutlined, WarningOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { CloseOutlined, WarningOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -243,11 +243,11 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
-        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.captureFrame")}</span>
+        <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+        <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.captureFrame")}</span>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
       <div
         ref={trackRef}
@@ -303,21 +303,19 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         )}
       </div>
 
-      <span className="text-sm tabular-nums text-[var(--canvas-text)]">{formatTime(currentTime)}</span>
+      <span className="text-sm tabular-nums text-[var(--foreground)]">{formatTime(currentTime)}</span>
 
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
-        <AppTooltip
-          title={t("capture.truncated", {
-            actual: formatTime(duration),
-            declared: formatTime(declaredDuration),
-          })}
-        >
-          <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <WarningOutlined style={{ color: "var(--chart-4)" }} />
+          </TooltipTrigger><TooltipContent>{t("capture.truncated", {
+              actual: formatTime(duration),
+              declared: formatTime(declaredDuration),
+            })}</TooltipContent></Tooltip>
       )}
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
       <IconActionButton onClick={handleCapture} disabled={!ready} />

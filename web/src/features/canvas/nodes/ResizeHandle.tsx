@@ -8,7 +8,7 @@
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useRef } from "react";
 
-import { ResizeCornerIcon } from "@/components/ui/icons/canvas/ResizeCornerIcon";
+import { ResizeCornerIcon } from "@/components/ui/AppIcon";
 import { shiftGroupMembers } from "@/features/canvas/shared/group-bounds";
 import { markDirty, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";

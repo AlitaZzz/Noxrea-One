@@ -7,6 +7,8 @@
 
 import { type Editor,useEditorState } from "@tiptap/react";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
+import { useTranslation } from "react-i18next";
+
 import {
   Bold,
   Heading1,
@@ -18,11 +20,9 @@ import {
   Minus,
   Quote,
   Type,
-} from "lucide-react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppTooltip from "@/components/ui/AppTooltip";
+} from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 
 interface Props {
@@ -55,74 +55,74 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
 
   const btnStyle = (on: boolean) => ({
     padding: 8,
-    ...(on ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}),
+    ...(on ? { background: "var(--accent)", color: "#fff" } : {}),
   });
 
   return (
     <RfNodeToolbar nodeId={nodeId} position={Position.Top} align="center" offset={8} isVisible>
-    <WheelGuard
-      data-rich-text-toolbar=""
-      // 统一阻止 mousedown 默认行为：点击工具条任意位置（含按钮间隙/背景）都不抢走编辑器焦点，
-      // 否则编辑器失焦会触发退出编辑态。焦点不转移，光标位置也得以保留。
-      onMouseDown={(e) => e.preventDefault()}
-      className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
-      style={{
-        height: 50,
-        padding: "6px 10px",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {/* 行内格式 */}
-      <AppTooltip title={t("richText.bold")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(active.bold)}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-        ><Bold size={16} /></AppButton>
-      </AppTooltip>
-      <AppTooltip title={t("richText.italic")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(active.italic)}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-        ><Italic size={16} /></AppButton>
-      </AppTooltip>
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <WheelGuard
+        data-rich-text-toolbar=""
+        // 统一阻止 mousedown 默认行为：点击工具条任意位置（含按钮间隙/背景）都不抢走编辑器焦点，
+        // 否则编辑器失焦会触发退出编辑态。焦点不转移，光标位置也得以保留。
+        onMouseDown={(e) => e.preventDefault()}
+        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
+        style={{
+          height: 50,
+          padding: "6px 10px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {/* 行内格式 */}
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(active.bold)}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+            ><Bold size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.bold")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(active.italic)}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+            ><Italic size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.italic")}</TooltipContent></Tooltip>
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
-      {/* 段落类型 — 平铺，无需二级菜单 */}
-      <AppTooltip title={t("richText.paragraph")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(!active.headingLevel)}
-          onClick={() => editor.chain().focus().setParagraph().run()}
-        ><Type size={16} /></AppButton>
-      </AppTooltip>
-      {HEADING_BUTTONS.map(({ level, Icon }) => (
-        <AppTooltip key={level} title={t(`richText.heading${level}`)}>
-          <AppButton variant="ghost" iconOnly            style={btnStyle(active.headingLevel === level)}
-            onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
-          ><Icon size={16} /></AppButton>
-        </AppTooltip>
-      ))}
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        {/* 段落类型 — 平铺，无需二级菜单 */}
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(!active.headingLevel)}
+              onClick={() => editor.chain().focus().setParagraph().run()}
+            ><Type size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.paragraph")}</TooltipContent></Tooltip>
+        {HEADING_BUTTONS.map(({ level, Icon }) => (
+          <Tooltip key={level}><TooltipTrigger asChild>
+              <Button variant="ghost" iconOnly            style={btnStyle(active.headingLevel === level)}
+                onClick={() => editor.chain().focus().toggleHeading({ level }).run()}
+              ><Icon size={16} /></Button>
+            </TooltipTrigger><TooltipContent>{t(`richText.heading${level}`)}</TooltipContent></Tooltip>
+        ))}
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
-      {/* 块级结构 */}
-      <AppTooltip title={t("richText.bulletList")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(active.bulletList)}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-        ><List size={16} /></AppButton>
-      </AppTooltip>
-      <AppTooltip title={t("richText.orderedList")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(active.orderedList)}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        ><ListOrdered size={16} /></AppButton>
-      </AppTooltip>
-      <AppTooltip title={t("richText.blockquote")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(active.blockquote)}
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        ><Quote size={16} /></AppButton>
-      </AppTooltip>
-      <AppTooltip title={t("richText.horizontalRule")}>
-        <AppButton variant="ghost" iconOnly          style={btnStyle(false)}
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-        ><Minus size={16} /></AppButton>
-      </AppTooltip>
+        {/* 块级结构 */}
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(active.bulletList)}
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+            ><List size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.bulletList")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(active.orderedList)}
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            ><ListOrdered size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.orderedList")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(active.blockquote)}
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            ><Quote size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.blockquote")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly          style={btnStyle(false)}
+              onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            ><Minus size={16} /></Button>
+          </TooltipTrigger><TooltipContent>{t("richText.horizontalRule")}</TooltipContent></Tooltip>
 
-    </WheelGuard>
+      </WheelGuard>
     </RfNodeToolbar>
   );
 }

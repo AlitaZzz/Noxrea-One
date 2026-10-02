@@ -7,6 +7,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CaretDownOutlined, CaretRightOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ChatActionRow from "@/features/canvas/agent/components/ChatActionRow";
 import type { ChatRound } from "@/features/canvas/agent/utils/group-sections";
 
@@ -30,20 +32,20 @@ export function ChatToolRound({ round, isStreaming }: Props) {
 
   if (!open) {
     return (
-      <button type="button" className="chat-tool-round-toggle" onClick={() => setUserOpen(true)}>
+      <Button type="button" variant="secondary" size="xs" className="w-fit" onClick={() => setUserOpen(true)}>
         {t("agent.executedCount", { count: round.calls.length })}
-        <span className="chat-tool-round-arrow">▸</span>
-      </button>
+        <CaretRightOutlined className="size-3 opacity-70" aria-hidden="true" />
+      </Button>
     );
   }
 
   return (
     <div className="chat-tool-round">
       {round.calls.length > 1 && (
-        <button type="button" className="chat-tool-round-toggle" onClick={() => setUserOpen(false)}>
+        <Button type="button" variant="secondary" size="xs" className="w-fit" onClick={() => setUserOpen(false)}>
           {t("agent.executedCount", { count: round.calls.length })}
-          <span className="chat-tool-round-arrow">▾</span>
-        </button>
+          <CaretDownOutlined className="size-3 opacity-70" aria-hidden="true" />
+        </Button>
       )}
       {round.calls.map((call) => (
         <ChatActionRow key={call.id} call={call} result={round.results.get(call.id)} isStreaming={isStreaming} />

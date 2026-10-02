@@ -6,14 +6,14 @@
  */
 "use client";
 
-import { CloseOutlined, UndoOutlined } from "@ant-design/icons";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { CloseOutlined, UndoOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -211,7 +211,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     width: 10,
     height: 10,
     background: "#fff",
-    border: "1.5px solid var(--canvas-success)",
+    border: "1.5px solid var(--primary)",
     borderRadius: 3,
     pointerEvents: "auto",
     cursor: "pointer",
@@ -231,37 +231,37 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
-          <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.crop")}</span>
+          <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+          <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.crop")}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
         {ASPECT_PRESETS.map((p) => (
-          <AppButton
+          <Button
             key={p.label}
             variant="ghost"
-            // 高度锁 32px：沿用原 antd size="middle" 的尺寸，避免预设按钮换行
-            style={{ height: 32, padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
+            // 高度锁 32px：沿用中等控件尺寸，避免预设按钮换行
+            style={{ height: 32, padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--accent)", color: "#fff" } : {}) }}
             onClick={() => handleAspectChange(p.value)}
           >
             {t(p.label)}
-          </AppButton>
+          </Button>
         ))}
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
-        <span className="text-xs font-medium text-center" style={{ color: "var(--canvas-text-dim)", minWidth: 70 }}>
+        <span className="text-xs font-medium text-center" style={{ color: "var(--muted-foreground)", minWidth: 70 }}>
           {cropW} × {cropH}
         </span>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
-        <AppTooltip title={t("crop.reset")}>
-          <AppButton variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></Button>
+          </TooltipTrigger><TooltipContent>{t("crop.reset")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
         {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
         <IconActionButton onClick={handleConfirm} disabled={!imgLoaded} />
@@ -301,7 +301,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
             width: `${crop.w * 100}%`,
             height: `${crop.h * 100}%`,
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
-            border: "1.5px solid var(--canvas-success)",
+            border: "1.5px solid var(--primary)",
           }}
         >
           {/* Rule of thirds */}

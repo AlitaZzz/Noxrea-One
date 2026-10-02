@@ -8,8 +8,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 
-import { PauseIcon } from "@/components/ui/icons/media/PauseIcon";
-import { PlayIcon } from "@/components/ui/icons/media/PlayIcon";
+import { PauseIcon } from "@/components/ui/AppIcon";
+import { PlayIcon } from "@/components/ui/AppIcon";
 import { clamp01 } from "@/features/canvas/editing/clip-range";
 import { registerAudioPlayer } from "@/features/canvas/shared/audio-playback-registry";
 import { DEFAULT_NODE_COLOR } from "@/lib/constants";

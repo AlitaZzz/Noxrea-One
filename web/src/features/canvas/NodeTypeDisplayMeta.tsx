@@ -5,11 +5,10 @@
  * 语义色统一引用 lib/constants 的 NODE_TYPE_COLOR（小地图与节点 handle 同源），
  * 避免历史上 TYPE_COLORS 与 NODE_TYPE_COLOR 并存的双数据源问题。
  */
-import { PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
-
-import { GroupIcon } from "@/components/ui/icons/canvas/GroupIcon";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { PartitionOutlined, PictureOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
+import { GroupIcon } from "@/components/ui/AppIcon";
+import { TextIcon } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
 import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
 
 /** 节点类型 -> i18n key 映射 */
@@ -34,7 +33,7 @@ export const NODE_TYPE_ORDER = [
 
 /** 根据节点类型获取语义色（取自单一数据源 NODE_TYPE_COLOR） */
 export function getNodeTypeColor(type: string): string {
-  return NODE_TYPE_COLOR[type] || "var(--canvas-text-dim)";
+  return NODE_TYPE_COLOR[type] || "var(--muted-foreground)";
 }
 
 /** 根据节点类型获取图标组件 */

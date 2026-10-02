@@ -8,7 +8,7 @@
 import { memo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
 
 import { type ReferenceItem, refLabelKey } from "./reference";
 
@@ -59,8 +59,8 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           top: y,
           width: dropdownWidth,
           maxHeight: 300,
-          background: "var(--canvas-bg, #262626)",
-          border: "1px solid var(--canvas-border, #3a3a3a)",
+          background: "var(--card, #262626)",
+          border: "1px solid var(--border, #3a3a3a)",
         }}
       >
       {items.map((item, i) => (
@@ -69,7 +69,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           className="flex items-center gap-3 px-3 py-2 cursor-pointer"
           style={{
             background: i === selectedIndex
-              ? "var(--canvas-bg-hover, #3c3c3c)"
+              ? "var(--accent, #3c3c3c)"
               : "transparent",
           }}
           onMouseEnter={() => onHover(i)}
@@ -82,7 +82,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           {item.kind === "audio" ? (
             <div
               className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--canvas-bg-hover, #3c3c3c)", border: "1px solid var(--canvas-border, #3a3a3a)", color: "var(--canvas-success)" }}
+              style={{ background: "var(--accent, #3c3c3c)", border: "1px solid var(--border, #3a3a3a)", color: "var(--primary)" }}
             >
               <WaveIcon style={{ width: 22, height: 22 }} />
             </div>
@@ -93,19 +93,19 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
               preload="metadata"
               playsInline
               className="w-10 h-10 rounded object-cover flex-shrink-0"
-              style={{ border: "1px solid var(--canvas-border, #3a3a3a)", background: "var(--canvas-bg-hover, #3c3c3c)" }}
+              style={{ border: "1px solid var(--border, #3a3a3a)", background: "var(--accent, #3c3c3c)" }}
             />
           ) : (
             <img
               src={item.thumbnail}
               alt={t(refLabelKey(item), { index: item.index + 1 })}
               className="w-10 h-10 rounded object-cover flex-shrink-0"
-              style={{ border: "1px solid var(--canvas-border, #3a3a3a)" }}
+              style={{ border: "1px solid var(--border, #3a3a3a)" }}
             />
           )}
           <span
             className="text-sm font-medium"
-            style={{ color: "var(--canvas-text)" }}
+            style={{ color: "var(--foreground)" }}
           >
             {t(refLabelKey(item), { index: item.index + 1 })}
           </span>

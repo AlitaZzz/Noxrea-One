@@ -4,12 +4,18 @@
  */
 "use client";
 
-import { PictureOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 
-import AppDropdown from "@/components/ui/AppDropdown";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { PictureOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
+import { TextIcon } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { canConnect, canConnectToInput, NODE_TYPE } from "@/lib/constants";
 
 export interface PendingConnectionCreate {
@@ -46,50 +52,45 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
 
   return (
     <>
-      <AppDropdown
+      <DropdownMenu
         open
-        trigger={["click"]}
-        placement="bottomLeft"
+        modal={false}
         onOpenChange={(v) => { if (!v) onClose(); }}
-        menu={{
-          items: [
-            {
-              key: "hint",
-              type: "group",
-              label: (
-                <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
-                  {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
-                </div>
-              ),
-            },
-            ...nodeOptions.map((opt) => {
-              // 批量连线：仅当全部参与节点都兼容该类型时才启用，
-              // 保证点击后所有选中节点都会接上新节点（与单节点行为一致）
-              const disabled =
-                pending.direction === "output"
-                  ? !pending.sourceNodeTypes.every((t) => canConnect(t, opt.type))
-                  : !pending.sourceNodeTypes.every((t) => canConnectToInput(t, opt.type));
-              return { key: opt.type, icon: opt.icon, label: opt.label, disabled };
-            }),
-          ],
-          onClick: ({ key }) => {
-            const opt = nodeOptions.find((o) => o.type === key);
-            if (opt) {
-              onSelect(opt.type);
-              onClose();
-            }
-          },
-        }}
       >
-        <span
-          style={{
-            position: "fixed",
-            left: Math.min(pending.screenPosition.x, window.innerWidth - 180),
-            top: Math.min(pending.screenPosition.y, window.innerHeight - 240),
-            width: 1, height: 1, pointerEvents: "none",
-          }}
-        />
-      </AppDropdown>
+        <DropdownMenuTrigger asChild>
+          <span
+            style={{
+              position: "fixed",
+              left: Math.min(pending.screenPosition.x, window.innerWidth - 180),
+              top: Math.min(pending.screenPosition.y, window.innerHeight - 240),
+              width: 1, height: 1, pointerEvents: "none",
+            }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="start">
+          <DropdownMenuLabel>
+            {pending.direction === "input" ? t("node.connectCreateInput") : t("node.connectCreateOutput")}
+          </DropdownMenuLabel>
+          {nodeOptions.map((opt) => {
+            // 批量连线：仅当全部参与节点都兼容该类型时才启用，
+            // 保证点击后所有选中节点都会接上新节点（与单节点行为一致）
+            const disabled =
+              pending.direction === "output"
+                ? !pending.sourceNodeTypes.every((t) => canConnect(t, opt.type))
+                : !pending.sourceNodeTypes.every((t) => canConnectToInput(t, opt.type));
+            return (
+              <DropdownMenuItem
+                key={opt.type}
+                disabled={disabled}
+                onSelect={() => { onSelect(opt.type); onClose(); }}
+              >
+                {opt.icon}
+                {opt.label}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
     </>
   );

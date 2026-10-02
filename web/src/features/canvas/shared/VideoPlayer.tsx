@@ -13,11 +13,11 @@
  */
 "use client";
 
-import { CaretRightOutlined, PauseOutlined } from "@ant-design/icons";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 
-import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
-import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
+import { CaretRightOutlined, PauseOutlined } from "@/components/ui/AppIcon";
+import { VolumeMuteIcon } from "@/components/ui/AppIcon";
+import { VolumeUpIcon } from "@/components/ui/AppIcon";
 import { formatTime } from "@/lib/utils/format";
 
 interface Props {
@@ -165,7 +165,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
           onPointerDown={handleSeekDown}
         >
           <div
-            className="relative h-full rounded-full bg-[var(--canvas-success)] transition-[width] duration-75"
+            className="relative h-full rounded-full bg-[var(--primary)] transition-[width] duration-75"
             style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
           >
             <div className="absolute -right-[7px] -top-[4px] h-[14px] w-[14px] scale-0 rounded-full bg-white shadow-md transition-transform group-hover/progress:scale-100" />
@@ -204,7 +204,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
               onPointerDown={handleVolumeDown}
             >
               <div
-                className="relative h-full rounded-full bg-[var(--canvas-success)] transition-[width] duration-75"
+                className="relative h-full rounded-full bg-[var(--primary)] transition-[width] duration-75"
                 style={{ width: `${volume * 100}%` }}
               >
                 <div className="absolute -right-[7px] -top-[4px] h-[14px] w-[14px] scale-0 rounded-full bg-white shadow-md transition-transform group-hover/volume:scale-100" />

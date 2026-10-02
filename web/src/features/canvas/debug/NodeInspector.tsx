@@ -6,11 +6,10 @@
 
 import type { Node } from "@xyflow/react";
 
-import AppDescriptions from "@/components/ui/AppDescriptions";
-import AppModal from "@/components/ui/AppModal";
-import AppTypography from "@/components/ui/AppTypography";
+import Descriptions from "@/components/ui/descriptions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Paragraph } from "@/components/ui/typography";
 
-const { Paragraph } = AppTypography;
 
 interface NodeInspectorProps {
   open: boolean;
@@ -28,35 +27,33 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
   );
 
   return (
-    <AppModal
-      title={(node.data as { label?: string })?.label || node.id}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={520}
-      styles={{ body: { padding: "16px 24px 24px" } }}
-    >
-      <AppDescriptions column={1} size="small" bordered className="mb-3" items={[
-        { key: "id", label: "ID", children: node.id },
-        { key: "type", label: "Type", children: node.type },
-        { key: "position", label: "Position", children: `x: ${Math.round(node.position.x)}, y: ${Math.round(node.position.y)}` },
-        { key: "size", label: "Size", children: node.style?.width ? `${node.style.width} × ${node.style.height || "auto"}` : "default" },
-      ]} />
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>{(node.data as { label?: string })?.label || node.id}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Descriptions column={1} size="sm" bordered items={[
+            { key: "id", label: "ID", children: node.id },
+            { key: "type", label: "Type", children: node.type },
+            { key: "position", label: "Position", children: `x: ${Math.round(node.position.x)}, y: ${Math.round(node.position.y)}` },
+            { key: "size", label: "Size", children: node.style?.width ? `${node.style.width} × ${node.style.height || "auto"}` : "default" },
+          ]} />
 
-      <div className="text-xs text-zinc-500 mb-1">Raw JSON:</div>
-      <Paragraph
-        copyable={{ text: jsonStr }}
-        className="text-xs"
-        style={{
-          background: "var(--canvas-bg-elevated, #353535)",
-          padding: 8,
-          borderRadius: 6,
-          maxHeight: 300,
-          overflow: "auto",
-        }}
-      >
-        <pre className="m-0 text-xs whitespace-pre-wrap">{jsonStr}</pre>
-      </Paragraph>
-    </AppModal>
+          <div className="text-xs text-muted-foreground">Raw JSON:</div>
+          <Paragraph
+            copyable={{ text: jsonStr }}
+            className="text-xs whitespace-pre-wrap"
+            style={{
+              background: "var(--popover, #353535)",
+              padding: 8,
+              borderRadius: 6,
+              maxHeight: 300,
+              overflow: "auto",
+            }}
+          >{jsonStr}</Paragraph>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

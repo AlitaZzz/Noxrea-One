@@ -10,7 +10,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 
-import { GroupIcon } from "@/components/ui/icons/canvas/GroupIcon";
+import { GroupIcon } from "@/components/ui/AppIcon";
 import GroupConnectRail from "@/features/canvas/controls/GroupConnectRail";
 import { isGroupMember } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";

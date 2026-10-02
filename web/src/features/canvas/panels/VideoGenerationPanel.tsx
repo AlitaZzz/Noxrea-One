@@ -6,21 +6,21 @@
 
 "use client";
 
-import { DownOutlined, PlusOutlined } from "@ant-design/icons";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { DownOutlined, PlusOutlined } from "@/components/ui/AppIcon";
+import { ParamsIcon } from "@/components/ui/AppIcon";
+import { TextToVideoIcon } from "@/components/ui/AppIcon";
+import { VideoCameraIcon } from "@/components/ui/AppIcon";
+import { VideoFrameIcon } from "@/components/ui/AppIcon";
+import { VideoRefIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { ParamsIcon } from "@/components/ui/icons/canvas/ParamsIcon";
-import { TextToVideoIcon } from "@/components/ui/icons/media/TextToVideoIcon";
-import { VideoCameraIcon } from "@/components/ui/icons/media/VideoCameraIcon";
-import { VideoFrameIcon } from "@/components/ui/icons/media/VideoFrameIcon";
-import { VideoRefIcon } from "@/components/ui/icons/media/VideoRefIcon";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
@@ -380,167 +380,149 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-    <WheelGuard
-      className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
-      style={{
-        background: "var(--canvas-bg, #262626)",
-        border: "1px solid var(--canvas-border, #3a3a3a)",
-        width: 640,
-      }}
-    >
-      {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
-          文本参考不可拖动，按连线顺序排在首位 */}
-      <div
-        className="flex gap-2 flex-wrap"
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
-            e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
-            return;
-          }
-          e.dataTransfer.dropEffect = 'move';
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+      <WheelGuard
+        className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
+        style={{
+          background: "var(--card, #262626)",
+          border: "1px solid var(--border, #3a3a3a)",
+          width: 640,
         }}
       >
-          {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
-          {refGroups.map((group, i) => (
-            <Fragment key={group.key}>
-              {i > 0 && <RefGroupDivider />}
-              {group.content}
-            </Fragment>
-          ))}
-          {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-          <AppTooltip title={t("common.reference")}>
-            <AppButton size="sm" variant="ghost"
-              className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-              style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
-              onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
-              onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
-              onClick={handleRefUpload}>
-              <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-            </AppButton>
-          </AppTooltip>
-        </div>
-      <MentionPrompt
-        references={references}
-        value={prompt}
-        onChange={setPrompt}
-        placeholder={t("generation.promptPlaceholderVideo")}
-        style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
-      />
-      <div className="flex items-center gap-2">
-        <AppDropdown
-          open={modelOpen} onOpenChange={setModelOpen} placement="bottomLeft" trigger={["click"]}
-          menu={{
-            items: allModels.map((m) => ({
-              key: m.value,
-              icon: <ModelIcon model={m.name} className="size-4 shrink-0" />,
-              label: m.name,
-              extra: m.providerName ? <span className="max-w-24 truncate text-xs opacity-50">{m.providerName}</span> : undefined,
-            })),
-            selectable: true,
-            selectedKeys: [modelKey],
-            onClick: ({ key }) => selectModel(key),
+        {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
+            文本参考不可拖动，按连线顺序排在首位 */}
+        <div
+          className="flex gap-2 flex-wrap"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
+              e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
+              return;
+            }
+            e.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
           }}
         >
-          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]">
-            <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
-            <span className="truncate">
-              {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-            </span>
-          </AppButton>
-        </AppDropdown>
-        <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        {refModeOptions.length > 0 && (
-          <AppDropdown
-            open={refModeOpen}
-            onOpenChange={setRefModeOpen}
-            placement="bottomLeft"
-            trigger={["click"]}
-            menu={{
-              items: [
-                {
-                  key: "refModeTitle",
-                  type: "group",
-                  label: (
-                    <div style={{ padding: "2px 4px 0", fontSize: 12, color: "var(--canvas-text-muted)" }}>
-                      {t("video.refModeTitle")}
-                    </div>
-                  ),
-                },
-                ...refModeOptions.map((m: string) => {
+            {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
+            {refGroups.map((group, i) => (
+              <Fragment key={group.key}>
+                {i > 0 && <RefGroupDivider />}
+                {group.content}
+              </Fragment>
+            ))}
+            {/* 添加参考：方形加号占位，与参考缩略图同行 */}
+            <Tooltip><TooltipTrigger asChild>
+                <Button size="sm" variant="ghost"
+                  className="flex items-center justify-center rounded transition-colors flex-shrink-0"
+                  style={{ width: 56, height: 56, background: "var(--accent)", border: "1px dashed var(--border)", cursor: "pointer" }}
+                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--muted-foreground)"; el.style.background = "rgba(255,255,255,0.08)"; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--border)"; el.style.background = "var(--accent)"; }}
+                  onClick={handleRefUpload}>
+                  <PlusOutlined style={{ fontSize: 18, color: "var(--muted-foreground)" }} />
+                </Button>
+              </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
+          </div>
+        <MentionPrompt
+          references={references}
+          value={prompt}
+          onChange={setPrompt}
+          placeholder={t("generation.promptPlaceholderVideo")}
+          style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
+        />
+        <div className="flex items-center gap-2">
+          <DropdownMenu open={modelOpen} onOpenChange={setModelOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="ghost" className="max-w-[180px] gap-1.5">
+                <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start">
+              {allModels.map((model) => (
+                <DropdownMenuItem
+                  key={model.value}
+                  className={model.value === modelKey ? "bg-accent text-accent-foreground" : undefined}
+                  onSelect={() => selectModel(model.value)}
+                >
+                  <ModelIcon model={model.name} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                  {model.providerName && <span className="ml-auto max-w-24 truncate text-xs opacity-50">{model.providerName}</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          {refModeOptions.length > 0 && (
+            <DropdownMenu open={refModeOpen} onOpenChange={setRefModeOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="w-[120px] justify-between gap-1.5">
+                  <span className="flex min-w-0 items-center gap-1.5 truncate">
+                    {refMode === "full" && <VideoRefIcon className="size-3.5 shrink-0" />}
+                    {refMode === "first-last" && <VideoFrameIcon className="size-3.5 shrink-0" />}
+                    {refMode === "image" && <VideoCameraIcon className="size-3.5 shrink-0" />}
+                    {refMode === "text" && <TextToVideoIcon className="size-3.5 shrink-0" />}
+                    {t(`video.refMode.${refMode}`)}
+                  </span>
+                  <DownOutlined className="size-3 shrink-0 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="start">
+                <DropdownMenuLabel>{t("video.refModeTitle")}</DropdownMenuLabel>
+                {refModeOptions.map((m: string) => {
                   const allowed = allowedRefModes.includes(m);
                   const modeIcon =
-                    m === "full" ? <VideoRefIcon style={{ fontSize: 14 }} />
-                    : m === "first-last" ? <VideoFrameIcon style={{ fontSize: 14 }} />
-                    : m === "image" ? <VideoCameraIcon style={{ fontSize: 14 }} />
-                    : m === "text" ? <TextToVideoIcon style={{ fontSize: 14 }} />
+                    m === "full" ? <VideoRefIcon className="size-3.5 shrink-0" />
+                    : m === "first-last" ? <VideoFrameIcon className="size-3.5 shrink-0" />
+                    : m === "image" ? <VideoCameraIcon className="size-3.5 shrink-0" />
+                    : m === "text" ? <TextToVideoIcon className="size-3.5 shrink-0" />
                     : undefined;
-                  const labelText = t(`video.refMode.${m}`);
-                  return {
-                    key: m,
-                    icon: modeIcon,
-                    label: allowed ? labelText : (
-                      // 禁用原因沿行悬停展示：antd 禁用条目只拦截点击，hover 仍生效
-                      <AppTooltip title={refModeDisabledReason(m)} placement="right">
-                        <span>{labelText}</span>
-                      </AppTooltip>
-                    ),
-                    disabled: !allowed,
-                  };
-                }),
-              ],
-              selectable: true,
-              selectedKeys: [refMode],
-              onClick: ({ key }) => setRefMode(key),
-            }}
-          >
-            <AppButton size="sm" variant="ghost"
-              className="gen-panel-btn flex items-center justify-between gap-1.5 rounded text-sm"
-              style={{ width: 120 }}>
-              <span className="truncate" style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-start" }}>
-                {refMode === "full" && <VideoRefIcon style={{ fontSize: 14 }} />}
-                {refMode === "first-last" && <VideoFrameIcon style={{ fontSize: 14 }} />}
-                {refMode === "image" && <VideoCameraIcon style={{ fontSize: 14 }} />}
-                {refMode === "text" && <TextToVideoIcon style={{ fontSize: 14 }} />}
-                {t(`video.refMode.${refMode}`)}
-              </span>
-              <DownOutlined style={{ fontSize: 11, color: "var(--canvas-text-dim)", flexShrink: 0 }} />
-            </AppButton>
-          </AppDropdown>
-        )}
-        {refModeOptions.length > 0 && (
-          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-        )}
-        <AppPopover
-          content={
-            <div className="panel-popover" style={{ width: 360 }}>
-              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
-            </div>
-          }
-          trigger="click" placement="bottomLeft"
-          contentStyle={{ padding: 0, background: "transparent" }}
-        >
-          <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
-            <ParamsIcon style={{ color: "#ffffff" }} />
-            <ParamSummary fields={fieldViews} values={fieldValues} />
-          </AppButton>
-        </AppPopover>
-        <div className="flex-1" />
-        <IconActionButton
-          cancel={isGenerating || submitting}
-          disabled={!isGenerating && !submitting && (!prompt.trim() || !modelKey)}
-          onClick={isGenerating || submitting ? handleCancel : handleGenerate}
-        />
-      </div>
-    </WheelGuard>
+                  return (
+                    <DropdownMenuItem
+                      key={m}
+                      disabled={!allowed}
+                      title={!allowed ? refModeDisabledReason(m) : undefined}
+                      className={m === refMode ? "bg-accent text-accent-foreground" : undefined}
+                      onSelect={() => setRefMode(m)}
+                    >
+                      {modeIcon}
+                      {t(`video.refMode.${m}`)}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {refModeOptions.length > 0 && (
+            <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost" className="shrink-0 gap-1">
+                <ParamsIcon className="size-4 shrink-0" />
+                <ParamSummary fields={fieldViews} values={fieldValues} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start" className="w-auto p-0 bg-transparent border-0">
+              <div className="panel-popover" style={{ width: 360 }}>
+                <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="flex-1" />
+          <IconActionButton
+            cancel={isGenerating || submitting}
+            disabled={!isGenerating && !submitting && (!prompt.trim() || !modelKey)}
+            onClick={isGenerating || submitting ? handleCancel : handleGenerate}
+          />
+        </div>
+      </WheelGuard>
     </>
   );
 });
 
 export default VideoGenerationPanel;
-

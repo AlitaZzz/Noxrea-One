@@ -8,17 +8,18 @@
 
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppDrawer from "@/components/ui/AppDrawer";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { HistoryIcon } from "@/components/ui/icons/agent/HistoryIcon";
-import { NewChatIcon } from "@/components/ui/icons/agent/NewChatIcon";
-import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
+import { ArrowUpOutlined, CloseOutlined, DeleteOutlined } from "@/components/ui/AppIcon";
+import { HistoryIcon } from "@/components/ui/AppIcon";
+import { NewChatIcon } from "@/components/ui/AppIcon";
+import { ChevronDownIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ChatSectionView from "@/features/canvas/agent/components/ChatSectionView";
 import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
@@ -36,7 +37,7 @@ interface Props {
   projectId?: string;
 }
 
-/** 右侧 Agent 对话抽屉（antd Drawer 外壳 + markdown 渲染 + 工具续轮） */
+/** 右侧 Agent 对话抽屉（项目 Drawer 外壳 + markdown 渲染 + 工具续轮） */
 export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
@@ -146,14 +147,20 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   }, []);
 
   return (
-    <AppDrawer
+    <Sheet
       open={open}
-      onClose={onClose}
-      width={420}
-      mask={false}
-      closePlacement="end"
-      title={
-        editing ? (
+      modal={false}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+    >
+      <SheetContent
+        side="right"
+        showOverlay={false}
+        className="w-[420px] max-w-[100vw] gap-0 border-l border-[var(--border)] bg-card p-0"
+        style={{ width: "min(420px, 100vw)", maxWidth: "min(420px, 100vw)" }}
+      >
+        <SheetHeader className="h-16 shrink-0 flex-row items-center gap-2 border-0 py-0 pl-3 pr-14">
+          <SheetTitle className="min-w-0 flex-1">
+            {editing ? (
           <input
             autoFocus
             className="chat-title-input"
@@ -166,31 +173,48 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               if (e.key === "Escape") setEditing(false);
             }}
           />
-        ) : (
-          <AppTooltip title={t("agent.renameTooltip")} placement="bottom">
-            <span className="chat-title" onClick={startRename}>{chatTitle ?? t("agent.newChat")}</span>
-          </AppTooltip>
-        )
-      }
-      extra={
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <AppTooltip title={t("agent.newChat")} placement="bottom">
-            <button type="button" className="chat-header-btn" aria-label={t("agent.newChat")} onClick={() => newChat()}>
-              <NewChatIcon />
-            </button>
-          </AppTooltip>
-          <AppPopover
+            ) : (
+          <Tooltip><TooltipTrigger asChild>
+              <span className="chat-title" onClick={startRename}>{chatTitle ?? t("agent.newChat")}</span>
+            </TooltipTrigger><TooltipContent side="bottom">{t("agent.renameTooltip")}</TooltipContent></Tooltip>
+            )}
+          </SheetTitle>
+          <SheetDescription className="sr-only">{t("agent.drawerDescription")}</SheetDescription>
+          <div className="ml-auto flex items-center gap-1">
+          <Tooltip><TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                aria-label={t("agent.newChat")}
+                onClick={() => newChat()}
+              >
+                <NewChatIcon />
+              </Button>
+            </TooltipTrigger><TooltipContent side="bottom">{t("agent.newChat")}</TooltipContent></Tooltip>
+          <Popover
             open={historyOpen}
             onOpenChange={(o) => {
               setHistoryOpen(o);
               if (o) void loadSessions();
             }}
-            placement="bottomRight"
-            trigger={["click"]}
-            arrow={false}
-            popupClassName="chat-history-popover"
-            contentStyle={{ padding: 0, background: "transparent" }}
-            content={
+          >
+            <Tooltip open={historyOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    aria-label={t("agent.historyTitle")}
+                  >
+                    <HistoryIcon />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t("agent.historyTitle")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent side="bottom" align="end" className="chat-history-popover z-[1050] w-auto p-0 bg-transparent">
               <div className="panel-popover chat-history-body">
                 <div className="chat-history-title">{t("agent.historyTitle")}</div>
                 <div className="chat-history-list">
@@ -198,56 +222,46 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                     <div className="chat-history-empty">{t("agent.historyEmpty")}</div>
                   ) : (
                     sessions.map((s) => (
-                      <div key={s.id} className="chat-history-item group">
-                        <button
+                      <div key={s.id} className="chat-history-item group transition-colors hover:bg-accent">
+                        <Button
                           type="button"
-                          className="chat-history-main"
+                          variant="ghost"
+                          size="sm"
+                          className="chat-history-main w-full justify-start px-3 text-[13px] font-normal text-foreground"
                           onClick={() => {
                             void loadHistory(s.id);
                             setHistoryOpen(false);
                           }}
                         >
                           <span className="chat-history-name">{s.title || t("agent.newChat")}</span>
-                        </button>
+                        </Button>
                         <div className="chat-history-side">
-                          <AppTooltip title={new Date(s.updatedAt).toLocaleString()} placement="top">
-                            <span className="chat-history-time">{formatRelative(s.updatedAt)}</span>
-                          </AppTooltip>
-                          <AppTooltip title={t("agent.deleteChatTooltip")} placement="top">
-                          <button
-                            type="button"
-                            className="chat-history-del"
-                            aria-label={t("agent.deleteChatAria", { title: s.title || t("agent.newChat") })}
-                            onClick={() => void deleteChat(s.id)}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19.5 21.5" width="14" height="14" aria-hidden="true" role="img">
-                              <path d="M11.75 0c.74 0 1.43.36 1.9.84.49.48.85 1.17.85 1.91V4h4.25a.75.75 0 0 1 0 1.5h-1.3l-.95 13.3a2.8 2.8 0 0 1-.84 1.86c-.48.48-1.17.84-1.91.84h-8c-.74 0-1.43-.36-1.9-.84A2.8 2.8 0 0 1 3 18.8L2.05 5.5H.75a.75.75 0 0 1 0-1.5H5V2.75c0-.74.36-1.43.84-1.9A2.8 2.8 0 0 1 7.75 0zM4.5 18.7v.05c0 .26.14.57.4.84.28.27.6.41.85.41h8c.26 0 .57-.14.84-.4a1.3 1.3 0 0 0 .41-.9l.94-13.2H3.56zM7.75 9c.41 0 .75.34.75.75v6a.75.75 0 0 1-1.5 0v-6c0-.41.34-.75.75-.75m4 0c.41 0 .75.34.75.75v6a.75.75 0 0 1-1.5 0v-6c0-.41.34-.75.75-.75m-4-7.5c-.26 0-.57.14-.84.4-.27.28-.41.6-.41.85V4H13V2.75c0-.26-.14-.57-.4-.84-.28-.27-.6-.41-.85-.41z" fill="currentColor"></path>
-                            </svg>
-                          </button>
-                          </AppTooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                              <span className="chat-history-time">{formatRelative(s.updatedAt)}</span>
+                            </TooltipTrigger><TooltipContent side="top">{new Date(s.updatedAt).toLocaleString()}</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                className="chat-history-del p-0 text-muted-foreground"
+                                aria-label={t("agent.deleteChatAria", { title: s.title || t("agent.newChat") })}
+                                onClick={() => void deleteChat(s.id)}
+                              >
+                                <DeleteOutlined className="size-3.5" />
+                              </Button>
+                            </TooltipTrigger><TooltipContent side="top">{t("agent.deleteChatTooltip")}</TooltipContent></Tooltip>
                         </div>
                       </div>
                     ))
                   )}
                 </div>
               </div>
-            }
-          >
-            <AppTooltip title={t("agent.historyTitle")} placement="bottom">
-              <button type="button" className="chat-header-btn" aria-label={t("agent.historyTitle")} onClick={() => setHistoryOpen((v) => !v)}>
-                <HistoryIcon />
-              </button>
-            </AppTooltip>
-          </AppPopover>
-        </div>
-      }
-      styles={{
-        header: { borderBottom: "none", padding: "12px 16px" },
-        body: { padding: 0, display: "flex", flexDirection: "column" },
-        panel: { borderLeft: "1px solid var(--canvas-border)" },
-      }}
-    >
-      <div ref={listRef} className="chat-scroll" style={{ flex: 1, overflowY: "auto", padding: 12 }}>
+            </PopoverContent>
+          </Popover>
+          </div>
+        </SheetHeader>
+        <div ref={listRef} className="chat-scroll min-h-0 flex-1" style={{ overflowY: "auto", padding: 12 }}>
         {messages.length === 0 ? (
           <div className="chat-empty">
             <div className="chat-empty-title">Noxrea One</div>
@@ -268,7 +282,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
         {pendingConfirm && <ConfirmCard pending={pendingConfirm} onResolve={respondToConfirm} />}
       </div>
 
-      <div className="chat-input-bar">
+        <SheetFooter className="chat-input-bar mt-0 flex shrink-0 flex-col gap-0 p-2.5">
         <div className="chat-composer">
           <div
             ref={composerRef}
@@ -314,46 +328,50 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
             <div className="chat-composer-left" />
             <div className="chat-composer-right">
               {initializeFailed && !modelOptions.length ? (
-                <button
+                <Button
                   type="button"
-                  className="chat-composer-model"
+                  size="sm"
+                  variant="ghost"
+                  className="max-w-[180px] justify-between text-muted-foreground"
                   onClick={() => void initialize()}
                 >
-                  <span className="chat-composer-model-label">{t("agent.modelLoadFailed")}</span>
-                </button>
+                  <span className="truncate">{t("agent.modelLoadFailed")}</span>
+                </Button>
               ) : (
-                <AppDropdown
+                <DropdownMenu
                   open={modelOpen}
                   onOpenChange={setModelOpen}
-                  placement="topRight"
-                  trigger={["click"]}
-                  menu={{
-                    items: modelOptions.map((m) => ({ key: m.value, label: m.label })),
-                    selectable: true,
-                    selectedKeys: activeOption ? [activeOption.value] : [],
-                    onClick: ({ key }) => setAgentModel(key),
-                  }}
                 >
-                  <button type="button" className="chat-composer-model" aria-label={t("agent.selectModelAria")}>
-                    <span className="chat-composer-model-label">{activeOption?.label ?? activeOption?.value}</span>
-                    <ChevronDownIcon />
-                  </button>
-                </AppDropdown>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="max-w-[180px] justify-between text-muted-foreground"
+                      aria-label={t("agent.selectModelAria")}
+                    >
+                      <span className="truncate">{activeOption?.label ?? activeOption?.value}</span>
+                      <ChevronDownIcon />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="end">
+                    {modelOptions.map((option) => (
+                      <DropdownMenuItem
+                        key={option.value}
+                        className={option.value === activeOption?.value ? "bg-accent text-accent-foreground" : undefined}
+                        onSelect={() => setAgentModel(option.value)}
+                      >
+                        {option.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
-              <button
+              <Button
                 type="button"
+                size="icon"
+                variant={isStreaming ? "destructive" : "default"}
                 aria-label={isStreaming ? t("agent.stopAria") : t("agent.sendAria")}
-                className="flex items-center justify-center flex-shrink-0 transition-all"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  background: isStreaming ? "var(--canvas-danger)" : !canSend ? "var(--canvas-border)" : "var(--canvas-text)",
-                  color: isStreaming ? "#fff" : !canSend ? "var(--canvas-text-muted)" : "var(--canvas-bg)",
-                  border: "none",
-                  cursor: "pointer",
-                  opacity: !canSend && !isStreaming ? 0.5 : 1,
-                }}
                 disabled={!canSend && !isStreaming}
                 onClick={isStreaming ? stopStream : handleSend}
               >
@@ -362,11 +380,12 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                 ) : (
                   <ArrowUpOutlined style={{ fontSize: 16 }} />
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </AppDrawer>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

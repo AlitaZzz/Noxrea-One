@@ -9,6 +9,8 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CloseOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -113,13 +115,16 @@ function ImageRefCard({
             src={preview}
             alt=""
             className="max-w-[240px] max-h-[240px] rounded-lg shadow-2xl"
-            style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", objectFit: "contain" }}
+            style={{ background: "var(--card)", border: "1px solid var(--border)", objectFit: "contain" }}
           />
         </div>
       )}
-      <button
+      <Button
         type="button"
-        className="app-overlay-btn app-overlay-btn--xxs absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100"
+        size="icon-xs"
+        variant="ghost"
+        aria-label={t("common.delete")}
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           // 删除参考 = 断开连线，显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -129,7 +134,10 @@ function ImageRefCard({
             return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === src;
           });
           if (edge) store.removeEdges([edge.id]);
-        }}>✕</button>
+        }}
+      >
+        <CloseOutlined className="size-3" />
+      </Button>
     </div>
   );
 }

@@ -2,10 +2,13 @@
  * 画布资源管理器（Explorer）。
  * 上半部为节点大纲：按类型分组列出画布节点，支持搜索、筛选与定位选中；
  * 下半部为资产快捷区：分页浏览资产文件夹与素材，支持悬浮预览并拖入画布成节点。
- * 以 antd Drawer 实现，不绑定具体方位，可在主题层调整为左 / 右 / 上下布局。
+ * 通过 shadcn Sheet 实现，不绑定具体方位，可在主题层调整为左 / 右 / 上下布局。
  */
 
 "use client";
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   AppstoreOutlined,
@@ -15,20 +18,17 @@ import {
   FolderOpenOutlined,
   LoadingOutlined,
   RightOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppCheckbox from "@/components/ui/AppCheckbox";
-import AppDrawer from "@/components/ui/AppDrawer";
-import AppEmpty from "@/components/ui/AppEmpty";
-import AppInput from "@/components/ui/AppInput";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
-import FilterIcon from "@/components/ui/icons/common/FilterIcon";
+} from "@/components/ui/AppIcon";
+import { AssetsIcon } from "@/components/ui/AppIcon";
+import { FilterIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
+import { SearchInput } from "@/components/ui/input-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetGrid from "@/features/assets/components/AssetGrid";
@@ -59,69 +59,54 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
   const [activeTab, setActiveTab] = useState<string>("elements");
 
   return (
-    <AppDrawer
-      className="canvas-sidebar"
+    <Sheet
       open={open}
-      onClose={onClose}
-      mask={false}
-      placement="left"
-      width={DRAWER_WIDTH}
-      styles={{
-        // header 规格走 globals.css 的 .ant-drawer-header 统一规则
-        body: {
-          background: "var(--canvas-bg)",
-          padding: 0,
-          display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
-        },
-        panel: {
-          borderRight: "1px solid var(--canvas-border)",
-        },
-      }}
-      // 关闭按钮用 antd 内置（与 AgentDrawer 一致，hover 规则见 globals.css 的 .ant-drawer-close）
-      closePlacement="start"
-      closeLabel={t("common.close")}
-      title={null}
+      modal={false}
+      onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
     >
-      <div className="canvas-sidebar flex flex-col h-full select-none">
-        {/* Tab 切换器 */}
-        <div className="flex items-center border-b flex-shrink-0" style={{ borderColor: "var(--canvas-border)" }}>
-          <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors border-b-2"
-            style={{
-              background: "transparent", cursor: "pointer",
-              color: activeTab === "elements" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-              borderColor: activeTab === "elements" ? "var(--canvas-text)" : "transparent",
-            }}
-            onClick={() => setActiveTab("elements")}
+      <SheetContent
+        side="left"
+        showOverlay={false}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        className="canvas-sidebar w-[360px] max-w-[100vw] gap-0 border-r border-border bg-card p-0"
+      >
+        <div className="flex min-h-0 flex-1 flex-col select-none">
+          <SheetHeader>
+            <SheetTitle>{t("canvas.sidebar")}</SheetTitle>
+            <SheetDescription>{t("canvas.sidebarDescription")}</SheetDescription>
+          </SheetHeader>
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex min-h-0 flex-1 flex-col gap-2"
           >
-            <AppstoreOutlined />
-            {t("canvas.tab.elements")}
-          </button>
-          <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors border-b-2"
-            style={{
-              background: "transparent", cursor: "pointer",
-              color: activeTab === "assets" ? "var(--canvas-text)" : "var(--canvas-text-dim)",
-              borderColor: activeTab === "assets" ? "var(--canvas-text)" : "transparent",
-            }}
-            onClick={() => setActiveTab("assets")}
-          >
-            <AssetsIcon />
-            {t("canvas.tab.assets")}
-          </button>
-        </div>
+            <TabsList
+              variant="line"
+              className="w-full shrink-0 rounded-none p-0"
+            >
+              <TabsTrigger value="elements" className="h-auto rounded-none py-2">
+                <AppstoreOutlined />
+                {t("canvas.tab.elements")}
+              </TabsTrigger>
+              <TabsTrigger value="assets" className="h-auto rounded-none py-2">
+                <AssetsIcon />
+                {t("canvas.tab.assets")}
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Tab 内容：双挂载保留状态，切换 tab 不丢导航/不重复请求 */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <div className={activeTab === "elements" ? "h-full" : "hidden"}>
-            <CanvasElementsView />
-          </div>
-          <div className={activeTab === "assets" ? "h-full" : "hidden"}>
-            <AssetsView />
-          </div>
+            {/* forceMount 保留两个视图的搜索、分页和文件夹状态 */}
+            <TabsContent value="elements" forceMount className="min-h-0 w-full data-[state=inactive]:hidden">
+              <CanvasElementsView />
+            </TabsContent>
+            <TabsContent value="assets" forceMount className="min-h-0 w-full data-[state=inactive]:hidden">
+              <AssetsView />
+            </TabsContent>
+          </Tabs>
         </div>
-      </div>
-    </AppDrawer>
+      </SheetContent>
+    </Sheet>
   );
 }
 // ── 元素视图 ──
@@ -245,22 +230,27 @@ function CanvasElementsView() {
     <div className="flex flex-col h-full">
       {/* 搜索：与资产页同规格（高 32、搜索图标前缀、可清除） */}
       <div className="flex items-center px-4 py-3 flex-shrink-0">
-        <AppInput
-          size="small"
+        <SearchInput
           placeholder={t("canvas.searchPlaceholder")}
-          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{ height: 32 }}
-          className="flex-1"
+          clearable
+          onClear={() => setSearch("")}
+          containerClassName="flex-1"
+          containerStyle={{ height: 32 }}
         />
       </div>
       <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
         {nodes.length === 0 ? (
-          <AppEmpty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("canvas.empty")}</span>} />
+          <Empty role="status" className="min-h-[120px] p-6 text-muted-foreground">
+            <EmptyMedia variant="icon" />
+            <EmptyDescription>{t("canvas.empty")}</EmptyDescription>
+          </Empty>
         ) : !hasMatch ? (
-          <AppEmpty description={<span style={{ color: "var(--canvas-text-dim)" }}>{t("common.noData")}</span>} />
+          <Empty role="status" className="min-h-[120px] p-6 text-muted-foreground">
+            <EmptyMedia variant="icon" />
+            <EmptyDescription>{t("common.noData")}</EmptyDescription>
+          </Empty>
         ) : (
           <>
             {/* 组：可折叠容器，成员嵌套在其下 */}
@@ -279,7 +269,7 @@ function CanvasElementsView() {
             {/* 未分组节点：按类型分组 */}
             {visible.ungroupedGroups.map((group) => (
               <div key={group.type} className="mb-3">
-                <div className="text-xs mb-1 px-2" style={{ color: "var(--canvas-text-muted)" }}>
+                <div className="text-xs mb-1 px-2" style={{ color: "var(--muted-foreground)" }}>
                   {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
                 </div>
                 {group.nodes.map((node) => (
@@ -294,13 +284,12 @@ function CanvasElementsView() {
           </>
         )}
       </div>
-      <div
-        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
-        style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
+      <SheetFooter
+        className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
       >
         <AppstoreOutlined />
         <span>{nodes.length} {t("canvas.nodesCount")}</span>
-      </div>
+      </SheetFooter>
     </div>
   );
 }
@@ -324,7 +313,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
   return (
     <div className="mb-1">
       <div
-        className={`canvas-explorer-row relative flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none${selected ? " is-selected" : ""}`}
+        className={`relative flex items-center gap-2 rounded-md py-1.5 text-sm text-foreground transition-colors hover:bg-accent cursor-pointer select-none${selected ? " bg-accent" : ""}`}
         style={{ paddingLeft: 8, paddingRight: 8 }}
         onClick={() => {
           const s = useCanvasStore.getState();
@@ -332,19 +321,21 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
           centerNode(group);
         }}
       >
-        {/* 选中竖条：与画布节点 --canvas-select 选中描边同色（约定同 ApiSettingsDrawer） */}
+        {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
         {selected && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--canvas-select)" }} />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--ring)" }} />
         )}
         {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
         <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
-          <button
-            className="w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 cursor-pointer"
-            style={{ color: "var(--canvas-text-muted)" }}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="h-4 w-4 rounded p-0 text-muted-foreground"
             onClick={(e) => { e.stopPropagation(); onToggle(); }}
           >
             {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
-          </button>
+          </Button>
         </span>
         <div
           className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
@@ -355,7 +346,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
         <span className="flex-1 truncate text-[13px]">{label}</span>
         <span
           className="shrink-0 text-[10px] px-1.5 rounded-full"
-          style={{ background: "var(--canvas-bg-elevated)", color: "var(--canvas-text-muted)" }}
+          style={{ background: "var(--popover)", color: "var(--muted-foreground)" }}
         >
           {members.length}
         </span>
@@ -431,7 +422,7 @@ function ElementItemImpl(props: ElementItemProps) {
   return (
     <div
       onClick={handleClick}
-      className={`canvas-explorer-row relative flex items-center gap-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm select-none${selected ? " is-selected" : ""}`}
+      className={`relative flex items-center gap-2 rounded-md py-1.5 text-sm text-foreground transition-colors hover:bg-accent cursor-pointer select-none${selected ? " bg-accent" : ""}`}
       style={{
         paddingLeft: 8 + depth * ROW_INDENT,
         paddingRight: 8,
@@ -441,9 +432,9 @@ function ElementItemImpl(props: ElementItemProps) {
       }}
       onMouseLeave={() => preview.onLeave()}
     >
-      {/* 选中竖条：与画布节点 --canvas-select 选中描边同色（约定同 ApiSettingsDrawer） */}
+      {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
       {selected && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--canvas-select)" }} />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--ring)" }} />
       )}
       {/* 空槽位：与组行折叠箭头同宽，保证图标与组图标垂直对齐 */}
       <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
@@ -453,10 +444,10 @@ function ElementItemImpl(props: ElementItemProps) {
         style={{
           minWidth: 52,
           background: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
-            ? "var(--canvas-bg-elevated)"
+            ? "var(--popover)"
             : `${getNodeTypeColor(nodeType)}18`,
           border: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
-            ? "1px solid var(--canvas-border)"
+            ? "1px solid var(--border)"
             : undefined,
         }}
       >
@@ -480,14 +471,14 @@ function ElementItemImpl(props: ElementItemProps) {
           /* 文本节点：内容预览小卡（与参考排版一致，正文片段替代类型图标） */
           <div
             className="w-full h-full px-1 py-0.5 overflow-hidden"
-            style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+            style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
           >
-            <span className="text-[8px] leading-[1.4] break-all line-clamp-4" style={{ color: "var(--canvas-text-muted)" }}>
+            <span className="text-[8px] leading-[1.4] break-all line-clamp-4" style={{ color: "var(--muted-foreground)" }}>
               {plainText.slice(0, 64)}
             </span>
           </div>
         ) : nodeType === NODE_TYPE.VIDEO && loading ? (
-          <LoadingOutlined style={{ fontSize: 14, color: "var(--canvas-text-dim)" }} />
+          <LoadingOutlined style={{ fontSize: 14, color: "var(--muted-foreground)" }} />
         ) : (
           getNodeTypeIcon(nodeType)
         )}
@@ -497,25 +488,25 @@ function ElementItemImpl(props: ElementItemProps) {
         <div className="flex items-center gap-1.5 min-w-0 h-5">
           <span className="flex-1 truncate text-[13px] leading-5 font-medium">{label || `Node ${node.id}`}</span>
           {failed ? (
-            <AppTooltip title={t("common.statusFailed")}>
-              <span
-                className="shrink-0 rounded-full"
-                style={{ width: 6, height: 6, background: "var(--canvas-danger)" }}
-              />
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <span
+                  className="shrink-0 rounded-full"
+                  style={{ width: 6, height: 6, background: "var(--destructive)" }}
+                />
+              </TooltipTrigger><TooltipContent>{t("common.statusFailed")}</TooltipContent></Tooltip>
           ) : generating ? (
-            <AppTooltip title={t("common.generating")}>
-              <LoadingOutlined className="shrink-0" spin style={{ fontSize: 12, color: "var(--canvas-accent)" }} />
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <LoadingOutlined className="shrink-0" spin style={{ fontSize: 12, color: "var(--primary)" }} />
+              </TooltipTrigger><TooltipContent>{t("common.generating")}</TooltipContent></Tooltip>
           ) : null}
         </div>
         {metaLine && (
-          <div className="explorer-row-sub text-[11px] leading-4 truncate">
+          <div className="truncate text-[11px] leading-4 text-muted-foreground">
             {metaLine}
           </div>
         )}
         {timeText && (
-          <div className="explorer-row-sub text-[11px] leading-4 flex items-center gap-1">
+          <div className="flex items-center gap-1 text-[11px] leading-4 text-muted-foreground">
             <ClockCircleOutlined style={{ fontSize: 10 }} />
             <span className="tabular-nums">{timeText}</span>
           </div>
@@ -615,99 +606,104 @@ function AssetsView() {
     // 使抽屉区域不作为画布落点——拖到抽屉上透传建节点 / 触发上传均被拦截
     <div className="canvas-asset-drawer flex flex-col h-full">
       {/* 搜索栏 + 风格筛选 */}
-      <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0">
-        <AppInput
-          size="small"
+      <div className="flex shrink-0 items-center gap-2 px-4 py-3">
+        <SearchInput
           placeholder={t("asset.search")}
-          prefix={<SearchOutlined style={{ color: "var(--canvas-text-dim)" }} />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          allowClear
-          style={{ height: 32 }}
-          className="flex-1"
+          clearable
+          onClear={() => setSearch("")}
+          containerClassName="h-8 flex-1"
         />
-        <AppPopover
-          trigger="click"
-          placement="bottomRight"
-          contentStyle={{ padding: 0, background: "transparent" }}
-          content={
-            <div className="panel-popover asset-filter-popover">
-              <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>{t("asset.filter")}</div>
+        <Popover>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-pressed={typeFilter.length > 0}
+                  className={typeFilter.length > 0 ? "bg-muted text-foreground" : undefined}
+                >
+                  <FilterIcon />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{t("asset.filter")}</TooltipContent>
+          </Tooltip>
+          <PopoverContent side="bottom" align="end" className="w-[210px] p-2">
+              <div className="px-2 py-1 text-xs text-muted-foreground">{t("asset.filter")}</div>
               {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
-                <label key={st.key} className="filter-row">
-                  <AppCheckbox
+                <label
+                  key={st.key}
+                  className="inline-flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <Checkbox
                     checked={typeFilter.includes(st.key)}
-                    onChange={(checked) => {
+                    onCheckedChange={(checked) => {
                       setTypeFilter((prev) =>
                         checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
                       );
                     }}
-                  >
-                    {t(st.labelKey)}
-                  </AppCheckbox>
+                  />
+                  {t(st.labelKey)}
                 </label>
               ))}
-              {typeFilter.length > 0 && <div className="panel-divider" />}
+              {typeFilter.length > 0 && <div className="my-1 h-px bg-border" />}
               {typeFilter.length > 0 && (
-                <div className="filter-row" onClick={() => setTypeFilter([])} style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="w-full justify-start px-2 text-xs font-normal text-muted-foreground"
+                  onClick={() => setTypeFilter([])}
+                >
                   {t("asset.filterClear")}
-                </div>
+                </Button>
               )}
-            </div>
-          }
-        >
-          <AppTooltip title={t("asset.filter")}>
-            <AppButton
-              size="sm"
-              variant="ghost"
-              iconOnly
-              style={{
-                height: 32,
-                background: typeFilter.length > 0 ? "rgba(255,255,255,0.16)" : undefined,
-              }}
-              className="canvas-ctrl-btn"
-            >
-              <FilterIcon style={{ fontSize: 16 }} />
-            </AppButton>
-          </AppTooltip>
-        </AppPopover>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。
           text-xs 提到行容器：否则 "/" 与层级包装 span 继承 14px 行高(21px)，
           比根视图的 12px 文字(20px)高 1px，进入文件夹后下方网格整体偏移 */}
-      <div className="flex items-center gap-1 px-4 pb-2 flex-shrink-0 flex-wrap text-xs">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 px-4 pb-2 text-xs">
         {/* 根：个人资产库（根视图为当前项，进入文件夹后可点击返回，位置保持一致不加箭头） */}
         {activeFolderId === null ? (
-          <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
+          <span className="inline-flex h-6 items-center whitespace-nowrap px-1 text-xs font-medium text-foreground">
             {t("asset.spacePersonal")}
           </span>
         ) : (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(null); }}
-            className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-            style={{ color: "var(--canvas-text-dim)" }}
+            className="h-6 rounded px-1 text-xs font-normal text-muted-foreground whitespace-nowrap"
           >
             {t("asset.spacePersonal")}
-          </button>
+          </Button>
         )}
         {breadcrumb.map((crumb) => {
           const isLast = crumb.id === activeFolderId;
           return (
             <span key={crumb.id} className="flex items-center gap-1">
-              <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+              <span className="text-muted-foreground">/</span>
               {isLast ? (
-                <span className="text-xs font-medium px-1 py-0.5 whitespace-nowrap" style={{ color: "var(--canvas-text)" }}>
+                <span className="inline-flex h-6 items-center whitespace-nowrap px-1 text-xs font-medium text-foreground">
                   {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
                 </span>
               ) : (
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
                   onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(crumb.id); }}
-                  className="text-xs px-1 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                  style={{ color: "var(--canvas-text-dim)" }}
+                  className="h-6 rounded px-1 text-xs font-normal text-muted-foreground whitespace-nowrap"
                 >
                   {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
-                </button>
+                </Button>
               )}
             </span>
           );
@@ -717,8 +713,8 @@ function AssetsView() {
       {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理。
           首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
       <div
-        className="flex-1 min-h-0 px-4 pb-3"
-        style={{ scrollbarGutter: "stable", overflow: loading ? "hidden" : "auto" }}
+        className={`min-h-0 flex-1 px-4 pb-3 ${loading ? "overflow-hidden" : "overflow-y-auto"}`}
+        style={{ scrollbarGutter: "stable" }}
       >
         <AssetGrid
           assets={items}
@@ -741,9 +737,8 @@ function AssetsView() {
       </div>
 
       {/* 底部统计 */}
-      <div
-        className="flex items-center justify-end gap-2 px-4 py-2.5 flex-shrink-0 text-xs border-t"
-        style={{ borderColor: "var(--canvas-border)", color: "var(--canvas-text-muted)" }}
+      <SheetFooter
+        className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
       >
         {activeFolderId === null && typeFilter.length === 0 && !search.trim() ? (
           <>
@@ -756,8 +751,7 @@ function AssetsView() {
             <span>{totalCount || items.length} {t("asset.count")}</span>
           </>
         )}
-      </div>
+      </SheetFooter>
     </div>
   );
 }
-

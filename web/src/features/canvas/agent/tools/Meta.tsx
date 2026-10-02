@@ -6,18 +6,18 @@
  */
 import type { ReactNode } from "react";
 
-import ArrangeIcon from "@/components/ui/icons/agent/ArrangeIcon";
-import CanvasStateIcon from "@/components/ui/icons/agent/CanvasStateIcon";
-import ConnectNodesIcon from "@/components/ui/icons/agent/ConnectNodesIcon";
-import CreateNodeIcon from "@/components/ui/icons/agent/CreateNodeIcon";
-import DeleteNodeIcon from "@/components/ui/icons/agent/DeleteNodeIcon";
-import DuplicateIcon from "@/components/ui/icons/agent/DuplicateIcon";
-import MoveIcon from "@/components/ui/icons/agent/MoveIcon";
-import NodeDetailIcon from "@/components/ui/icons/agent/NodeDetailIcon";
-import SelectIcon from "@/components/ui/icons/agent/SelectIcon";
-import UnlinkIcon from "@/components/ui/icons/agent/UnlinkIcon";
-import UpdateNodeIcon from "@/components/ui/icons/agent/UpdateNodeIcon";
-import ViewportFocusIcon from "@/components/ui/icons/agent/ViewportFocusIcon";
+import { ArrangeIcon } from "@/components/ui/AppIcon";
+import { CanvasStateIcon } from "@/components/ui/AppIcon";
+import { ConnectNodesIcon } from "@/components/ui/AppIcon";
+import { CreateNodeIcon } from "@/components/ui/AppIcon";
+import { DeleteNodeIcon } from "@/components/ui/AppIcon";
+import { DuplicateIcon } from "@/components/ui/AppIcon";
+import { MoveIcon } from "@/components/ui/AppIcon";
+import { NodeDetailIcon } from "@/components/ui/AppIcon";
+import { SelectIcon } from "@/components/ui/AppIcon";
+import { UnlinkIcon } from "@/components/ui/AppIcon";
+import { UpdateNodeIcon } from "@/components/ui/AppIcon";
+import { ViewportFocusIcon } from "@/components/ui/AppIcon";
 import type { ToolCallView } from "@/features/canvas/agent/types";
 import { expandGroupDeletionIds } from "@/features/canvas/agent/utils/confirm-selection";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";

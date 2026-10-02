@@ -9,7 +9,7 @@ export default function RefGroupDivider() {
   return (
     <div
       className="w-px h-14 mx-1 shrink-0 self-center"
-      style={{ background: "var(--canvas-border)" }}
+      style={{ background: "var(--border)" }}
     />
   );
 }

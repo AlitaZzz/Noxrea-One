@@ -11,13 +11,13 @@
  */
 "use client";
 
-import { CloseOutlined, WarningOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { CloseOutlined, WarningOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -610,7 +610,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         {dragging === which && (
           <div
             className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-            style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+            style={{ background: "var(--popover)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
           >
             {/* 时间用 2 位小数（10ms）：低于一帧时长（30fps ≈ 33ms），配得上帧级定位 */}
             {((which === "in" ? inRatio : outRatio) * duration).toFixed(2)}s
@@ -665,11 +665,11 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
-        <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("clip.menu")}</span>
+        <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+        <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("clip.menu")}</span>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
       <div
         ref={trackRef}
@@ -704,14 +704,14 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
                 <div
                   className="absolute inset-0"
                   style={{
-                    border: "2px solid var(--canvas-accent)",
-                    background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)",
+                    border: "2px solid var(--primary)",
+                    background: "color-mix(in srgb, var(--primary) 14%, transparent)",
                   }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span
                     className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-                    style={{ background: "var(--canvas-bg-elevated)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+                    style={{ background: "var(--popover)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
                   >
                     {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
                   </span>
@@ -771,17 +771,15 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
 
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
-        <AppTooltip
-          title={t("capture.truncated", {
-            actual: formatTime(duration),
-            declared: formatTime(declaredDuration),
-          })}
-        >
-          <WarningOutlined style={{ color: "var(--canvas-warning)" }} />
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <WarningOutlined style={{ color: "var(--chart-4)" }} />
+          </TooltipTrigger><TooltipContent>{t("capture.truncated", {
+              actual: formatTime(duration),
+              declared: formatTime(declaredDuration),
+            })}</TooltipContent></Tooltip>
       )}
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致）；转码/缓冲未就绪时整段禁用，
           避免可点击却静默无响应 */}

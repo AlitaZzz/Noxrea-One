@@ -7,16 +7,16 @@
 
 "use client";
 
-import { PlusOutlined } from "@ant-design/icons";
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
+import { PlusOutlined } from "@/components/ui/AppIcon";
+import { PresetIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { PresetIcon } from "@/components/ui/icons/canvas/PresetIcon";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
@@ -399,7 +399,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     <>
       <WheelGuard
         className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
-        style={{ background: "var(--canvas-bg, #262626)", border: "1px solid var(--canvas-border, #3a3a3a)", width: 580 }}
+        style={{ background: "var(--card, #262626)", border: "1px solid var(--border, #3a3a3a)", width: 580 }}
       >
         <div
           className="flex gap-2 flex-wrap"
@@ -425,16 +425,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               </Fragment>
             ))}
             {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-            <AppTooltip title={t("common.reference")}>
-              <AppButton size="sm" variant="ghost"
-                className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-                style={{ width: 56, height: 56, background: "var(--canvas-bg-hover)", border: "1px dashed var(--canvas-border)", cursor: "pointer" }}
-                onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-text-dim)"; el.style.background = "rgba(255,255,255,0.08)"; }}
-                onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--canvas-border)"; el.style.background = "var(--canvas-bg-hover)"; }}
-                onClick={handleRefUpload}>
-                <PlusOutlined style={{ fontSize: 18, color: "var(--canvas-text-muted)" }} />
-              </AppButton>
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <Button size="sm" variant="ghost"
+                  className="flex items-center justify-center rounded transition-colors flex-shrink-0"
+                  style={{ width: 56, height: 56, background: "var(--accent)", border: "1px dashed var(--border)", cursor: "pointer" }}
+                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--muted-foreground)"; el.style.background = "rgba(255,255,255,0.08)"; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--border)"; el.style.background = "var(--accent)"; }}
+                  onClick={handleRefUpload}>
+                  <PlusOutlined style={{ fontSize: 18, color: "var(--muted-foreground)" }} />
+                </Button>
+              </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
           </div>
         <MentionPrompt
           references={references}
@@ -444,55 +444,54 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
-          <AppDropdown
-            open={modelOpen}
-            onOpenChange={setModelOpen}
-            placement="bottomLeft"
-            trigger={["click"]}
-            menu={{
-              items: allModels.map((m) => ({
-                key: m.value,
-                icon: <ModelIcon model={m.name} className="size-4 shrink-0" />,
-                label: m.name,
-                extra: m.providerName ? <span className="max-w-24 truncate text-xs opacity-50">{m.providerName}</span> : undefined,
-              })),
-              selectable: true,
-              selectedKeys: [modelKey],
-              onClick: ({ key }) => { setModelKey(key); recordLastModel("text", key); },
-            }}
-          >
-            <AppButton
-              size="sm"
-              variant="ghost"
-              className="gen-panel-btn flex items-center gap-1.5 rounded text-sm max-w-[180px]"
-            >
-              <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} style={{ fontSize: 14, flexShrink: 0 }} />
-              <span className="truncate">
-                {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-              </span>
-            </AppButton>
-          </AppDropdown>
-          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--canvas-border)" }} />
-          <AppPopover
-            open={presetOpen} onOpenChange={setPresetOpen} placement="bottomLeft"
-            trigger={["click"]} arrow={false}
-            popupClassName="creation-menu-popover"
-            contentStyle={{ padding: 0, background: "transparent" }}
-            content={
+          <DropdownMenu open={modelOpen} onOpenChange={setModelOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="max-w-[180px] gap-1.5"
+              >
+                <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="start">
+              {allModels.map((model) => (
+                <DropdownMenuItem
+                  key={model.value}
+                  className={model.value === modelKey ? "bg-accent text-accent-foreground" : undefined}
+                  onSelect={() => { setModelKey(model.value); recordLastModel("text", model.value); }}
+                >
+                  <ModelIcon model={model.name} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                  {model.providerName && <span className="ml-auto max-w-24 truncate text-xs opacity-50">{model.providerName}</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          <Popover open={presetOpen} onOpenChange={setPresetOpen}>
+            <Tooltip open={presetOpen ? false : undefined}>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button size="icon-sm" variant="ghost" className="shrink-0">
+                    <PresetIcon />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t("node.creationPreset")}</TooltipContent>
+            </Tooltip>
+            <PopoverContent side="bottom" align="start" className="creation-menu-popover w-auto p-0 bg-transparent border-0">
               <div className="panel-popover">
                 <PresetMenuContent
                   catalog={promptTemplateCatalog}
                   onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
                 />
               </div>
-            }
-          >
-            <AppTooltip title={t("node.creationPreset")} open={presetOpen ? false : undefined}>
-              <AppButton size="sm" variant="ghost" className="gen-panel-btn flex items-center gap-1 rounded flex-shrink-0 text-sm">
-                <PresetIcon />
-              </AppButton>
-            </AppTooltip>
-          </AppPopover>
+            </PopoverContent>
+          </Popover>
           <div className="flex-1" />
           <IconActionButton
             cancel={isGenerating || submitting}

@@ -6,20 +6,21 @@
 
 "use client";
 
-import {
-  CaretRightOutlined,
-  PauseOutlined,
-  UploadOutlined,
-  VideoCameraOutlined,
-} from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
-import AppTooltip from "@/components/ui/AppTooltip";
-import { VolumeMuteIcon } from "@/components/ui/icons/media/VolumeMuteIcon";
-import { VolumeUpIcon } from "@/components/ui/icons/media/VolumeUpIcon";
+import {
+  CaretRightOutlined,
+  PauseOutlined,
+  UploadOutlined,
+  VideoCameraOutlined,
+} from "@/components/ui/AppIcon";
+import { VolumeMuteIcon } from "@/components/ui/AppIcon";
+import { VolumeUpIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAssetsStore } from "@/features/assets/store";
 import {
@@ -715,7 +716,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
         `}
-        style={{ background: hasVideo ? "transparent" : "var(--canvas-node-bg)" }}
+        style={{ background: hasVideo ? "transparent" : "var(--card)" }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -723,14 +724,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         {agentGhost && <AgentGhostOverlay />}
         {data.source === "upload" && hasVideo && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
           <div className="absolute top-2 right-2 z-20 nodrag">
-            <AppTooltip title={t("common.replace")}>
-              <button
-                className="app-overlay-btn app-overlay-btn--sm"
-                onClick={handleUpload}
-              >
-                <UploadOutlined />
-              </button>
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
+                  onClick={handleUpload}
+                >
+                  <UploadOutlined className="size-4" />
+                </Button>
+              </TooltipTrigger><TooltipContent>{t("common.replace")}</TooltipContent></Tooltip>
           </div>
         )}
         {data.upload?.uploading ? (
@@ -741,11 +745,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
               {data.upload?.progress != null ? (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--canvas-success)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                  <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
                 </div>
               ) : (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--canvas-success)] rounded-full animate-pulse" style={{ width: "60%" }} />
+                  <div className="h-full bg-[var(--primary)] rounded-full animate-pulse" style={{ width: "60%" }} />
                 </div>
               )}
               <span className="text-sm text-white/70 font-medium tabular-nums">
@@ -790,7 +794,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 onPointerDown={handleSeekDown}
               >
                 <div
-                  className="h-full bg-[var(--canvas-success)] rounded-full relative transition-[width] duration-75"
+                  className="h-full bg-[var(--primary)] rounded-full relative transition-[width] duration-75"
                   style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
                 >
                   <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
@@ -833,7 +837,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                       onPointerDown={handleVolumeDown}
                     >
                       <div
-                        className="h-full bg-[var(--canvas-success)] rounded-full relative transition-[width] duration-75"
+                        className="h-full bg-[var(--primary)] rounded-full relative transition-[width] duration-75"
                         style={{ width: `${volume * 100}%` }}
                       >
                         <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/volume:scale-100 transition-transform" />
@@ -849,10 +853,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
             <VideoCameraOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.video")}</span>
-            <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
+            <Button
+              type="button"
+              size="lg"
+              variant="secondary"
+              className="nodrag px-6"
               onClick={handleUpload}>
-              <UploadOutlined className="text-lg" /> {t("common.upload")}
-            </button>
+              <UploadOutlined className="size-5" /> {t("common.upload")}
+            </Button>
           </div>
         )}
 

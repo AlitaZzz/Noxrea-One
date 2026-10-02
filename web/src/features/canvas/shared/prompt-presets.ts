@@ -11,18 +11,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Wand2 } from "lucide-react";
 import type { ComponentType, CSSProperties } from "react";
 
-import { Back5sIcon } from "@/components/ui/icons/canvas/Back5sIcon";
-import { CharacterFaceThreeViewIcon } from "@/components/ui/icons/canvas/CharacterFaceThreeViewIcon";
-import { CharacterThreeViewIcon } from "@/components/ui/icons/canvas/CharacterThreeViewIcon";
-import { Forward3sIcon } from "@/components/ui/icons/canvas/Forward3sIcon";
-import { LightCorrectionIcon } from "@/components/ui/icons/canvas/LightCorrectionIcon";
-import { NineGridIcon } from "@/components/ui/icons/canvas/NineGridIcon";
-import { ProductThreeViewIcon } from "@/components/ui/icons/canvas/ProductThreeViewIcon";
-import { Storyboard4Icon } from "@/components/ui/icons/canvas/Storyboard4Icon";
-import { Storyboard25Icon } from "@/components/ui/icons/canvas/Storyboard25Icon";
+import { Wand2 } from "@/components/ui/AppIcon";
+import { Back5sIcon } from "@/components/ui/AppIcon";
+import { CharacterFaceThreeViewIcon } from "@/components/ui/AppIcon";
+import { CharacterThreeViewIcon } from "@/components/ui/AppIcon";
+import { Forward3sIcon } from "@/components/ui/AppIcon";
+import { LightCorrectionIcon } from "@/components/ui/AppIcon";
+import { NineGridIcon } from "@/components/ui/AppIcon";
+import { ProductThreeViewIcon } from "@/components/ui/AppIcon";
+import { Storyboard4Icon } from "@/components/ui/AppIcon";
+import { Storyboard25Icon } from "@/components/ui/AppIcon";
 import { api } from "@/lib/api/client";
 
 export interface BilingualText {

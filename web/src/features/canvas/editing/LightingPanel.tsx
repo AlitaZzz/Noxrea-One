@@ -10,13 +10,13 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppColorPicker from "@/components/ui/AppColorPicker";
-import AppSlider from "@/components/ui/AppSlider";
+import { ResetIcon } from "@/components/ui/AppIcon";
+import { SunIcon } from "@/components/ui/AppIcon";
+import { ThermometerIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/ui/color-picker";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { ResetIcon } from "@/components/ui/icons/canvas/ResetIcon";
-import { SunIcon } from "@/components/ui/icons/canvas/SunIcon";
-import { ThermometerIcon } from "@/components/ui/icons/canvas/ThermometerIcon";
+import { Slider } from "@/components/ui/slider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -159,21 +159,21 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
     <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
       {/* 标题栏 */}
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--canvas-text)" }}>
+        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--foreground)" }}>
           <SunIcon className="h-4 w-4" />
           {t("lighting.title")}
         </span>
         {/* 与资产弹窗关闭按钮同款：✕ 字形 + 次级文字色，悬停底色走 canvas-toolbar 按钮规则 */}
-        <AppButton
+        <Button
           variant="ghost"
           aria-label="close"
           onClick={onClose}
           style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
         >
-          <span style={{ color: "var(--canvas-text-dim)", fontSize: 12, lineHeight: 1 }}>✕</span>
-        </AppButton>
+          <span style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1 }}>✕</span>
+        </Button>
       </div>
-      <div className="h-px w-full" style={{ background: "var(--canvas-border)" }} />
+      <div className="h-px w-full" style={{ background: "var(--border)" }} />
 
       <div className="flex gap-3">
         {/* 左列：视角切换 + 3D 预览（高度撑满与右列对齐，画布填充剩余空间） */}
@@ -210,24 +210,22 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
 
         {/* 右列：参数 */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.global")}</div>
+          <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.global")}</div>
 
           {/* 亮度：档位滑杆 + 数值框联动（与色温同款 h-9 组合框，保证三行控件等高） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.intensity")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-              <AppSlider
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.intensity")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+              <Slider
                 min={10}
                 max={100}
                 step={1}
-                value={state.intensity}
-                onChange={(v) => update("intensity", Number(v))}
+                value={[state.intensity]}
+                onValueChange={([next]) => update("intensity", next)}
                 className="min-w-0 flex-1"
-                style={{ margin: 0 }}
-                showTooltip={false}
               />
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
-              <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--canvas-text-dim)" }} />
+              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
+              <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--muted-foreground)" }} />
               <input
                 type="number"
                 min={10}
@@ -248,7 +246,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                   update("intensity", clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--canvas-text-dim)" }}>%</span>
+              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>%</span>
             </div>
           </div>
 
@@ -273,21 +271,18 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
             </div>
             <div className="flex h-9 items-center">
               {colorTab === "temp" ? (
-                <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-                  <AppSlider
+                <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+                  <Slider
                     min={KELVIN_MIN}
                     max={KELVIN_MAX}
                     step={100}
-                    value={kelvin}
-                    onChange={(v) => handleKelvin(Number(v))}
-                    className="min-w-0 flex-1"
-                    style={{ margin: 0 }}
-                    showTooltip={false}
-                    // 色温带：渐变铺满整条轨道（rail），已填充段透明保持色带完整可见
-                    styles={{ rail: { background: "linear-gradient(to right, #FFB253, #3499FF)" }, track: { background: "transparent" } }}
+                    value={[kelvin]}
+                    onValueChange={([next]) => handleKelvin(next)}
+                    // 色温带：渐变铺满整条轨道，已填充段透明保持色带完整可见。
+                    className="min-w-0 flex-1 [&_[data-slot=slider-track]]:bg-[linear-gradient(to_right,#FFB253,#3499FF)] [&_[data-slot=slider-range]]:bg-transparent"
                   />
-                  <div className="h-4 w-px shrink-0" style={{ background: "var(--canvas-border)" }} />
-                  <ThermometerIcon className="size-4 shrink-0" style={{ color: "var(--canvas-text-dim)" }} />
+                  <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
+                  <ThermometerIcon className="size-4 shrink-0" style={{ color: "var(--muted-foreground)" }} />
                   <input
                     type="number"
                     min={KELVIN_MIN}
@@ -308,16 +303,16 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                       handleKelvin(clamped);
                     }}
                   />
-                  <span className="shrink-0 text-[13px]" style={{ color: "var(--canvas-text-muted)" }}>K</span>
+                  <span className="shrink-0 text-[13px]" style={{ color: "var(--muted-foreground)" }}>K</span>
                 </div>
               ) : (
-                <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2" style={{ background: "var(--canvas-bg-hover)" }}>
-                  <AppColorPicker
+                <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+                  <ColorPicker
                     value={state.color}
                     onChangeComplete={(color) => update("color", color)}
-                    size="small"
+                    size="sm"
                   />
-                  <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{state.color}</span>
+                  <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{state.color}</span>
                 </div>
               )}
             </div>
@@ -325,8 +320,8 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
 
           {/* 主光源六向预设（收进同底色圆角容器，与上方组合框形成一致的分组感） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("lighting.mainDirection")}</span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--canvas-bg-hover)" }}>
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.mainDirection")}</span>
+            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--accent)" }}>
               {DIRECTION_ORDER.map((dir) => {
                 const d = DIRECTIONS[dir];
                 const active = activeDir === dir;
@@ -352,7 +347,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           type="button"
           onClick={handleReset}
           className="panel-reset-btn flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all"
-          style={{ border: "1px solid var(--canvas-border)", color: "var(--canvas-text-dim)" }}
+          style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
         >
           <ResetIcon style={{ width: 13, height: 13 }} />
           {t("lighting.reset")}

@@ -15,8 +15,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
-import AppModal from "@/components/ui/AppModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAssetsStore } from "@/features/assets/store";
 import { useCanvasKeyboard } from "@/features/canvas/hooks/use-canvas-keyboard";
 import InfiniteCanvas from "@/features/canvas/InfiniteCanvas";
@@ -147,20 +147,17 @@ export default function CanvasPage({
       </AppShell>
 
       {/* Shortcuts help modal */}
-      <AppModal
-        title={<span style={{ color: "var(--canvas-text)" }}>{t("shortcuts.title")}</span>}
-        open={shortcutsVisible}
-        onCancel={() => setShortcutsVisible(false)}
-        footer={null}
-        width={620}
-        styles={{ body: { padding: "16px 24px 24px" } }}
-      >
-        {(() => {
+      <Dialog open={shortcutsVisible} onOpenChange={(nextOpen) => { if (!nextOpen) setShortcutsVisible(false); }}>
+        <DialogContent className="sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>{t("shortcuts.title")}</DialogTitle>
+          </DialogHeader>
+          {(() => {
           const kb = (v: string) => <kbd className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">{v}</kbd>;
           const row = (key: string, desc: string) => <div>{kb(key)} {desc}</div>;
           return (
-            <div className="space-y-3" style={{ color: "var(--canvas-text)" }}>
-              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.zoom")}</div>
+            <div className="space-y-3" style={{ color: "var(--foreground)" }}>
+              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>{t("shortcuts.zoom")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
                 {row("Scroll", t("shortcuts.desc.scroll"))}
                 {row(t("shortcuts.key.spaceDrag"), t("shortcuts.desc.pan"))}
@@ -170,7 +167,7 @@ export default function CanvasPage({
                 {row(modKey("0"), t("shortcuts.desc.reset"))}
                 {row(modKey("M"), t("shortcuts.desc.minimap"))}
               </div>
-              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.edit")}</div>
+              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>{t("shortcuts.edit")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
                 {row(t("shortcuts.key.drag"), t("shortcuts.desc.selectRegion"))}
                 {row(modKey("A"), t("shortcuts.desc.selectall"))}
@@ -180,22 +177,23 @@ export default function CanvasPage({
                 {row("Delete", t("shortcuts.desc.delete"))}
                 {row("Escape", t("shortcuts.desc.esc"))}
               </div>
-              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.group")}</div>
+              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>{t("shortcuts.group")}</div>
               <div className="grid grid-cols-2 gap-1.5 text-sm">
                 {row(modKey("G"), t("shortcuts.desc.group"))}
                 {row(modKey("Shift+G"), t("shortcuts.desc.ungroup"))}
                 {row(modKey("Z"), t("shortcuts.desc.undo"))}
                 {row(modKey("Shift+Z"), t("shortcuts.desc.redo"))}
               </div>
-              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--canvas-text-dim)" }}>{t("shortcuts.other")}</div>
-              <div className="space-y-1 text-xs" style={{ color: "var(--canvas-text-muted)" }}>
+              <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>{t("shortcuts.other")}</div>
+              <div className="space-y-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
                 <div>? — {t("shortcuts.desc.help")}</div>
                 <div>{t("drop.upload")}</div>
               </div>
             </div>
           );
-        })()}
-      </AppModal>
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Director fullscreen overlay */}
       {directorOverlayOpen && (

@@ -6,11 +6,12 @@
  */
 "use client";
 
-import { CloseOutlined, ExclamationCircleOutlined, RedoOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppTooltip from "@/components/ui/AppTooltip";
+import { CloseOutlined, ExclamationCircleOutlined, RedoOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { discardNodeUpload, retryNodeUpload } from "@/features/canvas/upload";
 import type { UploadErrorInfo } from "@/lib/utils/upload";
 
@@ -55,7 +56,7 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
       )}
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.55)" }} />
       <div className="relative z-10 flex flex-col items-center gap-2">
-        <ExclamationCircleOutlined style={{ fontSize: 22, color: "var(--canvas-danger)" }} />
+        <ExclamationCircleOutlined className="size-5 text-destructive" />
         {/* 节点尺寸有限，超长文案截断：不加任何悬停提示（原生 title / Tooltip 都不要） */}
         <span
           className="text-xs text-white/85 leading-relaxed"
@@ -71,18 +72,30 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
         </span>
         <div className="mt-1">
           {error.retryable ? (
-            <AppTooltip title={t("file.uploadRetry")}>
-              <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => void handleRetry()}>
-                <RedoOutlined />
-              </button>
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="nodrag rounded-full bg-white/20 p-0 text-white hover:bg-white/40 hover:text-white"
+                  onClick={() => void handleRetry()}
+                >
+                  <RedoOutlined className="size-4" />
+                </Button>
+              </TooltipTrigger><TooltipContent>{t("file.uploadRetry")}</TooltipContent></Tooltip>
           ) : (
             // 业务错误（体积超限 / 类型不支持）重试无意义，只留一个移除入口
-            <AppTooltip title={t("file.uploadDiscard")}>
-              <button className="app-overlay-btn app-overlay-btn--light app-overlay-btn--round nodrag" onClick={() => discardNodeUpload(nodeId)}>
-                <CloseOutlined />
-              </button>
-            </AppTooltip>
+            <Tooltip><TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="nodrag rounded-full bg-white/20 p-0 text-white hover:bg-white/40 hover:text-white"
+                  onClick={() => discardNodeUpload(nodeId)}
+                >
+                  <CloseOutlined className="size-4" />
+                </Button>
+              </TooltipTrigger><TooltipContent>{t("file.uploadDiscard")}</TooltipContent></Tooltip>
           )}
         </div>
       </div>

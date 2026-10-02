@@ -5,11 +5,12 @@
  */
 "use client";
 
-import { PartitionOutlined } from "@ant-design/icons";
 import { type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PartitionOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
@@ -35,12 +36,16 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
       {/* Body */}
       <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
         ${selected ? "node-selected" : ""}`}
-        style={{ background: "var(--canvas-node-bg)" }}>
+        style={{ background: "var(--card)" }}>
         {agentGhost && <AgentGhostOverlay />}
         <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
           <PartitionOutlined className="text-5xl" />
           <span className="text-base text-center">{t("node.directorDesc")}</span>
-          <button className="node-upload-btn nodrag flex items-center gap-2 px-6 py-3 rounded-lg text-base"
+          <Button
+            type="button"
+            size="lg"
+            variant="secondary"
+            className="nodrag px-6"
             onClick={() => {
               const cs = useCanvasStore.getState();
               const node = cs.nodes.find(n => n.id === id);
@@ -50,9 +55,10 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
               }
               useDirectorStore.getState().setOpeningNodeId(id);
               cs.setDirectorOverlayOpen(true);
-            }}>
+            }}
+          >
             {t("node.directorOpen")}
-          </button>
+          </Button>
         </div>
       </div>
 

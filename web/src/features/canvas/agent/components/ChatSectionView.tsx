@@ -5,7 +5,8 @@
 
 import { useTranslation } from "react-i18next";
 
-import { UndoTurnIcon } from "@/components/ui/icons/agent/UndoTurnIcon";
+import { UndoTurnIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ChatToolRound from "@/features/canvas/agent/components/ChatToolRound";
 import Markdown from "@/features/canvas/agent/components/Markdown";
 import type { ChatSection } from "@/features/canvas/agent/utils/group-sections";
@@ -69,10 +70,10 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       )}
 
       {canUndo && (
-        <button type="button" className="chat-section-undo-btn" onClick={onUndo}>
+        <Button type="button" variant="outline" size="sm" className="w-fit" onClick={onUndo}>
           <UndoTurnIcon />
           <span>{t("agent.undoTurn")}</span>
-        </button>
+        </Button>
       )}
     </div>
   );

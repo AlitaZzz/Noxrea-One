@@ -1,18 +1,18 @@
 import "@photo-sphere-viewer/core/index.css";
 
-import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Viewer } from "@photo-sphere-viewer/core";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { AspectRatioIcon } from "@/components/ui/icons/canvas/AspectRatioIcon";
-import { Grid4Icon } from "@/components/ui/icons/canvas/Grid4Icon";
-import { Grid8Icon } from "@/components/ui/icons/canvas/Grid8Icon";
-import { Grid12Icon } from "@/components/ui/icons/canvas/Grid12Icon";
+import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@/components/ui/AppIcon";
+import { AspectRatioIcon } from "@/components/ui/AppIcon";
+import { Grid4Icon } from "@/components/ui/AppIcon";
+import { Grid8Icon } from "@/components/ui/AppIcon";
+import { Grid12Icon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -345,75 +345,81 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <AppButton variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></AppButton>
-          <span className="text-[13px]" style={{ color: "var(--canvas-text)" }}>{t("node.panorama")}</span>
+          <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+          <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.panorama")}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
         {/* 截图：截取当前视角并新建图片节点 */}
-        <AppTooltip title={t("panorama.screenshot")}>
-          <AppButton variant="ghost" iconOnly            loading={loading}
-            onClick={handleScreenshot}
-          ><CameraOutlined /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly            loading={loading}
+              onClick={handleScreenshot}
+            ><CameraOutlined /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.screenshot")}</TooltipContent></Tooltip>
 
         {/* 多视角截图：4/8/12 视角等分 360°，每个方向生成独立节点 */}
-        <AppTooltip title={t("panorama.view4")}>
-          <AppButton variant="ghost" iconOnly            loading={multiLoading}
-            onClick={() => handleMultiScreenshot(4)}
-          ><Grid4Icon /></AppButton>
-        </AppTooltip>
-        <AppTooltip title={t("panorama.view8")}>
-          <AppButton variant="ghost" iconOnly            loading={multiLoading}
-            onClick={() => handleMultiScreenshot(8)}
-          ><Grid8Icon /></AppButton>
-        </AppTooltip>
-        <AppTooltip title={t("panorama.view12")}>
-          <AppButton variant="ghost" iconOnly            loading={multiLoading}
-            onClick={() => handleMultiScreenshot(12)}
-          ><Grid12Icon /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly            loading={multiLoading}
+              onClick={() => handleMultiScreenshot(4)}
+            ><Grid4Icon /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.view4")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly            loading={multiLoading}
+              onClick={() => handleMultiScreenshot(8)}
+            ><Grid8Icon /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.view8")}</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly            loading={multiLoading}
+              onClick={() => handleMultiScreenshot(12)}
+            ><Grid12Icon /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.view12")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
         {/* 画面比例：选择截图输出比例，同时显示对应取景框 */}
-        <AppDropdown
+        <DropdownMenu
           open={aspectOpen}
           onOpenChange={setAspectOpen}
-          placement="bottom"
-          trigger={["click"]}
-          menu={{
-            items: [
-              { key: "original", label: t("panorama.aspectOriginal") },
-              { type: "divider" },
-              { key: "16:9", label: "16:9" },
-              { key: "9:16", label: "9:16" },
-              { key: "21:9", label: "21:9" },
-            ],
-            selectable: true,
-            selectedKeys: [aspect],
-            onClick: ({ key }) => setAspect(key as typeof aspect),
-          }}
         >
-          <AppTooltip title={t("panorama.aspect")}>
-            <AppButton variant="ghost" iconOnly disabled={loading} ><AspectRatioIcon /></AppButton>
-          </AppTooltip>
-        </AppDropdown>
+          <Tooltip><TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" iconOnly disabled={loading}><AspectRatioIcon /></Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger><TooltipContent>{t("panorama.aspect")}</TooltipContent></Tooltip>
+          <DropdownMenuContent side="bottom" align="center">
+            <DropdownMenuItem
+              className={aspect === "original" ? "bg-accent text-accent-foreground" : undefined}
+              onSelect={() => setAspect("original")}
+            >
+              {t("panorama.aspectOriginal")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {(["16:9", "9:16", "21:9"] as const).map((key) => (
+              <DropdownMenuItem
+                key={key}
+                className={aspect === key ? "bg-accent text-accent-foreground" : undefined}
+                onSelect={() => setAspect(key)}
+              >
+                {key}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* 三分构图线开关 */}
-        <AppTooltip title={t("panorama.toggleGrid")}>
-          <AppButton variant="ghost" iconOnly            style={{ padding: 8, ...(showGrid ? { background: "var(--canvas-bg-hover)", color: "#fff" } : {}) }}
-            onClick={() => setShowGrid((v) => !v)}
-          ><BorderInnerOutlined /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly            style={{ padding: 8, ...(showGrid ? { background: "var(--accent)", color: "#fff" } : {}) }}
+              onClick={() => setShowGrid((v) => !v)}
+            ><BorderInnerOutlined /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.toggleGrid")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--canvas-border)" }} />
+        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
 
         {/* 重置视角，单独一组 */}
-        <AppTooltip title={t("panorama.reset")}>
-          <AppButton variant="ghost" iconOnly onClick={handleReset} ><ReloadOutlined /></AppButton>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button variant="ghost" iconOnly onClick={handleReset} ><ReloadOutlined /></Button>
+          </TooltipTrigger><TooltipContent>{t("panorama.reset")}</TooltipContent></Tooltip>
 
       </WheelGuard>
       </RfNodeToolbar>
