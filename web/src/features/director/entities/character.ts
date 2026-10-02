@@ -17,7 +17,7 @@ import { POSE_PRESET_MAP } from "./pose-presets";
 
 // 统一目标身高（单位），多角色视觉一致（§5.2）
 const TARGET_HEIGHT = 1.7;
-const DEFAULT_COLOR = DIRECTOR_CHARACTER_COLOR; // 截图同款素体绿（色值来源见 theme.ts）
+const DEFAULT_COLOR = DIRECTOR_CHARACTER_COLOR; // 截图同款素体绿（色值来源见 director/theme.ts）
 const XBOT_URL = "/assets/Xbot.glb"; // 轴向推断的参考模型(mixamo 标准 rigs)
 
 const _loader = new GLTFLoader();

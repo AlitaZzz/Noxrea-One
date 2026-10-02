@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppSlider from "@/components/ui/AppSlider";
+import { Slider } from "@/components/ui/slider";
 import { groupJoints } from "@/features/director/entities/joint-config";
 
 interface Props {
@@ -36,22 +36,26 @@ export default function PoseSliders({ values, onChange, syncRef }: Props) {
     <div id="pose-sliders-wrap">
       {groups.map((g) => (
         <div key={g.group}>
-          <h4 className="pose-h4">{t(`director.joint.group.${g.group}`)}</h4>
+          <h4 className="mb-1 mt-4 text-[13px] font-semibold text-foreground first:mt-0">
+            {t(`director.joint.group.${g.group}`)}
+          </h4>
           {g.sides.map((s) => (
             <div key={s.side || g.group}>
-              {s.side && <div className="pose-side">{t(`director.joint.side.${s.side}`)}</div>}
+              {s.side && (
+                <div className="mb-1 mt-2 text-xs text-muted-foreground">
+                  {t(`director.joint.side.${s.side}`)}
+                </div>
+              )}
               {s.joints.map((j) => {
                 const val = localVals[j.key] ?? values[j.key] ?? 0;
                 return (
-                  <div key={j.key} className="pose-sld">
-                    <div className="pose-sld-lab">
-                      <b>{t(`director.joint.label.${j.label}`)}</b>
-                      <span className="pose-sld-val">{Math.round(val)}°</span>
+                  <div key={j.key} className="mb-2.5">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <b className="font-medium text-foreground">{t(`director.joint.label.${j.label}`)}</b>
+                      <span className="tabular-nums text-muted-foreground">{Math.round(val)}°</span>
                     </div>
-                    <AppSlider min={j.min} max={j.max} step={1} value={val}
-                      style={{ margin: 0 }}
-                      showTooltip={false}
-                      onChange={(v) => { setLocalVals((prev) => ({ ...prev, [j.key]: v as number })); onChange(j.key, v as number); }} />
+                    <Slider min={j.min} max={j.max} step={1} value={[val]}
+                      onValueChange={([next]) => { setLocalVals((prev) => ({ ...prev, [j.key]: next })); onChange(j.key, next); }} />
                   </div>
                 );
               })}

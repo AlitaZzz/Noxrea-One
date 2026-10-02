@@ -5,10 +5,12 @@
  */
 "use client";
 
-import { CloseOutlined } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import { useTranslation } from "react-i18next";
 
+import { CloseOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import Dock from "@/features/director/components/Dock";
 import Inspector from "@/features/director/components/Inspector";
@@ -42,32 +44,43 @@ export default function DirectorOverlay({ onClose }: Props) {
   const tfLabel = { translate: t("director.tf.move"), rotate: t("director.tf.rotate"), scale: t("director.tf.scale") }[transformMode] || "";
 
   return (
-    <div id="director-page" className="fixed inset-0 z-[100] flex flex-col bg-[var(--dir-bg)] text-white overflow-hidden"
-      style={{ fontFamily: "-apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif", fontSize: 13 }}>
+    <div id="director-page" className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground text-[13px]">
       {/* Header — 56px, panel bg */}
-      <header className="flex items-center shrink-0 px-5 border-b border-[var(--dir-line)] relative z-20"
-        style={{ height: 56, background: "var(--dir-panel)" }}>
+      <header className="relative z-20 flex h-14 shrink-0 items-center border-b border-border bg-card px-5">
         {/* Logo + info */}
         <div className="flex items-center gap-3">
           <span className="font-semibold text-[17px] tracking-wide">{t("director.title")}</span>
-          <span className="text-[13px] text-white/30">
+          <span className="text-[13px] text-muted-foreground">
             {t("director.itemCount", { count: entities.length })}{selectedId ? ` · ${t("director.selectedLabel", { name: entityName })}` : ""} {tfLabel && `· ${tfLabel}`}
           </span>
         </div>
 
         {/* 视角切换标签(居中) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex rounded-[10px] p-[3px]" style={{ background: "var(--dir-panel2)" }}>
-          <button onClick={() => runtime?.setCameraView(false)} className="dir-viewtab" data-active={!cameraView}>
-            {t("director.directorView")}
-          </button>
-          <button onClick={() => runtime?.setCameraView(true)} className="dir-viewtab" data-active={cameraView}>
-            {t("director.cameraView")}
-          </button>
+        <div className="absolute left-1/2 -translate-x-1/2">
+          <Tabs
+            value={cameraView ? "camera" : "director"}
+            onValueChange={(value) => runtime?.setCameraView(value === "camera")}
+          >
+            <TabsList>
+              <TabsTrigger
+                value="director"
+                className="px-5"
+              >
+                {t("director.directorView")}
+              </TabsTrigger>
+              <TabsTrigger
+                value="camera"
+                className="px-5"
+              >
+                {t("director.cameraView")}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {/* 关闭按钮 */}
         <div className="ml-auto flex items-center">
-          <button onClick={() => {
+          <Button variant="ghost" size="icon-sm" aria-label={t("common.close")} onClick={() => {
             const ds = useDirectorStore.getState();
             const nodeId = ds.openingNodeId;
             if (ds.runtime && nodeId) {
@@ -78,18 +91,17 @@ export default function DirectorOverlay({ onClose }: Props) {
             }
             ds.reset();
             onClose();
-          }} className="cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 transition-colors">
+          }} className="text-muted-foreground hover:bg-muted hover:text-foreground">
             <CloseOutlined style={{ fontSize: 16 }} />
-          </button>
+          </Button>
         </div>
       </header>
 
       {/* 主体 */}
       <main className="flex flex-1 min-h-0">
         {/* 左:场景清单 — 232px, panel bg */}
-        <aside className="w-[232px] shrink-0 border-r border-[var(--dir-line)] overflow-hidden"
-          style={{ background: "var(--dir-panel)", padding: "18px 14px" }}>
-          <h3 className="text-sm font-semibold text-white mb-[14px]">{t("director.scene")}</h3>
+        <aside className="w-[232px] shrink-0 overflow-hidden border-r border-border bg-card px-3.5 py-[18px]">
+          <h3 className="mb-[14px] text-sm font-semibold text-foreground">{t("director.scene")}</h3>
           <Outliner />
         </aside>
 
@@ -99,8 +111,7 @@ export default function DirectorOverlay({ onClose }: Props) {
         </div>
 
         {/* 右:面板 — 290px, panel bg, no padding(由内部组件自行处理) */}
-        <aside className="w-[290px] shrink-0 border-l border-[var(--dir-line)] overflow-auto relative z-10"
-          style={{ background: "var(--dir-panel)" }}>
+        <aside className="relative z-10 w-[290px] shrink-0 overflow-auto border-l border-border bg-card">
           {selectedId ? <Inspector /> : <ScenePanel />}
         </aside>
       </main>

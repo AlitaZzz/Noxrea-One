@@ -6,16 +6,14 @@
 
 "use client";
 
-import { CameraOutlined,LockOutlined, UserOutlined } from "@ant-design/icons";
 import { useRef,useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppInput from "@/components/ui/AppInput";
-import AppModal from "@/components/ui/AppModal";
-import AppPasswordInput from "@/components/ui/AppPasswordInput";
-import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
-import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { CameraOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { type UserInfo } from "@/features/auth/user-cache";
@@ -54,8 +52,6 @@ export default function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  const is = { background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border-light)", color: "var(--canvas-text)", borderRadius: 8 };
-
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -78,23 +74,17 @@ export default function SettingsModal({ open, onClose }: Props) {
   };
 
   return (
-    <AppModal
-      title={t("auth.accountSettings")}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={400}
-      styles={{
-        header: { background: "var(--canvas-bg)", borderBottom: "none" },
-        body: { background: "var(--canvas-bg)", padding: "24px" },
-      }}
-    >
-      <div className="flex flex-col gap-4">
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="sm:max-w-[400px] bg-card">
+        <DialogHeader>
+          <DialogTitle>{t("auth.accountSettings")}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
         {/* Avatar */}
         <div className="flex flex-col items-center gap-2">
           <div
             className="w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold cursor-pointer relative group hover:opacity-80 transition-opacity"
-            style={{ background: "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}
+            style={{ background: "var(--primary)", color: "var(--background)" }}
             onClick={() => fileRef.current?.click()}
           >
             {avatarUrl ? (
@@ -106,35 +96,34 @@ export default function SettingsModal({ open, onClose }: Props) {
               <CameraOutlined style={{ fontSize: 18 }} />
             </div>
           </div>
-          <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{t("auth.clickUpload")}</span>
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("auth.clickUpload")}</span>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCropFile(f); setCropOpen(true); } }} />
         </div>
 
         {/* Username（登录身份，不可修改） */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.username")}</div>
-          <AppInput prefix={<UserOutlined style={{ color: "var(--canvas-text-dim)" }} />} value={user?.username ?? ""} disabled style={is} />
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.username")}</div>
+          <Input value={user?.username ?? ""} disabled />
         </div>
 
         {/* Old Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.currentPassword")}</div>
-          <AppPasswordInput prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} style={is}
-            renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.currentPassword")}</div>
+          <PasswordInput placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
         </div>
 
         {/* New Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--canvas-text-dim)" }}>{t("auth.newPassword")}</div>
-          <AppPasswordInput prefix={<LockOutlined style={{ color: "var(--canvas-text-dim)" }} />} placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} style={is}
-            renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)} />
+          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.newPassword")}</div>
+          <PasswordInput placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
         </div>
 
-        <AppButton variant="primary" size="md" onClick={handleSave} loading={saving} block>
+        <Button variant="primary" size="md" onClick={handleSave} loading={saving} block>
           {t("auth.saveChanges")}
-        </AppButton>
-      </div>
-      <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
-    </AppModal>
+        </Button>
+        </div>
+        <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
+      </DialogContent>
+    </Dialog>
   );
 }

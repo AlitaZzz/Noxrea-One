@@ -11,9 +11,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
-import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
-import { SpinnerIcon } from "@/components/ui/icons/common/SpinnerIcon";
+import { EyeIcon } from "@/components/ui/AppIcon";
+import { EyeOffIcon } from "@/components/ui/AppIcon";
+import { SpinnerIcon } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
@@ -21,10 +21,10 @@ import i18n from "@/lib/i18n/config";
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 /** 品牌青柠：引用 globals.css 变量，避免双处漂移 */
-const LIME = "var(--canvas-accent)";
+const LIME = "var(--primary)";
 /** 品牌青柠的透明度变体：由同一变量经 color-mix 派生 */
 const limeAlpha = (alpha: number) =>
-  `color-mix(in srgb, var(--canvas-accent) ${Math.round(alpha * 100)}%, transparent)`;
+  `color-mix(in srgb, var(--primary) ${Math.round(alpha * 100)}%, transparent)`;
 
 // ── Types ──
 
@@ -202,8 +202,8 @@ function LeftPanel() {
     <div
       className="relative hidden lg:flex w-1/2 flex-col items-center justify-center overflow-hidden"
       style={{
-        backgroundColor: "var(--canvas-app-bg)",
-        backgroundImage: "radial-gradient(color-mix(in srgb, var(--canvas-text) 5%, transparent) 1px, transparent 1px)",
+        backgroundColor: "var(--background)",
+        backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px)",
         backgroundSize: "26px 26px",
       }}
     >
@@ -224,7 +224,7 @@ function LeftPanel() {
             <p
               className="login-anim relative inline-block text-xl font-semibold leading-relaxed opacity-0"
               style={{
-                background: `linear-gradient(90deg, color-mix(in srgb, var(--canvas-text) 90%, transparent), ${LIME}, var(--canvas-accent-hover))`,
+                background: `linear-gradient(90deg, color-mix(in srgb, var(--foreground) 90%, transparent), ${LIME}, var(--primary))`,
                 backgroundClip: "text",
                 WebkitBackgroundClip: "text",
                 color: "transparent",
@@ -290,8 +290,8 @@ function RightPanel({
       style={{
         paddingTop: "max(96px, calc(50vh - 200px))",
         paddingBottom: "48px",
-        backgroundColor: "var(--canvas-app-bg)",
-        backgroundImage: "radial-gradient(color-mix(in srgb, var(--canvas-text) 5%, transparent) 1px, transparent 1px)",
+        backgroundColor: "var(--background)",
+        backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px)",
         backgroundSize: "26px 26px",
       }}
     >
@@ -307,14 +307,14 @@ function RightPanel({
           <h2 className="text-2xl font-bold text-white mb-1">
             {isSignin ? i18n.t("auth.login.title") : i18n.t("auth.login.createAccount")}
           </h2>
-          <p className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>
+          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
             {isSignin ? i18n.t("auth.login.subtitle", { name: APP_NAME }) : i18n.t("auth.login.createSubtitle")}
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="ui-select-none space-y-5" noValidate>
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "var(--canvas-text)" }}>{i18n.t("auth.login.username")}</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--foreground)" }}>{i18n.t("auth.login.username")}</label>
             <input
               type="text"
               value={username}
@@ -329,7 +329,7 @@ function RightPanel({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "var(--canvas-text)" }}>{i18n.t("auth.login.password")}</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--foreground)" }}>{i18n.t("auth.login.password")}</label>
             <div className="relative">
               <input
                 type={showPw ? "text" : "password"}
@@ -363,7 +363,7 @@ function RightPanel({
             className="login-anim relative overflow-hidden w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             style={{
               backgroundColor: LIME,
-              color: "var(--canvas-app-bg)",
+              color: "var(--background)",
               boxShadow: `0 8px 24px ${limeAlpha(0.18)}`,
             }}
             onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 8px 32px ${limeAlpha(0.32)}`; }}
@@ -393,7 +393,7 @@ function RightPanel({
         </form>
 
         <div className="mt-8 text-center">
-          <p className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>
+          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
             {isSignin ? i18n.t("auth.login.noAccount") : i18n.t("auth.login.hasAccount")}{" "}
             <button
               onClick={onToggle}
@@ -496,7 +496,7 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen bg-[var(--canvas-app-bg)] overflow-hidden">
+    <div className="flex h-screen w-screen bg-[var(--background)] overflow-hidden">
       <LeftPanel />
       <RightPanel
         mode={mode}

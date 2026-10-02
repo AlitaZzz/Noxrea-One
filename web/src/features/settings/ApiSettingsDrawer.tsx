@@ -7,6 +7,9 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   ApiOutlined,
   CopyOutlined,
@@ -14,15 +17,12 @@ import {
   DownloadOutlined,
   EditOutlined,
   PlusOutlined,
-} from "@ant-design/icons";
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppDrawer from "@/components/ui/AppDrawer";
+} from "@/components/ui/AppIcon";
+import { EyeIcon } from "@/components/ui/AppIcon";
+import { EyeOffIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
-import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import ApiSettingsForm from "@/features/settings/ApiSettingsForm";
@@ -75,33 +75,33 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
   return (
     <div
       className="flex flex-col gap-2 px-5 py-3.5 border-b"
-      style={{ borderColor: "var(--canvas-border)" }}
+      style={{ borderColor: "var(--border)" }}
     >
       <div className="flex items-center gap-3">
-        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>
+        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--muted-foreground)" }}>
           {t("modelConfig.baseUrl")}
         </span>
         <span
           className="flex-1 min-w-0 truncate text-[12.5px]"
-          style={{ color: "var(--canvas-text-dim)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+          style={{ color: "var(--muted-foreground)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
         >
           {provider.baseUrl}
         </span>
-        <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.copy")} onClick={() => copyText(provider.baseUrl)}>
+        <Button size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.copy")} onClick={() => copyText(provider.baseUrl)}>
           <CopyOutlined />
-        </AppButton>
+        </Button>
       </div>
       <div className="flex items-center gap-3">
-        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>
+        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--muted-foreground)" }}>
           {t("modelConfig.apiKey")}
         </span>
         <span
           className="flex-1 min-w-0 truncate text-[12.5px]"
-          style={{ color: "var(--canvas-text-dim)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+          style={{ color: "var(--muted-foreground)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
         >
           {revealed ? plain : provider.apiKey}
         </span>
-        <AppButton
+        <Button
           size="sm"
           variant="ghost"
           iconOnly
@@ -113,8 +113,8 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
           }}
         >
           {revealed ? <EyeOffIcon /> : <EyeIcon />}
-        </AppButton>
-        <AppButton
+        </Button>
+        <Button
           size="sm"
           variant="ghost"
           iconOnly
@@ -125,7 +125,7 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
           }}
         >
           <CopyOutlined />
-        </AppButton>
+        </Button>
       </div>
     </div>
   );
@@ -204,45 +204,39 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
 
   return (
     <>
-      <AppDrawer
+      <Sheet
         open={open}
-        onClose={onClose}
-        width={780}
-        placement="right"
-        destroyOnHidden
-        className="api-drawer"
-        closePlacement="end"
-        closeLabel={t("common.close")}
-        title={
-          <div className="flex items-center gap-2">
-            <ApiOutlined style={{ color: "var(--canvas-text-dim)" }} />
-            <span className="text-[15px] font-semibold" style={{ color: "var(--canvas-text)" }}>
-              {t("modelConfig.apiSettings")}
-            </span>
-          </div>
-        }
-        styles={{
-          body: { background: "var(--canvas-bg)", padding: 0 },
-          panel: { borderLeft: "1px solid #2c2c31" },
-        }}
+        onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
       >
-        <div className="flex h-full flex-col" style={{ color: "var(--canvas-text)" }}>
+        <SheetContent
+          side="right"
+          className="api-drawer gap-0 border-l border-[var(--border)] bg-card p-0"
+          style={{ width: "min(780px, 100vw)", maxWidth: "min(780px, 100vw)" }}
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <ApiOutlined style={{ color: "var(--muted-foreground)" }} />
+              {t("modelConfig.apiSettings")}
+            </SheetTitle>
+            <SheetDescription>{t("modelConfig.apiSettingsDescription")}</SheetDescription>
+          </SheetHeader>
+        <div className="flex min-h-0 flex-1 flex-col" style={{ color: "var(--foreground)" }}>
           <div className="flex flex-1 min-h-0">
           {/* ===== 左栏：供应商轨道 ===== */}
           <div
             className="w-[220px] shrink-0 flex flex-col border-r select-none"
-            style={{ borderColor: "var(--canvas-border)" }}
+            style={{ borderColor: "var(--border)" }}
           >
-            <div className="flex items-center gap-1.5 px-4 py-3 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-              <span className="text-[13px] font-medium" style={{ color: "var(--canvas-text)" }}>
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+              <span className="text-[13px] font-medium" style={{ color: "var(--foreground)" }}>
                 {t("modelConfig.providers")}
               </span>
               {providers.length > 0 && (
-                <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>
+                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
                   {providers.length}
                 </span>
               )}
-              <AppButton
+              <Button
                 size="sm"
                 variant="ghost"
                 iconOnly
@@ -251,41 +245,40 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 onClick={startAdd}
               >
                 <PlusOutlined />
-              </AppButton>
+              </Button>
             </div>
             {providers.length === 0 ? (
               <div
                 className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 text-center"
-                style={{ color: "var(--canvas-text-muted)" }}
+                style={{ color: "var(--muted-foreground)" }}
               >
-                <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.noProviders")}</div>
-                <AppButton size="sm" variant="primary" className="mt-1" onClick={startAdd}>
+                <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noProviders")}</div>
+                <Button size="sm" variant="primary" className="mt-1" onClick={startAdd}>
                   <PlusOutlined />
                   {t("modelConfig.addProvider")}
-                </AppButton>
+                </Button>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5">
                 {providers.map((c) => {
                   const active = view === "detail" && c.id === providerId;
                   return (
-                    <button
+                    <Button
                       key={c.id}
                       type="button"
+                      variant="ghost"
+                      aria-pressed={active}
                       onClick={() => selectProvider(c.id)}
-                      className={`relative w-full text-left rounded-lg px-3 py-2 cursor-pointer transition-colors ${
-                        active ? "bg-[var(--canvas-bg-hover)]" : "hover:bg-[var(--canvas-bg-hover)]"
-                      }`}
+                      className="relative h-auto w-full justify-start rounded-md px-3 py-2 text-left aria-pressed:bg-muted aria-pressed:text-foreground"
                     >
                       {active && (
                         <span
-                          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full"
-                          style={{ background: "var(--canvas-select)" }}
+                          className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-full bg-ring"
+                          aria-hidden="true"
                         />
                       )}
                       <div
-                        className="text-[13px] truncate"
-                        style={{ color: active ? "var(--canvas-text)" : "var(--canvas-text-dim)" }}
+                        className={`truncate text-[13px] ${active ? "text-foreground" : "text-muted-foreground"}`}
                       >
                         {c.name}
                       </div>
@@ -294,16 +287,15 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                         const enabled = c.models.filter((m) => (m.capabilities?.length ?? 0) > 0).length;
                         return (
                           <div
-                            className="text-xs mt-0.5 tabular-nums"
-                            style={{ color: "var(--canvas-text-muted)" }}
+                            className="mt-0.5 text-xs tabular-nums text-muted-foreground"
                             aria-label={t("modelConfig.enabledCount", { enabled, total: c.models.length })}
                           >
-                            <span style={{ color: enabled > 0 ? "var(--canvas-accent)" : undefined }}>{enabled}</span>
+                            <span className={enabled > 0 ? "text-primary" : undefined}>{enabled}</span>
                             /{c.models.length}
                           </div>
                         );
                       })()}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -326,33 +318,32 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 {/* 详情头：名称 + 协议 + 操作 */}
                 <div
                   className="flex items-center gap-2 px-5 py-3 border-b select-none"
-                  style={{ borderColor: "var(--canvas-border)" }}
+                  style={{ borderColor: "var(--border)" }}
                 >
-                  <span className="text-[15px] font-semibold truncate" style={{ color: "var(--canvas-text)" }}>
+                  <span className="text-[15px] font-semibold truncate" style={{ color: "var(--foreground)" }}>
                     {provider.name}
                   </span>
                   {provider.protocol && (
                     <span
                       className="shrink-0 text-xs leading-none px-1.5 py-1 rounded"
-                      style={{ color: "var(--canvas-text-dim)", border: "1px solid var(--canvas-border)" }}
+                      style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
                     >
                       {t(`modelConfig.protocol.${provider.protocol}`)}
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-1 shrink-0">
-                    <AppButton size="sm" variant="ghost" onClick={handleFetch} loading={fetching}>
+                    <Button size="sm" variant="ghost" onClick={handleFetch} loading={fetching}>
                       <DownloadOutlined />
                       {fetchLabel}
-                    </AppButton>
-                    <AppButton size="sm" variant="ghost" onClick={startEdit}>
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={startEdit}>
                       <EditOutlined />
                       {t("common.edit")}
-                    </AppButton>
-                    {/* 删除供应商是破坏性操作，用 danger 而不是默认变体 */}
-                    <AppButton size="sm" variant="danger" onClick={() => setDeleteOpen(true)}>
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>
                       <DeleteOutlined />
                       {t("common.delete")}
-                    </AppButton>
+                    </Button>
                   </div>
                 </div>
                 {/* 连接信息（key 保证切供应商时揭示状态重置） */}
@@ -363,21 +354,22 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
             ) : (
               <div
                 className="flex-1 flex flex-col items-center justify-center gap-1.5 text-center"
-                style={{ color: "var(--canvas-text-muted)" }}
+                style={{ color: "var(--muted-foreground)" }}
               >
                 <ApiOutlined className="text-3xl mb-1" />
-                <div className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.noProviders")}</div>
+                <div className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noProviders")}</div>
                 <div className="text-xs">{t("modelConfig.noProvidersDesc")}</div>
-                <AppButton size="sm" variant="primary" className="mt-2" onClick={startAdd}>
+                <Button size="sm" variant="primary" className="mt-2" onClick={startAdd}>
                   <PlusOutlined />
                   {t("modelConfig.addProvider")}
-                </AppButton>
+                </Button>
               </div>
             )}
           </div>
         </div>
         </div>
-      </AppDrawer>
+        </SheetContent>
+      </Sheet>
       <ConfirmModal
         open={deleteOpen}
         zIndex={1050}
@@ -388,6 +380,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
         })}
         okText={t("common.delete")}
         cancelText={t("common.cancel")}
+        confirmVariant="destructive"
         onOk={async () => {
           if (!providerId) return;
           try {

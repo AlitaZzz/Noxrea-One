@@ -11,7 +11,7 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
-import { NavSvg } from "@/components/ui/icons/director/NavSvg";
+import { NavSvg } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
@@ -884,16 +884,16 @@ export default function DirectorViewport() {
   }, []);
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative h-full w-full">
       <div ref={viewportRef} className="absolute inset-0" />
-      <div ref={frameRef} className="absolute pointer-events-none border-2 border-white/40" style={{ display: "none" }} />
-      <div id="dirLabelLayer" className="absolute inset-0 pointer-events-none overflow-hidden" />
+      <div ref={frameRef} className="pointer-events-none absolute hidden border-2 border-white/40" />
+      <div id="dirLabelLayer" className="pointer-events-none absolute inset-0 overflow-hidden" />
       {/* 去掉原生 title：下方已有可见的「重置视角」文字，提示内容重复 */}
-      <div className="absolute z-[5] text-center cursor-pointer" style={{ top: 18, right: 18, width: 74 }}>
+      <div className="absolute right-[18px] top-[18px] z-[5] w-[74px] cursor-pointer text-center">
         <NavSvg>
           <circle cx="37" cy="37" r="3" fill="var(--dir-dim2)" />
         </NavSvg>
-        <div className="text-[11.5px] mt-1.5" style={{ color: "var(--dir-dim)" }}>{t("director.resetView")}</div>
+        <div className="mt-1.5 text-[11.5px] text-muted-foreground">{t("director.resetView")}</div>
       </div>
     </div>
   );

@@ -9,8 +9,8 @@
 import { useCallback, useEffect,useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppModal from "@/components/ui/AppModal";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { uploadOne } from "@/features/canvas/upload";
 import { canvasToBlob } from "@/lib/utils/image-utils";
@@ -124,21 +124,19 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
   };
 
   return (
-    <AppModal
-      title={<span style={{ color: "var(--canvas-text)" }}>{t("auth.cropAvatar")}</span>}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={360}
-      centered
-      mask={false}
-      destroyOnHidden
-      styles={{ header: { background: "var(--canvas-bg)", borderBottom: "1px solid var(--canvas-border)" }, body: { background: "var(--canvas-bg)", padding: "16px" } }}
-    >
-      <div className="flex flex-col items-center gap-3">
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent
+        showOverlay={false}
+        className="sm:max-w-[360px] bg-card"
+        onInteractOutside={(event) => event.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>{t("auth.cropAvatar")}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-3">
         <div
           className="rounded-full overflow-hidden cursor-grab active:cursor-grabbing select-none"
-          style={{ width: SIZE, height: SIZE, border: "3px solid var(--canvas-border)" }}
+          style={{ width: SIZE, height: SIZE, border: "3px solid var(--border)" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -147,15 +145,16 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
           <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ width: SIZE, height: SIZE }} />
         </div>
         <div className="flex items-center gap-2 w-full">
-          <span className="text-xs" style={{ color: "var(--canvas-text-dim)" }}>{t("common.zoom")}</span>
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("common.zoom")}</span>
           <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
             className="flex-1" style={{ accentColor: "#c7f43d" }} />
         </div>
         <div className="flex gap-2 w-full">
-          <AppButton onClick={onClose} block style={{ background: "var(--canvas-bg)", border: "1px solid var(--canvas-border)", color: "var(--canvas-text)" }}>{t("common.cancel")}</AppButton>
-          <AppButton variant="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</AppButton>
+          <Button variant="outline" onClick={onClose} block>{t("common.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</Button>
         </div>
-      </div>
-    </AppModal>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

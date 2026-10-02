@@ -6,15 +6,16 @@
 
 "use client";
 
-import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@ant-design/icons";
 import { usePathname,useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
-import AppButton from "@/components/ui/AppButton";
+import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
+import { ChevronDownIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { ChevronDownIcon } from "@/components/ui/icons/common/ChevronDownIcon";
+import { Input } from "@/components/ui/input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import SettingsModal from "@/features/auth/components/SettingsModal";
 import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
@@ -107,12 +108,12 @@ export default function ProjectListPage() {
 
   return (
     <AppShell>
-      <div className="ui-select-none h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--canvas-text)" }}>
+      <div className="ui-select-none h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--foreground)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold m-0">{t("project.all")}</h1>
-          <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{projects.length}</span>
+          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>{projects.length}</span>
         </div>
 
         <UserMenuPopover
@@ -137,16 +138,16 @@ export default function ProjectListPage() {
           onLogout={() => useAuthStore.getState().logout().finally(() => router.push("/login"))}
           trigger={
             /* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--canvas-bg-elevated)" }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}>
+            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--popover)" }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--primary)", color: "var(--background)" }}>
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   (user?.username || "U")[0].toUpperCase()
                 )}
               </div>
-              <span className="text-sm font-medium" style={{ color: "var(--canvas-text)" }}>{user?.username || t("auth.defaultUser")}</span>
-              <ChevronDownIcon style={{ color: "var(--canvas-text-dim)", width: 10, height: 10 }} />
+              <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>{user?.username || t("auth.defaultUser")}</span>
+              <ChevronDownIcon style={{ color: "var(--muted-foreground)", width: 10, height: 10 }} />
             </div>
           }
         />
@@ -158,14 +159,14 @@ export default function ProjectListPage() {
           <div
             className="rounded-xl border border-dashed cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 flex flex-col items-center justify-center"
             style={{
-              background: "var(--canvas-bg)",
-              borderColor: "var(--canvas-border)",
+              background: "var(--card)",
+              borderColor: "var(--border)",
               aspectRatio: "1 / 1",
             }}
             onClick={handleCreate}
           >
-            <PlusOutlined className="text-3xl mb-2" style={{ color: "var(--canvas-text-dim)" }} />
-            <span className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("project.new")}</span>
+            <PlusOutlined className="text-3xl mb-2" style={{ color: "var(--muted-foreground)" }} />
+            <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("project.new")}</span>
           </div>
 
           {projects.map((p) => (
@@ -173,30 +174,29 @@ export default function ProjectListPage() {
               key={p.id}
               className="group relative rounded-xl border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5"
               style={{
-                background: "var(--canvas-bg)",
-                borderColor: "var(--canvas-border)",
+                background: "var(--card)",
+                borderColor: "var(--border)",
               }}
               onClick={() => handleOpen(p)}
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
               <div
                 className="aspect-video rounded-t-xl flex items-center justify-center overflow-hidden"
-                style={{ background: "var(--canvas-bg-elevated)" }}
+                style={{ background: "var(--popover)" }}
               >
                 {p.thumbnail ? (
                   <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <FolderOpenOutlined className="text-3xl" style={{ color: "var(--canvas-text-muted)" }} />
+                  <FolderOpenOutlined className="text-3xl" style={{ color: "var(--muted-foreground)" }} />
                 )}
               </div>
 
               {/* Info */}
               <div className="p-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex h-9 items-center justify-between gap-2">
                   {editingId === p.id ? (
-                    <input
-                      className="text-sm font-medium bg-transparent border rounded px-1.5 py-0.5 flex-1 min-w-0 outline-none"
-                      style={{ color: "var(--canvas-text)", borderColor: "var(--canvas-border)" }}
+                    <Input
+                      className="flex-1 min-w-0 text-sm font-medium"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       onBlur={() => { if (editName.trim()) renameProject(p.id, editName.trim()); setEditingId(null); }}
@@ -205,10 +205,10 @@ export default function ProjectListPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <div className="text-sm font-medium truncate flex-1">{p.name}</div>
+                    <div className="flex h-full min-w-0 flex-1 items-center truncate text-sm font-medium">{p.name}</div>
                   )}
                   <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <AppButton
+                    <Button
                       size="sm"
                       iconOnly
                       variant="ghost"
@@ -218,8 +218,8 @@ export default function ProjectListPage() {
                       onClick={() => handlePickCover(p.id)}
                     >
                       <PictureOutlined />
-                    </AppButton>
-                    <AppButton
+                    </Button>
+                    <Button
                       size="sm"
                       iconOnly
                       variant="ghost"
@@ -237,9 +237,9 @@ export default function ProjectListPage() {
                       }}
                     >
                       {/* 确认对勾用青柠：与检查器内联保存等肯定语义一致（globals.css 品牌色规则） */}
-                      {editingId === p.id ? <CheckOutlined style={{ color: "var(--canvas-accent)" }} /> : <EditOutlined />}
-                    </AppButton>
-                    <AppButton
+                      {editingId === p.id ? <CheckOutlined className="text-primary" /> : <EditOutlined />}
+                    </Button>
+                    <Button
                       size="sm"
                       iconOnly
                       variant="ghost"
@@ -247,14 +247,14 @@ export default function ProjectListPage() {
                       onClick={() => setDeleteTarget(p)}
                     >
                       <DeleteOutlined />
-                    </AppButton>
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "var(--canvas-text-muted)" }}>
+                <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
                   <ClockCircleOutlined className="text-[10px]" />
                   {formatDate(p.updatedAt)}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>
+                <div className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
                   {p.nodeCount}{t("canvas.nodesCount")}
                 </div>
               </div>
@@ -278,6 +278,7 @@ export default function ProjectListPage() {
         title={t("project.delete")}
         content={t("project.deleteConfirm", { name: deleteTarget?.name ?? "" })}
         okText={t("common.delete")}
+        confirmVariant="destructive"
         cancelText={t("common.cancel")}
         onOk={() => { if (deleteTarget) deleteProject(deleteTarget.id); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}

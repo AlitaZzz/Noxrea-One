@@ -8,10 +8,10 @@
 
 import { useTranslation } from "react-i18next";
 
-import AppColorPicker from "@/components/ui/AppColorPicker";
-import AppNumberInput from "@/components/ui/AppNumberInput";
-import AppSlider from "@/components/ui/AppSlider";
-import AppSwitch from "@/components/ui/AppSwitch";
+import { ColorPicker } from "@/components/ui/color-picker";
+import { NumberInput } from "@/components/ui/number-input";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { useDirectorStore } from "@/features/director/director-store";
 
 function SliderRow({ label, min, max, step = 1, value, disabled, format, onChange }: {
@@ -20,14 +20,16 @@ function SliderRow({ label, min, max, step = 1, value, disabled, format, onChang
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="dir-field">
-      {label && <label className="dir-label">{label}</label>}
+    <div className="mb-4">
+      {label && <label className="mb-2 block select-none text-xs text-muted-foreground">{label}</label>}
       <div className="flex items-center gap-3">
-        <AppSlider min={min} max={max} step={step} value={value} disabled={disabled}
-          style={{ flex: 1, margin: 0 }}
-          formatTooltip={(v) => format ? format(v as number) : String(v)}
-          onChange={(v) => onChange(v as number)} />
-        <div className="dir-valbox">{format ? format(value) : value}</div>
+        <Slider min={min} max={max} step={step} value={[value]} disabled={disabled}
+          className="flex-1"
+          title={format ? format(value) : String(value)}
+          onValueChange={([next]) => onChange(next)} />
+        <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">
+          {format ? format(value) : value}
+        </div>
       </div>
     </div>
   );
@@ -36,8 +38,8 @@ function SliderRow({ label, min, max, step = 1, value, disabled, format, onChang
 function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="toggle-label">{label}</span>
-      <AppSwitch size="small" checked={checked} onChange={onChange} />
+      <span className="text-sm font-semibold">{label}</span>
+      <Switch size="sm" checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -48,20 +50,20 @@ export default function ScenePanel() {
   const sceneState = useDirectorStore((s) => s.sceneState);
 
   return (
-    <div className="dir-rp-pad text-sm overflow-auto">
-      <h2 className="dir-h2">{t("director.scene3d")}</h2>
+    <div className="overflow-auto px-4 pb-4 pt-[18px] text-sm">
+      <h2 className="mb-1 text-sm font-semibold text-foreground">{t("director.scene3d")}</h2>
 
-      <div className="dir-sec-first">
+      <div className="mt-3.5">
         <SliderRow label={t("director.sceneScale")} min={0.1} max={3} step={0.05} value={sceneState.scale}
           format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => runtime?.setSceneScale(v)} />
 
-        <div className="dir-field">
-          <label className="dir-label">{t("director.scenePan")}</label>
+        <div className="mb-4">
+          <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.scenePan")}</label>
           <div className="flex gap-2">
             {(["x","y","z"] as const).map((k) => (
-              <div key={k} className="dir-fld flex-1">
-                <span className="dir-ax">{k.toUpperCase()}</span>
-                <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
+              <div key={k} className="flex flex-1 items-center gap-1.5 rounded-md border border-transparent bg-muted px-2.5">
+                <span className="select-none text-xs text-muted-foreground">{k.toUpperCase()}</span>
+                <NumberInput className="h-7 flex-1 border-0 bg-transparent shadow-none" controls={false}
                   value={parseFloat(sceneState.pos[k].toFixed(2))} step={0.01}
                   onChange={(v) => v != null && runtime?.setScenePos?.(k, v)} />
               </div>
@@ -69,13 +71,13 @@ export default function ScenePanel() {
           </div>
         </div>
 
-        <div className="dir-field">
-          <label className="dir-label">{t("director.sceneRotate")}</label>
+        <div className="mb-4">
+          <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.sceneRotate")}</label>
           <div className="flex gap-2">
             {(["x","y","z"] as const).map((k) => (
-              <div key={k} className="dir-fld flex-1">
-                <span className="dir-ax">{k.toUpperCase()}</span>
-                <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
+              <div key={k} className="flex flex-1 items-center gap-1.5 rounded-md border border-transparent bg-muted px-2.5">
+                <span className="select-none text-xs text-muted-foreground">{k.toUpperCase()}</span>
+                <NumberInput className="h-7 flex-1 border-0 bg-transparent shadow-none" controls={false}
                   value={Math.round(sceneState.rot[k])} step={1}
                   onChange={(v) => v != null && runtime?.setSceneRot?.(k, v)} />
               </div>
@@ -83,17 +85,19 @@ export default function ScenePanel() {
           </div>
         </div>
 
-        <div className="dir-field">
-          <label className="dir-label">{t("director.skyColor")}</label>
-          <AppColorPicker size="small" value={sceneState.sky}
+        <div className="mb-4">
+          <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.skyColor")}</label>
+          <ColorPicker size="sm" value={sceneState.sky}
             onChange={(hex) => runtime?.setSkyColor(hex)} />
         </div>
       </div>
 
-      <div className="dir-sec">
-        <div className="dir-sec-title">{t("director.panoBg")}</div>
-        <div className="dir-placeholder">{sceneState.panoActive ? t("director.panoSet") : t("director.panoHint")}</div>
-        <div style={{ marginTop: 14 }}>
+      <div className="mt-4 border-t border-border pt-4">
+        <div className="mb-3.5 mt-1 text-sm font-semibold">{t("director.panoBg")}</div>
+        <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+          {sceneState.panoActive ? t("director.panoSet") : t("director.panoHint")}
+        </div>
+        <div className="mt-3.5">
           <SliderRow label={t("director.panoRot")} min={0} max={360} value={sceneState.panoRot}
             disabled={!sceneState.panoActive} format={(v) => `${Math.round(v)}°`}
             onChange={() => {}} />
@@ -103,7 +107,7 @@ export default function ScenePanel() {
         </div>
       </div>
 
-      <div className="dir-sec">
+      <div className="mt-4 border-t border-border pt-4">
         <ToggleRow label={t("director.charLabels")} checked={sceneState.labels} onChange={(v) => runtime?.setLabelsVisible(v)} />
         <ToggleRow label={t("director.ground")} checked={sceneState.ground.visible} onChange={(v) => runtime?.setGroundVisible(v)} />
         {sceneState.ground.visible && (<>

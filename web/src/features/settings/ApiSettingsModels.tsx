@@ -6,6 +6,10 @@
 
 "use client";
 
+import type { ComponentType, CSSProperties } from "react";
+import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   CheckOutlined,
   CloseOutlined,
@@ -13,17 +17,19 @@ import {
   EllipsisOutlined,
   PictureOutlined,
   PlusOutlined,
-  SearchOutlined,
   VideoCameraOutlined,
-} from "@ant-design/icons";
-import type { ComponentType, CSSProperties } from "react";
-import { memo, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppInput from "@/components/ui/AppInput";
-import { TextIcon } from "@/components/ui/icons/media/TextIcon";
+} from "@/components/ui/AppIcon";
+import { TextIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/input-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { ModelIcon } from "@/features/model/ModelIcon";
 import { useModelStore } from "@/lib/model-store";
@@ -57,10 +63,10 @@ const ModelRow = memo(function ModelRow({
       className="group flex items-center gap-2 px-3 h-full"
       onMouseLeave={() => confirming && setConfirming(false)}
     >
-      <ModelIcon model={m.name} className="text-xs shrink-0" style={{ color: "var(--canvas-text-muted)" }} />
+      <ModelIcon model={m.name} className="text-xs shrink-0" style={{ color: "var(--muted-foreground)" }} />
       <span
         className="flex-1 min-w-0 truncate text-[13px]"
-        style={{ color: dim ? "var(--canvas-text-dim)" : "var(--canvas-text)" }}
+        style={{ color: dim ? "var(--muted-foreground)" : "var(--foreground)" }}
       >
         {m.name}
       </span>
@@ -68,35 +74,34 @@ const ModelRow = memo(function ModelRow({
         {CAP_PILLS.map(({ cap, Icon }) => {
           const on = !!m.capabilities?.includes(cap);
           return (
-            <button
+            <Button
               key={cap}
               type="button"
-              className="cap-pill"
+              size="icon-xs"
+              variant="ghost"
+              className="aria-pressed:bg-primary/15 aria-pressed:text-primary"
               aria-pressed={on}
               aria-label={t(`modelConfig.cap.${cap}`)}
               onClick={() => onToggle(m.id, cap)}
             >
-              <Icon />
-            </button>
+              <Icon className="size-3" />
+            </Button>
           );
         })}
       </div>
       {/* 删除只出现在未启用任何能力的行：已启用的行显示 × 会被误读为「停用」。
           占位符保持 22px 槽位，保证启用 / 未启用行的能力 pill 垂直对齐。 */}
       {(m.capabilities?.length ?? 0) === 0 ? (
-        <button
+        <Button
           type="button"
+          size="icon-xs"
+          variant="destructive"
           aria-label={confirming ? t("common.delete") : t("modelConfig.deleteModel")}
-          className={`cap-pill shrink-0 ${confirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-          style={
-            confirming
-              ? { color: "var(--canvas-accent)", background: "color-mix(in srgb, var(--canvas-accent) 14%, transparent)" }
-              : undefined
-          }
+          className={`shrink-0 ${confirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           onClick={() => (confirming ? onDelete(m.id) : setConfirming(true))}
         >
-          {confirming ? <CheckOutlined /> : <CloseOutlined />}
-        </button>
+          {confirming ? <CheckOutlined className="size-3" /> : <CloseOutlined className="size-3" />}
+        </Button>
       ) : (
         <span aria-hidden className="w-[22px] shrink-0" />
       )}
@@ -202,87 +207,66 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
     })),
   ];
 
-  return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      {/* 能力筛选 chips */}
-      <div className="flex items-center flex-wrap gap-1 px-4 pt-3">
-        {chips.map((chip) => (
-          <button
-            key={chip.key}
-            type="button"
-            className="cap-chip"
-            data-active={filter === chip.key}
-            onClick={() => setFilter(chip.key)}
-          >
-            {chip.label}
-            <span className="cap-chip-count">{chip.count}</span>
-          </button>
-        ))}
-      </div>
-
+  const renderModelContent = () => (
+    <>
       {/* 搜索 + 批量 + 手动添加 */}
       <div className="flex items-center gap-1.5 px-4 py-2.5">
-        <AppInput
-          allowClear
-          prefix={<SearchOutlined style={{ color: "var(--canvas-text-muted)" }} />}
+        <SearchInput
           placeholder={t("modelConfig.searchModel")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          clearable
+          onClear={() => setSearch("")}
           className="flex-1"
         />
-        <AppButton
-          size="sm"
+        <Button
           variant="ghost"
-          iconOnly
+          size="icon-sm"
           aria-label={t("modelConfig.addModel")}
           data-active={adding}
           onClick={() => setAdding((v) => !v)}
         >
-          <PlusOutlined />
-        </AppButton>
-        <AppDropdown
-          trigger={["click"]}
-          open={batchOpen}
-          onOpenChange={setBatchOpen}
-          menu={{
-            items: filter === "all"
-              ? [{ key: "hint", label: t("modelConfig.batchNeedFilter"), disabled: true }]
-              : [
-                  { key: "selectAll", label: t("modelConfig.batchSelectShown") },
-                  { key: "clear", label: t("modelConfig.batchClearShown") },
-                ],
-            onClick: ({ key }) => {
-              if (key === "selectAll") batchSelectAll();
-              else if (key === "clear") batchClear();
-            },
-          }}
-        >
-          <AppButton size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.batch")}>
-            <EllipsisOutlined />
-          </AppButton>
-        </AppDropdown>
+          <PlusOutlined className="size-4" />
+        </Button>
+        <DropdownMenu open={batchOpen} onOpenChange={setBatchOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" variant="ghost" aria-label={t("modelConfig.batch")}>
+              <EllipsisOutlined className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end">
+            {filter === "all" ? (
+              <DropdownMenuItem disabled>{t("modelConfig.batchNeedFilter")}</DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuItem onSelect={batchSelectAll}>{t("modelConfig.batchSelectShown")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={batchClear}>{t("modelConfig.batchClearShown")}</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* 手动添加输入行（＋ 按钮展开） */}
       {adding && (
         <div className="flex items-center gap-1.5 px-4 pb-2.5">
-          <AppInput
+          <Input
             autoFocus
             placeholder={t("modelConfig.addModelPlaceholder")}
             value={newModelName}
             onChange={(e) => setNewModelName(e.target.value)}
-            onPressEnter={handleAddModel}
             onKeyDown={(e) => {
+              if (e.key === "Enter") void handleAddModel();
               if (e.key === "Escape") setAdding(false);
             }}
             className="flex-1"
           />
-          <AppButton size="sm" variant="ghost" onClick={() => setAdding(false)}>
+          <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
             {t("common.cancel")}
-          </AppButton>
-          <AppButton size="sm" variant="primary" disabled={!newModelName.trim()} onClick={handleAddModel}>
+          </Button>
+          <Button size="sm" variant="primary" disabled={!newModelName.trim()} onClick={handleAddModel}>
             {t("common.add")}
-          </AppButton>
+          </Button>
         </div>
       )}
 
@@ -290,19 +274,19 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
       {provider.models.length === 0 ? (
         <div
           className="flex-1 flex flex-col items-center justify-center gap-1.5 pb-8 text-center"
-          style={{ color: "var(--canvas-text-muted)" }}
+          style={{ color: "var(--muted-foreground)" }}
         >
-          <div className="text-sm" style={{ color: "var(--canvas-text-dim)" }}>{t("modelConfig.noModels")}</div>
+          <div className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noModels")}</div>
           <div className="text-xs">{t("modelConfig.noModelsDesc")}</div>
-          <AppButton size="sm" variant="primary" className="mt-2" onClick={onFetch} loading={fetching}>
+          <Button size="sm" variant="primary" className="mt-2" onClick={onFetch} loading={fetching}>
             <DownloadOutlined />
             {t("modelConfig.fetchModels")}
-          </AppButton>
+          </Button>
         </div>
       ) : rows.length === 0 ? (
         <div
           className="flex-1 flex items-center justify-center text-[13px]"
-          style={{ color: "var(--canvas-text-muted)" }}
+          style={{ color: "var(--muted-foreground)" }}
         >
           {t("modelConfig.noMatchModels")}
         </div>
@@ -318,7 +302,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
               r.kind === "header" ? (
                 <div
                   className="flex items-center px-2 h-full text-[12px] font-medium"
-                  style={{ color: "var(--canvas-text-muted)" }}
+                  style={{ color: "var(--muted-foreground)" }}
                 >
                   {r.label}
                 </div>
@@ -329,6 +313,28 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
           />
         </div>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <Tabs
+      value={filter}
+      onValueChange={(value) => setFilter(value as "all" | ModelCapability)}
+      className="flex min-h-0 flex-1 flex-col gap-0"
+    >
+      <TabsList className="mx-4 mt-3 grid w-auto shrink-0 grid-cols-4">
+        {chips.map((chip) => (
+          <TabsTrigger key={chip.key} value={chip.key}>
+            {chip.label}
+            <span className="text-xs tabular-nums opacity-55">{chip.count}</span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {chips.map((chip) => (
+        <TabsContent key={chip.key} value={chip.key} className="min-h-0 flex-1">
+          {renderModelContent()}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }

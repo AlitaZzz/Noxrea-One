@@ -6,16 +6,14 @@
 
 "use client";
 
-import { ArrowLeftOutlined,CopyOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppInput from "@/components/ui/AppInput";
-import AppPasswordInput from "@/components/ui/AppPasswordInput";
-import AppSelect from "@/components/ui/AppSelect";
-import { EyeIcon } from "@/components/ui/icons/common/EyeIcon";
-import { EyeOffIcon } from "@/components/ui/icons/common/EyeOffIcon";
+import { ArrowLeftOutlined,CopyOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider, ProviderPreset } from "@/lib/types/models";
@@ -120,11 +118,11 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       {/* 头部：返回 + 标题 */}
-      <div className="flex items-center gap-1 px-4 py-3 border-b" style={{ borderColor: "var(--canvas-border)" }}>
-        <AppButton size="sm" variant="ghost" iconOnly onClick={onCancel} aria-label={t("modelConfig.back")}>
+      <div className="flex items-center gap-1 px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+        <Button size="sm" variant="ghost" iconOnly onClick={onCancel} aria-label={t("modelConfig.back")}>
           <ArrowLeftOutlined />
-        </AppButton>
-        <span className="text-[15px] font-semibold" style={{ color: "var(--canvas-text)" }}>
+        </Button>
+        <span className="text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
           {mode === "edit" ? t("modelConfig.editProvider") : t("modelConfig.addProvider")}
         </span>
       </div>
@@ -133,8 +131,8 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
       <div className="flex-1 overflow-y-auto px-5 py-4">
         <div className="flex flex-col gap-4" style={{ maxWidth: 560 }}>
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("common.name")}</span>
-              <AppInput
+              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("common.name")}</span>
+              <Input
                 placeholder={t("modelConfig.myApi")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -142,8 +140,8 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
               />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.baseUrl")}</span>
-              <AppInput
+              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.baseUrl")}</span>
+              <Input
                 placeholder="https://api.openai.com/v1"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
@@ -151,34 +149,34 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.protocolLabel")}</span>
-                <AppSelect
-                  value={protocol}
-                  onChange={setProtocol}
-                  options={[
-                    { label: t("modelConfig.protocol.openai"), value: "openai" },
-                    { label: t("modelConfig.protocol.ark"), value: "ark" },
-                  ]}
-                />
+                <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.protocolLabel")}</span>
+                <Select value={protocol} onValueChange={setProtocol}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">{t("modelConfig.protocol.openai")}</SelectItem>
+                    <SelectItem value="ark">{t("modelConfig.protocol.ark")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.preset")}</span>
-                <AppSelect
-                  placeholder={t("modelConfig.preset")}
-                  options={presets.map((p) => ({ label: p.name, value: p.name }))}
-                  onChange={(presetName) => {
-                    const p = presets.find((pr) => pr.name === presetName);
-                    if (!p) return;
-                    setBaseUrl(p.baseUrl ?? "");
-                    setProtocol(p.protocol || "openai");
-                  }}
-                />
+                <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.preset")}</span>
+                <Select onValueChange={(presetName) => {
+                  const p = presets.find((pr) => pr.name === presetName);
+                  if (!p) return;
+                  setBaseUrl(p.baseUrl ?? "");
+                  setProtocol(p.protocol || "openai");
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t("modelConfig.preset")} /></SelectTrigger>
+                  <SelectContent>
+                    {presets.map((preset) => <SelectItem key={preset.name} value={preset.name}>{preset.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--canvas-text-muted)" }}>{t("modelConfig.apiKey")}</span>
+              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.apiKey")}</span>
               <div className="flex gap-1.5">
-                <AppPasswordInput
+                <PasswordInput
                   className="flex-1"
                   placeholder={mode === "edit" ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
                   value={apiKey}
@@ -188,12 +186,11 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                   }}
                   visible={keyVisible}
                   onVisibleChange={handleKeyVisibleChange}
-                  renderVisibilityIcon={(v) => (v ? <EyeIcon style={{ color: "var(--canvas-text)" }} /> : <EyeOffIcon style={{ color: "var(--canvas-text)" }} />)}
                 />
                 {mode === "edit" && (
-                  <AppButton size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
+                  <Button size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
                     <CopyOutlined />
-                  </AppButton>
+                  </Button>
                 )}
               </div>
             </div>
@@ -201,11 +198,11 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
       </div>
 
       {/* 底部操作 */}
-      <div className="flex justify-end gap-2 px-5 py-3.5 border-t" style={{ borderColor: "var(--canvas-border)" }}>
-        <AppButton onClick={onCancel}>{t("common.cancel")}</AppButton>
-        <AppButton variant="primary" disabled={!canSave} loading={saving} onClick={handleSave}>
+      <div className="flex justify-end gap-2 px-5 py-3.5 border-t" style={{ borderColor: "var(--border)" }}>
+        <Button onClick={onCancel}>{t("common.cancel")}</Button>
+        <Button variant="primary" disabled={!canSave} loading={saving} onClick={handleSave}>
           {mode === "edit" ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
-        </AppButton>
+        </Button>
       </div>
     </div>
   );

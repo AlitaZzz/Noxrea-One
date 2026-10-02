@@ -6,23 +6,25 @@
 
 "use client";
 
-import { DeleteOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
-import AppButton from "@/components/ui/AppButton";
-import AppColorPicker from "@/components/ui/AppColorPicker";
-import AppInput from "@/components/ui/AppInput";
-import AppNumberInput from "@/components/ui/AppNumberInput";
-import AppSelect from "@/components/ui/AppSelect";
-import AppSlider from "@/components/ui/AppSlider";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { DirExpandIcon } from "@/components/ui/icons/director/DirExpandIcon";
-import { DirEyeIcon } from "@/components/ui/icons/director/DirEyeIcon";
-import { DirEyeOffIcon } from "@/components/ui/icons/director/DirEyeOffIcon";
-import { DirSendIcon } from "@/components/ui/icons/director/DirSendIcon";
-import { DirTrashIcon } from "@/components/ui/icons/director/DirTrashIcon";
+import { CloseOutlined, DeleteOutlined, RotateRightOutlined } from "@/components/ui/AppIcon";
+import { DirExpandIcon } from "@/components/ui/AppIcon";
+import { DirEyeIcon } from "@/components/ui/AppIcon";
+import { DirEyeOffIcon } from "@/components/ui/AppIcon";
+import { DirSendIcon } from "@/components/ui/AppIcon";
+import { DirTrashIcon } from "@/components/ui/AppIcon";
+import { UngroupIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/ui/color-picker";
+import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
@@ -44,13 +46,13 @@ function TripleRow({ label, keys, step = 0.01, deg = false }: {
 }) {
   const fmt = (v: number) => deg ? String(Math.round(v)) : v.toFixed(2);
   return (
-    <div className="dir-field">
-      <label className="dir-label">{label}</label>
+    <div className="mb-4">
+      <label className="mb-2 block select-none text-xs text-muted-foreground">{label}</label>
       <div className="flex gap-2">
         {keys.map(({ k, get, set, step: ks }) => (
-          <div key={k} className="dir-fld flex-1">
-            <span className="dir-ax">{k.toUpperCase()}</span>
-            <AppNumberInput size="small" className="dir-inputnum flex-1" controls={false}
+          <div key={k} className="flex flex-1 items-center gap-1.5 rounded-md border border-transparent bg-muted px-2.5">
+            <span className="select-none text-xs text-muted-foreground">{k.toUpperCase()}</span>
+            <NumberInput className="h-7 flex-1 border-0 bg-transparent shadow-none" controls={false}
               step={ks ?? step} value={deg ? Math.round(get()) : parseFloat(fmt(get()))}
               onChange={(v) => v != null && set(v as number)} />
           </div>
@@ -108,38 +110,48 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
         <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
         {/* 原生 title 换成系统 Tooltip */}
-        <AppTooltip title={t("director.fullscreenExpand")}>
-        <button className="dir-cam-expand" onClick={() => {
-          const stage = runtime._getStage();
-          if (!stage) return;
-          const url = renderCameraThumbnail(stage, ent.cam, 1280, 720, {
-            before: () => runtime._beginCleanRender(),
-            after: () => runtime._endCleanRender(),
-          });
-          setModalUrl(url);
-        }}>⤢</button>
-        </AppTooltip>
+        <Tooltip><TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("director.fullscreenExpand")}
+              className="absolute bottom-[7px] right-[7px] rounded-[7px] border border-white/25 bg-black/50 text-white hover:bg-black/75 hover:text-white"
+              onClick={() => {
+              const stage = runtime._getStage();
+              if (!stage) return;
+              const url = renderCameraThumbnail(stage, ent.cam, 1280, 720, {
+                before: () => runtime._beginCleanRender(),
+                after: () => runtime._endCleanRender(),
+              });
+              setModalUrl(url);
+            }}
+            >
+              <DirExpandIcon />
+            </Button>
+          </TooltipTrigger><TooltipContent>{t("director.fullscreenExpand")}</TooltipContent></Tooltip>
       </div>
-      <div className="dir-field">
-        <label className="dir-label">{t("common.name")}</label>
-        <div className="dir-namefld">
-          <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename(entity.id, e.target.value)} />
+      <div className="mb-4">
+        <label className="mb-2 block select-none text-xs text-muted-foreground">{t("common.name")}</label>
+        <div className="rounded-md bg-muted px-3">
+          <Input className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={ent.name} onChange={(e) => runtime.rename(entity.id, e.target.value)} />
         </div>
       </div>
       {entities.filter((e) => e.type === "camera").length > 1 && (
-        <div className="dir-field">
-          <label className="dir-label">{t("director.switchCamera")}</label>
-          <AppSelect size="small" className="w-full dir-select" value={entity.id}
-            options={entities.filter((e) => e.type === "camera").map((c) => ({ value: c.id, label: c.name }))}
-            onChange={(id: string) => runtime.select(id)} />
+        <div className="mb-4">
+          <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.switchCamera")}</label>
+          <Select value={entity.id} onValueChange={(id) => runtime.select(id)}>
+            <SelectTrigger size="sm" className="h-8 w-full bg-muted text-foreground shadow-none"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {entities.filter((e) => e.type === "camera").map((camera) => <SelectItem key={camera.id} value={camera.id}>{camera.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       )}
       <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); refreshPreview(); } }))} />
-      <div className="dir-field">
-        <label className="dir-label">{t("director.aimTarget")}</label>
-        <AppSelect size="small" className="w-full dir-select" value={aimMode}
-          options={aimOpts}
-          onChange={(val) => {
+      <div className="mb-4">
+        <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.aimTarget")}</label>
+        <Select value={aimMode} onValueChange={(val) => {
             setAimMode(val);
             if (val !== "manual") {
               const target = runtime._getEntity(val);
@@ -150,22 +162,37 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
                 schedulePreview();
               }
             }
-          }} />
+          }}>
+          <SelectTrigger size="sm" className="h-8 w-full bg-muted text-foreground shadow-none"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {aimOpts.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       <TripleRow label={t("director.aimCoords")} step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); refreshPreview(); } }))} />
-      <div className="dir-field">
-        <div className="flex justify-between items-center dir-label"><span>{t("director.fovAngle")} <AppTooltip title={t("director.fovTip")}><span className="text-white/25 cursor-help">ⓘ</span></AppTooltip></span><span className="dir-val">{Math.round(ent.cam?.fov || 40)}°</span></div>
+      <div className="mb-4">
+        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{t("director.fovAngle")} <Tooltip><TooltipTrigger asChild><span className="cursor-help text-muted-foreground">ⓘ</span></TooltipTrigger><TooltipContent>{t("director.fovTip")}</TooltipContent></Tooltip></span><span>{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
-          <AppSlider min={20} max={90} step={1} style={{ flex: 1, margin: 0 }} value={ent.cam?.fov || 40} formatTooltip={(v) => `${v}°`}
-            onChange={(v) => { ent.setFov(v); refreshPreview(); }} />
-          <div className="dir-valbox">{Math.round(ent.cam?.fov || 40)}°</div>
+          <Slider min={20} max={90} step={1} className="flex-1" value={[ent.cam?.fov || 40]}
+            title={`${Math.round(ent.cam?.fov || 40)}°`}
+            onValueChange={([next]) => { ent.setFov(next); refreshPreview(); }} />
+          <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
       {/* 全屏预览 modal */}
       {modalUrl && (
         <div className="dir-modal-overlay" onClick={() => setModalUrl("")}>
           <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
-            <button className="dir-modal-close" onClick={() => setModalUrl("")}>×</button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("common.close")}
+              className="absolute -top-3.5 -right-3.5 rounded-full border border-border bg-muted text-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => setModalUrl("")}
+            >
+              <CloseOutlined />
+            </Button>
             <img src={modalUrl} className="dir-modal-img" alt="POV" />
             <div className="dir-modal-bar">
               <span className="dir-modal-title">{t("director.fovModalTitle", { name: ent.name, fov: Math.round(ent.cam?.fov || 40) })}</span>
@@ -192,41 +219,41 @@ function CameraShots({ cameraId }: { cameraId: string }) {
   }, [allShots, cameraId]);
 
   return (
-    <div className="dir-field" style={{ marginTop: 8 }}>
-      <div className="dir-sec-title" style={{ marginBottom: 8 }}>{t("director.cameraShots", { count: shots.length })}</div>
+    <div className="mt-2 mb-4">
+      <div className="mb-2 mt-1 text-sm font-semibold">{t("director.cameraShots", { count: shots.length })}</div>
       {shots.length === 0 ? (
-        <div className="dir-placeholder" style={{ marginBottom: 0 }}>{t("director.captureHint")}</div>
+        <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">{t("director.captureHint")}</div>
       ) : (
         <div className="dir-shot-grid">
           {shots.map((shot) => (
             // 卡片名可能被 CSS 截断，tooltip 展示完整名称；操作按钮改用系统 Tooltip
-            <AppTooltip key={shot.id} title={shot.name}>
-              <div
-                className="dir-shot-card"
-                data-selected={shot.selected || undefined}
-                onClick={() => toggleShotSelected(shot.id)}
-              >
-                <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
-                <span className="dir-shot-label">{shot.name}</span>
-                <div className="dir-shot-actions">
-                  <AppTooltip title={t("director.sendToCanvasTip")}>
-                    <button onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
-                      <DirSendIcon style={{ width: 14, height: 14 }} />
-                    </button>
-                  </AppTooltip>
-                  <AppTooltip title={t("common.delete")}>
-                    <button onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
-                      <DirTrashIcon style={{ width: 14, height: 14 }} />
-                    </button>
-                  </AppTooltip>
-                  <AppTooltip title={t("director.enlargePreview")}>
-                    <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
-                      <DirExpandIcon style={{ width: 14, height: 14 }} />
-                    </button>
-                  </AppTooltip>
+            <Tooltip key={shot.id}><TooltipTrigger asChild>
+                <div
+                  className="dir-shot-card"
+                  data-selected={shot.selected || undefined}
+                  onClick={() => toggleShotSelected(shot.id)}
+                >
+                  <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
+                  <span className="dir-shot-label">{shot.name}</span>
+                  <div className="dir-shot-actions">
+                    <Tooltip><TooltipTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.sendToCanvasTip")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
+                          <DirSendIcon style={{ width: 14, height: 14 }} />
+                        </Button>
+                      </TooltipTrigger><TooltipContent>{t("director.sendToCanvasTip")}</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("common.delete")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
+                          <DirTrashIcon style={{ width: 14, height: 14 }} />
+                        </Button>
+                      </TooltipTrigger><TooltipContent>{t("common.delete")}</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.enlargePreview")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
+                          <DirExpandIcon style={{ width: 14, height: 14 }} />
+                        </Button>
+                      </TooltipTrigger><TooltipContent>{t("director.enlargePreview")}</TooltipContent></Tooltip>
+                  </div>
                 </div>
-              </div>
-            </AppTooltip>
+              </TooltipTrigger><TooltipContent>{shot.name}</TooltipContent></Tooltip>
           ))}
         </div>
       )}
@@ -234,7 +261,16 @@ function CameraShots({ cameraId }: { cameraId: string }) {
       {previewUrl && (
         <div className="dir-modal-overlay" onClick={() => setPreviewUrl("")}>
           <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
-            <button className="dir-modal-close" onClick={() => setPreviewUrl("")}>×</button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("common.close")}
+              className="absolute -top-3.5 -right-3.5 rounded-full border border-border bg-muted text-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => setPreviewUrl("")}
+            >
+              <CloseOutlined />
+            </Button>
             <img src={previewUrl} className="dir-modal-img" alt={t("director.preview")} />
           </div>
         </div>
@@ -274,9 +310,9 @@ export default function Inspector() {
     setPrevColorKey(colorKey);
     setEntityColor(colorKey);
   }
-  if (!entity || !runtime) return <div className="px-4 py-3 text-white/30 text-sm">{t("director.noEntity")}</div>;
+  if (!entity || !runtime) return <div className="px-4 py-3 text-sm text-muted-foreground">{t("director.noEntity")}</div>;
   const ent = runtime._getEntity(entity.id) || null;
-  if (!ent) return <div className="px-4 py-3 text-white/30 text-sm">{t("director.loading")}</div>;
+  if (!ent) return <div className="px-4 py-3 text-sm text-muted-foreground">{t("director.loading")}</div>;
 
   const isCharacter = ent.type === "character", isCamera = ent.type === "camera", isCrowd = ent.type === "crowd";
   const typeLabel = isCharacter ? t("director.type.character") : isCamera ? t("director.type.camera") : isCrowd ? t("director.type.crowd") : t("director.type.prop");
@@ -285,108 +321,140 @@ export default function Inspector() {
 
   return (
     <div className="flex flex-col h-full text-sm">
-      <div className="dir-rp-pad">
+      <div className="px-4 pb-0 pt-[18px]">
         <div className="flex items-center justify-between mb-1">
-          <div><span className="text-[10px] text-white/35">{typeLabel}</span><h3 className="text-sm font-medium text-white/80 truncate">{entity.name}</h3></div>
-          <AppTooltip title={t("common.delete")}><AppButton variant="ghost" size="sm" iconOnly style={{ color: "var(--dir-dim)" }} onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-txt)"} onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "var(--dir-dim)"} onClick={() => runtime.remove(entity.id)} ><DeleteOutlined /></AppButton></AppTooltip>
+          <div><span className="text-[10px] text-muted-foreground">{typeLabel}</span><h3 className="truncate text-sm font-medium text-foreground">{entity.name}</h3></div>
+          <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={t("common.delete")} className="text-muted-foreground" onClick={() => runtime.remove(entity.id)} ><DeleteOutlined /></Button></TooltipTrigger><TooltipContent>{t("common.delete")}</TooltipContent></Tooltip>
         </div>
       </div>
-      <div className="dir-ptabs">
-        {tabItems.map((t) => (
-          <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
-            className={`dir-ptab ${activeTab === t.key ? "on" : ""}`}>{t.label}</button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col gap-0">
+        <TabsList variant="line" className="w-full shrink-0 justify-start gap-6 rounded-none border-b border-border px-4">
+          {tabItems.map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key} className="flex-none rounded-none px-0 py-3">
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {activeTab === "attr" && !isCamera && (isCrowd ? (
+      <TabsContent value="attr" className="min-h-0 flex-1">
+      {!isCamera && (isCrowd ? (
         <div className="flex-1 overflow-auto px-4 pb-3">
-          <div className="dir-multi-note">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>
-          <button className="dir-minibtn" onClick={() => runtime.ungroupCrowd(entity.id)}>⊟ {t("director.ungroupDetail")}</button>
-          <div className="dir-field">
-            <label className="dir-label">{t("common.name")}</label>
-            <div className="dir-namefld">
-              <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
+          <div className="mb-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mb-3 w-full justify-center gap-1.5"
+            onClick={() => runtime.ungroupCrowd(entity.id)}
+          >
+            <UngroupIcon className="size-4" />
+            {t("director.ungroupDetail")}
+          </Button>
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("common.name")}</label>
+            <div className="rounded-md bg-muted px-3">
+            <Input className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
           <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
           <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
           <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
-          <div className="dir-field">
-            <label className="dir-label">{t("director.uniformScale")}</label>
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
-              <AppSlider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
-                value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
-                formatTooltip={(v) => (v as number).toFixed(1)}
-                onChange={(v) => { const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s, s, s); bumpInspector(); }} />
-              <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
+              <Slider min={0.2} max={3} step={0.01} className="flex-1"
+                value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
+                title={(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}
+                onValueChange={([next]) => { const s = (entBaseScale || 1) * next; ent.root.scale.set(s, s, s); bumpInspector(); }} />
+              <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
-          <div className="dir-field">
-            <label className="dir-label">{t("director.color")}</label>
-            <AppColorPicker size="small" value={entityColor}
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.color")}</label>
+            <ColorPicker size="sm" value={entityColor}
               onChange={(hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
-          <div className="flex items-center justify-between text-xs dir-dim">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{t("director.visible")}</span>
-            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
+            <Button variant="ghost" size="icon-xs" aria-label={t("director.visible")} onClick={() => runtime.toggleVisible(entity.id)}>
               {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
-            </span>
+            </Button>
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-auto px-4 pb-3">
-          <div className="dir-field">
-            <label className="dir-label">{t("common.name")}</label>
-            <div className="dir-namefld">
-              <AppInput variant="borderless" size="small" className="dir-nameinp" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("common.name")}</label>
+            <div className="rounded-md bg-muted px-3">
+              <Input className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
           <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
           <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
           <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
-          <div className="dir-field">
-            <label className="dir-label">{t("director.uniformScale")}</label>
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
-              <AppSlider min={0.2} max={3} step={0.01} style={{ flex: 1, margin: 0 }}
-                value={entBaseScale ? ent.root.scale.y / entBaseScale : 1}
-                formatTooltip={(v) => (v as number).toFixed(1)}
-                onChange={(v) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * (v as number); ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
-              <div className="dir-valbox">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
+              <Slider min={0.2} max={3} step={0.01} className="flex-1"
+                value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
+                title={(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}
+                onValueChange={([next]) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * next; ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
+              <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
-          <div className="dir-field">
-            <label className="dir-label">{t("director.color")}</label>
-            <AppColorPicker size="small" value={entityColor}
+          <div className="mb-4">
+            <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.color")}</label>
+            <ColorPicker size="sm" value={entityColor}
               onChange={(hex) => { runtime.setEntityColor(entity.id, hex); setEntityColor(hex); }} />
           </div>
-          <div className="flex items-center justify-between text-xs dir-dim">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{t("director.visible")}</span>
-            <span className="dir-eye" onClick={() => runtime.toggleVisible(entity.id)}>
+            <Button variant="ghost" size="icon-xs" aria-label={t("director.visible")} onClick={() => runtime.toggleVisible(entity.id)}>
               {entity.visible ? <DirEyeIcon style={{ width: 16, height: 16 }} /> : <DirEyeOffIcon style={{ width: 16, height: 16 }} />}
-            </span>
+            </Button>
           </div>
         </div>
       ))}
 
-      {activeTab === "attr" && isCamera && (
+      {isCamera && (
         <div className="flex-1 overflow-auto px-4 pb-3">
           <CameraAttr entity={entity} ent={ent as CameraEntity} entities={entities} runtime={runtime} />
           <CameraShots cameraId={entity.id} />
         </div>
       )}
+      </TabsContent>
 
-      {activeTab === "pose" && (isCharacter || isCrowd) && (
+      <TabsContent value="pose" className="min-h-0 flex-1">
+      {(isCharacter || isCrowd) && (
         <div className="flex-1 overflow-auto px-4 pb-3">
-          {isCrowd && <div className="dir-multi-note mb-3">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>}
-          <div className="dir-sec-title">{t("director.posePresets")}</div>
-          <div className="dir-pose-grid">
+          {isCrowd && <div className="mb-3 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">{t("director.multiSelectNote", { count: (ent as Crowd).members?.length || 0 })}</div>}
+          <div className="mb-3.5 mt-1 text-sm font-semibold">{t("director.posePresets")}</div>
+          <div className="mb-1 grid grid-cols-4 gap-2">
             {POSE_PRESETS.map((p) => (
-              <button key={p.key} className={`dir-posebtn ${posePresetKey === p.key ? "on" : ""}`}
-                onClick={() => { isCrowd ? runtime._broadcastPosePreset(entity.id, p.key) : runtime.applyPosePreset(entity.id, p.key); setPosePresetKey(p.key); poseSyncRef.current?.(); }}>{t(`director.${p.label}`)}</button>
+              <Button
+                key={p.key}
+                type="button"
+                size="sm"
+                variant={posePresetKey === p.key ? "secondary" : "outline"}
+                aria-pressed={posePresetKey === p.key}
+                className="h-auto min-h-8 w-full justify-center px-1.5 py-1.5 text-[13px]"
+                onClick={() => { isCrowd ? runtime._broadcastPosePreset(entity.id, p.key) : runtime.applyPosePreset(entity.id, p.key); setPosePresetKey(p.key); poseSyncRef.current?.(); }}
+              >
+                {t(`director.${p.label}`)}
+              </Button>
             ))}
           </div>
-          <button className="dir-minibtn" onClick={() => { isCrowd ? runtime._broadcastResetPose(entity.id) : (ent instanceof Character ? ent.resetPose() : undefined); setPosePresetKey(null); poseSyncRef.current?.(); }}>⟲ {t("director.resetPose")}</button>
-          <div className="dir-sec-title">{t("director.poseAdjust")}</div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mb-3 w-full justify-center gap-1.5"
+            onClick={() => { isCrowd ? runtime._broadcastResetPose(entity.id) : (ent instanceof Character ? ent.resetPose() : undefined); setPosePresetKey(null); poseSyncRef.current?.(); }}
+          >
+            <RotateRightOutlined className="size-4" />
+            {t("director.resetPose")}
+          </Button>
+          <div className="mb-3.5 mt-1 text-sm font-semibold">{t("director.poseAdjust")}</div>
           {isCrowd ? (
             <PoseSliders characterId={entity.id} values={(ent as Crowd).members?.[0]?.values || {}} syncRef={poseSyncRef}
               onChange={(key, v) => { setPosePresetKey(null); (ent as Crowd).members?.forEach((m: DirectorEntityMeta) => runtime.setJointValue(m.id, key, v)); }} />
@@ -396,6 +464,8 @@ export default function Inspector() {
           )}
         </div>
       )}
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }

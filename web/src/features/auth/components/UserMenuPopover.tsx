@@ -12,12 +12,22 @@
 
 "use client";
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppDropdown from "@/components/ui/AppDropdown";
-import type { AppMenuItem } from "@/components/ui/AppMenu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/features/auth/UserContext";
+
+type UserMenuItem =
+  | { type: "divider"; key?: string }
+  | { type?: never; key: string; label?: ReactNode; extra?: ReactNode };
 
 export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: {
   open: boolean;
@@ -26,7 +36,7 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
   /** 弹出方位：画布工具栏（左上角）用 bottomLeft，项目页头像（右上角）用 bottomRight */
   placement?: "bottomLeft" | "bottomRight";
   /** 中段业务条目：画布=项目主页/新建/删除，项目页=账户设置/语言切换 */
-  items: AppMenuItem[];
+  items: UserMenuItem[];
   /** 中段条目点击（按 key 分发；退出登录走 onLogout，不经此处） */
   onItemClick: (key: string) => void;
   /** 退出登录动作：页面自持（确认框 / 直接登出 + 跳转目标） */
@@ -35,51 +45,44 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
   const { t } = useTranslation();
   const user = useCurrentUser();
 
-  const menuItems: AppMenuItem[] = [
-    {
-      key: "user",
-      type: "group",
-      label: (
-        <div className="flex items-center gap-2 py-1" style={{ color: "var(--canvas-text)" }}>
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-            style={{ background: user?.avatarUrl ? "transparent" : "var(--canvas-accent)", color: "var(--canvas-app-bg)" }}
-          >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              (user?.username || t("auth.defaultUser"))[0].toUpperCase()
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">
-              {user?.username || t("auth.defaultUser")}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    { type: "divider" },
-    ...items,
-    { type: "divider" },
-    { key: "logout", label: t("auth.logout") },
-  ];
-
   return (
-    <AppDropdown
+    <DropdownMenu
       open={open}
       onOpenChange={onOpenChange}
-      trigger={["click"]}
-      placement={placement}
-      menu={{
-        items: menuItems,
-        onClick: ({ key }) => {
-          if (key === "logout") onLogout();
-          else onItemClick(key);
-        },
-      }}
     >
-      {trigger}
-    </AppDropdown>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align={placement === "bottomLeft" ? "start" : "end"}>
+        <DropdownMenuLabel>
+          <div className="flex items-center gap-2 py-1" style={{ color: "var(--foreground)" }}>
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
+              style={{ background: user?.avatarUrl ? "transparent" : "var(--primary)", color: "var(--background)" }}
+            >
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                (user?.username || t("auth.defaultUser"))[0].toUpperCase()
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate">
+                {user?.username || t("auth.defaultUser")}
+              </div>
+            </div>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {items.map((item, index) => item.type === "divider" ? (
+          <DropdownMenuSeparator key={item.key ?? `divider-${index}`} />
+        ) : (
+          <DropdownMenuItem key={item.key} onSelect={() => onItemClick(item.key)}>
+            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            {item.extra && <span className="ml-auto shrink-0">{item.extra}</span>}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onLogout}>{t("auth.logout")}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
