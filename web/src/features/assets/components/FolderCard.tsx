@@ -1,15 +1,14 @@
 /**
  * 资产网格中的文件夹卡片。
  * 展示文件夹名与资产数量，点击进入、悬停显示重命名 / 删除按钮，纯展示组件。
- * 操作按钮复用统一图标按钮类 .app-icon-btn（hover 与按下同色），不另立样式。
  */
 
 "use client";
 
-import { DeleteOutlined, EditOutlined, FolderOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
+import { DeleteOutlined, EditOutlined, FolderOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import type { AssetFolder } from "@/features/assets/types";
 
 interface Props {
@@ -31,34 +30,31 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
   return (
     <div
       onClick={() => onClick(folder)}
-      className="relative group rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-2"
-      style={{ background: "var(--canvas-bg-elevated)", aspectRatio: "1" }}
+      className="group relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-border bg-popover transition-colors hover:border-ring"
     >
       {(onDelete || onRename) && (
-        <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-1 right-1 z-10 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {onRename && (
-            <AppButton
+            <Button
               variant="ghost"
-              size="sm"
-              className="app-icon-btn"
-              iconOnly
+              size="icon-sm"
+              aria-label={t("asset.folder.rename")}
               onClick={stop(onRename)}
-            ><EditOutlined /></AppButton>
+            ><EditOutlined aria-hidden="true" /></Button>
           )}
           {onDelete && (
-            <AppButton
+            <Button
               variant="ghost"
-              size="sm"
-              className="app-icon-btn"
-              iconOnly
+              size="icon-sm"
+              aria-label={t("asset.folder.delete")}
               onClick={stop(onDelete)}
-            ><DeleteOutlined /></AppButton>
+            ><DeleteOutlined aria-hidden="true" /></Button>
           )}
         </div>
       )}
-      <FolderOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
-      <div className="text-white/70 text-xs px-2 text-center truncate w-full">{folder.name}</div>
-      <div className="text-white/25 text-[10px]">{count ?? 0} {t("asset.count")}</div>
+      <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />
+      <div className="w-full truncate px-2 text-center text-xs text-muted-foreground">{folder.name}</div>
+      <div className="text-[10px] text-muted-foreground/60">{count ?? 0} {t("asset.count")}</div>
     </div>
   );
 }

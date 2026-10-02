@@ -6,20 +6,16 @@
 
 "use client";
 
-import { LoadingOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppSpinner from "@/components/ui/AppSpinner";
-import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import { AssetsIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type { AssetFolder,AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";
-
-/** 加载动画统一使用品牌青柠（见 globals.css：青柠用于链接 / 加载动画 / 徽标 / 选中描边）。 */
-const limeIndicator = <LoadingOutlined style={{ color: "var(--canvas-accent)" }} spin />;
 
 interface Props {
   assets: AssetItem[];
@@ -86,7 +82,7 @@ export default function AssetGrid({
   if (loading && !hasContent) {
     return (
       <div className="flex items-center justify-center h-full min-h-[200px]">
-        <AppSpinner indicator={limeIndicator} />
+        <Spinner className="size-6 text-primary" />
       </div>
     );
   }
@@ -95,22 +91,22 @@ export default function AssetGrid({
     if (loadError && onRetry) {
       return (
         <div className="flex items-center justify-center h-full min-h-[200px]">
-          <AppButton variant="ghost" size="sm" onClick={onRetry}>
+          <Button variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}
-          </AppButton>
+          </Button>
         </div>
       );
     }
     return (
-      // 自绘空态：中性图标容器，替代 antd Empty 默认插画（与暗色画布主题不搭）
+      // 自绘空态：中性图标容器，与暗色画布主题保持一致
       <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-3 select-none">
         <div
           className="flex items-center justify-center w-16 h-16 rounded-2xl"
-          style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+          style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
         >
-          <AssetsIcon style={{ fontSize: 26, color: "var(--canvas-text-dim)" }} />
+          <AssetsIcon style={{ fontSize: 26, color: "var(--muted-foreground)" }} />
         </div>
-        <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("asset.empty")}</div>
+        <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("asset.empty")}</div>
       </div>
     );
   }
@@ -121,7 +117,7 @@ export default function AssetGrid({
           弹窗与抽屉两个滚动容器复用，避免各自实现浮层。 */}
       {loading && hasContent && (
         <div className="grid-loading-overlay">
-          <AppSpinner indicator={limeIndicator} />
+          <Spinner className="size-6 text-primary" />
         </div>
       )}
       <div
@@ -159,11 +155,11 @@ export default function AssetGrid({
       </div>
       {/* Sentinel + loading indicator */}
       <div ref={sentinelRef} className="flex items-center justify-center py-3">
-        {loadingMore && <AppSpinner size="small" indicator={limeIndicator} />}
+        {loadingMore && <Spinner className="size-4 text-primary" />}
         {loadError && !loadingMore && onRetry && (
-          <AppButton variant="ghost" size="sm" onClick={onRetry}>
+          <Button variant="ghost" size="sm" onClick={onRetry}>
             {t("asset.retry")}
-          </AppButton>
+          </Button>
         )}
       </div>
     </div>

@@ -7,19 +7,18 @@
 
 "use client";
 
-import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppInput from "@/components/ui/AppInput";
-import AppModal from "@/components/ui/AppModal";
-import AppSelect from "@/components/ui/AppSelect";
-import AppTooltip from "@/components/ui/AppTooltip";
-import AppTreeSelect from "@/components/ui/AppTreeSelect";
+import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@/components/ui/AppIcon";
+import { AssetsIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import DialogActions from "@/components/ui/DialogActions";
-import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TreeSelect } from "@/components/ui/tree-select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
@@ -42,7 +41,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function AssetsModal({ open, onClose }: Props) {
+export default function AssetsDialog({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const folders = useAssetsStore((s) => s.folders);
@@ -80,6 +79,7 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   // Delete folder confirm state
   const [deleteFolder, setDeleteFolder] = useState<AssetFolder | null>(null);
+  const [folderDeleting, setFolderDeleting] = useState(false);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -431,11 +431,14 @@ export default function AssetsModal({ open, onClose }: Props) {
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
 
   const handleDeleteFolderConfirm = useCallback(async () => {
-    if (!deleteFolder) return;
+    if (!deleteFolder || folderDeleting) return;
     const deletedId = deleteFolder.id;
+    setFolderDeleting(true);
     const removed = await removeFolder(deletedId);
+    setFolderDeleting(false);
+    if (!removed) return;
     // 只有删除成功才把用户切回根目录；失败原因由 store 统一通知
-    if (removed && activeFolderId) {
+    if (activeFolderId) {
       let cur: string | null = activeFolderId;
       let within = false;
       while (cur) {
@@ -446,7 +449,7 @@ export default function AssetsModal({ open, onClose }: Props) {
     }
     clearSelection();
     setDeleteFolder(null);
-  }, [deleteFolder, removeFolder, activeFolderId, folders, clearSelection]);
+  }, [deleteFolder, folderDeleting, removeFolder, activeFolderId, folders, clearSelection]);
 
   // Breadcrumb data
   const breadCrumb = useMemo((): AssetFolder[] => {
@@ -464,30 +467,17 @@ export default function AssetsModal({ open, onClose }: Props) {
 
   return (
     <>
-      <AppModal
-        title={
-          <div className="flex items-center gap-2">
-            <AssetsIcon style={{ color: "var(--canvas-text-dim)", fontSize: 18 }} />
-            <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.title")}</span>
-          </div>
-        }
-        open={open}
-        onCancel={onClose}
-        footer={null}
-        width="94vw"
-        centered
-        destroyOnHidden
-        flush
-        className="asset-library-modal select-none"
-        styles={{
-          // 内边距节奏已由 theme.ts Modal token 统一（contentPadding 0），三栏贴边即默认；
-          // header 差异（16px 底边距 + 分隔横线）经 styles.header 内联声明
-          container: { background: "var(--canvas-bg)" },
-          header: { background: "var(--canvas-bg)", padding: "16px 56px 16px 24px", borderBottom: "1px solid var(--canvas-border)" },
-          body: { background: "var(--canvas-bg)", padding: 0, maxHeight: "calc(100vh - 100px)", overflow: "hidden" },
-        }}
-        style={{ maxWidth: 1600 }}
-      >
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+        <DialogContent
+          className="asset-library-modal select-none sm:max-w-none w-[94vw] max-w-[1600px] gap-0 p-0 bg-card"
+        >
+          <DialogHeader className="border-b px-6 py-6">
+            <DialogTitle className="flex items-center gap-2">
+              <AssetsIcon className="text-muted-foreground" />
+              <span>{t("asset.title")}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-hidden bg-card" style={{ maxHeight: "calc(100vh - 100px)" }}>
         <style>{`
         `}</style>
         <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
@@ -498,35 +488,39 @@ export default function AssetsModal({ open, onClose }: Props) {
               <div className="flex items-center gap-1 flex-1 min-w-0">
                 {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
                 {activeFolderId === null ? (
-                  <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                  <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--foreground)" }}>
                     {t("asset.spacePersonal")}
                   </span>
                 ) : (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
                     onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(null); }}
-                    className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                    style={{ color: "var(--canvas-text-dim)" }}
+                    className="whitespace-nowrap text-sm text-muted-foreground hover:text-foreground"
                   >
                     {t("asset.spacePersonal")}
-                  </button>
+                  </Button>
                 )}
                 {breadCrumb.map((f) => {
                   const isLast = f.id === activeFolderId;
                   return (
                     <span key={f.id} className="flex items-center gap-1">
-                      <span style={{ color: "var(--canvas-text-dim)" }}>/</span>
+                      <span style={{ color: "var(--muted-foreground)" }}>/</span>
                       {isLast ? (
-                        <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--canvas-text)" }}>
+                        <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--foreground)" }}>
                           {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
                         </span>
                       ) : (
-                        <button
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
                           onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(f.id); }}
-                          className="text-sm px-2 py-0.5 rounded transition-colors hover:bg-white/5 whitespace-nowrap cursor-pointer"
-                          style={{ color: "var(--canvas-text-dim)" }}
+                          className="whitespace-nowrap text-sm text-muted-foreground hover:text-foreground"
                         >
                           {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-                        </button>
+                        </Button>
                       )}
                     </span>
                   );
@@ -535,21 +529,18 @@ export default function AssetsModal({ open, onClose }: Props) {
 
               {/* 单选时工具条行显示「已选 1 项」chip；多选由批量条承接，避免两处重复 */}
               {selectedIds.size === 1 && (
-                <AppTooltip title={t("asset.clearSelection")}>
-                  <button
-                    type="button"
-                    onClick={clearSelection}
-                    className="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
-                    style={{
-                      background: "var(--canvas-bg-hover)",
-                      border: "1px solid var(--canvas-border-light)",
-                      color: "var(--canvas-text)",
-                    }}
-                  >
-                    {t("asset.selectedN", { count: selectedIds.size })}
-                    <CloseOutlined style={{ fontSize: 10, color: "var(--canvas-text-muted)" }} />
-                  </button>
-                </AppTooltip>
+                <Tooltip><TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      onClick={clearSelection}
+                      variant="secondary"
+                      size="sm"
+                      className="shrink-0"
+                    >
+                      {t("asset.selectedN", { count: selectedIds.size })}
+                      <CloseOutlined className="size-3 text-muted-foreground" />
+                    </Button>
+                  </TooltipTrigger><TooltipContent>{t("asset.clearSelection")}</TooltipContent></Tooltip>
               )}
 
               <AssetToolbar
@@ -568,68 +559,72 @@ export default function AssetsModal({ open, onClose }: Props) {
             {/* 多选批量操作条：常驻挂载，外层 grid 行高动画折叠，出现/消失平滑推移网格 */}
             <div className={`bulk-bar-collapse${bulkOpen ? " bulk-bar-collapse--open" : ""}`}>
               <div inert={bulkOpen ? undefined : true}>
-                <div className="bulk-bar">
+                <div className="mx-3 mb-3 flex h-11 items-center gap-0.5 rounded-[10px] border border-input bg-popover px-2.5 pl-3">
                   {/* 计数即全选开关：白框对勾=已全选当前列表，横杠=部分选中，点击在两者间切换 */}
-                  <button
+                  <Button
                     type="button"
-                    className="bulk-select-btn"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1.5 px-2"
                     onClick={handleSelectAll}
                     aria-pressed={allSelected}
                   >
-                    <span className="bulk-check">
+                    <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-white bg-white text-[#1d1d21]">
                       {allSelected
-                        ? <CheckOutlined style={{ fontSize: 11, fontWeight: 700 }} />
-                        : <MinusOutlined style={{ fontSize: 10, fontWeight: 700 }} />}
+                        ? <CheckOutlined className="size-3 font-bold" />
+                        : <MinusOutlined className="size-3 font-bold" />}
                     </span>
-                    <span className="bulk-select-label">{t("asset.selectedN", { count: selectedIds.size })}</span>
-                  </button>
-                  <AppTooltip title={t("asset.clearSelection")}>
-                    <AppButton
-                      size="sm"
-                      iconOnly
-                      variant="ghost"
-                      aria-label={t("asset.clearSelection")}
-                      onClick={clearSelection}
-                    >
-                      <CloseOutlined style={{ fontSize: 11 }} />
-                    </AppButton>
-                  </AppTooltip>
+                    <span className="whitespace-nowrap text-[13px] font-medium text-foreground">{t("asset.selectedN", { count: selectedIds.size })}</span>
+                  </Button>
+                  <Tooltip><TooltipTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={t("asset.clearSelection")}
+                        onClick={clearSelection}
+                      >
+                        <CloseOutlined className="size-3" />
+                      </Button>
+                    </TooltipTrigger><TooltipContent>{t("asset.clearSelection")}</TooltipContent></Tooltip>
                   <div className="flex-1" />
-                  <button
+                  <Button
                     type="button"
-                    className="bulk-btn bulk-btn--primary"
+                    size="sm"
+                    variant="default"
                     disabled={selectedAssets.length === 0}
                     onClick={() => handleBatchInsert(selectedAssets)}
                   >
-                    <PlusOutlined />
+                    <PlusOutlined className="size-3.5" />
                     {t("asset.addToCanvas")}（{selectedAssets.length}）
-                  </button>
-                  <button type="button" className="bulk-btn" onClick={openBatchMove}>
-                    <FolderOutlined />
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={openBatchMove}>
+                    <FolderOutlined className="size-3.5" />
                     {t("asset.moveTo")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="bulk-btn"
+                    size="sm"
+                    variant="ghost"
                     onClick={() => { setBatchTypeValue(undefined); setBatchTypeOpen(true); }}
                   >
-                    <SwapOutlined />
+                    <SwapOutlined className="size-3.5" />
                     {t("asset.changeType")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="bulk-btn"
+                    size="sm"
+                    variant="ghost"
                     disabled={selectedAssets.length === 0}
                     onClick={() => selectedAssets.forEach(downloadAsset)}
                   >
-                    <DownloadOutlined />
+                    <DownloadOutlined className="size-3.5" />
                     {t("common.download")}（{selectedAssets.length}）
-                  </button>
-                  <span className="bulk-bar-sep" />
-                  <button type="button" className="bulk-btn bulk-btn--danger" onClick={handleBatchDelete}>
-                    <DeleteOutlined />
+                  </Button>
+                  <span className="mx-1.5 h-[18px] w-px bg-input" aria-hidden="true" />
+                  <Button type="button" size="sm" variant="destructive" onClick={handleBatchDelete}>
+                    <DeleteOutlined className="size-3.5" />
                     {t("common.delete")}（{selectedIds.size}）
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -665,7 +660,7 @@ export default function AssetsModal({ open, onClose }: Props) {
           {/* 右侧检查器：常驻展示；未选中时为空态提示，选中后为单项详情或批量操作区 */}
           <div
             className="shrink-0 overflow-hidden"
-            style={{ width: 360, borderLeft: "1px solid var(--canvas-border)" }}
+            style={{ width: 360, borderLeft: "1px solid var(--border)" }}
           >
             <AssetInspector
               assets={selectedAssets}
@@ -680,139 +675,146 @@ export default function AssetsModal({ open, onClose }: Props) {
             />
           </div>
         </div>
+          </div>
 
         {/* Rename folder modal */}
-        <AppModal
-          title={t("asset.folder.rename")}
-          open={!!renamingFolder}
-          onCancel={() => { if (!folderRenameSaving) { setRenamingFolder(null); setFolderRenameValue(""); setFolderRenameError(""); } }}
-          centered
-          global
-          flush
-          className="app-dialog"
-          destroyOnHidden
-          width={400}
-          footer={
-            <DialogActions onCancel={() => setRenamingFolder(null)} cancelDisabled={folderRenameSaving}>
-              <AppButton variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</AppButton>
-            </DialogActions>
-          }
-        >
-          <AppInput
-            value={folderRenameValue}
-            onChange={(e) => { setFolderRenameValue(e.target.value.slice(0, 50)); setFolderRenameError(""); }}
-            onPressEnter={handleRenameFolderConfirm}
-            maxLength={50}
-            showCount
-            status={folderRenameError ? "error" : undefined}
-          />
-          {folderRenameError && (
-            <div className="app-dialog-error">{folderRenameError}</div>
-          )}
-        </AppModal>
+        <Dialog open={!!renamingFolder} onOpenChange={(nextOpen) => {
+          if (!nextOpen && !folderRenameSaving) { setRenamingFolder(null); setFolderRenameValue(""); setFolderRenameError(""); }
+        }}>
+          <DialogContent global className="sm:max-w-[400px]">
+            <DialogHeader><DialogTitle>{t("asset.folder.rename")}</DialogTitle></DialogHeader>
+            <div className="space-y-2">
+          <InputGroup>
+            <InputGroupInput
+              value={folderRenameValue}
+              onChange={(e) => { setFolderRenameValue(e.target.value.slice(0, 50)); setFolderRenameError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleRenameFolderConfirm(); }}
+              maxLength={50}
+              aria-invalid={folderRenameError ? true : undefined}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupText>{folderRenameValue.length} / 50</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+              {folderRenameError && <p className="text-sm text-destructive">{folderRenameError}</p>}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" disabled={folderRenameSaving}>{t("common.cancel")}</Button>
+              </DialogClose>
+              <Button variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-        {/* Single delete confirm */}
         <ConfirmModal
-          global
           open={!!deleteAsset}
+          global
           title={t("asset.delete")}
-          content={deleteAsset?.name || ""}
+          content={t("asset.deleteConfirm", { name: deleteAsset?.name || "" })}
+          okText={t("common.delete")}
+          cancelText={t("common.cancel")}
+          confirmVariant="destructive"
           confirmLoading={deleting}
           onOk={handleSingleDeleteConfirm}
           onCancel={() => { if (!deleting) setDeleteAsset(null); }}
         />
 
-        {/* Batch delete confirm —— 取消只关弹窗，保留勾选便于改主意 */}
         <ConfirmModal
-          global
           open={batchDeleteOpen}
+          global
           title={t("asset.delete")}
           content={t("asset.batchDeleteWarn", { count: selectedIds.size })}
+          okText={t("common.delete")}
+          cancelText={t("common.cancel")}
+          confirmVariant="destructive"
           confirmLoading={deleting}
           onOk={handleBatchDeleteConfirm}
           onCancel={() => { if (!deleting) setBatchDeleteOpen(false); }}
         />
 
-        {/* Delete folder confirm */}
         <ConfirmModal
-          global
           open={!!deleteFolder}
+          global
           title={t("asset.folder.delete")}
-          content={`${deleteFolder?.name || ""} — ${t("asset.folder.deleteWarn")}`}
+          content={t("asset.folder.deleteWarn", { name: deleteFolder?.name || "" })}
+          okText={t("common.delete")}
+          cancelText={t("common.cancel")}
+          confirmVariant="destructive"
+          confirmLoading={folderDeleting}
           onOk={handleDeleteFolderConfirm}
-          onCancel={() => { setDeleteFolder(null); setSelectedIds(new Set()); }}
+          onCancel={() => {
+            if (folderDeleting) return;
+            setDeleteFolder(null);
+            setSelectedIds(new Set());
+          }}
         />
 
-        {/* Batch move modal —— app-dialog + 可搜索折叠树，目录规模增长后仍可定位目标 */}
-        <AppModal
-          title={t("asset.moveTo")}
-          open={batchMoveOpen}
-          onCancel={() => { if (!batchMoving) setBatchMoveOpen(false); }}
-          centered
-          global
-          flush
-          className="app-dialog"
-          destroyOnHidden
-          width={400}
-          footer={
-            <DialogActions onCancel={() => setBatchMoveOpen(false)} cancelDisabled={batchMoving}>
-              <AppButton
-                variant="primary"
+        {/* Batch move modal —— 可搜索折叠树，目录规模增长后仍可定位目标 */}
+        <Dialog open={batchMoveOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !batchMoving) setBatchMoveOpen(false); }}>
+          <DialogContent global className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>{t("asset.moveTo")}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <TreeSelect
+                className="folder-tree-select"
+                value={batchMoveTarget}
+                onChange={(v) => setBatchMoveTarget(v)}
+                style={{ width: "100%" }}
+                placeholder={t("asset.folderPickerPlaceholder")}
+                searchPlaceholder={t("asset.folderSearchPlaceholder")}
+                allowClear
+                searchable
+                emptyContent={t("common.noData")}
+                onSearch={onMoveTreeSearch}
+                expandAll
+                popupHeight={280}
+                nodes={moveTreeData}
+              />
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" disabled={batchMoving}>{t("common.cancel")}</Button>
+              </DialogClose>
+              <Button
                 loading={batchMoving}
                 disabled={!batchMoveTarget}
                 onClick={() => batchMoveTarget && handleBatchMove(batchMoveTarget)}
               >
                 {t("common.confirm")}
-              </AppButton>
-            </DialogActions>
-          }
-        >
-          <AppTreeSelect
-            className="folder-tree-select"
-            value={batchMoveTarget}
-            onChange={(v) => setBatchMoveTarget(v)}
-            style={{ width: "100%" }}
-            placeholder={t("asset.folderPickerPlaceholder")}
-            allowClear
-            searchable
-            emptyContent={t("common.noData")}
-            onSearch={onMoveTreeSearch}
-            expandAll
-            popupHeight={280}
-            nodes={moveTreeData}
-          />
-        </AppModal>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Batch type modal */}
-        <AppModal
-          title={t("asset.changeType")}
-          open={batchTypeOpen}
-          onCancel={() => { if (!batchTypeSaving) setBatchTypeOpen(false); }}
-          centered
-          global
-          flush
-          className="app-dialog"
-          destroyOnHidden
-          width={400}
-          footer={
-            <DialogActions onCancel={() => setBatchTypeOpen(false)} cancelDisabled={batchTypeSaving}>
-              <AppTooltip title={!batchTypeValue ? t("asset.typeTip") : ""}>
-                <span>
-                  <AppButton variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</AppButton>
-                </span>
-              </AppTooltip>
-            </DialogActions>
-          }
-        >
-          <AppSelect
-            value={batchTypeValue}
-            onChange={(v) => setBatchTypeValue(v)}
-            style={{ width: "100%" }}
-            placeholder={t("asset.typePlaceholder")}
-            allowClear
-            options={ASSET_CATEGORIES.filter((c): c is typeof c & { key: AssetType } => c.key !== "all").map((cat) => ({ value: cat.key, label: t(cat.labelKey) }))}
-          />
-        </AppModal>
+        <Dialog open={batchTypeOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !batchTypeSaving) setBatchTypeOpen(false); }}>
+          <DialogContent global className="sm:max-w-[400px]">
+            <DialogHeader><DialogTitle>{t("asset.changeType")}</DialogTitle></DialogHeader>
+          <Select
+            value={batchTypeValue ?? undefined}
+            onValueChange={(value) => setBatchTypeValue(value === "__clear__" ? undefined : value as AssetType)}
+          >
+            <SelectTrigger className="w-full"><SelectValue placeholder={t("asset.typePlaceholder")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__clear__">{t("asset.typePlaceholder")}</SelectItem>
+              {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all")
+                .map((category) => <SelectItem key={category.key} value={category.key}>{t(category.labelKey)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" disabled={batchTypeSaving}>{t("common.cancel")}</Button>
+              </DialogClose>
+              <Tooltip><TooltipTrigger asChild>
+                  <span>
+                    <Button variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</Button>
+                  </span>
+                </TooltipTrigger><TooltipContent>{!batchTypeValue ? t("asset.typeTip") : ""}</TooltipContent></Tooltip>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Upload dialog */}
         <AssetCreateDialog
@@ -829,7 +831,8 @@ export default function AssetsModal({ open, onClose }: Props) {
           onClose={() => setFolderCreateOpen(false)}
           onCreate={handleCreateFolder}
         />
-      </AppModal>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -7,6 +7,9 @@
 
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   CheckOutlined,
   CloseOutlined,
@@ -17,13 +20,12 @@ import {
   PlusOutlined,
   SelectOutlined,
   VideoCameraOutlined,
-} from "@ant-design/icons";
-import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppTooltip from "@/components/ui/AppTooltip";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+} from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
@@ -60,22 +62,6 @@ const MAX_TAGS = 6;
 
 /** 提示词最大长度，与服务端 assetCreateSchema 的上限保持一致。 */
 const MAX_PROMPT_LENGTH = 10000;
-
-/**
- * 标题与重命名输入框的共享盒模型与字体度量。
- * 两种状态是不同元素，必须逐属性一致（尤其 input 默认不继承字体/行高），
- * 切换时文字基线才不会上下跳；头部容器另以固定高度兜底。
- */
-const renameBoxStyle = {
-  height: 26,
-  padding: "2px 8px",
-  fontSize: 14,
-  fontWeight: 600,
-  lineHeight: "20px",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-  color: "var(--canvas-text)",
-} as const;
 
 function formatDateTime(ts: number) {
   const d = new Date(ts);
@@ -127,8 +113,8 @@ function Preview({ asset }: { asset: AssetItem }) {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2 text-xs">
-      <span style={{ color: "var(--canvas-text-muted)" }}>{label}</span>
-      <span className="text-right truncate" style={{ color: "var(--canvas-text)" }}>{value}</span>
+      <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
+      <span className="text-right truncate" style={{ color: "var(--foreground)" }}>{value}</span>
     </div>
   );
 }
@@ -189,7 +175,7 @@ function TagEditor({
 
   return (
     <div className="mt-3">
-      <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{label}</div>
+      <div className="text-xs mb-1.5" style={{ color: "var(--muted-foreground)" }}>{label}</div>
       <div
         className="flex flex-wrap items-center gap-1.5"
         style={busy ? { opacity: 0.6, pointerEvents: "none" } : undefined}
@@ -200,27 +186,26 @@ function TagEditor({
             className="inline-flex items-center gap-1 rounded text-xs"
             style={{
               padding: "1px 2px 1px 8px",
-              background: "var(--canvas-bg-hover)",
-              border: "1px solid var(--canvas-border)",
-              color: "var(--canvas-text-dim)",
+              background: "var(--accent)",
+              border: "1px solid var(--border)",
+              color: "var(--muted-foreground)",
             }}
           >
             <span className="max-w-[150px] truncate">{tag}</span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("common.delete")}
               onClick={() => remove(tag)}
-              className="flex items-center justify-center w-4 h-4 rounded transition-colors cursor-pointer"
-              style={{ color: "var(--canvas-text-muted)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
             >
-              <CloseOutlined style={{ fontSize: 9 }} />
-            </button>
+              <CloseOutlined className="size-3" />
+            </Button>
           </span>
         ))}
-        {busy && <LoadingOutlined style={{ fontSize: 12, color: "var(--canvas-accent)" }} />}
+        {busy && <LoadingOutlined style={{ fontSize: 12, color: "var(--primary)" }} />}
         {adding ? (
-          <input
+          <Input
             ref={inputRef}
             value={value}
             placeholder={placeholder}
@@ -231,51 +216,33 @@ function TagEditor({
               if (e.key === "Escape") cancel();
             }}
             onBlur={cancel}
-            className="inspector-edit-input text-xs rounded"
-            style={{
-              width: 100,
-              padding: "2px 8px",
-              background: "var(--canvas-bg-elevated)",
-              color: "var(--canvas-text)",
-            }}
+            className="h-7 w-[100px] bg-popover text-xs"
           />
         ) : asset.tags.length >= MAX_TAGS ? (
-          <AppTooltip title={t("asset.tagLimit", { max: MAX_TAGS })}>
-            <span
-              className="inline-flex items-center gap-1 rounded text-xs cursor-not-allowed"
-              style={{
-                padding: "1px 8px",
-                border: "1px dashed var(--canvas-border)",
-                color: "var(--canvas-text-muted)",
-                opacity: 0.4,
-              }}
-            >
-              <PlusOutlined style={{ fontSize: 9 }} />
-              {addLabel}
-            </span>
-          </AppTooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <span
+                className="inline-flex items-center gap-1 rounded text-xs cursor-not-allowed"
+                style={{
+                  padding: "1px 8px",
+                  border: "1px dashed var(--border)",
+                  color: "var(--muted-foreground)",
+                  opacity: 0.4,
+                }}
+              >
+                <PlusOutlined style={{ fontSize: 9 }} />
+                {addLabel}
+              </span>
+            </TooltipTrigger><TooltipContent>{t("asset.tagLimit", { max: MAX_TAGS })}</TooltipContent></Tooltip>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="xs"
             onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-1 rounded text-xs transition-colors cursor-pointer"
-            style={{
-              padding: "1px 8px",
-              border: "1px dashed var(--canvas-border)",
-              color: "var(--canvas-text-muted)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--canvas-text-muted)";
-              e.currentTarget.style.color = "var(--canvas-text)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--canvas-border)";
-              e.currentTarget.style.color = "var(--canvas-text-muted)";
-            }}
           >
-            <PlusOutlined style={{ fontSize: 9 }} />
+            <PlusOutlined className="size-3" />
             {addLabel}
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -340,63 +307,62 @@ function PromptEditor({
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs" style={{ color: "var(--canvas-text-muted)" }}>{label}</span>
+        <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{label}</span>
         <div className="flex items-center gap-3">
           {editing ? (
             <>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t("common.save")}
                 onClick={save}
                 disabled={busy}
-                className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                style={{ color: "var(--canvas-accent)" }}
               >
-                {busy ? <LoadingOutlined style={{ fontSize: 11 }} /> : <CheckOutlined style={{ fontSize: 12 }} />}
-              </button>
-              <button
+                {busy ? <LoadingOutlined className="size-3" /> : <CheckOutlined className="size-3" />}
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t("common.cancel")}
                 onClick={cancel}
                 disabled={busy}
-                className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                style={{ color: "var(--canvas-text-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
               >
-                <CloseOutlined style={{ fontSize: 11 }} />
-              </button>
+                <CloseOutlined className="size-3" />
+              </Button>
             </>
           ) : (
             <>
-              <AppTooltip title={copied ? t("common.copied") : t("common.copy")}>
-                <button
-                  type="button"
-                  onClick={copy}
-                  disabled={!asset.prompt}
-                  className="inline-flex items-center text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-                  style={{ color: copied ? "var(--canvas-accent)" : "var(--canvas-text-muted)" }}
-                  onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text)"; }}
-                  onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-                >
-                  {copied ? <CheckOutlined style={{ fontSize: 11 }} /> : <CopyOutlined style={{ fontSize: 11 }} />}
-                </button>
-              </AppTooltip>
-              <button
-                type="button"
-                onClick={startEdit}
-                className="inline-flex items-center gap-1 text-xs transition-colors cursor-pointer"
-                style={{ color: "var(--canvas-text-muted)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--canvas-text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
-              >
-                <EditOutlined style={{ fontSize: 10 }} />
-                {editLabel}
-              </button>
+              <Tooltip><TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={copied ? t("common.copied") : t("common.copy")}
+                    onClick={copy}
+                    disabled={!asset.prompt}
+                  >
+                    {copied ? <CheckOutlined className="size-3" /> : <CopyOutlined className="size-3" />}
+                  </Button>
+                </TooltipTrigger><TooltipContent>{copied ? t("common.copied") : t("common.copy")}</TooltipContent></Tooltip>
+              <Tooltip><TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={editLabel}
+                    onClick={startEdit}
+                  >
+                    <EditOutlined className="size-3" />
+                  </Button>
+                </TooltipTrigger><TooltipContent>{editLabel}</TooltipContent></Tooltip>
             </>
           )}
         </div>
       </div>
       {editing ? (
-        <textarea
+        <Textarea
           autoFocus
           value={value}
           maxLength={MAX_PROMPT_LENGTH}
@@ -408,13 +374,7 @@ function PromptEditor({
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void save();
           }}
           rows={6}
-          className="inspector-edit-input w-full text-xs rounded resize-y"
-          style={{
-            padding: "8px 10px",
-            background: "var(--canvas-bg-elevated)",
-            color: "var(--canvas-text)",
-            lineHeight: 1.6,
-          }}
+          className="min-h-32 w-full resize-y bg-popover text-xs leading-[1.6]"
         />
       ) : (
         <div
@@ -423,9 +383,9 @@ function PromptEditor({
             maxHeight: 120,
             overflowY: "auto",
             padding: "6px 8px",
-            background: "var(--canvas-bg-hover)",
-            border: "1px solid var(--canvas-border)",
-            color: asset.prompt ? "var(--canvas-text-dim)" : "var(--canvas-text-muted)",
+            background: "var(--accent)",
+            border: "1px solid var(--border)",
+            color: asset.prompt ? "var(--muted-foreground)" : "var(--muted-foreground)",
             lineHeight: 1.5,
             minHeight: 30,
           }}
@@ -500,7 +460,7 @@ export default function AssetInspector({
       {single && (
       <div className="flex items-center gap-2 px-3 pt-3 pb-3 shrink-0" style={{ height: 50 }}>
         {renaming ? (
-          <input
+          <Input
             autoFocus
             value={nameValue}
             maxLength={100}
@@ -513,7 +473,7 @@ export default function AssetInspector({
                 void submitRename();
               }
               if (e.key === "Escape") {
-                // antd Modal 既可能经 React onKeyDown 冒泡、也可能在 document 原生层监听 Esc
+                // 弹窗既可能经 React onKeyDown 冒泡、也可能在 document 原生层监听 Esc
                 e.stopPropagation();
                 e.preventDefault();
                 e.nativeEvent.stopImmediatePropagation();
@@ -529,14 +489,12 @@ export default function AssetInspector({
               }
               void submitRename();
             }}
-            className="inspector-edit-input flex-1 min-w-0 rounded"
-            style={{ ...renameBoxStyle, background: "var(--canvas-bg-elevated)" }}
+            className="h-7 min-w-0 flex-1 bg-popover px-2 text-sm font-semibold"
             aria-label={t("asset.rename")}
           />
         ) : (
           <div
-            className="flex-1 min-w-0 flex items-center rounded"
-            style={{ ...renameBoxStyle, border: "1px solid transparent" }}
+            className="flex h-7 min-w-0 flex-1 items-center border border-transparent px-2 text-sm font-semibold"
           >
             <span className="truncate" style={{ userSelect: "none" }}>
               {single.name}
@@ -544,16 +502,16 @@ export default function AssetInspector({
           </div>
         )}
         {!renaming && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t("asset.rename")}
             onClick={startRename}
-            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
-            style={{ color: "var(--canvas-text-muted)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--canvas-bg-hover)"; e.currentTarget.style.color = "var(--canvas-text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--canvas-text-muted)"; }}
+            className="shrink-0"
           >
-            <EditOutlined style={{ fontSize: 13 }} />
-          </button>
+            <EditOutlined className="size-3" />
+          </Button>
         )}
       </div>
       )}
@@ -564,19 +522,19 @@ export default function AssetInspector({
           <div className="h-full flex flex-col items-center justify-center gap-3 pb-10 select-none">
             <div
               className="flex items-center justify-center w-16 h-16 rounded-2xl"
-              style={{ background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+              style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
             >
-              <SelectOutlined style={{ fontSize: 26, color: "var(--canvas-text-dim)" }} />
+              <SelectOutlined style={{ fontSize: 26, color: "var(--muted-foreground)" }} />
             </div>
-            <div className="text-[13px]" style={{ color: "var(--canvas-text-dim)" }}>{t("asset.noDetail")}</div>
-            <div className="text-xs text-center px-2" style={{ color: "var(--canvas-text-muted)" }}>
+            <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("asset.noDetail")}</div>
+            <div className="text-xs text-center px-2" style={{ color: "var(--muted-foreground)" }}>
               {t("asset.noDetailHint", { mod: MOD_KEY })}
             </div>
           </div>
         ) : single ? (
           <>
             <Preview key={`preview-${single.id}`} asset={single} />
-            <div className="mt-2" style={{ borderTop: "1px solid var(--canvas-border)" }}>
+            <div className="mt-2" style={{ borderTop: "1px solid var(--border)" }}>
               <MetaRow label={t("asset.typeLabel")} value={typeKey ? t(typeKey) : single.type} />
               {(single.mediaType === "image" || single.mediaType === "video") && single.width > 0 && single.height > 0 && (
                 <MetaRow label={t("asset.dimensionsLabel")} value={`${single.width} × ${single.height}`} />
@@ -617,17 +575,17 @@ export default function AssetInspector({
       {single && (
         <div className="shrink-0 px-3 pt-1 pb-4">
           <div className="flex flex-col gap-2">
-            <AppButton variant="primary" block onClick={() => onInsert(single)}>
+            <Button variant="primary" block onClick={() => onInsert(single)}>
               {t("asset.addToCanvas")}
-            </AppButton>
+            </Button>
             <div className="flex gap-2">
-              <AppButton block onClick={() => downloadAsset(single)}>{t("common.download")}</AppButton>
-              <AppButton block onClick={onBatchMove}>{t("asset.moveTo")}</AppButton>
-              <AppButton block onClick={onBatchType}>{t("asset.changeType")}</AppButton>
+              <Button block onClick={() => downloadAsset(single)}>{t("common.download")}</Button>
+              <Button block onClick={onBatchMove}>{t("asset.moveTo")}</Button>
+              <Button block onClick={onBatchType}>{t("asset.changeType")}</Button>
             </div>
-            <AppButton variant="danger" block onClick={() => onSingleDelete(single)}>
+            <Button variant="destructive" block onClick={() => onSingleDelete(single)}>
               {t("common.delete")}
-            </AppButton>
+            </Button>
           </div>
         </div>
       )}

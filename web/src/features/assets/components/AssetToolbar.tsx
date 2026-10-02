@@ -5,23 +5,23 @@
 
 "use client";
 
+import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   FolderAddOutlined,
   PlusOutlined,
   SearchOutlined,
   UploadOutlined,
-} from "@ant-design/icons";
-import { useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-
-import AppButton from "@/components/ui/AppButton";
-import AppCheckbox from "@/components/ui/AppCheckbox";
-import AppDropdown from "@/components/ui/AppDropdown";
-import AppInput, { type AppInputHandle } from "@/components/ui/AppInput";
-import AppPopover from "@/components/ui/AppPopover";
-import AppTooltip from "@/components/ui/AppTooltip";
-import FilterIcon from "@/components/ui/icons/common/FilterIcon";
-import ManageIcon from "@/components/ui/icons/common/ManageIcon";
+} from "@/components/ui/AppIcon";
+import { FilterIcon } from "@/components/ui/AppIcon";
+import { ManageIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { InputGroup, InputGroupClearButton, InputGroupInput } from "@/components/ui/input-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AssetType } from "@/features/assets/types";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
@@ -50,7 +50,7 @@ export default function AssetToolbar({
 
   // 搜索默认收起为一颗图标，点击后输入框向左展开；失焦且内容为空时自动收回。
   const [searchOpen, setSearchOpen] = useState(false);
-  const inputRef = useRef<AppInputHandle>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const searchExpanded = searchOpen || search.trim() !== "";
 
   const toggleSearch = () => {
@@ -65,38 +65,42 @@ export default function AssetToolbar({
   };
 
   const filterContent = (
-    <div className="panel-popover asset-filter-popover">
-      <div style={{ padding: "2px 12px 4px", fontSize: 12, color: "var(--canvas-text-muted)" }}>
+    <div className="flex min-w-52 flex-col gap-0.5">
+      <div className="px-3 py-1 text-xs text-muted-foreground">
         {t("asset.filter")}
       </div>
       {ASSET_CATEGORIES.filter(
         (category): category is typeof category & { key: AssetType } => category.key !== "all",
       ).map((cat) => (
-        <label key={cat.key} className="filter-row">
-          <AppCheckbox
+        <label
+          key={cat.key}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent"
+        >
+          <Checkbox
             checked={categories.includes(cat.key)}
-            onChange={(checked) => {
+            onCheckedChange={(checked) => {
               onCategoriesChange(
                 checked
                   ? [...categories, cat.key]
                   : categories.filter((k) => k !== cat.key),
               );
             }}
-          >
-            {t(cat.labelKey)}
-          </AppCheckbox>
+          />
+          {t(cat.labelKey)}
         </label>
       ))}
       {categories.length > 0 && (
         <>
-          <div className="panel-divider" />
-          <div
-            className="filter-row"
+          <div className="my-1 h-px bg-border" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start px-3 text-sm text-muted-foreground hover:text-accent-foreground"
             onClick={() => onCategoriesChange([])}
-            style={{ color: "var(--canvas-text-dim)", fontSize: 13 }}
           >
             {t("asset.filterClear")}
-          </div>
+          </Button>
         </>
       )}
     </div>
@@ -105,97 +109,94 @@ export default function AssetToolbar({
   return (
     <div className="flex items-center gap-2 shrink-0">
       {/* 搜索：收起态仅图标，展开态图标固定在右端、输入框向左生长 */}
-      <div className="relative shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH, height: ICON_WIDTH }}>
+      <div className="relative h-9 shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH }}>
         {searchExpanded && (
-          <AppInput
-            ref={inputRef}
-            placeholder={t("asset.search")}
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onBlur={() => { if (!search.trim()) setSearchOpen(false); }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") { onSearchChange(""); setSearchOpen(false); }
-            }}
-            allowClear
-            className="asset-search-input w-full"
-            style={{
-              height: ICON_WIDTH,
-              paddingRight: 64,
-              background: "var(--canvas-bg-elevated)",
-              borderColor: "var(--canvas-border)",
-              color: "var(--canvas-text)",
-            }}
-          />
-        )}
-        <AppTooltip title={t("asset.search")}>
-          <button
-            type="button"
-            // 阻止按下时输入框失焦：否则空内容会先自动收回、click 又展开，宽度抖一下
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={toggleSearch}
-            className="app-icon-btn app-icon-btn--md absolute top-0 right-0 z-10"
-            aria-label={t("asset.search")}
-            style={{ color: "#fff", fontSize: 18 }}
+          <InputGroup
+            className="w-full bg-popover text-foreground"
           >
-            <SearchOutlined />
-          </button>
-        </AppTooltip>
+            <InputGroupInput
+              ref={inputRef}
+              placeholder={t("asset.search")}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onBlur={() => { if (!search.trim()) setSearchOpen(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { onSearchChange(""); setSearchOpen(false); }
+              }}
+              className="h-full pr-16"
+            />
+            {search && <InputGroupClearButton onClear={() => onSearchChange("")} />}
+          </InputGroup>
+        )}
+        <Tooltip><TooltipTrigger asChild>
+            <Button
+              type="button"
+              // 阻止按下时输入框失焦：否则空内容会先自动收回、click 又展开，宽度抖一下
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={toggleSearch}
+              variant="ghost"
+              size="icon"
+              className="absolute top-0 right-0 z-10"
+              aria-label={t("asset.search")}
+            >
+              <SearchOutlined />
+            </Button>
+          </TooltipTrigger><TooltipContent>{t("asset.search")}</TooltipContent></Tooltip>
       </div>
 
       {/* 管理 / 多选模式：开启后卡片勾选框常驻、单击卡片直接增减选择（≥2 项弹出批量操作条） */}
-      <AppTooltip title={multiSelect ? t("asset.exitManage") : t("asset.manage")}>
-        <button
-          type="button"
-          className={`app-icon-btn app-icon-btn--md${multiSelect ? " is-active" : ""}`}
-          aria-label={t("asset.manage")}
-          aria-pressed={multiSelect}
-          onClick={onToggleMultiSelect}
-          style={{ color: "#fff" }}
-        >
-          <ManageIcon style={{ fontSize: 18 }} />
-        </button>
-      </AppTooltip>
+      <Tooltip><TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="aria-pressed:bg-accent aria-pressed:text-foreground"
+            aria-label={t("asset.manage")}
+            aria-pressed={multiSelect}
+            onClick={onToggleMultiSelect}
+          >
+            <ManageIcon />
+          </Button>
+        </TooltipTrigger><TooltipContent>{multiSelect ? t("asset.exitManage") : t("asset.manage")}</TooltipContent></Tooltip>
 
       {/* 筛选：多选分类，选中任一分类后按钮常驻高亮 */}
-      <AppPopover
-        trigger="click"
-        placement="bottomRight"
-        contentStyle={{ padding: 0, background: "transparent" }}
-        content={filterContent}
-      >
-        <AppTooltip title={t("asset.filter")}>
-          <button
-            type="button"
-            className={`app-icon-btn app-icon-btn--md${categories.length > 0 ? " is-active" : ""}`}
-            aria-label={t("asset.filter")}
-            style={{ color: "#fff", fontSize: 18 }}
-          >
-            <FilterIcon />
-          </button>
-        </AppTooltip>
-      </AppPopover>
+      <Popover>
+        <Tooltip><TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-pressed={categories.length > 0}
+                className={categories.length > 0 ? "bg-muted text-foreground" : undefined}
+              >
+                <FilterIcon />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger><TooltipContent>{t("asset.filter")}</TooltipContent></Tooltip>
+        <PopoverContent align="end" className="w-auto p-2">
+          {filterContent}
+        </PopoverContent>
+      </Popover>
 
-      {/* 新建菜单悬停触发，禁用项由 UI 出口处理。 */}
-      <AppDropdown
-        trigger={["hover"]}
-        placement="bottomRight"
-        closeDelay={0.15}
-        menu={{
-          items: [
-            { key: "createFolder", icon: <FolderAddOutlined />, label: t("asset.createFolder"), disabled: !canCreateFolder },
-            { key: "upload", icon: <UploadOutlined />, label: t("asset.uploadTitle") },
-          ],
-          onClick: ({ key }) => {
-            if (key === "createFolder") onCreateFolder?.();
-            else if (key === "upload") onUpload?.();
-          },
-        }}
-      >
-        <AppButton variant="primary">
-          <PlusOutlined />
-          {t("asset.create")}
-        </AppButton>
-      </AppDropdown>
+      {/* 新建菜单由 DropdownMenu 点击触发，禁用项由 UI 出口处理。 */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="default">
+            <PlusOutlined />
+            {t("asset.create")}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end">
+          <DropdownMenuItem disabled={!canCreateFolder} onSelect={onCreateFolder}>
+            <FolderAddOutlined />
+            {t("asset.createFolder")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onUpload}>
+            <UploadOutlined />
+            {t("asset.uploadTitle")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

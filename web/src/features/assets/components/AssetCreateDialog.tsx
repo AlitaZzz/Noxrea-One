@@ -6,18 +6,18 @@
 
 "use client";
 
-import { CloseOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppModal from "@/components/ui/AppModal";
-import AppProgress from "@/components/ui/AppProgress";
-import AppSelect from "@/components/ui/AppSelect";
-import AppTreeSelect from "@/components/ui/AppTreeSelect";
-import DialogActions from "@/components/ui/DialogActions";
-import { AssetsIcon } from "@/components/ui/icons/canvas/AssetsIcon";
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { CloseOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
+import { AssetsIcon } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { CircularProgress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TreeSelect } from "@/components/ui/tree-select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
@@ -327,54 +327,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
   const folderTreeData = useFolderTree(folders, renderFolderTitle);
 
   return (
-    <AppModal
-      title={
-        <div className="flex items-center gap-2">
-          <AssetsIcon style={{ color: "var(--canvas-text-dim)", fontSize: 18 }} />
-          <span style={{ color: "var(--canvas-text)", fontSize: 16, fontWeight: 600 }}>{t("asset.uploadTitle")}</span>
-        </div>
-      }
-      open={open}
-      onCancel={() => { reset(); onClose(); }}
-      centered
-      global
-      flush
-      className="ui-select-none"
-      styles={{ header: { padding: "16px 56px 16px 24px", borderBottom: "1px solid var(--canvas-border)" } }}
-      destroyOnHidden
-      width={920}
-      footer={
-        <div className="flex items-center justify-between gap-4">
-          {/* 左：格式/体积说明，类型图标行内直出（体积超限要等上传完才报错，唯一需提前告知的约束）；
-              具体扩展名由文件选择器 accept 白名单拦截、拖入不支持类型卡片标红，无需罗列 */}
-          {limits ? (
-            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-white/40 cursor-default">
-              <span>{t("asset.formatPrefix")}</span>
-              {([
-                { icon: <PictureOutlined />, label: t("asset.formatGroupImage") },
-                { icon: <VideoCameraOutlined />, label: t("asset.formatGroupVideo") },
-                { icon: <WaveIcon />, label: t("asset.formatGroupAudio") },
-              ]).map((g, i) => (
-                <span key={g.label} className="flex items-center gap-1">
-                  {i > 0 && <span>/</span>}
-                  <span style={{ color: "var(--canvas-text-muted)", fontSize: 13 }}>{g.icon}</span>
-                  {g.label}
-                </span>
-              ))}
-              <span>· {t("asset.formatSize", { limit: limits.maxSizeMb })}</span>
-            </span>
-          ) : (
-            <span />
-          )}
-          {/* 右：操作按钮 */}
-          <DialogActions onCancel={() => { reset(); onClose(); }}>
-            <AppButton variant="primary" loading={saving} disabled={saveDisabled} onClick={handleSave}>
-              {t("common.save")}
-            </AppButton>
-          </DialogActions>
-        </div>
-      }
-    >
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) { reset(); onClose(); } }}>
+      <DialogContent global className="ui-select-none sm:max-w-none w-[min(920px,calc(100vw-2rem))] gap-0 p-0">
+        <DialogHeader className="border-b px-6 py-6">
+          <DialogTitle className="flex items-center gap-2">
+            <AssetsIcon className="text-muted-foreground" />
+            <span>{t("asset.uploadTitle")}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="p-6">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -393,23 +354,23 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 min-h-0 flex">
             {/* 外层托盘只管边框圆角（overflow hidden 防止滚动内容顶穿圆角），内层滚动 */}
-            <div className="upload-grid flex flex-1 min-h-0">
+            <div className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-border p-3">
               <div className="flex flex-wrap content-start flex-1 overflow-y-auto" style={{ gap: 12 }}>
                 {/* Drop zone — always first card */}
                 <div
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
-                  className="upload-drop-zone dashed-add-zone shrink-0"
+                  className="flex size-[130px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-accent transition-colors hover:border-muted-foreground hover:bg-secondary"
                 >
-                  <PlusOutlined style={{ fontSize: 28, color: "var(--canvas-text-muted)" }} />
+                  <PlusOutlined style={{ fontSize: 28, color: "var(--muted-foreground)" }} />
                 </div>
 
                 {/* Uploaded files */}
                 {files.map((f) => {
                   const kind = kindOfBlob(f.file, f.file.name);
                   return (
-                  <div key={f.id} className="upload-file-card group shrink-0">
+                  <div key={f.id} className="group relative size-[130px] shrink-0 overflow-hidden rounded-md border border-border/50 bg-popover">
                     {kind === "image" ? (
                       <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
                     ) : kind === "video" ? (
@@ -435,8 +396,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     {f.status === "uploading" && (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                         {/* 字节发完仍在等服务端落盘，保持进度显示。 */}
-                        <AppProgress
-                          shape="circle"
+                        <CircularProgress
                           value={f.uploadProgress}
                           size={48}
                           color="#fff"
@@ -453,12 +413,16 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     )}
 
                     {f.status === "done" && (
-                      <button
-                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/70 text-white/80 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer hover:bg-white hover:text-[var(--canvas-bg)]"
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon-xs"
+                        aria-label={t("common.delete")}
+                        className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
                       >
-                        <CloseOutlined style={{ fontSize: 10 }} />
-                      </button>
+                        <CloseOutlined className="size-3" />
+                      </Button>
                     )}
 
                     <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 bg-gradient-to-t from-black/80 to-transparent">
@@ -476,14 +440,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
         <div className="flex flex-col w-64 shrink-0 pt-4 pl-4 gap-5">
           {/* Save location — 必选：不默认落位，由用户显式选择（个人资产库 = 根目录） */}
           <div>
-            <label className="block text-xs text-white/40 mb-2">
+            <Label className="mb-2 block text-xs text-muted-foreground">
               {t("asset.saveLocation")} <span className="text-red-400">*</span>
-            </label>
-            <AppTreeSelect
+            </Label>
+          <TreeSelect
               className="folder-tree-select"
               value={saveFolderId}
               onChange={(v) => setSaveFolderId(v ?? null)}
               placeholder={t("asset.saveLocationPlaceholder")}
+              searchPlaceholder={t("asset.folderSearchPlaceholder")}
               style={{ width: "100%" }}
               allowClear
               searchable
@@ -497,16 +462,49 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
 
           {/* Category */}
           <div>
-            <label className="block text-xs text-white/40 mb-2">{t("asset.type")}</label>
-            <AppSelect
-              value={category}
-              onChange={(v) => setCategory(v)}
-              options={ASSET_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
-              style={{ width: "100%" }}
-            />
+            <Label className="mb-2 block text-xs text-muted-foreground">{t("asset.type")}</Label>
+            <Select value={category} onValueChange={(value) => setCategory(value as AssetType)}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ASSET_TYPE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{t(option.labelKey)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-      </div>
-    </AppModal>
+        </div>
+        </div>
+        <DialogFooter
+          className="border-t px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          {limits ? (
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+              <span>{t("asset.formatPrefix")}</span>
+              {([
+                { icon: <PictureOutlined />, label: t("asset.formatGroupImage") },
+                { icon: <VideoCameraOutlined />, label: t("asset.formatGroupVideo") },
+                { icon: <WaveIcon />, label: t("asset.formatGroupAudio") },
+              ]).map((g, i) => (
+                <span key={g.label} className="flex items-center gap-1">
+                  {i > 0 && <span>/</span>}
+                  <span className="text-muted-foreground">{g.icon}</span>
+                  {g.label}
+                </span>
+              ))}
+              <span>· {t("asset.formatSize", { limit: limits.maxSizeMb })}</span>
+            </span>
+          ) : <span />}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <DialogClose asChild>
+              <Button variant="outline">
+                {t("common.cancel")}
+              </Button>
+            </DialogClose>
+            <Button loading={saving} disabled={saveDisabled} onClick={handleSave}>
+              {t("common.save")}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

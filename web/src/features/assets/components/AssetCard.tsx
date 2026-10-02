@@ -7,12 +7,14 @@
  */
 "use client";
 
-import { CheckOutlined, PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@ant-design/icons";
-import { PauseCircleFilled, PlayCircleFilled } from "@ant-design/icons";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { WaveIcon } from "@/components/ui/icons/media/WaveIcon";
+import { PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
+import { PauseCircleFilled, PlayCircleFilled } from "@/components/ui/AppIcon";
+import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
 
@@ -163,7 +165,7 @@ export default function AssetCard({
       {/* 封面区 */}
       <div
         className={`relative w-full rounded-lg overflow-hidden border transition-colors ${selected ? "" : "border-white/10 group-hover:border-white/30"}`}
-        style={{ aspectRatio: "1", background: "var(--canvas-bg-elevated)", borderColor: selected ? "#fff" : undefined, borderWidth: selected ? 2 : 1 }}
+        style={{ aspectRatio: "1", background: "var(--popover)", borderColor: selected ? "#fff" : undefined, borderWidth: selected ? 2 : 1 }}
       >
         {isVideo ? (
           <div className="w-full h-full relative bg-black/40">
@@ -194,33 +196,34 @@ export default function AssetCard({
 
         {/* 多选勾选框：未选中仅悬停显示，选中后常驻白色实底（与全局中性 Checkbox 一致） */}
         {selectable && onToggleSelect && (
-          <button
-            type="button"
+          <Checkbox
+            checked={Boolean(selected)}
             aria-label={asset.name}
-            onClick={(e) => { e.stopPropagation(); onToggleSelect(asset); }}
-            className={`absolute top-1.5 right-1.5 z-10 flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border cursor-pointer transition-all ${
+            onClick={(e) => e.stopPropagation()}
+            onCheckedChange={() => onToggleSelect(asset)}
+            className={`absolute top-1.5 right-1.5 z-10 size-[18px] rounded-[5px] transition-all ${
               selected
-                ? "opacity-100 bg-white border-white"
+                ? "opacity-100 border-white bg-white text-[var(--card)]"
                 : selectMode
-                  ? "opacity-100 bg-black/45 border-white/60 hover:border-white"
-                  : "opacity-0 group-hover:opacity-100 bg-black/45 border-white/60 hover:border-white"
+                  ? "opacity-100 border-white/60 bg-black/45 text-white hover:border-white"
+                  : "opacity-0 border-white/60 bg-black/45 text-white group-hover:opacity-100 hover:border-white"
             }`}
-          >
-            {selected && <CheckOutlined style={{ fontSize: 11, color: "var(--canvas-bg)", fontWeight: 700 }} />}
-          </button>
+          />
         )}
 
         {/* 悬停蒙层 + 快速插入：仅插入为第一意图的抽屉场景显示；拖拽期间隐藏，避免与拖拽图像叠加 */}
         {showInsertButton && !dragging && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
-            <button
+            <Button
               type="button"
+              size="icon-lg"
+              variant="secondary"
               aria-label={t("asset.addToCanvas")}
-              className="app-overlay-btn app-overlay-btn--light app-overlay-btn--md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              className="pointer-events-auto opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
             >
-              <PlusOutlined />
-            </button>
+              <PlusOutlined className="size-5" />
+            </Button>
           </div>
         )}
 
@@ -232,19 +235,22 @@ export default function AssetCard({
       {/* 封面下方信息 */}
       <div className="px-1 pt-1.5 pb-1">
         <div className="flex items-center gap-1">
-          <div className="text-xs truncate font-medium flex-1 min-w-0" style={{ color: "var(--canvas-text)" }}>{asset.name}</div>
+          <div className="text-xs truncate font-medium flex-1 min-w-0" style={{ color: "var(--foreground)" }}>{asset.name}</div>
           {isAudio && (
-            <button
+            <Button
               type="button"
-              className="shrink-0 leading-none"
-              style={{ color: "var(--canvas-text-muted)" }}
+              variant="ghost"
+              size="icon-xs"
+              aria-label={playing ? t("common.stop") : t("common.play")}
+              title={playing ? t("common.stop") : t("common.play")}
+              className="shrink-0"
               onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
             >
               {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-            </button>
+            </Button>
           )}
         </div>
-        <div className="text-[10px] mt-0.5" style={{ color: "var(--canvas-text-muted)" }}>{formatDate(asset.createdAt)}</div>
+        <div className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>{formatDate(asset.createdAt)}</div>
       </div>
 
       {/* 音频拖拽图像：仅作为 setDragImage 快照源，固定在视口外不影响布局 */}
@@ -253,7 +259,7 @@ export default function AssetCard({
           ref={audioGhostRef}
           aria-hidden
           className="fixed flex items-center justify-center rounded-lg"
-          style={{ top: -200, left: -200, width: 56, height: 56, background: "var(--canvas-bg-elevated)", border: "1px solid var(--canvas-border)" }}
+          style={{ top: -200, left: -200, width: 56, height: 56, background: "var(--popover)", border: "1px solid var(--border)" }}
         >
           <WaveIcon style={{ fontSize: 28, color: "rgb(var(--on-media-rgb) / 0.3)" }} />
         </div>

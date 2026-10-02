@@ -90,6 +90,7 @@
   },
   "canvas": {
     "sidebar": "画布",
+    "sidebarDescription": "浏览画布中的元素和资产。",
     "openSidebar": "打开侧边栏",
     "closeSidebar": "收起侧边栏",
     "panel": "面板",
@@ -196,6 +197,7 @@
   "modelConfig": {
     "title": "模型配置",
     "apiSettings": "API 设置",
+    "apiSettingsDescription": "管理供应商、API 密钥和可用模型。",
     "providers": "供应商",
     "addProvider": "添加供应商",
     "providerUpdated": "供应商已更新",
@@ -310,9 +312,11 @@
     "uncategorized": "待分类资产",
     "create": "新建",
     "batchDelete": "批量删除",
-    "batchDeleteWarn": "确定删除选中的 {{count}} 项资产吗？删除后不可恢复。",
+    "deleteConfirm": "删除「{{name}}」后将永久删除该资产，且不可恢复。确定要删除吗？",
+    "batchDeleteWarn": "删除选中的 {{count}} 项资产将永久删除这些资产，且不可恢复。确定要删除吗？",
     "moveTo": "移动到",
     "folderPickerPlaceholder": "选择目标文件夹",
+    "folderSearchPlaceholder": "搜索文件夹...",
     "changeType": "修改类型",
     "empty": "暂无资产",
     "send": "发送到画布",
@@ -362,6 +366,7 @@
     "editPrompt": "编辑",
     "promptEmpty": "暂无提示词",
     "promptPlaceholder": "输入生成该素材所用的提示词",
+    "folderName": "文件夹名称",
     "folderNamePlaceholder": "输入文件夹名称",
     "folderDuplicate": "同级已存在同名文件夹",
     "count": "项",
@@ -384,7 +389,7 @@
     "folder": {
       "delete": "删除文件夹",
       "rename": "重命名文件夹",
-      "deleteWarn": "此操作将永久删除该文件夹及其所有子文件夹与资产，且不可恢复。"
+      "deleteWarn": "删除「{{name}}」将同时删除其所有子文件夹与资产，且不可恢复。确定要删除吗？"
     },
     "added": "已添加到画布",
     "addedCount": "已添加 {{count}} 项到画布"
@@ -588,6 +593,7 @@
   },
   "agent": {
     "title": "Agent",
+    "drawerDescription": "与 Agent 对话并管理历史会话。",
     "createSessionFailed": "创建会话失败",
     "loadHistoryFailed": "加载历史失败",
     "loadSessionsFailed": "加载历史列表失败",

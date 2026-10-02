@@ -8,10 +8,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppInput from "@/components/ui/AppInput";
-import AppModal from "@/components/ui/AppModal";
-import DialogActions from "@/components/ui/DialogActions";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldGroup } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   open: boolean;
@@ -43,33 +44,38 @@ export default function CreateFolderDialog({ open, onClose, onCreate }: Props) {
   };
 
   return (
-    <AppModal
-      title={t("asset.createFolder")}
-      open={open}
-      onCancel={() => { setName(""); setError(""); onClose(); }}
-      width={400}
-      global
-      flush
-      className="app-dialog"
-      destroyOnHidden
-      footer={
-        <DialogActions onCancel={() => { setName(""); onClose(); }}>
-          <AppButton variant="primary" onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</AppButton>
-        </DialogActions>
-      }
-    >
-      <AppInput
-        value={name}
-        onChange={(e) => { setName(e.target.value.slice(0, 20)); setError(""); }}
-        onPressEnter={handleCreate}
-        placeholder={t("asset.folderNamePlaceholder")}
-        maxLength={20}
-        showCount
-        status={error ? "error" : undefined}
-      />
-      {error && (
-        <div className="app-dialog-error">{error}</div>
-      )}
-    </AppModal>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen) { setName(""); setError(""); onClose(); }
+    }}>
+      <DialogContent global className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>{t("asset.createFolder")}</DialogTitle>
+        </DialogHeader>
+        <FieldGroup>
+          <Field>
+            <Label htmlFor="asset-folder-name">{t("asset.folderName")}</Label>
+            <Input
+              id="asset-folder-name"
+              value={name}
+              onChange={(e) => { setName(e.target.value.slice(0, 20)); setError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}
+              placeholder={t("asset.folderNamePlaceholder")}
+              maxLength={20}
+              aria-invalid={error ? true : undefined}
+            />
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              {error ? <p className="text-destructive">{error}</p> : <span />}
+              <span>{name.length} / 20</span>
+            </div>
+          </Field>
+        </FieldGroup>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" disabled={saving}>{t("common.cancel")}</Button>
+          </DialogClose>
+          <Button onClick={handleCreate} disabled={!name.trim() || saving}>{t("common.save")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

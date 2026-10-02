@@ -133,7 +133,7 @@ export function AssetHoverPreview({
         borderRadius: 12,
         overflow: "hidden",
         background: "#000",
-        border: "1px solid var(--canvas-border)",
+        border: "1px solid var(--border)",
         boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
         opacity: box ? 1 : 0,
         transition: "opacity 120ms ease-out",

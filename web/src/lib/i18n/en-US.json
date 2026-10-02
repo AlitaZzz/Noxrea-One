@@ -88,6 +88,7 @@
   },
   "canvas": {
     "sidebar": "Canvas",
+    "sidebarDescription": "Browse the elements and assets on this canvas.",
     "openSidebar": "Open Sidebar",
     "closeSidebar": "Close Sidebar",
     "panel": "Panel",
@@ -194,6 +195,7 @@
   "modelConfig": {
     "title": "Model Configuration",
     "apiSettings": "API Settings",
+    "apiSettingsDescription": "Manage providers, API keys, and available models.",
     "providers": "Providers",
     "addProvider": "Add Provider",
     "providerUpdated": "Provider updated",
@@ -308,9 +310,11 @@
     "uncategorized": "Uncategorized",
     "create": "New",
     "batchDelete": "Batch Delete",
-    "batchDeleteWarn": "Delete the selected {{count}} assets? This cannot be undone.",
+    "deleteConfirm": "Deleting \"{{name}}\" will permanently delete this asset, and this cannot be undone. Continue?",
+    "batchDeleteWarn": "Deleting the selected {{count}} assets will permanently delete them, and this cannot be undone. Continue?",
     "moveTo": "Move To",
     "folderPickerPlaceholder": "Select destination folder",
+    "folderSearchPlaceholder": "Search folders...",
     "changeType": "Change Type",
     "empty": "No assets yet",
     "send": "Send to Canvas",
@@ -360,6 +364,7 @@
     "editPrompt": "Edit",
     "promptEmpty": "No prompt",
     "promptPlaceholder": "Enter the prompt used to generate this asset",
+    "folderName": "Folder name",
     "folderNamePlaceholder": "Enter folder name",
     "folderDuplicate": "A folder with this name already exists",
     "count": "items",
@@ -382,7 +387,7 @@
     "folder": {
       "delete": "Delete Folder",
       "rename": "Rename Folder",
-      "deleteWarn": "This will permanently delete the folder and all its subfolders and assets, and cannot be undone."
+      "deleteWarn": "Deleting \"{{name}}\" will also delete all its subfolders and assets, and this cannot be undone. Continue?"
     },
     "added": "Added to canvas",
     "addedCount": "Added {{count}} items to canvas"
@@ -588,6 +593,7 @@
   },
   "agent": {
     "title": "Agent",
+    "drawerDescription": "Chat with the Agent and manage conversation history.",
     "createSessionFailed": "Failed to create session",
     "loadHistoryFailed": "Failed to load history",
     "loadSessionsFailed": "Failed to load session list",
