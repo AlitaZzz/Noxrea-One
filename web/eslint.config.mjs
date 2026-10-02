@@ -125,7 +125,7 @@ const eslintConfig = defineConfig([
       "check-file/filename-naming-convention": "off",
     },
   },
-  // 全局 message/notification wrapper 的使用边界（见根 CLAUDE.md「七、消息通知规范」）。
+  // 全局 message/notification wrapper 的使用边界（见根 AGENTS.md「七、消息通知规范」）。
   // 策略：白名单制——默认全项目禁止引入 wrapper（React 上下文一律 useAppFeedback()），
   // 仅下方 ignores 白名单内的非 React 模块（store / 工具函数 / wrapper 注册方）放行。
   // 新增合法消费者时在此补一行；改配置这个动作本身就是“确认过确实不在 React 上下文”。
@@ -145,11 +145,11 @@ const eslintConfig = defineConfig([
           paths: [
             {
               name: "@/lib/global-message",
-              message: "React 组件/Hook 内一律 useAppFeedback() 解构 message；此 wrapper 仅供非 React 上下文使用（CLAUDE.md 七）",
+              message: "React 组件/Hook 内一律 useAppFeedback() 解构 message；此 wrapper 仅供非 React 上下文使用（AGENTS.md 七）",
             },
             {
               name: "@/lib/global-notification",
-              message: "React 组件/Hook 内一律 useAppFeedback() 解构 notification；此 wrapper 仅供非 React 上下文使用（CLAUDE.md 七）",
+              message: "React 组件/Hook 内一律 useAppFeedback() 解构 notification；此 wrapper 仅供非 React 上下文使用（AGENTS.md 七）",
             },
           ],
         },
@@ -164,7 +164,7 @@ const eslintConfig = defineConfig([
         "error",
         {
           selector: "ImportDeclaration[source.value='antd']",
-          message: "业务代码禁止依赖 antd 实现和类型，请使用 App* 控件或 useAppFeedback（web/CLAUDE.md 八）",
+          message: "业务代码禁止依赖 antd 实现和类型，请使用 App* 控件或 useAppFeedback（web/AGENTS.md 八）",
         },
         {
           selector: "ImportDeclaration[source.value=/^antd\\//]",
