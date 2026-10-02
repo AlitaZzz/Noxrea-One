@@ -1,23 +1,19 @@
 /**
  * 应用页面外壳容器。
- * 提供满屏 flex 布局骨架，并固定 <html data-theme> 为深色主题。
+ * 提供满屏 flex 布局骨架。主题由根布局的 .dark class 统一控制。
  */
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode } from "react";
 
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", "dark");
-  }, []);
-
   return (
     <div
       className="flex flex-col h-screen w-screen overflow-hidden"
       style={{
-        background: "var(--canvas-app-bg)",
-        color: "var(--canvas-text)",
+        background: "var(--background)",
+        color: "var(--foreground)",
       }}
     >
       {/* Canvas area */}

@@ -1,10 +1,11 @@
 "use client";
 
+import { cn } from "cn";
 import { memo } from "react";
 
-import AppButton from "@/components/ui/AppButton";
-import AppNumberInput from "@/components/ui/AppNumberInput";
-import AppSlider from "@/components/ui/AppSlider";
+import { Button } from "@/components/ui/button";
+import { NumberInput } from "@/components/ui/number-input";
+import { Slider } from "@/components/ui/slider";
 
 export interface ParamOptionView {
   value: string | number | boolean;
@@ -37,7 +38,7 @@ const ParamFields = memo(function ParamFields({ fields, values, onChange }: Para
     <div className="flex flex-col gap-4">
       {fields.map((field) => (
         <div key={field.name}>
-          <div className="text-xs mb-1.5" style={{ color: "var(--canvas-text-muted)" }}>{field.label}</div>
+          <div className="mb-1.5 text-xs text-muted-foreground">{field.label}</div>
           <FieldControl field={field} value={values[field.name]} onChange={(v) => onChange(field.name, v)} />
         </div>
       ))}
@@ -55,24 +56,23 @@ function FieldControl({ field, value, onChange }: {
   if (field.type === "slider" || field.type === "number") {
     const num = typeof value === "number" ? value : typeof field.defaultValue === "number" ? field.defaultValue : undefined;
     const input = (
-      <AppNumberInput
-        className={field.type === "slider" ? "param-num-input" : undefined}
-        size="small"
+      <NumberInput
+        className={field.type === "slider" ? "h-7 w-9 border-0 bg-transparent p-0 text-[13px] text-foreground shadow-none" : undefined}
         min={field.min} max={field.max} step={field.step} value={num}
         onChange={(v) => { if (field.type === "number" || v !== null) onChange(v); }}
-        variant={field.type === "slider" ? "borderless" : undefined}
         controls={field.type === "slider" ? false : undefined}
-        style={field.type === "slider" ? { width: 36, color: "var(--canvas-text)", fontSize: 13 } : { width: "100%" }}
       />
     );
     if (field.type === "number") return input;
     return (
       <div className="flex items-center gap-3">
-        <AppSlider min={field.min} max={field.max} step={field.step} value={num}
-          onChange={onChange} style={{ flex: 1, margin: 0 }} showTooltip={false} />
-        <div className="flex items-center rounded-md" style={{ background: "var(--canvas-bg-active, #33333a)", padding: "2px 6px", minWidth: 48 }}>
+        <Slider min={field.min} max={field.max} step={field.step}
+          value={num === undefined ? undefined : [num]}
+          defaultValue={num === undefined ? [field.min ?? 0] : undefined}
+          onValueChange={([next]) => onChange(next)} className="flex-1" />
+        <div className="flex min-w-12 items-center rounded-md bg-secondary px-1.5 py-0.5">
           {input}
-          <span className="text-xs ml-0.5" style={{ color: "var(--canvas-text)" }}>{field.unit}</span>
+          <span className="ml-0.5 text-xs text-foreground">{field.unit}</span>
         </div>
       </div>
     );
@@ -88,20 +88,26 @@ function FieldControl({ field, value, onChange }: {
         const ratio = option.aspectRatio;
         const max = ratio ? Math.max(ratio.width, ratio.height) : 1;
         return (
-          <AppButton key={String(option.value)} variant="ghost" className="param-option" aria-pressed={active}
-            style={isRatio ? { minHeight: 48, padding: "8px 2px", flexDirection: "column", gap: 4 } : undefined}
+          <Button
+            key={String(option.value)}
+            variant="outline"
+            className={cn(
+              "h-auto min-h-9 whitespace-normal px-2 py-1",
+              "aria-pressed:border-foreground aria-pressed:bg-accent aria-pressed:text-accent-foreground",
+              isRatio && "min-h-12 flex-col gap-1 px-0.5 py-2",
+            )}
+            aria-pressed={active}
             onClick={() => onChange(option.value)}>
             {isRatio && ratio && (
-              <span className="flex items-center justify-center" style={{ height: 20 }}>
-                <span className="border" style={{
+              <span className="flex h-5 items-center justify-center">
+                <span className={cn("border", active ? "border-foreground" : "border-input")} style={{
                   width: Math.max(4, Math.round(18 * ratio.width / max)),
                   height: Math.max(4, Math.round(18 * ratio.height / max)),
-                  borderColor: active ? "var(--canvas-text)" : "var(--canvas-border-light)",
                 }} />
               </span>
             )}
             <span className={isRatio ? "text-xs leading-none" : undefined}>{option.label}</span>
-          </AppButton>
+          </Button>
         );
       })}
     </div>

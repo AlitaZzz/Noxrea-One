@@ -27,31 +27,7 @@ const LayerContext = createContext<LayerState>({
 
 export { LayerContext };
 
-/**
- * Hook for components that need to portal into the *current* layer's
- * overlay-root (e.g. AssetCard menu, custom dropdowns).
- * Returns null at depth 0 (body-level) — callers should fall back to
- * the nearest overlay-root via DOM lookup or document.body.
- */
-export function useLayerOverlay(): HTMLElement | null {
-  return useContext(LayerContext).overlayRoot;
-}
-
-/**
- * Returns the overlay-root owned by the nearest layer scope.
- * Falls back to `document.body`.  Designed to be passed as antd
- * `getPopupContainer` at the ConfigProvider level.
- */
-export function getLayerPopupContainer(
-  trigger?: HTMLElement,
-): HTMLElement | ShadowRoot {
-  if (!trigger) return document.body;
-  const scope = trigger.closest<HTMLElement>("[data-layer-scope]");
-  const overlay = scope?.querySelector<HTMLElement>(":scope > [data-layer-overlay-root]");
-  return overlay || trigger.closest<HTMLElement>("[data-layer-overlay-root]") || document.body;
-}
-
-/** Props for the internal AppModal hook. */
+/** Props for the internal Dialog layer hook. */
 export interface LayerParent {
   /** Where to mount THIS modal (parent's overlay-root, or body). */
   parentContainer: HTMLElement | undefined;
@@ -64,7 +40,7 @@ export interface LayerParent {
   zIndex: number;
 }
 
-/** 供 AppModal 内部使用的父层级解析 hook。 */
+/** 供 Dialog 内部使用的父层级解析 hook。 */
 export function useLayerParent(): LayerParent {
   const parent = useContext(LayerContext);
   const [overlayRoot, setOverlayRoot] = useState<HTMLDivElement | null>(null);

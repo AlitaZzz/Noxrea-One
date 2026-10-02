@@ -23,9 +23,9 @@ export default function OfflineIndicator() {
       aria-label={t("offline.label")}
       className="flex items-center gap-2 border-[0.5px] px-3 text-[12px] transition-colors h-8 rounded-lg select-none"
       style={{
-        color: "var(--canvas-text)",
-        backgroundColor: "var(--canvas-bg)",
-        borderColor: "var(--canvas-border)",
+        color: "var(--foreground)",
+        backgroundColor: "var(--card)",
+        borderColor: "var(--border)",
       }}
     >
       <span data-testid="sync-status-dot" className="rounded-full size-2 bg-amber-400" aria-hidden="true" />

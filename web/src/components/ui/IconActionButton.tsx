@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { ArrowUpOutlined, CloseOutlined, LoadingOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, CloseOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 
 interface IconActionButtonProps {
   onClick?: () => void;
@@ -18,14 +19,16 @@ interface IconActionButtonProps {
 
 export default function IconActionButton({ onClick, disabled, loading = false, cancel = false }: IconActionButtonProps) {
   return (
-    <button
+    <Button
       type="button"
+      variant={cancel ? "destructive" : "default"}
+      size="icon-sm"
       disabled={disabled}
+      loading={loading && !cancel}
       onClick={onClick}
-      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-      style={{ background: cancel ? "var(--canvas-danger)" : "var(--canvas-text)", color: "var(--canvas-bg)" }}
+      aria-label={cancel ? "Cancel" : loading ? "Loading" : "Submit"}
     >
-      {cancel ? <CloseOutlined style={{ fontSize: 14 }} /> : loading ? <LoadingOutlined style={{ fontSize: 14 }} /> : <ArrowUpOutlined style={{ fontSize: 14 }} />}
-    </button>
+      {cancel ? <CloseOutlined aria-hidden="true" /> : <ArrowUpOutlined aria-hidden="true" />}
+    </Button>
   );
 }

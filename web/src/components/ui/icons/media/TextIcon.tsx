@@ -12,7 +12,7 @@ interface TextIconProps {
 
 /**
  * 统一文本节点图标（4 条横线，上短下长）。
- * 使用 1em 尺寸，继承父元素 font-size，与 antd 图标行为一致。
+ * 使用 1em 尺寸，继承父元素 font-size。
  */
 export function TextIcon({ className, style }: TextIconProps) {
   return (

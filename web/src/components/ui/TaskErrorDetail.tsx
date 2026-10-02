@@ -8,7 +8,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import AppTypography from "@/components/ui/AppTypography";
+import { Paragraph } from "@/components/ui/typography";
 
 /** 折叠状态下展示的行数 */
 const SUMMARY_ROWS = 2;
@@ -17,12 +17,12 @@ export default function TaskErrorDetail({ message }: { message: string }) {
   const { t } = useTranslation();
 
   return (
-    <AppTypography.Paragraph
+    <Paragraph
       ellipsis={{ rows: SUMMARY_ROWS, expandable: true, symbol: t("generation.showDetail") }}
       // 保留上游原文中的换行，长单词/URL 强制断行避免溢出
       style={{ marginBottom: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}
     >
       {message}
-    </AppTypography.Paragraph>
+    </Paragraph>
   );
 }

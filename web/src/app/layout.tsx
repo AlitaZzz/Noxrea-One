@@ -6,6 +6,7 @@
 import "@/styles/globals.css";
 
 import type { Metadata } from "next";
+import { Figtree } from "next/font/google";
 import { cookies } from "next/headers";
 
 import { parseUserCookie, USER_COOKIE } from "@/features/auth/user-cache";
@@ -14,7 +15,10 @@ import enUS from "@/lib/i18n/en-US.json";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { LANG_COOKIE } from "@/lib/i18n/lang-cookie";
 import zhCN from "@/lib/i18n/zh-CN.json";
+import { cn } from "@/lib/utils";
 import { AppProviders } from "@/providers/AppProviders";
+
+const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Noxrea One";
 
@@ -38,7 +42,7 @@ export default async function RootLayout({
   // 用户缓存 cookie：SSR 直出真实头像/用户名，避免「占位 → 填充」闪变
   const cachedUser = parseUserCookie((await cookies()).get(USER_COOKIE)?.value);
   return (
-    <html lang={lang} suppressHydrationWarning>
+    <html lang={lang} className={cn("dark font-sans", figtree.variable)}>
       <body className="m-0 p-0 overflow-hidden">
         <AppProviders>
           <CachedUserProvider user={cachedUser}>

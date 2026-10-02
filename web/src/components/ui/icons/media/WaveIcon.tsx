@@ -8,7 +8,7 @@ interface WaveIconProps {
   style?: CSSProperties;
 }
 
-/** 音频波形图标（自定义 SVG path），用法与 antd 图标一致：用 fontSize 控制尺寸 */
+/** 音频波形图标（自定义 SVG path），用 fontSize 控制尺寸 */
 export function WaveIcon({ className, style }: WaveIconProps) {
   return (
     <svg

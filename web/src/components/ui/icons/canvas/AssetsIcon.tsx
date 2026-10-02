@@ -8,7 +8,7 @@ interface AssetsIconProps {
   style?: CSSProperties;
 }
 
-/** 资产库图标（自定义 SVG path），用法与 antd 图标一致：用 fontSize 控制尺寸 */
+/** 资产库图标（自定义 SVG path），用 fontSize 控制尺寸 */
 export function AssetsIcon({ className, style }: AssetsIconProps) {
   return (
     <svg

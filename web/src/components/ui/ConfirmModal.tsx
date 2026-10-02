@@ -4,12 +4,10 @@
  */
 "use client";
 
-import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppButton from "@/components/ui/AppButton";
-import AppModal from "@/components/ui/AppModal";
-import DialogActions from "@/components/ui/DialogActions";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Props {
   open: boolean;
@@ -19,6 +17,8 @@ interface Props {
   cancelText?: string;
   /** 确定按钮进入加载态并阻止重复提交，用于异步 onOk。 */
   confirmLoading?: boolean;
+  /** 确定按钮的语义变体；删除等不可逆操作使用 destructive。 */
+  confirmVariant?: "default" | "destructive" | "primary";
   /** 只保留确定按钮（无取消语义的强制流程，如会话过期）；Esc / 遮罩关闭同样走 onCancel。 */
   hideCancel?: boolean;
   onOk: () => void;
@@ -29,34 +29,25 @@ interface Props {
   global?: boolean;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, hideCancel, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, confirmVariant = "default", hideCancel, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
   const { t } = useTranslation();
-  const okRef = useRef<HTMLButtonElement>(null);
-
-  // 焦点必须等 antd 打开动画结束、rc-dialog 的焦点管理收尾后再交回「确定」，
-  // 挂载期 autoFocus 会被 rc-dialog 抢走，故只在 afterOpenChange 里显式聚焦
-  const handleAfterOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) setTimeout(() => okRef.current?.focus(), 0);
-  };
 
   return (
-    <AppModal
-      title={title}
-      open={open}
-      onCancel={onCancel}
-      zIndex={zIndex}
-      global={isGlobal}
-      flush
-      className="app-dialog"
-      afterOpenChange={handleAfterOpenChange}
-      width={380}
-      footer={
-        <DialogActions onCancel={onCancel} cancelText={cancelText} cancelDisabled={confirmLoading} hideCancel={hideCancel}>
-          <AppButton variant="primary" loading={confirmLoading} onClick={onOk} ref={okRef}>{okText ?? t("common.confirm")}</AppButton>
-        </DialogActions>
-      }
-    >
-      <p className="app-dialog-text">{content}</p>
-    </AppModal>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}>
+      <DialogContent global={isGlobal} zIndex={zIndex} className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{content}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          {!hideCancel && (
+            <DialogClose asChild>
+              <Button variant="outline" disabled={confirmLoading}>{cancelText ?? t("common.cancel")}</Button>
+            </DialogClose>
+          )}
+          <Button variant={confirmVariant} loading={confirmLoading} onClick={onOk}>{okText ?? t("common.confirm")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

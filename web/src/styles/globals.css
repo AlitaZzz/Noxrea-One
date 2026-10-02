@@ -1,5 +1,8 @@
 @import "tailwindcss";
-@import "../components/ui/antd.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ===== Animations ===== */
 @keyframes fadeIn {
@@ -26,100 +29,135 @@
   100% { transform: translate3d(4%, -3%, 0) scale(1.12); }
 }
 
-/* ===== 键盘焦点环（全局统一）=====
-   键盘聚焦（:focus-visible）的可交互元素统一画青柠 outline。
-   此前 antd 组件用其主题主色环、自绘按钮落浏览器默认白框，两种光圈并存无规范；
-   本规则收敛为一种（Tab 导航与弹窗关闭还焦时的视觉反馈保持一致）。
-   文本输入类自带焦点样式（antd 边框/底色），且鼠标点击也会命中 :focus-visible，
-   显式排除，避免与既有输入焦点态打架。 */
-:focus-visible {
-  outline: 2px solid var(--canvas-accent);
-  outline-offset: 2px;
+/* shadcn semantic theme tokens. The root .dark class selects the dark palette
+   and the Tailwind dark variant used by the UI components. */
+:root {
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
 }
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible,
-[contenteditable]:focus-visible,
-[contenteditable] :focus-visible {
-  outline: none;
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* ===== Dark theme（默认）=====
-   配色：中性石墨 + 青柠。
-   设计约束：深色模式、长时间使用不累眼、强调色固定为青柠 #c7f43d。
-
-   明度锚点（最关键的一条）：底色取 L*≈11 的深灰，不取纯黑也不取中灰。
-     - 纯黑 + 亮青柠对比约 16:1，亮色边缘会出现光晕（halation），最累眼；
-     - 试过提到 L*≈16 的中灰，又太亮、深色质感没了；
-     - L*≈11 落在两者中间，与青柠对比约 13:1：够清晰，又不过曝。
-   中性色不带色相偏色（R≈G≈B，仅蓝通道 +2 防止屏幕观感发暖）。
-     此前偏橄榄的暖灰在大面积暗色下发「脏」，已弃用。
-   层级：app-bg < header < bg < bg-hover < bg-active，每级约 +3.5 L*；
-     描边比底色亮约 +5 L*，保证提亮后边界依然清楚。
-   正文用 #e7e7ec 而非纯白：对比约 13.5:1（远高于 AAA 的 7:1），
-     同时避开纯白贴深灰的刺眼。
-
-   改色时 theme.ts 的 antd token 需同步（见该文件注释）。 */
-:root, [data-theme="dark"] {
+:root, .dark {
   /* 全局 UI 字体栈：系统字体（Windows 上拉丁 Segoe UI / 中文 Microsoft YaHei，
      均为微软针对小字号 ClearType 渲染调校过的字体）。
-     antd 的 theme.ts fontFamily 通过 var() 引用这里，保持单一来源。
+     UI 控件通过 var() 引用这里，保持单一来源。
      注：MiSans 自托管方案实测小字号发虚（网络字体无小字号 hinting），已移除。 */
   --font-ui: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --canvas-app-bg: #0c0c0e;
-  --canvas-header-bg: #151518;
-  --canvas-bg: #1d1d21;
-  /* 节点主体底色（空态 / 媒体衬底）：纯平 --canvas-bg 在大面积节点上显得死板，
-     纵向 -5 灰阶的微渐变（顶部受光）提供「面」的方向性；渐变中点 ≈ #1c1c20，
-     与 --canvas-bg 的明度锚点重合，bg < bg-hover < bg-active 层级不受影响。
-     仅供节点 body 使用；面板 / 按钮等小面积表面仍用纯色 --canvas-bg。 */
-  --canvas-node-bg: linear-gradient(180deg, #1e1e22, #19191d);
-  --canvas-bg-hover: #26262b;
-  --canvas-bg-active: #323238;
-  --canvas-bg-elevated: #1d1d21;
-  --canvas-border: #2d2d33;
-  --canvas-border-light: #3b3b42;
-  --canvas-text: #e7e7ec;
-  --canvas-text-dim: #95959e;
-  --canvas-text-muted: #7e7e88;
-  --canvas-text-disabled: rgba(231, 231, 236, 0.3);
-  /* 媒体表面上的恒白前景（缩略图覆盖图标 / 波形轨道等）：照片亮暗不定，
-     白字+遮罩不随主题切换，故独立于 canvas-text；用 rgb(var()/alpha) 取不同透明度 */
+  /* 媒体表面上的恒白前景不随主题切换。 */
   --on-media-rgb: 255 255 255;
-  /* 品牌强调色（青柠）：链接 / 加载动画 / 徽标 / 选中描边等交互强调，不再用于按钮填充 */
-  --canvas-accent: #c7f43d;
-  /* 主色 hover / active：与 theme.ts 的 COLOR_PRIMARY_HOVER / ACTIVE 同值 */
-  --canvas-accent-hover: #d6f86a;
-  --canvas-accent-active: #aede2b;
-  /* 无彩强调填充：与 theme.ts 的 NEUTRAL_FILL 同值。
-     Switch / Checkbox / Slider / 主按钮共用，避免青柠外溢到控件与按钮上 */
-  --canvas-solid: #fff;
-  --canvas-solid-hover: #e6e6e6;
-  /* 危险语义色：与 theme.ts 的 COLOR_ERROR 同值，供自绘的危险按钮复用 */
-  --canvas-danger: #ff4d4f;
-  /* 节点/画布选中态描边 */
-  --canvas-select: #c7f43d;
-  /* 拖拽中的框选矩形：中性灰，避免与「已选中」的品牌色抢语义 */
-  --canvas-marquee-bg: rgba(231, 231, 236, 0.06);
-  --canvas-marquee-border: rgba(231, 231, 236, 0.38);
-  /* 进度 / 成功 / 就绪 / 媒体流反馈色（当前与选中色同值，可独立拆分） */
-  --canvas-success: #c7f43d;
-  /* 警示 / 超限提示色（如文本节点字数超限）：橙，与青柠拉开色相避免混淆 */
-  --canvas-warning: #ffb020;
-  --nav-active-bg: #26262b;
-  /* hover 介于底色 #1d1d21 与选中 #26262b 之间，比选中淡一档；此前过深看起来像墨绿色凹陷 */
-  --nav-hover-bg: #222226;
-  /* 工具栏 */
-  --toolbar-bg: #1e1e22;
-  --toolbar-border: #2d2d33;
+  /* 画布框选是领域状态，不属于 shadcn 控件主题。 */
+  --marquee-bg: rgba(231, 231, 236, 0.06);
+  --marquee-border: rgba(231, 231, 236, 0.38);
   --toolbar-shadow: 0 10px 34px rgba(0,0,0,.55);
-  --toolbar-btn-hover: #2a2a2f;
-  --toolbar-btn-active: #34343a;
-  --toolbar-btn-color: #cdcdd4;
-  /* 菜单 */
-  --menu-bg: #1f1f23;
-  --menu-border: #2d2d33;
-  --menu-item-hover: #2a2a2f;
+}
+
+/* Tailwind v4 names used by shadcn-style components. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* React Flow overrides */
@@ -162,16 +200,16 @@ select:focus-visible,
    它是几百毫秒的「工具反馈」，用强调色会让人误以为已经选中，也和选中态抢视觉；
    虚线进一步把它和下面实线的持久外框区分开。 */
 .react-flow__selection {
-  background: var(--canvas-marquee-bg) !important;
-  border: 1px dashed var(--canvas-marquee-border) !important;
+  background: var(--marquee-bg) !important;
+  border: 1px dashed var(--marquee-border) !important;
   border-radius: 6px;
 }
 /* 松手后的多选外框：与拖拽框同色（中性灰），但边框改回实线——
    虚线读作「进行中」，实线读作「已成结果」，靠线型而非颜色区分两个阶段。
-   选中语义由节点自身的 --canvas-select 描边承担，大框不再用强调色。 */
+   选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
 .react-flow__nodesselection-rect {
-  background: var(--canvas-marquee-bg) !important;
-  border: 1px solid var(--canvas-marquee-border) !important;
+  background: var(--marquee-bg) !important;
+  border: 1px solid var(--marquee-border) !important;
   border-radius: 6px;
 }
 /* 单选、或选中的全是组节点时隐藏外框：这两种情况下包一圈外框没有信息量 */
@@ -179,14 +217,14 @@ select:focus-visible,
   display: none;
 }
 
-/* Shared reset button hover (matches modal close button hover) */
+/* Shared reset button hover */
 .panel-reset-btn {
   background: transparent;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
 }
 .panel-reset-btn:hover {
-  background: var(--canvas-bg-hover) !important;
-  color: var(--canvas-text) !important;
+  background: var(--accent) !important;
+  color: var(--foreground) !important;
 }
 
 /* Shared node body styles — selected / unselected border */
@@ -194,7 +232,7 @@ select:focus-visible,
   outline: 1px solid rgba(255, 255, 255, 0.1);
 }
 .node-body.node-selected {
-  outline: 1px solid var(--canvas-select);
+  outline: 1px solid var(--ring);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 .node-body.node-drag-over {
@@ -206,7 +244,7 @@ select:focus-visible,
   cursor: text;
   font-size: 0.875rem;
   line-height: 1.625;
-  color: var(--canvas-text);
+  color: var(--foreground);
   outline: none;
 }
 [data-text-editor][contenteditable="false"] { cursor: default; }
@@ -245,9 +283,9 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 [data-text-editor] ul ul ul { list-style: square; }
 [data-text-editor] li + li { margin-top: 0.25em; }
 [data-text-editor] blockquote {
-  border-left: 3px solid var(--canvas-border-light);
+  border-left: 3px solid var(--input);
   padding-left: 0.75em;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
 }
 
 /* Prompt 输入框（Tiptap）：纯文本语义，段落无额外间距 */
@@ -257,7 +295,7 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   padding: 8px 0;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--canvas-text);
+  color: var(--foreground);
   background: transparent;
   border: none;
   outline: none;
@@ -268,7 +306,7 @@ div:has(> [contenteditable="true"][data-text-editor]) {
 .mention-editable p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: var(--canvas-text-muted, #888);
+  color: var(--muted-foreground, #888);
   pointer-events: none;
   height: 0;
 }
@@ -284,12 +322,12 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   font-size: 13px;
   line-height: 1;
   background: transparent;
-  border: 1px solid var(--canvas-border, #3a3a3a);
+  border: 1px solid var(--border, #3a3a3a);
   white-space: nowrap;
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  color: var(--canvas-text);
+  color: var(--foreground);
 }
 .mention-thumb {
   width: 20px;
@@ -297,7 +335,7 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   border-radius: 3px;
   object-fit: cover;
   flex-shrink: 0;
-  background: var(--canvas-bg-hover, #3c3c3c);
+  background: var(--accent, #3c3c3c);
 }
 .mention-wave {
   display: inline-flex;
@@ -306,20 +344,20 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: var(--canvas-success);
+  color: var(--primary);
 }
 /* 预设 chip 图标（kind=preset 的 mention 节点） */
 .mention-preset-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  color: var(--canvas-text-dim, #aaa);
+  color: var(--muted-foreground, #aaa);
 }
 
 /* Prompt 输入区滚动条 */
 .mention-scroll::-webkit-scrollbar { width: 6px; }
 .mention-scroll::-webkit-scrollbar-thumb {
-  background: var(--canvas-border, #3a3a3a);
+  background: var(--border, #3a3a3a);
   border-radius: 3px;
 }
 
@@ -332,24 +370,6 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   background: transparent !important;
   padding: 0 !important;
 }
-/* 底部按钮行：右对齐、8px 间距 */
-.app-dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-/* 确认正文 */
-.app-dialog-text {
-  margin: 0;
-  color: var(--canvas-text);
-}
-/* 行内错误提示 */
-.app-dialog-error {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--canvas-danger);
-}
 /* 网格刷新态：sticky 占满视口高度再用负边距归零布局占位，转圈始终钉在可视区正中；
    放在滚动内容内部，弹窗与抽屉两个 AssetGrid 使用方都生效。不拦截点击。 */
 .grid-loading-overlay {
@@ -361,48 +381,9 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   justify-content: center;
   height: 100vh;
   margin-bottom: -100vh;
-  background: color-mix(in srgb, var(--canvas-bg) 55%, transparent);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
   pointer-events: none;
 }
-/* 上传弹窗：拖放区卡片，悬停提亮一格 */
-/* 上传弹窗：宫格整体托盘——外框固定并裁切圆角，卡片超出时在内层滚动（滚动条贴托盘右缘） */
-.upload-grid {
-  border: 1px solid var(--canvas-border);
-  border-radius: 10px;
-  padding: 12px;
-  overflow: hidden;
-}
-/* 虚线添加占位共用规格（生成面板「添加参考」加号 / 上传弹窗放置区）：
-   1px 虚线暗示可放置，hover 提亮边框、底色抬一档（token 见 :root 画布色板） */
-.dashed-add-zone {
-  border: 1px dashed var(--canvas-border);
-  background: var(--canvas-bg-hover);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.dashed-add-zone:hover {
-  border-color: var(--canvas-text-dim);
-  background: var(--canvas-bg-active);
-}
-.upload-drop-zone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 130px;
-  height: 130px;
-  border-radius: 8px;
-}
-/* 上传弹窗：已选文件卡片 */
-.upload-file-card {
-  position: relative;
-  width: 130px;
-  height: 130px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--canvas-bg-elevated);
-}
-
 /* Base font size；全站固定深色主题，body 直接给底色，避免 SSR 空壳 / 客户端接管前的白闪 */
 html, body { font-family: var(--font-ui); }
 body { font-size: 14px; background: #151518; transition: background-color 0.3s ease, color 0.3s ease; }
@@ -458,7 +439,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   margin: calc(var(--rail-dot-size, 20px) / -2) 0 0 calc(var(--rail-dot-size, 20px) / -2);
   border-radius: 50%;
   border: 1.5px solid var(--handle-color);
-  background: var(--canvas-bg);
+  background: var(--card);
   transition: transform 80ms ease-out, filter 0.15s ease;
   will-change: transform;
 }
@@ -544,89 +525,9 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   pointer-events: auto;
 }
 
-/* ===== 统一按钮（components/ui/AppButton）=====
-   全站按钮共用的视觉基线。原来散落在各处的「36px 高 / 8px 圆角 / 手写 hover」
-   以及无引用的 .modal-cancel-btn / .modal-save-btn 都由这里取代。
-   颜色全部取 --canvas-* 语义变量，换主题时自动跟随。
-   按下（:active）不再叠一层更深的颜色：按下时元素仍命中 :hover，视觉与悬停一致。 */
-.app-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  outline: none;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
-}
-.app-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* 尺寸：md 用于弹窗 / 工具条，sm 用于设置面板等紧凑区域 */
-.app-btn--md { height: 36px; padding: 0 20px; }
-.app-btn--sm { height: 28px; padding: 0 12px; font-size: 12px; }
-.app-btn--block { width: 100%; }
-/* 纯图标：宽度收敛到与高度相等 */
-.app-btn--icon { padding: 0; width: 36px; }
-.app-btn--sm.app-btn--icon { width: 28px; }
-
-/* 主行动：无彩白填充 + 深色字。青柠只留给链接 / 加载 / 徽标 / 选中描边，
-   不再作为按钮填充 —— 与 Switch / Checkbox / Slider 的 NEUTRAL_FILL 保持一致。 */
-.app-btn--primary {
-  background: var(--canvas-solid);
-  border: 1px solid var(--canvas-solid);
-  color: var(--canvas-app-bg);
-}
-.app-btn--primary:not(:disabled):hover {
-  background: var(--canvas-solid-hover);
-  border-color: var(--canvas-solid-hover);
-}
-
-/* 次行动 / 取消 */
-.app-btn--default {
-  background: var(--canvas-bg);
-  border: 1px solid var(--canvas-border);
-  color: var(--canvas-text);
-}
-.app-btn--default:not(:disabled):hover { background: var(--canvas-bg-hover); }
-
-/* 工具条图标按钮 / 纯文字按钮 */
-.app-btn--ghost {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--canvas-text-dim);
-}
-.app-btn--ghost:not(:disabled):hover {
-  background: var(--canvas-bg-hover);
-  color: var(--canvas-text);
-}
 .canvas-sidebar ::-webkit-scrollbar { width: 4px; }
 .canvas-sidebar ::-webkit-scrollbar-track { background: transparent; }
-.canvas-sidebar ::-webkit-scrollbar-thumb { background: var(--canvas-border); border-radius: 2px; }
-
-.app-btn.param-option {
-  height: auto;
-  min-height: 36px;
-  padding: 4px 8px;
-  white-space: normal;
-  border: 1px solid var(--canvas-border-light);
-  color: var(--canvas-text-muted);
-}
-.app-btn.param-option[aria-pressed="true"] {
-  background: var(--canvas-bg-hover);
-  border-color: var(--canvas-text);
-  color: var(--canvas-text);
-}
-
-/* 破坏性操作：红是唯一危险语义，不要用主色顶替 */
-.app-btn--danger {
-  background: transparent;
-  border: 1px solid var(--canvas-danger);
-  color: var(--canvas-danger);
-}
-.app-btn--danger:not(:disabled):hover { background: var(--canvas-bg-hover); }
+.canvas-sidebar ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 /* Tech grid animations */
 @keyframes grid-scan {
@@ -652,8 +553,8 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--canvas-bg); }
-::-webkit-scrollbar-thumb { background: var(--canvas-border-light); border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--card); }
+::-webkit-scrollbar-thumb { background: var(--input); border-radius: 3px; }
 
 /* ===== 3D 导演台 CSS 变量 =====
    与 --canvas-* 同一套「中性石墨 + 青柠」配色，命名不同是因为导演台自成一块皮肤，
@@ -673,291 +574,15 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   --dir-green: #5ad86a;
 }
 
-/* Director: Antd Slider 细条 + 白柄 + 黑底 */
-#director-page [class*="ant-slider"] [class*="rail"] { background: var(--dir-panel2) !important; height: 2px !important; }
-#director-page [class*="ant-slider"] [class*="track"] { background: var(--dir-txt) !important; height: 2px !important; }
-#director-page [class*="ant-slider"] [class*="handle"]::after { background: var(--dir-txt) !important; box-shadow: 0 1px 3px rgba(0,0,0,.4) !important; }
-#director-page [class*="ant-slider"]:hover [class*="rail"] { background: var(--dir-panel2) !important; }
-#director-page [class*="ant-slider"]:hover [class*="track"] { background: var(--dir-txt) !important; }
-#director-page [class*="ant-slider"]:hover [class*="handle"]::after { background: var(--dir-txt) !important; }
-
-/* Director: Outliner 搜索框 */
-#director-page .searchbox-input:focus,
-#director-page .searchbox-input:focus-within { border-color: var(--dir-line2) !important; box-shadow: none !important; }
-
-/* Director: 输入框去焦点边框 */
-#director-page [class*="ant-input"]:focus,
-#director-page [class*="ant-input"]:focus-within,
-#director-page [class*="ant-input-number"]:focus,
-#director-page [class*="ant-input-number"]:focus-within,
-#director-page [class*="ant-input-number-focused"] { border-color: transparent !important; box-shadow: none !important; outline: none !important; }
-
-/* Director: InputNumber 融入 fld 容器 */
-#director-page .dir-inputnum { width: 100% !important; background: none !important; border: none !important; box-shadow: none !important; }
-#director-page .dir-inputnum:hover,
-#director-page .dir-inputnum:focus,
-#director-page .dir-inputnum:focus-within { border: none !important; box-shadow: none !important; }
-
-/* Director: 视角切换按钮 */
-#director-page .dir-viewtab {
-  font-size: 14px; padding: 7px 22px; border-radius: 8px; border: none;
-  background: none; color: var(--dir-dim); cursor: pointer; transition: .12s;
-}
-#director-page .dir-viewtab[data-active="true"] { background: var(--dir-panel3); color: var(--dir-txt); }
-#director-page .dir-viewtab:hover:not([data-active="true"]) { color: var(--dir-dim); }
-
-/* Director: 姿势预设按钮 */
-#director-page .dir-posebtn {
-  background: var(--dir-panel2) !important; border: 1px solid transparent; border-radius: 8px;
-  padding: 7px 4px; font-size: 13px; cursor: pointer; text-align: center;
-  color: var(--dir-dim) !important; transition: .1s;
-}
-#director-page .dir-posebtn:hover:not(.on) { color: var(--dir-txt) !important; border-color: var(--dir-line2); }
-#director-page .dir-posebtn.on { border-color: var(--dir-line2) !important; color: var(--dir-txt) !important; }
-
-/* Director: 复位姿势按钮 */
-#director-page .dir-minibtn {
-  display: block; width: 100%; text-align: center; margin-bottom: 12px;
-  background: var(--dir-panel2); border: 1px solid transparent; color: var(--dir-dim);
-  border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
-}
-#director-page .dir-minibtn:hover { color: var(--dir-txt); border-color: var(--dir-line2); }
-
-/* Director: 原生 range 滑块（姿势滑条用） */
-.dir-range {
-  -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-  border-radius: 2px; background: var(--dir-line2); outline: none;
-}
-.dir-range::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-  background: var(--dir-txt); cursor: pointer; border: none;
-}
-.dir-range::-moz-range-thumb {
-  width: 14px; height: 14px; border-radius: 50%; background: var(--dir-txt); cursor: pointer; border: none;
-}
-
-/* Director: 原生 select 下拉 */
-.dir-select {
-  width: 100%; background: var(--dir-panel2); border: 1px solid transparent;
-  border-radius: 8px; color: var(--dir-txt); font-size: 13px;
-  padding: 9px 10px; outline: none; cursor: pointer; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237d7d86' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 10px center;
-}
-.dir-select:focus { border-color: var(--dir-line2); }
-
-/* Director: 滑块行（filled range + valbox） */
-.dir-slider-row { display: flex; align-items: center; gap: 12px; }
-.dir-slider {
-  flex: 1; -webkit-appearance: none; appearance: none; height: 4px;
-  border-radius: 2px; background: var(--dir-line2); outline: none;
-}
-.dir-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%;
-  background: var(--dir-txt); cursor: pointer; border: none; box-shadow: 0 1px 3px rgba(0,0,0,.3);
-}
-.dir-slider::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: var(--dir-txt); cursor: pointer; border: none; }
-.dir-slider:disabled { opacity: .5; }
-
-/* Director: 隐藏 number input 原生箭头 */
-.dir-num { -moz-appearance: textfield; appearance: textfield; }
-.dir-num::-webkit-inner-spin-button,
-.dir-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-
-/* Director: Switch 选中白底黑钮,hover 不蓝色 */
-#director-page [class*="ant-switch-checked"],
-#director-page [class*="ant-switch-checked"]:hover { background: var(--dir-txt) !important; }
-#director-page [class*="ant-switch-checked"] [class*="handle"]::before { background: var(--dir-bg) !important; }
-.dir-valbox {
-  flex: 0 0 auto; min-width: 56px; text-align: center;
-  background: var(--dir-panel2); border-radius: 8px;
-  padding: 7px 10px; font-size: 13px; font-variant-numeric: tabular-nums;
-}
-
-/* === Director: 共享 Component CSS === */
-
-/* 字段容器 */
-.dir-field { margin-bottom: 15px; }
-.dir-label { display: block; font-size: 12px; color: var(--dir-dim); margin-bottom: 8px; user-select: none; }
-
-/* TripleRow fld 输入组 */
-.dir-fld { display: flex; align-items: center; gap: 5px; background: var(--dir-panel2); border: 1px solid transparent; border-radius: 8px; padding: 0 10px; }
-.dir-ax { font-size: 12px; color: var(--dir-dim); user-select: none; }
-.dir-inputnum { width: 100% !important; background: none !important; border: none !important; box-shadow: none !important; }
-.dir-inputnum:hover, .dir-inputnum:focus, .dir-inputnum:focus-within { border: none !important; box-shadow: none !important; }
-
-/* 名称输入框 */
-.dir-namefld { background: var(--dir-panel2); border-radius: 8px; padding: 0 12px; }
-.dir-nameinp { font-size: 13px !important; color: var(--dir-txt) !important; padding: 9px 0 !important; }
-
-/* 右侧面板 padding */
-.dir-rp-pad { padding: 18px 16px 0; }
-
-/* Tab 栏 */
-.dir-ptabs { display: flex; gap: 24px; margin: 16px 0 18px; padding: 0 16px; border-bottom: 1px solid var(--dir-line); }
-.dir-ptab { background: none; border: none; color: var(--dir-dim); font-size: 14px; padding: 0 0 12px; cursor: pointer; position: relative; }
-.dir-ptab.on { color: var(--dir-txt); }
-.dir-ptab.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--dir-txt); border-radius: 2px; }
-
-/* 多选提示 */
-.dir-multi-note { font-size: 12px; color: var(--dir-dim); background: var(--dir-panel2); border-radius: 8px; padding: 9px 11px; margin: 12px 0 4px; }
-
-/* 章节标题 */
-.dir-sec-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; margin-top: 4px; }
-
-/* 姿势网格(Inspector 和 ScenePanel 共用) */
-.dir-pose-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 4px; }
-
-/* Valbox(Slider 旁数值) */
-.dir-valbox { flex: 0 0 auto; min-width: 56px; text-align: center; background: var(--dir-panel2); border-radius: 8px; padding: 7px 10px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--dir-dim); }
-.dir-val { font-size: 13px; color: var(--dir-dim2); }
-
 /* 摄像机预览 */
 .dir-cam-preview { position: relative; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--dir-line2); margin-bottom: 15px; }
 .dir-cam-badge { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; user-select: none; }
-.dir-cam-expand { position: absolute; bottom: 7px; right: 7px; width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.5); color: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-.dir-cam-expand:hover { background: rgba(0,0,0,.75); }
-
 /* Modal overlay */
 .dir-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.78); z-index: 80; display: flex; align-items: center; justify-content: center; }
 .dir-modal-box { position: relative; max-width: 90vw; max-height: 90vh; background: var(--dir-panel); border: 1px solid var(--dir-line2); border-radius: 12px; padding: 12px; }
-.dir-modal-close { position: absolute; top: -14px; right: -14px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--dir-line2); background: var(--dir-panel2); color: var(--dir-txt); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .dir-modal-img { display: block; max-width: 86vw; max-height: 78vh; border-radius: 8px; }
 .dir-modal-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
 .dir-modal-title { flex: 1; font-size: 13px; color: var(--dir-txt); }
-
-/* 文字颜色 */
-.dir-dim { color: var(--dir-dim); }
-
-/* 可见性图标 */
-.dir-eye { cursor: pointer; opacity: 0.6; }
-.dir-eye:hover { opacity: 1; }
-
-/* 视角切换按钮 */
-.dir-viewtab { font-size: 14px; padding: 7px 22px; border-radius: 8px; border: none; background: none; color: var(--dir-dim); cursor: pointer; transition: .12s; }
-.dir-viewtab[data-active="true"] { background: var(--dir-panel3); color: var(--dir-txt); }
-.dir-viewtab:hover:not([data-active="true"]) { color: var(--dir-dim); }
-
-/* 姿势预设按钮 */
-.dir-posebtn { background: var(--dir-panel2); border: 1px solid transparent; border-radius: 8px; padding: 7px 4px; font-size: 13px; cursor: pointer; text-align: center; color: var(--dir-dim); transition: .1s; }
-.dir-posebtn:hover:not(.on) { color: var(--dir-txt); border-color: var(--dir-line2); }
-.dir-posebtn.on { border-color: var(--dir-line2); color: var(--dir-txt); }
-
-/* 复位按钮 */
-.dir-minibtn { display: block; width: 100%; text-align: center; margin-bottom: 12px; background: var(--dir-panel2); border: 1px solid transparent; color: var(--dir-dim); border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
-.dir-minibtn:hover { color: var(--dir-txt); border-color: var(--dir-line2); }
-
-/* PoseSliders */
-.pose-h4 { font-size: 13px; font-weight: 600; color: var(--dir-txt); margin: 16px 0 4px; }
-.pose-side { font-size: 12px; color: var(--dir-dim); margin: 9px 0 5px; }
-.pose-sld { margin-bottom: 10px; }
-.pose-sld-lab { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 5px; }
-.pose-sld-lab b { font-weight: 500; color: var(--dir-txt); }
-.pose-sld-val { color: var(--dir-dim); font-variant-numeric: tabular-nums; }
-
-/* ScenePanel */
-.dir-sec-first { margin-top: 14px; }
-.dir-sec { border-top: 1px solid var(--dir-line); padding-top: 16px; margin-top: 16px; }
-.dir-h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--dir-txt); }
-.dir-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--dir-line2); border-radius: 9px; padding: 16px 12px; color: var(--dir-dim2); font-size: 12px; text-align: center; }
-.toggle-label { font-size: 14px; font-weight: 600; }
-
-/* ===== 统一图标按钮 =====
-   画布节点工具条（.canvas-toolbar-btn）、画布控制条（.canvas-ctrl-btn）、
-   生成面板（.gen-panel-btn）此前各写了一份几乎相同的「透明底 + hover 提亮 +
-   active 更深」实现，Director Dock 甚至用 onMouseEnter/Leave 在 JS 里改 style。
-   这里把交互规则收敛到一处（逗号选择器各自保留原有优先级，因此仍能压过 antd）；
-   调用方类名不变，新增代码统一用 .app-icon-btn。 */
-.app-icon-btn,
-
-.canvas-ctrl-btn,
-
-.gen-panel-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  /* 不能写 border: none —— antd 会在 :hover / :active 用 border 简写重铺一遍
-     --ant-btn-border-width（默认 1px），选择器优先级高于本条，会把 none 覆盖掉。
-     定宽按钮是 border-box，加了也看不出；但宽度自适应的按钮（带文字、未设 width，
-     如控制条的「面板」按钮）外宽会 +2px，把整条工具条顶得抖一下。
-     保留 1px 透明边框：hover 前后盒模型一致，视觉上不可见。 */
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--canvas-text);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: background 0.12s, color 0.12s;
-}
-/* hover 与按下（:active）同色：全站这类按钮都不再有「按下去更深」的反馈层 */
-.app-icon-btn:hover,
-
-.app-icon-btn:active,
-
-.canvas-ctrl-btn:not(:disabled):hover,
-
-.canvas-ctrl-btn:not(:disabled):active,
-
-.gen-panel-btn:hover,
-
-.gen-panel-btn:active {
-  background: var(--canvas-bg-hover) !important;
-  color: var(--canvas-text) !important;
-}
-/* 激活态（开关已启用）：与 hover 同色，语义是状态不是悬停 */
-.app-icon-btn.is-active,
-.canvas-ctrl-btn.canvas-ctrl-active {
-  background: var(--canvas-bg-hover) !important;
-  color: var(--canvas-text) !important;
-}
-/* 控制条（CanvasControls）是毛玻璃（70% 底色 + blur10px），上面的按钮不能
-   用实色 hover 块——实色不随背后内容变化，压在玻璃上像贴纸。
-   玻璃材质的 hover 是「把玻璃本身提亮一档」：白色低透明度叠加，无论背后
-   画布是亮是暗，色块与玻璃的材质关系始终一致（macOS 风格的 frost lift）。
-   只作用于毛玻璃条内；实色工具条（.canvas-toolbar-btn 等）仍用实色。 */
-.canvas-ctrl-bar .canvas-ctrl-btn:not(:disabled):hover,
-.canvas-ctrl-bar .canvas-ctrl-btn:not(:disabled):active,
-.canvas-ctrl-bar .canvas-ctrl-btn.canvas-ctrl-active {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: var(--canvas-text) !important;
-}
-.app-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-/* 尺寸：lg 用于工具条，md 用于面板内 */
-.app-icon-btn--lg { width: 40px; height: 38px; border-radius: 9px; }
-.app-icon-btn--md { width: 36px; height: 36px; border-radius: 8px; }
-
-/* ===== 覆盖层图标按钮 =====
-   浮在图片 / 视频之上的操作按钮（插入画布、更多、播放、全屏、翻页…）。
-   此前 AssetCard / ImageNode / AnnotationPanel 各自手写一遍，尺寸与 hover 都不一致。
-   与 .app-icon-btn 的区别：它压在媒体上，底色必须半透明、hover 靠加深底色 +
-   文字提白，不能复用面板按钮的 --canvas-bg-hover（会被媒体吃掉）。
-   --light 变体：用于已经铺了暗色蒙层的场景（如 hover 遮罩内），底色反过来用白。 */
-.app-overlay-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  cursor: pointer;
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.7);
-  /* opacity 一并过渡：部分按钮靠 group-hover 淡入 */
-  transition: background 0.15s, color 0.15s, opacity 0.15s;
-}
-.app-overlay-btn:hover { background: rgba(0, 0, 0, 0.7); color: #fff; }
-.app-overlay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.app-overlay-btn--light { background: rgba(255, 255, 255, 0.2); color: #fff; }
-.app-overlay-btn--light:hover { background: rgba(255, 255, 255, 0.4); }
-/* 尺寸：xxs 16 / xs 20 / sm 28 / md 36 / round 28（圆形）。
-   图标尺寸由尺寸类统一给出：antd 图标是 1em，会跟随按钮 font-size，
-   因此调用点不要再写 style={{ fontSize }}。 */
-.app-overlay-btn--xxs { width: 16px; height: 16px; border-radius: 999px; font-size: 10px; }
-.app-overlay-btn--xs { width: 20px; height: 20px; border-radius: 999px; font-size: 14px; }
-.app-overlay-btn--sm { width: 28px; height: 28px; border-radius: 6px; font-size: 13px; }
-.app-overlay-btn--md { width: 36px; height: 36px; border-radius: 999px; font-size: 14px; }
-/* 28px 圆形：与 --sm 同尺寸但要求圆形的场景（如音频参考卡居中的播放/停止键） */
-.app-overlay-btn--round { width: 28px; height: 28px; border-radius: 999px; font-size: 14px; }
 
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
 @property --agent-ring-angle {
@@ -974,9 +599,9 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   height: 40px;
   padding: 0 16px;
   border-radius: 12px;
-  background: var(--canvas-bg);
+  background: var(--card);
   border: none;
-  color: var(--canvas-text);
+  color: var(--foreground);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -996,15 +621,15 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   border-radius: inherit;
   background: conic-gradient(
     from var(--agent-ring-angle),
-    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 0deg,
-    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 150deg,
-    var(--canvas-accent) 168deg,
+    color-mix(in srgb, var(--primary) 25%, transparent) 0deg,
+    color-mix(in srgb, var(--primary) 25%, transparent) 150deg,
+    var(--primary) 168deg,
     #fff 178deg,
-    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 180deg,
-    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 330deg,
-    var(--canvas-accent) 348deg,
+    color-mix(in srgb, var(--primary) 25%, transparent) 180deg,
+    color-mix(in srgb, var(--primary) 25%, transparent) 330deg,
+    var(--primary) 348deg,
     #fff 358deg,
-    color-mix(in srgb, var(--canvas-accent) 25%, transparent) 360deg
+    color-mix(in srgb, var(--primary) 25%, transparent) 360deg
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -1135,7 +760,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   height: 19px;
   margin: -9.5px 0 0 -9.5px;
   border-radius: 50% 50% 50% 0;
-  background: var(--canvas-accent);
+  background: var(--primary);
   box-shadow: 0 0 6px rgba(199, 244, 61, 0.45);
   animation: canvas-clover-pulse 0.8s ease-in-out infinite;
 }
@@ -1154,7 +779,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 }
 
 .canvas-agent-btn:hover {
-  background: var(--canvas-bg-hover);
+  background: var(--accent);
 }
 /* 系统开启「减弱动态效果」时停掉流光，只保留静态描边 */
 @media (prefers-reduced-motion: reduce) {
@@ -1162,20 +787,13 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
     animation: none;
   }
 }
-.canvas-toolbar-sep { width: 1px; height: 22px; background: var(--canvas-border); margin: 0 4px; flex-shrink: 0; }
-/* 生成面板按钮（模型选择 / 参考方式 / 参数面板 trigger）：尺寸 + 水平内边距；
-   交互规则见上方「统一图标按钮」。
-   注意：那条规则为纯图标按钮把 padding 清零了，而 Tailwind 工具类在 @layer 里必输，
-   所以调用点写 px-* / py-* 无效——文字按钮的内边距必须由这条未分层规则给出，
-   否则文字贴边。宽度一律不固定，随内容自适应。 */
-.gen-panel-btn { height: 36px; border-radius: 8px; padding: 0 12px; }
-.canvas-toolbar { background: var(--canvas-bg); border: 1px solid var(--canvas-border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
+.canvas-toolbar { background: var(--card); border: 1px solid var(--border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
 
 /* ── 图片打光面板（LightingPanel） ── */
 /* 档位滑杆：填充色由内联 background 渐变按当前档位驱动 */
 /* 亮度百分比输入（亮度组合框内，隐藏原生箭头） */
 .light-panel-pct-input {
-  width: 30px; background: transparent; border: none; outline: none; color: var(--canvas-text);
+  width: 30px; background: transparent; border: none; outline: none; color: var(--foreground);
   font-size: 12px; text-align: right; padding: 0;
   -moz-appearance: textfield; appearance: textfield;
 }
@@ -1184,7 +802,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 /* 色温输入框（温标组合框内，隐藏原生箭头） */
 .light-panel-temp-input {
   width: 44px; background: transparent; border: none; outline: none;
-  color: var(--canvas-text); font-size: 13px; text-align: right; padding: 0;
+  color: var(--foreground); font-size: 13px; text-align: right; padding: 0;
   -moz-appearance: textfield; appearance: textfield;
 }
 .light-panel-temp-input::-webkit-inner-spin-button,
@@ -1192,92 +810,65 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 /* 透视/正面 视角切换 pill：占满预览列宽，两段等宽 */
 .light-panel-view-toggle {
   display: flex; width: 100%; padding: 2px; gap: 2px;
-  background: var(--canvas-bg-hover); border: 1px solid var(--canvas-border); border-radius: 8px;
+  background: var(--accent); border: 1px solid var(--border); border-radius: 8px;
 }
 .light-panel-view-opt {
   flex: 1; display: flex; align-items: center; justify-content: center; height: 24px; padding: 0;
   font-size: 12px; line-height: 1; border: none; border-radius: 6px; cursor: pointer;
-  background: transparent; color: var(--canvas-text-dim); transition: background .15s, color .15s;
+  background: transparent; color: var(--muted-foreground); transition: background .15s, color .15s;
 }
 .light-panel-view-opt.active {
-  background: var(--canvas-text); color: var(--canvas-bg);
+  background: var(--foreground); color: var(--card);
 }
-/* 主光源方向按钮：骨架与 API 设置能力筛选 chip（.cap-chip）一致，
+/* 主光源方向按钮：骨架与 API 设置能力筛选按钮一致，
    选中态保留白底反色以强调当前方位 */
 .light-panel-dir-btn {
   display: flex; align-items: center; justify-content: center;
   height: 26px; padding: 0; font-size: 12px; line-height: 1; border-radius: 7px; cursor: pointer;
-  border: none; background: transparent; color: var(--canvas-text-dim);
+  border: none; background: transparent; color: var(--muted-foreground);
   transition: background .15s, color .15s;
 }
-.light-panel-dir-btn:hover { background: var(--canvas-bg-active); color: var(--canvas-text); }
-.light-panel-dir-btn.active { background: var(--canvas-text); color: var(--canvas-bg); }
+.light-panel-dir-btn:hover { background: var(--secondary); color: var(--foreground); }
+.light-panel-dir-btn.active { background: var(--foreground); color: var(--card); }
 /* 颜色区 色温/颜色 迷你选项卡：占满列宽，两段等分（与视角切换 pill 同构） */
 .light-panel-mini-tabs {
   display: flex; width: 100%; gap: 2px; padding: 2px;
-  background: var(--canvas-bg-hover); border: 1px solid var(--canvas-border); border-radius: 7px;
+  background: var(--accent); border: 1px solid var(--border); border-radius: 7px;
 }
 .light-panel-mini-tab {
   flex: 1; display: flex; align-items: center; justify-content: center; height: 24px; padding: 0;
   font-size: 12px; line-height: 1; border: none; border-radius: 5px; cursor: pointer;
-  background: transparent; color: var(--canvas-text-dim); transition: background .15s, color .15s;
+  background: transparent; color: var(--muted-foreground); transition: background .15s, color .15s;
 }
-.light-panel-mini-tab.active { background: var(--canvas-text); color: var(--canvas-bg); }
-/* 工具栏内按钮图标统一 16px（AntD 默认 14，自绘/1em 图标跟随） */
-
-.canvas-toolbar .app-btn { font-size: 16px; }
-/* 工具栏按钮 hover 与按下同色：点击不再闪一层更深底色（排除 disabled，避免禁用态被点亮） */
-
-.canvas-toolbar .app-btn:not(:disabled):hover,
-
-.canvas-toolbar .app-btn:not(:disabled):active {
-  background: var(--canvas-bg-hover) !important;
-  color: var(--canvas-text) !important;
-}
-
-/* 节点上传/参考按钮 */
-.node-upload-btn { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); border: none; cursor: pointer; transition: background .15s, color .15s; }
-.node-upload-btn:hover { background: var(--canvas-bg-active); color: var(--canvas-text); }
-
+.light-panel-mini-tab.active { background: var(--foreground); color: var(--card); }
 /* 自定义面板弹层（多列预设网格 / 筛选 / 历史列表等借用菜单外观的非列表弹层） */
-.panel-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--menu-bg); border-radius: 12px; border: 1px solid var(--menu-border); user-select: none; -webkit-user-select: none; }
-.panel-item-btn { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: none; cursor: pointer; padding: 6px 12px; font-size: 13px; border-radius: 6px; }
-.panel-item-btn:hover { background: var(--menu-item-hover); color: var(--canvas-text) !important; }
-.panel-divider { height: 1px; background: var(--menu-border); margin: 3px 6px; }
-/* 分组标题（创作菜单等）：小号弱化文字，条目下的两行说明文字 */
-.menu-group-label { padding: 6px 12px 2px; font-size: 11px; color: var(--canvas-text-muted); }
-.menu-item-description { font-size: 11px; color: var(--canvas-text-dim); }
+.panel-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--popover); border-radius: 12px; border: 1px solid var(--border); user-select: none; -webkit-user-select: none; }
 /* 创作菜单：分组 + 两行条目，宽度随列数自适应（列宽固定，避免长描述把弹层撑得过宽）；
    多列布局由目录数据的 group.column 声明，列数任意，宽度按 224px 等分 */
 .creation-menu-popover .panel-popover { width: max-content; }
-.preset-menu-columns { display: flex; gap: 6px; }
-.preset-menu-col { width: 288px; }
-.preset-menu-columns.multi .preset-menu-col { width: 224px; }
 
 /* 历史对话弹层：320px 宽，配色沿用 canvas 变量族 */
 .chat-history-popover { min-width: 300px !important; width: 320px !important; }
 .chat-history-popover .panel-popover {
   padding: 0; min-width: 0; width: 100%;
-  background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 16px;
+  background: var(--popover); border: 1px solid var(--border); border-radius: 16px;
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
 }
 .chat-history-body { display: flex; flex-direction: column; }
 .chat-history-title {
   font-size: 16px; font-weight: 600; line-height: 20px; padding: 14px 16px 8px;
-  color: var(--canvas-text);
+  color: var(--foreground);
 }
 .chat-history-list { max-height: 260px; overflow-y: auto; padding: 4px 8px 8px; }
 .chat-history-empty {
-  padding: 24px 12px; text-align: center; font-size: 13px; color: var(--canvas-text-dim);
+  padding: 24px 12px; text-align: center; font-size: 13px; color: var(--muted-foreground);
 }
 .chat-history-item {
   display: flex; align-items: center; width: 100%; min-width: 0;
-  border-radius: 10px; transition: background-color 0.2s ease;
+  border-radius: 10px;
 }
-.chat-history-item:hover { background: var(--menu-item-hover); }
 .chat-history-main {
-  flex: 1; min-width: 0; text-align: left; background: transparent; border: none; cursor: pointer;
-  padding: 10px 12px; font-size: 13px; color: var(--canvas-text);
+  flex: 1; min-width: 0;
 }
 .chat-history-name {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1288,44 +879,25 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .chat-history-time {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
   padding-right: 6px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
   transition: opacity 0.15s ease;
 }
 .chat-history-item:hover .chat-history-time,
 .chat-history-item:focus-within .chat-history-time { opacity: 0; }
 .chat-history-del {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
-  padding-right: 6px; background: transparent; border: none; cursor: pointer;
-  color: var(--canvas-text-dim); opacity: 0; pointer-events: none;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  padding-right: 6px; opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease;
 }
-.chat-history-del:hover { color: var(--canvas-text); }
 .chat-history-item:hover .chat-history-del,
 .chat-history-item:focus-within .chat-history-del {
   opacity: 1; pointer-events: auto;
 }
 
-/* 风格筛选弹层：面板壳（.panel-popover），仅加宽并定义行样式 */
-.asset-filter-popover { min-width: 210px; }
-.asset-filter-popover .filter-row {
-  display: flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.asset-filter-popover .filter-row:hover { background: var(--menu-item-hover); }
-
 /* 工具栏容器 */
-.toolbar-dock { background: var(--toolbar-bg); border: 1px solid var(--toolbar-border); box-shadow: var(--toolbar-shadow); }
+.toolbar-dock { background: var(--card); border: 1px solid var(--border); box-shadow: var(--toolbar-shadow); }
 
 /* 右键菜单 */
-
-.dir-ctxmenu {
-  position: fixed; z-index: 50; min-width: 184px;
-  background: var(--menu-bg); border: 1px solid var(--dir-line2); border-radius: 16px;
-  padding: 8px; box-shadow: 0 22px 60px rgba(0,0,0,.6);
-}
 
 /* Outliner 列表：默认隐藏滚动条，hover 时显示 */
 .dir-outliner-list {
@@ -1337,13 +909,13 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   border-radius: 3px;
 }
 .dir-outliner-list:hover::-webkit-scrollbar-thumb {
-  background: var(--canvas-border-light);
+  background: var(--input);
 }
 .dir-outliner-list {
   scrollbar-color: transparent transparent;
 }
 .dir-outliner-list:hover {
-  scrollbar-color: var(--canvas-border-light) transparent;
+  scrollbar-color: var(--input) transparent;
 }
 
 /* Director: 截图卡片网格 */
@@ -1410,27 +982,10 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .dir-shot-card:hover .dir-shot-actions {
   opacity: 1;
 }
-.dir-shot-actions button {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255,255,255,.15);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background .12s;
-}
-.dir-shot-actions button:hover {
-  background: rgba(255,255,255,.3);
-}
-
 /* ===== AgentDrawer (Agent 对话抽屉) ===== */
 .chat-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--canvas-border-light) transparent;
+  scrollbar-color: var(--input) transparent;
 }
 /* 聊天空态：居中显示品牌标题，无图标 */
 .chat-empty {
@@ -1467,8 +1022,8 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   border-bottom-right-radius: 4px;
 }
 .chat-bubble-assistant {
-  background: var(--canvas-bg-elevated);
-  color: var(--canvas-text);
+  background: var(--popover);
+  color: var(--foreground);
   border-bottom-left-radius: 4px;
 }
 .chat-bubble-error {
@@ -1480,7 +1035,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
   opacity: 0.85;
   font-size: 13px;
 }
@@ -1488,8 +1043,8 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   content: "";
   width: 13px;
   height: 13px;
-  border: 2px solid var(--canvas-border-light);
-  border-top-color: var(--canvas-accent);
+  border: 2px solid var(--input);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: chat-spin 0.7s linear infinite;
 }
@@ -1500,23 +1055,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .chat-section { display: flex; flex-direction: column; margin-bottom: 16px; }
 .chat-tool-calls { margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
 .chat-tool-round { display: flex; flex-direction: column; gap: 4px; }
-.chat-tool-round-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  width: fit-content;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--canvas-text-dim);
-  background: var(--canvas-bg-hover);
-  border: none;
-  border-radius: 6px;
-  padding: 6px 9px;
-  cursor: pointer;
-  transition: color .15s ease;
-}
-.chat-tool-round-toggle:hover { color: var(--canvas-text); }
-.chat-tool-round-arrow { font-size: 10px; opacity: .7; }
 .chat-action-row {
   display: flex;
   align-items: center;
@@ -1525,45 +1063,32 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   max-width: 100%;
   font-size: 12px;
   line-height: 1;
-  color: var(--canvas-text-dim);
-  background: var(--canvas-bg-hover);
+  color: var(--muted-foreground);
+  background: var(--accent);
   border-radius: 6px;
   padding: 5px 8px;
   flex-wrap: wrap;
 }
-.chat-action-icon { display: inline-flex; font-size: 12px; color: var(--canvas-accent); }
+.chat-action-icon { display: inline-flex; font-size: 12px; color: var(--primary); }
 .chat-action-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 260px;
 }
-.chat-action-status { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--canvas-text-dim); }
+.chat-action-status { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
 .chat-action-status.is-error { color: #e74c3c; }
-.chat-action-status.is-pending { color: var(--canvas-accent); }
-.chat-action-skip-text { font-size: 11px; color: var(--canvas-text-dim); }
-.chat-action-detail-toggle {
-  flex: none;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--canvas-text-dim);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  opacity: .7;
-  transition: opacity .15s ease;
-}
-.chat-action-detail-toggle:hover { opacity: 1; color: var(--canvas-text); }
+.chat-action-status.is-pending { color: var(--primary); }
+.chat-action-skip-text { font-size: 11px; color: var(--muted-foreground); }
 .chat-tool-detail {
   flex-basis: 100%;
   max-height: 180px;
   overflow: auto;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--canvas-text-dim);
-  background: var(--canvas-bg);
-  border: 1px solid var(--canvas-border);
+  color: var(--muted-foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
   margin: 2px 0 0;
@@ -1581,34 +1106,17 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   margin-bottom: 8px;
 }
 .chat-confirm-result-ok {
-  color: var(--canvas-text-dim);
-  background: var(--canvas-bg-hover);
+  color: var(--muted-foreground);
+  background: var(--accent);
 }
 .chat-confirm-result-deny {
   color: #ff9b93;
   background: color-mix(in srgb, #e74c3c 10%, transparent);
 }
-/* 回合撤销按钮 */
-.chat-section-undo-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  width: fit-content;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--canvas-text-dim);
-  background: none;
-  border: 1px solid var(--canvas-border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: color .15s ease, border-color .15s ease;
-}
-.chat-section-undo-btn:hover { color: var(--canvas-text); border-color: var(--canvas-border-light); }
 /* 提议-确认卡片：删除类工具执行前请用户确认 */
 .chat-confirm {
   border: 1px solid color-mix(in srgb, #e74c3c 45%, transparent);
-  background: color-mix(in srgb, #e74c3c 8%, var(--canvas-bg-elevated));
+  background: color-mix(in srgb, #e74c3c 8%, var(--popover));
   border-radius: 12px;
   padding: 10px 12px;
   margin-bottom: 12px;
@@ -1624,7 +1132,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .chat-confirm-subtitle {
   font-size: 12px;
   font-weight: 500;
-  color: var(--canvas-text);
+  color: var(--foreground);
   margin-bottom: 6px;
 }
 .chat-confirm-list {
@@ -1639,7 +1147,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   flex-direction: column;
   gap: 2px;
   font-size: 12px;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
   margin-bottom: 6px;
 }
 .chat-confirm-item-check {
@@ -1652,51 +1160,23 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   cursor: pointer;
 }
 .chat-confirm-item-check:hover { background: color-mix(in srgb, #e74c3c 10%, transparent); }
-.chat-confirm-item-check input[type="checkbox"] {
-  flex: none;
-  accent-color: #e74c3c;
-  width: 13px;
-  height: 13px;
-  cursor: pointer;
-}
 .chat-confirm-thumb {
   flex: none;
   width: 28px;
   height: 28px;
   object-fit: cover;
   border-radius: 5px;
-  border: 1px solid var(--canvas-border);
+  border: 1px solid var(--border);
 }
 .chat-confirm-item-label {
-  color: var(--canvas-text);
+  color: var(--foreground);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.chat-confirm-item-type { flex: none; font-size: 11px; color: var(--canvas-text-dim); }
-.chat-confirm-label { color: var(--canvas-text); font-weight: 500; }
-.chat-confirm-actions { display: flex; gap: 8px; margin-top: 10px; }
-.chat-confirm-btn {
-  flex: 1;
-  height: 30px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: opacity .2s ease;
-}
-.chat-confirm-btn:hover { opacity: 0.85; }
-.chat-confirm-approve {
-  background: #e74c3c;
-  color: #fff;
-  border: none;
-}
-.chat-confirm-deny {
-  background: var(--canvas-bg-hover);
-  color: var(--canvas-text);
-  border: 1px solid var(--canvas-border);
-}
+.chat-confirm-item-type { flex: none; font-size: 11px; color: var(--muted-foreground); }
+.chat-confirm-label { color: var(--foreground); font-weight: 500; }
 /* Agent 幻影蒙层：待确认操作的目标节点预览 */
 .agent-ghost-overlay {
   position: absolute;
@@ -1708,19 +1188,19 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   pointer-events: none;
 }
 .chat-input-bar {
-  background: var(--canvas-bg);
+  background: var(--card);
   padding: 10px;
 }
 /* 精致输入框（参照 design composer 结构） */
 .chat-composer {
   border-radius: 16px;
-  border: 0.8px solid var(--canvas-border);
-  background: var(--canvas-bg-elevated);
+  border: 0.8px solid var(--border);
+  background: var(--popover);
   padding: 10px 12px;
   transition: border-color .3s ease, box-shadow .3s ease;
 }
 .chat-composer:focus-within {
-  border-color: var(--canvas-border-light);
+  border-color: var(--input);
 }
 .chat-composer-input {
   width: 100%;
@@ -1728,7 +1208,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   outline: none;
   resize: none;
   background: transparent;
-  color: var(--canvas-text);
+  color: var(--foreground);
   font-size: 14px;
   line-height: 1.5;
   font-family: inherit;
@@ -1740,7 +1220,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 }
 .chat-composer-input:empty::before {
   content: attr(data-placeholder);
-  color: var(--canvas-text-muted);
+  color: var(--muted-foreground);
   pointer-events: none;
 }
 .chat-composer-actions {
@@ -1764,39 +1244,20 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition: color .2s, background .2s;
 }
 .chat-composer-icon:hover {
-  color: var(--canvas-text);
-  background: var(--canvas-bg-hover);
-}
-/* Agent 抽屉 header 右侧按钮（新对话 / 关闭） */
-.chat-header-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--canvas-text-dim);
-  font-size: 16px;
-  cursor: pointer;
-  transition: color .2s, background .2s;
-}
-.chat-header-btn:hover {
-  color: var(--canvas-text);
-  background: var(--canvas-bg-hover);
+  color: var(--foreground);
+  background: var(--accent);
 }
 /* Agent 抽屉 header 左侧会话标题（点击重命名） */
 .chat-title {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: var(--canvas-text);
+  color: var(--foreground);
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1811,47 +1272,21 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .chat-title-input {
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid var(--canvas-border);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 2px 6px;
-  background: var(--canvas-bg);
-  color: var(--canvas-text);
+  background: var(--card);
+  color: var(--foreground);
   outline: none;
   min-width: 160px;
 }
-.chat-composer-model {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 8px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--canvas-text-dim);
-  font-size: 13px;
-  cursor: pointer;
-  transition: color .2s, background .2s;
-}
-.chat-composer-model:hover {
-  color: var(--canvas-text);
-  background: var(--canvas-bg-hover);
-}
-/* 模型名带「渠道名/模型名」前缀，过长时截断省略 */
-.chat-composer-model-label {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* markdown 渲染容器 */
 .cortex-markdown {
   display: flex;
   flex-direction: column;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--canvas-text);
+  color: var(--foreground);
   white-space: normal;
 }
 .cortex-markdown p { margin: 0 0 8px; }
@@ -1868,14 +1303,14 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .cortex-markdown ol { list-style-type: decimal; }
 .cortex-markdown li { margin-bottom: 3px; }
 .cortex-markdown code {
-  background: var(--canvas-bg-hover);
+  background: var(--accent);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .cortex-markdown pre {
-  background: var(--canvas-bg-hover);
+  background: var(--accent);
   border-radius: 8px;
   padding: 10px 12px;
   overflow-x: auto;
@@ -1884,38 +1319,18 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 }
 .cortex-markdown pre code { background: none; padding: 0; font-size: 12px; }
 .cortex-markdown blockquote {
-  border-left: 3px solid var(--canvas-border-light);
+  border-left: 3px solid var(--input);
   margin: 0 0 8px;
   padding: 2px 12px;
-  color: var(--canvas-text-dim);
+  color: var(--muted-foreground);
 }
-.cortex-markdown a { color: var(--canvas-accent); text-decoration: underline; }
+.cortex-markdown a { color: var(--primary); text-decoration: underline; }
 .cortex-markdown table { border-collapse: collapse; margin: 0 0 8px; font-size: 13px; }
 .cortex-markdown th, .cortex-markdown td {
-  border: 1px solid var(--canvas-border);
+  border: 1px solid var(--border);
   padding: 4px 8px;
 }
 .cortex-markdown img { max-width: 100%; border-radius: 6px; }
-
-/* Slider 旁紧凑数值框：任何状态都不显示边框/聚焦圈。
-   antd 的 borderless 变体虽 border:none，但 :focus-visible 会以 activeBorderColor(主色) 画一圈 outline，
-   而文本 input 即便用鼠标点击也会匹配 :focus-visible，故需显式清除（详见 ParamFields.tsx）。 */
-.param-num-input,
-.param-num-input:hover,
-.param-num-input:focus,
-.param-num-input:focus-within,
-.param-num-input:focus-visible,
-.param-num-input:has(input:focus-visible) {
-  border-color: transparent !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
-/* 焦点指示：以上把描边与光晕都清掉了，会让键盘用户失去可见焦点，
-   故改用背景提亮来指示，既保持无边框观感又不引入主色。
-   注：文本 input 即使用鼠标点击也匹配 :focus-visible，无法只针对键盘显示。 */
-.param-num-input:focus-within {
-  background: var(--canvas-border-light, #3a3a40);
-}
 
 /* 音频波形（wavesurfer）：波形层整体降透明度，进度层保持纯色不透明。
    wavesurfer 的进度画布是「复制波形画布 + source-in 填 progressColor」，
@@ -1928,13 +1343,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 /* 音频截取面板轨道：同款降透明逻辑，但轨道放大后条形加粗，透明度略提保证可读 */
 .audio-waveform-panel > div::part(canvases) {
   opacity: 0.5;
-}
-
-/* 检查器内联编辑框：与设置页 antd 输入框保持同一中性控件语言，
-   常态中性描边，聚焦不出现主色描边或光晕（全局 controlOutlineWidth: 0）。 */
-.inspector-edit-input {
-  border: 1px solid var(--canvas-border-light);
-  outline: none;
 }
 
 /* 多选批量操作条：出现在网格正上方，操作与选择同处一个上下文。
@@ -1953,141 +1361,7 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   overflow: hidden;
   min-height: 0;
 }
-.bulk-bar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 44px;
-  margin: 0 12px 12px;
-  padding: 0 10px 0 12px;
-  background: var(--canvas-bg-elevated);
-  border: 1px solid var(--canvas-border-light);
-  border-radius: 10px;
-}
-.bulk-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 7px;
-  font-size: 12.5px;
-  color: var(--canvas-text-dim);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.bulk-btn:not(:disabled):hover {
-  background: var(--canvas-bg-hover);
-  color: var(--canvas-text);
-}
-.bulk-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.bulk-btn--primary {
-  background: var(--canvas-solid);
-  color: var(--canvas-app-bg);
-  font-weight: 600;
-}
-.bulk-btn--primary:not(:disabled):hover {
-  background: var(--canvas-solid-hover);
-  color: var(--canvas-app-bg);
-}
-.bulk-btn--danger {
-  color: var(--canvas-danger);
-}
-.bulk-btn--danger:not(:disabled):hover {
-  background: var(--canvas-bg-hover);
-  color: var(--canvas-danger);
-}
-.bulk-bar-sep {
-  width: 1px;
-  height: 18px;
-  margin: 0 6px;
-  background: var(--canvas-border-light);
-}
-/* 全选复选框：全选白实底对勾，部分选半透白横杠（与卡片勾选框同一视觉语言） */
-.bulk-select-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 28px;
-  padding: 0 8px 0 4px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.bulk-select-btn:hover {
-  background: var(--canvas-bg-hover);
-}
-.bulk-select-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--canvas-text);
-  white-space: nowrap;
-}
-.bulk-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  border-radius: 5px;
-  border: 1px solid #fff;
-  background: #fff;
-  color: #1d1d21;
-}
-.api-drawer input::placeholder { color: var(--canvas-text-muted) !important; opacity: 1 !important; }
-
-/* 能力筛选 chip：单选筛选器，选中与 hover 同为提亮底，靠字色区分当前态 */
-.cap-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--canvas-text-dim);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.cap-chip:hover { background: var(--canvas-bg-hover); color: var(--canvas-text); }
-.cap-chip[data-active="true"] { background: var(--canvas-bg-hover); color: var(--canvas-text); }
-.cap-chip-count { opacity: 0.55; font-variant-numeric: tabular-nums; }
-
-/* 模型行能力 pill：点亮 = 该模型已启用此能力（青柠语义，与画布选中描边一致） */
-.cap-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--canvas-text-muted);
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.cap-pill:hover { background: var(--canvas-bg-hover); color: var(--canvas-text-dim); }
-.cap-pill[aria-pressed="true"] {
-  color: var(--canvas-accent);
-  background: color-mix(in srgb, var(--canvas-accent) 14%, transparent);
-}
-.cap-pill[aria-pressed="true"]:hover {
-  background: color-mix(in srgb, var(--canvas-accent) 26%, transparent);
-}
+.api-drawer input::placeholder { color: var(--muted-foreground) !important; opacity: 1 !important; }
 
 /* ===== 登录页（(auth)/login）私有样式 =====
    必须放在打包进 head 的全局 CSS 里：曾放 body 内联 \3c style>，首帧绘制时
@@ -2130,41 +1404,14 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .login-input-error { border-color: #ef4444 !important; }
 .login-input-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important; }
 
-
 /* ===== 生成面板文本域（gen-textarea）=====
-   去除 antd TextArea 聚焦态描边；原先三面板各自内联 \3c style> 重复定义，收口至此。 */
+   统一文本域聚焦态描边；原先三面板各自内联样式重复定义，收口至此。 */
 .gen-textarea:focus,
 .gen-textarea-focused {
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
 }
-
-/* ===== 导航列表按钮（NavButton）=====
-   hover 态由 CSS :hover 承担，不用 JS state 模拟（触屏设备无 hover，CSS 也不会误保持）。 */
-.nav-btn {
-  background: transparent;
-  transition: background 0.15s;
-}
-.nav-btn:hover { background: var(--nav-hover-bg); }
-.nav-btn-active,
-.nav-btn-active:hover { background: var(--nav-active-bg); }
-
-/* ===== 画布资源管理器行（CanvasExplorer）=====
-   hover 仅整行背景变色，文字颜色不变；标题常亮（层级：白标题 / 灰元数据），
-   选中态与画布节点选中同色系：hover 底色 + 左侧 --canvas-select 青柠竖条。 */
-.canvas-explorer-row {
-  background: transparent;
-  color: var(--canvas-text);
-}
-.canvas-explorer-row:hover {
-  background: var(--canvas-bg-hover);
-}
-.canvas-explorer-row.is-selected,
-.canvas-explorer-row.is-selected:hover {
-  background: var(--canvas-bg-hover);
-}
-.canvas-explorer-row .explorer-row-sub { color: var(--canvas-text-muted); }
 
 /* ===== 连线拖动目标节点反馈（connection-tilt）=====
    状态类由 controls/connection-tilt.ts 命令式写在与维护，只加在节点 body 上
@@ -2227,26 +1474,20 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   }
 }
 
-/* ===== UI 操作界面禁选（.ui-select-none / .app-dialog）=====
+/* ===== UI 操作界面禁选（.ui-select-none）=====
    弹窗/面板等 chrome 容器整块禁止拖蓝选中，替代逐元素打补丁。
-   用法：给操作界面容器（AppModal className、面板根 div 等）挂 .ui-select-none；
-   .app-dialog（确认/小表单弹窗基类）自动纳入，无需重复挂类。
+   用法：给操作界面容器或面板根 div 挂 .ui-select-none。
    输入类控件显式豁免——user-select 会继承进 input/contenteditable，
    不豁免会破坏输入框选词与富文本编辑器（MentionPrompt/TextNode 编辑器）的光标。
-   antd 下拉面板经 LayerModal 的 data-layer-overlay-root 挂在容器内部，同样覆盖。 */
-.ui-select-none,
-.app-dialog {
+   下拉面板经 LayerModal 的 data-layer-overlay-root 挂在容器内部，同样覆盖。 */
+.ui-select-none {
   user-select: none;
 }
 .ui-select-none input,
 .ui-select-none textarea,
-.ui-select-none [contenteditable="true"],
-.app-dialog input,
-.app-dialog textarea,
-.app-dialog [contenteditable="true"] {
+.ui-select-none [contenteditable="true"] {
   user-select: text;
 }
-
 
 /* ===== 全景面板加载指示器隐藏（.panorama-mount）=====
    PSV v5 无 useLoader 配置，初始加载强制 loader.show()；其 show() 是清空
@@ -2259,6 +1500,24 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 
 /* Search match emphasis shared by folder selectors. */
 .app-tree-match {
-  color: var(--canvas-solid);
+  color: var(--primary);
   font-weight: 600;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  .cn-font-heading {
+    font-family: var(--font-heading);
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
 }

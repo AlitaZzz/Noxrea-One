@@ -31,17 +31,19 @@ const eslintConfig = defineConfig([
       "boundaries/ignore": ["**/*.test.ts", "**/*.test.tsx"],
     },
     rules: {
-      // 文件名命名约定：组件（.tsx）统一 PascalCase（符合 React 行业惯例），
-      // 非组件（.ts）与测试（.test.ts）统一 kebab-case。
+      // 业务组件（.tsx）统一 PascalCase（符合 React 行业惯例），
+      // shadcn/ui 源码遵循官方约定使用 kebab-case；非组件（.ts）与测试统一 kebab-case。
       // Next.js 约定文件（page/layout/loading/error/not-found/template 等）固定小写，必须豁免。
       // 注意：glob 必须互斥，否则组件 .tsx 会同时命中默认 kebab 规则而误报。
       "check-file/filename-naming-convention": [
         "error",
-        {
-          "src/**/*.test.ts": "KEBAB_CASE",
-          "src/**/*.ts": "KEBAB_CASE",
-          "src/app/**/*.tsx": "@(page|layout|loading|error|not-found|template|route|global-error|index)",
-          "src/!(app)/**/*.tsx": "PASCAL_CASE",
+          {
+            "src/**/*.test.ts": "KEBAB_CASE",
+            "src/**/*.ts": "KEBAB_CASE",
+            "src/app/**/*.tsx": "@(page|layout|loading|error|not-found|template|route|global-error|index)",
+          "src/components/ui/**/*.tsx": "KEBAB_CASE",
+          "src/components/!(ui)/**/*.tsx": "PASCAL_CASE",
+          "src/!(app|components)/**/*.tsx": "PASCAL_CASE",
         },
         { ignoreMiddleExtensions: true },
       ],
@@ -116,6 +118,13 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // shadcn/ui 官方组件文件使用 kebab-case；组件目录内的命名由 shadcn 约定统一管理。
+    files: ["src/components/ui/**/*.tsx"],
+    rules: {
+      "check-file/filename-naming-convention": "off",
+    },
+  },
   // 全局 message/notification wrapper 的使用边界（见根 CLAUDE.md「七、消息通知规范」）。
   // 策略：白名单制——默认全项目禁止引入 wrapper（React 上下文一律 useAppFeedback()），
   // 仅下方 ignores 白名单内的非 React 模块（store / 工具函数 / wrapper 注册方）放行。
@@ -147,7 +156,7 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // antd 实现及类型只允许在 UI 基础层出现，通知入口也属于 UI 适配。
+  // 具体第三方 UI 实现及类型只允许在 UI 基础层出现，通知入口也属于 UI 适配。
   {
     files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/hooks/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
     rules: {
@@ -162,16 +171,80 @@ const eslintConfig = defineConfig([
           message: "核心领域禁止通过 antd 子路径导入实现，请使用 App* 出口",
         },
         {
+          selector: "ImportDeclaration[source.value=/^@ant-design\\/icons($|\\/)/]",
+          message: "业务代码禁止直接依赖图标库，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportDeclaration[source.value='lucide-react']",
+          message: "业务代码禁止直接依赖具体图标库，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportDeclaration[source.value=/^@\\/components\\/ui\\/icons\\//]",
+          message: "业务代码禁止直接导入图标实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportDeclaration[source.value=/\\.svg$/]",
+          message: "业务代码禁止直接导入 SVG 资源，请使用 components/ui 的项目图标出口",
+        },
+        {
           selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value=/^antd($|\\/)/]",
           message: "核心领域禁止重新导出 antd 实现，请使用 App* 出口",
+        },
+        {
+          selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value=/^@ant-design\\/icons($|\\/)/]",
+          message: "业务代码禁止重新导出图标库实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value='lucide-react']",
+          message: "业务代码禁止重新导出具体图标库，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value=/^@\\/components\\/ui\\/icons\\//]",
+          message: "业务代码禁止重新导出图标实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: ":matches(ExportNamedDeclaration, ExportAllDeclaration)[source.value=/\\.svg$/]",
+          message: "业务代码禁止重新导出 SVG 资源，请使用 components/ui 的项目图标出口",
         },
         {
           selector: "ImportExpression[source.value=/^antd($|\\/)/]",
           message: "核心领域禁止动态导入 antd 实现，请使用 App* 出口",
         },
         {
+          selector: "ImportExpression[source.value=/^@ant-design\\/icons($|\\/)/]",
+          message: "业务代码禁止动态导入图标库实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportExpression[source.value='lucide-react']",
+          message: "业务代码禁止动态导入具体图标库，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportExpression[source.value=/^@\\/components\\/ui\\/icons\\//]",
+          message: "业务代码禁止动态导入图标实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "ImportExpression[source.value=/\\.svg$/]",
+          message: "业务代码禁止动态导入 SVG 资源，请使用 components/ui 的项目图标出口",
+        },
+        {
           selector: "TSImportType[source.value=/^antd($|\\/)/]",
           message: "业务代码禁止通过 import() 类型引用 antd，请使用项目接口",
+        },
+        {
+          selector: "TSImportType[source.value=/^@ant-design\\/icons($|\\/)/]",
+          message: "业务代码禁止通过 import() 类型引用图标库，请使用项目图标接口",
+        },
+        {
+          selector: "TSImportType[source.value='lucide-react']",
+          message: "业务代码禁止通过 import() 类型引用具体图标库，请使用项目图标接口",
+        },
+        {
+          selector: "TSImportType[source.value=/^@\\/components\\/ui\\/icons\\//]",
+          message: "业务代码禁止通过 import() 类型引用图标实现，请使用项目图标接口",
+        },
+        {
+          selector: "TSImportType[source.value=/\\.svg$/]",
+          message: "业务代码禁止通过 import() 类型引用 SVG 资源，请使用项目图标接口",
         },
         {
           selector: "JSXAttribute[name.name='className'] Literal[value=/(^|\\s)ant-/]",
@@ -180,6 +253,22 @@ const eslintConfig = defineConfig([
         {
           selector: "CallExpression[callee.name='require'][arguments.0.value=/^antd($|\\/)/]",
           message: "核心领域禁止 require antd 实现，请使用 App* 出口",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value=/^@ant-design\\/icons($|\\/)/]",
+          message: "业务代码禁止 require 图标库实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value='lucide-react']",
+          message: "业务代码禁止 require 具体图标库，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value=/^@\\/components\\/ui\\/icons\\//]",
+          message: "业务代码禁止 require 图标实现，请使用 components/ui 的项目图标出口",
+        },
+        {
+          selector: "CallExpression[callee.name='require'][arguments.0.value=/\\.svg$/]",
+          message: "业务代码禁止 require SVG 资源，请使用 components/ui 的项目图标出口",
         },
       ],
     },
