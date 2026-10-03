@@ -1350,8 +1350,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   overflow: hidden;
   min-height: 0;
 }
-.api-drawer input::placeholder { color: var(--muted-foreground) !important; opacity: 1 !important; }
-
 /* ===== 登录页（(auth)/login）私有样式 =====
    必须放在打包进 head 的全局 CSS 里：曾放 body 内联 \3c style>，首帧绘制时
    尚未解析，输入框边框 0→1px 迟到导致表单区域刷新时上下抖动一次。

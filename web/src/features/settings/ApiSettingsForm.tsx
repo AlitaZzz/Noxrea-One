@@ -118,20 +118,20 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       {/* 头部：返回 + 标题 */}
-      <div className="flex items-center gap-1 px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-center gap-1 border-b border-border px-4 py-3">
         <Button size="sm" variant="ghost" iconOnly onClick={onCancel} aria-label={t("modelConfig.back")}>
           <ArrowLeftOutlined />
         </Button>
-        <span className="text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
+        <span className="text-[15px] font-semibold text-foreground">
           {mode === "edit" ? t("modelConfig.editProvider") : t("modelConfig.addProvider")}
         </span>
       </div>
 
       {/* 字段 */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="flex flex-col gap-4" style={{ maxWidth: 560 }}>
+        <div className="flex max-w-[560px] flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("common.name")}</span>
+              <span className="text-xs text-muted-foreground">{t("common.name")}</span>
               <Input
                 placeholder={t("modelConfig.myApi")}
                 value={name}
@@ -140,7 +140,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
               />
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.baseUrl")}</span>
+              <span className="text-xs text-muted-foreground">{t("modelConfig.baseUrl")}</span>
               <Input
                 placeholder="https://api.openai.com/v1"
                 value={baseUrl}
@@ -149,7 +149,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.protocolLabel")}</span>
+                <span className="text-xs text-muted-foreground">{t("modelConfig.protocolLabel")}</span>
                 <Select value={protocol} onValueChange={setProtocol}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -159,7 +159,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                 </Select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.preset")}</span>
+                <span className="text-xs text-muted-foreground">{t("modelConfig.preset")}</span>
                 <Select onValueChange={(presetName) => {
                   const p = presets.find((pr) => pr.name === presetName);
                   if (!p) return;
@@ -174,7 +174,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[12px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.apiKey")}</span>
+              <span className="text-xs text-muted-foreground">{t("modelConfig.apiKey")}</span>
               <div className="flex gap-1.5">
                 <PasswordInput
                   className="flex-1"
@@ -198,7 +198,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
       </div>
 
       {/* 底部操作 */}
-      <div className="flex justify-end gap-2 px-5 py-3.5 border-t" style={{ borderColor: "var(--border)" }}>
+      <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
         <Button onClick={onCancel}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!canSave} loading={saving} onClick={handleSave}>
           {mode === "edit" ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}

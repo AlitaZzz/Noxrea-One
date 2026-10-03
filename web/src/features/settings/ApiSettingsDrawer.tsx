@@ -73,17 +73,13 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
   };
 
   return (
-    <div
-      className="flex flex-col gap-2 px-5 py-3.5 border-b"
-      style={{ borderColor: "var(--border)" }}
-    >
+    <div className="flex flex-col gap-2 border-b border-border px-5 py-3.5">
       <div className="flex items-center gap-3">
-        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--muted-foreground)" }}>
+        <span className="w-16 shrink-0 text-xs text-muted-foreground">
           {t("modelConfig.baseUrl")}
         </span>
         <span
-          className="flex-1 min-w-0 truncate text-[12.5px]"
-          style={{ color: "var(--muted-foreground)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+          className="flex-1 min-w-0 truncate font-mono text-xs text-muted-foreground"
         >
           {provider.baseUrl}
         </span>
@@ -92,12 +88,11 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
         </Button>
       </div>
       <div className="flex items-center gap-3">
-        <span className="w-16 shrink-0 text-[12px]" style={{ color: "var(--muted-foreground)" }}>
+        <span className="w-16 shrink-0 text-xs text-muted-foreground">
           {t("modelConfig.apiKey")}
         </span>
         <span
-          className="flex-1 min-w-0 truncate text-[12.5px]"
-          style={{ color: "var(--muted-foreground)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+          className="flex-1 min-w-0 truncate font-mono text-xs text-muted-foreground"
         >
           {revealed ? plain : provider.apiKey}
         </span>
@@ -210,29 +205,27 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       >
         <SheetContent
           side="right"
-          className="api-drawer gap-0 border-l border-[var(--border)] bg-card p-0"
-          style={{ width: "min(780px, 100vw)", maxWidth: "min(780px, 100vw)" }}
+          className="w-[min(780px,100vw)] max-w-[min(780px,100vw)] gap-0 border-l border-border p-0"
         >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <ApiOutlined style={{ color: "var(--muted-foreground)" }} />
+              <ApiOutlined className="text-muted-foreground" />
               {t("modelConfig.apiSettings")}
             </SheetTitle>
             <SheetDescription>{t("modelConfig.apiSettingsDescription")}</SheetDescription>
           </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col" style={{ color: "var(--foreground)" }}>
+        <div className="flex min-h-0 flex-1 flex-col text-foreground">
           <div className="flex flex-1 min-h-0">
           {/* ===== 左栏：供应商轨道 ===== */}
           <div
-            className="w-[220px] shrink-0 flex flex-col border-r select-none"
-            style={{ borderColor: "var(--border)" }}
+            className="flex w-[220px] shrink-0 flex-col select-none border-r border-border"
           >
-            <div className="flex items-center gap-1.5 px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-              <span className="text-[13px] font-medium" style={{ color: "var(--foreground)" }}>
+            <div className="flex items-center gap-1.5 border-b border-border px-4 py-3">
+              <span className="text-[13px] font-medium text-foreground">
                 {t("modelConfig.providers")}
               </span>
               {providers.length > 0 && (
-                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                <span className="text-xs text-muted-foreground">
                   {providers.length}
                 </span>
               )}
@@ -248,11 +241,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               </Button>
             </div>
             {providers.length === 0 ? (
-              <div
-                className="flex-1 flex flex-col items-center justify-center gap-1.5 px-4 text-center"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noProviders")}</div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-4 text-center text-muted-foreground">
+                <div className="text-[13px] text-muted-foreground">{t("modelConfig.noProviders")}</div>
                 <Button size="sm" variant="primary" className="mt-1" onClick={startAdd}>
                   <PlusOutlined />
                   {t("modelConfig.addProvider")}
@@ -316,17 +306,13 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
             ) : provider ? (
               <>
                 {/* 详情头：名称 + 协议 + 操作 */}
-                <div
-                  className="flex items-center gap-2 px-5 py-3 border-b select-none"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <span className="text-[15px] font-semibold truncate" style={{ color: "var(--foreground)" }}>
+                <div className="flex select-none items-center gap-2 border-b border-border px-5 py-3">
+                  <span className="truncate text-[15px] font-semibold text-foreground">
                     {provider.name}
                   </span>
                   {provider.protocol && (
                     <span
-                      className="shrink-0 text-xs leading-none px-1.5 py-1 rounded"
-                      style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                      className="shrink-0 rounded-md border border-border px-1.5 py-1 text-xs leading-none text-muted-foreground"
                     >
                       {t(`modelConfig.protocol.${provider.protocol}`)}
                     </span>
@@ -352,12 +338,9 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 <ApiSettingsModels provider={provider} onFetch={handleFetch} fetching={fetching} />
               </>
             ) : (
-              <div
-                className="flex-1 flex flex-col items-center justify-center gap-1.5 text-center"
-                style={{ color: "var(--muted-foreground)" }}
-              >
+              <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-center text-muted-foreground">
                 <ApiOutlined className="text-3xl mb-1" />
-                <div className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noProviders")}</div>
+                <div className="text-sm text-muted-foreground">{t("modelConfig.noProviders")}</div>
                 <div className="text-xs">{t("modelConfig.noProvidersDesc")}</div>
                 <Button size="sm" variant="primary" className="mt-2" onClick={startAdd}>
                   <PlusOutlined />

@@ -75,7 +75,7 @@ export default function SettingsModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="sm:max-w-[400px] bg-card">
+      <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>{t("auth.accountSettings")}</DialogTitle>
         </DialogHeader>
@@ -83,8 +83,7 @@ export default function SettingsModal({ open, onClose }: Props) {
         {/* Avatar */}
         <div className="flex flex-col items-center gap-2">
           <div
-            className="w-32 h-32 rounded-full flex items-center justify-center text-4xl font-bold cursor-pointer relative group hover:opacity-80 transition-opacity"
-            style={{ background: "var(--primary)", color: "var(--background)" }}
+            className="group relative flex size-32 cursor-pointer items-center justify-center rounded-full bg-primary text-4xl font-bold text-primary-foreground transition-opacity hover:opacity-80"
             onClick={() => fileRef.current?.click()}
           >
             {avatarUrl ? (
@@ -93,28 +92,28 @@ export default function SettingsModal({ open, onClose }: Props) {
               user?.username?.[0]?.toUpperCase() || "U"
             )}
             <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <CameraOutlined style={{ fontSize: 18 }} />
+              <CameraOutlined className="text-lg text-white" />
             </div>
           </div>
-          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("auth.clickUpload")}</span>
+          <span className="text-xs text-muted-foreground">{t("auth.clickUpload")}</span>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCropFile(f); setCropOpen(true); } }} />
         </div>
 
         {/* Username（登录身份，不可修改） */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.username")}</div>
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.username")}</div>
           <Input value={user?.username ?? ""} disabled />
         </div>
 
         {/* Old Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.currentPassword")}</div>
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.currentPassword")}</div>
           <PasswordInput placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
         </div>
 
         {/* New Password */}
         <div>
-          <div className="text-xs font-medium mb-1.5" style={{ color: "var(--muted-foreground)" }}>{t("auth.newPassword")}</div>
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.newPassword")}</div>
           <PasswordInput placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
         </div>
 

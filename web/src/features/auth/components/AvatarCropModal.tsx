@@ -129,7 +129,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent
         showOverlay={false}
-        className="sm:max-w-[360px] bg-card"
+        className="sm:max-w-[360px]"
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader>
@@ -137,8 +137,8 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
         </DialogHeader>
         <div className="flex flex-col items-center gap-3">
         <div
-          className="rounded-full overflow-hidden cursor-grab active:cursor-grabbing select-none"
-          style={{ width: SIZE, height: SIZE, border: "3px solid var(--border)" }}
+          className="cursor-grab select-none overflow-hidden rounded-full border-[3px] border-border active:cursor-grabbing"
+          style={{ width: SIZE, height: SIZE }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

@@ -6,7 +6,7 @@
 
 "use client";
 
-import type { ComponentType, CSSProperties } from "react";
+import type { ComponentType } from "react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,7 +37,7 @@ import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo, ModelProvider } from "@/lib/types/models";
 
 /** 模块级常量（稳定引用，避免每次渲染重建导致虚拟列表失效） */
-const CAP_PILLS: { cap: ModelCapability; Icon: ComponentType<{ className?: string; style?: CSSProperties }> }[] = [
+const CAP_PILLS: { cap: ModelCapability; Icon: ComponentType<{ className?: string }> }[] = [
   { cap: "text", Icon: TextIcon },
   { cap: "image", Icon: PictureOutlined },
   { cap: "video", Icon: VideoCameraOutlined },
@@ -60,13 +61,12 @@ const ModelRow = memo(function ModelRow({
   const [confirming, setConfirming] = useState(false);
   return (
     <div
-      className="group flex items-center gap-2 px-3 h-full"
+      className="group flex h-full items-center gap-2 px-3"
       onMouseLeave={() => confirming && setConfirming(false)}
     >
-      <ModelIcon model={m.name} className="text-xs shrink-0" style={{ color: "var(--muted-foreground)" }} />
+      <ModelIcon model={m.name} className="shrink-0 text-xs text-muted-foreground" />
       <span
-        className="flex-1 min-w-0 truncate text-[13px]"
-        style={{ color: dim ? "var(--muted-foreground)" : "var(--foreground)" }}
+        className={`min-w-0 flex-1 truncate text-sm ${dim ? "text-muted-foreground" : "text-foreground"}`}
       >
         {m.name}
       </span>
@@ -272,22 +272,16 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
 
       {/* 模型列表 / 空态 */}
       {provider.models.length === 0 ? (
-        <div
-          className="flex-1 flex flex-col items-center justify-center gap-1.5 pb-8 text-center"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          <div className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("modelConfig.noModels")}</div>
-          <div className="text-xs">{t("modelConfig.noModelsDesc")}</div>
+        <Empty className="h-auto min-h-0 flex-1 gap-1.5 rounded-none border-0 p-0 pb-8">
+          <EmptyDescription className="text-sm text-muted-foreground">{t("modelConfig.noModels")}</EmptyDescription>
+          <EmptyDescription className="text-xs">{t("modelConfig.noModelsDesc")}</EmptyDescription>
           <Button size="sm" variant="primary" className="mt-2" onClick={onFetch} loading={fetching}>
             <DownloadOutlined />
             {t("modelConfig.fetchModels")}
           </Button>
-        </div>
+        </Empty>
       ) : rows.length === 0 ? (
-        <div
-          className="flex-1 flex items-center justify-center text-[13px]"
-          style={{ color: "var(--muted-foreground)" }}
-        >
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {t("modelConfig.noMatchModels")}
         </div>
       ) : (
@@ -301,8 +295,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
             renderItem={(r) =>
               r.kind === "header" ? (
                 <div
-                  className="flex items-center px-2 h-full text-[12px] font-medium"
-                  style={{ color: "var(--muted-foreground)" }}
+                  className="flex h-full items-center px-2 text-xs font-medium text-muted-foreground"
                 >
                   {r.label}
                 </div>

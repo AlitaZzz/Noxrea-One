@@ -53,10 +53,9 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align={placement === "bottomLeft" ? "start" : "end"}>
         <DropdownMenuLabel>
-          <div className="flex items-center gap-2 py-1" style={{ color: "var(--foreground)" }}>
+          <div className="flex items-center gap-2 py-1 text-foreground">
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden"
-              style={{ background: user?.avatarUrl ? "transparent" : "var(--primary)", color: "var(--background)" }}
+              className={`flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ${user?.avatarUrl ? "bg-transparent" : "bg-primary text-primary-foreground"}`}
             >
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
