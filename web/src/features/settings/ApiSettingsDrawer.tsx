@@ -322,7 +322,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                       <DownloadOutlined />
                       {fetchLabel}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={startEdit}>
+                    <Button size="sm" variant="outline" onClick={startEdit}>
                       <EditOutlined />
                       {t("common.edit")}
                     </Button>

@@ -9,11 +9,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ArrowLeftOutlined,CopyOutlined } from "@/components/ui/AppIcon";
+import { ArrowLeftOutlined, CopyOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelProvider, ProviderPreset } from "@/lib/types/models";
@@ -118,91 +121,92 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       {/* 头部：返回 + 标题 */}
-      <div className="flex items-center gap-1 border-b border-border px-4 py-3">
+      <SheetHeader className="flex-row items-center gap-1 border-b border-border px-4 py-3">
         <Button size="sm" variant="ghost" iconOnly onClick={onCancel} aria-label={t("modelConfig.back")}>
           <ArrowLeftOutlined />
         </Button>
-        <span className="text-[15px] font-semibold text-foreground">
+        <SheetTitle className="text-[15px] font-semibold">
           {mode === "edit" ? t("modelConfig.editProvider") : t("modelConfig.addProvider")}
-        </span>
-      </div>
+        </SheetTitle>
+      </SheetHeader>
 
       {/* 字段 */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        <div className="flex max-w-[560px] flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{t("common.name")}</span>
-              <Input
-                placeholder={t("modelConfig.myApi")}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
+        <FieldGroup className="max-w-[560px] gap-4">
+          <Field>
+            <Label htmlFor="api-settings-name">{t("common.name")}</Label>
+            <Input
+              id="api-settings-name"
+              placeholder={t("modelConfig.myApi")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field>
+              <Label htmlFor="api-settings-preset">{t("modelConfig.preset")}</Label>
+              <Select onValueChange={(presetName) => {
+                const p = presets.find((pr) => pr.name === presetName);
+                if (!p) return;
+                setBaseUrl(p.baseUrl ?? "");
+                setProtocol(p.protocol || "openai");
+              }}>
+                <SelectTrigger id="api-settings-preset" className="w-full"><SelectValue placeholder={t("modelConfig.preset")} /></SelectTrigger>
+                <SelectContent>
+                  {presets.map((preset) => <SelectItem key={preset.name} value={preset.name}>{preset.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <Label htmlFor="api-settings-protocol">{t("modelConfig.protocolLabel")}</Label>
+              <Select value={protocol} onValueChange={setProtocol}>
+                <SelectTrigger id="api-settings-protocol" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">{t("modelConfig.protocol.openai")}</SelectItem>
+                  <SelectItem value="ark">{t("modelConfig.protocol.ark")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <Field>
+            <Label htmlFor="api-settings-base-url">{t("modelConfig.baseUrl")}</Label>
+            <Input
+              id="api-settings-base-url"
+              placeholder="https://api.openai.com/v1"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor="api-settings-api-key">{t("modelConfig.apiKey")}</Label>
+            <div className="flex gap-1.5">
+              <PasswordInput
+                id="api-settings-api-key"
+                className="flex-1"
+                placeholder={mode === "edit" ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setKeyDirty(true);
+                }}
+                visible={keyVisible}
+                onVisibleChange={handleKeyVisibleChange}
               />
+              {mode === "edit" && (
+                <Button size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
+                  <CopyOutlined />
+                </Button>
+              )}
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{t("modelConfig.baseUrl")}</span>
-              <Input
-                placeholder="https://api.openai.com/v1"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">{t("modelConfig.protocolLabel")}</span>
-                <Select value={protocol} onValueChange={setProtocol}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">{t("modelConfig.protocol.openai")}</SelectItem>
-                    <SelectItem value="ark">{t("modelConfig.protocol.ark")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">{t("modelConfig.preset")}</span>
-                <Select onValueChange={(presetName) => {
-                  const p = presets.find((pr) => pr.name === presetName);
-                  if (!p) return;
-                  setBaseUrl(p.baseUrl ?? "");
-                  setProtocol(p.protocol || "openai");
-                }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder={t("modelConfig.preset")} /></SelectTrigger>
-                  <SelectContent>
-                    {presets.map((preset) => <SelectItem key={preset.name} value={preset.name}>{preset.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">{t("modelConfig.apiKey")}</span>
-              <div className="flex gap-1.5">
-                <PasswordInput
-                  className="flex-1"
-                  placeholder={mode === "edit" ? t("modelConfig.apiKeyKeepBlank") : "sk-..."}
-                  value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setKeyDirty(true);
-                  }}
-                  visible={keyVisible}
-                  onVisibleChange={handleKeyVisibleChange}
-                />
-                {mode === "edit" && (
-                  <Button size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
-                    <CopyOutlined />
-                  </Button>
-                )}
-              </div>
-            </div>
-        </div>
-      </div>
-
-      {/* 底部操作 */}
-      <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
-        <Button onClick={onCancel}>{t("common.cancel")}</Button>
-        <Button variant="primary" disabled={!canSave} loading={saving} onClick={handleSave}>
-          {mode === "edit" ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
-        </Button>
+          </Field>
+        </FieldGroup>
+        <SheetFooter className="mt-6 max-w-[560px] flex-row justify-end border-t border-border p-0 pt-4">
+          <Button variant="outline" onClick={onCancel}>{t("common.cancel")}</Button>
+          <Button disabled={!canSave} loading={saving} onClick={handleSave}>
+            {mode === "edit" ? t("modelConfig.saveChanges") : t("modelConfig.addProvider")}
+          </Button>
+        </SheetFooter>
       </div>
     </div>
   );

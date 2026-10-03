@@ -66,12 +66,15 @@ function DialogContent({
   global?: boolean
   zIndex?: number
 }) {
-  const { parentContainer, overlayRef, overlayRoot, depth } = useLayerParent()
+  const { parentContainer, overlayRef, overlayRoot, depth, zIndex: layerZIndex } = useLayerParent()
   const container = global ? undefined : parentContainer
+  const resolvedZIndex = zIndex ?? layerZIndex
+  const layerStyle = resolvedZIndex === undefined ? undefined : { zIndex: resolvedZIndex }
   const content = (
     <div
       data-slot="dialog-positioner"
       className="pointer-events-none fixed inset-0 z-50 grid place-items-center"
+      style={layerStyle}
     >
       <DialogPrimitive.Content
         data-slot="dialog-content"
@@ -79,7 +82,7 @@ function DialogContent({
           "pointer-events-auto relative grid w-full max-w-[calc(100%-2rem)] gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
-        style={{ ...style, ...(zIndex === undefined ? {} : { zIndex }) }}
+        style={{ ...style, ...layerStyle }}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event);
           if (event.defaultPrevented) return;
@@ -110,7 +113,7 @@ function DialogContent({
   )
   return (
     <DialogPortal container={container}>
-      {showOverlay && <DialogOverlay style={zIndex === undefined ? undefined : { zIndex }} />}
+      {showOverlay && <DialogOverlay style={layerStyle} />}
       {content}
     </DialogPortal>
   )

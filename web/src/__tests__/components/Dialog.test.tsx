@@ -58,6 +58,20 @@ describe("Dialog", () => {
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
   });
 
+  it("applies explicit z-index to the full dialog layer", () => {
+    render(
+      <Dialog open>
+        <DialogContent zIndex={1050}>
+          <DialogTitle>Confirm</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(document.querySelector('[data-slot="dialog-positioner"]')).toHaveStyle({ zIndex: "1050" });
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveStyle({ zIndex: "1050" });
+    expect(document.querySelector('[data-slot="dialog-content"]')).toHaveStyle({ zIndex: "1050" });
+  });
+
   it("focuses the first editable control instead of an action button", () => {
     render(
       <Dialog open>
