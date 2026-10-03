@@ -11,10 +11,12 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
-import { CheckOutlined, ClockCircleOutlined,DeleteOutlined, EditOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
+import { CheckOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
 import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import SettingsModal from "@/features/auth/components/SettingsModal";
@@ -25,6 +27,19 @@ import { flushAndWait } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
 import type { ProjectSummary } from "@/features/project/types";
 import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
+
+function projectThumbnailUrl(src: string): string {
+  if (!src.includes("/api/files/")) return src;
+  const hashIndex = src.indexOf("#");
+  const hash = hashIndex >= 0 ? src.slice(hashIndex) : "";
+  const withoutHash = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
+  const queryIndex = withoutHash.indexOf("?");
+  const pathname = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+  const query = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : "";
+  const params = new URLSearchParams(query);
+  params.set("w", "480");
+  return `${pathname}?${params.toString()}${hash}`;
+}
 
 export default function ProjectListPage() {
   const router = useRouter();
@@ -156,44 +171,36 @@ export default function ProjectListPage() {
       {/* Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-6xl mx-auto">
           {/* Create new project card — always first */}
-          <div
-            className="rounded-xl border border-dashed cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 flex flex-col items-center justify-center"
-            style={{
-              background: "var(--card)",
-              borderColor: "var(--border)",
-              aspectRatio: "1 / 1",
-            }}
+          <Card
+            className="group flex h-full min-h-[220px] cursor-pointer flex-col items-center justify-center overflow-hidden border-dashed border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-muted/20 hover:shadow-lg"
             onClick={handleCreate}
           >
-            <PlusOutlined className="text-3xl mb-2" style={{ color: "var(--muted-foreground)" }} />
-            <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>{t("project.new")}</span>
-          </div>
+            <div className="flex size-12 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 bg-muted/30 transition-colors group-hover:border-primary group-hover:bg-primary/10">
+              <PlusOutlined className="text-2xl text-muted-foreground transition-colors group-hover:text-primary" />
+            </div>
+            <span className="mt-3 text-sm font-medium text-foreground">{t("project.new")}</span>
+          </Card>
 
           {projects.map((p) => (
-            <div
+            <Card
               key={p.id}
-              className="group relative rounded-xl border cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5"
-              style={{
-                background: "var(--card)",
-                borderColor: "var(--border)",
-              }}
+              className="group relative flex h-full cursor-pointer overflow-hidden border-border bg-card p-0 gap-0 transition-all hover:-translate-y-0.5 hover:shadow-lg"
               onClick={() => handleOpen(p)}
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
               <div
-                className="aspect-video rounded-t-xl flex items-center justify-center overflow-hidden"
-                style={{ background: "var(--popover)" }}
+                className="flex aspect-video items-center justify-center overflow-hidden bg-popover"
               >
                 {p.thumbnail ? (
-                  <img src={p.thumbnail} alt="" className="w-full h-full object-cover" />
+                  <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 ) : (
-                  <FolderOpenOutlined className="text-3xl" style={{ color: "var(--muted-foreground)" }} />
+                  <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}
               </div>
 
               {/* Info */}
-              <div className="p-3">
-                <div className="flex h-9 items-center justify-between gap-2">
+              <CardContent className="shrink-0 p-3">
+                <div className="flex h-9 min-w-0 items-center justify-between gap-2">
                   {editingId === p.id ? (
                     <Input
                       className="flex-1 min-w-0 text-sm font-medium"
@@ -207,58 +214,61 @@ export default function ProjectListPage() {
                   ) : (
                     <div className="flex h-full min-w-0 flex-1 items-center truncate text-sm font-medium">{p.name}</div>
                   )}
-                  <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="sm"
-                      iconOnly
-                      variant="ghost"
-                      aria-label={t("project.setCover")}
-                      loading={coverUploadingId === p.id}
-                      disabled={coverUploadingId !== null}
-                      onClick={() => handlePickCover(p.id)}
-                    >
-                      <PictureOutlined />
-                    </Button>
-                    <Button
-                      size="sm"
-                      iconOnly
-                      variant="ghost"
-                      aria-label={editingId === p.id ? t("common.save") : t("common.edit")}
-                      // 编辑态点击不让 input 先失焦（blur 保存 + click 重开会产生闪跳），由 click 统一切换
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        if (editingId === p.id) {
-                          if (editName.trim()) renameProject(p.id, editName.trim());
-                          setEditingId(null);
-                        } else {
-                          setEditingId(p.id);
-                          setEditName(p.name);
-                        }
-                      }}
-                    >
-                      {/* 确认对勾用青柠：与检查器内联保存等肯定语义一致（globals.css 品牌色规则） */}
-                      {editingId === p.id ? <CheckOutlined className="text-primary" /> : <EditOutlined />}
-                    </Button>
-                    <Button
-                      size="sm"
-                      iconOnly
-                      variant="ghost"
-                      aria-label={t("common.delete")}
-                      onClick={() => setDeleteTarget(p)}
-                    >
-                      <DeleteOutlined />
-                    </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={t("common.moreActions")}
+                        onMouseDown={(e) => {
+                          if (editingId === p.id) e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <EllipsisOutlined />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-auto min-w-36" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem disabled={coverUploadingId !== null} onSelect={() => handlePickCover(p.id)}>
+                        <PictureOutlined />
+                        {t("project.setCover")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          if (editingId === p.id) {
+                            if (editName.trim()) renameProject(p.id, editName.trim());
+                            setEditingId(null);
+                          } else {
+                            setEditingId(p.id);
+                            setEditName(p.name);
+                          }
+                        }}
+                      >
+                        {editingId === p.id ? <CheckOutlined /> : <EditOutlined />}
+                        {editingId === p.id ? t("common.save") : t("common.rename")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(p)}>
+                        <DeleteOutlined />
+                        {t("common.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="mt-1.5 flex min-h-8 items-end justify-between gap-3">
+                  <div className="min-w-0 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1 truncate">
+                      <ClockCircleOutlined className="shrink-0 text-[10px]" />
+                      <span className="truncate">{formatDate(p.updatedAt)}</span>
+                    </div>
+                    <div className="mt-0.5 truncate">
+                      {p.nodeCount}{t("canvas.nodesCount")}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                  <ClockCircleOutlined className="text-[10px]" />
-                  {formatDate(p.updatedAt)}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-                  {p.nodeCount}{t("canvas.nodesCount")}
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 

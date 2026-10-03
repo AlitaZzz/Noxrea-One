@@ -17,6 +17,7 @@ import { NewChatIcon } from "@/components/ui/AppIcon";
 import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -161,9 +162,9 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
         <SheetHeader className="h-16 shrink-0 flex-row items-center gap-2 border-0 py-0 pl-3 pr-14">
           <SheetTitle className="min-w-0 flex-1">
             {editing ? (
-          <input
+          <Input
             autoFocus
-            className="chat-title-input"
+            className="h-8 min-w-40 max-w-60 text-sm font-medium"
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={commitRename}

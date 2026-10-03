@@ -11,6 +11,8 @@
     "info": "Info",
     "delete": "Delete",
     "edit": "Edit",
+    "rename": "Rename",
+    "moreActions": "More actions",
     "group": "Group",
     "ungroup": "Ungroup",
     "layout": "Layout",

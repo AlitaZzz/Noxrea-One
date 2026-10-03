@@ -11,6 +11,8 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { uploadOne } from "@/features/canvas/upload";
 import { canvasToBlob } from "@/lib/utils/image-utils";
@@ -70,7 +72,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
       y: prev.y + (oldSrcW - newSrcW) / 2,
     }));
     prevZoom.current = zoom;
-  }, [zoom]);
+  }, [img, zoom]);
 
   // Draw preview
   useEffect(() => {
@@ -145,9 +147,17 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
           <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ width: SIZE, height: SIZE }} />
         </div>
         <div className="flex items-center gap-2 w-full">
-          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("common.zoom")}</span>
-          <input type="range" min={0.05} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(Number(e.target.value))}
-            className="flex-1" style={{ accentColor: "#c7f43d" }} />
+          <Label htmlFor="avatar-zoom" className="text-xs text-muted-foreground">{t("common.zoom")}</Label>
+          <Slider
+            id="avatar-zoom"
+            aria-label={t("common.zoom")}
+            min={0.05}
+            max={3}
+            step={0.01}
+            value={[zoom]}
+            onValueChange={([value]) => { if (value !== undefined) setZoom(value); }}
+            className="flex-1"
+          />
         </div>
         <div className="flex gap-2 w-full">
           <Button variant="outline" onClick={onClose} block>{t("common.cancel")}</Button>

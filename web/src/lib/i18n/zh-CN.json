@@ -11,6 +11,8 @@
     "info": "信息",
     "delete": "删除",
     "edit": "编辑",
+    "rename": "重命名",
+    "moreActions": "更多操作",
     "group": "分组",
     "ungroup": "解组",
     "layout": "布局",

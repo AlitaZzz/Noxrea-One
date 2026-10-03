@@ -1269,17 +1269,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 .chat-title:hover {
   opacity: 0.7;
 }
-.chat-title-input {
-  font-size: 14px;
-  font-weight: 500;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 6px;
-  background: var(--card);
-  color: var(--foreground);
-  outline: none;
-  min-width: 160px;
-}
 /* markdown 渲染容器 */
 .cortex-markdown {
   display: flex;
@@ -1399,11 +1388,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 @media (prefers-reduced-motion: reduce) {
   .login-anim, .login-anim * { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
 }
-.login-input { background: #161619; border: 1px solid #2d2d33; }
-.login-input:focus { outline: none; border-color: #c7f43d; box-shadow: 0 0 0 3px rgba(199, 244, 61, 0.12); }
-.login-input-error { border-color: #ef4444 !important; }
-.login-input-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important; }
-
 /* ===== 生成面板文本域（gen-textarea）=====
    统一文本域聚焦态描边；原先三面板各自内联样式重复定义，收口至此。 */
 .gen-textarea:focus,

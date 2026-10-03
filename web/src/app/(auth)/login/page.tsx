@@ -14,6 +14,10 @@ import { useCallback, useEffect, useState } from "react";
 import { EyeIcon } from "@/components/ui/AppIcon";
 import { EyeOffIcon } from "@/components/ui/AppIcon";
 import { SpinnerIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
@@ -277,10 +281,6 @@ function RightPanel({
   const isSignin = mode === "signin";
   const [showPw, setShowPw] = useState(false);
 
-  const inputClass = (hasError?: string) =>
-    `login-input w-full px-4 py-3 rounded-xl text-white placeholder-zinc-500 transition-all duration-200
-     ${hasError ? "login-input-error" : ""}`;
-
   return (
     <div
       // 垂直方向用固定 padding 定位而非 flex 居中：任何首帧与稳定态之间的
@@ -300,110 +300,115 @@ function RightPanel({
           <h1 className="text-2xl font-bold" style={{ color: LIME }}>{APP_NAME}</h1>
         </div>
 
-        <div
-          className="mb-8 login-anim opacity-0"
+        <Card
+          className="login-anim w-full opacity-0"
           style={{ animation: "loginFadeUp 0.7s ease-out 0.3s forwards" }}
         >
-          <h2 className="text-2xl font-bold text-white mb-1">
-            {isSignin ? i18n.t("auth.login.title") : i18n.t("auth.login.createAccount")}
-          </h2>
-          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-            {isSignin ? i18n.t("auth.login.subtitle", { name: APP_NAME }) : i18n.t("auth.login.createSubtitle")}
-          </p>
-        </div>
+          <CardHeader>
+            <CardTitle className="text-xl">
+              {isSignin ? i18n.t("auth.login.title") : i18n.t("auth.login.createAccount")}
+            </CardTitle>
+            <CardDescription>
+              {isSignin ? i18n.t("auth.login.subtitle", { name: APP_NAME }) : i18n.t("auth.login.createSubtitle")}
+            </CardDescription>
+            <CardAction>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={onToggle}
+                className="h-auto p-0 font-medium text-primary"
+              >
+                {isSignin ? i18n.t("auth.login.registerNow") : i18n.t("auth.login.loginNow")}
+              </Button>
+            </CardAction>
+          </CardHeader>
 
-        <form onSubmit={onSubmit} className="ui-select-none space-y-5" noValidate>
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "var(--foreground)" }}>{i18n.t("auth.login.username")}</label>
-            <input
+          <form onSubmit={onSubmit} className="ui-select-none flex flex-col gap-6" noValidate>
+            <CardContent className="space-y-5">
+            <div>
+            <Label htmlFor="login-username" className="mb-2 text-foreground">{i18n.t("auth.login.username")}</Label>
+            <Input
+              id="login-username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder={i18n.t("auth.login.usernamePlaceholder")}
-              aria-invalid={!!errors.username}
-              className={inputClass(errors.username)}
+              aria-invalid={errors.username ? true : undefined}
+              aria-describedby={errors.username ? "login-username-error" : undefined}
             />
             {errors.username && (
-              <p className="mt-1.5 text-sm text-red-400">{errors.username}</p>
+              <p id="login-username-error" className="mt-1.5 text-sm text-destructive">{errors.username}</p>
             )}
-          </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: "var(--foreground)" }}>{i18n.t("auth.login.password")}</label>
+            <div>
+            <Label htmlFor="login-password" className="mb-2 text-foreground">{i18n.t("auth.login.password")}</Label>
             <div className="relative">
-              <input
+              <Input
+                id="login-password"
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={i18n.t("auth.login.passwordPlaceholder")}
-                aria-invalid={!!errors.password}
-                className={`${inputClass(errors.password)} pr-11`}
+                aria-invalid={errors.password ? true : undefined}
+                aria-describedby={errors.password ? "login-password-error" : undefined}
+                className="pr-11"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
+                iconOnly
                 onClick={() => setShowPw((v) => !v)}
                 aria-label={showPw ? i18n.t("auth.login.hidePassword") : i18n.t("auth.login.showPassword")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
               >
                 {showPw ? (
                   <EyeIcon className="w-5 h-5" />
                 ) : (
                   <EyeOffIcon className="w-5 h-5" />
                 )}
-              </button>
+              </Button>
             </div>
             {errors.password && (
-              <p className="mt-1.5 text-sm text-red-400">{errors.password}</p>
+              <p id="login-password-error" className="mt-1.5 text-sm text-destructive">{errors.password}</p>
             )}
-          </div>
+            </div>
+            </CardContent>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="login-anim relative overflow-hidden w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            style={{
-              backgroundColor: LIME,
-              color: "var(--background)",
-              boxShadow: `0 8px 24px ${limeAlpha(0.18)}`,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 8px 32px ${limeAlpha(0.32)}`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = `0 8px 24px ${limeAlpha(0.18)}`; }}
-          >
-            {/* 斜向光泽周期性扫过 */}
-            <span
-              className="login-anim absolute inset-0 pointer-events-none"
-              style={{
-                background: "linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%)",
-                animation: "loginSheen 3.8s ease-in-out infinite",
-              }}
-            />
-            <span className="relative flex items-center justify-center gap-2">
-              {loading ? (
-                <>
-                  <SpinnerIcon className="animate-spin h-4 w-4" />
-                  {i18n.t("common.processing")}
-                </>
-              ) : isSignin ? (
-                i18n.t("auth.login.signIn")
-              ) : (
-                i18n.t("auth.login.signUp")
-              )}
-            </span>
-          </button>
-        </form>
-
-        <div className="mt-8 text-center">
-          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-            {isSignin ? i18n.t("auth.login.noAccount") : i18n.t("auth.login.hasAccount")}{" "}
-            <button
-              onClick={onToggle}
-              className="font-medium transition-colors hover:opacity-80 cursor-pointer"
-              style={{ color: LIME }}
-            >
-              {isSignin ? i18n.t("auth.login.registerNow") : i18n.t("auth.login.loginNow")}
-            </button>
-          </p>
-        </div>
+            <CardFooter className="flex-col gap-2">
+              <Button
+                type="submit"
+                size="lg"
+                block
+                disabled={loading}
+                className="login-anim relative overflow-hidden"
+              >
+                {/* 斜向光泽周期性扫过 */}
+                <span
+                  className="login-anim absolute inset-0 pointer-events-none"
+                  style={{
+                    background: "linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%)",
+                    animation: "loginSheen 3.8s ease-in-out infinite",
+                  }}
+                />
+                <span className="relative flex items-center justify-center gap-2">
+                  {loading ? (
+                    <>
+                      <SpinnerIcon className="animate-spin h-4 w-4" />
+                      {i18n.t("common.processing")}
+                    </>
+                  ) : isSignin ? (
+                    i18n.t("auth.login.signIn")
+                  ) : (
+                    i18n.t("auth.login.signUp")
+                  )}
+                </span>
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
       </div>
     </div>
   );
