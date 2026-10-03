@@ -6,13 +6,12 @@
 
 "use client";
 
-import { usePathname,useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppShell from "@/components/layout/AppShell";
-import { CheckOutlined, ClockCircleOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
-import { ChevronDownIcon } from "@/components/ui/AppIcon";
+import { CheckOutlined, ChevronDownIcon, ClockCircleOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -124,6 +123,13 @@ export default function ProjectListPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
+  const handleCardKeyDown = (event: React.KeyboardEvent, onOpen: () => void) => {
+    if ((event.target as HTMLElement).closest("button, input, a, [role='menuitem']")) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onOpen();
+  };
+
   return (
     <AppShell>
       <div className="ui-select-none h-full overflow-y-auto p-6 text-foreground md:p-10">
@@ -156,17 +162,22 @@ export default function ProjectListPage() {
           onLogout={() => useAuthStore.getState().logout().finally(() => router.push("/login"))}
           trigger={
             /* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */
-            <div className="flex cursor-pointer items-center gap-2 rounded-lg bg-popover px-2 py-1 transition-opacity hover:opacity-80">
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={t("auth.accountSettings")}
+              className="h-auto gap-2 rounded-lg bg-popover px-2 py-1 text-foreground hover:bg-muted"
+            >
               <div className={`flex size-8 items-center justify-center overflow-hidden rounded-full text-xs font-bold ${user?.avatarUrl ? "bg-transparent" : "bg-primary text-primary-foreground"}`}>
                 {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
                   (user?.username || "U")[0].toUpperCase()
                 )}
               </div>
               <span className="text-sm font-medium text-foreground">{user?.username || t("auth.defaultUser")}</span>
               <ChevronDownIcon className="size-3 text-muted-foreground" />
-            </div>
+            </Button>
           }
         />
       </div>
@@ -176,7 +187,11 @@ export default function ProjectListPage() {
           {/* Create new project card — always first */}
           <Card
             className="group relative flex cursor-pointer flex-col gap-0 overflow-hidden border-dashed border-border bg-card p-0"
+            role="button"
+            tabIndex={0}
+            aria-label={t("project.new")}
             onClick={handleCreate}
+            onKeyDown={(event) => handleCardKeyDown(event, handleCreate)}
           >
             <div className="flex aspect-video items-center justify-center" aria-hidden="true" />
             <CardContent aria-hidden="true" className={PROJECT_CARD_INFO_CLASS} />
@@ -192,7 +207,11 @@ export default function ProjectListPage() {
             <Card
               key={p.id}
               className="group relative flex h-full cursor-pointer gap-0 overflow-hidden border-border bg-card p-0"
+              role="button"
+              tabIndex={0}
+              aria-label={p.name}
               onClick={() => handleOpen(p)}
+              onKeyDown={(event) => handleCardKeyDown(event, () => handleOpen(p))}
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
               <div
