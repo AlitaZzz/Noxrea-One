@@ -204,9 +204,8 @@ function LeftPanel() {
 
   return (
     <div
-      className="relative hidden lg:flex w-1/2 flex-col items-center justify-center overflow-hidden"
+      className="relative hidden w-1/2 flex-col items-center justify-center overflow-hidden bg-background lg:flex"
       style={{
-        backgroundColor: "var(--background)",
         backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px)",
         backgroundSize: "26px 26px",
       }}
@@ -286,18 +285,17 @@ function RightPanel({
       // 垂直方向用固定 padding 定位而非 flex 居中：任何首帧与稳定态之间的
       // 内容高度差都会让居中布局整体上下回弹（顶栏对齐的页面则完全不可见），
       // 固定 padding 让标题/表单位置与内容高度彻底解耦
-      className="relative w-full lg:w-1/2 flex justify-center px-8 overflow-hidden"
+      className="relative flex w-full justify-center overflow-hidden bg-background px-8 lg:w-1/2"
       style={{
         paddingTop: "max(96px, calc(50vh - 200px))",
         paddingBottom: "48px",
-        backgroundColor: "var(--background)",
         backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 5%, transparent) 1px, transparent 1px)",
         backgroundSize: "26px 26px",
       }}
     >
       <div className="relative w-full max-w-[420px]">
         <div className="lg:hidden text-center mb-8">
-          <h1 className="text-2xl font-bold" style={{ color: LIME }}>{APP_NAME}</h1>
+          <h1 className="text-2xl font-bold text-primary">{APP_NAME}</h1>
         </div>
 
         <Card
@@ -501,7 +499,7 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen bg-[var(--background)] overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
       <LeftPanel />
       <RightPanel
         mode={mode}
