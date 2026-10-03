@@ -21,12 +21,7 @@ export default function OfflineIndicator() {
     <div
       role="status"
       aria-label={t("offline.label")}
-      className="flex items-center gap-2 border-[0.5px] px-3 text-[12px] transition-colors h-8 rounded-lg select-none"
-      style={{
-        color: "var(--foreground)",
-        backgroundColor: "var(--card)",
-        borderColor: "var(--border)",
-      }}
+      className="flex h-8 select-none items-center gap-2 rounded-md border border-border bg-card px-3 text-xs text-foreground transition-colors"
     >
       <span data-testid="sync-status-dot" className="rounded-full size-2 bg-amber-400" aria-hidden="true" />
       <span>{t("offline.label")}</span>

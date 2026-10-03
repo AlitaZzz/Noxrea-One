@@ -9,13 +9,7 @@ import { ReactNode } from "react";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div
-      className="flex flex-col h-screen w-screen overflow-hidden"
-      style={{
-        background: "var(--background)",
-        color: "var(--foreground)",
-      }}
-    >
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Canvas area */}
       <main className="flex-1 relative overflow-hidden">{children}</main>
     </div>

@@ -122,21 +122,13 @@ export function AssetHoverPreview({
 
   return createPortal(
     <div
+      className="pointer-events-none fixed z-[9999] overflow-hidden rounded-xl border border-border bg-black shadow-2xl transition-opacity duration-150 ease-out"
       style={{
-        position: "fixed",
         left,
         top,
-        zIndex: 9999,
-        pointerEvents: "none",
         width: box ? box.w : PREVIEW_W,
         maxHeight: box ? box.h : "70vh",
-        borderRadius: 12,
-        overflow: "hidden",
-        background: "#000",
-        border: "1px solid var(--border)",
-        boxShadow: "0 12px 40px rgba(0,0,0,0.55)",
         opacity: box ? 1 : 0,
-        transition: "opacity 120ms ease-out",
       }}
     >
       {isVideo ? (
@@ -167,7 +159,7 @@ export function AssetHoverPreview({
             }
             setBox({ w, h });
           }}
-          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", background: "#000" }}
+          className="block size-full bg-black object-contain"
         />
       ) : (
         <img
@@ -197,7 +189,7 @@ export function AssetHoverPreview({
             }
             setBox({ w, h });
           }}
-          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          className="block size-full object-contain"
         />
       )}
     </div>,
