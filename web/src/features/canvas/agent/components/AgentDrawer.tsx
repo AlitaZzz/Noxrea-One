@@ -156,8 +156,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
       <SheetContent
         side="right"
         showOverlay={false}
-        className="w-[420px] max-w-[100vw] gap-0 border-l border-[var(--border)] bg-card p-0"
-        style={{ width: "min(420px, 100vw)", maxWidth: "min(420px, 100vw)" }}
+        className="w-[min(420px,100vw)] !max-w-[min(420px,100vw)] gap-0 border-l border-border p-0"
       >
         <SheetHeader className="h-16 shrink-0 flex-row items-center gap-2 border-0 py-0 pl-3 pr-14">
           <SheetTitle className="min-w-0 flex-1">
@@ -176,7 +175,12 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
           />
             ) : (
           <Tooltip><TooltipTrigger asChild>
-              <span className="chat-title" onClick={startRename}>{chatTitle ?? t("agent.newChat")}</span>
+              <span
+                className="inline-block max-w-60 cursor-pointer truncate text-sm font-medium text-foreground transition-opacity hover:opacity-70"
+                onClick={startRename}
+              >
+                {chatTitle ?? t("agent.newChat")}
+              </span>
             </TooltipTrigger><TooltipContent side="bottom">{t("agent.renameTooltip")}</TooltipContent></Tooltip>
             )}
           </SheetTitle>
@@ -215,37 +219,37 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               </TooltipTrigger>
               <TooltipContent side="bottom">{t("agent.historyTitle")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="end" className="chat-history-popover z-[1050] w-auto p-0 bg-transparent">
-              <div className="panel-popover chat-history-body">
-                <div className="chat-history-title">{t("agent.historyTitle")}</div>
-                <div className="chat-history-list">
+            <PopoverContent side="bottom" align="end" className="z-[1050] w-[320px] p-0">
+              <div className="flex flex-col overflow-hidden">
+                <div className="px-4 pb-2 pt-3.5 text-base font-semibold leading-5 text-foreground">{t("agent.historyTitle")}</div>
+                <div className="max-h-[260px] overflow-y-auto px-2 pb-2 pt-1">
                   {sessions.length === 0 ? (
-                    <div className="chat-history-empty">{t("agent.historyEmpty")}</div>
+                    <div className="px-3 py-6 text-center text-[13px] text-muted-foreground">{t("agent.historyEmpty")}</div>
                   ) : (
                     sessions.map((s) => (
-                      <div key={s.id} className="chat-history-item group transition-colors hover:bg-accent">
+                      <div key={s.id} className="group flex w-full min-w-0 items-center rounded-md transition-colors hover:bg-accent">
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="chat-history-main w-full justify-start px-3 text-[13px] font-normal text-foreground"
+                          className="min-w-0 flex-1 justify-start px-3 text-[13px] font-normal text-foreground"
                           onClick={() => {
                             void loadHistory(s.id);
                             setHistoryOpen(false);
                           }}
                         >
-                          <span className="chat-history-name">{s.title || t("agent.newChat")}</span>
+                          <span className="block truncate">{s.title || t("agent.newChat")}</span>
                         </Button>
-                        <div className="chat-history-side">
+                        <div className="relative h-8 min-w-11 shrink-0">
                           <Tooltip><TooltipTrigger asChild>
-                              <span className="chat-history-time">{formatRelative(s.updatedAt)}</span>
+                              <span className="absolute inset-0 flex items-center justify-end pr-1.5 text-xs tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">{formatRelative(s.updatedAt)}</span>
                             </TooltipTrigger><TooltipContent side="top">{new Date(s.updatedAt).toLocaleString()}</TooltipContent></Tooltip>
                           <Tooltip><TooltipTrigger asChild>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon-xs"
-                                className="chat-history-del p-0 text-muted-foreground"
+                                className="pointer-events-none absolute inset-0 flex items-center justify-end pr-1.5 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
                                 aria-label={t("agent.deleteChatAria", { title: s.title || t("agent.newChat") })}
                                 onClick={() => void deleteChat(s.id)}
                               >
@@ -262,11 +266,11 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
           </Popover>
           </div>
         </SheetHeader>
-        <div ref={listRef} className="chat-scroll min-h-0 flex-1" style={{ overflowY: "auto", padding: 12 }}>
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin] [scrollbar-color:var(--input)_transparent]">
         {messages.length === 0 ? (
-          <div className="chat-empty">
-            <div className="chat-empty-title">Noxrea One</div>
-            <div className="chat-empty-subtitle">{t("agent.emptySubtitle")}</div>
+          <div className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
+            <div className="text-[22px] font-semibold tracking-wide text-foreground">Noxrea One</div>
+            <div className="text-[13px] text-muted-foreground">{t("agent.emptySubtitle")}</div>
           </div>
         ) : (
           sections.map((section, index) => (
@@ -283,11 +287,11 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
         {pendingConfirm && <ConfirmCard pending={pendingConfirm} onResolve={respondToConfirm} />}
       </div>
 
-        <SheetFooter className="chat-input-bar mt-0 flex shrink-0 flex-col gap-0 p-2.5">
-        <div className="chat-composer">
+        <SheetFooter className="mt-0 flex shrink-0 flex-col gap-0 bg-card p-2.5">
+        <div className="rounded-2xl border border-border bg-popover px-3 py-2.5 transition-colors focus-within:border-input">
           <div
             ref={composerRef}
-            className="chat-composer-input"
+            className="min-h-[60px] max-h-[200px] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words bg-transparent text-sm leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
             contentEditable
             suppressContentEditableWarning
             data-placeholder={t("agent.composerPlaceholder")}
@@ -325,9 +329,9 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               }
             }}
           />
-          <div className="chat-composer-actions">
-            <div className="chat-composer-left" />
-            <div className="chat-composer-right">
+          <div className="mt-1.5 flex items-center justify-between">
+            <div />
+            <div className="flex items-center gap-1.5">
               {initializeFailed && !modelOptions.length ? (
                 <Button
                   type="button"
