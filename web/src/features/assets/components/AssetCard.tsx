@@ -1,6 +1,6 @@
 /**
  * 单个资产卡片。
- * 上半部分为正方形封面（图片 / 视频抽帧 / 音频波形），名称与日期排在封面下方；
+ * 正方形封面（图片 / 视频抽帧 / 音频波形）底部叠加名称与日期；
  * 右上角为多选勾选框（悬停显示、选中常驻）。
  * 单击卡片本体 = 选中该项（右侧检查器展示详情），双击 = 插入画布；单击勾选框 = 增减多选。
  * 抽屉场景不传选择回调：单击不作为，插入走悬停中央「+」（showInsertButton）/ 双击 / Enter。
@@ -14,6 +14,7 @@ import { PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@/components
 import { PauseCircleFilled, PlayCircleFilled } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
@@ -120,7 +121,7 @@ export default function AssetCard({
   const thumbUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=300` : sourceUrl;
 
   return (
-    <div
+    <Card
       tabIndex={0}
       role="button"
       aria-label={asset.name}
@@ -150,7 +151,7 @@ export default function AssetCard({
       }}
       // 拖拽结束清掉可能残留的悬浮大图预览
       onDragEnd={() => { setDragging(false); preview.onLeave(); }}
-      className={`group rounded-lg transition-all outline-none ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "opacity-50" : ""}`}
+      className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all outline-none ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "opacity-50" : ""}`}
       onMouseLeave={handleCardLeave}
       onMouseEnter={(event) => { if (showHoverPreview && sourceUrl && !dragging) preview.onEnter(asset, event); }}
       onClick={(e) => {
@@ -164,8 +165,7 @@ export default function AssetCard({
     >
       {/* 封面区 */}
       <div
-        className={`relative w-full rounded-lg overflow-hidden border transition-colors ${selected ? "" : "border-white/10 group-hover:border-white/30"}`}
-        style={{ aspectRatio: "1", background: "var(--popover)", borderColor: selected ? "#fff" : undefined, borderWidth: selected ? 2 : 1 }}
+        className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
       >
         {isVideo ? (
           <div className="w-full h-full relative bg-black/40">
@@ -178,21 +178,42 @@ export default function AssetCard({
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
               />
             )}
-            <div className="absolute top-1.5 left-1.5 flex items-center justify-center w-6 h-6 rounded bg-black/50 pointer-events-none">
-              <VideoCameraOutlined style={{ fontSize: 12, color: "rgb(var(--on-media-rgb) / 0.8)" }} />
+            <div className="pointer-events-none absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded bg-black/50">
+              <VideoCameraOutlined className="size-3 text-white/80" />
             </div>
           </div>
         ) : isAudio ? (
           <div className="w-full h-full flex items-center justify-center">
-            <WaveIcon style={{ fontSize: 32, color: "rgb(var(--on-media-rgb) / 0.15)" }} />
+            <WaveIcon className="size-8 text-muted-foreground/40" />
           </div>
         ) : thumbUrl ? (
           <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <PictureOutlined style={{ fontSize: 32, color: "rgb(var(--on-media-rgb) / 0.15)" }} />
+            <PictureOutlined className="size-8 text-muted-foreground/40" />
           </div>
         )}
+
+        {/* 名称与日期叠加在封面底部，避免卡片信息把网格行高撑开。 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end gap-1 bg-black/55 px-2 py-1.5 text-white">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-medium">{asset.name}</div>
+            <div className="mt-0.5 text-[10px] text-white/70">{formatDate(asset.createdAt)}</div>
+          </div>
+          {isAudio && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={playing ? t("common.stop") : t("common.play")}
+              title={playing ? t("common.stop") : t("common.play")}
+              className="pointer-events-auto shrink-0 text-white hover:bg-white/15 hover:text-white"
+              onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
+            >
+              {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
+            </Button>
+          )}
+        </div>
 
         {/* 多选勾选框：未选中仅悬停显示，选中后常驻白色实底（与全局中性 Checkbox 一致） */}
         {selectable && onToggleSelect && (
@@ -203,7 +224,7 @@ export default function AssetCard({
             onCheckedChange={() => onToggleSelect(asset)}
             className={`absolute top-1.5 right-1.5 z-10 size-[18px] rounded-[5px] transition-all ${
               selected
-                ? "opacity-100 border-white bg-white text-[var(--card)]"
+                ? "opacity-100 border-primary bg-primary text-primary-foreground"
                 : selectMode
                   ? "opacity-100 border-white/60 bg-black/45 text-white hover:border-white"
                   : "opacity-0 border-white/60 bg-black/45 text-white group-hover:opacity-100 hover:border-white"
@@ -232,38 +253,16 @@ export default function AssetCard({
         )}
       </div>
 
-      {/* 封面下方信息 */}
-      <div className="px-1 pt-1.5 pb-1">
-        <div className="flex items-center gap-1">
-          <div className="text-xs truncate font-medium flex-1 min-w-0" style={{ color: "var(--foreground)" }}>{asset.name}</div>
-          {isAudio && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={playing ? t("common.stop") : t("common.play")}
-              title={playing ? t("common.stop") : t("common.play")}
-              className="shrink-0"
-              onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
-            >
-              {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-            </Button>
-          )}
-        </div>
-        <div className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>{formatDate(asset.createdAt)}</div>
-      </div>
-
       {/* 音频拖拽图像：仅作为 setDragImage 快照源，固定在视口外不影响布局 */}
       {draggable && isAudio && (
         <div
           ref={audioGhostRef}
           aria-hidden
-          className="fixed flex items-center justify-center rounded-lg"
-          style={{ top: -200, left: -200, width: 56, height: 56, background: "var(--popover)", border: "1px solid var(--border)" }}
+          className="fixed -top-[200px] -left-[200px] flex size-14 items-center justify-center rounded-lg border border-border bg-popover"
         >
-          <WaveIcon style={{ fontSize: 28, color: "rgb(var(--on-media-rgb) / 0.3)" }} />
+          <WaveIcon className="size-7 text-muted-foreground/40" />
         </div>
       )}
-    </div>
+    </Card>
   );
 }

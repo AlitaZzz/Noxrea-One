@@ -7,8 +7,10 @@
 
 import { useTranslation } from "react-i18next";
 
-import { DeleteOutlined, EditOutlined, FolderOutlined } from "@/components/ui/AppIcon";
+import { DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { AssetFolder } from "@/features/assets/types";
 
 interface Props {
@@ -22,39 +24,46 @@ interface Props {
 export default function FolderCard({ folder, count, onClick, onDelete, onRename }: Props) {
   const { t } = useTranslation();
 
-  const stop = (handler: (folder: AssetFolder) => void) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    handler(folder);
-  };
-
   return (
-    <div
+    <Card
       onClick={() => onClick(folder)}
-      className="group relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-border bg-popover transition-colors hover:border-ring"
+      className="group relative flex aspect-square cursor-pointer flex-col gap-0 overflow-hidden border-border bg-popover p-0 transition-colors hover:border-ring"
     >
       {(onDelete || onRename) && (
-        <div className="absolute top-1 right-1 z-10 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {onRename && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={t("asset.folder.rename")}
-              onClick={stop(onRename)}
-            ><EditOutlined aria-hidden="true" /></Button>
-          )}
-          {onDelete && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("asset.folder.delete")}
-              onClick={stop(onDelete)}
-            ><DeleteOutlined aria-hidden="true" /></Button>
-          )}
-        </div>
+              aria-label={t("common.moreActions")}
+              className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <EllipsisOutlined aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-32" onClick={(event) => event.stopPropagation()}>
+            {onRename && (
+              <DropdownMenuItem onSelect={() => onRename(folder)}>
+                <EditOutlined aria-hidden="true" />
+                {t("common.rename")}
+              </DropdownMenuItem>
+            )}
+            {onRename && onDelete && <DropdownMenuSeparator />}
+            {onDelete && (
+              <DropdownMenuItem variant="destructive" onSelect={() => onDelete(folder)}>
+                <DeleteOutlined aria-hidden="true" />
+                {t("common.delete")}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
-      <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />
-      <div className="w-full truncate px-2 text-center text-xs text-muted-foreground">{folder.name}</div>
-      <div className="text-[10px] text-muted-foreground/60">{count ?? 0} {t("asset.count")}</div>
-    </div>
+      <CardContent className="flex h-full flex-col items-center justify-center gap-2 p-3">
+        <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />
+        <div className="w-full truncate text-center text-xs text-muted-foreground">{folder.name}</div>
+        <div className="text-[10px] text-muted-foreground/60">{count ?? 0} {t("asset.count")}</div>
+      </CardContent>
+    </Card>
   );
 }
