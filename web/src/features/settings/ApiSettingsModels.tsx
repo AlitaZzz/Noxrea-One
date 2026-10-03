@@ -33,6 +33,7 @@ import { SearchInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VirtualList } from "@/components/ui/VirtualList";
 import { ModelIcon } from "@/features/model/ModelIcon";
+import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo, ModelProvider } from "@/lib/types/models";
 
@@ -42,6 +43,12 @@ const CAP_PILLS: { cap: ModelCapability; Icon: ComponentType<{ className?: strin
   { cap: "image", Icon: PictureOutlined },
   { cap: "video", Icon: VideoCameraOutlined },
 ];
+
+const CAPABILITY_COLORS: Record<ModelCapability, string> = {
+  text: NODE_TYPE_COLOR[NODE_TYPE.TEXT],
+  image: NODE_TYPE_COLOR[NODE_TYPE.IMAGE],
+  video: NODE_TYPE_COLOR[NODE_TYPE.VIDEO],
+};
 
 /** 单行（已 memo）：仅在 m / dim / onToggle / onDelete 变化时才重渲染。
     dim = 该行在当前筛选下未启用（字色降级，不参与选中语义）。
@@ -79,9 +86,13 @@ const ModelRow = memo(function ModelRow({
               type="button"
               size="icon-xs"
               variant="ghost"
-              className="aria-pressed:bg-primary/15 aria-pressed:text-primary"
+              className="hover:bg-muted"
               aria-pressed={on}
               aria-label={t(`modelConfig.cap.${cap}`)}
+              style={on ? {
+                color: CAPABILITY_COLORS[cap],
+                backgroundColor: `color-mix(in srgb, ${CAPABILITY_COLORS[cap]} 15%, transparent)`,
+              } : undefined}
               onClick={() => onToggle(m.id, cap)}
             >
               <Icon className="size-3" />
