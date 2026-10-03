@@ -41,6 +41,9 @@ function projectThumbnailUrl(src: string): string {
   return `${pathname}?${params.toString()}${hash}`;
 }
 
+// 固定信息区高度，让空列表首帧与项目数据加载后的网格行保持同一尺寸。
+const PROJECT_CARD_INFO_CLASS = "h-[100px] shrink-0 p-3";
+
 export default function ProjectListPage() {
   const router = useRouter();
   const { notification } = useAppFeedback();
@@ -123,12 +126,12 @@ export default function ProjectListPage() {
 
   return (
     <AppShell>
-      <div className="ui-select-none h-full overflow-y-auto p-6 md:p-10" style={{ color: "var(--foreground)" }}>
+      <div className="ui-select-none h-full overflow-y-auto p-6 text-foreground md:p-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold m-0">{t("project.all")}</h1>
-          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>{projects.length}</span>
+          <span className="text-sm text-muted-foreground">{projects.length}</span>
         </div>
 
         <UserMenuPopover
@@ -140,7 +143,7 @@ export default function ProjectListPage() {
             {
               key: "lang",
               label: i18n.language === "zh" ? "简体中文" : "English",
-              extra: <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{i18n.language === "zh" ? "中" : "EN"}</span>,
+              extra: <span className="text-xs font-semibold opacity-60">{i18n.language === "zh" ? "中" : "EN"}</span>,
             },
           ]}
           onItemClick={(key) => {
@@ -153,16 +156,16 @@ export default function ProjectListPage() {
           onLogout={() => useAuthStore.getState().logout().finally(() => router.push("/login"))}
           trigger={
             /* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity rounded-lg px-2 py-1" style={{ background: "var(--popover)" }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden" style={{ background: user?.avatarUrl ? "transparent" : "var(--primary)", color: "var(--background)" }}>
+            <div className="flex cursor-pointer items-center gap-2 rounded-lg bg-popover px-2 py-1 transition-opacity hover:opacity-80">
+              <div className={`flex size-8 items-center justify-center overflow-hidden rounded-full text-xs font-bold ${user?.avatarUrl ? "bg-transparent" : "bg-primary text-primary-foreground"}`}>
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   (user?.username || "U")[0].toUpperCase()
                 )}
               </div>
-              <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>{user?.username || t("auth.defaultUser")}</span>
-              <ChevronDownIcon style={{ color: "var(--muted-foreground)", width: 10, height: 10 }} />
+              <span className="text-sm font-medium text-foreground">{user?.username || t("auth.defaultUser")}</span>
+              <ChevronDownIcon className="size-3 text-muted-foreground" />
             </div>
           }
         />
@@ -172,19 +175,23 @@ export default function ProjectListPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-6xl mx-auto">
           {/* Create new project card — always first */}
           <Card
-            className="group flex h-full min-h-[220px] cursor-pointer flex-col items-center justify-center overflow-hidden border-dashed border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-muted/20 hover:shadow-lg"
+            className="group relative flex cursor-pointer flex-col gap-0 overflow-hidden border-dashed border-border bg-card p-0"
             onClick={handleCreate}
           >
-            <div className="flex size-12 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 bg-muted/30 transition-colors group-hover:border-primary group-hover:bg-primary/10">
-              <PlusOutlined className="text-2xl text-muted-foreground transition-colors group-hover:text-primary" />
+            <div className="flex aspect-video items-center justify-center" aria-hidden="true" />
+            <CardContent aria-hidden="true" className={PROJECT_CARD_INFO_CLASS} />
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6">
+              <div className="flex size-12 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 bg-muted/30 transition-colors group-hover:border-primary group-hover:bg-primary/10">
+                <PlusOutlined className="text-2xl text-muted-foreground transition-colors group-hover:text-primary" />
+              </div>
+              <span className="mt-3 text-sm font-medium text-foreground">{t("project.new")}</span>
             </div>
-            <span className="mt-3 text-sm font-medium text-foreground">{t("project.new")}</span>
           </Card>
 
           {projects.map((p) => (
             <Card
               key={p.id}
-              className="group relative flex h-full cursor-pointer overflow-hidden border-border bg-card p-0 gap-0 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+              className="group relative flex h-full cursor-pointer gap-0 overflow-hidden border-border bg-card p-0"
               onClick={() => handleOpen(p)}
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
@@ -192,14 +199,14 @@ export default function ProjectListPage() {
                 className="flex aspect-video items-center justify-center overflow-hidden bg-popover"
               >
                 {p.thumbnail ? (
-                  <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}
               </div>
 
               {/* Info */}
-              <CardContent className="shrink-0 p-3">
+              <CardContent className={PROJECT_CARD_INFO_CLASS}>
                 <div className="flex h-9 min-w-0 items-center justify-between gap-2">
                   {editingId === p.id ? (
                     <Input
