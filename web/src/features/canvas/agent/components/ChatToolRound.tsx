@@ -40,7 +40,7 @@ export function ChatToolRound({ round, isStreaming }: Props) {
   }
 
   return (
-    <div className="chat-tool-round">
+    <div className="flex flex-col gap-1">
       {round.calls.length > 1 && (
         <Button type="button" variant="secondary" size="xs" className="w-fit" onClick={() => setUserOpen(false)}>
           {t("agent.executedCount", { count: round.calls.length })}

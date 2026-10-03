@@ -17,9 +17,9 @@ import {
   EllipsisOutlined,
   PictureOutlined,
   PlusOutlined,
+  TextIcon,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
-import { TextIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

@@ -48,16 +48,16 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
   }
 
   return (
-    <div className="chat-action-row">
-      <span className="chat-action-icon">{meta?.icon}</span>
+    <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-xs leading-none text-muted-foreground">
+      <span className="inline-flex text-xs text-primary">{meta?.icon}</span>
       <Tooltip><TooltipTrigger asChild>
-          <span className="chat-action-text">{text}</span>
+          <span className="max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap">{text}</span>
         </TooltipTrigger><TooltipContent side="top">{text}</TooltipContent></Tooltip>
-      <span className={`chat-action-status${status === "error" ? " is-error" : ""}${status === "pending" ? " is-pending" : ""}`}>
+      <span className={`inline-flex items-center gap-1 text-xs ${status === "error" ? "text-destructive" : status === "pending" ? "text-primary" : "text-muted-foreground"}`}>
         {status === "ok" && <CheckOutlined />}
         {status === "pending" && <LoadingOutlined spin />}
         {(status === "error" || status === "skipped") && <CloseOutlined />}
-        {status === "skipped" && <span className="chat-action-skip-text">{t("agent.skipped")}</span>}
+        {status === "skipped" && <span className="text-[11px] text-muted-foreground">{t("agent.skipped")}</span>}
       </span>
       <Button
         type="button"
@@ -68,7 +68,7 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
       >
         {detailOpen ? t("common.collapse") : t("agent.detail")}
       </Button>
-      {detailOpen && <pre className="chat-tool-detail">{pretty}</pre>}
+      {detailOpen && <pre className="basis-full max-h-[180px] overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-card px-2 py-1.5 text-[11px] leading-6 text-muted-foreground">{pretty}</pre>}
     </div>
   );
 }

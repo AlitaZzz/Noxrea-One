@@ -22,17 +22,17 @@ interface Props {
 export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="chat-section">
+    <div className="mb-4 flex flex-col text-sm leading-[1.55]">
       {section.userMsg && (
-        <div className="chat-msg chat-msg-user" style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
-          <div className="chat-bubble chat-bubble-user">
+        <div className="mb-3 flex justify-end">
+          <div className="max-w-[88%] break-words whitespace-pre-wrap rounded-xl rounded-br-sm bg-secondary px-3 py-[9px] text-secondary-foreground">
             <div className="cortex-markdown">{section.userMsg.content ? <Markdown>{section.userMsg.content}</Markdown> : null}</div>
           </div>
         </div>
       )}
 
       {section.rounds.length > 0 && (
-        <div className="chat-tool-calls">
+        <div className="mb-1.5 flex flex-col gap-1">
           {section.rounds.map((round) => (
             <ChatToolRound key={round.key} round={round} isStreaming={isStreaming} />
           ))}
@@ -40,7 +40,7 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       )}
 
       {section.confirmResult && (
-        <div className={`chat-confirm-result ${section.confirmResult.approved ? "chat-confirm-result-ok" : "chat-confirm-result-deny"}`}>
+        <div className={`mb-2 w-fit max-w-[88%] rounded-lg px-2.5 py-1.5 text-xs leading-[1.4] ${section.confirmResult.approved ? "bg-accent text-muted-foreground" : "bg-destructive/10 text-destructive"}`}>
           {section.confirmResult.approved
             ? section.confirmResult.skippedCount > 0
               ? t("agent.confirmExecuted", { executed: section.confirmResult.executedCount, skipped: section.confirmResult.skippedCount })
@@ -52,19 +52,21 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       {section.texts.map((m) => (
         <div
           key={m.id}
-          className="chat-msg chat-msg-assistant"
-          style={{ marginBottom: 12, display: "flex", justifyContent: "flex-start" }}
+          className="mb-3 flex justify-start"
         >
-          <div className={`chat-bubble chat-bubble-assistant${m.error ? " chat-bubble-error" : ""}`}>
+          <div className={`max-w-[88%] break-words whitespace-pre-wrap rounded-xl rounded-bl-sm bg-popover px-3 py-[9px] text-foreground ${m.error ? "border border-destructive/50 bg-destructive/15 text-destructive" : ""}`}>
             <Markdown>{m.content}</Markdown>
           </div>
         </div>
       ))}
 
       {section.thinking && isStreaming && (
-        <div className="chat-msg chat-msg-assistant" style={{ marginBottom: 12, display: "flex", justifyContent: "flex-start" }}>
-          <div className="chat-bubble chat-bubble-assistant">
-            <span className="chat-thinking">{t("agent.thinking")}</span>
+        <div className="mb-3 flex justify-start">
+          <div className="max-w-[88%] break-words whitespace-pre-wrap rounded-xl rounded-bl-sm bg-popover px-3 py-[9px] text-foreground">
+            <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+              <span className="size-3.5 animate-spin rounded-full border-2 border-input border-t-primary" aria-hidden="true" />
+              {t("agent.thinking")}
+            </span>
           </div>
         </div>
       )}

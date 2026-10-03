@@ -105,28 +105,28 @@ export function ConfirmCard({ pending, onResolve }: Props) {
   };
 
   return (
-    <div className="chat-confirm">
-      <div className="chat-confirm-title">{t("agent.confirmTitle")}</div>
+    <div className="mb-3 max-w-[88%] rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2.5">
+      <div className="mb-2 text-sm font-semibold text-destructive">{t("agent.confirmTitle")}</div>
       {calls.map((c) => {
         if (c.name === "arrange_canvas") {
           return (
-            <div key={c.id} className="chat-confirm-item">
-              <span className="chat-confirm-detail">{t("agent.arrangeCanvasDetail")}</span>
+            <div key={c.id} className="mb-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+              <span>{t("agent.arrangeCanvasDetail")}</span>
             </div>
           );
         }
         if (c.nodeIds.length > 0) {
           return (
-            <div key={c.id} className="chat-confirm-group">
-              <div className="chat-confirm-subtitle">{t("agent.confirmDeleteNodes", { count: c.nodeIds.length })}</div>
-              <div className="chat-confirm-list">
+            <div key={c.id} className="mb-2">
+              <div className="mb-1.5 text-xs font-medium text-foreground">{t("agent.confirmDeleteNodes", { count: c.nodeIds.length })}</div>
+              <div className="flex max-h-[180px] flex-col gap-0.5 overflow-y-auto">
                 {c.nodeIds.map((id) => {
                   const n = nodesById.get(id);
                   const thumb = nodeThumb(id);
                   return (
                     <div
                       key={id}
-                      className="chat-confirm-item chat-confirm-item-check"
+                      className="flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-destructive/10"
                       onClick={(event) => {
                         if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, id);
                       }}
@@ -136,9 +136,9 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                         onCheckedChange={() => toggle(c.id, id)}
                         aria-label={nodeLabel(id)}
                       />
-                      {thumb && <img className="chat-confirm-thumb" src={thumb} alt="" />}
-                      <span className="chat-confirm-item-label">{nodeLabel(id)}</span>
-                      <span className="chat-confirm-item-type">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
+                      {thumb && <img className="size-7 shrink-0 rounded-md border border-border object-cover" src={thumb} alt="" />}
+                      <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(id)}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
                     </div>
                   );
                 })}
@@ -148,13 +148,13 @@ export function ConfirmCard({ pending, onResolve }: Props) {
         }
         if (c.edges.length > 0) {
           return (
-            <div key={c.id} className="chat-confirm-group">
-              <div className="chat-confirm-subtitle">{t("agent.confirmDeleteEdges", { count: c.edges.length })}</div>
-              <div className="chat-confirm-list">
+            <div key={c.id} className="mb-2">
+              <div className="mb-1.5 text-xs font-medium text-foreground">{t("agent.confirmDeleteEdges", { count: c.edges.length })}</div>
+              <div className="flex max-h-[180px] flex-col gap-0.5 overflow-y-auto">
                 {c.edges.map((e, i) => (
                   <div
                     key={`${e.source}-${e.target}-${i}`}
-                    className="chat-confirm-item chat-confirm-item-check"
+                    className="flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-destructive/10"
                     onClick={(event) => {
                       if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, i);
                     }}
@@ -164,7 +164,7 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                       onCheckedChange={() => toggle(c.id, i)}
                       aria-label={`${nodeLabel(e.source)} → ${nodeLabel(e.target)}`}
                     />
-                    <span className="chat-confirm-item-label">{nodeLabel(e.source)} → {nodeLabel(e.target)}</span>
+                    <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(e.source)} → {nodeLabel(e.target)}</span>
                   </div>
                 ))}
               </div>
@@ -172,8 +172,8 @@ export function ConfirmCard({ pending, onResolve }: Props) {
           );
         }
         return (
-          <div key={c.id} className="chat-confirm-item">
-            <span className="chat-confirm-detail">{t("agent.confirmGeneric")}</span>
+          <div key={c.id} className="mb-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+            <span>{t("agent.confirmGeneric")}</span>
           </div>
         );
       })}
