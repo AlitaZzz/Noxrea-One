@@ -23,7 +23,9 @@ import {
 } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
@@ -83,8 +85,7 @@ function Preview({ asset }: { asset: AssetItem }) {
 
   return (
     <div
-      className="relative w-full rounded-lg overflow-hidden flex items-center justify-center"
-      style={{ aspectRatio: "1", maxHeight: 280, background: "#000" }}
+      className="relative aspect-square max-h-[280px] w-full overflow-hidden rounded-lg bg-black flex items-center justify-center"
     >
       {asset.mediaType === "audio" && asset.sourceUrl ? (
         <AudioWaveform
@@ -101,10 +102,10 @@ function Preview({ asset }: { asset: AssetItem }) {
         <img src={thumbUrl} alt={asset.name} draggable={false} className="w-full h-full object-cover" />
       ) : (
         asset.mediaType === "video"
-          ? <VideoCameraOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
+          ? <VideoCameraOutlined className="size-10 text-white/25" />
           : asset.mediaType === "audio"
-            ? <WaveIcon style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
-            : <PictureOutlined style={{ fontSize: 40, color: "rgb(var(--on-media-rgb) / 0.25)" }} />
+            ? <WaveIcon className="size-10 text-white/25" />
+            : <PictureOutlined className="size-10 text-white/25" />
       )}
     </div>
   );
@@ -113,8 +114,8 @@ function Preview({ asset }: { asset: AssetItem }) {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2 text-xs">
-      <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
-      <span className="text-right truncate" style={{ color: "var(--foreground)" }}>{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate text-right text-foreground">{value}</span>
     </div>
   );
 }
@@ -175,22 +176,10 @@ function TagEditor({
 
   return (
     <div className="mt-3">
-      <div className="text-xs mb-1.5" style={{ color: "var(--muted-foreground)" }}>{label}</div>
-      <div
-        className="flex flex-wrap items-center gap-1.5"
-        style={busy ? { opacity: 0.6, pointerEvents: "none" } : undefined}
-      >
+      <div className="mb-1.5 text-xs text-muted-foreground">{label}</div>
+      <div className={`flex flex-wrap items-center gap-1.5 ${busy ? "pointer-events-none opacity-60" : ""}`}>
         {asset.tags.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded text-xs"
-            style={{
-              padding: "1px 2px 1px 8px",
-              background: "var(--accent)",
-              border: "1px solid var(--border)",
-              color: "var(--muted-foreground)",
-            }}
-          >
+          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-border bg-accent px-2 py-0.5 text-xs text-accent-foreground">
             <span className="max-w-[150px] truncate">{tag}</span>
             <Button
               type="button"
@@ -203,7 +192,7 @@ function TagEditor({
             </Button>
           </span>
         ))}
-        {busy && <LoadingOutlined style={{ fontSize: 12, color: "var(--primary)" }} />}
+        {busy && <LoadingOutlined className="size-3 text-primary" />}
         {adding ? (
           <Input
             ref={inputRef}
@@ -220,16 +209,8 @@ function TagEditor({
           />
         ) : asset.tags.length >= MAX_TAGS ? (
           <Tooltip><TooltipTrigger asChild>
-              <span
-                className="inline-flex items-center gap-1 rounded text-xs cursor-not-allowed"
-                style={{
-                  padding: "1px 8px",
-                  border: "1px dashed var(--border)",
-                  color: "var(--muted-foreground)",
-                  opacity: 0.4,
-                }}
-              >
-                <PlusOutlined style={{ fontSize: 9 }} />
+              <span className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground opacity-40">
+                <PlusOutlined className="size-3" />
                 {addLabel}
               </span>
             </TooltipTrigger><TooltipContent>{t("asset.tagLimit", { max: MAX_TAGS })}</TooltipContent></Tooltip>
@@ -306,8 +287,8 @@ function PromptEditor({
 
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{label}</span>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{label}</span>
         <div className="flex items-center gap-3">
           {editing ? (
             <>
@@ -377,19 +358,7 @@ function PromptEditor({
           className="min-h-32 w-full resize-y bg-popover text-xs leading-[1.6]"
         />
       ) : (
-        <div
-          className="text-xs rounded whitespace-pre-wrap break-words"
-          style={{
-            maxHeight: 120,
-            overflowY: "auto",
-            padding: "6px 8px",
-            background: "var(--accent)",
-            border: "1px solid var(--border)",
-            color: asset.prompt ? "var(--muted-foreground)" : "var(--muted-foreground)",
-            lineHeight: 1.5,
-            minHeight: 30,
-          }}
-        >
+        <div className="max-h-[120px] min-h-[30px] overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-accent px-2 py-1.5 text-xs leading-[1.5] text-muted-foreground">
           {asset.prompt || emptyHint}
         </div>
       )}
@@ -458,7 +427,7 @@ export default function AssetInspector({
       {/* Header：仅单选时展示标题与内联重命名（清除选择已移至列表工具条行）；
           多选时无需标题，内容区已有「已选 X / 共 Y」；未选中时空态在内容区居中 */}
       {single && (
-      <div className="flex items-center gap-2 px-3 pt-3 pb-3 shrink-0" style={{ height: 50 }}>
+      <div className="flex h-[50px] shrink-0 items-center gap-2 px-3 py-3">
         {renaming ? (
           <Input
             autoFocus
@@ -496,7 +465,7 @@ export default function AssetInspector({
           <div
             className="flex h-7 min-w-0 flex-1 items-center border border-transparent px-2 text-sm font-semibold"
           >
-            <span className="truncate" style={{ userSelect: "none" }}>
+            <span className="select-none truncate">
               {single.name}
             </span>
           </div>
@@ -519,22 +488,16 @@ export default function AssetInspector({
       <div className={`flex-1 overflow-y-auto px-3 pb-4 min-h-0${single ? "" : " pt-3"}`}>
         {!hasSelection ? (
           // 空态与资产网格空态同款：圆角容器包原图标，替代裸图标
-          <div className="h-full flex flex-col items-center justify-center gap-3 pb-10 select-none">
-            <div
-              className="flex items-center justify-center w-16 h-16 rounded-2xl"
-              style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
-            >
-              <SelectOutlined style={{ fontSize: 26, color: "var(--muted-foreground)" }} />
-            </div>
-            <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("asset.noDetail")}</div>
-            <div className="text-xs text-center px-2" style={{ color: "var(--muted-foreground)" }}>
-              {t("asset.noDetailHint", { mod: MOD_KEY })}
-            </div>
-          </div>
+          <Empty className="h-full min-h-0 select-none border-0 p-0 pb-10">
+            <EmptyMedia variant="icon"><SelectOutlined className="size-6" /></EmptyMedia>
+            <EmptyDescription className="text-[13px]">{t("asset.noDetail")}</EmptyDescription>
+            <EmptyDescription className="px-2 text-xs">{t("asset.noDetailHint", { mod: MOD_KEY })}</EmptyDescription>
+          </Empty>
         ) : single ? (
           <>
             <Preview key={`preview-${single.id}`} asset={single} />
-            <div className="mt-2" style={{ borderTop: "1px solid var(--border)" }}>
+            <div className="mt-2">
+              <Separator />
               <MetaRow label={t("asset.typeLabel")} value={typeKey ? t(typeKey) : single.type} />
               {(single.mediaType === "image" || single.mediaType === "video") && single.width > 0 && single.height > 0 && (
                 <MetaRow label={t("asset.dimensionsLabel")} value={`${single.width} × ${single.height}`} />

@@ -11,8 +11,9 @@ import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import type { AssetFolder,AssetItem } from "@/features/assets/types";
+import type { AssetFolder, AssetItem } from "@/features/assets/types";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";
@@ -98,16 +99,10 @@ export default function AssetGrid({
       );
     }
     return (
-      // 自绘空态：中性图标容器，与暗色画布主题保持一致
-      <div className="flex flex-col items-center justify-center h-full min-h-[200px] gap-3 select-none">
-        <div
-          className="flex items-center justify-center w-16 h-16 rounded-2xl"
-          style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
-        >
-          <AssetsIcon style={{ fontSize: 26, color: "var(--muted-foreground)" }} />
-        </div>
-        <div className="text-[13px]" style={{ color: "var(--muted-foreground)" }}>{t("asset.empty")}</div>
-      </div>
+      <Empty className="h-full min-h-[200px] select-none border-0 p-6">
+        <EmptyMedia variant="icon"><AssetsIcon className="size-6" /></EmptyMedia>
+        <EmptyDescription className="text-[13px]">{t("asset.empty")}</EmptyDescription>
+      </Empty>
     );
   }
 

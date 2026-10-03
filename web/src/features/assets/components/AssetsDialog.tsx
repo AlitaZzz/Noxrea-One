@@ -17,6 +17,7 @@ import ConfirmModal from "@/components/ui/ConfirmModal";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TreeSelect } from "@/components/ui/tree-select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
@@ -477,10 +478,8 @@ export default function AssetsDialog({ open, onClose }: Props) {
               <span>{t("asset.title")}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-hidden bg-card" style={{ maxHeight: "calc(100vh - 100px)" }}>
-        <style>{`
-        `}</style>
-        <div className="flex" style={{ height: "calc(90vh - 130px)", minHeight: 520 }}>
+          <div className="max-h-[calc(100vh-100px)] overflow-hidden bg-card">
+        <div className="flex h-[calc(90vh-130px)] min-h-[520px]">
           {/* Main content：面包屑/工具条、批量条与网格 */}
           <div className="flex-1 flex flex-col pt-3 pb-4 min-w-0">
             {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
@@ -488,7 +487,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
               <div className="flex items-center gap-1 flex-1 min-w-0">
                 {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
                 {activeFolderId === null ? (
-                  <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--foreground)" }}>
+                  <span className="cursor-default whitespace-nowrap px-2 py-0.5 text-sm text-foreground">
                     {t("asset.spacePersonal")}
                   </span>
                 ) : (
@@ -506,9 +505,9 @@ export default function AssetsDialog({ open, onClose }: Props) {
                   const isLast = f.id === activeFolderId;
                   return (
                     <span key={f.id} className="flex items-center gap-1">
-                      <span style={{ color: "var(--muted-foreground)" }}>/</span>
+                      <span className="text-muted-foreground">/</span>
                       {isLast ? (
-                        <span className="text-sm px-2 py-0.5 whitespace-nowrap cursor-default" style={{ color: "var(--foreground)" }}>
+                        <span className="cursor-default whitespace-nowrap px-2 py-0.5 text-sm text-foreground">
                           {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
                         </span>
                       ) : (
@@ -559,7 +558,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
             {/* 多选批量操作条：常驻挂载，外层 grid 行高动画折叠，出现/消失平滑推移网格 */}
             <div className={`bulk-bar-collapse${bulkOpen ? " bulk-bar-collapse--open" : ""}`}>
               <div inert={bulkOpen ? undefined : true}>
-                <div className="mx-3 mb-3 flex h-11 items-center gap-0.5 rounded-[10px] border border-input bg-popover px-2.5 pl-3">
+                <div className="mx-3 mb-3 flex h-11 items-center gap-0.5 rounded-md border border-input bg-popover px-2.5 pl-3">
                   {/* 计数即全选开关：白框对勾=已全选当前列表，横杠=部分选中，点击在两者间切换 */}
                   <Button
                     type="button"
@@ -569,7 +568,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
                     onClick={handleSelectAll}
                     aria-pressed={allSelected}
                   >
-                    <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-white bg-white text-[#1d1d21]">
+                    <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input bg-background text-foreground">
                       {allSelected
                         ? <CheckOutlined className="size-3 font-bold" />
                         : <MinusOutlined className="size-3 font-bold" />}
@@ -620,7 +619,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
                     <DownloadOutlined className="size-3.5" />
                     {t("common.download")}（{selectedAssets.length}）
                   </Button>
-                  <span className="mx-1.5 h-[18px] w-px bg-input" aria-hidden="true" />
+                  <Separator orientation="vertical" className="mx-1.5 h-[18px]" />
                   <Button type="button" size="sm" variant="destructive" onClick={handleBatchDelete}>
                     <DeleteOutlined className="size-3.5" />
                     {t("common.delete")}（{selectedIds.size}）
@@ -658,10 +657,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
           </div>
 
           {/* 右侧检查器：常驻展示；未选中时为空态提示，选中后为单项详情或批量操作区 */}
-          <div
-            className="shrink-0 overflow-hidden"
-            style={{ width: 360, borderLeft: "1px solid var(--border)" }}
-          >
+          <div className="w-[360px] shrink-0 overflow-hidden border-l border-border">
             <AssetInspector
               assets={selectedAssets}
               folderPath={inspectorFolderPath}
@@ -761,7 +757,6 @@ export default function AssetsDialog({ open, onClose }: Props) {
                 className="folder-tree-select"
                 value={batchMoveTarget}
                 onChange={(v) => setBatchMoveTarget(v)}
-                style={{ width: "100%" }}
                 placeholder={t("asset.folderPickerPlaceholder")}
                 searchPlaceholder={t("asset.folderSearchPlaceholder")}
                 allowClear

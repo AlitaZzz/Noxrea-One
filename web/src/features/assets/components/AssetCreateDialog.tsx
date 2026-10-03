@@ -13,6 +13,7 @@ import { CloseOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, Video
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { CircularProgress } from "@/components/ui/progress";
@@ -349,13 +350,13 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
         }}
       />
 
-      <div className="flex" style={{ height: 440 }}>
+      <div className="flex h-[440px]">
         {/* Left — upload zone + preview */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 min-h-0 flex">
             {/* 外层托盘只管边框圆角（overflow hidden 防止滚动内容顶穿圆角），内层滚动 */}
             <div className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-border p-3">
-              <div className="flex flex-wrap content-start flex-1 overflow-y-auto" style={{ gap: 12 }}>
+              <div className="flex flex-1 flex-wrap content-start gap-3 overflow-y-auto">
                 {/* Drop zone — always first card */}
                 <div
                   onDrop={handleDrop}
@@ -363,14 +364,14 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                   onClick={() => fileInputRef.current?.click()}
                   className="flex size-[130px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-accent transition-colors hover:border-muted-foreground hover:bg-secondary"
                 >
-                  <PlusOutlined style={{ fontSize: 28, color: "var(--muted-foreground)" }} />
+                  <PlusOutlined className="size-7 text-muted-foreground" />
                 </div>
 
                 {/* Uploaded files */}
                 {files.map((f) => {
                   const kind = kindOfBlob(f.file, f.file.name);
                   return (
-                  <div key={f.id} className="group relative size-[130px] shrink-0 overflow-hidden rounded-md border border-border/50 bg-popover">
+                  <Card key={f.id} className="group relative size-[130px] shrink-0 gap-0 overflow-hidden rounded-md border-border/50 bg-popover p-0 shadow-none">
                     {kind === "image" ? (
                       <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
                     ) : kind === "video" ? (
@@ -384,17 +385,17 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                           />
                         ) : null}
-                        <PlayCircleOutlined style={{ fontSize: 28, color: "rgb(var(--on-media-rgb) / 0.7)", position: "relative", zIndex: 1 }} />
+                        <PlayCircleOutlined className="relative z-[1] size-7 text-white/70" />
                       </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <WaveIcon style={{ fontSize: 36, color: "rgb(var(--on-media-rgb) / 0.3)" }} />
+                        <WaveIcon className="size-9 text-white/30" />
                       </div>
                     )}
 
                     {/* 上传进行中 → 进度圈 */}
                     {f.status === "uploading" && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                         {/* 字节发完仍在等服务端落盘，保持进度显示。 */}
                         <CircularProgress
                           value={f.uploadProgress}
@@ -407,7 +408,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     )}
 
                     {f.status === "error" && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-red-400 text-xs">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-destructive-foreground">
                         {t("file.uploadFailed")}
                       </div>
                     )}
@@ -428,7 +429,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 bg-gradient-to-t from-black/80 to-transparent">
                       <div className="text-white/70 text-[10px] truncate">{f.file.name}</div>
                     </div>
-                  </div>
+                  </Card>
                   );
                 })}
               </div>
@@ -441,7 +442,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
           {/* Save location — 必选：不默认落位，由用户显式选择（个人资产库 = 根目录） */}
           <div>
             <Label className="mb-2 block text-xs text-muted-foreground">
-              {t("asset.saveLocation")} <span className="text-red-400">*</span>
+              {t("asset.saveLocation")} <span className="text-destructive">*</span>
             </Label>
           <TreeSelect
               className="folder-tree-select"
@@ -449,7 +450,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
               onChange={(v) => setSaveFolderId(v ?? null)}
               placeholder={t("asset.saveLocationPlaceholder")}
               searchPlaceholder={t("asset.folderSearchPlaceholder")}
-              style={{ width: "100%" }}
               allowClear
               searchable
               emptyContent={t("common.noData")}
