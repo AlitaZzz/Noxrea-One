@@ -108,11 +108,11 @@ export default function AssetToolbar({
 
   return (
     <div className="flex items-center gap-2 shrink-0">
-      {/* 搜索：收起态仅图标，展开态图标固定在右端、输入框向左生长 */}
-      <div className="relative h-9 shrink-0 transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH }}>
+      {/* 搜索：收起态仅图标，展开态输入组和触发按钮各占独立空间，避免清除按钮与搜索按钮重叠。 */}
+      <div className="flex h-9 shrink-0 items-center transition-[width] duration-200 ease-out" style={{ width: searchExpanded ? SEARCH_WIDTH : ICON_WIDTH }}>
         {searchExpanded && (
           <InputGroup
-            className="w-full bg-popover text-foreground"
+            className="min-w-0 flex-1 bg-popover text-foreground"
           >
             <InputGroupInput
               ref={inputRef}
@@ -123,7 +123,7 @@ export default function AssetToolbar({
               onKeyDown={(e) => {
                 if (e.key === "Escape") { onSearchChange(""); setSearchOpen(false); }
               }}
-              className="h-full pr-16"
+              className="h-full"
             />
             {search && <InputGroupClearButton onClear={() => onSearchChange("")} />}
           </InputGroup>
@@ -136,7 +136,7 @@ export default function AssetToolbar({
               onClick={toggleSearch}
               variant="ghost"
               size="icon"
-              className="absolute top-0 right-0 z-10"
+              className="shrink-0"
               aria-label={t("asset.search")}
             >
               <SearchOutlined />
