@@ -6,13 +6,14 @@
 
 "use client";
 
-import { useRef,useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CameraOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
@@ -58,11 +59,11 @@ export default function SettingsModal({ open, onClose }: Props) {
       const body: Record<string, string> = {};
       if (avatarUrl.trim() && avatarUrl !== user?.avatarUrl) body.avatarUrl = avatarUrl.trim();
       if (newPw.trim()) {
-        if (!oldPw) { message.error(t("auth.oldPwRequired")); setSaving(false); return; }
+        if (!oldPw) { message.error(t("auth.oldPwRequired")); return; }
         body.password = newPw;
         body.oldPassword = oldPw;
       }
-      if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); setSaving(false); return; }
+      if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); return; }
       const updated = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
       // 保存失败时 api() 抛 ApiError，由外层 catch 提示且不关弹窗
       if (!updated) { message.error(t("auth.saveFailed")); return; }
@@ -70,57 +71,74 @@ export default function SettingsModal({ open, onClose }: Props) {
       message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }
-    setSaving(false);
+    finally { setSaving(false); }
   };
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="sm:max-w-[400px]">
-        <DialogHeader>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[480px]">
+        <DialogHeader className="border-b bg-muted/20 px-6 py-6">
           <DialogTitle>{t("auth.accountSettings")}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-        {/* Avatar */}
-        <div className="flex flex-col items-center gap-2">
-          <div
-            className="group relative flex size-32 cursor-pointer items-center justify-center rounded-full bg-primary text-4xl font-bold text-primary-foreground transition-opacity hover:opacity-80"
-            onClick={() => fileRef.current?.click()}
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-            ) : (
-              user?.username?.[0]?.toUpperCase() || "U"
-            )}
-            <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <CameraOutlined className="text-lg text-white" />
+        <div className="max-h-[min(720px,calc(100vh-8rem))] overflow-y-auto px-6 py-6">
+          <section className="flex items-center gap-4 rounded-lg border border-border bg-muted/20 p-4">
+            <button
+              type="button"
+              className="group relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-3xl font-bold text-primary-foreground ring-1 ring-border transition-shadow hover:ring-2 hover:ring-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => fileRef.current?.click()}
+              aria-label={t("auth.clickUpload")}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                user?.username?.[0]?.toUpperCase() || "U"
+              )}
+              <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <CameraOutlined className="text-lg" />
+              </span>
+            </button>
+            <div className="min-w-0 space-y-1">
+              <div className="truncate text-sm font-medium text-foreground">{user?.username || t("auth.defaultUser")}</div>
             </div>
-          </div>
-          <span className="text-xs text-muted-foreground">{t("auth.clickUpload")}</span>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCropFile(f); setCropOpen(true); } }} />
-        </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) {
+                  setCropFile(f);
+                  setCropOpen(true);
+                }
+              }}
+            />
+          </section>
 
-        {/* Username（登录身份，不可修改） */}
-        <div>
-          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.username")}</div>
-          <Input value={user?.username ?? ""} disabled />
+          <section className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="settings-username" className="text-xs text-muted-foreground">{t("auth.username")}</Label>
+              <Input id="settings-username" value={user?.username ?? ""} disabled />
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="settings-current-password" className="text-xs text-muted-foreground">{t("auth.currentPassword")}</Label>
+                <PasswordInput id="settings-current-password" placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-new-password" className="text-xs text-muted-foreground">{t("auth.newPassword")}</Label>
+                <PasswordInput id="settings-new-password" placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+              </div>
+            </div>
+          </section>
         </div>
-
-        {/* Old Password */}
-        <div>
-          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.currentPassword")}</div>
-          <PasswordInput placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
-        </div>
-
-        {/* New Password */}
-        <div>
-          <div className="mb-1.5 text-xs font-medium text-muted-foreground">{t("auth.newPassword")}</div>
-          <PasswordInput placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
-        </div>
-
-        <Button variant="primary" size="md" onClick={handleSave} loading={saving} block>
-          {t("auth.saveChanges")}
-        </Button>
-        </div>
+        <DialogFooter className="border-t bg-muted/20 px-6 py-4 sm:justify-end">
+          <DialogClose asChild>
+            <Button type="button" variant="outline" disabled={saving}>{t("common.cancel")}</Button>
+          </DialogClose>
+          <Button type="button" variant="primary" onClick={handleSave} loading={saving}>{t("auth.saveChanges")}</Button>
+        </DialogFooter>
         <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
       </DialogContent>
     </Dialog>

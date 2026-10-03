@@ -6,11 +6,11 @@
 
 "use client";
 
-import { useCallback, useEffect,useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
@@ -41,10 +41,13 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
 
   useEffect(() => {
     if (!open || !file) return;
+    let active = true;
     const reader = new FileReader();
     reader.onload = (e) => {
+      if (!active) return;
       const i = new Image();
       i.onload = () => {
+        if (!active) return;
         setImg(i);
         const s = Math.min(i.naturalWidth, i.naturalHeight);
         const initZoom = SIZE / s;
@@ -59,7 +62,11 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
       i.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-    return () => { setImg(null); };
+    return () => {
+      active = false;
+      reader.abort();
+      setImg(null);
+    };
   }, [open, file]);
 
   // When zoom changes, adjust offset to keep center point stable
@@ -84,8 +91,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
     const ctx = canvas.getContext("2d")!;
     const scale = zoom;
     const srcW = SIZE / scale;
-    const srcH = SIZE / scale;
-    ctx.drawImage(img, offset.x, offset.y, srcW, srcH, 0, 0, SIZE, SIZE);
+    ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, SIZE, SIZE);
   }, [img, offset, zoom]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -112,58 +118,65 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
   const handleSave = async () => {
     if (!img) return;
     setSaving(true);
-    const srcW = SIZE / zoom;
-    const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
-      ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
-    });
     try {
+      const srcW = SIZE / zoom;
+      const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
+        ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
+      });
       // 统一上传管道 raw sink：只取远程地址，不碰画布
       const result = await uploadOne(blob, "avatar.png", "derived");
       if (result?.url) { onDone(result.url); message.success(t("auth.avatarSaved")); }
       else message.error(t("auth.avatarFailed"));
     } catch { message.error(t("auth.avatarFailed")); }
-    setSaving(false);
+    finally { setSaving(false); }
   };
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent
         showOverlay={false}
-        className="sm:max-w-[360px]"
+        className="gap-0 overflow-hidden p-0 sm:max-w-[520px]"
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <DialogHeader>
+        <DialogHeader className="border-b bg-muted/20 px-6 py-6">
           <DialogTitle>{t("auth.cropAvatar")}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-3">
-        <div
-          className="cursor-grab select-none overflow-hidden rounded-full border-[3px] border-border active:cursor-grabbing"
-          style={{ width: SIZE, height: SIZE }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-        >
-          <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ width: SIZE, height: SIZE }} />
+        <div className="grid gap-6 px-6 py-6 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+          <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-border bg-muted/20 p-6">
+            <div
+              className="size-[220px] cursor-grab select-none overflow-hidden rounded-full border-2 border-border bg-background shadow-lg ring-1 ring-ring/20 active:cursor-grabbing"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+            >
+              <canvas ref={canvasRef} width={SIZE} height={SIZE} className="block size-[220px]" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="avatar-zoom" className="text-sm font-medium text-foreground">{t("common.zoom")}</Label>
+              <Slider
+                id="avatar-zoom"
+                aria-label={t("common.zoom")}
+                min={0.05}
+                max={3}
+                step={0.01}
+                value={[zoom]}
+                onValueChange={([value]) => { if (value !== undefined) setZoom(value); }}
+              />
+              <div className="flex justify-between text-[11px] tabular-nums text-muted-foreground">
+                <span>0.05x</span>
+                <span>{zoom.toFixed(2)}x</span>
+                <span>3.00x</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 w-full">
-          <Label htmlFor="avatar-zoom" className="text-xs text-muted-foreground">{t("common.zoom")}</Label>
-          <Slider
-            id="avatar-zoom"
-            aria-label={t("common.zoom")}
-            min={0.05}
-            max={3}
-            step={0.01}
-            value={[zoom]}
-            onValueChange={([value]) => { if (value !== undefined) setZoom(value); }}
-            className="flex-1"
-          />
-        </div>
-        <div className="flex gap-2 w-full">
-          <Button variant="outline" onClick={onClose} block>{t("common.cancel")}</Button>
-          <Button variant="primary" onClick={handleSave} loading={saving} block>{t("common.save")}</Button>
-        </div>
-        </div>
+        <DialogFooter className="border-t bg-muted/20 px-6 py-4 sm:justify-end">
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t("common.cancel")}</Button>
+          <Button type="button" variant="primary" onClick={handleSave} loading={saving}>{t("common.save")}</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
