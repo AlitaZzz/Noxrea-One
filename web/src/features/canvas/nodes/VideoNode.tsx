@@ -12,8 +12,8 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import {
-  CaretRightOutlined,
-  PauseOutlined,
+  PauseIcon,
+  PlayIcon,
   UploadOutlined,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
@@ -773,7 +773,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                     onClick={(e) => { e.stopPropagation(); togglePlay(); }}
                     aria-label={playing ? "pause" : "play"}
                   >
-                    {playing ? <PauseOutlined className="size-5" /> : <CaretRightOutlined className="size-5" />}
+                    {playing ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
                   </Button>
                   <span className="text-sm text-white flex-shrink-0 tabular-nums">
                     {formatTime(progress)} / {formatTime(duration)}

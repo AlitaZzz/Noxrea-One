@@ -15,7 +15,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 
-import { CaretRightOutlined, PauseOutlined } from "@/components/ui/AppIcon";
+import { PauseIcon, PlayIcon } from "@/components/ui/AppIcon";
 import { VolumeMuteIcon } from "@/components/ui/AppIcon";
 import { VolumeUpIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
@@ -135,7 +135,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
               onClick={(e) => { e.stopPropagation(); togglePlay(); }}
               aria-label={playing ? "pause" : "play"}
             >
-              {playing ? <PauseOutlined className="size-5" /> : <CaretRightOutlined className="size-5" />}
+              {playing ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
             </Button>
             <span className="flex-shrink-0 text-sm text-white tabular-nums">
               {formatTime(progress)} / {formatTime(duration)}
