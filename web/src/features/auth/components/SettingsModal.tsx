@@ -82,9 +82,10 @@ export default function SettingsModal({ open, onClose }: Props) {
         </DialogHeader>
         <div className="max-h-[min(720px,calc(100vh-8rem))] overflow-y-auto px-6 py-6">
           <section className="flex items-center gap-4 rounded-lg border border-border bg-muted/20 p-4">
-            <button
+            <Button
               type="button"
-              className="group relative flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-3xl font-bold text-primary-foreground ring-1 ring-border transition-shadow hover:ring-2 hover:ring-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              variant="default"
+              className="group relative size-24 shrink-0 overflow-hidden rounded-full p-0 text-3xl font-bold ring-1 ring-border hover:ring-2 hover:ring-ring focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => fileRef.current?.click()}
               aria-label={t("auth.clickUpload")}
             >
@@ -96,7 +97,7 @@ export default function SettingsModal({ open, onClose }: Props) {
               <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <CameraOutlined className="text-lg" />
               </span>
-            </button>
+            </Button>
             <div className="min-w-0 space-y-1">
               <div className="truncate text-sm font-medium text-foreground">{user?.username || t("auth.defaultUser")}</div>
             </div>

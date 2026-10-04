@@ -9,6 +9,8 @@ import { memo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 import { type ReferenceItem, refLabelKey } from "./reference";
 
@@ -32,48 +34,35 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
 
   if (items.length === 0) return null;
 
-  // Clamp position to viewport
-  const dropdownWidth = 220;
-  const dropdownHeight = Math.min(items.length * 56 + 8, 300);
-  const x = Math.min(position.x, window.innerWidth - dropdownWidth - 8);
-  const y = position.y + dropdownHeight > window.innerHeight
-    ? position.y - dropdownHeight - 8
-    : position.y + 4;
-
   return (
-    <>
-      <style>{`
-        .mention-dropdown-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent; }
-        .mention-dropdown-scroll::-webkit-scrollbar { width: 6px; }
-        .mention-dropdown-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.2);
-          border-radius: 3px;
-        }
-        .mention-dropdown-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
-      `}</style>
-      <div
+    <Popover open modal={false}>
+      <PopoverAnchor asChild>
+        <span
+          aria-hidden="true"
+          tabIndex={-1}
+          className="fixed size-px pointer-events-none"
+          style={{ left: position.x, top: position.y }}
+        />
+      </PopoverAnchor>
+      <PopoverContent
         ref={listRef}
-        className="mention-dropdown-scroll fixed z-[9999] rounded-lg shadow-2xl overflow-x-hidden overflow-y-auto"
-        style={{
-          left: x,
-          top: y,
-          width: dropdownWidth,
-          maxHeight: 300,
-          background: "var(--card, #262626)",
-          border: "1px solid var(--border, #3a3a3a)",
-        }}
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        collisionPadding={8}
+        className="max-h-[300px] w-[220px] overflow-x-hidden p-1"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
       >
       {items.map((item, i) => (
-        <div
+        <Button
           key={`${item.kind}-${item.src}`}
-          className="flex items-center gap-3 px-3 py-2 cursor-pointer"
-          style={{
-            background: i === selectedIndex
-              ? "var(--accent, #3c3c3c)"
-              : "transparent",
-          }}
-          onMouseEnter={() => onHover(i)}
-          onMouseDown={(e) => {
+          type="button"
+          variant="ghost"
+          data-selected={i === selectedIndex ? "true" : undefined}
+          className="h-auto min-h-14 w-full justify-start gap-3 rounded-sm px-3 py-2 text-left data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+          onPointerMove={() => onHover(i)}
+          onPointerDown={(e) => {
             // 阻止默认行为，避免抢走编辑器焦点导致 suggestion 提前退出
             e.preventDefault();
             onSelect(item);
@@ -81,10 +70,9 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
         >
           {item.kind === "audio" ? (
             <div
-              className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--accent, #3c3c3c)", border: "1px solid var(--border, #3a3a3a)", color: "var(--primary)" }}
+              className="flex size-10 shrink-0 items-center justify-center rounded border border-border bg-accent text-primary"
             >
-              <WaveIcon style={{ width: 22, height: 22 }} />
+              <WaveIcon className="size-[22px]" />
             </div>
           ) : item.kind === "video" ? (
             <video
@@ -92,27 +80,22 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
               muted
               preload="metadata"
               playsInline
-              className="w-10 h-10 rounded object-cover flex-shrink-0"
-              style={{ border: "1px solid var(--border, #3a3a3a)", background: "var(--accent, #3c3c3c)" }}
+              className="size-10 shrink-0 rounded border border-border bg-accent object-cover"
             />
           ) : (
             <img
               src={item.thumbnail}
               alt={t(refLabelKey(item), { index: item.index + 1 })}
-              className="w-10 h-10 rounded object-cover flex-shrink-0"
-              style={{ border: "1px solid var(--border, #3a3a3a)" }}
+              className="size-10 shrink-0 rounded border border-border object-cover"
             />
           )}
-          <span
-            className="text-sm font-medium"
-            style={{ color: "var(--foreground)" }}
-          >
+          <span className="text-sm font-medium">
             {t(refLabelKey(item), { index: item.index + 1 })}
           </span>
-        </div>
+        </Button>
       ))}
-      </div>
-    </>
+      </PopoverContent>
+    </Popover>
   );
 });
 
