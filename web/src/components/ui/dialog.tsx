@@ -69,7 +69,7 @@ function DialogContent({
   const { parentContainer, overlayRef, overlayRoot, depth, zIndex: layerZIndex } = useLayerParent()
   const container = global ? undefined : parentContainer
   const resolvedZIndex = zIndex ?? layerZIndex
-  const layerStyle = resolvedZIndex === undefined ? undefined : { zIndex: resolvedZIndex }
+  const layerStyle = { zIndex: resolvedZIndex }
   const content = (
     <div
       data-slot="dialog-positioner"
@@ -90,7 +90,7 @@ function DialogContent({
         }}
         {...props}
       >
-        <LayerContext.Provider value={{ overlayRoot, depth }}>
+        <LayerContext.Provider value={{ overlayRoot, depth, zIndex: resolvedZIndex }}>
           <div data-layer-scope className="contents">
             {children}
             <div ref={overlayRef} data-layer-overlay-root data-layer-depth={depth} className="fixed inset-0 pointer-events-none" />

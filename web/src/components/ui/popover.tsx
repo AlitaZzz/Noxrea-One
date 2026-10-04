@@ -4,6 +4,8 @@ import { cn } from "cn"
 import { Popover as PopoverPrimitive } from "radix-ui"
 import * as React from "react"
 
+import { useLayerZIndex } from "@/components/ui/modal/layer-context"
+
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
@@ -20,10 +22,12 @@ function PopoverContent({
   onCloseAutoFocus,
   onInteractOutside,
   onPointerDown,
+  style,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // Radix restores the trigger on close; pointer actions should keep the browser's current focus.
   const pointerInteractionRef = React.useRef(false)
+  const layerZIndex = useLayerZIndex()
 
   return (
     <PopoverPrimitive.Portal>
@@ -57,6 +61,7 @@ function PopoverContent({
           pointerInteractionRef.current = false
           if (pointerInteraction && !event.defaultPrevented) event.preventDefault()
         }}
+        style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}
       />
     </PopoverPrimitive.Portal>

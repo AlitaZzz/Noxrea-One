@@ -6,6 +6,8 @@ import { cn } from "cn"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import * as React from "react"
 
+import { useLayerZIndex } from "@/components/ui/modal/layer-context"
+
 function DropdownMenu({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -38,10 +40,12 @@ function DropdownMenuContent({
   onCloseAutoFocus,
   onInteractOutside,
   onPointerDown,
+  style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   // Radix restores the trigger on close; pointer actions should keep the browser's current focus.
   const pointerInteractionRef = React.useRef(false)
+  const layerZIndex = useLayerZIndex()
 
   return (
     <DropdownMenuPrimitive.Portal>
@@ -68,6 +72,7 @@ function DropdownMenuContent({
           pointerInteractionRef.current = false
           if (pointerInteraction && !event.defaultPrevented) event.preventDefault()
         }}
+        style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>

@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LayerContext } from "@/components/ui/modal/layer-context";
 
 afterEach(cleanup);
 
@@ -32,6 +33,30 @@ describe("DropdownMenu", () => {
     expect(screen.getByRole("menu")).toHaveClass("space-y-px");
     fireEvent.click(screen.getByRole("menuitem", { name: "Action" }));
     expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the official body portal and inherits the active layer z-index", () => {
+    const layerRoot = document.createElement("div");
+    document.body.appendChild(layerRoot);
+
+    render(
+      <LayerContext.Provider value={{ overlayRoot: layerRoot, depth: 1, zIndex: 1000 }}>
+        <DropdownMenu open>
+          <DropdownMenuTrigger asChild>
+            <button type="button">Open menu</button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>Action</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </LayerContext.Provider>,
+    );
+
+    const menu = screen.getByRole("menu");
+    expect(document.body).toContainElement(menu);
+    expect(layerRoot).not.toContainElement(menu);
+    expect(menu).toHaveStyle({ zIndex: "1001" });
+    layerRoot.remove();
   });
 
   it("does not restore trigger focus after clicking outside on a canvas surface", async () => {

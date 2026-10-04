@@ -18,11 +18,14 @@ interface LayerState {
   overlayRoot: HTMLElement | null;
   /** Depth of the current layer. 0 = body-level (no modal). */
   depth: number;
+  /** Base z-index for the current layer. 0 = body-level (use component defaults). */
+  zIndex: number;
 }
 
 const LayerContext = createContext<LayerState>({
   overlayRoot: null,
   depth: 0,
+  zIndex: 0,
 });
 
 export { LayerContext };
@@ -54,6 +57,12 @@ export function useLayerParent(): LayerParent {
   const parentContainer = parent.overlayRoot || undefined;
 
   return { parentContainer, overlayRef, overlayRoot, depth, zIndex };
+}
+
+/** Resolve the z-index for a popup rendered by Radix's body-level Portal. */
+export function useLayerZIndex() {
+  const { zIndex } = useContext(LayerContext);
+  return zIndex > 0 ? zIndex + 1 : undefined;
 }
 
 export type { ComponentProps, ReactNode };
