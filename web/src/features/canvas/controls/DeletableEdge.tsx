@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ScissorOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
@@ -205,10 +206,12 @@ export default function DeletableEdge(props: EdgeProps) {
 
       <EdgeLabelRenderer>
         {armed && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label={t("common.delete")}
-            className="nodrag nopan"
+            className="nodrag nopan absolute z-10 rounded-full border border-border bg-card text-foreground transition-none hover:bg-muted"
             onMouseEnter={() => setButtonHovered(true)}
             onMouseLeave={() => setButtonHovered(false)}
             onMouseMove={reanchor}
@@ -218,26 +221,14 @@ export default function DeletableEdge(props: EdgeProps) {
               useCanvasStore.getState().removeEdges([id]);
             }}
             style={{
-              position: "absolute",
               left: buttonX,
               top: buttonY,
               transform: "translate(-50%, -50%)",
               pointerEvents: "all",
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 0,
-              borderRadius: "50%",
-              background: "var(--card)",
-              border: "1px solid var(--border, #525252)",
-              color: "var(--foreground)",
-              cursor: "pointer",
             }}
           >
-            <ScissorOutlined style={{ fontSize: 14 }} />
-          </button>
+            <ScissorOutlined className="size-4" />
+          </Button>
         )}
       </EdgeLabelRenderer>
     </>

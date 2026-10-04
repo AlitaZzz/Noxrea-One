@@ -92,6 +92,16 @@ function GridPicker({ nodeId, onSelect }: { nodeId: string; onSelect: () => void
   const { t } = useTranslation();
   const [hover, setHover] = useState({ rows: 0, cols: 0 });
   const MAX = 5;
+  const updateHover = useCallback((rows: number, cols: number) => {
+    setHover((current) => current.rows === rows && current.cols === cols ? current : { rows, cols });
+  }, []);
+  const handleGridPointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const cell = target.closest<HTMLButtonElement>('[data-grid-cell="true"]');
+    if (!cell || !event.currentTarget.contains(cell)) return;
+    updateHover(Number(cell.dataset.row), Number(cell.dataset.col));
+  }, [updateHover]);
   const handleSelect = useCallback(
     (rows: number, cols: number) => {
       dispatchNodeAction(nodeId, "grid-split", { rows, cols });
@@ -133,20 +143,26 @@ function GridPicker({ nodeId, onSelect }: { nodeId: string; onSelect: () => void
           <div
             className="inline-grid gap-px rounded-sm border border-border bg-border p-px"
             style={{ gridTemplateColumns: `repeat(${MAX}, 16px)` }}
-            onMouseLeave={() => setHover({ rows: 0, cols: 0 })}
+            onPointerMove={handleGridPointerMove}
+            onPointerLeave={() => setHover({ rows: 0, cols: 0 })}
           >
             {Array.from({ length: MAX * MAX }).map((_, i) => {
               const row = Math.floor(i / MAX) + 1;
               const col = (i % MAX) + 1;
               const active = row <= hover.rows && col <= hover.cols;
               return (
-                <button key={i}
+                <Button
+                  key={i}
                   type="button"
+                  variant={active ? "default" : "ghost"}
+                  size="icon-xs"
+                  data-grid-cell="true"
+                  data-row={row}
+                  data-col={col}
                   aria-label={`${row}×${col}`}
-                  onMouseEnter={() => setHover({ rows: row, cols: col })}
-                  onFocus={() => setHover({ rows: row, cols: col })}
+                  onFocus={() => updateHover(row, col)}
                   onClick={() => handleSelect(row, col)}
-                  className={`size-4 rounded-[1px] border-0 p-0 transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? "bg-primary" : "bg-muted hover:bg-accent"}`}
+                  className={`size-4 rounded-[1px] border-0 p-0 transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring ${active ? "hover:bg-primary" : "bg-muted hover:bg-accent"}`}
                 />
               );
             })}
