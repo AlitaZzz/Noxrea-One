@@ -12,12 +12,12 @@ import { useTranslation } from "react-i18next";
 
 import {
   AppstoreOutlined,
-  CaretRightOutlined,
   ClockCircleOutlined,
   DownOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
   RightOutlined,
+  VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { FilterIcon } from "@/components/ui/AppIcon";
@@ -420,9 +420,13 @@ function ElementItemImpl(props: ElementItemProps) {
   }, [node, centerNode]);
 
   return (
-    <div
+    <Button
+      type="button"
       onClick={handleClick}
-      className={`relative flex items-center gap-2 rounded-md py-1.5 text-sm text-foreground transition-colors hover:bg-accent cursor-pointer select-none${selected ? " bg-accent" : ""}`}
+      aria-label={label || `Node ${node.id}`}
+      aria-current={selected ? "true" : undefined}
+      variant="ghost"
+      className={`relative h-auto w-full justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground hover:bg-accent${selected ? " bg-accent" : ""}`}
       style={{
         paddingLeft: 8 + depth * ROW_INDENT,
         paddingRight: 8,
@@ -456,14 +460,11 @@ function ElementItemImpl(props: ElementItemProps) {
         ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
           <>
             <img src={thumb} alt={label} className="w-full h-full object-cover" />
-            {/* 视频播放角标：居中三角 + 投影，无圆底更轻，亮暗画面均清晰 */}
-            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <CaretRightOutlined
-                style={{
-                  fontSize: 14,
-                  color: "rgba(255,255,255,0.96)",
-                  filter: "drop-shadow(0 0 1px rgba(0,0,0,0.85)) drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
-                }}
+            {/* 视频类型角标：复用全局视频图标，避免把类型识别和播放操作混为一谈 */}
+            <span className="pointer-events-none absolute left-1 top-1 flex size-4 items-center justify-center rounded-sm border border-border/60 bg-background/85 text-foreground shadow-sm">
+              <VideoCameraOutlined
+                aria-hidden="true"
+                className="size-2.5"
               />
             </span>
           </>
@@ -484,21 +485,9 @@ function ElementItemImpl(props: ElementItemProps) {
         )}
       </div>
       {/* 固定三行高度：标题 20px + 元数据 16px + 时间 16px，缺行时整体仍保持同高 */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center overflow-hidden">
+      <div className={`flex-1 min-w-0 flex flex-col justify-center overflow-hidden${failed || generating ? " pr-5" : ""}`}>
         <div className="flex items-center gap-1.5 min-w-0 h-5">
           <span className="flex-1 truncate text-[13px] leading-5 font-medium">{label || `Node ${node.id}`}</span>
-          {failed ? (
-            <Tooltip><TooltipTrigger asChild>
-                <span
-                  className="shrink-0 rounded-full"
-                  style={{ width: 6, height: 6, background: "var(--destructive)" }}
-                />
-              </TooltipTrigger><TooltipContent>{t("common.statusFailed")}</TooltipContent></Tooltip>
-          ) : generating ? (
-            <Tooltip><TooltipTrigger asChild>
-                <LoadingOutlined className="shrink-0" spin style={{ fontSize: 12, color: "var(--primary)" }} />
-              </TooltipTrigger><TooltipContent>{t("common.generating")}</TooltipContent></Tooltip>
-          ) : null}
         </div>
         {metaLine && (
           <div className="truncate text-[11px] leading-4 text-muted-foreground">
@@ -512,8 +501,23 @@ function ElementItemImpl(props: ElementItemProps) {
           </div>
         )}
       </div>
+      {(failed || generating) && (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">
+          {failed ? (
+            <Tooltip><TooltipTrigger asChild>
+                <span
+                  className="block size-1.5 rounded-full bg-destructive"
+                />
+              </TooltipTrigger><TooltipContent>{t("common.statusFailed")}</TooltipContent></Tooltip>
+          ) : (
+            <Tooltip><TooltipTrigger asChild>
+                <LoadingOutlined className="block size-3 text-primary" spin />
+              </TooltipTrigger><TooltipContent>{t("common.generating")}</TooltipContent></Tooltip>
+          )}
+        </span>
+      )}
       <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-    </div>
+    </Button>
   );
 }
 
@@ -521,9 +525,8 @@ const ElementItem = memo(ElementItemImpl);
 
 // ── 资产视图 ──
 function AssetsView() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { message } = useAppFeedback();
-  const lang = i18n.language;
   const folders = useAssetsStore((s) => s.folders);
   const getChildFolders = useAssetsStore((s) => s.getChildFolders);
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
@@ -596,7 +599,7 @@ function AssetsView() {
     }));
     if (activeFolderId !== null) return childFolders;
     return uncategorizedFolder ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders] : childFolders;
-  }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t, lang]);
+  }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t]);
 
   // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
   const showFolderGrid = typeFilter.length === 0 && !appliedSearch.trim();
