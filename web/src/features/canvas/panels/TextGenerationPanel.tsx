@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -35,7 +36,6 @@ import PresetMenuContent from "../shared/PresetMenuContent";
 import { expandPresetTokens, replacePresetToken, usePromptTemplateCatalog } from "../shared/prompt-presets";
 import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
-import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
 import { useGenerationSubmit } from "./use-generation-submit";
@@ -398,8 +398,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   return (
     <>
       <WheelGuard
-        className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
-        style={{ background: "var(--card, #262626)", border: "1px solid var(--border, #3a3a3a)", width: 580 }}
+        className="ui-select-none nodrag nopan flex w-[580px] flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground shadow-xl"
       >
         <div
           className="flex gap-2 flex-wrap"
@@ -420,19 +419,19 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
             {refGroups.map((group, i) => (
               <Fragment key={group.key}>
-                {i > 0 && <RefGroupDivider />}
+                {i > 0 && <Separator orientation="vertical" className="mx-1 h-14 self-center" />}
                 {group.content}
               </Fragment>
             ))}
             {/* 添加参考：方形加号占位，与参考缩略图同行 */}
             <Tooltip><TooltipTrigger asChild>
-                <Button size="sm" variant="ghost"
-                  className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-                  style={{ width: 56, height: 56, background: "var(--accent)", border: "1px dashed var(--border)", cursor: "pointer" }}
-                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--muted-foreground)"; el.style.background = "rgba(255,255,255,0.08)"; }}
-                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--border)"; el.style.background = "var(--accent)"; }}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-14 shrink-0 rounded-md border-dashed p-0"
                   onClick={handleRefUpload}>
-                  <PlusOutlined style={{ fontSize: 18, color: "var(--muted-foreground)" }} />
+                  <PlusOutlined className="size-5" />
                 </Button>
               </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
           </div>
@@ -471,7 +470,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          <Separator orientation="vertical" className="h-7 self-center" />
           <Popover open={presetOpen} onOpenChange={setPresetOpen}>
             <Tooltip open={presetOpen ? false : undefined}>
               <TooltipTrigger asChild>

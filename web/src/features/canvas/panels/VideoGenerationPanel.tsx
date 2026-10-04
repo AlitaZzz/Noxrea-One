@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import IconActionButton from "@/components/ui/IconActionButton";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
@@ -39,7 +40,6 @@ import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
 import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
-import RefGroupDivider from "../shared/RefGroupDivider";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
 import { useGenerationSubmit } from "./use-generation-submit";
@@ -381,12 +381,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   return (
     <>
       <WheelGuard
-        className="ui-select-none nodrag nopan flex flex-col gap-2 px-4 py-3 rounded-lg shadow-xl"
-        style={{
-          background: "var(--card, #262626)",
-          border: "1px solid var(--border, #3a3a3a)",
-          width: 640,
-        }}
+        className="ui-select-none nodrag nopan flex w-[640px] flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground shadow-xl"
       >
         {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
             文本参考不可拖动，按连线顺序排在首位 */}
@@ -409,19 +404,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
             {refGroups.map((group, i) => (
               <Fragment key={group.key}>
-                {i > 0 && <RefGroupDivider />}
+                {i > 0 && <Separator orientation="vertical" className="mx-1 h-14 self-center" />}
                 {group.content}
               </Fragment>
             ))}
             {/* 添加参考：方形加号占位，与参考缩略图同行 */}
             <Tooltip><TooltipTrigger asChild>
-                <Button size="sm" variant="ghost"
-                  className="flex items-center justify-center rounded transition-colors flex-shrink-0"
-                  style={{ width: 56, height: 56, background: "var(--accent)", border: "1px dashed var(--border)", cursor: "pointer" }}
-                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--muted-foreground)"; el.style.background = "rgba(255,255,255,0.08)"; }}
-                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "var(--border)"; el.style.background = "var(--accent)"; }}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-14 shrink-0 rounded-md border-dashed p-0"
                   onClick={handleRefUpload}>
-                  <PlusOutlined style={{ fontSize: 18, color: "var(--muted-foreground)" }} />
+                  <PlusOutlined className="size-5" />
                 </Button>
               </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
           </div>
@@ -456,7 +451,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+          <Separator orientation="vertical" className="h-7 self-center" />
           {refModeOptions.length > 0 && (
             <DropdownMenu open={refModeOpen} onOpenChange={setRefModeOpen}>
               <DropdownMenuTrigger asChild>
@@ -498,7 +493,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             </DropdownMenu>
           )}
           {refModeOptions.length > 0 && (
-            <div className="w-px h-7 flex-shrink-0" style={{ background: "var(--border)" }} />
+            <Separator orientation="vertical" className="h-7 self-center" />
           )}
           <Popover>
             <PopoverTrigger asChild>
