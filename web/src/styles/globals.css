@@ -217,16 +217,6 @@
   display: none;
 }
 
-/* Shared reset button hover */
-.panel-reset-btn {
-  background: transparent;
-  color: var(--muted-foreground);
-}
-.panel-reset-btn:hover {
-  background: var(--accent) !important;
-  color: var(--foreground) !important;
-}
-
 /* Shared node body styles — selected / unselected border */
 .node-body {
   outline: 1px solid rgba(255, 255, 255, 0.1);
@@ -789,58 +779,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 }
 .canvas-toolbar { background: var(--card); border: 1px solid var(--border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
 
-/* ── 图片打光面板（LightingPanel） ── */
-/* 档位滑杆：填充色由内联 background 渐变按当前档位驱动 */
-/* 亮度百分比输入（亮度组合框内，隐藏原生箭头） */
-.light-panel-pct-input {
-  width: 30px; background: transparent; border: none; outline: none; color: var(--foreground);
-  font-size: 12px; text-align: right; padding: 0;
-  -moz-appearance: textfield; appearance: textfield;
-}
-.light-panel-pct-input::-webkit-inner-spin-button,
-.light-panel-pct-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-/* 色温输入框（温标组合框内，隐藏原生箭头） */
-.light-panel-temp-input {
-  width: 44px; background: transparent; border: none; outline: none;
-  color: var(--foreground); font-size: 13px; text-align: right; padding: 0;
-  -moz-appearance: textfield; appearance: textfield;
-}
-.light-panel-temp-input::-webkit-inner-spin-button,
-.light-panel-temp-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-/* 透视/正面 视角切换 pill：占满预览列宽，两段等宽 */
-.light-panel-view-toggle {
-  display: flex; width: 100%; padding: 2px; gap: 2px;
-  background: var(--accent); border: 1px solid var(--border); border-radius: 8px;
-}
-.light-panel-view-opt {
-  flex: 1; display: flex; align-items: center; justify-content: center; height: 24px; padding: 0;
-  font-size: 12px; line-height: 1; border: none; border-radius: 6px; cursor: pointer;
-  background: transparent; color: var(--muted-foreground); transition: background .15s, color .15s;
-}
-.light-panel-view-opt.active {
-  background: var(--foreground); color: var(--card);
-}
-/* 主光源方向按钮：骨架与 API 设置能力筛选按钮一致，
-   选中态保留白底反色以强调当前方位 */
-.light-panel-dir-btn {
-  display: flex; align-items: center; justify-content: center;
-  height: 26px; padding: 0; font-size: 12px; line-height: 1; border-radius: 7px; cursor: pointer;
-  border: none; background: transparent; color: var(--muted-foreground);
-  transition: background .15s, color .15s;
-}
-.light-panel-dir-btn:hover { background: var(--secondary); color: var(--foreground); }
-.light-panel-dir-btn.active { background: var(--foreground); color: var(--card); }
-/* 颜色区 色温/颜色 迷你选项卡：占满列宽，两段等分（与视角切换 pill 同构） */
-.light-panel-mini-tabs {
-  display: flex; width: 100%; gap: 2px; padding: 2px;
-  background: var(--accent); border: 1px solid var(--border); border-radius: 7px;
-}
-.light-panel-mini-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; height: 24px; padding: 0;
-  font-size: 12px; line-height: 1; border: none; border-radius: 5px; cursor: pointer;
-  background: transparent; color: var(--muted-foreground); transition: background .15s, color .15s;
-}
-.light-panel-mini-tab.active { background: var(--foreground); color: var(--card); }
 /* 工具栏容器 */
 .toolbar-dock { background: var(--card); border: 1px solid var(--border); box-shadow: var(--toolbar-shadow); }
 

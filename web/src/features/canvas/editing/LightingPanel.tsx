@@ -10,13 +10,17 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ResetIcon } from "@/components/ui/AppIcon";
+import { CloseOutlined, ResetIcon } from "@/components/ui/AppIcon";
 import { SunIcon } from "@/components/ui/AppIcon";
 import { ThermometerIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { ColorPicker } from "@/components/ui/color-picker";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -156,10 +160,10 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
   );
 
   return (
-    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
+    <Card className="nodrag nopan nowheel pointer-events-auto w-[460px] select-none gap-3 p-3">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--foreground)" }}>
+      <CardHeader className="flex items-center justify-between gap-0 px-0 py-0">
+        <span className="inline-flex items-center gap-2 text-[13px] text-foreground">
           <SunIcon className="h-4 w-4" />
           {t("lighting.title")}
         </span>
@@ -168,32 +172,33 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           variant="ghost"
           aria-label="close"
           onClick={onClose}
-          style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
+          size="icon-xs"
         >
-          <span style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1 }}>✕</span>
+          <CloseOutlined aria-hidden="true" />
         </Button>
-      </div>
-      <div className="h-px w-full" style={{ background: "var(--border)" }} />
+      </CardHeader>
+      <Separator />
 
-      <div className="flex gap-3">
+      <CardContent className="flex gap-3 px-0 py-0">
         {/* 左列：视角切换 + 3D 预览（高度撑满与右列对齐，画布填充剩余空间） */}
         <div className="flex h-full w-[200px] shrink-0 flex-col gap-2">
-          <div className="light-panel-view-toggle">
-            <button
-              type="button"
-              className={`light-panel-view-opt${viewMode === "perspective" ? " active" : ""}`}
-              onClick={() => setViewMode("perspective")}
-            >
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) => { if (value) setViewMode(value as OrbitViewMode); }}
+            variant="outline"
+            size="sm"
+            spacing={2}
+            className="w-full"
+            aria-label={t("lighting.title")}
+          >
+            <ToggleGroupItem value="perspective" className="h-7 flex-1 px-2 text-xs font-normal">
               {t("lighting.view.perspective")}
-            </button>
-            <button
-              type="button"
-              className={`light-panel-view-opt${viewMode === "front" ? " active" : ""}`}
-              onClick={() => setViewMode("front")}
-            >
+            </ToggleGroupItem>
+            <ToggleGroupItem value="front" className="h-7 flex-1 px-2 text-xs font-normal">
               {t("lighting.view.front")}
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
           <div className="min-h-0 flex-1">
             <OrbitScene3D
               variant="light"
@@ -210,12 +215,12 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
 
         {/* 右列：参数 */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.global")}</div>
+          <div className="text-xs text-muted-foreground">{t("lighting.global")}</div>
 
           {/* 亮度：档位滑杆 + 数值框联动（与色温同款 h-9 组合框，保证三行控件等高） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.intensity")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+            <span className="text-xs text-muted-foreground">{t("lighting.intensity")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2">
               <Slider
                 min={10}
                 max={100}
@@ -224,15 +229,15 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                 onValueChange={([next]) => update("intensity", next)}
                 className="min-w-0 flex-1"
               />
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
-              <SunIcon className="shrink-0" style={{ width: 13, height: 13, color: "var(--muted-foreground)" }} />
-              <input
+              <div className="h-4 w-px shrink-0 bg-border" />
+              <SunIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <Input
                 type="number"
                 min={10}
                 max={100}
                 step={1}
                 value={state.intensity}
-                className="light-panel-pct-input shrink-0"
+                className="h-7 w-9 shrink-0 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 // 输入中间态（如打 "55" 时的 "5"）不能立即钳位，否则每次按键都被夹成 10/100；
                 // 只在值合法时提交，非法中间态留在 DOM，失焦时统一钳位回写
                 onChange={(e) => {
@@ -246,49 +251,49 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                   update("intensity", clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>%</span>
+              <span className="shrink-0 text-xs text-muted-foreground">%</span>
             </div>
           </div>
 
           {/* 颜色：色温 / 颜色 双选项卡，共享同一个 color 参数；
               控件行固定高度，两种模式切换不引起下方布局跳动 */}
           <div className="flex flex-col gap-1.5">
-            <div className="light-panel-mini-tabs">
-              <button
-                type="button"
-                className={`light-panel-mini-tab${colorTab === "temp" ? " active" : ""}`}
-                onClick={() => switchColorTab("temp")}
-              >
+            <ToggleGroup
+              type="single"
+              value={colorTab}
+              onValueChange={(value) => { if (value) switchColorTab(value as "temp" | "custom"); }}
+              variant="outline"
+              size="sm"
+              spacing={2}
+              className="w-full"
+              aria-label={t("lighting.color")}
+            >
+              <ToggleGroupItem value="temp" className="h-7 flex-1 px-2 text-xs font-normal">
                 {t("lighting.colorTemp")}
-              </button>
-              <button
-                type="button"
-                className={`light-panel-mini-tab${colorTab === "custom" ? " active" : ""}`}
-                onClick={() => switchColorTab("custom")}
-              >
+              </ToggleGroupItem>
+              <ToggleGroupItem value="custom" className="h-7 flex-1 px-2 text-xs font-normal">
                 {t("lighting.color")}
-              </button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
             <div className="flex h-9 items-center">
               {colorTab === "temp" ? (
-                <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+                <div className="flex h-9 w-full items-center gap-1 rounded-xl px-2">
                   <Slider
                     min={KELVIN_MIN}
                     max={KELVIN_MAX}
                     step={100}
                     value={[kelvin]}
                     onValueChange={([next]) => handleKelvin(next)}
-                    // 色温带：渐变铺满整条轨道，已填充段透明保持色带完整可见。
-                    className="min-w-0 flex-1 [&_[data-slot=slider-track]]:bg-[linear-gradient(to_right,#FFB253,#3499FF)] [&_[data-slot=slider-range]]:bg-transparent"
+                    className="min-w-0 flex-1"
                   />
-                  <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
-                  <ThermometerIcon className="size-4 shrink-0" style={{ color: "var(--muted-foreground)" }} />
-                  <input
+                  <div className="h-4 w-px shrink-0 bg-border" />
+                  <ThermometerIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <Input
                     type="number"
                     min={KELVIN_MIN}
                     max={KELVIN_MAX}
                     value={kelvin}
-                    className="light-panel-temp-input shrink-0"
+                    className="h-7 w-11 shrink-0 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     // 同亮度输入：中间态不钳位，失焦统一归一并回写
                     onChange={(e) => {
                       const v = Number(e.target.value);
@@ -303,16 +308,16 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                       handleKelvin(clamped);
                     }}
                   />
-                  <span className="shrink-0 text-[13px]" style={{ color: "var(--muted-foreground)" }}>K</span>
+                  <span className="shrink-0 text-[13px] text-muted-foreground">K</span>
                 </div>
               ) : (
-                <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+                <div className="flex h-9 w-full items-center gap-2 rounded-xl px-2">
                   <ColorPicker
                     value={state.color}
                     onChangeComplete={(color) => update("color", color)}
                     size="sm"
                   />
-                  <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{state.color}</span>
+                  <span className="text-xs text-muted-foreground">{state.color}</span>
                 </div>
               )}
             </div>
@@ -320,40 +325,43 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
 
           {/* 主光源六向预设（收进同底色圆角容器，与上方组合框形成一致的分组感） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("lighting.mainDirection")}</span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--accent)" }}>
-              {DIRECTION_ORDER.map((dir) => {
-                const d = DIRECTIONS[dir];
-                const active = activeDir === dir;
-                return (
-                  <button
-                    key={dir}
-                    type="button"
-                    onClick={() => setState((prev) => ({ ...prev, azimuth: d.azimuth, elevation: d.elevation }))}
-                    className={`light-panel-dir-btn${active ? " active" : ""}`}
-                  >
-                    {t(d.labelKey)}
-                  </button>
-                );
-              })}
-            </div>
+            <span className="text-xs text-muted-foreground">{t("lighting.mainDirection")}</span>
+            <ToggleGroup
+              type="single"
+              value={activeDir ?? ""}
+              onValueChange={(value) => {
+                const direction = value ? DIRECTIONS[value] : undefined;
+                if (direction) setState((prev) => ({ ...prev, azimuth: direction.azimuth, elevation: direction.elevation }));
+              }}
+              variant="outline"
+              size="sm"
+              spacing={2}
+              className="grid h-auto w-full grid-cols-3"
+              aria-label={t("lighting.mainDirection")}
+            >
+              {DIRECTION_ORDER.map((dir) => (
+                <ToggleGroupItem key={dir} value={dir} className="h-7 px-2 text-xs font-normal">
+                  {t(DIRECTIONS[dir].labelKey)}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         </div>
-      </div>
+      </CardContent>
 
       {/* 底部：重置 + 确认（点生成走后端 lighting 模板插值，链路同文件头说明） */}
-      <div className="flex items-center justify-between">
-        <button
+      <CardFooter className="flex items-center justify-between px-0 py-0">
+        <Button
           type="button"
           onClick={handleReset}
-          className="panel-reset-btn flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all"
-          style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          variant="outline"
+          size="xs"
         >
-          <ResetIcon style={{ width: 13, height: 13 }} />
+          <ResetIcon className="size-3.5" />
           {t("lighting.reset")}
-        </button>
+        </Button>
         <IconActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }

@@ -9,10 +9,14 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { MultiAngleIcon } from "@/components/ui/AppIcon";
+import { CloseOutlined, MultiAngleIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
@@ -115,17 +119,17 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
     (p) => p.azimuth === azimuth && p.elevation === elevation && p.zoom === zoom,
   )?.key ?? null;
 
+  // Use the official two-thumb range to show the signed distance from neutral (0°).
+  const elevationRange: [number, number] = elevation < 0 ? [elevation, 0] : [0, elevation];
+
   // Zoom scales the center image
   const zoomScale = [1.6, 1.0, 0.65][zoom];
 
-  // Elevation handle position in % of track（-90→0%、0→50%、90→100%），供中点填充段定位
-  const elevationPct = ((elevation + 90) / 180) * 100;
-
   return (
-    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto select-none flex flex-col gap-3 rounded-2xl p-3" style={{ width: 460 }}>
+    <Card className="nodrag nopan nowheel pointer-events-auto w-[460px] select-none gap-3 p-3">
       {/* 标题栏（与打光面板同款） */}
-      <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--foreground)" }}>
+      <CardHeader className="flex items-center justify-between gap-0 px-0 py-0">
+        <span className="inline-flex items-center gap-2 text-[13px] text-foreground">
           <MultiAngleIcon className="h-4 w-4" />
           {t("angle.editorTitle")}
         </span>
@@ -133,28 +137,36 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
           variant="ghost"
           aria-label="close"
           onClick={onClose}
-          style={{ width: 24, height: 24, minWidth: 24, padding: 0 }}
+          size="icon-xs"
         >
-          <span style={{ color: "var(--muted-foreground)", fontSize: 12, lineHeight: 1 }}>✕</span>
+          <CloseOutlined aria-hidden="true" />
         </Button>
-      </div>
-      <div className="h-px w-full" style={{ background: "var(--border)" }} />
+      </CardHeader>
+      <Separator />
 
-      <div className="flex gap-3">
+      <CardContent className="flex gap-3 px-0 py-0">
         {/* 左列：3D 轨道球（与打光面板同款：视角切换 + 场景铺满剩余高度） */}
         <div className="flex h-full w-[200px] shrink-0 flex-col gap-2">
-          <div className="light-panel-view-toggle">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) => { if (value) setViewMode(value as OrbitViewMode); }}
+            variant="outline"
+            size="sm"
+            spacing={2}
+            className="w-full"
+            aria-label={t("angle.editorTitle")}
+          >
             {VIEW_OPTIONS.map((opt) => (
-              <button
+              <ToggleGroupItem
                 key={opt.key}
-                type="button"
-                className={`light-panel-view-opt${viewMode === opt.key ? " active" : ""}`}
-                onClick={() => setViewMode(opt.key)}
+                value={opt.key}
+                className="h-7 flex-1 px-2 text-xs font-normal"
               >
                 {t(opt.labelKey)}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
           <div className="min-h-0 flex-1">
             <OrbitScene3D
               variant="camera"
@@ -172,8 +184,8 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* 方位角：滑杆 + 数值框联动 */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.azimuth")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
+            <span className="text-xs text-muted-foreground">{t("angle.azimuth")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2">
               <Slider
                 min={0}
                 max={359}
@@ -182,14 +194,14 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                 onValueChange={([next]) => setAzimuth(next)}
                 className="min-w-0 flex-1"
               />
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
-              <input
+              <div className="h-4 w-px shrink-0 bg-border" />
+              <Input
                 type="number"
                 min={0}
                 max={359}
                 step={1}
                 value={azimuth}
-                className="light-panel-pct-input shrink-0"
+                className="h-7 w-9 shrink-0 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 // 输入中间态不钳位（与打光面板同款策略），失焦统一归一回写；
                 // 空串必须跳过——Number("") 为 0，恰在合法区间内，会立即提交 0 锁死输入
                 onChange={(e) => {
@@ -204,44 +216,33 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                   setAzimuth(clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>°</span>
+              <span className="shrink-0 text-xs text-muted-foreground">°</span>
             </div>
           </div>
 
-          {/* 俯仰角 */}
+          {/* 俯仰角：官方 range slider，以 0° 为中性端点 */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.elevation")}</span>
-            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2" style={{ background: "var(--accent)" }}>
-              <div className="relative min-w-0 flex-1">
-                {/* 双向轴：填充从中间 0° 出发指向手柄。原生轨道只会从最小值填充，
-                    隐藏原生轨道填充，自绘一段 0 点→手柄的白条（层级在轨道上、手柄下） */}
-                <div
-                  className="pointer-events-none absolute h-1 -translate-y-1/2 rounded-full"
-                  style={{
-                    top: "50%",
-                    left: `${Math.min(50, elevationPct)}%`,
-                    width: `${Math.abs(elevationPct - 50)}%`,
-                    background: "#fff",
-                    zIndex: 1,
-                  }}
-                />
-                <Slider
-                  min={-90}
-                  max={90}
-                  step={1}
-                  value={[elevation]}
-                  onValueChange={([next]) => setElevation(next)}
-                  className="relative w-full [&_[data-slot=slider-range]]:bg-transparent [&_[data-slot=slider-thumb]]:z-[2]"
-                />
-              </div>
-              <div className="h-4 w-px shrink-0" style={{ background: "var(--border)" }} />
-              <input
+            <span className="text-xs text-muted-foreground">{t("angle.elevation")}</span>
+            <div className="flex h-9 w-full items-center gap-1.5 rounded-xl px-2">
+              <Slider
+                min={-90}
+                max={90}
+                step={1}
+                value={elevationRange}
+                onValueChange={(values) => {
+                  const [start, end] = values;
+                  setElevation(Math.abs(start) >= Math.abs(end) ? start : end);
+                }}
+                className="min-w-0 flex-1"
+              />
+              <div className="h-4 w-px shrink-0 bg-border" />
+              <Input
                 type="number"
                 min={-90}
                 max={90}
                 step={1}
                 value={elevation}
-                className="light-panel-pct-input shrink-0"
+                className="h-7 w-9 shrink-0 border-0 bg-transparent p-0 text-right text-xs shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 onChange={(e) => {
                   if (e.target.value.trim() === "") return;
                   const v = Number(e.target.value);
@@ -254,61 +255,80 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                   setElevation(clamped);
                 }}
               />
-              <span className="shrink-0 text-xs" style={{ color: "var(--muted-foreground)" }}>°</span>
+              <span className="shrink-0 text-xs text-muted-foreground">°</span>
             </div>
           </div>
 
           {/* 景别：三档分段切换（与打光面板的视角切换同款控件） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.zoom")}</span>
-            <div className="light-panel-view-toggle w-full">
+            <span className="text-xs text-muted-foreground">{t("angle.zoom")}</span>
+            <ToggleGroup
+              type="single"
+              value={String(zoom)}
+              onValueChange={(value) => { if (value) setZoom(Number(value)); }}
+              variant="outline"
+              size="sm"
+              spacing={2}
+              className="w-full"
+              aria-label={t("angle.zoom")}
+            >
               {ZOOM_LABELS.map((labelKey, z) => (
-                <button
+                <ToggleGroupItem
                   key={labelKey}
-                  type="button"
-                  className={`light-panel-view-opt${zoom === z ? " active" : ""}`}
-                  onClick={() => setZoom(z)}
+                  value={String(z)}
+                  className="h-7 flex-1 px-2 text-xs font-normal"
                 >
                   {t(labelKey)}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </div>
 
           {/* 预设机位（与打光面板的主光源网格同款，手动改参即取消高亮） */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{t("angle.presets")}</span>
-            <div className="grid grid-cols-3 gap-1 rounded-xl p-1" style={{ background: "var(--accent)" }}>
+            <span className="text-xs text-muted-foreground">{t("angle.presets")}</span>
+            <ToggleGroup
+              type="single"
+              value={activePreset ?? ""}
+              onValueChange={(value) => {
+                if (!value) return;
+                const preset = PRESETS.find((item) => item.key === value);
+                if (preset) handlePreset(preset);
+              }}
+              variant="outline"
+              size="sm"
+              spacing={2}
+              className="grid h-auto w-full grid-cols-3"
+              aria-label={t("angle.presets")}
+            >
               {PRESETS.map((p) => {
-                const active = activePreset === p.key;
                 return (
-                  <button
+                  <ToggleGroupItem
                     key={p.key}
-                    type="button"
-                    onClick={() => handlePreset(p)}
-                    className={`light-panel-dir-btn${active ? " active" : ""}`}
+                    value={p.key}
+                    className="h-7 px-2 text-xs font-normal"
                   >
                     {t(p.labelKey)}
-                  </button>
+                  </ToggleGroupItem>
                 );
               })}
-            </div>
+            </ToggleGroup>
           </div>
         </div>
-      </div>
+      </CardContent>
 
       {/* 底部：重置 + 确认（确认即按当前机位派生图片节点，链路同打光） */}
-      <div className="flex items-center justify-between">
-        <button
+      <CardFooter className="flex items-center justify-between px-0 py-0">
+        <Button
           type="button"
           onClick={handleReset}
-          className="panel-reset-btn flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-all"
-          style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          variant="outline"
+          size="xs"
         >
           {t("angle.reset")}
-        </button>
+        </Button>
         <IconActionButton onClick={handleGenerate} disabled={!src} loading={submitting} />
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
