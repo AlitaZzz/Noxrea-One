@@ -18,7 +18,9 @@ import WaveSurfer from "wavesurfer.js";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Separator } from "@/components/ui/separator";
 import { FRAME_TRACK_WIDTH } from "@/features/canvas/hooks/use-frame-sprite";
 import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
@@ -384,8 +386,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       >
         {clipDragging === which && (
           <div
-            className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-            style={{ background: "var(--popover)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+            className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
           >
             {(ratio * duration).toFixed(2)}s          </div>
         )}
@@ -399,14 +400,14 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
 
   // 整块面板不透明：轨道与操作区共用黑色背板，避免按钮直接透出画布内容
   return (
-    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
+    <Card className="nodrag nopan nowheel pointer-events-auto flex flex-row items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
-        <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("clip.menu")}</span>
+        <span className="text-[13px] text-foreground">{t("clip.menu")}</span>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+      <Separator orientation="vertical" className="h-5 self-center" />
 
       {/* 波形轨道：wavesurfer 与选区叠层共用同一坐标系（轨道全宽） */}
       <div
@@ -443,16 +444,11 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
                 onPointerDown={(e) => clipStartDrag("band", e)}
               >
                 <div
-                  className="absolute inset-0"
-                  style={{
-                    border: "2px solid var(--primary)",
-                    background: "color-mix(in srgb, var(--primary) 14%, transparent)",
-                  }}
+                  className="absolute inset-0 border-2 border-primary bg-primary/15"
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span
-                    className="rounded-md px-2 py-0.5 text-xs tabular-nums text-white"
-                    style={{ background: "var(--popover)", boxShadow: "0 4px 12px rgba(0,0,0,0.45)" }}
+                    className="rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
                   >
                     {((clipRange.outR - clipRange.inR) * duration).toFixed(2)}s
                   </span>
@@ -488,10 +484,10 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
         )}
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+      <Separator orientation="vertical" className="h-5 self-center" />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
       <IconActionButton onClick={handleConfirm} disabled={!rangeValid} />
-    </div>
+    </Card>
   );
 }

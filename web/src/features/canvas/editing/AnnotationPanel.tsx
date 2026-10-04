@@ -495,7 +495,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           <span className="text-[13px] text-foreground">{t("annotation.title")}</span>
         </div>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* Mode buttons */}
         <ToggleGroup type="single" variant="outline" size="sm" spacing={1} value={mode} onValueChange={(value) => { if (value) setMode(value as AnnotateMode); }} aria-label={t("annotation.title")}>
@@ -510,14 +510,14 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
             </TooltipTrigger><TooltipContent>{t("annotation.mode.text")}</TooltipContent></Tooltip>
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* Color picker */}
         <Tooltip><TooltipTrigger asChild>
             <ColorPicker value={color} onChangeComplete={setColor} size="sm" />
           </TooltipTrigger><TooltipContent>{t("annotation.color")}</TooltipContent></Tooltip>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* Brush size slider */}
         <div className="flex w-[90px] items-center gap-1.5">
@@ -526,7 +526,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
           <span className="min-w-4 text-[10px] font-medium text-muted-foreground">{brushSize}</span>
         </div>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* Undo / Redo */}
         <Tooltip><TooltipTrigger asChild>
@@ -536,7 +536,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
             <Button variant="ghost" iconOnly disabled={!canRedo} onClick={handleRedo} ><RedoIcon /></Button>
           </TooltipTrigger><TooltipContent>{t("annotation.redo")}</TooltipContent></Tooltip>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 保存：反色 ↑（与截取/变速工具栏确认键一致） */}
         <IconActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />

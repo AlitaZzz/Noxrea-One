@@ -346,7 +346,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
           <span className="text-[13px] text-foreground">{t("node.panorama")}</span>
         </div>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 截图：截取当前视角并新建图片节点 */}
         <Tooltip><TooltipTrigger asChild>
@@ -372,7 +372,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
             ><Grid12Icon /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.view12")}</TooltipContent></Tooltip>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 画面比例：选择截图输出比例，同时显示对应取景框 */}
         <DropdownMenu
@@ -409,7 +409,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
             ><BorderInnerOutlined /></Toggle>
           </TooltipTrigger><TooltipContent>{t("panorama.toggleGrid")}</TooltipContent></Tooltip>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 重置视角，单独一组 */}
         <Tooltip><TooltipTrigger asChild>

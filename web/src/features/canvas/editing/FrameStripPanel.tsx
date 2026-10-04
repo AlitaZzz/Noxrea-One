@@ -15,7 +15,9 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, WarningOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
@@ -240,14 +242,14 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
 
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
-    <div className="canvas-toolbar nodrag nopan nowheel pointer-events-auto flex items-center gap-3 rounded-2xl p-2">
+    <Card className="nodrag nopan nowheel pointer-events-auto flex flex-row items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
-        <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.captureFrame")}</span>
+        <span className="text-[13px] text-foreground">{t("node.captureFrame")}</span>
       </div>
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+      <Separator orientation="vertical" className="h-5 self-center" />
 
       <div
         ref={trackRef}
@@ -303,23 +305,23 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         )}
       </div>
 
-      <span className="text-sm tabular-nums text-[var(--foreground)]">{formatTime(currentTime)}</span>
+      <span className="text-foreground text-sm tabular-nums">{formatTime(currentTime)}</span>
 
       {/* 截断文件的轨道已收敛到可解码范围：标称时长超出部分是坏数据，提示用户 */}
       {truncated && declaredDuration !== null && (
         <Tooltip><TooltipTrigger asChild>
-            <WarningOutlined style={{ color: "var(--chart-4)" }} />
+            <WarningOutlined className="text-chart-4" />
           </TooltipTrigger><TooltipContent>{t("capture.truncated", {
               actual: formatTime(duration),
               declared: formatTime(declaredDuration),
             })}</TooltipContent></Tooltip>
       )}
 
-      <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+      <Separator orientation="vertical" className="h-5 self-center" />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
       <IconActionButton onClick={handleCapture} disabled={!ready} />
-    </div>
+    </Card>
   );
 }
 

@@ -38,7 +38,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
         <span className="text-[13px] text-foreground">{t("node.audioSpeed")}</span>
       </div>
 
-      <Separator orientation="vertical" className="mx-1 h-5" />
+      <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
       {/* 中组：0.1x — 滑杆 — 4.0x（固定宽度：外层工具栏宽度由内容撑开，
           flex-1 在自适应容器里会坍缩为 0，滑杆必须靠显式宽度撑起） */}
@@ -66,7 +66,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
         suffix="×"
       />
 
-      <Separator orientation="vertical" className="mx-1 h-5" />
+      <Separator orientation="vertical" className="mx-1 h-5 self-center" />
       {/* 确认：↑ 反色箭头 */}
       <IconActionButton onClick={onApply} />
     </>

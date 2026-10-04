@@ -619,7 +619,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
                     <DownloadOutlined className="size-3.5" />
                     {t("common.download")}（{selectedAssets.length}）
                   </Button>
-                  <Separator orientation="vertical" className="mx-1.5 h-[18px]" />
+                  <Separator orientation="vertical" className="mx-1.5 h-[18px] self-center" />
                   <Button type="button" size="sm" variant="destructive" onClick={handleBatchDelete}>
                     <DeleteOutlined className="size-3.5" />
                     {t("common.delete")}（{selectedIds.size}）

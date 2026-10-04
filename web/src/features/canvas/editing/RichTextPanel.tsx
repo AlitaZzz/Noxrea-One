@@ -75,7 +75,7 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
               onClick={() => editor.chain().focus().toggleItalic().run()}
             ><Italic size={16} /></Toggle>
           </TooltipTrigger><TooltipContent>{t("richText.italic")}</TooltipContent></Tooltip>
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 段落类型 — 平铺，无需二级菜单 */}
         <Tooltip><TooltipTrigger asChild>
@@ -90,7 +90,7 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
               ><Icon size={16} /></Toggle>
             </TooltipTrigger><TooltipContent>{t(`richText.heading${level}`)}</TooltipContent></Tooltip>
         ))}
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 块级结构 */}
         <Tooltip><TooltipTrigger asChild>

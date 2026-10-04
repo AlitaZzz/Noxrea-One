@@ -232,7 +232,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
           <span className="text-[13px] text-foreground">{t("node.crop")}</span>
         </div>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         <ToggleGroup
           type="single"
@@ -248,19 +248,19 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
           {ASPECT_PRESETS.map((p) => <ToggleGroupItem key={p.label} value={p.label}>{t(p.label)}</ToggleGroupItem>)}
         </ToggleGroup>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         <span className="min-w-[70px] text-center text-xs font-medium text-muted-foreground">
           {cropW} × {cropH}
         </span>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         <Tooltip><TooltipTrigger asChild>
             <Button variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("crop.reset")}</TooltipContent></Tooltip>
 
-        <Separator orientation="vertical" className="mx-1 h-5" />
+        <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
         <IconActionButton onClick={handleConfirm} disabled={!imgLoaded} />
