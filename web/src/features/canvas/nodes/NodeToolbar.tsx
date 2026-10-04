@@ -170,7 +170,7 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     [nodeId]
   );
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-popover p-2">
+    <div className="flex flex-col gap-2">
       <div className="px-1 text-xs text-muted-foreground">{t("node.groupColor")}</div>
       <div className="grid grid-cols-5 gap-2">
         {GROUP_COLOR_KEYS.map((key) => {
@@ -411,13 +411,11 @@ function NodeToolbar({
               </TooltipTrigger>
               <TooltipContent>{t("node.creation")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="start" className="creation-menu-popover w-auto border-0 bg-transparent p-0" onCloseAutoFocus={handleMenuCloseAutoFocus}>
-              <div className="panel-popover">
-                <PresetMenuContent
-                  catalog={templateCatalog}
-                  onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
-                />
-              </div>
+            <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+              <PresetMenuContent
+                catalog={templateCatalog}
+                onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
+              />
             </PopoverContent>
           </Popover>
           {/* Export */}
@@ -580,7 +578,7 @@ function NodeToolbar({
               </TooltipTrigger>
               <TooltipContent>{t("node.groupColor")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="center" className="w-auto border-0 bg-transparent p-0" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <PopoverContent side="bottom" align="center" className="w-auto p-2" onCloseAutoFocus={handleMenuCloseAutoFocus}>
               <GroupColorPicker nodeId={nodeId} current={groupColor} />
             </PopoverContent>
           </Popover>

@@ -841,12 +841,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   background: transparent; color: var(--muted-foreground); transition: background .15s, color .15s;
 }
 .light-panel-mini-tab.active { background: var(--foreground); color: var(--card); }
-/* 自定义面板弹层（多列预设网格 / 筛选 / 历史列表等借用菜单外观的非列表弹层） */
-.panel-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px; min-width: 160px; background: var(--popover); border-radius: 12px; border: 1px solid var(--border); user-select: none; -webkit-user-select: none; }
-/* 创作菜单：分组 + 两行条目，宽度随列数自适应（列宽固定，避免长描述把弹层撑得过宽）；
-   多列布局由目录数据的 group.column 声明，列数任意，宽度按 224px 等分 */
-.creation-menu-popover .panel-popover { width: max-content; }
-
 /* 工具栏容器 */
 .toolbar-dock { background: var(--card); border: 1px solid var(--border); box-shadow: var(--toolbar-shadow); }
 

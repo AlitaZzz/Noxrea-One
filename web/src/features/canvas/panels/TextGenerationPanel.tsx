@@ -483,13 +483,11 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
               </TooltipTrigger>
               <TooltipContent>{t("node.creationPreset")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="start" className="creation-menu-popover w-auto p-0 bg-transparent border-0">
-              <div className="panel-popover">
-                <PresetMenuContent
-                  catalog={promptTemplateCatalog}
-                  onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
-                />
-              </div>
+            <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1">
+              <PresetMenuContent
+                catalog={promptTemplateCatalog}
+                onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+              />
             </PopoverContent>
           </Popover>
           <div className="flex-1" />

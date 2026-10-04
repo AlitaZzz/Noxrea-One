@@ -507,10 +507,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                 <ParamSummary fields={fieldViews} values={fieldValues} />
               </Button>
             </PopoverTrigger>
-            <PopoverContent side="bottom" align="start" className="w-auto p-0 bg-transparent border-0">
-              <div className="panel-popover" style={{ width: 360 }}>
-                <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
-              </div>
+            <PopoverContent side="bottom" align="start" className="w-[360px] max-w-[calc(100vw-2rem)] p-3">
+              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
             </PopoverContent>
           </Popover>
           <div className="flex-1" />
