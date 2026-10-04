@@ -171,6 +171,7 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 - `SheetContent` 统一采用容器优先的初始焦点策略，打开侧栏时不会把焦点自动落到新建、历史或关闭等导航动作上；关闭时由 Radix 恢复到打开前的触发元素。
 - `DialogContent` 统一按“`data-autofocus` 标记、可编辑表单控件、对话框容器”的顺序确定初始焦点，动作按钮不作为默认焦点；业务组件不得为规避默认焦点在每个 Dialog 或 Sheet 上重复实现 `onOpenAutoFocus`。
 - `DropdownMenuContent` 在鼠标点击外部时保留外部交互的焦点结果，不让 Radix 把焦点强制恢复到触发器；键盘关闭和菜单项选择继续使用标准触发器回焦行为。
+- Radix 的浮层组件继续使用官方 body-level Portal；Portal 挂载、焦点和定位由 Radix 管理，跨 Dialog / Sheet / 确认框的 z-index 只由 `components/ui/modal/layer-context.ts` 统一计算和传递。业务组件不得为单个菜单、Select、Popover 或 Tooltip 新增 z-index、Portal 容器或层级兜底。
 - 迁移完成后删除遗留的通用 `App*` 适配器和不再使用的旧通用 CSS；项目级 Provider、图标出口和反馈出口如果承担明确的基础设施职责，可以保留在 `components/ui`。画布、节点、Director、登录页等领域样式继续由对应领域负责。
 
 **强制约束**（由 `eslint.config.mjs` 保证，违反无法合入）：
