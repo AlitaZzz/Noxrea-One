@@ -9,9 +9,10 @@
  */
 "use client";
 
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
 
-import { CloseOutlined,DownloadOutlined, LeftOutlined,RightOutlined } from "@/components/ui/AppIcon";
+import { CloseOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 
 import VideoPlayer from "./VideoPlayer";
 
@@ -54,43 +55,47 @@ export default function MediaPreviewOverlay({ items, index, onIndexChange, onClo
     document.body.removeChild(a);
   };
 
-  const btnBase =
-    "flex cursor-pointer items-center justify-center rounded-full text-white/90 transition hover:text-white hover:bg-white/15";
-
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center nodrag"
-      style={{
-        background: "rgba(0,0,0,0.92)",
-        opacity: shown ? 1 : 0,
-        transition: "opacity 0.2s ease",
-      }}
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 transition-opacity duration-200 nodrag ${shown ? "opacity-100" : "opacity-0"}`}
       onClick={onClose}
     >
       {/* 关闭 */}
-      <button
-        className={`${btnBase} absolute right-5 top-5 h-10 w-10 text-xl`}
-        onClick={onClose}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-lg"
+        className="absolute right-5 top-5 rounded-full text-white hover:bg-white/15 hover:text-white"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        aria-label="Close preview"
       >
         <CloseOutlined />
-      </button>
+      </Button>
 
       {/* 下载 */}
-      <button
-        className={`${btnBase} absolute right-5 top-[68px] h-10 w-10 text-lg`}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-lg"
+        className="absolute right-5 top-[68px] rounded-full text-white hover:bg-white/15 hover:text-white"
         onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+        aria-label="Download media"
       >
         <DownloadOutlined />
-      </button>
+      </Button>
 
       {/* 上一张 */}
       {count > 1 && (
-        <button
-          className={`${btnBase} absolute left-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          className="absolute left-5 top-1/2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white"
           onClick={(e) => { e.stopPropagation(); go(-1); }}
+          aria-label="Previous media"
         >
           <LeftOutlined />
-        </button>
+        </Button>
       )}
 
       {/* 当前媒体 */}
@@ -126,12 +131,16 @@ export default function MediaPreviewOverlay({ items, index, onIndexChange, onClo
 
       {/* 下一张 */}
       {count > 1 && (
-        <button
-          className={`${btnBase} absolute right-5 top-1/2 h-12 w-12 -translate-y-1/2 text-2xl`}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          className="absolute right-5 top-1/2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white"
           onClick={(e) => { e.stopPropagation(); go(1); }}
+          aria-label="Next media"
         >
           <RightOutlined />
-        </button>
+        </Button>
       )}
 
       {/* 计数 */}
@@ -151,10 +160,13 @@ export default function MediaPreviewOverlay({ items, index, onIndexChange, onClo
           onClick={(e) => e.stopPropagation()}
         >
           {items.map((item, i) => (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
               key={i}
-              onClick={() => onIndexChange?.(i)}
-              className={`h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-md transition ${
+              onClick={(e) => { e.stopPropagation(); onIndexChange?.(i); }}
+              className={`size-14 shrink-0 overflow-hidden rounded-md p-0 transition ${
                 i === safeIndex ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
               }`}
             >
@@ -164,7 +176,7 @@ export default function MediaPreviewOverlay({ items, index, onIndexChange, onClo
               ) : (
                 <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />
               )}
-            </button>
+            </Button>
           ))}
         </div>
       )}
