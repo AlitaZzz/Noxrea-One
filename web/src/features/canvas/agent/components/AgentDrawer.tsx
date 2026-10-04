@@ -175,12 +175,15 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
           />
             ) : (
           <Tooltip><TooltipTrigger asChild>
-              <span
-                className="inline-block max-w-60 cursor-pointer truncate text-sm font-medium text-foreground transition-opacity hover:opacity-70"
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto max-w-60 min-w-0 justify-start truncate px-1 text-sm font-medium text-foreground"
                 onClick={startRename}
               >
                 {chatTitle ?? t("agent.newChat")}
-              </span>
+              </Button>
             </TooltipTrigger><TooltipContent side="bottom">{t("agent.renameTooltip")}</TooltipContent></Tooltip>
             )}
           </SheetTitle>
