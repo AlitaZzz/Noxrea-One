@@ -10,6 +10,7 @@ import WaveSurfer from "wavesurfer.js";
 
 import { PauseIcon } from "@/components/ui/AppIcon";
 import { PlayIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { clamp01 } from "@/features/canvas/editing/clip-range";
 import { registerAudioPlayer } from "@/features/canvas/shared/audio-playback-registry";
 import { DEFAULT_NODE_COLOR } from "@/lib/constants";
@@ -225,30 +226,17 @@ export default function AudioWaveform({
           <div className="whitespace-nowrap text-sm tabular-nums text-white/70">
             {formatTime(current)} / {formatTime(duration)}
           </div>
-          <button
-              type="button"
-              onClick={toggle}
-              disabled={!ready || failed || clipActive}
-              className="nodrag absolute left-1/2 flex -translate-x-1/2 items-center justify-center gap-0.5 transition-opacity disabled:opacity-50"
-              style={{
-                width: 24,
-                height: 24,
-                padding: 0,
-                borderRadius: "100%",
-                border: "0.5px solid rgb(82, 82, 82)",
-                background: "rgba(31, 31, 31, 0.9)",
-                boxShadow: "rgba(0,0,0,0.12) 0px 4px 10px 0px, rgba(0,0,0,0.2) 0px 2px 4px 0px",
-                backdropFilter: "blur(16px)",
-                color: "rgba(255,255,255,0.9)",
-                cursor: "pointer",
-              }}
-            >
-              {wsPlaying ? (
-                <PauseIcon />
-              ) : (
-                <PlayIcon />
-              )}
-            </button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            onClick={toggle}
+            disabled={!ready || failed || clipActive}
+            className="nodrag absolute left-1/2 -translate-x-1/2 rounded-full"
+            aria-label={wsPlaying ? "Pause" : "Play"}
+          >
+            {wsPlaying ? <PauseIcon /> : <PlayIcon />}
+          </Button>
         </div>
       </div>
     </div>

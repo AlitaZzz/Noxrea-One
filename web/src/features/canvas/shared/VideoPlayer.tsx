@@ -1,8 +1,8 @@
 /**
- * 视频播放器：与画布视频节点的底部控件同款外观。
+ * 视频播放器：独立预览场景使用的媒体控件。
  *
  * 复用 .video-controls-scrim / .video-control-btn / .video-controls-bar 三个类，
- * 因此与视频节点的控件栏视觉完全一致（渐变遮罩、进度条、播放/暂停、时间、音量）。
+ * 并使用项目 Button、Slider 组件管理按钮、进度和音量交互。
  *
  * 这里是独立实例，不参与视频节点的音轨探测、hover 自动播放与播放注册表，
  * 专供全屏预览这类「用户主动打开」的一次性场景使用。
@@ -18,6 +18,8 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { CaretRightOutlined, PauseOutlined } from "@/components/ui/AppIcon";
 import { VolumeMuteIcon } from "@/components/ui/AppIcon";
 import { VolumeUpIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { formatTime } from "@/lib/utils/format";
 
 interface Props {
@@ -34,8 +36,6 @@ interface Props {
 
 export default function VideoPlayer({ src, style, autoPlay = true, loop = true, defaultVolume = 1, fill = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const seekBarRef = useRef<HTMLDivElement>(null);
-  const volumeBarRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -68,60 +68,13 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
     else v.pause();
   }, []);
 
-  const seekTo = useCallback(
-    (clientX: number) => {
-      const bar = seekBarRef.current;
-      const v = videoRef.current;
-      if (!bar || !v || !duration) return;
-      const rect = bar.getBoundingClientRect();
-      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      v.currentTime = pct * duration;
-      setProgress(v.currentTime);
-    },
-    [duration],
-  );
-
-  const handleSeekDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      seekTo(e.clientX);
-      const onMove = (ev: PointerEvent) => { ev.preventDefault(); seekTo(ev.clientX); };
-      const onUp = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    },
-    [seekTo],
-  );
-
-  const setVolumeFromX = useCallback(
-    (clientX: number) => {
-      const bar = volumeBarRef.current;
-      if (!bar) return;
-      const rect = bar.getBoundingClientRect();
-      applyVolume((clientX - rect.left) / rect.width);
-    },
-    [applyVolume],
-  );
-
-  const handleVolumeDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setVolumeFromX(e.clientX);
-      const onMove = (ev: PointerEvent) => { ev.preventDefault(); setVolumeFromX(ev.clientX); };
-      const onUp = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    },
-    [setVolumeFromX],
-  );
+  const seekTo = useCallback((value: number) => {
+    const v = videoRef.current;
+    if (!v || !duration) return;
+    const time = Math.max(0, Math.min(duration, value));
+    v.currentTime = time;
+    setProgress(time);
+  }, [duration]);
 
   // 自动播放（默认有声）：被浏览器策略拦截时降级为静音播放，用户点一下即可恢复声音
   useEffect(() => {
@@ -159,57 +112,58 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
 
       <div className={`video-controls-bar absolute ${fill ? "bottom-2" : "bottom-4"} left-0 right-0 z-10 flex flex-col gap-2 px-3`}>
         {/* 进度条：已播放部分用品牌色，与视频节点一致 */}
-        <div
-          ref={seekBarRef}
-          className="group/progress relative h-[6px] cursor-pointer rounded-full bg-white/20"
-          onPointerDown={handleSeekDown}
-        >
-          <div
-            className="relative h-full rounded-full bg-[var(--primary)] transition-[width] duration-75"
-            style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
-          >
-            <div className="absolute -right-[7px] -top-[4px] h-[14px] w-[14px] scale-0 rounded-full bg-white shadow-md transition-transform group-hover/progress:scale-100" />
-          </div>
-        </div>
+        <Slider
+          min={0}
+          max={duration || 1}
+          step={0.01}
+          value={[Math.min(progress, duration || 1)]}
+          disabled={!duration}
+          aria-label="Video progress"
+          className="h-3 w-full"
+          onPointerDown={(e) => e.stopPropagation()}
+          onValueChange={([value]) => seekTo(value)}
+        />
 
         {/* 播放 / 时间 ｜ 音量 + 滑块 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button
-              className="video-control-btn flex-shrink-0 text-white transition-colors hover:text-white/80"
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="video-control-btn shrink-0 text-white hover:text-white/80"
               onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               aria-label={playing ? "pause" : "play"}
             >
-              {playing ? <PauseOutlined style={{ fontSize: 22 }} /> : <CaretRightOutlined style={{ fontSize: 22 }} />}
-            </button>
+              {playing ? <PauseOutlined className="size-5" /> : <CaretRightOutlined className="size-5" />}
+            </Button>
             <span className="flex-shrink-0 text-sm text-white tabular-nums">
               {formatTime(progress)} / {formatTime(duration)}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              className="video-control-btn flex-shrink-0 text-white transition-colors hover:text-white/80"
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="video-control-btn shrink-0 text-white hover:text-white/80"
               onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
               aria-label={volume === 0 ? "unmute" : "mute"}
             >
               {volume === 0
-                ? <VolumeMuteIcon style={{ color: "#fff", width: 22, height: 22 }} />
-                : <VolumeUpIcon style={{ color: "#fff", width: 22, height: 22 }} />}
-            </button>
-            <div
-              ref={volumeBarRef}
-              className="group/volume relative h-[6px] w-20 cursor-pointer rounded-full bg-white/20"
-              onPointerDown={handleVolumeDown}
-            >
-              <div
-                className="relative h-full rounded-full bg-[var(--primary)] transition-[width] duration-75"
-                style={{ width: `${volume * 100}%` }}
-              >
-                <div className="absolute -right-[7px] -top-[4px] h-[14px] w-[14px] scale-0 rounded-full bg-white shadow-md transition-transform group-hover/volume:scale-100" />
-              </div>
-            </div>
+                ? <VolumeMuteIcon />
+                : <VolumeUpIcon />}
+            </Button>
+            <Slider
+              min={0}
+              max={1}
+              step={0.01}
+              value={[volume]}
+              aria-label="Volume"
+              className="h-3 w-20"
+              onPointerDown={(e) => e.stopPropagation()}
+              onValueChange={([value]) => applyVolume(value)}
+            />
           </div>
         </div>
       </div>

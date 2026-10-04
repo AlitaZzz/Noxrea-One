@@ -20,6 +20,7 @@ import {
 import { VolumeMuteIcon } from "@/components/ui/AppIcon";
 import { VolumeUpIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAssetsStore } from "@/features/assets/store";
@@ -77,8 +78,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const seekBarRef = useRef<HTMLDivElement>(null);
-  const volumeBarRef = useRef<HTMLDivElement>(null);
   /** 当前播放是否由 hover 预览触发（用户点击播放后置 false）：
    *  连线 / 拖动让位逻辑只停 hover 预览，不碰用户主动播放 */
   const hoverPlayingRef = useRef(false);
@@ -124,28 +123,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const toggleMute = useCallback(() => {
     applyVolume(volume === 0 ? lastVolume || 0.5 : 0);
   }, [volume, lastVolume, applyVolume]);
-
-  /** 音量滑块点击：转 0~1 比例后写入 */
-  const setVolumeFromX = useCallback((clientX: number) => {
-    const bar = volumeBarRef.current;
-    if (!bar) return;
-    const rect = bar.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    applyVolume(pct);
-  }, [applyVolume]);
-
-  const handleVolumeDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setVolumeFromX(e.clientX);
-    const onMove = (ev: PointerEvent) => { ev.preventDefault(); setVolumeFromX(ev.clientX); };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }, [setVolumeFromX]);
 
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -277,28 +254,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame, data.duration, id]);
 
-  const seekTo = useCallback((clientX: number) => {
+  const seekTo = useCallback((value: number) => {
     const v = videoRef.current;
-    const bar = seekBarRef.current;
-    if (!v || !bar || !duration) return;
-    const rect = bar.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    v.currentTime = pct * duration;
-    setProgress(pct * duration);
+    if (!v || !duration) return;
+    const time = Math.max(0, Math.min(duration, value));
+    v.currentTime = time;
+    setProgress(time);
   }, [duration]);
-
-  const handleSeekDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    seekTo(e.clientX);
-    const onMove = (ev: PointerEvent) => { ev.preventDefault(); seekTo(ev.clientX); };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }, [seekTo]);
 
   const captureFrame = useCallback(async (time: number | null) => {
     const v = videoRef.current;
@@ -788,29 +750,31 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             {/* Controls bar */}
             <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${playing || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
               {/* 第一行：进度条横跨整行（已播放部分用品牌色，与图片一致） */}
-              <div
-                ref={seekBarRef}
-                className="h-[6px] bg-white/20 rounded-full cursor-pointer relative group/progress"
-                onPointerDown={handleSeekDown}
-              >
-                <div
-                  className="h-full bg-[var(--primary)] rounded-full relative transition-[width] duration-75"
-                  style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
-                >
-                  <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
-                </div>
-              </div>
+              <Slider
+                min={0}
+                max={duration || 1}
+                step={0.01}
+                value={[Math.min(progress, duration || 1)]}
+                disabled={!duration}
+                aria-label="Video progress"
+                className="h-3 w-full"
+                onPointerDown={(e) => e.stopPropagation()}
+                onValueChange={([value]) => seekTo(value)}
+              />
 
               {/* 第二行：左 play+时间 ｜ 右 volume+slider */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <button
-                    className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="video-control-btn shrink-0 text-white hover:text-white/80"
                     onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                    aria-label={playing ? "pause" : "play"}
                   >
-                    {playing ? <PauseOutlined style={{ fontSize: 22 }} /> : <CaretRightOutlined style={{ fontSize: 22 }} />}
-                  </button>
+                    {playing ? <PauseOutlined className="size-5" /> : <CaretRightOutlined className="size-5" />}
+                  </Button>
                   <span className="text-sm text-white flex-shrink-0 tabular-nums">
                     {formatTime(progress)} / {formatTime(duration)}
                   </span>
@@ -818,31 +782,31 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 {/* 确认无音轨时隐藏音量控件（图标+滑块），与浏览器原生行为一致，避免“可拖动但无效果”的误导 */}
                 {data.hasAudio !== false && (
                   <div className="flex items-center gap-2">
-                    <button
-                      className="video-control-btn flex-shrink-0 text-white hover:text-white/80 transition-colors"
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="video-control-btn shrink-0 text-white hover:text-white/80"
                       onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
                       aria-label={volume === 0 ? "unmute" : "mute"}
                     >
                       {volume === 0 ? (
-                        <VolumeMuteIcon style={{ color: "#fff", width: 22, height: 22 }} />
+                        <VolumeMuteIcon />
                       ) : (
-                        <VolumeUpIcon style={{ color: "#fff", width: 22, height: 22 }} />
+                        <VolumeUpIcon />
                       )}
-                    </button>
+                    </Button>
                     {/* 音量滑块：80px，定长避免占据底部控件太多空间 */}
-                    <div
-                      ref={volumeBarRef}
-                      className="w-20 h-[6px] bg-white/20 rounded-full cursor-pointer relative group/volume"
-                      onPointerDown={handleVolumeDown}
-                    >
-                      <div
-                        className="h-full bg-[var(--primary)] rounded-full relative transition-[width] duration-75"
-                        style={{ width: `${volume * 100}%` }}
-                      >
-                        <div className="absolute -right-[7px] -top-[4px] w-[14px] h-[14px] rounded-full bg-white shadow-md scale-0 group-hover/volume:scale-100 transition-transform" />
-                      </div>
-                    </div>
+                    <Slider
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={[volume]}
+                      aria-label="Volume"
+                      className="h-3 w-20"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onValueChange={([value]) => applyVolume(value)}
+                    />
                   </div>
                 )}
               </div>
