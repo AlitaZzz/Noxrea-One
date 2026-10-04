@@ -312,18 +312,10 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
 
   return (
     <div className="mb-1">
-      <div
-        className={`relative flex items-center gap-2 rounded-md py-1.5 text-sm text-foreground transition-colors hover:bg-accent cursor-pointer select-none${selected ? " bg-accent" : ""}`}
-        style={{ paddingLeft: 8, paddingRight: 8 }}
-        onClick={() => {
-          const s = useCanvasStore.getState();
-          s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
-          centerNode(group);
-        }}
-      >
+      <div className="relative flex items-center gap-2 px-2">
         {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
         {selected && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--ring)" }} />
+          <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-ring" />
         )}
         {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
         <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
@@ -337,19 +329,29 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
             {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
           </Button>
         </span>
-        <div
-          className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-          style={{ background: `${getNodeTypeColor(NODE_TYPE.GROUP)}18` }}
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={label}
+          aria-current={selected ? "true" : undefined}
+          onClick={() => {
+            const s = useCanvasStore.getState();
+            s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
+            centerNode(group);
+          }}
+          className={`h-auto min-w-0 flex-1 justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground hover:bg-accent${selected ? " bg-accent" : ""}`}
         >
-          {getNodeTypeIcon(NODE_TYPE.GROUP)}
-        </div>
-        <span className="flex-1 truncate text-[13px]">{label}</span>
-        <span
-          className="shrink-0 text-[10px] px-1.5 rounded-full"
-          style={{ background: "var(--popover)", color: "var(--muted-foreground)" }}
-        >
-          {members.length}
-        </span>
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded"
+            style={{ background: `${getNodeTypeColor(NODE_TYPE.GROUP)}18` }}
+          >
+            {getNodeTypeIcon(NODE_TYPE.GROUP)}
+          </div>
+          <span className="min-w-0 flex-1 truncate text-[13px]">{label}</span>
+          <span className="shrink-0 rounded-full bg-popover px-1.5 text-[10px] text-muted-foreground">
+            {members.length}
+          </span>
+        </Button>
       </div>
       {!collapsed && members.map((m) => (
         <ElementItem key={m.id} node={m} selected={selectedNodeIds.has(m.id)} depth={1} />
@@ -438,7 +440,7 @@ function ElementItemImpl(props: ElementItemProps) {
     >
       {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
       {selected && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full" style={{ background: "var(--ring)" }} />
+        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-ring" />
       )}
       {/* 空槽位：与组行折叠箭头同宽，保证图标与组图标垂直对齐 */}
       <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
