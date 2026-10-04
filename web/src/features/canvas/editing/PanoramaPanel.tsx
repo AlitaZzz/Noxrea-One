@@ -11,7 +11,9 @@ import { Grid4Icon } from "@/components/ui/AppIcon";
 import { Grid8Icon } from "@/components/ui/AppIcon";
 import { Grid12Icon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
@@ -336,20 +338,15 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       {/* 全景专属工具栏：RfNodeToolbar 恒定尺寸定位；仅当节点被选中时显示 */}
       <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible={selected}>
       <WheelGuard
-        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
-        style={{
-          height: 50,
-          padding: "6px 10px",
-          whiteSpace: "nowrap",
-        }}
+        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
-          <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.panorama")}</span>
+          <span className="text-[13px] text-foreground">{t("node.panorama")}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* 截图：截取当前视角并新建图片节点 */}
         <Tooltip><TooltipTrigger asChild>
@@ -375,7 +372,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
             ><Grid12Icon /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.view12")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* 画面比例：选择截图输出比例，同时显示对应取景框 */}
         <DropdownMenu
@@ -388,33 +385,31 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
               </DropdownMenuTrigger>
             </TooltipTrigger><TooltipContent>{t("panorama.aspect")}</TooltipContent></Tooltip>
           <DropdownMenuContent side="bottom" align="center">
-            <DropdownMenuItem
-              className={aspect === "original" ? "bg-accent text-accent-foreground" : undefined}
-              onSelect={() => setAspect("original")}
-            >
-              {t("panorama.aspectOriginal")}
-            </DropdownMenuItem>
+            <DropdownMenuRadioGroup value={aspect} onValueChange={(value) => setAspect(value as AspectKey)}>
+              <DropdownMenuRadioItem value="original">
+                {t("panorama.aspectOriginal")}
+              </DropdownMenuRadioItem>
             <DropdownMenuSeparator />
             {(["16:9", "9:16", "21:9"] as const).map((key) => (
-              <DropdownMenuItem
+              <DropdownMenuRadioItem
                 key={key}
-                className={aspect === key ? "bg-accent text-accent-foreground" : undefined}
-                onSelect={() => setAspect(key)}
+                value={key}
               >
                 {key}
-              </DropdownMenuItem>
+              </DropdownMenuRadioItem>
             ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
 
         {/* 三分构图线开关 */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            style={{ padding: 8, ...(showGrid ? { background: "var(--accent)", color: "#fff" } : {}) }}
-              onClick={() => setShowGrid((v) => !v)}
-            ><BorderInnerOutlined /></Button>
+            <Toggle variant="default" size="sm" pressed={showGrid} onPressedChange={setShowGrid}
+              aria-label={t("panorama.toggleGrid")}
+            ><BorderInnerOutlined /></Toggle>
           </TooltipTrigger><TooltipContent>{t("panorama.toggleGrid")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* 重置视角，单独一组 */}
         <Tooltip><TooltipTrigger asChild>

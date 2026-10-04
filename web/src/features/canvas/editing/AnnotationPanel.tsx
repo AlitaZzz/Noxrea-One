@@ -17,7 +17,9 @@ import { UndoIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/ui/color-picker";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -485,55 +487,46 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
       {/* Toolbar — RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
       <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
-        style={{
-          height: 50,
-          padding: "6px 10px",
-          whiteSpace: "nowrap",
-        }}
+        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
-          <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("annotation.title")}</span>
+          <span className="text-[13px] text-foreground">{t("annotation.title")}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* Mode buttons */}
-        <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "brush" ? { background: "var(--accent)", color: "#fff" } : {}) }}
-              onClick={() => setMode("brush")}
-            ><SmartEditBrushToolIcon style={{ fontSize: 16 }} /></Button>
-          </TooltipTrigger><TooltipContent>{t("annotation.mode.brush")}</TooltipContent></Tooltip>
-        <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "rect" ? { background: "var(--accent)", color: "#fff" } : {}) }}
-              onClick={() => setMode("rect")}
-            ><BorderOutlined /></Button>
-          </TooltipTrigger><TooltipContent>{t("annotation.mode.rect")}</TooltipContent></Tooltip>
-        <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            style={{ padding: 8, ...(mode === "text" ? { background: "var(--accent)", color: "#fff" } : {}) }}
-              onClick={() => setMode("text")}
-            ><FontSizeOutlined /></Button>
-          </TooltipTrigger><TooltipContent>{t("annotation.mode.text")}</TooltipContent></Tooltip>
+        <ToggleGroup type="single" variant="outline" size="sm" spacing={1} value={mode} onValueChange={(value) => { if (value) setMode(value as AnnotateMode); }} aria-label={t("annotation.title")}>
+          <Tooltip><TooltipTrigger asChild>
+              <ToggleGroupItem value="brush" aria-label={t("annotation.mode.brush")}><SmartEditBrushToolIcon /></ToggleGroupItem>
+            </TooltipTrigger><TooltipContent>{t("annotation.mode.brush")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <ToggleGroupItem value="rect" aria-label={t("annotation.mode.rect")}><BorderOutlined /></ToggleGroupItem>
+            </TooltipTrigger><TooltipContent>{t("annotation.mode.rect")}</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+              <ToggleGroupItem value="text" aria-label={t("annotation.mode.text")}><FontSizeOutlined /></ToggleGroupItem>
+            </TooltipTrigger><TooltipContent>{t("annotation.mode.text")}</TooltipContent></Tooltip>
+        </ToggleGroup>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* Color picker */}
         <Tooltip><TooltipTrigger asChild>
             <ColorPicker value={color} onChangeComplete={setColor} size="sm" />
           </TooltipTrigger><TooltipContent>{t("annotation.color")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* Brush size slider */}
-        <div className="flex items-center gap-1.5" style={{ width: 90 }}>
+        <div className="flex w-[90px] items-center gap-1.5">
           <BrushSizeIcon />
           <Slider min={1} max={50} value={[brushSize]} onValueChange={([next]) => setBrushSize(next)} className="w-[60px]" />
-          <span className="text-[10px] font-medium" style={{ color: "var(--muted-foreground)", minWidth: 16 }}>{brushSize}</span>
+          <span className="min-w-4 text-[10px] font-medium text-muted-foreground">{brushSize}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* Undo / Redo */}
         <Tooltip><TooltipTrigger asChild>
@@ -543,7 +536,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
             <Button variant="ghost" iconOnly disabled={!canRedo} onClick={handleRedo} ><RedoIcon /></Button>
           </TooltipTrigger><TooltipContent>{t("annotation.redo")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* 保存：反色 ↑（与截取/变速工具栏确认键一致） */}
         <IconActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />
@@ -635,14 +628,17 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
               <span key={i} style={{ display: "block" }}>{line}</span>
             ))}
             {/* Delete button */}
-            <button
-              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: "rgba(60,60,60,0.9)", color: "#fff", fontSize: 10, border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon-xs"
+              aria-label={t("common.delete")}
+              className="absolute -top-1.5 -right-1.5 size-4 p-0 opacity-0 transition-opacity group-hover:opacity-100"
               onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
               onClick={(e) => { e.stopPropagation(); deleteTextAnnotation(ta.id); }}
             >
-              <DeleteOutlined style={{ fontSize: 8 }} />
-            </button>
+              <DeleteOutlined />
+            </Button>
           </div>
         ))}
       </div>

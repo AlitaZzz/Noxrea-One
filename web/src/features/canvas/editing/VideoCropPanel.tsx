@@ -13,6 +13,8 @@ import { useTranslation } from "react-i18next";
 import { CloseOutlined, UndoOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { Separator } from "@/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
@@ -222,46 +224,43 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
       {/* Toolbar - RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
       <RfNodeToolbar nodeId={nodeId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag flex items-center gap-1 rounded-xl"
-        style={{
-          height: 50,
-          padding: "6px 10px",
-          whiteSpace: "nowrap",
-        }}
+        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
       >
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
-          <span className="text-[13px]" style={{ color: "var(--foreground)" }}>{t("node.crop")}</span>
+          <span className="text-[13px] text-foreground">{t("node.crop")}</span>
         </div>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
-        {ASPECT_PRESETS.map((p) => (
-          <Button
-            key={p.label}
-            variant="ghost"
-            // 高度锁 32px：沿用中等控件尺寸，避免预设按钮换行
-            style={{ height: 32, padding: "4px 8px", fontSize: 12, ...(aspect === p.value ? { background: "var(--accent)", color: "#fff" } : {}) }}
-            onClick={() => handleAspectChange(p.value)}
-          >
-            {t(p.label)}
-          </Button>
-        ))}
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={1}
+          value={ASPECT_PRESETS.find((p) => p.value === aspect)?.label ?? ASPECT_PRESETS[0].label}
+          onValueChange={(value) => {
+            if (value) handleAspectChange(ASPECT_PRESETS.find((p) => p.label === value)?.value);
+          }}
+          aria-label={t("crop.aspect.free")}
+        >
+          {ASPECT_PRESETS.map((p) => <ToggleGroupItem key={p.label} value={p.label}>{t(p.label)}</ToggleGroupItem>)}
+        </ToggleGroup>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
-        <span className="text-xs font-medium text-center" style={{ color: "var(--muted-foreground)", minWidth: 70 }}>
+        <span className="min-w-[70px] text-center text-xs font-medium text-muted-foreground">
           {cropW} × {cropH}
         </span>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         <Tooltip><TooltipTrigger asChild>
             <Button variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("crop.reset")}</TooltipContent></Tooltip>
 
-        <div className="w-px h-5 mx-1" style={{ background: "var(--border)" }} />
+        <Separator orientation="vertical" className="mx-1 h-5" />
 
         {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
         <IconActionButton onClick={handleConfirm} disabled={!imgLoaded} />
