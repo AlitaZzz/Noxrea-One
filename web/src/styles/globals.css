@@ -567,13 +567,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 /* 摄像机预览 */
 .dir-cam-preview { position: relative; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--dir-line2); margin-bottom: 15px; }
 .dir-cam-badge { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; user-select: none; }
-/* Modal overlay */
-.dir-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.78); z-index: 80; display: flex; align-items: center; justify-content: center; }
-.dir-modal-box { position: relative; max-width: 90vw; max-height: 90vh; background: var(--dir-panel); border: 1px solid var(--dir-line2); border-radius: 12px; padding: 12px; }
-.dir-modal-img { display: block; max-width: 86vw; max-height: 78vh; border-radius: 8px; }
-.dir-modal-bar { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-.dir-modal-title { flex: 1; font-size: 13px; color: var(--dir-txt); }
-
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
 @property --agent-ring-angle {
   syntax: "<angle>";

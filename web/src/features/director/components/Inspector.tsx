@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
-import { CloseOutlined, DeleteOutlined, RotateRightOutlined } from "@/components/ui/AppIcon";
+import { DeleteOutlined, RotateRightOutlined } from "@/components/ui/AppIcon";
 import { DirExpandIcon } from "@/components/ui/AppIcon";
 import { DirEyeIcon } from "@/components/ui/AppIcon";
 import { DirEyeOffIcon } from "@/components/ui/AppIcon";
@@ -19,6 +19,7 @@ import { DirTrashIcon } from "@/components/ui/AppIcon";
 import { UngroupIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -179,27 +180,14 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
           <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
-      {/* 全屏预览 modal */}
-      {modalUrl && (
-        <div className="dir-modal-overlay" onClick={() => setModalUrl("")}>
-          <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("common.close")}
-              className="absolute -top-3.5 -right-3.5 rounded-full border border-border bg-muted text-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => setModalUrl("")}
-            >
-              <CloseOutlined />
-            </Button>
-            <img src={modalUrl} className="dir-modal-img" alt="POV" />
-            <div className="dir-modal-bar">
-              <span className="dir-modal-title">{t("director.fovModalTitle", { name: ent.name, fov: Math.round(ent.cam?.fov || 40) })}</span>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={Boolean(modalUrl)} onOpenChange={(open) => { if (!open) setModalUrl(""); }}>
+        <DialogContent className="w-auto max-w-[90vw] gap-3 p-3 sm:max-w-[90vw]">
+          <img src={modalUrl} className="block max-h-[78vh] max-w-[86vw] rounded-lg" alt="POV" />
+          <DialogTitle className="text-sm font-medium">
+            {t("director.fovModalTitle", { name: ent.name, fov: Math.round(ent.cam?.fov || 40) })}
+          </DialogTitle>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -257,24 +245,12 @@ function CameraShots({ cameraId }: { cameraId: string }) {
           ))}
         </div>
       )}
-      {/* 放大预览 modal（复用相机预览弹层样式） */}
-      {previewUrl && (
-        <div className="dir-modal-overlay" onClick={() => setPreviewUrl("")}>
-          <div className="dir-modal-box" onClick={(e) => e.stopPropagation()}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("common.close")}
-              className="absolute -top-3.5 -right-3.5 rounded-full border border-border bg-muted text-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => setPreviewUrl("")}
-            >
-              <CloseOutlined />
-            </Button>
-            <img src={previewUrl} className="dir-modal-img" alt={t("director.preview")} />
-          </div>
-        </div>
-      )}
+      <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => { if (!open) setPreviewUrl(""); }}>
+        <DialogContent className="w-auto max-w-[90vw] p-3 sm:max-w-[90vw]">
+          <DialogTitle className="sr-only">{t("director.preview")}</DialogTitle>
+          <img src={previewUrl} className="block max-h-[78vh] max-w-[86vw] rounded-lg" alt={t("director.preview")} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
