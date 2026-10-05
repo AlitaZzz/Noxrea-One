@@ -37,7 +37,11 @@ import { EditOutlined } from "@/components/ui/AppIcon";
 import { AgentIcon } from "@/components/ui/AppIcon";
 import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { DirUploadIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsDialog from "@/features/assets/components/AssetsDialog";
@@ -1080,17 +1084,7 @@ export default function InfiniteCanvas() {
         {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}
         <Panel position="top-left" style={{ margin: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease", pointerEvents: "none" }}>
           <div style={{ paddingLeft: 30, paddingTop: 30 }}>
-            <div
-              className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 transition-colors w-[280px] select-none"
-              style={{
-                // 磨砂玻璃：背景 70% 不透明度 + 背景模糊，透出并柔化画布内容
-                background: "color-mix(in srgb, var(--card) 70%, transparent)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid var(--border)",
-                pointerEvents: "auto",
-              }}
-            >
+            <Card className="pointer-events-auto flex h-9 w-[280px] shrink-0 flex-row items-center gap-1 rounded-lg border-border bg-card/70 px-2 py-0 backdrop-blur-[10px]">
               <UserMenuPopover
                 open={toolbarMenuOpen}
                 onOpenChange={setToolbarMenuOpen}
@@ -1121,20 +1115,20 @@ export default function InfiniteCanvas() {
                 }}
                 onLogout={() => setLogoutConfirmOpen(true)}
                 trigger={
-                  <div className="flex shrink-0 cursor-pointer items-center gap-1 hover:bg-white/10 rounded px-0.5 py-0.5 transition-colors">
+                  <Button type="button" variant="ghost" size="sm" aria-label={t("auth.accountSettings")} className="h-7 shrink-0 gap-1 rounded px-1">
                     <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
                     <ChevronDownIcon
                       className="shrink-0 transition-transform duration-200"
-                      style={{ color: "var(--muted-foreground)", width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
+                      style={{ width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
                     />
-                  </div>
+                  </Button>
                 }
               />
-              <div className="w-px h-5 mx-0.5" style={{ background: "var(--border)" }} />
+              <Separator orientation="vertical" className="mx-0.5 h-5" />
               {isEditingName ? (
-                <input
+                <Input
                   className="bg-transparent text-sm outline-none border-none flex-1 min-w-0"
-                  style={{ color: "var(--foreground)", height: 24, cursor: "text" }}
+                  style={{ height: 24, cursor: "text" }}
                   placeholder={t("project.untitled")}
                   autoFocus
                   value={editName}
@@ -1166,14 +1160,19 @@ export default function InfiniteCanvas() {
                   >
                     {editName || "Untitled"}
                   </div>
-                  <EditOutlined
-                    className="shrink-0 ml-1.5 opacity-0 transition-opacity group-hover/name:opacity-100"
-                    style={{ fontSize: 13, color: "var(--muted-foreground)" }}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t("common.edit")}
+                    className="ml-1.5 shrink-0 opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
                     onClick={() => setIsEditingName(true)}
-                  />
+                  >
+                    <EditOutlined />
+                  </Button>
                 </div>
               )}
-            </div>
+            </Card>
 
           </div>
         </Panel>

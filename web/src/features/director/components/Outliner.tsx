@@ -98,55 +98,53 @@ export default function Outliner() {
 
           return (
             <div key={ent.id}>
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  {/* 主行 */}
-                  <div
-                role="button"
-                tabIndex={0}
-                aria-pressed={sel}
-                className={`group/item flex cursor-pointer items-center gap-[9px] rounded-lg px-2.5 py-[9px] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50
-                ${sel ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                onClick={(e) => {
-                  if (e.shiftKey) {
-                    runtime?.toggleSelect(ent.id); return;
-                  }
-                  selectEntity();
-                }}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    selectEntity();
-                  }
-                }}
-                onContextMenu={() => {
-                  if (!selectedIds.includes(ent.id)) runtime?.select(ent.id);
-                }}
-                  >
-                {/* 群众折叠箭头 */}
-                {isCrowd && (
-                  <span className={`mr-[-2px] flex w-[14px] cursor-pointer items-center text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCollapsed((c) => {
-                        const next = new Set(c);
-                        if (open) next.add(ent.id);
-                        else next.delete(ent.id);
-                        return next;
-                      });
-                    }}
-                  >
-                    {S("caret")}
-                  </span>
-                )}
-                <span className="w-[18px] flex items-center">{S(typeIcon(ent.type))}</span>
-                <span className="flex-1 truncate">{ent.name}</span>
-                {isCamera && shotCount > 0 && (
-                  <span className="min-w-[18px] shrink-0 rounded-full bg-secondary px-[5px] text-center text-[10px] font-semibold leading-[18px] text-secondary-foreground">{shotCount}</span>
-                )}
-                {/* 操作按钮(hover/选中时显示) */}
-                <span className={`gap-0.5 ${sel ? "flex" : "hidden group-hover/item:flex"}`}>
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    {/* 主行：选择动作使用标准 Button，外层仅负责布局和右键菜单。 */}
+                    <div
+                      className="group/item flex items-center gap-0.5"
+                      onContextMenu={() => {
+                        if (!selectedIds.includes(ent.id)) runtime?.select(ent.id);
+                      }}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        aria-pressed={sel}
+                        className={`h-auto min-w-0 flex-1 justify-start gap-[9px] rounded-lg px-2.5 py-[9px] text-[13px]
+                        ${sel ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                        onClick={(e) => {
+                          if (e.shiftKey) {
+                            runtime?.toggleSelect(ent.id); return;
+                          }
+                          selectEntity();
+                        }}
+                      >
+                        {/* 群众折叠箭头 */}
+                        {isCrowd && (
+                          <span className={`mr-[-2px] flex w-[14px] cursor-pointer items-center text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCollapsed((c) => {
+                                const next = new Set(c);
+                                if (open) next.add(ent.id);
+                                else next.delete(ent.id);
+                                return next;
+                              });
+                            }}
+                          >
+                            {S("caret")}
+                          </span>
+                        )}
+                        <span className="flex w-[18px] items-center">{S(typeIcon(ent.type))}</span>
+                        <span className="flex-1 truncate">{ent.name}</span>
+                        {isCamera && shotCount > 0 && (
+                          <span className="min-w-[18px] shrink-0 rounded-full bg-secondary px-[5px] text-center text-[10px] font-semibold leading-[18px] text-secondary-foreground">{shotCount}</span>
+                        )}
+                      </Button>
+
+                      {/* 操作按钮(hover/选中时显示) */}
+                      <span className={`gap-0.5 ${sel ? "flex" : "hidden group-hover/item:flex"}`}>
                       {isCrowd && (
                         <Tooltip><TooltipTrigger asChild>
                             <Button
@@ -161,14 +159,14 @@ export default function Outliner() {
                             </Button>
                           </TooltipTrigger><TooltipContent>{t("director.ungroup")}</TooltipContent></Tooltip>
                       )}
-                      <Button variant="ghost" size="icon-xs"
+                      <Button type="button" variant="ghost" size="icon-xs"
                         className="text-muted-foreground hover:bg-transparent hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); runtime?.toggleVisible(ent.id); }} ><span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span></Button>
-                      <Button variant="ghost" size="icon-xs"
+                      <Button type="button" variant="ghost" size="icon-xs"
                         className="text-muted-foreground hover:bg-transparent hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); runtime?.remove(ent.id); }} ><DeleteOutlined /></Button>
-                </span>
-                  </div>
+                      </span>
+                    </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="min-w-[184px]">
                   <ContextMenuItem
@@ -205,7 +203,7 @@ export default function Outliner() {
                   variant="ghost"
                   aria-pressed={selectedId === m.id}
                   className={`h-auto w-full justify-start gap-[9px] rounded-lg px-2.5 py-[9px] pl-[30px] text-[13px]
-                  ${selectedId === m.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                  ${selectedId === m.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (mIsCamera) { runtime?.select(m.id); runtime?.setCameraView(true); }
