@@ -1,6 +1,6 @@
 /**
  * 画布核心状态仓库。
- * 持有节点 / 连线 / 视口 / 背景 / 主题等画布状态与各类浮层开关，
+ * 持有节点 / 连线 / 视口等画布状态与各类浮层开关，
  * 提供节点增删改与快照能力，并通过 SaveManager 做脏标记与延迟保存。
  * 视口高频变更走模块级变量以避免重渲染循环。
  */
@@ -15,11 +15,11 @@ import {
   pruneEmptyGroups,
 } from "@/features/canvas/shared/group-bounds";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { BackgroundType, ViewportState } from "@/features/canvas/types";
+import type { ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
+import { DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
 import { nodeRectOf } from "@/lib/utils/image-utils";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
@@ -142,10 +142,6 @@ interface CanvasState {
   removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
   removeEdges: (edgeIds: string[], options?: { skipHistory?: boolean }) => void;
 
-  // Background
-  background: BackgroundType;
-  setBackground: (bg: BackgroundType) => void;
-
   // Minimap visibility
   minimapVisible: boolean;
   toggleMinimap: () => void;
@@ -231,7 +227,7 @@ interface CanvasState {
    * 同项目的内容恢复不换项目 ID，靠订阅此计数把恢复出的视口应用到 React Flow。
    */
   viewportSyncCount: number;
-  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
+  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
 }
 
 /**
@@ -442,12 +438,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
     saveManager.markDirtyImmediate();
   },
-  background: DEFAULT_BACKGROUND,
-  setBackground: (background) => {
-    set({ background });
-    saveManager.markDirtyImmediate();
-  },
-
   minimapVisible: true,
   toggleMinimap: () => {
     set((s) => ({ minimapVisible: !s.minimapVisible }));
@@ -538,7 +528,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   snapThreshold: 5,
 
   /** 从项目恢复画布状态（内容所有者随之切换；未落库的尾部编辑不随新内容派发保存） */
-  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; background?: BackgroundType; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
+  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
     // 过期态只在「真正的项目切换」时随切换清除；同项目 / 首次加载的服务端数据
     // 恢复保留过期态——加载在途时收到的 evict 不能被恢复完成冲掉
     // （过期弹窗唯一出口是刷新，同项目恢复并不重新取得编辑权）
@@ -571,7 +561,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       nodes,
       edges,
       viewport: vp,
-      background: data.background || DEFAULT_BACKGROUND,
       minimapVisible: data.minimapVisible !== false,
       snapToGrid: data.snapToGrid || false,
       agentModel: data.agentModel ?? null,
@@ -589,7 +578,6 @@ export function takeCanvasSnapshot(): HistorySnapshot {
     nodes: structuredClone(s.nodes),
     edges: structuredClone(s.edges),
     viewport: { ..._liveViewport },
-    background: s.background,
     minimapVisible: s.minimapVisible,
     snapToGrid: s.snapToGrid,
   };

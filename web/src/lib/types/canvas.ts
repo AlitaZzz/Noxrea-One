@@ -1,5 +1,5 @@
 /**
- * 画布基础纯类型（背景 / 主题 / 视口 / 任务绑定 / 上传状态）。
+ * 画布基础纯类型（视口 / 任务绑定 / 上传状态）。
  *
  * 为何放在 lib 层：`lib/constants.ts` 中大量运行时常量（DEFAULT_VIEWPORT、
  * isGenerating 等）依赖这些类型，而架构分层约定 lib 只能
@@ -11,8 +11,6 @@
 import type { TaskStatus } from "@noxrea/shared";
 
 import type { UploadErrorInfo } from "@/lib/utils/upload";
-
-export type BackgroundType = "dots" | "grid" | "blank";
 
 export interface ViewportState {
   x: number;

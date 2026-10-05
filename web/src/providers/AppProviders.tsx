@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import AppUiProvider from "@/components/ui/AppUiProvider";
 import { useAuthStore } from "@/features/auth/store";
+import { useCurrentUser } from "@/features/auth/UserContext";
 import { setUnauthorizedHandler } from "@/lib/api/client";
 import { loadUploadFormats } from "@/lib/upload-formats";
 
@@ -43,6 +44,20 @@ function HtmlLangSync() {
   return null;
 }
 
+/** 同步用户主题到 <html>，让全局 shadcn 令牌和画布控件共用一个主题来源。 */
+function HtmlThemeSync() {
+  const user = useCurrentUser();
+  const theme = user?.theme === "light" ? "light" : "dark";
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", theme === "dark");
+    root.classList.toggle("light", theme === "light");
+  }, [theme]);
+
+  return null;
+}
+
 function SessionProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -62,6 +77,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <UnauthorizedHandlerRegistrar />
       <UploadFormatsWarmup />
       <HtmlLangSync />
+      <HtmlThemeSync />
       <SessionProviders key={userId ?? "guest"}>{children}</SessionProviders>
     </AppUiProvider>
   );

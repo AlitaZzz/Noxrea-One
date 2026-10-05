@@ -374,9 +374,9 @@ div:has(> [contenteditable="true"][data-text-editor]) {
   background: color-mix(in srgb, var(--card) 55%, transparent);
   pointer-events: none;
 }
-/* Base font size；全站固定深色主题，body 直接给底色，避免 SSR 空壳 / 客户端接管前的白闪 */
+/* Base font size and theme-aware document background. */
 html, body { font-family: var(--font-ui); }
-body { font-size: 14px; background: #151518; transition: background-color 0.3s ease, color 0.3s ease; }
+body { font-size: 14px; background: var(--background); color: var(--foreground); transition: background-color 0.3s ease, color 0.3s ease; }
 .react-flow__node { font-size: 14px; }
 .react-flow__node-image-node { overflow: visible !important; }
 .react-flow__node-audio-node { overflow: visible !important; }

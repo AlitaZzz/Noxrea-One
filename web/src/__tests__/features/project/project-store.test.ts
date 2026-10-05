@@ -186,7 +186,7 @@ describe("project store 采纳握手快照（adoptProject）", () => {
       revision: 4,
       updatedAt: "2026-01-01T00:00:00Z",
       coverUrl: "/api/files/1/ab/cover.png",
-      canvasData: { nodes: [{ type: "image-node", data: { src: "/img.png" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 }, background: "dots" },
+      canvasData: { nodes: [{ type: "image-node", data: { src: "/img.png" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
     });
 
     expect(project?.nodes).toHaveLength(1);

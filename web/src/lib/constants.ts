@@ -7,10 +7,7 @@
  */
 // 这些纯类型下沉在 lib/types/*，避免 lib 层反向依赖 features（架构分层约束）
 import type { AssetType } from "@/lib/types/assets";
-import type {
-  BackgroundType,
-  ViewportState,
-} from "@/lib/types/canvas";
+import type { ViewportState } from "@/lib/types/canvas";
 import type {
   TaskBinding,
   UploadState,
@@ -18,7 +15,6 @@ import type {
 
 // Viewport
 export const DEFAULT_VIEWPORT: ViewportState = { x: 0, y: 0, zoom: 1 };
-export const DEFAULT_BACKGROUND: BackgroundType = "dots";
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 5;
 

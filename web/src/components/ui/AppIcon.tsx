@@ -48,7 +48,6 @@ import {
   Minus as LucideMinus,
   MoreHorizontal as LucideMoreHorizontal,
   MousePointer2 as LucideMousePointer2,
-  Palette as LucidePalette,
   Pause as LucidePause,
   Pencil as LucidePencil,
   Plus as LucidePlus,
@@ -197,8 +196,7 @@ export * from './icons/models/QwenIcon';
 export * from './icons/models/SeedanceIcon';
 export * from './icons/models/SunoIcon';
 export * from './icons/models/ViduIcon';
-export * from './icons/theme/ThemeDarkIcon';
-export * from './icons/theme/ThemeLightIcon';
+export * from './icons/theme/ThemeModeIcon';
 
 // Generic icons are adapted to the project's 1em sizing contract. This keeps
 // existing font-size/className usage stable while hiding Lucide's API.
@@ -215,7 +213,6 @@ const ApiOutlined = adaptIcon(LucideWaypoints);
 const AppstoreOutlined = adaptIcon(LucideGrid2X2);
 const ArrowLeftOutlined = adaptIcon(LucideArrowLeft);
 const ArrowUpOutlined = adaptIcon(LucideArrowUp);
-const BgColorsOutlined = adaptIcon(LucidePalette);
 const BorderInnerOutlined = adaptIcon(LucideSquareDashed);
 const BorderOutlined = adaptIcon(LucideSquare);
 const CameraOutlined = adaptIcon(LucideCamera);
@@ -289,7 +286,7 @@ const Type = adaptIcon(LucideType);
 const Wand2 = adaptIcon(LucideWand2);
 
 export {
-  ApiOutlined, AppstoreOutlined, ArrowLeftOutlined, ArrowUpOutlined, BgColorsOutlined, Bold,
+  ApiOutlined, AppstoreOutlined, ArrowLeftOutlined, ArrowUpOutlined, Bold,
   BorderInnerOutlined, BorderOutlined, CameraOutlined, CaretDownOutlined, CaretRightOutlined,
   CaretUpOutlined, CheckOutlined, ClockCircleOutlined, CloseOutlined, Copy, CopyOutlined, Crop, CrownOutlined,
   DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, EllipsisOutlined,

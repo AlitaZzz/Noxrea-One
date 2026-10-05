@@ -122,7 +122,6 @@ function buildCanvasData(): CanvasData {
     nodes: clean.nodes as AnyNode[],
     edges: clean.edges as AnyEdge[],
     viewport: clean.viewport,
-    background: clean.background,
     minimapVisible: clean.minimapVisible,
     snapToGrid: clean.snapToGrid,
     agentModel: useCanvasStore.getState().agentModel ?? undefined,

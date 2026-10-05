@@ -1,6 +1,6 @@
 /**
  * 画布类型定义（纯类型）。
- * 合并了画布基础类型（连线别名、背景/主题枚举、视口）与节点数据类型
+ * 合并了画布基础类型（连线别名、视口）与节点数据类型
  * （任务绑定、生成参数、各节点 data 结构、判别联合 AnyNode）。
  *
  * 运行时常量（NODE_TYPE、UPLOAD_KEY 等）在 lib/constants.ts。
@@ -11,11 +11,10 @@ import type { SceneState } from "@/features/director/types";
 import type { NODE_TYPE } from "@/lib/constants";
 import type { TaskBinding, UploadState } from "@/lib/types/canvas";
 
-// 画布基础类型（背景 / 主题 / 视口 / 任务绑定 / 上传状态）下沉至 lib/types/canvas，
+// 画布基础类型（视口 / 任务绑定 / 上传状态）下沉至 lib/types/canvas，
 // 使 lib/constants.ts 等底层模块可以引用而不反向依赖 feature 层。
 // 此处统一转出，保证上层 "@/features/canvas/types" 的既有导入路径不变。
 export type {
-  BackgroundType,
   TaskBinding,
   TaskStatus,
   UploadState,

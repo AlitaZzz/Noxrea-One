@@ -13,7 +13,11 @@ import { useAuthStore } from "@/features/auth/store";
 import { CachedUserProvider, useCurrentUser } from "@/features/auth/UserContext";
 import { AppProviders } from "@/providers/AppProviders";
 
-afterEach(() => { cleanup(); useAuthStore.setState({ user: null }); });
+afterEach(() => {
+  cleanup();
+  useAuthStore.setState({ user: null });
+  document.documentElement.classList.remove("light", "dark");
+});
 
 describe("page session boundary", () => {
   it("finishes queries during StrictMode's mount cleanup and remount", async () => {
@@ -36,6 +40,22 @@ describe("page session boundary", () => {
     expect(screen.getByText("a")).toBeTruthy();
     act(() => useAuthStore.setState({ initialized: true }));
     expect(screen.getByText("Guest")).toBeTruthy();
+  });
+
+  it("syncs the persisted user theme to the document root", async () => {
+    const user = { id: 1, username: "a", avatarUrl: null, theme: "light", language: "zh" };
+    useAuthStore.setState({ user, initialized: true });
+
+    render(
+      <CachedUserProvider user={null}>
+        <AppProviders><span>Content</span></AppProviders>
+      </CachedUserProvider>,
+    );
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveClass("light");
+      expect(document.documentElement).not.toHaveClass("dark");
+    });
   });
 
   it("preserves local state for profile changes and recreates it and query cache for another account", () => {

@@ -45,7 +45,6 @@
     "refImageLabel": "图片{{index}}",
     "refVideoLabel": "视频{{index}}",
     "refAudioLabel": "音频{{index}}",
-    "background": "背景",
     "assets": "资产管理",
     "uploading": "正在上传...",
     "generating": "生成中...",
@@ -111,11 +110,6 @@
     "snap": {
       "on": "吸附开",
       "off": "吸附关"
-    },
-    "background": {
-      "dots": "点阵",
-      "grid": "网格",
-      "blank": "空白"
     },
     "zoom": {
       "in": "放大",

@@ -42,13 +42,20 @@ export default async function RootLayout({
   // 用户缓存 cookie：SSR 直出真实头像/用户名，避免「占位 → 填充」闪变
   const cachedUser = parseUserCookie((await cookies()).get(USER_COOKIE)?.value);
   return (
-    <html lang={lang} className={cn("dark font-sans", figtree.variable)}>
+    <html
+      lang={lang}
+      className={cn(
+        cachedUser?.theme === "light" ? "light" : "dark",
+        "font-sans",
+        figtree.variable,
+      )}
+    >
       <body className="m-0 p-0 overflow-hidden">
-        <AppProviders>
-          <CachedUserProvider user={cachedUser}>
+        <CachedUserProvider user={cachedUser}>
+          <AppProviders>
             <I18nProvider lang={lang}>{children}</I18nProvider>
-          </CachedUserProvider>
-        </AppProviders>
+          </AppProviders>
+        </CachedUserProvider>
       </body>
     </html>
   );

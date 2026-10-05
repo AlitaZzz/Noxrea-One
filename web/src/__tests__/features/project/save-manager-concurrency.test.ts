@@ -64,7 +64,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
       nodes: structuredClone(mocks.snapshotNodes.length > 0 ? mocks.snapshotNodes : [{ id: "n1", data: {} }]),
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots" as const,
       minimapVisible: true,
       snapToGrid: false,
     }),
@@ -73,7 +72,6 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
       getState: () => ({
         nodes: mocks.snapshotNodes,
         edges: [],
-        background: "dots" as const,
         minimapVisible: true,
         snapToGrid: false,
         agentModel: undefined,

@@ -12,14 +12,14 @@
  */
 import { create } from "zustand";
 
-import type { AnyEdge, BackgroundType, ViewportState } from "@/features/canvas/types";
+import type { AnyEdge, ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
 import { projectApi } from "@/features/project/api";
 import { saveMutex } from "@/features/project/save-mutex";
 import type { CanvasProject, ProjectSummary } from "@/features/project/types";
 import { ApiError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
-import { DEFAULT_BACKGROUND, DEFAULT_VIEWPORT } from "@/lib/constants";
+import { DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 import { isOffline } from "@/lib/utils/upload";
@@ -30,7 +30,6 @@ import { isOffline } from "@/lib/utils/upload";
 // 前端提交侧的严格快照类型见 types.ts 的 CanvasData，两者描述同一 wire 格式。
 interface CanvasData {
   viewport?: ViewportState;
-  background?: BackgroundType;
   minimapVisible?: boolean;
   snapToGrid?: boolean;
   agentModel?: string;
@@ -97,7 +96,6 @@ function mapServerDetail(p: ServerProjectDetail): CanvasProject {
     coverUrl,
     nodeCount: nodes.length,
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
-    background: p.canvasData?.background || DEFAULT_BACKGROUND,
     minimapVisible: p.canvasData?.minimapVisible ?? true,
     snapToGrid: p.canvasData?.snapToGrid || false,
     agentModel: p.canvasData?.agentModel,
@@ -134,7 +132,7 @@ async function fetchProjects(): Promise<ProjectSummary[] | null> {
 
 async function apiCreateProject(name: string): Promise<CanvasProject | null> {
   try {
-    const data = await projectApi.createProject<ServerProjectDetail>(name, { viewport: DEFAULT_VIEWPORT, background: DEFAULT_BACKGROUND, nodes: [], edges: [] });
+    const data = await projectApi.createProject<ServerProjectDetail>(name, { viewport: DEFAULT_VIEWPORT, nodes: [], edges: [] });
     if (data) return mapServerDetail(data);
   } catch { /* */ }
   return null;

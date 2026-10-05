@@ -441,7 +441,6 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
     s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
     s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
     s.setViewport(snapshot.viewport);
-    s.setBackground(snapshot.background);
     if (snapshot.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: snapshot.minimapVisible });
     if (snapshot.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: snapshot.snapToGrid });
   });

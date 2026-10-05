@@ -48,6 +48,7 @@ import AssetsDialog from "@/features/assets/components/AssetsDialog";
 import type { AssetItem } from "@/features/assets/types";
 import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
+import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
@@ -118,6 +119,7 @@ const RF_EDGE_TYPES = {
 export default function InfiniteCanvas() {
   const router = useRouter();
   const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
+  const user = useCurrentUser();
   const { message, notification: notif } = useAppFeedback();
   useSseTaskMonitor(notif);
 
@@ -127,7 +129,6 @@ export default function InfiniteCanvas() {
   const setNodes = useCanvasStore((s) => s.setNodes);
   const setEdges = useCanvasStore((s) => s.setEdges);
   const addNodes = useCanvasStore((s) => s.addNodes);
-  const background = useCanvasStore((s) => s.background);
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const snapGridSize = useCanvasStore((s) => s.snapGridSize);
@@ -1053,7 +1054,7 @@ export default function InfiniteCanvas() {
         maxZoom={5}
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
-        colorMode="dark"
+        colorMode={user?.theme === "light" ? "light" : "dark"}
         // 连线吸附半径：xyflow 的吸附判定取「指针到 Handle 中心」的距离，Handle 中心
         // 在轨道正中（离节点边缘 RAIL_WIDTH/2）。半径盖住可见圆点加余量即可，不能取
         // 轨道外接圆——那会让磁吸远及边缘外 ~97px，相邻轨道（组与成员仅隔
@@ -1066,19 +1067,7 @@ export default function InfiniteCanvas() {
           style: { stroke: EDGE_BASE_COLOR, strokeWidth: 2 },
         }}
       >
-        <Background
-          variant={
-            background === "dots"
-              ? BackgroundVariant.Dots
-              : background === "grid"
-                ? BackgroundVariant.Lines
-                : undefined
-          }
-          gap={background === "grid" ? 40 : 20}
-          size={background === "dots" ? 1.5 : 0.5}
-          color={"var(--input)"}
-          style={background === "blank" ? { display: "none" } : undefined}
-        />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />
 
         {/* Top-left panel: quick toolbar */}
         {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}

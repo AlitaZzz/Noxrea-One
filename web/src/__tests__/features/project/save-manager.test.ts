@@ -17,7 +17,6 @@ interface HistorySnapshot {
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   viewport: { x: number; y: number; zoom: number };
-  background: string;
   minimapVisible: boolean;
   snapToGrid: boolean;
 }
@@ -48,7 +47,6 @@ function takeCanvasSnapshot(state: {
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   viewport: { x: number; y: number; zoom: number };
-  background: string;
   minimapVisible: boolean;
   snapToGrid: boolean;
 }): HistorySnapshot {
@@ -56,7 +54,6 @@ function takeCanvasSnapshot(state: {
     nodes: JSON.parse(JSON.stringify(state.nodes)),
     edges: JSON.parse(JSON.stringify(state.edges)),
     viewport: { ...state.viewport },
-    background: state.background,
     minimapVisible: state.minimapVisible,
     snapToGrid: state.snapToGrid,
   };
@@ -74,7 +71,6 @@ describe("stripRuntimeFields", () => {
       ],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -95,7 +91,6 @@ describe("stripRuntimeFields", () => {
         { id: "e1", source: "n1", target: "n2", selected: true, type: "deletable" },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -113,7 +108,6 @@ describe("stripRuntimeFields", () => {
         { id: "e1", source: "n1", target: "n2", type: "deletable", markerEnd: { type: "arrowclosed", color: "#888" } },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -133,7 +127,6 @@ describe("stripRuntimeFields", () => {
         { id: "e1", source: "n1", target: "n2", sourceHandle: "a", targetHandle: "b", selected: false },
       ],
       viewport: { x: 50, y: 100, zoom: 1.5 },
-      background: "grid",
       minimapVisible: false,
       snapToGrid: true,
     };
@@ -158,14 +151,12 @@ describe("stripRuntimeFields", () => {
       nodes: [{ id: "n1", selected: true }],
       edges: [{ id: "e1", selected: true }],
       viewport: { x: -100, y: -200, zoom: 0.5 },
-      background: "blank",
       minimapVisible: false,
       snapToGrid: true,
     };
 
     const cleaned = stripRuntimeFields(snapshot);
     expect(cleaned.viewport).toEqual(snapshot.viewport);
-    expect(cleaned.background).toBe("blank");
     expect(cleaned.minimapVisible).toBe(false);
     expect(cleaned.snapToGrid).toBe(true);
   });
@@ -175,7 +166,6 @@ describe("stripRuntimeFields", () => {
       nodes: [],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -190,7 +180,6 @@ describe("stripRuntimeFields", () => {
       nodes: [{ id: "n1", position: { x: 10, y: 20 }, data: {} }],
       edges: [{ id: "e1", source: "n1", target: "n2" }],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -209,7 +198,6 @@ describe("stripRuntimeFields", () => {
         { id: "e1", deletable: true, selected: false },
       ],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -231,19 +219,17 @@ describe("stripRuntimeFields", () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe("takeCanvasSnapshot", () => {
-  it("返回对象的 viewport/background/minimapVisible/snapToGrid 字段正确", () => {
+  it("返回对象的 viewport/minimapVisible/snapToGrid 字段正确", () => {
     const state = {
       nodes: [],
       edges: [],
       viewport: { x: -200, y: -300, zoom: 2 },
-      background: "grid",
       minimapVisible: false,
       snapToGrid: true,
     };
 
     const snap = takeCanvasSnapshot(state);
     expect(snap.viewport).toEqual({ x: -200, y: -300, zoom: 2 });
-    expect(snap.background).toBe("grid");
     expect(snap.minimapVisible).toBe(false);
     expect(snap.snapToGrid).toBe(true);
   });
@@ -254,7 +240,6 @@ describe("takeCanvasSnapshot", () => {
       nodes: [originalNode],
       edges: [{ id: "e1", source: "n1", target: "n2" }],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -273,7 +258,6 @@ describe("takeCanvasSnapshot", () => {
       nodes: [],
       edges: [],
       viewport,
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -290,7 +274,6 @@ describe("takeCanvasSnapshot", () => {
       nodes: [{ id: "n1", data }],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -307,7 +290,6 @@ describe("takeCanvasSnapshot", () => {
       nodes: [],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -329,7 +311,6 @@ describe("takeCanvasSnapshot", () => {
         style: { stroke: "#666" },
       }],
       viewport: { x: 0, y: 0, zoom: 1 },
-      background: "dots",
       minimapVisible: true,
       snapToGrid: false,
     };
@@ -354,7 +335,6 @@ describe("stripRuntimeFields(takeCanvasSnapshot(state)) 完整管线", () => {
         { id: "e1", source: "n1", target: "n2", selected: false, type: "deletable" },
       ],
       viewport: { x: -50, y: -100, zoom: 1.5 },
-      background: "grid",
       minimapVisible: true,
       snapToGrid: false,
     };

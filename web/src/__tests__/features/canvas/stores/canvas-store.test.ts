@@ -34,7 +34,6 @@ function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unkn
     nodes,
     edges,
     viewport: { x: 0, y: 0, zoom: 1 },
-    background: "dots" as const,
     minimapVisible: true,
     snapToGrid: false,
   } as HistorySnapshot;

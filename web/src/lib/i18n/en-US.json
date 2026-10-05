@@ -43,7 +43,6 @@
     "refImageLabel": "Image {{index}}",
     "refVideoLabel": "Video {{index}}",
     "refAudioLabel": "Audio {{index}}",
-    "background": "Background",
     "assets": "Assets",
     "uploading": "Uploading...",
     "generating": "Generating...",
@@ -109,11 +108,6 @@
     "snap": {
       "on": "Snap On",
       "off": "Snap Off"
-    },
-    "background": {
-      "dots": "Dots",
-      "grid": "Grid",
-      "blank": "Blank"
     },
     "zoom": {
       "in": "Zoom In",

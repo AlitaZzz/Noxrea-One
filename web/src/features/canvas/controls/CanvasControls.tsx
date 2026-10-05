@@ -1,6 +1,6 @@
 /**
  * 画布右下角控制条。
- * 提供缩放调节、适应视图、网格背景切换、吸附开关与语言切换，
+ * 提供缩放调节、适应视图、主题与语言切换、吸附开关，
  * 以及资产库 / 渠道配置 / 侧边栏的打开入口；偏好项变更会同步保存到用户配置。
  */
 "use client";
@@ -11,8 +11,8 @@ import { useTranslation } from "react-i18next";
 
 import {
   ApiOutlined,
-  BgColorsOutlined,
   ExpandOutlined,
+  ThemeModeIcon,
   ZoomInOutlined,
   ZoomOutOutlined,
 } from "@/components/ui/AppIcon";
@@ -37,8 +37,8 @@ import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/features/auth/store";
+import { useCurrentUser } from "@/features/auth/UserContext";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { BackgroundType } from "@/features/canvas/types";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import { modKey } from "@/lib/platform";
 
@@ -63,6 +63,35 @@ function LanguageToggle() {
   );
 }
 
+function ThemeToggle() {
+  const { t } = useTranslation();
+  const user = useCurrentUser();
+  const isDark = user?.theme !== "light";
+
+  const toggle = (pressed: boolean) => {
+    const next = pressed ? "dark" : "light";
+    if (next !== (isDark ? "dark" : "light")) {
+      void useAuthStore.getState().savePreference("theme", next);
+    }
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t(isDark ? "theme.light" : "theme.dark")}
+          onClick={() => toggle(!isDark)}
+        >
+          <ThemeModeIcon className="size-4.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{t(isDark ? "theme.light" : "theme.dark")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface Props {
   onOpenSettings?: () => void;
   onOpenAssets?: () => void;
@@ -79,10 +108,8 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
   const toggleMinimap = useCanvasStore((s) => s.toggleMinimap);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
   const toggleSnapToGrid = useCanvasStore((s) => s.toggleSnapToGrid);
-  const setBackground = useCanvasStore((s) => s.setBackground);
 
   const [zoomOpen, setZoomOpen] = useState(false);
-  const [bgOpen, setBgOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [inputZoom, setInputZoom] = useState(Math.round(viewport.zoom * 100));
 
@@ -151,26 +178,8 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
             </Toggle>
           </TooltipTrigger><TooltipContent>{snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}</TooltipContent></Tooltip>
 
-      {/* Background picker */}
-      <DropdownMenu
-        open={bgOpen}
-        onOpenChange={setBgOpen}
-      >
-        <Tooltip><TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant="ghost">
-                <BgColorsOutlined />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger><TooltipContent>{t("common.background")}</TooltipContent></Tooltip>
-        <DropdownMenuContent side="top" align="center">
-          {(["dots", "grid", "blank"] as BackgroundType[]).map((bg) => (
-            <DropdownMenuItem key={bg} onSelect={() => setBackground(bg)}>
-              {t(`canvas.background.${bg}`)}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Theme toggle */}
+      <ThemeToggle />
       {/* Language toggle */}
       <LanguageToggle />
 
