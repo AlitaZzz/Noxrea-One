@@ -22,6 +22,7 @@ import { MapPinIcon } from "@/components/ui/AppIcon";
 import { PanelIcon } from "@/components/ui/AppIcon";
 import { ShortcutIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/features/auth/store";
@@ -106,9 +108,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
 
   return (
     <>
-      <div
-        className="pointer-events-auto flex h-10 w-fit items-center gap-1 rounded-lg border border-border bg-card/70 px-1.5 shadow-lg backdrop-blur-[10px]"
-      >
+      <Card className="pointer-events-auto flex h-10 w-fit flex-row items-center gap-1 rounded-lg bg-card/70 px-1.5 py-0 backdrop-blur-[10px]">
         {/* Canvas Explorer — 最左侧主面板开关。
             按钮同时有图标和文字「面板」，再挂 tooltip 属于重复提示，去掉 */}
         <Toggle
@@ -184,7 +184,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           <Button size="icon-sm" variant="ghost" onClick={onOpenAssets}><AssetsIcon /></Button>
         </TooltipTrigger><TooltipContent>{t("common.assets")}</TooltipContent></Tooltip>
 
-      <span className="mx-1 h-[18px] w-px shrink-0 bg-border" />
+      <Separator orientation="vertical" className="mx-1 h-[18px]" />
 
       {/* Shortcuts — 快捷键速查，使用标准 Popover 锚定工具栏按钮。 */}
       <Popover
@@ -261,7 +261,7 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
           <DropdownMenuItem onSelect={() => handleZoomTo(100)}>{t("canvas.zoom.to100")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </Card>
     </>
   );
 }

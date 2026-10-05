@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, UndoOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -249,8 +250,9 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
       {/* Toolbar — RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
       <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
+        className="nodrag"
       >
+      <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
@@ -293,6 +295,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
 
         {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
         <IconActionButton onClick={handleConfirm} disabled={loading || !imgLoaded} loading={loading} />
+      </Card>
       </WheelGuard>
       </RfNodeToolbar>
 

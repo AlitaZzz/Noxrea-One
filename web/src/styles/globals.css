@@ -749,11 +749,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
     animation: none;
   }
 }
-.canvas-toolbar { background: var(--card); border: 1px solid var(--border); box-shadow: 0 10px 34px rgba(0,0,0,.55); user-select: none; }
-
-/* 工具栏容器 */
-.toolbar-dock { background: var(--card); border: 1px solid var(--border); box-shadow: var(--toolbar-shadow); }
-
 /* 右键菜单 */
 
 /* Outliner 列表：默认隐藏滚动条，hover 时显示 */

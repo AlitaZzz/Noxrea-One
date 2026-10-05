@@ -194,7 +194,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                 onValueChange={([next]) => setAzimuth(next)}
                 className="min-w-0 flex-1"
               />
-              <div className="h-4 w-px shrink-0 bg-border" />
+              <Separator orientation="vertical" className="h-4 shrink-0" />
               <Input
                 type="number"
                 min={0}
@@ -235,7 +235,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
                 }}
                 className="min-w-0 flex-1"
               />
-              <div className="h-4 w-px shrink-0 bg-border" />
+              <Separator orientation="vertical" className="h-4 shrink-0" />
               <Input
                 type="number"
                 min={-90}

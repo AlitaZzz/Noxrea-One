@@ -11,6 +11,7 @@ import { Grid4Icon } from "@/components/ui/AppIcon";
 import { Grid8Icon } from "@/components/ui/AppIcon";
 import { Grid12Icon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
@@ -338,8 +339,9 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       {/* 全景专属工具栏：RfNodeToolbar 恒定尺寸定位；仅当节点被选中时显示 */}
       <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible={selected}>
       <WheelGuard
-        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
+        className="nodrag"
       >
+      <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
@@ -416,6 +418,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
             <Button variant="ghost" iconOnly onClick={handleReset} ><ReloadOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.reset")}</TooltipContent></Tooltip>
 
+      </Card>
       </WheelGuard>
       </RfNodeToolbar>
 

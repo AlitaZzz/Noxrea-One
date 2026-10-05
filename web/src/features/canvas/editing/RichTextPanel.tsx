@@ -22,6 +22,7 @@ import {
   Type,
 } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -62,8 +63,9 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
         // 统一阻止 mousedown 默认行为：点击工具条任意位置（含按钮间隙/背景）都不抢走编辑器焦点，
         // 否则编辑器失焦会触发退出编辑态。焦点不转移，光标位置也得以保留。
         onMouseDown={(e) => e.preventDefault()}
-        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
+        className="nodrag"
       >
+      <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 行内格式 */}
         <Tooltip><TooltipTrigger asChild>
             <Toggle size="sm" pressed={active.bold} className="size-8 p-0"
@@ -114,6 +116,7 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
             ><Minus size={16} /></Button>
           </TooltipTrigger><TooltipContent>{t("richText.horizontalRule")}</TooltipContent></Tooltip>
 
+      </Card>
       </WheelGuard>
     </RfNodeToolbar>
   );

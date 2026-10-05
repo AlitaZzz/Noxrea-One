@@ -15,6 +15,7 @@ import { RedoIcon } from "@/components/ui/AppIcon";
 import { SmartEditBrushToolIcon } from "@/components/ui/AppIcon";
 import { UndoIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ColorPicker } from "@/components/ui/color-picker";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
@@ -487,8 +488,9 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
       {/* Toolbar — RfNodeToolbar 恒定尺寸定位（与其它编辑工具栏统一） */}
       <RfNodeToolbar nodeId={sourceId} position={Position.Top} align="center" offset={8} isVisible>
       <WheelGuard
-        className="canvas-toolbar nodrag flex h-[50px] items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5"
+        className="nodrag"
       >
+      <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
@@ -540,6 +542,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
         {/* 保存：反色 ↑（与截取/变速工具栏确认键一致） */}
         <IconActionButton onClick={handleSave} disabled={loading || !imgLoaded} loading={loading} />
+      </Card>
       </WheelGuard>
       </RfNodeToolbar>
 

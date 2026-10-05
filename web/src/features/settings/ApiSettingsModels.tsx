@@ -335,7 +335,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
         ))}
       </TabsList>
       {chips.map((chip) => (
-        <TabsContent key={chip.key} value={chip.key} className="min-h-0 flex-1">
+        <TabsContent key={chip.key} value={chip.key} className="flex min-h-0 flex-1 flex-col">
           {renderModelContent()}
         </TabsContent>
       ))}

@@ -37,8 +37,10 @@ import { VideoToPromptIcon } from "@/components/ui/AppIcon";
 import { FrameCaptureIcon } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
@@ -321,9 +323,7 @@ function NodeToolbar({
   );
 
   return (
-    <div
-      className="canvas-toolbar z-20 flex h-[50px] items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5"
-    >
+    <Card className="z-20 flex h-[50px] flex-row items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5">
       {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
       {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
         <Tooltip><TooltipTrigger asChild>
@@ -336,7 +336,7 @@ function NodeToolbar({
       {/* Image node actions */}
       {nodeType === NODE_ACTIONS.IMAGE && (
         <>
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           {/* 全景 */}
           <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" iconOnly disabled={!assetSrc}
@@ -399,7 +399,7 @@ function NodeToolbar({
             </PopoverContent>
           </Popover>
           {/* AI */}
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></Button>
             </TooltipTrigger><TooltipContent>{t("angle.editor")}</TooltipContent></Tooltip>
@@ -435,7 +435,7 @@ function NodeToolbar({
             </PopoverContent>
           </Popover>
           {/* Export */}
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" iconOnly disabled={!assetSrc}
@@ -451,7 +451,7 @@ function NodeToolbar({
       {/* Video node actions */}
       {nodeType === NODE_ACTIONS.VIDEO && (
         <>
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <DropdownMenu open={captureOpen} onOpenChange={(open) => {
             if (open) resetDismissFocus();
             setCaptureOpen(open);
@@ -498,7 +498,7 @@ function NodeToolbar({
                 disabled={!assetSrc}
               ><VideoToPromptIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.reversePrompt")}</TooltipContent></Tooltip>
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" iconOnly disabled={!assetSrc}
@@ -527,7 +527,7 @@ function NodeToolbar({
             />
           ) : (
             <>
-              <div className="mx-1 h-5 w-px bg-border" />
+              <Separator orientation="vertical" className="mx-1 h-5 self-center" />
               <Tooltip><TooltipTrigger asChild>
                   <Button variant="ghost" iconOnly
                     disabled={!assetSrc}
@@ -555,7 +555,7 @@ function NodeToolbar({
       {/* Text node actions — 复制 / 下载为 Markdown */}
       {nodeType === NODE_ACTIONS.TEXT && (
         <>
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Tooltip><TooltipTrigger asChild>
               <Button variant="ghost" iconOnly disabled={!textContent}
                 onClick={() => dispatchNodeAction(nodeId, "copy")} ><Copy size={16} /></Button>
@@ -570,7 +570,7 @@ function NodeToolbar({
       {/* Group node actions */}
       {nodeType === NODE_ACTIONS.GROUP && (
         <>
-          <div className="mx-1 h-5 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Popover open={groupColorOpen} onOpenChange={(open) => {
             if (open) resetDismissFocus();
             setGroupColorOpen(open);
@@ -629,7 +629,7 @@ function NodeToolbar({
             </TooltipTrigger><TooltipContent>{t("common.ungroup")}</TooltipContent></Tooltip>
         </>
       )}
-    </div>
+    </Card>
   );
 }
 

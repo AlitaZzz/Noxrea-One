@@ -167,7 +167,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
           <SunIcon className="h-4 w-4" />
           {t("lighting.title")}
         </span>
-        {/* 与资产弹窗关闭按钮同款：✕ 字形 + 次级文字色，悬停底色走 canvas-toolbar 按钮规则 */}
+        {/* 关闭按钮使用共享 Button 主题样式 */}
         <Button
           variant="ghost"
           aria-label="close"
@@ -229,7 +229,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                 onValueChange={([next]) => update("intensity", next)}
                 className="min-w-0 flex-1"
               />
-              <div className="h-4 w-px shrink-0 bg-border" />
+              <Separator orientation="vertical" className="h-4 shrink-0" />
               <SunIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <Input
                 type="number"
@@ -286,7 +286,7 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
                     onValueChange={([next]) => handleKelvin(next)}
                     className="min-w-0 flex-1"
                   />
-                  <div className="h-4 w-px shrink-0 bg-border" />
+                  <Separator orientation="vertical" className="h-4 shrink-0" />
                   <ThermometerIcon className="size-4 shrink-0 text-muted-foreground" />
                   <Input
                     type="number"
