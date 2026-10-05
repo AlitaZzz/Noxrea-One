@@ -9,31 +9,40 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { DirCaretIcon } from "@/components/ui/AppIcon";
 import { DirCubeIcon } from "@/components/ui/AppIcon";
-import { DirExpandIcon } from "@/components/ui/AppIcon";
 import { DirFrameIcon } from "@/components/ui/AppIcon";
 import { DirGroupIcon } from "@/components/ui/AppIcon";
 import { DirImageIcon } from "@/components/ui/AppIcon";
 import { DirMoveIcon } from "@/components/ui/AppIcon";
 import { DirPersonIcon } from "@/components/ui/AppIcon";
-import { DirPointerIcon } from "@/components/ui/AppIcon";
 import { DirRotateIcon } from "@/components/ui/AppIcon";
 import { DirScaleIcon } from "@/components/ui/AppIcon";
 import { DirShotIcon } from "@/components/ui/AppIcon";
 import { DirUploadIcon } from "@/components/ui/AppIcon";
 import { DirVideoIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { groupedPresets } from "@/features/director/core/camera-presets";
 import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 
 const IC_MAP = {
-  pointer: DirPointerIcon,
   move: DirMoveIcon,
   rotate: DirRotateIcon,
   scale: DirScaleIcon,
@@ -41,9 +50,7 @@ const IC_MAP = {
   cube: DirCubeIcon,
   video: DirVideoIcon,
   shot: DirShotIcon,
-  expand: DirExpandIcon,
   frame: DirFrameIcon,
-  chevron: DirCaretIcon,
   upload: DirUploadIcon,
   image: DirImageIcon,
   group: DirGroupIcon,
@@ -67,19 +74,20 @@ function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
   const MAX = 6;
 
   return (
-    <div className="rounded-xl border border-[var(--dir-line2)] bg-[var(--dir-panel)] p-3">
-      <div className="mb-2 text-xs text-[var(--dir-dim2)]">
+    <Card className="w-[216px] gap-0 border-border bg-card p-0 shadow-sm">
+      <CardContent className="p-3">
+      <div className="mb-2 text-xs text-muted-foreground">
         {t("director.crowdArrayInfo", { count: rows * cols })}
       </div>
       <div className="mb-2 flex items-center gap-2 text-xs">
-        <span className="text-[var(--dir-dim)]">{t("director.spacing")}</span>
+        <span className="text-muted-foreground">{t("director.spacing")}</span>
         <NumberInput min={0.5} max={5} step={0.1} value={spacing}
-          className="h-8 flex-1 border-transparent bg-[var(--dir-panel2)] text-[var(--dir-txt)]"
+          className="h-8 flex-1"
           onChange={(v) => { if (v != null) setSpacing(v); }} />
       </div>
       <div className="flex justify-center">
         <div
-          className="inline-grid gap-px overflow-hidden rounded-[3px] bg-[var(--dir-line2)]"
+          className="inline-grid gap-px overflow-hidden rounded-sm bg-border"
           style={{ gridTemplateColumns: `repeat(${MAX}, 16px)` }}
         >
           {Array.from({ length: MAX * MAX }).map((_, i) => {
@@ -87,14 +95,22 @@ function CrowdForm({ runtime }: { runtime: DirectorRuntime }) {
             const c = (i % MAX) + 1;
             const active = r <= rows && c <= cols;
             return (
-              <div key={i} className={`size-4 cursor-pointer ${active ? "bg-[var(--dir-txt)]" : "bg-[var(--dir-panel2)]"}`}
+              <Button
+                key={i}
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`${r} x ${c}`}
+                className={`size-4 min-w-4 rounded-none p-0 ${active ? "bg-foreground hover:bg-foreground/80" : "bg-muted hover:bg-muted/80"}`}
                 onMouseEnter={() => { setRows(r); setCols(c); }}
-                onClick={() => runtime?.addCrowd?.(r, c, spacing)} />
+                onClick={() => runtime?.addCrowd?.(r, c, spacing)}
+              />
             );
           })}
         </div>
       </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -121,8 +137,8 @@ export default function Dock() {
     }
   }, [runtime, notification]);
 
-  const dockBtn = (icon: string, title: string, onClick: () => void, active = false, hideTooltip = false) => (
-    <Tooltip key={title} open={hideTooltip ? false : undefined}><TooltipTrigger asChild>
+  const dockBtn = (icon: string, title: string, onClick: () => void, active = false) => (
+    <Tooltip key={title}><TooltipTrigger asChild>
         <Button
           type="button"
           variant="ghost"
@@ -134,125 +150,121 @@ export default function Dock() {
       </TooltipTrigger><TooltipContent>{title}</TooltipContent></Tooltip>
   );
 
-  const menuItem = (icon: string, label: string, onClick: () => void, checked = false, hasSub = false) => (
-    <Button
-      key={label}
-      type="button"
-      variant="ghost"
-      onClick={onClick}
-      className="h-auto w-full justify-start gap-[11px] rounded-lg px-3 py-[9px] text-left text-[13px] text-[var(--dir-txt)] hover:bg-[var(--accent)]"
-    >
-      {icon ? <span className="flex w-[20px] items-center justify-center text-[var(--dir-dim)]">{S(icon)}</span> : <span className="w-[20px]" />}
-      <span className="flex-1">{label}</span>
-      {hasSub && <span className="ml-auto text-[var(--dir-dim)]">{S("chevron")}</span>}
-      {checked && <span className="ml-auto text-xs text-blue-500">✓</span>}
-    </Button>
-  );
-
-  const menuContent = (children: React.ReactNode, minWidth = 200) => (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-[var(--dir-line2)] bg-popover p-1.5" style={{ minWidth }}>
-      {children}
-    </div>
+  const menuTrigger = (icon: string, title: string, open: boolean) => (
+    <Tooltip open={open ? false : undefined}><TooltipTrigger asChild>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          aria-pressed={open}
+          className="aria-pressed:bg-accent aria-pressed:text-foreground"
+        >
+          {S(icon)}
+        </Button>
+      </DropdownMenuTrigger>
+    </TooltipTrigger><TooltipContent>{title}</TooltipContent></Tooltip>
   );
 
   const closeAddMenu = () => setAddMenuOpen(false);
 
   return (
-    <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-[var(--dir-line2)] bg-card px-3 py-2 shadow-[0_10px_34px_rgba(0,0,0,0.55)]">
+    <Card className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 flex-row items-center gap-1 rounded-2xl border-border bg-card px-3 py-2 shadow-lg">
       {/* 变换模式 */}
       {dockBtn(TF_ICON.translate, t("director.tool.move"), () => runtime?.setTransformMode("translate"), transformMode === "translate")}
       {dockBtn(TF_ICON.rotate, t("director.tool.rotate"), () => runtime?.setTransformMode("rotate"), transformMode === "rotate")}
       {dockBtn(TF_ICON.scale, t("director.tool.scale"), () => runtime?.setTransformMode("scale"), transformMode === "scale")}
 
       {/* 分隔 */}
-      <span className="mx-1 h-[22px] w-px bg-[var(--dir-line2)]" />
+      <Separator orientation="vertical" className="mx-1 h-[22px]" />
 
       {/* 添加角色/模型 */}
-      <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
-        <PopoverTrigger asChild>
-          <div>{dockBtn("person", t("director.addCharacter"), () => {}, false, addMenuOpen)}</div>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="center" className="z-[1050] w-auto p-0 bg-transparent border-0">
-          {menuContent(
-            <>
-              {BODY_KEYS.map((k) => menuItem("person", t(`director.body.${k}`), () => { runtime?.addCharacter(k); closeAddMenu(); }))}
-              <div className="mx-1 my-1.5 h-px bg-[var(--dir-line2)]" />
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <div>{menuItem("group", t("director.crowd"), () => {}, false, true)}</div>
-                </HoverCardTrigger>
-                <HoverCardContent side="right" align="start" className="z-[1050] w-auto p-0 bg-transparent border-0">
-                  <CrowdForm runtime={runtime as DirectorRuntime} />
-                </HoverCardContent>
-              </HoverCard>
-              <div className="mx-1 my-1.5 h-px bg-[var(--dir-line2)]" />
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <div>{menuItem("cube", t("director.geometry"), () => {}, false, true)}</div>
-                </HoverCardTrigger>
-                <HoverCardContent side="right" align="start" className="z-[1050] w-auto p-0 bg-transparent border-0">
-                  {menuContent(
-                    <>{GEO_KEYS.map((k) => menuItem("cube", t(`director.prop.${k}`), () => { runtime?.addProp(k); closeAddMenu(); }))}</>, 150
-                  )}
-                </HoverCardContent>
-              </HoverCard>
-            </>
-          )}
-        </PopoverContent>
-      </Popover>
+      <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
+        {menuTrigger("person", t("director.addCharacter"), addMenuOpen)}
+        <DropdownMenuContent side="top" align="center" className="w-52">
+          {BODY_KEYS.map((k) => (
+            <DropdownMenuItem key={k} onSelect={() => { runtime?.addCharacter(k); closeAddMenu(); }}>
+              <span className="flex w-5 items-center justify-center text-muted-foreground">{S("person")}</span>
+              <span>{t(`director.body.${k}`)}</span>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex w-5 items-center justify-center text-muted-foreground">{S("group")}</span>
+              <span>{t("director.crowd")}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-auto p-2">
+              <CrowdForm runtime={runtime as DirectorRuntime} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex w-5 items-center justify-center text-muted-foreground">{S("cube")}</span>
+              <span>{t("director.geometry")}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-40">
+              {GEO_KEYS.map((k) => (
+                <DropdownMenuItem key={k} onSelect={() => { runtime?.addProp(k); closeAddMenu(); }}>
+                  <span className="flex w-5 items-center justify-center text-muted-foreground">{S("cube")}</span>
+                  <span>{t(`director.prop.${k}`)}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* 全景图 */}
-      <Popover open={panoMenuOpen} onOpenChange={setPanoMenuOpen}>
-        <PopoverTrigger asChild>
-          <div>{dockBtn("image", t("director.panorama"), () => {}, false, panoMenuOpen)}</div>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="center" className="z-[1050] w-auto p-0 bg-transparent border-0">
-          {menuContent(
-            <label className="flex cursor-pointer items-center gap-[11px] rounded-lg px-3 py-[9px] text-[13px] text-[var(--dir-txt)] hover:bg-[var(--accent)]">
-              <span className="flex w-[20px] items-center justify-center text-[var(--dir-dim)]">{S("upload")}</span>
-              <span className="flex-1">{t("director.localUpload")}</span>
+      <DropdownMenu open={panoMenuOpen} onOpenChange={setPanoMenuOpen}>
+        {menuTrigger("image", t("director.panorama"), panoMenuOpen)}
+        <DropdownMenuContent side="top" align="center" className="w-40">
+          <DropdownMenuItem asChild>
+            <label>
+              <span className="flex w-5 items-center justify-center text-muted-foreground">{S("upload")}</span>
+              <span>{t("director.localUpload")}</span>
               <input type="file" accept="image/*" className="hidden" />
-            </label>, 160,
-          )}
-        </PopoverContent>
-      </Popover>
+            </label>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* 添加机位 */}
-      <Popover open={camMenuOpen} onOpenChange={setCamMenuOpen}>
-        <PopoverTrigger asChild>
-          <div>{dockBtn("video", t("director.addCameraPreset"), () => {}, false, camMenuOpen)}</div>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="center" className="z-[1050] w-auto p-0 bg-transparent border-0">
-          {menuContent(
-            cameraPresets.map((g) => (
-              <div key={g.name}>
-                <div className="px-3 pb-1 pt-2 text-xs tracking-[.4px] text-[var(--dir-dim2)]">{t(`director.${g.name}`)}</div>
-                {g.items.map((p) => menuItem("video", t(`director.${p.label}`), () => { runtime?.addCamera?.(p.key); setCamMenuOpen(false); }, false))}
-              </div>
-            )), 184,
-          )}
-        </PopoverContent>
-      </Popover>
+      <DropdownMenu open={camMenuOpen} onOpenChange={setCamMenuOpen}>
+        {menuTrigger("video", t("director.addCameraPreset"), camMenuOpen)}
+        <DropdownMenuContent side="top" align="center" className="w-48">
+          {cameraPresets.map((g) => (
+            <div key={g.name}>
+              <DropdownMenuLabel>{t(`director.${g.name}`)}</DropdownMenuLabel>
+              {g.items.map((p) => (
+                <DropdownMenuItem key={p.key} onSelect={() => { runtime?.addCamera?.(p.key); setCamMenuOpen(false); }}>
+                  <span className="flex w-5 items-center justify-center text-muted-foreground">{S("video")}</span>
+                  <span>{t(`director.${p.label}`)}</span>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* 分隔 */}
-      <span className="mx-1 h-[22px] w-px bg-[var(--dir-line2)]" />
+      <Separator orientation="vertical" className="mx-1 h-[22px]" />
 
       {/* 取景比例 */}
-      <Popover open={ratioMenuOpen} onOpenChange={setRatioMenuOpen}>
-        <PopoverTrigger asChild>
-          <div>{dockBtn("frame", t("director.frameRatio"), () => {}, false, ratioMenuOpen)}</div>
-        </PopoverTrigger>
-        <PopoverContent side="top" align="center" className="z-[1050] w-auto p-0 bg-transparent border-0">
-          {menuContent(
-            RATIOS.map(([v, l]) => menuItem("", l, () => { runtime?.setRatio(v); setRatioMenuOpen(false); }, ratio === v)),
-            150,
-          )}
-        </PopoverContent>
-      </Popover>
+      <DropdownMenu open={ratioMenuOpen} onOpenChange={setRatioMenuOpen}>
+        {menuTrigger("frame", t("director.frameRatio"), ratioMenuOpen)}
+        <DropdownMenuContent side="top" align="center" className="w-40">
+          <DropdownMenuRadioGroup value={ratio} onValueChange={(value) => { runtime?.setRatio(value); setRatioMenuOpen(false); }}>
+            {RATIOS.map(([value, label]) => (
+              <DropdownMenuRadioItem key={value} value={value}>{label}</DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* 截图 */}
       {dockBtn("shot", t("director.screenshot"), handleShot, false)}
 
-    </div>
+    </Card>
   );
 }
