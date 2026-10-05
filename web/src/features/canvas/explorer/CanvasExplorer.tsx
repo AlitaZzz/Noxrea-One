@@ -22,10 +22,17 @@ import {
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { FilterIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
 import { SearchInput } from "@/components/ui/input-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -620,10 +627,10 @@ function AssetsView() {
           onClear={() => setSearch("")}
           containerClassName="h-8 flex-1"
         />
-        <Popover>
+        <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
+              <DropdownMenuTrigger asChild>
                 <Button
                   size="icon-sm"
                   variant="ghost"
@@ -632,42 +639,36 @@ function AssetsView() {
                 >
                   <FilterIcon />
                 </Button>
-              </PopoverTrigger>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent>{t("asset.filter")}</TooltipContent>
           </Tooltip>
-          <PopoverContent side="bottom" align="end" className="w-[210px] p-2">
-              <div className="px-2 py-1 text-xs text-muted-foreground">{t("asset.filter")}</div>
-              {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
-                <label
-                  key={st.key}
-                  className="inline-flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                >
-                  <Checkbox
-                    checked={typeFilter.includes(st.key)}
-                    onCheckedChange={(checked) => {
-                      setTypeFilter((prev) =>
-                        checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
-                      );
-                    }}
-                  />
-                  {t(st.labelKey)}
-                </label>
-              ))}
-              {typeFilter.length > 0 && <div className="my-1 h-px bg-border" />}
-              {typeFilter.length > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="w-full justify-start px-2 text-xs font-normal text-muted-foreground"
-                  onClick={() => setTypeFilter([])}
-                >
+          <DropdownMenuContent side="bottom" align="end" className="w-52">
+            <DropdownMenuLabel>{t("asset.filter")}</DropdownMenuLabel>
+            {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
+              <DropdownMenuCheckboxItem
+                key={st.key}
+                checked={typeFilter.includes(st.key)}
+                onSelect={(event) => event.preventDefault()}
+                onCheckedChange={(checked) => {
+                  setTypeFilter((prev) =>
+                    checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
+                  );
+                }}
+              >
+                {t(st.labelKey)}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {typeFilter.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setTypeFilter([])}>
                   {t("asset.filterClear")}
-                </Button>
-              )}
-          </PopoverContent>
-        </Popover>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。

@@ -17,10 +17,16 @@ import {
 import { FilterIcon } from "@/components/ui/AppIcon";
 import { ManageIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { InputGroup, InputGroupClearButton, InputGroupInput } from "@/components/ui/input-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AssetType } from "@/features/assets/types";
 import { ASSET_CATEGORIES } from "@/lib/constants";
@@ -65,45 +71,35 @@ export default function AssetToolbar({
   };
 
   const filterContent = (
-    <div className="flex min-w-52 flex-col gap-0.5">
-      <div className="px-3 py-1 text-xs text-muted-foreground">
-        {t("asset.filter")}
-      </div>
+    <>
+      <DropdownMenuLabel>{t("asset.filter")}</DropdownMenuLabel>
       {ASSET_CATEGORIES.filter(
         (category): category is typeof category & { key: AssetType } => category.key !== "all",
       ).map((cat) => (
-        <label
+        <DropdownMenuCheckboxItem
           key={cat.key}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent"
+          checked={categories.includes(cat.key)}
+          onSelect={(event) => event.preventDefault()}
+          onCheckedChange={(checked) => {
+            onCategoriesChange(
+              checked
+                ? [...categories, cat.key]
+                : categories.filter((k) => k !== cat.key),
+            );
+          }}
         >
-          <Checkbox
-            checked={categories.includes(cat.key)}
-            onCheckedChange={(checked) => {
-              onCategoriesChange(
-                checked
-                  ? [...categories, cat.key]
-                  : categories.filter((k) => k !== cat.key),
-              );
-            }}
-          />
           {t(cat.labelKey)}
-        </label>
+        </DropdownMenuCheckboxItem>
       ))}
       {categories.length > 0 && (
         <>
-          <div className="my-1 h-px bg-border" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start px-3 text-sm text-muted-foreground hover:text-accent-foreground"
-            onClick={() => onCategoriesChange([])}
-          >
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onCategoriesChange([])}>
             {t("asset.filterClear")}
-          </Button>
+          </DropdownMenuItem>
         </>
       )}
-    </div>
+    </>
   );
 
   return (
@@ -160,9 +156,9 @@ export default function AssetToolbar({
         </TooltipTrigger><TooltipContent>{multiSelect ? t("asset.exitManage") : t("asset.manage")}</TooltipContent></Tooltip>
 
       {/* 筛选：多选分类，选中任一分类后按钮常驻高亮 */}
-      <Popover>
+      <DropdownMenu>
         <Tooltip><TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+            <DropdownMenuTrigger asChild>
               <Button
                 size="icon-sm"
                 variant="ghost"
@@ -171,12 +167,12 @@ export default function AssetToolbar({
               >
                 <FilterIcon />
               </Button>
-            </PopoverTrigger>
+            </DropdownMenuTrigger>
           </TooltipTrigger><TooltipContent>{t("asset.filter")}</TooltipContent></Tooltip>
-        <PopoverContent align="end" className="w-auto p-2">
+        <DropdownMenuContent align="end" className="w-52">
           {filterContent}
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* 新建菜单由 DropdownMenu 点击触发，禁用项由 UI 出口处理。 */}
       <DropdownMenu>
