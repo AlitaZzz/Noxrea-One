@@ -7,6 +7,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LayerContext } from "@/components/ui/modal/layer-context";
@@ -57,6 +60,32 @@ describe("DropdownMenu", () => {
     expect(document.body).toContainElement(menu);
     expect(layerRoot).not.toContainElement(menu);
     expect(menu).toHaveStyle({ zIndex: "1001" });
+    layerRoot.remove();
+  });
+
+  it("applies the active layer z-index to submenu content", () => {
+    const layerRoot = document.createElement("div");
+    document.body.appendChild(layerRoot);
+
+    render(
+      <LayerContext.Provider value={{ overlayRoot: layerRoot, depth: 1, zIndex: 1000 }}>
+        <DropdownMenu open>
+          <DropdownMenuTrigger asChild>
+            <button type="button">Open menu</button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuSub open>
+              <DropdownMenuSubTrigger>More</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem>Sub action</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </LayerContext.Provider>,
+    );
+
+    expect(screen.getByRole("menu", { name: "More" })).toHaveStyle({ zIndex: "1001" });
     layerRoot.remove();
   });
 
