@@ -890,8 +890,8 @@ export default function DirectorViewport() {
       <div id="dirLabelLayer" className="pointer-events-none absolute inset-0 overflow-hidden" />
       {/* 去掉原生 title：下方已有可见的「重置视角」文字，提示内容重复 */}
       <div className="absolute right-[18px] top-[18px] z-[5] w-[74px] cursor-pointer text-center">
-        <NavSvg>
-          <circle cx="37" cy="37" r="3" fill="var(--dir-dim2)" />
+        <NavSvg className="text-muted-foreground">
+          <circle cx="37" cy="37" r="3" fill="currentColor" />
         </NavSvg>
         <div className="mt-1.5 text-[11.5px] text-muted-foreground">{t("director.resetView")}</div>
       </div>

@@ -1,7 +1,8 @@
 /**
  * 导演台导航小地图的 SVG 容器，承载动态绘制的方位指示，供运行时按 id 查询。
  */
-import type { CSSProperties,ReactNode } from "react";
+import { cn } from "cn"
+import type { CSSProperties, ReactNode } from "react";
 
 interface NavSvgProps {
   children: ReactNode;
@@ -20,12 +21,8 @@ export function NavSvg({ children, className, style }: NavSvgProps) {
       width="74"
       height="74"
       viewBox="0 0 74 74"
-      className={className}
+      className={cn("block rounded-full border border-border bg-background/80", className)}
       style={{
-        display: "block",
-        background: "rgba(0,0,0,.5)",
-        border: "1px solid var(--dir-line2)",
-        borderRadius: "50%",
         ...style,
       }}
     >

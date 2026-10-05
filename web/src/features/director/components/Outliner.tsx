@@ -39,7 +39,6 @@ const ICON_MAP = {
   caret: DirCaretIcon,
   eye: DirEyeIcon,
   eyeOff: DirEyeOffIcon,
-  trash: DirTrashIcon,
 };
 const S = (name: string) => {
   const C = ICON_MAP[name as keyof typeof ICON_MAP];
@@ -69,14 +68,14 @@ export default function Outliner() {
           onChange={(e) => setSearch(e.target.value)}
           clearable
           onClear={() => setSearch("")}
-          containerClassName="border-transparent bg-[var(--dir-panel2)] text-[var(--dir-txt)]"
+          containerClassName="border-transparent bg-muted text-foreground"
         />
       </div>
 
       {/* 树 */}
       <div className="dir-outliner-list flex flex-1 select-none flex-col gap-0.5">
         {filtered.length === 0 && (
-          <div className="px-1.5 py-[22px] text-center text-xs text-[var(--dir-dim2)]">{t("director.emptyScene")}</div>
+          <div className="px-1.5 py-[22px] text-center text-xs text-muted-foreground">{t("director.emptyScene")}</div>
         )}
         {filtered.map((ent) => {
           const sel = selectedIds.includes(ent.id);
@@ -87,24 +86,38 @@ export default function Outliner() {
 
           const contextIds = selectedIds.includes(ent.id) ? selectedIds : [ent.id];
           const contextGroupCount = contextIds.filter((id) => entities.find((x) => x.id === id)?.type === "character").length;
+          const selectEntity = () => {
+            if (ent.type === "camera") {
+              runtime?.select(ent.id);
+              runtime?.setCameraView(true);
+            } else {
+              runtime?.setCameraView(false);
+              runtime?.select(ent.id);
+            }
+          };
 
           return (
             <div key={ent.id}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   {/* 主行 */}
-                  <div className={`flex cursor-pointer items-center gap-[9px] rounded-lg px-2.5 py-[9px] text-[13px] transition-colors
-                ${sel ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
+                  <div
+                role="button"
+                tabIndex={0}
+                aria-pressed={sel}
+                className={`group/item flex cursor-pointer items-center gap-[9px] rounded-lg px-2.5 py-[9px] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50
+                ${sel ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                 onClick={(e) => {
                   if (e.shiftKey) {
                     runtime?.toggleSelect(ent.id); return;
                   }
-                  if (ent.type === "camera") {
-                    runtime?.select(ent.id);
-                    runtime?.setCameraView(true);
-                  } else {
-                    runtime?.setCameraView(false);
-                    runtime?.select(ent.id);
+                  selectEntity();
+                }}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    selectEntity();
                   }
                 }}
                 onContextMenu={() => {
@@ -113,7 +126,7 @@ export default function Outliner() {
                   >
                 {/* 群众折叠箭头 */}
                 {isCrowd && (
-                  <span className={`mr-[-2px] flex w-[14px] cursor-pointer items-center text-[var(--dir-dim)] transition-transform ${open ? "rotate-90" : ""}`}
+                  <span className={`mr-[-2px] flex w-[14px] cursor-pointer items-center text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCollapsed((c) => {
@@ -130,12 +143,10 @@ export default function Outliner() {
                 <span className="w-[18px] flex items-center">{S(typeIcon(ent.type))}</span>
                 <span className="flex-1 truncate">{ent.name}</span>
                 {isCamera && shotCount > 0 && (
-                  <span className="min-w-[18px] shrink-0 rounded-full bg-[var(--dir-accent)] px-[5px] text-center text-[10px] font-semibold leading-[18px] text-white">{shotCount}</span>
+                  <span className="min-w-[18px] shrink-0 rounded-full bg-secondary px-[5px] text-center text-[10px] font-semibold leading-[18px] text-secondary-foreground">{shotCount}</span>
                 )}
                 {/* 操作按钮(hover/选中时显示) */}
-                <span className={`gap-0.5 ${sel ? "flex" : "hidden"} group-hover/item:flex`} style={{ display: sel ? "flex" : undefined }}>
-                  {(isCrowd || true) && (
-                    <>
+                <span className={`gap-0.5 ${sel ? "flex" : "hidden group-hover/item:flex"}`}>
                       {isCrowd && (
                         <Tooltip><TooltipTrigger asChild>
                             <Button
@@ -143,7 +154,7 @@ export default function Outliner() {
                               variant="ghost"
                               size="icon-xs"
                               aria-label={t("director.ungroup")}
-                              className="text-[var(--dir-dim)] hover:bg-transparent hover:text-[var(--dir-txt)]"
+                              className="text-muted-foreground hover:bg-transparent hover:text-foreground"
                               onClick={(e) => { e.stopPropagation(); runtime?.ungroupCrowd(ent.id); }}
                             >
                               <UngroupIcon />
@@ -151,13 +162,11 @@ export default function Outliner() {
                           </TooltipTrigger><TooltipContent>{t("director.ungroup")}</TooltipContent></Tooltip>
                       )}
                       <Button variant="ghost" size="icon-xs"
-                        className="text-[var(--dir-dim)] hover:bg-transparent hover:text-[var(--dir-txt)]"
+                        className="text-muted-foreground hover:bg-transparent hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); runtime?.toggleVisible(ent.id); }} ><span className="w-[14px] flex items-center">{ent.visible ? S("eye") : S("eyeOff")}</span></Button>
                       <Button variant="ghost" size="icon-xs"
-                        className="text-[var(--dir-dim)] hover:bg-transparent hover:text-[var(--dir-txt)]"
+                        className="text-muted-foreground hover:bg-transparent hover:text-foreground"
                         onClick={(e) => { e.stopPropagation(); runtime?.remove(ent.id); }} ><DeleteOutlined /></Button>
-                    </>
-                  )}
                 </span>
                   </div>
                 </ContextMenuTrigger>
@@ -190,8 +199,13 @@ export default function Outliner() {
                 const mIsCamera = m.type === "camera";
                 const mShotCount = mIsCamera ? allShots.filter((s) => s.cameraId === m.id).length : 0;
                 return (
-                <div key={m.id} className={`flex cursor-pointer items-center gap-[9px] rounded-lg px-2.5 py-[9px] pl-[30px] text-[13px] transition-colors
-                  ${selectedId === m.id ? "bg-[var(--dir-panel3)] text-[var(--dir-txt)]" : "text-[var(--dir-dim)] hover:bg-[var(--dir-panel2)] hover:text-[var(--dir-txt)]"}`}
+                <Button
+                  key={m.id}
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={selectedId === m.id}
+                  className={`h-auto w-full justify-start gap-[9px] rounded-lg px-2.5 py-[9px] pl-[30px] text-[13px]
+                  ${selectedId === m.id ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (mIsCamera) { runtime?.select(m.id); runtime?.setCameraView(true); }
@@ -201,9 +215,9 @@ export default function Outliner() {
                   <span className="w-[18px] flex items-center">{S(typeIcon(m.type))}</span>
                   <span className="flex-1 truncate">{m.name}</span>
                   {mIsCamera && mShotCount > 0 && (
-                    <span className="min-w-[18px] shrink-0 rounded-full bg-[var(--dir-accent)] px-[5px] text-center text-[10px] font-semibold leading-[18px] text-white">{mShotCount}</span>
+                    <span className="min-w-[18px] shrink-0 rounded-full bg-secondary px-[5px] text-center text-[10px] font-semibold leading-[18px] text-secondary-foreground">{mShotCount}</span>
                   )}
-                </div>
+                </Button>
                 );
               })}
             </div>

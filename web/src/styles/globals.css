@@ -546,24 +546,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
 ::-webkit-scrollbar-track { background: var(--card); }
 ::-webkit-scrollbar-thumb { background: var(--input); border-radius: 3px; }
 
-/* ===== 3D 导演台 CSS 变量 =====
-   与 --canvas-* 同一套「中性石墨 + 青柠」配色，命名不同是因为导演台自成一块皮肤，
-   但色值必须同源，避免两处各调各的。 */
-:root {
-  --dir-bg: #0c0c0e;
-  --dir-panel: #151518;
-  --dir-panel2: #1d1d21;
-  --dir-panel3: #26262b;
-  --dir-line: #26262b;
-  --dir-line2: #2d2d33;
-  --dir-txt: #e7e7ec;
-  --dir-dim: #95959e;
-  --dir-dim2: #676770;
-  --dir-accent: #c7f43d;
-  /* 「通过 / 正常」态：比青柠更冷一点的绿，避免和强调色混为一谈 */
-  --dir-green: #5ad86a;
-}
-
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
 @property --agent-ring-angle {
   syntax: "<angle>";
