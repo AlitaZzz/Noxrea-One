@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/features/auth/store";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -110,38 +111,44 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
       >
         {/* Canvas Explorer — 最左侧主面板开关。
             按钮同时有图标和文字「面板」，再挂 tooltip 属于重复提示，去掉 */}
-        <Button
+        <Toggle
           size="sm"
-          variant="ghost"
-          aria-pressed={canvasExplorerOpen}
-          onClick={onOpenCanvasExplorer}
+          variant="default"
+          pressed={canvasExplorerOpen}
+          onPressedChange={(pressed) => {
+            if (pressed !== canvasExplorerOpen) onOpenCanvasExplorer?.();
+          }}
         >
           <PanelIcon />
           {t("canvas.panel")}
-        </Button>
+        </Toggle>
 
         {/* Minimap toggle */}
         <Tooltip><TooltipTrigger asChild>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-pressed={minimapVisible}
-              onClick={() => { toggleMinimap(); }}
+            <Toggle
+              size="sm"
+              variant="default"
+              className="size-8 p-0"
+              pressed={minimapVisible}
+              aria-label={minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}
+              onPressedChange={toggleMinimap}
             >
               <MapPinIcon />
-            </Button>
+            </Toggle>
           </TooltipTrigger><TooltipContent>{minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}</TooltipContent></Tooltip>
 
         {/* Snap to grid toggle */}
         <Tooltip><TooltipTrigger asChild>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-pressed={snapToGrid}
-              onClick={() => { toggleSnapToGrid(); }}
+            <Toggle
+              size="sm"
+              variant="default"
+              className="size-8 p-0"
+              pressed={snapToGrid}
+              aria-label={snapToGrid ? t("canvas.snap.off") : t("canvas.snap.on")}
+              onPressedChange={toggleSnapToGrid}
             >
               <MagnetIcon />
-            </Button>
+            </Toggle>
           </TooltipTrigger><TooltipContent>{snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}</TooltipContent></Tooltip>
 
       {/* Background picker */}
