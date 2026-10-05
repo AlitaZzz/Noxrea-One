@@ -318,7 +318,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" onClick={handleFetch} loading={fetching}>
+                    <Button size="sm" variant="outline" onClick={handleFetch} loading={fetching}>
                       <DownloadOutlined />
                       {fetchLabel}
                     </Button>
