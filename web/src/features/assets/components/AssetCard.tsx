@@ -81,8 +81,7 @@ export default function AssetCard({
     setPlaying(false);
   };
 
-  const togglePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const togglePlay = () => {
     const url = asset.sourceUrl;
     if (!url) return;
     if (!audioRef.current) {
@@ -121,78 +120,76 @@ export default function AssetCard({
   const thumbUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=300` : sourceUrl;
 
   return (
-    <Card
-      tabIndex={0}
-      role="button"
-      aria-label={asset.name}
-      aria-pressed={selected}
-      onKeyDown={handleKeyDown}
-      draggable={draggable}
-      onDragStart={(e) => {
-        // 封面 <img> 会被浏览器原生拖拽（拖影跟随光标、看似可拖入画布但落点无效）：
-        // 非拖拽模式（弹窗）直接取消；抽屉模式才是真正的资产拖拽。
-        if (!draggable) {
-          e.preventDefault();
-          return;
-        }
-        e.dataTransfer.effectAllowed = "copy";
-        // 自定义标记承载完整资产信息（画布落点据此建节点），text/plain 兜底浏览器默认行为
-        e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
-        e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
-        setDragging(true);
-        preview.onLeave(); // 拖拽期间抑制悬浮大图，避免预览与拖拽图像错位（同视频参考卡）
-        // 拖拽图像与视频参考卡一致：用干净封面缩略图、锚点居中，避免默认整卡快照的半透明观感
-        const cover = (e.currentTarget as HTMLElement).querySelector("img");
-        if (cover) {
-          e.dataTransfer.setDragImage(cover, cover.offsetWidth / 2, cover.offsetHeight / 2);
-        } else if (audioGhostRef.current) {
-          e.dataTransfer.setDragImage(audioGhostRef.current, 28, 28);
-        }
-      }}
-      // 拖拽结束清掉可能残留的悬浮大图预览
-      onDragEnd={() => { setDragging(false); preview.onLeave(); }}
-      className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all outline-none ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "opacity-50" : ""}`}
-      onMouseLeave={handleCardLeave}
-      onMouseEnter={(event) => { if (showHoverPreview && sourceUrl && !dragging) preview.onEnter(asset, event); }}
-      onClick={(e) => {
-        // 弹窗：单击选中；抽屉：单击不作为，插入走悬停「+」/ 双击 / Enter，避免误触
-        if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
-      }}
-      onDoubleClick={(e) => {
-        // 勾选框 / 音频播放等内部按钮连点会冒泡到这里，不应触发插入
-        if (!(e.target as HTMLElement).closest("button")) onInsertCanvas?.(asset);
-      }}
-    >
-      {/* 封面区 */}
+    <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>
+      {/* 封面区：Card 只负责容器布局，主选择 / 插入行为由独立 Button 承担。 */}
       <div
         className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
+        onMouseLeave={handleCardLeave}
+        onMouseEnter={(event) => { if (showHoverPreview && sourceUrl && !dragging) preview.onEnter(asset, event); }}
       >
-        {isVideo ? (
-          <div className="w-full h-full relative bg-black/40">
-            {thumbUrl && (
-              <img
-                src={thumbUrl}
-                alt={asset.name}
-                loading="lazy"
-                className="w-full h-full object-cover"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
-            )}
-            <div className="pointer-events-none absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded bg-black/50">
-              <VideoCameraOutlined className="size-3 text-white/80" />
-            </div>
-          </div>
-        ) : isAudio ? (
-          <div className="w-full h-full flex items-center justify-center">
-            <WaveIcon className="size-8 text-muted-foreground/40" />
-          </div>
-        ) : thumbUrl ? (
-          <img src={thumbUrl} alt={asset.name} loading="lazy" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <PictureOutlined className="size-8 text-muted-foreground/40" />
-          </div>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={asset.name}
+          aria-pressed={selected}
+          draggable={draggable}
+          onKeyDown={handleKeyDown}
+          onDragStart={(e) => {
+            // 封面 <img> 会被浏览器原生拖拽（拖影跟随光标、看似可拖入画布但落点无效）：
+            // 非拖拽模式（弹窗）直接取消；抽屉模式才是真正的资产拖拽。
+            if (!draggable) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.effectAllowed = "copy";
+            e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
+            e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
+            setDragging(true);
+            preview.onLeave();
+            const cover = e.currentTarget.parentElement?.querySelector("img");
+            if (cover instanceof HTMLImageElement) {
+              e.dataTransfer.setDragImage(cover, cover.offsetWidth / 2, cover.offsetHeight / 2);
+            } else if (audioGhostRef.current) {
+              e.dataTransfer.setDragImage(audioGhostRef.current, 28, 28);
+            }
+          }}
+          onDragEnd={() => { setDragging(false); preview.onLeave(); }}
+          onClick={(e) => {
+            if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
+          }}
+          onDoubleClick={() => onInsertCanvas?.(asset)}
+          className={`absolute inset-0 z-0 size-full rounded-lg p-0 ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+        />
+
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1]">
+          {isVideo ? (
+            <span className="relative block size-full bg-black/40">
+              {thumbUrl && (
+                <img
+                  src={thumbUrl}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              )}
+              <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded bg-black/50">
+                <VideoCameraOutlined className="size-3 text-white/80" />
+              </span>
+            </span>
+          ) : isAudio ? (
+            <span className="flex size-full items-center justify-center">
+              <WaveIcon className="size-8 text-muted-foreground/40" />
+            </span>
+          ) : thumbUrl ? (
+            <img src={thumbUrl} alt="" loading="lazy" className="size-full object-cover" />
+          ) : (
+            <span className="flex size-full items-center justify-center">
+              <PictureOutlined className="size-8 text-muted-foreground/40" />
+            </span>
+          )}
+        </div>
 
         {/* 名称与日期叠加在封面底部，避免卡片信息把网格行高撑开。 */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex items-end gap-1 bg-black/55 px-2 py-1.5 text-white">
@@ -208,7 +205,7 @@ export default function AssetCard({
               aria-label={playing ? t("common.stop") : t("common.play")}
               title={playing ? t("common.stop") : t("common.play")}
               className="pointer-events-auto shrink-0 text-white hover:bg-white/15 hover:text-white"
-              onClick={(e) => { e.stopPropagation(); togglePlay(e); }}
+              onClick={togglePlay}
             >
               {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
             </Button>
@@ -220,9 +217,8 @@ export default function AssetCard({
           <Checkbox
             checked={Boolean(selected)}
             aria-label={asset.name}
-            onClick={(e) => e.stopPropagation()}
             onCheckedChange={() => onToggleSelect(asset)}
-            className={`absolute top-1.5 right-1.5 z-10 size-[18px] rounded-[5px] transition-all ${
+            className={`absolute right-1.5 top-1.5 z-20 size-[18px] rounded-[5px] transition-all ${
               selected
                 ? "opacity-100 border-primary bg-primary text-primary-foreground"
                 : selectMode
@@ -234,14 +230,14 @@ export default function AssetCard({
 
         {/* 悬停蒙层 + 快速插入：仅插入为第一意图的抽屉场景显示；拖拽期间隐藏，避免与拖拽图像叠加 */}
         {showInsertButton && !dragging && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center rounded-lg pointer-events-none">
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/0 transition-colors group-hover:bg-black/50">
             <Button
               type="button"
               size="icon-lg"
               variant="secondary"
               aria-label={t("asset.addToCanvas")}
               className="pointer-events-auto opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => { e.stopPropagation(); onInsertCanvas?.(asset); }}
+              onClick={() => onInsertCanvas?.(asset)}
             >
               <PlusOutlined className="size-5" />
             </Button>
