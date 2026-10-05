@@ -25,10 +25,7 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
   const { t } = useTranslation();
 
   return (
-    <Card
-      onClick={() => onClick(folder)}
-      className="group relative flex aspect-square cursor-pointer flex-col gap-0 overflow-hidden border-border bg-popover p-0 transition-colors hover:border-ring"
-    >
+    <Card className="group relative flex aspect-square flex-col gap-0 overflow-hidden border-border bg-popover p-0 transition-colors hover:border-ring">
       {(onDelete || onRename) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -59,10 +56,18 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <CardContent className="flex h-full flex-col items-center justify-center gap-2 p-3">
-        <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />
-        <div className="w-full truncate text-center text-xs text-muted-foreground">{folder.name}</div>
-        <div className="text-[10px] text-muted-foreground/60">{count ?? 0} {t("asset.count")}</div>
+      <CardContent className="h-full p-0">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={folder.name}
+          className="h-full w-full flex-col gap-2 rounded-lg p-3 text-center font-normal"
+          onClick={() => onClick(folder)}
+        >
+          <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />
+          <span className="w-full truncate text-center text-xs text-muted-foreground">{folder.name}</span>
+          <span className="text-[10px] text-muted-foreground/60">{count ?? 0} {t("asset.count")}</span>
+        </Button>
       </CardContent>
     </Card>
   );
