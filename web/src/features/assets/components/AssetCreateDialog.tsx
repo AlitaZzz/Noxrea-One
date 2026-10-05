@@ -419,10 +419,10 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     {f.status === "done" && (
                       <Button
                         type="button"
-                        variant="destructive"
+                        variant="ghost"
                         size="icon-xs"
                         aria-label={t("common.delete")}
-                        className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
+                        className="absolute top-1 right-1 rounded-full bg-black/50 p-0 text-white/70 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/70 hover:text-white"
                         onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
                       >
                         <CloseOutlined className="size-3" />
