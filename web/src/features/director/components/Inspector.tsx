@@ -18,6 +18,7 @@ import { DirSendIcon } from "@/components/ui/AppIcon";
 import { DirTrashIcon } from "@/components/ui/AppIcon";
 import { UngroupIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -212,35 +213,45 @@ function CameraShots({ cameraId }: { cameraId: string }) {
       {shots.length === 0 ? (
         <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">{t("director.captureHint")}</div>
       ) : (
-        <div className="dir-shot-grid">
+        <div className="grid grid-cols-2 gap-2">
           {shots.map((shot) => (
             // 卡片名可能被 CSS 截断，tooltip 展示完整名称；操作按钮改用系统 Tooltip
             <Tooltip key={shot.id}><TooltipTrigger asChild>
-                <div
-                  className="dir-shot-card"
+                <Card
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={shot.selected}
+                  className="group relative aspect-video overflow-hidden rounded-lg border-2 border-transparent bg-card p-0 shadow-none transition-colors hover:border-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 data-[selected]:border-ring"
                   data-selected={shot.selected || undefined}
                   onClick={() => toggleShotSelected(shot.id)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleShotSelected(shot.id);
+                    }
+                  }}
                 >
-                  <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" />
-                  <span className="dir-shot-label">{shot.name}</span>
-                  <div className="dir-shot-actions">
+                  <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                  <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-xs tabular-nums text-white">{shot.name}</span>
+                  <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-1.5 bg-black/55 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                     <Tooltip><TooltipTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.sendToCanvasTip")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.sendToCanvasTip")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
                           <DirSendIcon style={{ width: 14, height: 14 }} />
                         </Button>
                       </TooltipTrigger><TooltipContent>{t("director.sendToCanvasTip")}</TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("common.delete")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("common.delete")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); removeShot(shot.id); }}>
                           <DirTrashIcon style={{ width: 14, height: 14 }} />
                         </Button>
                       </TooltipTrigger><TooltipContent>{t("common.delete")}</TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.enlargePreview")} className="bg-white/15 text-white hover:bg-white/30 hover:text-white" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.enlargePreview")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
                           <DirExpandIcon style={{ width: 14, height: 14 }} />
                         </Button>
                       </TooltipTrigger><TooltipContent>{t("director.enlargePreview")}</TooltipContent></Tooltip>
                   </div>
-                </div>
+                </Card>
               </TooltipTrigger><TooltipContent>{shot.name}</TooltipContent></Tooltip>
           ))}
         </div>
