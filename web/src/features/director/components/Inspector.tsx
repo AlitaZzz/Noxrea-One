@@ -108,9 +108,11 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
 
   return (
     <div>
-      <div className="dir-cam-preview">
+      <Card className="relative mb-[15px] aspect-video overflow-hidden rounded-[10px] border-border bg-black p-0 shadow-none">
         {previewUrl ? <img src={previewUrl} className="w-full h-full object-cover" alt="POV" /> : <div className="text-[10px] text-white/20 text-center pt-12">POV</div>}
-        <div className="dir-cam-badge">FOV {Math.round(ent.cam?.fov || 40)}°</div>
+        <div className="absolute left-[7px] top-[7px] select-none rounded-md bg-black/60 px-2 py-[3px] text-xs tabular-nums text-white">
+          FOV {Math.round(ent.cam?.fov || 40)}°
+        </div>
         {/* 原生 title 换成系统 Tooltip */}
         <Tooltip><TooltipTrigger asChild>
             <Button
@@ -132,7 +134,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
               <DirExpandIcon />
             </Button>
           </TooltipTrigger><TooltipContent>{t("director.fullscreenExpand")}</TooltipContent></Tooltip>
-      </div>
+      </Card>
       <div className="mb-4">
         <label className="mb-2 block select-none text-xs text-muted-foreground">{t("common.name")}</label>
         <div className="rounded-md bg-muted px-3">

@@ -564,9 +564,6 @@ body { font-size: 14px; background: #151518; transition: background-color 0.3s e
   --dir-green: #5ad86a;
 }
 
-/* 摄像机预览 */
-.dir-cam-preview { position: relative; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--dir-line2); margin-bottom: 15px; }
-.dir-cam-badge { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; user-select: none; }
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
 @property --agent-ring-angle {
   syntax: "<angle>";
