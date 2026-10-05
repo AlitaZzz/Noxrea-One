@@ -11,8 +11,10 @@
 "use client";
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { EditOutlined } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
@@ -104,6 +106,7 @@ export default function NodeTitle({
   trailing,
   className,
 }: NodeTitleProps) {
+  const { t } = useTranslation();
   const { editing, draft, setDraft, startEdit, handleSave, handleKeyDown } =
     useEditableTitle(nodeId, title);
 
@@ -146,11 +149,16 @@ export default function NodeTitle({
           >
             {display ?? title}
           </MidTruncate>
-          <EditOutlined
-            className="cursor-pointer shrink-0 text-white/30 transition-colors group-hover/title:text-white/70"
-            style={{ fontSize: 10 }}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t("common.edit")}
+            className="nodrag shrink-0 rounded-sm p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:text-foreground"
             onClick={startEdit}
-          />
+          >
+            <EditOutlined />
+          </Button>
         </span>
       )}
       {trailing != null && trailing !== false && (

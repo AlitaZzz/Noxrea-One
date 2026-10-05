@@ -219,23 +219,18 @@ function CameraShots({ cameraId }: { cameraId: string }) {
           {shots.map((shot) => (
             // 卡片名可能被 CSS 截断，tooltip 展示完整名称；操作按钮改用系统 Tooltip
             <Tooltip key={shot.id}><TooltipTrigger asChild>
-                <Card
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={shot.selected}
-                  className="group relative aspect-video overflow-hidden rounded-lg border-2 border-transparent bg-card p-0 shadow-none transition-colors hover:border-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 data-[selected]:border-ring"
-                  data-selected={shot.selected || undefined}
-                  onClick={() => toggleShotSelected(shot.id)}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggleShotSelected(shot.id);
-                    }
-                  }}
-                >
-                  <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
-                  <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-xs tabular-nums text-white">{shot.name}</span>
+                <Card className="group relative aspect-video overflow-hidden rounded-lg border-2 border-transparent bg-card p-0 shadow-none">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-pressed={shot.selected}
+                    className="absolute inset-0 z-0 h-full w-full rounded-lg border-2 border-transparent bg-card p-0 hover:bg-transparent hover:border-border focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 data-[selected]:border-ring data-[selected]:hover:border-ring"
+                    data-selected={shot.selected || undefined}
+                    onClick={() => toggleShotSelected(shot.id)}
+                  >
+                    <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                    <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-xs tabular-nums text-white">{shot.name}</span>
+                  </Button>
                   <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-1.5 bg-black/55 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                     <Tooltip><TooltipTrigger asChild>
                         <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.sendToCanvasTip")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); runtime?.sendShotToCanvas(shot.id); }}>
