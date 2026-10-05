@@ -30,7 +30,8 @@ describe("DropdownMenu", () => {
     );
 
     expect(screen.getByRole("menuitem", { name: "Action" })).toBeTruthy();
-    expect(screen.getByRole("menu")).toHaveClass("space-y-px");
+    expect(screen.getByRole("menu")).toHaveClass("space-y-px", "min-w-32");
+    expect(screen.getByRole("menu")).not.toHaveClass("w-(--radix-dropdown-menu-trigger-width)");
     fireEvent.click(screen.getByRole("menuitem", { name: "Action" }));
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
