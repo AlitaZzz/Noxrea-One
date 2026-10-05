@@ -107,6 +107,27 @@ export default function Outliner() {
                         if (!selectedIds.includes(ent.id)) runtime?.select(ent.id);
                       }}
                     >
+                      {/* 折叠控制与选择动作并列，避免可点击元素嵌套在选择按钮内。 */}
+                      {isCrowd && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={open ? t("common.collapse") : t("common.expand")}
+                          aria-expanded={open}
+                          className="mr-[-2px] shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                          onClick={() => {
+                            setCollapsed((c) => {
+                              const next = new Set(c);
+                              if (open) next.add(ent.id);
+                              else next.delete(ent.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          <span className={`transition-transform ${open ? "rotate-90" : ""}`}>{S("caret")}</span>
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
@@ -120,22 +141,6 @@ export default function Outliner() {
                           selectEntity();
                         }}
                       >
-                        {/* 群众折叠箭头 */}
-                        {isCrowd && (
-                          <span className={`mr-[-2px] flex w-[14px] cursor-pointer items-center text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCollapsed((c) => {
-                                const next = new Set(c);
-                                if (open) next.add(ent.id);
-                                else next.delete(ent.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            {S("caret")}
-                          </span>
-                        )}
                         <span className="flex w-[18px] items-center">{S(typeIcon(ent.type))}</span>
                         <span className="flex-1 truncate">{ent.name}</span>
                         {isCamera && shotCount > 0 && (
