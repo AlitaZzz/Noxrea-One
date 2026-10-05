@@ -358,14 +358,17 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
             <div className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-border p-3">
               <div className="flex flex-1 flex-wrap content-start gap-3 overflow-y-auto">
                 {/* Drop zone — always first card */}
-                <div
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label={t("asset.uploadTitle")}
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex size-[130px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border bg-accent transition-colors hover:border-muted-foreground hover:bg-secondary"
+                  className="size-[130px] shrink-0 flex-col rounded-md border-dashed p-0"
                 >
                   <PlusOutlined className="size-7 text-muted-foreground" />
-                </div>
+                </Button>
 
                 {/* Uploaded files */}
                 {files.map((f) => {
