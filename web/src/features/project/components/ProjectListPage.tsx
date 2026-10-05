@@ -51,6 +51,7 @@ export default function ProjectListPage() {
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
   // 改封面：选图目标卡片 + 上传中的卡片 ID（单 file input 复用）
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetRef = useRef<string | null>(null);
@@ -77,6 +78,17 @@ export default function ProjectListPage() {
     });
     return () => { cancelled = true; };
   }, [pathname, refreshProjects]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    const frame = requestAnimationFrame(() => {
+      const input = editInputRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editingId]);
 
   // 鉴权由 (app)/layout.tsx 统一完成；项目列表由本页拉取（唯一消费方）。
 
@@ -121,13 +133,6 @@ export default function ProjectListPage() {
   const formatDate = (ts: number) => {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  };
-
-  const handleCardKeyDown = (event: React.KeyboardEvent, onOpen: () => void) => {
-    if ((event.target as HTMLElement).closest("button, input, a, [role='menuitem']")) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onOpen();
   };
 
   return (
@@ -186,59 +191,68 @@ export default function ProjectListPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-6xl mx-auto">
           {/* Create new project card — always first */}
           <Card
-            className="group relative flex cursor-pointer flex-col gap-0 overflow-hidden border-dashed border-border bg-card p-0"
-            role="button"
-            tabIndex={0}
-            aria-label={t("project.new")}
-            onClick={handleCreate}
-            onKeyDown={(event) => handleCardKeyDown(event, handleCreate)}
+            className="group relative flex flex-col gap-0 overflow-hidden border-dashed border-border bg-card p-0"
           >
-            <div className="flex aspect-video items-center justify-center" aria-hidden="true" />
-            <CardContent aria-hidden="true" className={PROJECT_CARD_INFO_CLASS} />
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6">
-              <div className="flex size-12 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 bg-muted/30 transition-colors group-hover:border-primary group-hover:bg-primary/10">
-                <PlusOutlined className="text-2xl text-muted-foreground transition-colors group-hover:text-primary" />
-              </div>
-              <span className="mt-3 text-sm font-medium text-foreground">{t("project.new")}</span>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={t("project.new")}
+              onClick={handleCreate}
+              className="relative flex h-full w-full flex-col gap-0 rounded-none p-0"
+            >
+              <span className="block aspect-video w-full shrink-0" aria-hidden="true" />
+              <span aria-hidden="true" className={`block w-full ${PROJECT_CARD_INFO_CLASS}`} />
+              <span className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6">
+                <span className="flex size-12 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 bg-muted/30 transition-colors group-hover:border-primary group-hover:bg-primary/10">
+                  <PlusOutlined className="text-2xl text-muted-foreground transition-colors group-hover:text-primary" />
+                </span>
+                <span className="mt-3 text-sm font-medium text-foreground">{t("project.new")}</span>
+              </span>
+            </Button>
           </Card>
 
           {projects.map((p) => (
             <Card
               key={p.id}
-              className="group relative flex h-full cursor-pointer gap-0 overflow-hidden border-border bg-card p-0"
-              role="button"
-              tabIndex={0}
-              aria-label={p.name}
-              onClick={() => handleOpen(p)}
-              onKeyDown={(event) => handleCardKeyDown(event, () => handleOpen(p))}
+              className="group relative flex h-full flex-col gap-0 overflow-hidden border-border bg-card p-0"
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
-              <div
-                className="flex aspect-video items-center justify-center overflow-hidden bg-popover"
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={p.name}
+                onClick={() => handleOpen(p)}
+                className="relative flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0"
               >
                 {p.thumbnail ? (
                   <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}
-              </div>
+              </Button>
 
               {/* Info */}
               <CardContent className={PROJECT_CARD_INFO_CLASS}>
                 <div className="flex h-9 min-w-0 items-center justify-between gap-2">
                   {editingId === p.id ? (
                     <Input
+                      ref={editInputRef}
                       className="flex-1 min-w-0 text-sm font-medium"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       onBlur={() => { if (editName.trim()) renameProject(p.id, editName.trim()); setEditingId(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <div className="flex h-full min-w-0 flex-1 items-center truncate text-sm font-medium">{p.name}</div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      aria-label={p.name}
+                      onClick={() => handleOpen(p)}
+                      className="h-auto min-w-0 flex-1 justify-start rounded-none px-0 py-0 text-left text-sm font-medium"
+                    >
+                      <span className="truncate">{p.name}</span>
+                    </Button>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -246,16 +260,11 @@ export default function ProjectListPage() {
                         size="icon-xs"
                         variant="ghost"
                         aria-label={t("common.moreActions")}
-                        onMouseDown={(e) => {
-                          if (editingId === p.id) e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onClick={(e) => e.stopPropagation()}
                       >
                         <EllipsisOutlined />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-auto min-w-36" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuContent align="end" className="w-auto min-w-36">
                       <DropdownMenuItem disabled={coverUploadingId !== null} onSelect={() => handlePickCover(p.id)}>
                         <PictureOutlined />
                         {t("project.setCover")}
