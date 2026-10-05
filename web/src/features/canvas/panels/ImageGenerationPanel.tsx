@@ -13,6 +13,7 @@ import { PlusOutlined } from "@/components/ui/AppIcon";
 import { ParamsIcon } from "@/components/ui/AppIcon";
 import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
@@ -351,9 +352,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-      <WheelGuard
-        className="ui-select-none nodrag nopan flex w-[640px] flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground shadow-xl"
-      >
+      <WheelGuard asChild>
+        <Card className="ui-select-none nodrag nopan w-[640px] gap-2 px-4 py-3">
         <div
           className="flex gap-2 flex-wrap"
           onDragOver={(e) => {
@@ -458,6 +458,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
             onClick={isGenerating || submitting ? handleCancel : handleGenerate}
           />
         </div>
+        </Card>
       </WheelGuard>
     </>
   );

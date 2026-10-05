@@ -3,9 +3,11 @@
 import { cn } from "cn";
 import { memo } from "react";
 
-import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export interface ParamOptionView {
   value: string | number | boolean;
@@ -78,26 +80,75 @@ function FieldControl({ field, value, onChange }: {
     );
   }
 
+  if (field.type === "switch") {
+    return (
+      <div className="flex justify-end">
+        <Switch checked={Boolean(value)} onCheckedChange={onChange} aria-label={field.label} />
+      </div>
+    );
+  }
+
   const options = field.options ?? [];
   const isRatio = field.type === "ratio";
   if (options.length === 0) return null;
+
+  const useToggleGroup = field.type === "segmented"
+    || field.type === "ratio"
+    || (field.type === "select" && options.length <= 4 && options.every((option) => option.label.length <= 12));
+
+  if (field.type === "select" && !useToggleGroup) {
+    const selected = value === undefined || value === null ? undefined : String(value);
+    return (
+      <Select
+        value={selected}
+        onValueChange={(next) => {
+          const option = options.find((candidate) => String(candidate.value) === next);
+          if (option) onChange(option.value);
+        }}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={String(option.value)} value={String(option.value)}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
   return (
-    <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${isRatio ? 5 : Math.min(options.length, 4)}, minmax(0, 1fr))` }}>
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      spacing={2}
+      value={value === undefined || value === null ? undefined : String(value)}
+      onValueChange={(next) => {
+        if (!next) return;
+        const option = options.find((candidate) => String(candidate.value) === next);
+        if (option) onChange(option.value);
+      }}
+      className="grid w-full"
+      style={{ gridTemplateColumns: `repeat(${isRatio ? 5 : Math.min(options.length, 4)}, minmax(0, 1fr))` }}
+    >
       {options.map((option) => {
         const active = value === option.value;
         const ratio = option.aspectRatio;
         const max = ratio ? Math.max(ratio.width, ratio.height) : 1;
         return (
-          <Button
+          <ToggleGroupItem
             key={String(option.value)}
-            variant="outline"
+            value={String(option.value)}
             className={cn(
-              "h-auto min-h-9 whitespace-normal px-2 py-1",
-              "aria-pressed:border-foreground aria-pressed:bg-accent aria-pressed:text-accent-foreground",
+              "h-auto min-h-9 w-full whitespace-normal px-2 py-1",
               isRatio && "min-h-12 flex-col gap-1 px-0.5 py-2",
             )}
-            aria-pressed={active}
-            onClick={() => onChange(option.value)}>
+            aria-label={option.label}
+          >
             {isRatio && ratio && (
               <span className="flex h-5 items-center justify-center">
                 <span className={cn("border", active ? "border-foreground" : "border-input")} style={{
@@ -107,10 +158,10 @@ function FieldControl({ field, value, onChange }: {
               </span>
             )}
             <span className={isRatio ? "text-xs leading-none" : undefined}>{option.label}</span>
-          </Button>
+          </ToggleGroupItem>
         );
       })}
-    </div>
+    </ToggleGroup>
   );
 }
 

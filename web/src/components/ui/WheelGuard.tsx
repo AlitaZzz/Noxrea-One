@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { Slot } from "radix-ui";
 import { type ComponentPropsWithoutRef, useEffect, useRef } from "react";
 
 /**
@@ -14,7 +15,11 @@ import { type ComponentPropsWithoutRef, useEffect, useRef } from "react";
  * WheelGuard 用原生 addEventListener 在目标元素拦截 wheel 事件，
  * 阻止其到达 React Flow 的 zoom 处理器。
  */
-export default function WheelGuard({ children, ...rest }: ComponentPropsWithoutRef<"div">) {
+interface WheelGuardProps extends ComponentPropsWithoutRef<"div"> {
+  asChild?: boolean;
+}
+
+export default function WheelGuard({ asChild = false, children, ...rest }: WheelGuardProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,5 +30,6 @@ export default function WheelGuard({ children, ...rest }: ComponentPropsWithoutR
     return () => el.removeEventListener("wheel", handler);
   }, []);
 
-  return <div ref={ref} {...rest}>{children}</div>;
+  const Component = asChild ? Slot.Root : "div";
+  return <Component ref={ref} {...rest}>{children}</Component>;
 }

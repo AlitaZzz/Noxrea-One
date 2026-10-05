@@ -16,6 +16,7 @@ import { VideoCameraIcon } from "@/components/ui/AppIcon";
 import { VideoFrameIcon } from "@/components/ui/AppIcon";
 import { VideoRefIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
@@ -380,9 +381,8 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   return (
     <>
-      <WheelGuard
-        className="ui-select-none nodrag nopan flex w-[640px] flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground shadow-xl"
-      >
+      <WheelGuard asChild>
+        <Card className="ui-select-none nodrag nopan w-[640px] gap-2 px-4 py-3">
         {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
             文本参考不可拖动，按连线顺序排在首位 */}
         <div
@@ -513,6 +513,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             onClick={isGenerating || submitting ? handleCancel : handleGenerate}
           />
         </div>
+        </Card>
       </WheelGuard>
     </>
   );
