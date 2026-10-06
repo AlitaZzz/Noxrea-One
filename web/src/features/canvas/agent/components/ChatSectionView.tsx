@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { UndoTurnIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import ChatToolRound from "@/features/canvas/agent/components/ChatToolRound";
 import Markdown from "@/features/canvas/agent/components/Markdown";
 import type { ChatSection } from "@/features/canvas/agent/utils/group-sections";
@@ -64,7 +65,7 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
         <div className="mb-3 flex justify-start">
           <div className="max-w-[88%] break-words whitespace-pre-wrap rounded-xl rounded-bl-sm bg-popover px-3 py-[9px] text-foreground">
             <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-              <span className="size-3.5 animate-spin rounded-full border-2 border-input border-t-primary" aria-hidden="true" />
+              <Spinner aria-label={t("agent.thinking")} />
               {t("agent.thinking")}
             </span>
           </div>

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import { CaretDownOutlined, CaretRightOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ChatActionRow from "@/features/canvas/agent/components/ChatActionRow";
 import type { ChatRound } from "@/features/canvas/agent/utils/group-sections";
 
@@ -30,27 +31,20 @@ export function ChatToolRound({ round, isStreaming }: Props) {
     return <ChatActionRow call={call} result={round.results.get(call.id)} isStreaming={isStreaming} />;
   }
 
-  if (!open) {
-    return (
-      <Button type="button" variant="secondary" size="xs" className="w-fit" onClick={() => setUserOpen(true)}>
-        {t("agent.executedCount", { count: round.calls.length })}
-        <CaretRightOutlined className="size-3 opacity-70" aria-hidden="true" />
-      </Button>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-1">
-      {round.calls.length > 1 && (
-        <Button type="button" variant="secondary" size="xs" className="w-fit" onClick={() => setUserOpen(false)}>
+    <Collapsible open={open} onOpenChange={setUserOpen} className="flex flex-col gap-1">
+      <CollapsibleTrigger asChild>
+        <Button type="button" variant="secondary" size="xs" className="w-fit">
           {t("agent.executedCount", { count: round.calls.length })}
-          <CaretDownOutlined className="size-3 opacity-70" aria-hidden="true" />
+          {open ? <CaretDownOutlined aria-hidden="true" /> : <CaretRightOutlined aria-hidden="true" />}
         </Button>
-      )}
-      {round.calls.map((call) => (
-        <ChatActionRow key={call.id} call={call} result={round.results.get(call.id)} isStreaming={isStreaming} />
-      ))}
-    </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-1">
+        {round.calls.map((call) => (
+          <ChatActionRow key={call.id} call={call} result={round.results.get(call.id)} isStreaming={isStreaming} />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

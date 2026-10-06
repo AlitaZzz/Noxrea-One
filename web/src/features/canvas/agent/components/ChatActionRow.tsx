@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import { CheckOutlined, CloseOutlined, LoadingOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { actionRowText, TOOL_META } from "@/features/canvas/agent/tools/Meta";
 import type { ChatMessage, ToolCallView } from "@/features/canvas/agent/types";
@@ -48,7 +49,7 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
   }
 
   return (
-    <div className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-xs leading-none text-muted-foreground">
+    <Collapsible open={detailOpen} onOpenChange={setDetailOpen} className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-xs leading-none text-muted-foreground">
       <span className="inline-flex text-xs text-primary">{meta?.icon}</span>
       <Tooltip><TooltipTrigger asChild>
           <span className="max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap">{text}</span>
@@ -59,17 +60,15 @@ export function ChatActionRow({ call, result, isStreaming }: Props) {
         {(status === "error" || status === "skipped") && <CloseOutlined />}
         {status === "skipped" && <span className="text-[11px] text-muted-foreground">{t("agent.skipped")}</span>}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        className="shrink-0 opacity-70"
-        onClick={() => setDetailOpen((v) => !v)}
-      >
-        {detailOpen ? t("common.collapse") : t("agent.detail")}
-      </Button>
-      {detailOpen && <pre className="basis-full max-h-[180px] overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-card px-2 py-1.5 text-[11px] leading-6 text-muted-foreground">{pretty}</pre>}
-    </div>
+      <CollapsibleTrigger asChild>
+        <Button type="button" variant="ghost" size="xs">
+          {detailOpen ? t("common.collapse") : t("agent.detail")}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="min-w-0 basis-full">
+        <pre className="max-h-[180px] overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-card px-2 py-1.5 text-[11px] leading-6 text-muted-foreground">{pretty}</pre>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

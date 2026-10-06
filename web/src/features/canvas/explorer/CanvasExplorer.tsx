@@ -22,6 +22,7 @@ import {
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { FilterIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -54,7 +55,7 @@ import { formatBytes, formatDateTime, formatTime } from "@/lib/utils/format";
 export const DRAWER_WIDTH = 360;
 
 /** 元素树每层缩进宽度，同时用作组折叠箭头槽位宽度，保证各组/节点图标垂直对齐 */
-const ROW_INDENT = 18;
+const ROW_INDENT = 24;
 
 interface CanvasExplorerProps {
   open: boolean;
@@ -318,7 +319,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
     : t("node.groupWithCount", { count: members.length });
 
   return (
-    <div className="mb-1">
+    <Collapsible open={!collapsed} onOpenChange={onToggle} className="mb-1">
       <div className="relative flex items-center gap-2 px-2">
         {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
         {selected && (
@@ -326,15 +327,16 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
         )}
         {/* 折叠箭头槽位：与普通节点的空槽位同宽，保证图标垂直对齐 */}
         <span className="shrink-0 flex items-center justify-center" style={{ width: ROW_INDENT, height: 24 }}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="h-4 w-4 rounded p-0 text-muted-foreground"
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          >
-            {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <DownOutlined style={{ fontSize: 10 }} />}
-          </Button>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={label}
+            >
+              {collapsed ? <RightOutlined /> : <DownOutlined />}
+            </Button>
+          </CollapsibleTrigger>
         </span>
         <Button
           type="button"
@@ -360,10 +362,12 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
           </span>
         </Button>
       </div>
-      {!collapsed && members.map((m) => (
-        <ElementItem key={m.id} node={m} selected={selectedNodeIds.has(m.id)} depth={1} />
-      ))}
-    </div>
+      <CollapsibleContent>
+        {members.map((m) => (
+          <ElementItem key={m.id} node={m} selected={selectedNodeIds.has(m.id)} depth={1} />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
