@@ -30,7 +30,7 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
 
-import { DOT_COLOR, FlowLines } from "./EdgeFlow";
+import { FlowLines } from "./EdgeFlow";
 
 /** 删除按钮的出现延迟（驻留时长）：指针在连线上停稳 1s 才出现；沿线移动会重置计时 */
 const DELETE_BUTTON_DELAY_MS = 1000;
@@ -201,7 +201,7 @@ export default function DeletableEdge(props: EdgeProps) {
         />
 
         {/* 管道流光（hover / 选中节点或边时叠加） */}
-        {emphasized && <FlowLines path={edgePath} color={DOT_COLOR} />}
+        {emphasized && <FlowLines path={edgePath} />}
       </g>
 
       <EdgeLabelRenderer>

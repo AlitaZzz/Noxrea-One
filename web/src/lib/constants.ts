@@ -184,12 +184,14 @@ export const DEFAULT_NODE_COLOR = "#c7f43d";
 
 /**
  * 连线（管道）本体色：中性灰，用 CSS 变量以跟随明暗主题。
- * 与流光色 DOT_COLOR 分离是刻意的——底线若与流光同色，
+ * 与流光色 EDGE_FLOW_COLOR 分离是刻意的——底线若与流光同色，
  * 流光的水滴形状会被淹没看不出来。
  * 连线不画箭头：方向由流光水滴的朝向表达（未选中时无流光，靠节点布局与句柄方位判断）。
  * 新建连线（createEdge）与 defaultEdgeOptions 都引用此处，避免硬编码散落。
  */
 export const EDGE_BASE_COLOR = "var(--muted-foreground)";
+/** 节点之间连线上的动态流光色，固定使用品牌青柠以保持画布语义一致。 */
+export const EDGE_FLOW_COLOR = "#c7f43d";
 
 // ── 节点连接规则 ──
 // 连接规则区分「输入」与「输出」两个方向：

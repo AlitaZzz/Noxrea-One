@@ -11,12 +11,11 @@
 import { getBezierPath } from "@xyflow/react";
 import { useId } from "react";
 
-/** 流光（管道里的流体）颜色；管道本体色见 constants.ts 的 EDGE_BASE_COLOR */
-export const DOT_COLOR = "var(--primary)";
+import { EDGE_FLOW_COLOR } from "@/lib/constants";
 
 // ── 流光动画可调参数 ──
 // 调效果只动这一块：
-//   颜色 → DOT_COLOR
+//   颜色 → EDGE_FLOW_COLOR
 //   快慢 → DURATION（秒，流光从起点流到终点的时间，越小越快；与段数无关）
 //   疏密 → SEGMENT_COUNT（整条线上同时流动的流光段数量）
 //   长短 → SEGMENT_FILL（0~1，头部段占一格的比例，越大流光越长、间隔越小）
@@ -48,7 +47,7 @@ const GLOW_BLUR = 2.2; // 发光层高斯模糊强度
  * 用 pathLength 把路径长度归一化为 100，dasharray / dashoffset 因此都用相对
  * 单位——无论实际连线多长，线上都稳定分布同样数量的流光段，且首尾无缝循环。
  */
-export function FlowLines({ path, color = DOT_COLOR }: { path: string; color?: string }) {
+export function FlowLines({ path }: { path: string }) {
   const uid = useId();
   const glowId = `${uid}-flow-glow`;
 
@@ -92,7 +91,7 @@ export function FlowLines({ path, color = DOT_COLOR }: { path: string; color?: s
             d={path}
             pathLength={100}
             fill="none"
-            stroke={color}
+            stroke={EDGE_FLOW_COLOR}
             strokeWidth={FLOW_WIDTH * GLOW_SCALE}
             strokeLinecap="round"
             strokeDasharray={`${tailLen} ${cycle - tailLen}`}
@@ -117,7 +116,7 @@ export function FlowLines({ path, color = DOT_COLOR }: { path: string; color?: s
           d={path}
           pathLength={100}
           fill="none"
-          stroke={color}
+          stroke={EDGE_FLOW_COLOR}
           strokeWidth={layer.width}
           strokeLinecap="round"
           strokeDasharray={`${layer.dash} ${cycle - layer.dash}`}

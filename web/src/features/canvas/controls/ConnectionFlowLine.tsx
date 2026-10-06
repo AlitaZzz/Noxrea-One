@@ -17,7 +17,7 @@ import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas
 import { EDGE_BASE_COLOR, insetHandleCenter, NODE_TYPE } from "@/lib/constants";
 
 import { applyConnectionTilt, clearConnectionTilt } from "./connection-tilt";
-import { DOT_COLOR, FlowLines } from "./EdgeFlow";
+import { FlowLines } from "./EdgeFlow";
 
 export default function ConnectionFlowLine({
   fromX,
@@ -150,11 +150,11 @@ export default function ConnectionFlowLine({
   return (
     <>
       <BaseEdge path={edgePath} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
-      <FlowLines path={edgePath} color={DOT_COLOR} />
+      <FlowLines path={edgePath} />
       {bundlePaths.map((p, i) => (
         <Fragment key={i}>
           <BaseEdge path={p} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
-          <FlowLines path={p} color={DOT_COLOR} />
+          <FlowLines path={p} />
         </Fragment>
       ))}
     </>
