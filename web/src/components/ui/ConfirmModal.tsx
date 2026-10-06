@@ -18,7 +18,7 @@ interface Props {
   /** 确定按钮进入加载态并阻止重复提交，用于异步 onOk。 */
   confirmLoading?: boolean;
   /** 确定按钮的语义变体；删除等不可逆操作使用 destructive。 */
-  confirmVariant?: "default" | "destructive" | "primary";
+  confirmVariant?: "default" | "destructive";
   /** 只保留确定按钮（无取消语义的强制流程，如会话过期）；Esc / 遮罩关闭同样走 onCancel。 */
   hideCancel?: boolean;
   onOk: () => void;

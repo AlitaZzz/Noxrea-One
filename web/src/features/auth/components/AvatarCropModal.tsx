@@ -175,7 +175,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
         </div>
         <DialogFooter className="border-t bg-muted/20 px-6 py-4 sm:justify-end">
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t("common.cancel")}</Button>
-          <Button type="button" variant="primary" onClick={handleSave} loading={saving}>{t("common.save")}</Button>
+          <Button type="button" variant="default" onClick={handleSave} loading={saving}>{t("common.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

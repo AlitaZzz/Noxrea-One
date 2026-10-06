@@ -344,7 +344,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+          <Button size="icon" variant="ghost" onClick={onClose} ><CloseOutlined /></Button>
           <span className="text-[13px] text-foreground">{t("node.panorama")}</span>
         </div>
 
@@ -352,24 +352,24 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
         {/* 截图：截取当前视角并新建图片节点 */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            loading={loading}
+            <Button size="icon" variant="ghost"            loading={loading}
               onClick={handleScreenshot}
             ><CameraOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.screenshot")}</TooltipContent></Tooltip>
 
         {/* 多视角截图：4/8/12 视角等分 360°，每个方向生成独立节点 */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            loading={multiLoading}
+            <Button size="icon" variant="ghost"            loading={multiLoading}
               onClick={() => handleMultiScreenshot(4)}
             ><Grid4Icon /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.view4")}</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            loading={multiLoading}
+            <Button size="icon" variant="ghost"            loading={multiLoading}
               onClick={() => handleMultiScreenshot(8)}
             ><Grid8Icon /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.view8")}</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly            loading={multiLoading}
+            <Button size="icon" variant="ghost"            loading={multiLoading}
               onClick={() => handleMultiScreenshot(12)}
             ><Grid12Icon /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.view12")}</TooltipContent></Tooltip>
@@ -383,7 +383,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
         >
           <Tooltip><TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" iconOnly disabled={loading}><AspectRatioIcon /></Button>
+                <Button size="icon" variant="ghost" disabled={loading}><AspectRatioIcon /></Button>
               </DropdownMenuTrigger>
             </TooltipTrigger><TooltipContent>{t("panorama.aspect")}</TooltipContent></Tooltip>
           <DropdownMenuContent side="bottom" align="center">
@@ -415,7 +415,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
         {/* 重置视角，单独一组 */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly onClick={handleReset} ><ReloadOutlined /></Button>
+            <Button size="icon" variant="ghost" onClick={handleReset} ><ReloadOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("panorama.reset")}</TooltipContent></Tooltip>
 
       </Card>

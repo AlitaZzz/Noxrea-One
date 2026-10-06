@@ -538,15 +538,15 @@ export default function AssetInspector({
       {single && (
         <div className="shrink-0 px-3 pt-1 pb-4">
           <div className="flex flex-col gap-2">
-            <Button variant="primary" block onClick={() => onInsert(single)}>
+            <Button variant="default" className="w-full" onClick={() => onInsert(single)}>
               {t("asset.addToCanvas")}
             </Button>
             <div className="flex gap-2">
-              <Button block onClick={() => downloadAsset(single)}>{t("common.download")}</Button>
-              <Button block onClick={onBatchMove}>{t("asset.moveTo")}</Button>
-              <Button block onClick={onBatchType}>{t("asset.changeType")}</Button>
+              <Button className="w-full" onClick={() => downloadAsset(single)}>{t("common.download")}</Button>
+              <Button className="w-full" onClick={onBatchMove}>{t("asset.moveTo")}</Button>
+              <Button className="w-full" onClick={onBatchType}>{t("asset.changeType")}</Button>
             </div>
-            <Button variant="destructive" block onClick={() => onSingleDelete(single)}>
+            <Button variant="destructive" className="w-full" onClick={() => onSingleDelete(single)}>
               {t("common.delete")}
             </Button>
           </div>

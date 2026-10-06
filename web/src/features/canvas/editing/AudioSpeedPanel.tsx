@@ -34,7 +34,7 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
     <>
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" iconOnly onClick={onCancel} ><CloseOutlined /></Button>
+        <Button size="icon" variant="ghost" onClick={onCancel} ><CloseOutlined /></Button>
         <span className="text-[13px] text-foreground">{t("node.audioSpeed")}</span>
       </div>
 

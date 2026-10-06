@@ -275,7 +275,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
           <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
             {t("common.cancel")}
           </Button>
-          <Button size="sm" variant="primary" disabled={!newModelName.trim()} onClick={handleAddModel}>
+          <Button size="sm" variant="default" disabled={!newModelName.trim()} onClick={handleAddModel}>
             {t("common.add")}
           </Button>
         </div>
@@ -286,7 +286,7 @@ export default function ApiSettingsModels({ provider, onFetch, fetching }: Props
         <Empty className="h-auto min-h-0 flex-1 gap-1.5 rounded-none border-0 p-0 pb-8">
           <EmptyDescription className="text-sm text-muted-foreground">{t("modelConfig.noModels")}</EmptyDescription>
           <EmptyDescription className="text-xs">{t("modelConfig.noModelsDesc")}</EmptyDescription>
-          <Button size="sm" variant="primary" className="mt-2" onClick={onFetch} loading={fetching}>
+          <Button size="sm" variant="default" className="mt-2" onClick={onFetch} loading={fetching}>
             <DownloadOutlined />
             {t("modelConfig.fetchModels")}
           </Button>

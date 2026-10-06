@@ -152,7 +152,7 @@ export default function SettingsModal({ open, onClose }: Props) {
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={saving}>{t("common.cancel")}</Button>
           </DialogClose>
-          <Button type="button" variant="primary" onClick={handleSave} loading={saving}>{t("auth.saveChanges")}</Button>
+          <Button type="button" variant="default" onClick={handleSave} loading={saving}>{t("auth.saveChanges")}</Button>
         </DialogFooter>
         <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
       </DialogContent>

@@ -255,7 +255,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
       <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+          <Button size="icon" variant="ghost" onClick={onClose} ><CloseOutlined /></Button>
           <span className="text-[13px] text-foreground">{t("node.crop")}</span>
         </div>
 
@@ -288,7 +288,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
 
         {/* Reset */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly onClick={handleReset} ><UndoOutlined /></Button>
+            <Button size="icon" variant="ghost" onClick={handleReset} ><UndoOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("crop.reset")}</TooltipContent></Tooltip>
 
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />

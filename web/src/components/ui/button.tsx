@@ -11,7 +11,6 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        primary: "bg-primary text-primary-foreground hover:bg-primary/80",
         outline:
           "border-border bg-background shadow-xs hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -28,7 +27,6 @@ const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-[min(var(--radius-md),8px)] px-2 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 gap-1 rounded-[min(var(--radius-md),10px)] px-2.5 in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5",
         lg: "h-10 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        md: "h-10 gap-1.5 px-3",
         icon: "size-9",
         "icon-xs":
           "size-6 rounded-[min(var(--radius-md),8px)] in-data-[slot=button-group]:rounded-md [&_svg:not([class*='size-'])]:size-3",
@@ -48,8 +46,6 @@ type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
     loading?: boolean
-    block?: boolean
-    iconOnly?: boolean
   }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button({
@@ -58,22 +54,18 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   size = "default",
   asChild = false,
   loading = false,
-  block = false,
-  iconOnly = false,
   children,
   disabled,
   ...props
 }, ref) {
   const Comp = asChild ? Slot.Root : "button"
-  const iconSize = size === "sm" ? "size-8" : size === "lg" || size === "md" ? "size-10" : "size-9"
-
   return (
     <Comp
       ref={ref}
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }), block && "w-full", iconOnly && `${iconSize} px-0`)}
+      className={cn(buttonVariants({ variant, size, className }))}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...props}

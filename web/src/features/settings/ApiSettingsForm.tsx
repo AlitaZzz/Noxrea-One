@@ -122,7 +122,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
     <div className="flex-1 min-w-0 flex flex-col">
       {/* 头部：返回 + 标题 */}
       <SheetHeader className="flex-row items-center gap-1 border-b border-border px-4 py-3">
-        <Button size="sm" variant="ghost" iconOnly onClick={onCancel} aria-label={t("modelConfig.back")}>
+        <Button size="icon-sm" variant="ghost" onClick={onCancel} aria-label={t("modelConfig.back")}>
           <ArrowLeftOutlined />
         </Button>
         <SheetTitle className="text-[15px] font-semibold">
@@ -196,7 +196,7 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                 hideLabel={t("auth.login.hidePassword")}
               />
               {mode === "edit" && (
-                <Button size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
+                <Button size="icon-sm" variant="ghost" onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
                   <CopyOutlined />
                 </Button>
               )}

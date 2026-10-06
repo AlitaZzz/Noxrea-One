@@ -493,7 +493,7 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
       <Card className="flex h-[50px] flex-row items-center gap-1 rounded-xl whitespace-nowrap px-2.5 py-1.5">
         {/* 左组：✗ 关闭 + 标题 */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+          <Button size="icon" variant="ghost" onClick={onClose} ><CloseOutlined /></Button>
           <span className="text-[13px] text-foreground">{t("annotation.title")}</span>
         </div>
 
@@ -532,10 +532,10 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
         {/* Undo / Redo */}
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly disabled={!canUndo} onClick={handleUndo} ><UndoIcon /></Button>
+            <Button size="icon" variant="ghost" disabled={!canUndo} onClick={handleUndo} ><UndoIcon /></Button>
           </TooltipTrigger><TooltipContent>{t("annotation.undo")}</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly disabled={!canRedo} onClick={handleRedo} ><RedoIcon /></Button>
+            <Button size="icon" variant="ghost" disabled={!canRedo} onClick={handleRedo} ><RedoIcon /></Button>
           </TooltipTrigger><TooltipContent>{t("annotation.redo")}</TooltipContent></Tooltip>
 
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />

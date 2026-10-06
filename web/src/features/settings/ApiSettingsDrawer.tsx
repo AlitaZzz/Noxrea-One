@@ -83,7 +83,7 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
         >
           {provider.baseUrl}
         </span>
-        <Button size="sm" variant="ghost" iconOnly aria-label={t("modelConfig.copy")} onClick={() => copyText(provider.baseUrl)}>
+        <Button size="icon-sm" variant="ghost" aria-label={t("modelConfig.copy")} onClick={() => copyText(provider.baseUrl)}>
           <CopyOutlined />
         </Button>
       </div>
@@ -97,9 +97,8 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
           {revealed ? plain : provider.apiKey}
         </span>
         <Button
-          size="sm"
+          size="icon-sm"
           variant="ghost"
-          iconOnly
           aria-label={revealed ? t("modelConfig.hide") : t("modelConfig.reveal")}
           loading={loading}
           onClick={() => {
@@ -110,9 +109,8 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
           {revealed ? <EyeOffIcon /> : <EyeIcon />}
         </Button>
         <Button
-          size="sm"
+          size="icon-sm"
           variant="ghost"
-          iconOnly
           aria-label={t("modelConfig.copy")}
           onClick={async () => {
             const key = await ensurePlain();
@@ -231,9 +229,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 </span>
               )}
               <Button
-                size="sm"
+                size="icon-sm"
                 variant="ghost"
-                iconOnly
                 className="ml-auto"
                 aria-label={t("modelConfig.addProvider")}
                 onClick={startAdd}
@@ -244,7 +241,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
             {providers.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-4 text-center text-muted-foreground">
                 <div className="text-[13px] text-muted-foreground">{t("modelConfig.noProviders")}</div>
-                <Button size="sm" variant="primary" className="mt-1" onClick={startAdd}>
+                <Button size="sm" variant="default" className="mt-1" onClick={startAdd}>
                   <PlusOutlined />
                   {t("modelConfig.addProvider")}
                 </Button>
@@ -343,7 +340,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                 <ApiOutlined className="text-3xl mb-1" />
                 <div className="text-sm text-muted-foreground">{t("modelConfig.noProviders")}</div>
                 <div className="text-xs">{t("modelConfig.noProvidersDesc")}</div>
-                <Button size="sm" variant="primary" className="mt-2" onClick={startAdd}>
+                <Button size="sm" variant="default" className="mt-2" onClick={startAdd}>
                   <PlusOutlined />
                   {t("modelConfig.addProvider")}
                 </Button>

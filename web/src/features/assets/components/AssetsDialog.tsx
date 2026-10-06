@@ -693,7 +693,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
               <DialogClose asChild>
                 <Button variant="outline" disabled={folderRenameSaving}>{t("common.cancel")}</Button>
               </DialogClose>
-              <Button variant="primary" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</Button>
+              <Button variant="default" loading={folderRenameSaving} onClick={handleRenameFolderConfirm} disabled={!folderRenameValue.trim()}>{t("common.save")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -799,7 +799,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
               </DialogClose>
               <Tooltip><TooltipTrigger asChild>
                   <span>
-                    <Button variant="primary" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</Button>
+                    <Button variant="default" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</Button>
                   </span>
                 </TooltipTrigger><TooltipContent>{!batchTypeValue ? t("asset.typeTip") : ""}</TooltipContent></Tooltip>
             </DialogFooter>

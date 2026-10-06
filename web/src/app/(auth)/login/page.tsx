@@ -360,9 +360,8 @@ function RightPanel({
               <Button
                 type="submit"
                 size="lg"
-                block
                 disabled={loading}
-                className="login-anim relative overflow-hidden"
+                className="login-anim relative w-full overflow-hidden"
               >
                 {/* 斜向光泽周期性扫过 */}
                 <span

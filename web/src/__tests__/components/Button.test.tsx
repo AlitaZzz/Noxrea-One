@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 afterEach(cleanup);
 
 describe("Button", () => {
-  it("keeps project variant and size semantics on the native button", () => {
-    render(<Button variant="primary" size="sm">Save</Button>);
+  it("uses the official default variant and size semantics on the native button", () => {
+    render(<Button variant="default" size="sm">Save</Button>);
 
     const button = screen.getByRole("button", { name: "Save" });
 
-    expect(button.dataset.variant).toBe("primary");
+    expect(button.dataset.variant).toBe("default");
     expect(button.dataset.size).toBe("sm");
   });
 
@@ -26,10 +26,10 @@ describe("Button", () => {
   });
 
   it("keeps icon-only buttons square at the selected size", () => {
-    render(<Button iconOnly size="sm" aria-label="More" />);
+    render(<Button size="icon-sm" aria-label="More" />);
 
     const button = screen.getByRole("button", { name: "More" });
     expect(button.className).toContain("size-8");
-    expect(button.dataset.size).toBe("sm");
+    expect(button.dataset.size).toBe("icon-sm");
   });
 });

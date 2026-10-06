@@ -245,7 +245,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     <Card className="nodrag nopan nowheel pointer-events-auto flex flex-row items-center gap-3 rounded-2xl p-2">
       {/* 左组：✗ 关闭 + 标题 */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" iconOnly onClick={onClose} ><CloseOutlined /></Button>
+        <Button size="icon" variant="ghost" onClick={onClose} ><CloseOutlined /></Button>
         <span className="text-[13px] text-foreground">{t("node.captureFrame")}</span>
       </div>
 

@@ -111,7 +111,7 @@ export default function RichTextPanel({ editor, nodeId }: Props) {
             ><Quote size={16} /></Toggle>
           </TooltipTrigger><TooltipContent>{t("richText.blockquote")}</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly
+            <Button size="icon" variant="ghost"
               onClick={() => editor.chain().focus().setHorizontalRule().run()}
             ><Minus size={16} /></Button>
           </TooltipTrigger><TooltipContent>{t("richText.horizontalRule")}</TooltipContent></Tooltip>

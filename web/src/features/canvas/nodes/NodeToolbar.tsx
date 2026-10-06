@@ -234,9 +234,8 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
   const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetUrls.has(assetSrc));
   return (
     <Tooltip><TooltipTrigger asChild>
-        <Button
+        <Button size="icon"
           variant="ghost"
-          iconOnly
           disabled={!assetSrc}
           onClick={() => {
             if (!assetSrc) return;
@@ -327,7 +326,7 @@ function NodeToolbar({
       {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
       {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
         <Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" iconOnly
+            <Button size="icon" variant="ghost"
               onClick={handleInfo}
             ><InfoCircleOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("common.info")}</TooltipContent></Tooltip>
@@ -339,7 +338,7 @@ function NodeToolbar({
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           {/* 全景 */}
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "panorama")} ><PanoramaIcon /></Button>
             </TooltipTrigger><TooltipContent>{t("node.panorama")}</TooltipContent></Tooltip>
           {/* Edit */}
@@ -349,7 +348,7 @@ function NodeToolbar({
           }}>
             <Tooltip><TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" iconOnly disabled={!assetSrc}><RotateRightOutlined /></Button>
+                  <Button size="icon" variant="ghost" disabled={!assetSrc}><RotateRightOutlined /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("node.transform")}</TooltipContent></Tooltip>
             <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
@@ -365,11 +364,11 @@ function NodeToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "crop-interactive")} ><Crop size={16} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.crop")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "annotate")} ><ImageAnnotationIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("annotation.title")}</TooltipContent></Tooltip>
           <Popover
@@ -382,7 +381,7 @@ function NodeToolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" iconOnly disabled={!assetSrc}>
+                  <Button size="icon" variant="ghost" disabled={!assetSrc}>
                     <GridSplitIcon />
                   </Button>
                 </PopoverTrigger>
@@ -401,13 +400,13 @@ function NodeToolbar({
           {/* AI */}
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></Button>
+              <Button size="icon" variant="ghost"              onClick={() => dispatchNodeAction(nodeId, "angle-editor")} disabled={!assetSrc} ><MultiAngleIcon /></Button>
             </TooltipTrigger><TooltipContent>{t("angle.editor")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} ><LightingIcon /></Button>
+              <Button size="icon" variant="ghost"              onClick={() => onOpenLighting(nodeId)} disabled={!assetSrc} ><LightingIcon /></Button>
             </TooltipTrigger><TooltipContent>{t("lighting.title")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
+              <Button size="icon" variant="ghost"              onClick={() => dispatchNodeAction(nodeId, "create-template", { templateId: "reverse" })}
                 disabled={!assetSrc} ><ImageToPromptIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.reversePrompt")}</TooltipContent></Tooltip>
           <Popover
@@ -420,7 +419,7 @@ function NodeToolbar({
             <Tooltip open={creationOpen ? false : undefined}>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" iconOnly disabled={!assetSrc}>
+                  <Button size="icon" variant="ghost" disabled={!assetSrc}>
                     <Wand2 size={16} />
                   </Button>
                 </PopoverTrigger>
@@ -438,11 +437,11 @@ function NodeToolbar({
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
             </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></Button>
             </TooltipTrigger><TooltipContent>{t("node.previewFullscreen")}</TooltipContent></Tooltip>
         </>
@@ -458,7 +457,7 @@ function NodeToolbar({
           }}>
             <Tooltip><TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" iconOnly disabled={!assetSrc}><FrameCaptureIcon /></Button>
+                  <Button size="icon" variant="ghost" disabled={!assetSrc}><FrameCaptureIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("node.captureFrame")}</TooltipContent></Tooltip>
             <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
@@ -475,37 +474,37 @@ function NodeToolbar({
           </DropdownMenu>
           {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly
+              <Button size="icon" variant="ghost"
                 disabled={!assetSrc}
                 onClick={() => onOpenClipStrip(nodeId)}
               ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
           {/* 画面裁剪：与图片节点同语义（源像素矩形重编码为派生视频） */}
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly
+              <Button size="icon" variant="ghost"
                 disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "crop-video")}
               ><Crop size={16} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.crop")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly
+              <Button size="icon" variant="ghost"
                 disabled={!assetSrc || videoHasAudio === false}
                 onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
               ><WaveIcon /></Button>
             </TooltipTrigger><TooltipContent>{videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly
+              <Button size="icon" variant="ghost"
                 disabled={!assetSrc}
               ><VideoToPromptIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.reversePrompt")}</TooltipContent></Tooltip>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <AssetStarButton nodeId={nodeId} assetSrc={assetSrc} />
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
             </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!assetSrc}
+              <Button size="icon" variant="ghost" disabled={!assetSrc}
                 onClick={() => dispatchNodeAction(nodeId, "preview-fullscreen")} ><ExpandOutlined /></Button>
             </TooltipTrigger><TooltipContent>{t("node.previewFullscreen")}</TooltipContent></Tooltip>
         </>
@@ -529,13 +528,13 @@ function NodeToolbar({
             <>
               <Separator orientation="vertical" className="mx-1 h-5 self-center" />
               <Tooltip><TooltipTrigger asChild>
-                  <Button variant="ghost" iconOnly
+                  <Button size="icon" variant="ghost"
                     disabled={!assetSrc}
                     onClick={() => onOpenAudioClip(nodeId)}
                   ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
                 </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
-                  <Button variant="ghost" iconOnly
+                  <Button size="icon" variant="ghost"
                     disabled={!assetSrc}
                     onClick={() => {
                       setSpeedDraft(1);
@@ -544,7 +543,7 @@ function NodeToolbar({
                   ><SpeedIcon /></Button>
                 </TooltipTrigger><TooltipContent>{t("node.audioSpeed")}</TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
-                  <Button variant="ghost" iconOnly disabled={!assetSrc}
+                  <Button size="icon" variant="ghost" disabled={!assetSrc}
                     onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
                 </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
             </>
@@ -557,11 +556,11 @@ function NodeToolbar({
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!textContent}
+              <Button size="icon" variant="ghost" disabled={!textContent}
                 onClick={() => dispatchNodeAction(nodeId, "copy")} ><Copy size={16} /></Button>
             </TooltipTrigger><TooltipContent>{t("common.copy")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly disabled={!textContent}
+              <Button size="icon" variant="ghost" disabled={!textContent}
                 onClick={() => dispatchNodeAction(nodeId, "download")} ><DownloadOutlined /></Button>
             </TooltipTrigger><TooltipContent>{t("common.download")}</TooltipContent></Tooltip>
         </>
@@ -578,7 +577,7 @@ function NodeToolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" iconOnly>
+                  <Button size="icon" variant="ghost">
                     <span
                       style={{
                         display: "block",
@@ -604,7 +603,7 @@ function NodeToolbar({
           }}>
             <Tooltip><TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" iconOnly><GroupGridIcon /></Button>
+                  <Button size="icon" variant="ghost"><GroupGridIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("common.layout")}</TooltipContent></Tooltip>
             <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
@@ -620,7 +619,7 @@ function NodeToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
           <Tooltip><TooltipTrigger asChild>
-              <Button variant="ghost" iconOnly
+              <Button size="icon" variant="ghost"
                 onClick={(e) => {
                   e.stopPropagation();
                   window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
