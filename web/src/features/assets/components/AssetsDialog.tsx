@@ -10,9 +10,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CheckOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, MinusOutlined, PlusOutlined, SwapOutlined } from "@/components/ui/AppIcon";
+import { CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, PlusOutlined, SwapOutlined } from "@/components/ui/AppIcon";
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
@@ -555,26 +557,19 @@ export default function AssetsDialog({ open, onClose }: Props) {
               />
             </div>
 
-            {/* 多选批量操作条：常驻挂载，外层 grid 行高动画折叠，出现/消失平滑推移网格 */}
-            <div className={`bulk-bar-collapse${bulkOpen ? " bulk-bar-collapse--open" : ""}`}>
-              <div inert={bulkOpen ? undefined : true}>
+            {/* 多选批量操作条：由 Collapsible 管理可见性和折叠动画，出现/消失平滑推移网格 */}
+            <Collapsible open={bulkOpen} className="shrink-0">
+              <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                 <div className="mx-3 mb-3 flex h-11 items-center gap-0.5 rounded-md border border-input bg-popover px-2.5 pl-3">
-                  {/* 计数即全选开关：白框对勾=已全选当前列表，横杠=部分选中，点击在两者间切换 */}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 gap-1.5 px-2"
-                    onClick={handleSelectAll}
-                    aria-pressed={allSelected}
-                  >
-                    <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input bg-background text-foreground">
-                      {allSelected
-                        ? <CheckOutlined className="size-3 font-bold" />
-                        : <MinusOutlined className="size-3 font-bold" />}
-                    </span>
+                  {/* 使用 shadcn Checkbox 表达全选 / 半选状态，避免手绘控件脱离主题 */}
+                  <label className="flex h-7 shrink-0 items-center gap-1.5 px-2 text-[13px] font-medium text-foreground">
+                    <Checkbox
+                      checked={allSelected ? true : "indeterminate"}
+                      onCheckedChange={handleSelectAll}
+                      aria-label={t("asset.selectedN", { count: selectedIds.size })}
+                    />
                     <span className="whitespace-nowrap text-[13px] font-medium text-foreground">{t("asset.selectedN", { count: selectedIds.size })}</span>
-                  </Button>
+                  </label>
                   <Tooltip><TooltipTrigger asChild>
                       <Button
                         size="icon-xs"
@@ -625,8 +620,8 @@ export default function AssetsDialog({ open, onClose }: Props) {
                     {t("common.delete")}（{selectedIds.size}）
                   </Button>
                 </div>
-              </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Grid。首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
             <div

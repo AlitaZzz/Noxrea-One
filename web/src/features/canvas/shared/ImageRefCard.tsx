@@ -9,14 +9,12 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CloseOutlined } from "@/components/ui/AppIcon";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
+import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { findReferenceNode, useRevealCanvasNode } from "./reveal-node";
-import { useDelayedHover } from "./use-delayed-hover";
 
 export interface ImageRefCardProps {
   /** 参考图地址 */
@@ -43,8 +41,6 @@ function ImageRefCard({
 }: ImageRefCardProps) {
   const { t } = useTranslation();
   const reveal = useRevealCanvasNode();
-  // 放大预览用延迟悬停：鼠标扫过整排卡片时不闪大图
-  const { active: hovered, onMouseEnter, onMouseLeave } = useDelayedHover();
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
 
@@ -54,91 +50,75 @@ function ImageRefCard({
   const preview = src.includes("/api/files/") ? `${src}?w=480` : src;
 
   return (
-    <Card
-      className={`group relative h-14 w-14 rounded-md border-border bg-accent p-0 shadow-none ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      draggable
-      onDoubleClick={() => {
-        const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, src);
-        if (n) reveal(n);
-      }}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("application/x-ref-image", src);
-        e.dataTransfer.setData("text/plain", src);
-        e.dataTransfer.effectAllowed = "move";
-        setDragging(true); // 自身拖拽期间不显示放大预览，避免与拖拽图像错位
-        onDragStateChange?.(true);
-        // 以缩略图为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
-        const el = (e.currentTarget as HTMLElement).querySelector("img");
-        if (el) e.dataTransfer.setDragImage(el, 28, 28);
-      }}
-      onDragEnd={() => {
-        setDragging(false);
-        onDragStateChange?.(false);
-      }}
-      onDragEnter={(e) => {
-        // 部分浏览器要求 dragenter 也 preventDefault，否则后续 drop 不会触发
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!e.dataTransfer.types.includes("application/x-ref-image")) {
-          e.dataTransfer.dropEffect = "none"; // 仅图片可放到图片位置
-          return;
-        }
-        e.dataTransfer.dropEffect = "move";
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragOver(false);
-        const dragged = e.dataTransfer.getData("text/plain");
-        if (!dragged || dragged === src) return;
-        onReorder(dragged, src); // 内部按 refOrder 校验，非图片自动忽略
-      }}
+    <ReferenceHoverPreview
+      disabled={dragging || Boolean(dragActive) || dragOver}
+      preview={<img src={preview} alt="" className="block max-h-[240px] max-w-[240px] object-contain" />}
     >
-      <img
-        src={thumbnail}
-        draggable={false}
-        alt={`Ref ${index + 1}`}
-        className="block size-full rounded-md object-cover cursor-grab active:cursor-grabbing transition-shadow"
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      />
-      {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
-      <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refImageLabel", { index: index + 1 })}</span>
-      {hovered && !dragging && !dragActive && !dragOver && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <img
-            src={preview}
-            alt=""
-            className="max-h-[240px] max-w-[240px] rounded-lg border border-border bg-card object-contain shadow-2xl"
-          />
-        </div>
-      )}
-      <Button
-        type="button"
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
-        onClick={() => {
-          // 删除参考 = 断开连线，显示顺序随后自动派生
-          const store = useCanvasStore.getState();
-          const edge = store.edges.find((e) => {
-            if (e.target !== nodeId) return false;
-            const srcNode = store.nodes.find((n) => n.id === e.source);
-            return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === src;
-          });
-          if (edge) store.removeEdges([edge.id]);
+      <Card
+        className={`group relative h-14 w-14 rounded-md border-border bg-accent p-0 shadow-none ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
+        draggable
+        onDoubleClick={() => {
+          const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, src);
+          if (n) reveal(n);
+        }}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/x-ref-image", src);
+          e.dataTransfer.setData("text/plain", src);
+          e.dataTransfer.effectAllowed = "move";
+          setDragging(true);
+          onDragStateChange?.(true);
+          const el = (e.currentTarget as HTMLElement).querySelector("img");
+          if (el) e.dataTransfer.setDragImage(el, 28, 28);
+        }}
+        onDragEnd={() => {
+          setDragging(false);
+          onDragStateChange?.(false);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.dataTransfer.types.includes("application/x-ref-image")) {
+            e.dataTransfer.dropEffect = "none";
+            return;
+          }
+          e.dataTransfer.dropEffect = "move";
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          const dragged = e.dataTransfer.getData("text/plain");
+          if (!dragged || dragged === src) return;
+          onReorder(dragged, src);
         }}
       >
-        <CloseOutlined className="size-3" />
-      </Button>
-    </Card>
+        <img
+          src={thumbnail}
+          draggable={false}
+          alt={`Ref ${index + 1}`}
+          className="block size-full cursor-grab rounded-md object-cover transition-shadow active:cursor-grabbing"
+        />
+        <ReferenceIndexBadge>{t("common.refImageLabel", { index: index + 1 })}</ReferenceIndexBadge>
+        <ReferenceRemoveButton
+          ariaLabel={t("common.delete")}
+          onRemove={() => {
+            const store = useCanvasStore.getState();
+            const edge = store.edges.find((e) => {
+              if (e.target !== nodeId) return false;
+              const srcNode = store.nodes.find((n) => n.id === e.source);
+              return srcNode && srcNode.type === NODE_TYPE.IMAGE && (srcNode.data as { src?: string }).src === src;
+            });
+            if (edge) store.removeEdges([edge.id]);
+          }}
+        />
+      </Card>
+    </ReferenceHoverPreview>
   );
 }
 

@@ -12,8 +12,19 @@ describe("Switch", () => {
     const toggle = screen.getByRole("switch");
 
     expect(toggle).toHaveAttribute("data-slot", "switch");
-    expect(toggle).toHaveClass("rounded-full", "data-checked:bg-primary", "data-unchecked:bg-input");
-    expect(toggle.querySelector('[data-slot="switch-thumb"]')).toBeTruthy();
+    expect(toggle).toHaveClass("rounded-full", "data-[state=checked]:bg-primary", "data-[state=unchecked]:bg-input");
+    const thumb = toggle.querySelector('[data-slot="switch-thumb"]');
+    expect(thumb).toHaveAttribute("data-state", "unchecked");
+    expect(thumb).toHaveClass("data-[state=checked]:translate-x-[calc(100%-2px)]", "data-[state=unchecked]:translate-x-0");
+  });
+
+  it("uses Radix data-state for checked track and thumb", () => {
+    render(<Switch checked />);
+    const toggle = screen.getByRole("switch");
+    const thumb = toggle.querySelector('[data-slot="switch-thumb"]');
+
+    expect(toggle).toHaveAttribute("data-state", "checked");
+    expect(thumb).toHaveAttribute("data-state", "checked");
   });
 
   it("exposes checked state through switch semantics and toggles boolean values", () => {

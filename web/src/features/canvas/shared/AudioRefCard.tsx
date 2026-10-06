@@ -9,11 +9,12 @@
 import { memo, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CloseOutlined, PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
+import { PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
+import { ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { useRevealCanvasNode } from "./reveal-node";
 
 export interface AudioRefCardProps {
@@ -112,13 +113,12 @@ function AudioRefCard({
       }}
     >
       <WaveIcon className="pointer-events-none" style={{ color: "var(--foreground)", width: 16, height: 16 }} />
-      {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
-      <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refAudioLabel", { index: index + 1 })}</span>
+      <ReferenceIndexBadge>{t("common.refAudioLabel", { index: index + 1 })}</ReferenceIndexBadge>
       {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
       {hovered && (
         <Button
           type="button"
-          size="icon-sm"
+          size="icon-xs"
           variant="ghost"
           aria-label={playing ? t("common.stop") : t("common.play")}
           className="absolute inset-0 m-auto rounded-full bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
@@ -128,9 +128,9 @@ function AudioRefCard({
           }}
         >
           {playing ? (
-            <StopIcon className="size-4" />
+            <StopIcon className="size-3" />
           ) : (
-            <PlayIcon className="size-4" />
+            <PlayIcon className="size-3" />
           )}
         </Button>
       )}
@@ -138,7 +138,7 @@ function AudioRefCard({
       {playing && !hovered && (
         <Button
           type="button"
-          size="icon-sm"
+          size="icon-xs"
           variant="ghost"
           aria-label={t("common.stop")}
           className="absolute inset-0 m-auto rounded-full bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
@@ -147,23 +147,17 @@ function AudioRefCard({
             stop();
           }}
         >
-          <StopIcon className="size-4" />
+          <StopIcon className="size-3" />
         </Button>
       )}
-      <Button
-        type="button"
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
-        onClick={() => {
+      <ReferenceRemoveButton
+        ariaLabel={t("common.delete")}
+        onRemove={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
           if (edge) store.removeEdges([edge.id]);
         }}
-      >
-        <CloseOutlined className="size-3" />
-      </Button>
+      />
       <audio
         ref={audioRef}
         src={audio.src}

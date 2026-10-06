@@ -27,4 +27,14 @@ describe("Checkbox", () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("renders the indeterminate state with the mixed aria value", () => {
+    render(<Checkbox checked="indeterminate" onCheckedChange={vi.fn()} />);
+    const checkbox = screen.getByRole("checkbox");
+    const indicator = checkbox.querySelector('[data-slot="checkbox-indicator"]');
+
+    expect(checkbox).toHaveAttribute("aria-checked", "mixed");
+    expect(checkbox).toHaveAttribute("data-state", "indeterminate");
+    expect(indicator).toHaveAttribute("data-state", "indeterminate");
+  });
 });

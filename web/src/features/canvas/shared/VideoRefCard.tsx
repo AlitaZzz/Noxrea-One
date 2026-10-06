@@ -8,14 +8,12 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CloseOutlined } from "@/components/ui/AppIcon";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
+import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { findReferenceNode, useRevealCanvasNode } from "./reveal-node";
-import { useDelayedHover } from "./use-delayed-hover";
 
 export interface VideoRefCardProps {
   /** 参考视频地址 */
@@ -42,89 +40,74 @@ function VideoRefCard({
 }: VideoRefCardProps) {
   const { t } = useTranslation();
   const reveal = useRevealCanvasNode();
-  // 悬浮预览用延迟悬停：鼠标扫过整排卡片时不闪浮层
-  const { active: hovered, onMouseEnter, onMouseLeave } = useDelayedHover();
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   return (
-    <Card
-      className={`group relative flex h-14 w-14 flex-row rounded-md border-border bg-accent p-0 shadow-none transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      draggable
-      onDoubleClick={() => {
-        const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, src);
-        if (n) reveal(n);
-      }}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("application/x-ref-video", src);
-        e.dataTransfer.setData("text/plain", src);
-        e.dataTransfer.effectAllowed = "move";
-        setDragging(true); // 自身拖拽期间不显示预览，避免与拖拽图像错位
-        onDragStateChange?.(true);
-        // 以首帧缩略视频为拖拽图像并锚定中心，避免快照携带悬停预览浮层导致错位
-        const el = (e.currentTarget as HTMLElement).querySelector("video");
-        if (el) e.dataTransfer.setDragImage(el, 28, 28);
-      }}
-      onDragEnd={() => {
-        setDragging(false);
-        onDragStateChange?.(false);
-      }}
-      onDragEnter={(e) => {
-        // 部分浏览器要求 dragenter 也 preventDefault，否则后续 drop 不会触发
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!e.dataTransfer.types.includes("application/x-ref-video")) {
-          e.dataTransfer.dropEffect = "none"; // 仅视频可放到视频位置
-          return;
-        }
-        e.dataTransfer.dropEffect = "move";
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragOver(false);
-        const dragged = e.dataTransfer.getData("text/plain");
-        if (!dragged || dragged === src) return;
-        onReorder(dragged, src); // 面板侧按 refVideoOrder 校验，非视频自动忽略
-      }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+    <ReferenceHoverPreview
+      disabled={dragging || Boolean(dragActive) || dragOver}
+      preview={<video src={src} className="block max-h-[240px] max-w-[240px] object-contain" autoPlay muted loop playsInline />}
     >
-      {/* 静态缩略：用视频元素渲染首帧（#t=0.1 避开开头黑场，preload=metadata 不预载全片） */}
-      <video src={`${src}#t=0.1`} className="size-full rounded-md object-cover pointer-events-none" muted preload="metadata" playsInline draggable={false} />
-      {hovered && !dragging && !dragActive && !dragOver && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <video src={src} className="max-h-[240px] max-w-[240px] rounded-lg border border-border bg-card shadow-2xl" autoPlay muted loop playsInline />
-        </div>
-      )}
-      {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
-      <span className="absolute inset-x-0 bottom-0 h-4 flex items-center justify-center rounded-b text-[10px] font-semibold pointer-events-none whitespace-nowrap" style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>{t("common.refVideoLabel", { index: index + 1 })}</span>
-      <Button
-        type="button"
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
-        onClick={() => {
-          // 删除参考 = 断开连线（与图片 / 音频参考一致），显示顺序随后自动派生
-          const store = useCanvasStore.getState();
-          const edge = store.edges.find((e) => {
-            if (e.target !== nodeId) return false;
-            const srcNode = store.nodes.find((n) => n.id === e.source);
-            return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === src;
-          });
-          if (edge) store.removeEdges([edge.id]);
+      <Card
+        className={`group relative flex h-14 w-14 flex-row cursor-grab rounded-md border-border bg-accent p-0 shadow-none transition-shadow active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
+        draggable
+        onDoubleClick={() => {
+          const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, src);
+          if (n) reveal(n);
+        }}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/x-ref-video", src);
+          e.dataTransfer.setData("text/plain", src);
+          e.dataTransfer.effectAllowed = "move";
+          setDragging(true);
+          onDragStateChange?.(true);
+          const el = (e.currentTarget as HTMLElement).querySelector("video");
+          if (el) e.dataTransfer.setDragImage(el, 28, 28);
+        }}
+        onDragEnd={() => {
+          setDragging(false);
+          onDragStateChange?.(false);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.dataTransfer.types.includes("application/x-ref-video")) {
+            e.dataTransfer.dropEffect = "none";
+            return;
+          }
+          e.dataTransfer.dropEffect = "move";
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          const dragged = e.dataTransfer.getData("text/plain");
+          if (!dragged || dragged === src) return;
+          onReorder(dragged, src);
         }}
       >
-        <CloseOutlined className="size-3" />
-      </Button>
-    </Card>
+        <video src={`${src}#t=0.1`} className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
+        <ReferenceIndexBadge>{t("common.refVideoLabel", { index: index + 1 })}</ReferenceIndexBadge>
+        <ReferenceRemoveButton
+          ariaLabel={t("common.delete")}
+          onRemove={() => {
+            const store = useCanvasStore.getState();
+            const edge = store.edges.find((e) => {
+              if (e.target !== nodeId) return false;
+              const srcNode = store.nodes.find((n) => n.id === e.source);
+              return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === src;
+            });
+            if (edge) store.removeEdges([edge.id]);
+          }}
+        />
+      </Card>
+    </ReferenceHoverPreview>
   );
 }
 

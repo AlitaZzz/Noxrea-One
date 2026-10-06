@@ -123,6 +123,7 @@ Radix UI primitives、样式与图标实现
 - 交互元素不得嵌套；需要同时支持选择和操作时，将选择控件与操作控件拆为并列元素，外层只负责布局或浮层触发。
 - 悬停隐藏的交互控件必须保留 `focus-visible` 状态，确保键盘操作时可见且可用。
 - 选中态使用主题 token，并明确检查官方 hover、focus 和 disabled 样式是否覆盖业务状态。
+- 全选、部分选中等选择状态统一使用 `components/ui/checkbox`；部分选中必须传递 `checked="indeterminate"`，不得手绘横杠或勾选框。
 - 业务语义色可以保留在标准控件上：例如 API 模型能力按钮用文字、图片、视频的颜色区分模型类型；迁移控件时保留该语义色，不要为追求统一而改成无差别的主题色。
 
 ### 3. UI 基础层规范
@@ -226,6 +227,10 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 ### 2. 重构后的维护约束
 
 - 交互控件的颜色、边框、焦点和悬停状态优先使用主题 token（如 `bg-background`、`bg-popover`、`text-foreground`、`border-input`、`ring-ring`）；业务组件不得用硬编码颜色覆盖基础组件的主题契约。
+- Checkbox 的状态样式必须匹配 Radix 的 `data-state="checked"` / `data-state="indeterminate"`，选中和半选背景、边框及图标颜色统一走主题 token。
+- 媒体缩略图底部的信息条统一使用黑色半透明背景和白色文字（与资产卡片一致），明暗主题保持相同，确保覆盖在不同内容上时有稳定对比度。
+- 媒体卡片右上角的删除角标与资产卡片的 `+` 操作统一使用透明背景、白色图标，悬停或聚焦时使用 `bg-white/15`；保留 `focus-visible` 可见状态，不使用红色作为默认删除角标颜色。
+- 图片、视频等媒体悬浮预览统一由 `HoverCardContent` 提供外层边框、圆角、背景和裁剪；媒体元素本身不得重复添加边框、圆角或背景，避免出现双层边框。
 - Dialog、Sheet、Popover、DropdownMenu、Tooltip 和 Tabs 统一使用 `components/ui` 的实现。业务层只组合标准 API，不重复实现焦点恢复、浮层定位、关闭和键盘行为。
 - `DialogTitle` 用于标题，`DialogDescription` 只放简短的说明文本；表单、列表、代码块和其他结构化内容放在普通容器中，避免产生无效 HTML 或 hydration 错误。
 - 共享 UI 组件的行为变更应覆盖键盘操作、焦点转移、鼠标关闭、主题 token 和 Portal 渲染等关键路径；业务组件只补充自身领域行为测试。

@@ -783,21 +783,14 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   opacity: 0.5;
 }
 
-/* 多选批量操作条：出现在网格正上方，操作与选择同处一个上下文。
-   外层用 grid-template-rows 0fr→1fr 做高度折叠动画，
-   内层 overflow:hidden，出现/消失时网格只做一次平滑推移，不产生跳动。 */
-.bulk-bar-collapse {
-  display: grid;
-  grid-template-rows: 0fr;
-  flex-shrink: 0;
-  transition: grid-template-rows 160ms ease;
+/* Collapsible 内容的通用高度动画，使用 Radix 提供的实际内容高度。 */
+@keyframes collapsible-down {
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
 }
-.bulk-bar-collapse--open {
-  grid-template-rows: 1fr;
-}
-.bulk-bar-collapse > div {
-  overflow: hidden;
-  min-height: 0;
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
 }
 /* ===== 登录页（(auth)/login）私有样式 =====
    必须放在打包进 head 的全局 CSS 里：曾放 body 内联 \3c style>，首帧绘制时

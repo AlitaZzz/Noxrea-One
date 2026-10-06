@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PictureOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
@@ -42,6 +43,13 @@ interface Props {
 
 export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Props) {
   const { t } = useTranslation();
+
+  useEffect(() => {
+    // DropdownMenu 负责普通外点关闭；文档级 contextmenu 只负责结束右键触发的连接创建，
+    // 不拦截事件，让画布或输入区域继续执行各自的右键语义。
+    document.addEventListener("contextmenu", onClose);
+    return () => document.removeEventListener("contextmenu", onClose);
+  }, [onClose]);
 
   const nodeOptions = [
     { type: NODE_TYPE.TEXT, label: t("node.text"), icon: <TextIcon /> },
@@ -91,7 +99,6 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
           })}
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
     </>
   );
 }
