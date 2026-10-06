@@ -66,7 +66,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
       <DialogContent
         global
         showCloseButton={false}
-        className="nodrag flex h-screen max-h-screen w-screen max-w-none items-center justify-center overflow-hidden rounded-none bg-black/95 p-0 text-white shadow-none ring-0 sm:max-w-none"
+        className="nodrag flex h-screen max-h-screen w-screen max-w-none items-center justify-center overflow-hidden rounded-none bg-card/55 p-0 text-foreground shadow-none backdrop-blur-md ring-0 sm:max-w-none"
         onClick={onClose}
       >
         <DialogTitle className="sr-only">Media preview</DialogTitle>
@@ -77,7 +77,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
             type="button"
             variant="ghost"
             size="icon-lg"
-            className="absolute right-5 top-5 rounded-full text-white hover:bg-white/15 hover:text-white"
+            className="absolute right-5 top-5 rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
             onClick={(event) => event.stopPropagation()}
             aria-label="Close preview"
           >
@@ -89,7 +89,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
           type="button"
           variant="ghost"
           size="icon-lg"
-          className="absolute right-5 top-[68px] rounded-full text-white hover:bg-white/15 hover:text-white"
+          className="absolute right-5 top-[68px] rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
           onClick={(event) => { event.stopPropagation(); handleDownload(); }}
           aria-label="Download media"
         >
@@ -101,7 +101,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
             type="button"
             variant="ghost"
             size="icon-lg"
-            className="absolute left-5 top-1/2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white"
+            className="absolute left-5 top-1/2 -translate-y-1/2 active:!-translate-y-1/2 rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
             onClick={(event) => { event.stopPropagation(); go(-1); }}
             aria-label="Previous media"
           >
@@ -138,7 +138,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
             type="button"
             variant="ghost"
             size="icon-lg"
-            className="absolute right-5 top-1/2 -translate-y-1/2 rounded-full text-white hover:bg-white/15 hover:text-white"
+            className="absolute right-5 top-1/2 -translate-y-1/2 active:!-translate-y-1/2 rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
             onClick={(event) => { event.stopPropagation(); go(1); }}
             aria-label="Next media"
           >
@@ -148,7 +148,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
 
         {count > 1 && (
           <div
-            className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-sm text-white/90"
+            className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-card/70 px-3 py-1 text-sm text-foreground/90"
             onClick={(event) => event.stopPropagation()}
           >
             {safeIndex + 1} / {count}
@@ -157,7 +157,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
 
         {count > 1 && (
           <div
-            className="absolute bottom-14 left-1/2 flex max-w-[90vw] -translate-x-1/2 gap-2 overflow-x-auto rounded-xl bg-black/40 p-2"
+            className="absolute bottom-14 left-1/2 flex max-w-[90vw] -translate-x-1/2 gap-2 overflow-x-auto rounded-xl bg-card/70 p-2"
             onClick={(event) => event.stopPropagation()}
           >
             {items.map((item, itemIndex) => (
@@ -168,7 +168,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
                 key={`${item.url}-${itemIndex}`}
                 onClick={(event) => { event.stopPropagation(); onIndexChange?.(itemIndex); }}
                 className={`size-14 shrink-0 overflow-hidden rounded-md p-0 transition ${
-                  itemIndex === safeIndex ? "ring-2 ring-white" : "opacity-60 hover:opacity-100"
+                    itemIndex === safeIndex ? "ring-2 ring-foreground" : "opacity-60 hover:opacity-100"
                 }`}
               >
                 {item.mediaType === "video" ? (

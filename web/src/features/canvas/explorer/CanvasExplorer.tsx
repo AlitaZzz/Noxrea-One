@@ -78,7 +78,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
-        className="canvas-sidebar w-[360px] max-w-[100vw] gap-0 border-r border-border bg-card p-0"
+        className="w-[360px] max-w-[100vw] gap-0 border-r border-border bg-card p-0"
       >
         <div className="flex min-h-0 flex-1 flex-col select-none">
           <SheetHeader>
@@ -248,7 +248,7 @@ function CanvasElementsView() {
           containerStyle={{ height: 32 }}
         />
       </div>
-      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
+      <div className="scrollbar-ui scrollbar-ui-compact flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
         {nodes.length === 0 ? (
           <Empty role="status" className="min-h-[120px] p-6 text-muted-foreground">
             <EmptyMedia variant="icon" />
@@ -724,7 +724,7 @@ function AssetsView() {
       {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理。
           首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
       <div
-        className={`min-h-0 flex-1 px-4 pb-3 ${loading ? "overflow-hidden" : "overflow-y-auto"}`}
+        className={`scrollbar-ui scrollbar-ui-compact min-h-0 flex-1 px-4 pb-3 ${loading ? "overflow-hidden" : "overflow-y-auto"}`}
         style={{ scrollbarGutter: "stable" }}
       >
         <AssetGrid

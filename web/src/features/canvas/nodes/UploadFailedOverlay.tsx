@@ -29,7 +29,7 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
   // 重试中：节点回到上传态后本组件会被卸载，这里只是按下按钮到状态切换之间的过渡
   if (retrying) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
+      <div className="absolute inset-0 flex items-center justify-center bg-black/45">
         <div className="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -54,7 +54,7 @@ export default function UploadFailedOverlay({ nodeId, error, previewUrl }: Props
           style={{ filter: "blur(24px)", opacity: 0.45 }}
         />
       )}
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.55)" }} />
+      <div className="absolute inset-0 bg-black/55" />
       <div className="relative z-10 flex flex-col items-center gap-2">
         <ExclamationCircleOutlined className="size-5 text-destructive" />
         {/* 节点尺寸有限，超长文案截断：不加任何悬停提示（原生 title / Tooltip 都不要） */}

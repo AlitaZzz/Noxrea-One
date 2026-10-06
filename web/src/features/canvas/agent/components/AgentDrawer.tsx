@@ -268,7 +268,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
           </Popover>
           </div>
         </SheetHeader>
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin] [scrollbar-color:var(--input)_transparent]">
+        <div ref={listRef} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-3">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2.5 text-center">
             <div className="text-[22px] font-semibold tracking-wide text-foreground">Noxrea One</div>

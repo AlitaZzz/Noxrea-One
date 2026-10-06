@@ -73,7 +73,7 @@ export default function Outliner() {
       </div>
 
       {/* 树 */}
-      <div className="dir-outliner-list flex flex-1 select-none flex-col gap-0.5">
+      <div className="scrollbar-ui scrollbar-ui-hover flex flex-1 select-none flex-col gap-0.5 overflow-y-auto [scrollbar-gutter:stable]">
         {filtered.length === 0 && (
           <div className="px-1.5 py-[22px] text-center text-xs text-muted-foreground">{t("director.emptyScene")}</div>
         )}

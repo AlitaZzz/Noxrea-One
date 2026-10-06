@@ -392,7 +392,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
 
   return (
     <div className="relative">
-      <div className="mention-scroll w-full min-h-[100px] max-h-[240px] overflow-y-auto rounded-md border-0 bg-transparent p-0">
+      <div className="scrollbar-ui w-full min-h-[100px] max-h-[240px] overflow-y-auto rounded-md border-0 bg-transparent p-0">
         <EditorContent editor={editor} />
       </div>
       {mention && mention.items.length > 0 &&

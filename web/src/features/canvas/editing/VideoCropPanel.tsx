@@ -292,17 +292,16 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
           style={{ pointerEvents: "none", userSelect: "none" }}
         />
         {/* Dark overlay outside crop area */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "rgba(0,0,0,0.5)" }} />
+        <div className="pointer-events-none absolute inset-0 bg-black/50" />
 
         {/* Cutout for crop area (clear the dark overlay) */}
         <div
-          className="absolute pointer-events-none"
+          className="absolute pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
           style={{
             left: `${crop.x * 100}%`,
             top: `${crop.y * 100}%`,
             width: `${crop.w * 100}%`,
             height: `${crop.h * 100}%`,
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
             border: "1.5px solid var(--primary)",
           }}
         >

@@ -231,8 +231,10 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 - 交互控件的颜色、边框、焦点和悬停状态优先使用主题 token（如 `bg-background`、`bg-popover`、`text-foreground`、`border-input`、`ring-ring`）；业务组件不得用硬编码颜色覆盖基础组件的主题契约。
 - Checkbox 的状态样式必须匹配 Radix 的 `data-state="checked"` / `data-state="indeterminate"`，选中和半选背景、边框及图标颜色统一走主题 token。
 - 媒体缩略图底部的信息条统一使用黑色半透明背景和白色文字（与资产卡片一致），明暗主题保持相同，确保覆盖在不同内容上时有稳定对比度。
+- 媒体内容内的局部遮罩统一使用 Tailwind `bg-black/xx` 与 `text-white` 写法，禁止在业务组件中以内联 `rgba` 重复实现固定遮罩颜色；全屏交互遮罩（如媒体预览、文件拖放）统一使用 `bg-card/55 backdrop-blur-md`，控件前景使用主题 token。
 - 媒体卡片右上角的删除角标与资产卡片的 `+` 操作统一使用透明背景、白色图标，悬停或聚焦时使用 `bg-white/15`；保留 `focus-visible` 可见状态，不使用红色作为默认删除角标颜色。
 - 图片、视频等媒体悬浮预览统一由 `HoverCardContent` 提供外层边框、圆角、背景和裁剪；媒体元素本身不得重复添加边框、圆角或背景，避免出现双层边框。
+- 业务滚动区域统一使用 `.scrollbar-ui`；仅在滚动密度或悬停显隐确有差异时使用对应变体，禁止在组件内联 `scrollbar-width` 或 `scrollbar-color`。
 - Dialog、Sheet、Popover、DropdownMenu、Tooltip 和 Tabs 统一使用 `components/ui` 的实现。业务层只组合标准 API，不重复实现焦点恢复、浮层定位、关闭和键盘行为。
 - `DialogTitle` 用于标题，`DialogDescription` 只放简短的说明文本；表单、列表、代码块和其他结构化内容放在普通容器中，避免产生无效 HTML 或 hydration 错误。
 - 共享 UI 组件的行为变更应覆盖键盘操作、焦点转移、鼠标关闭、主题 token 和 Portal 渲染等关键路径；业务组件只补充自身领域行为测试。

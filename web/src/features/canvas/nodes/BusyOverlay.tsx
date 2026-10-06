@@ -31,8 +31,7 @@ export default function BusyOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-lg"
-      style={{ background: "rgba(0,0,0,0.45)" }}
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/45"
     >
       <span className="w-7 h-7 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
       <span className="text-xs text-white/80">
