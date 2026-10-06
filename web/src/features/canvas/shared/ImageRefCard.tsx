@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -53,8 +54,8 @@ function ImageRefCard({
   const preview = src.includes("/api/files/") ? `${src}?w=480` : src;
 
   return (
-    <div
-      className="relative group"
+    <Card
+      className={`group relative h-14 w-14 rounded-md border-border bg-accent p-0 shadow-none ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
       draggable
       onDoubleClick={() => {
         const n = findReferenceNode(nodeId, NODE_TYPE.IMAGE, src);
@@ -103,7 +104,7 @@ function ImageRefCard({
         src={thumbnail}
         draggable={false}
         alt={`Ref ${index + 1}`}
-        className={`block h-14 w-14 rounded object-cover cursor-grab active:cursor-grabbing transition-shadow ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
+        className="block size-full rounded-md object-cover cursor-grab active:cursor-grabbing transition-shadow"
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       />
@@ -114,8 +115,7 @@ function ImageRefCard({
           <img
             src={preview}
             alt=""
-            className="max-w-[240px] max-h-[240px] rounded-lg shadow-2xl"
-            style={{ background: "var(--card)", border: "1px solid var(--border)", objectFit: "contain" }}
+            className="max-h-[240px] max-w-[240px] rounded-lg border border-border bg-card object-contain shadow-2xl"
           />
         </div>
       )}
@@ -124,7 +124,7 @@ function ImageRefCard({
         size="icon-xs"
         variant="ghost"
         aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           // 删除参考 = 断开连线，显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -138,7 +138,7 @@ function ImageRefCard({
       >
         <CloseOutlined className="size-3" />
       </Button>
-    </div>
+    </Card>
   );
 }
 

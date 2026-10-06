@@ -126,19 +126,24 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                   return (
                     <div
                       key={id}
-                      className="flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-destructive/10"
-                      onClick={(event) => {
-                        if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, id);
-                      }}
+                      className="flex min-w-0 flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground"
                     >
                       <Checkbox
                         checked={checked[c.id]?.has(id) ?? true}
                         onCheckedChange={() => toggle(c.id, id)}
                         aria-label={nodeLabel(id)}
                       />
-                      {thumb && <img className="size-7 shrink-0 rounded-md border border-border object-cover" src={thumb} alt="" />}
-                      <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(id)}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto min-w-0 flex-1 justify-start gap-1.5 rounded-md px-1 py-1 text-left text-xs font-normal hover:bg-destructive/10"
+                        onClick={() => toggle(c.id, id)}
+                      >
+                        {thumb && <img className="size-7 shrink-0 rounded-md border border-border object-cover" src={thumb} alt="" />}
+                        <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(id)}</span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
+                      </Button>
                     </div>
                   );
                 })}
@@ -154,17 +159,22 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                 {c.edges.map((e, i) => (
                   <div
                     key={`${e.source}-${e.target}-${i}`}
-                    className="flex cursor-pointer flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground hover:bg-destructive/10"
-                    onClick={(event) => {
-                      if (!(event.target as HTMLElement).closest('[data-slot="checkbox"]')) toggle(c.id, i);
-                    }}
+                    className="flex min-w-0 flex-row items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-muted-foreground"
                   >
                     <Checkbox
                       checked={checked[c.id]?.has(i) ?? true}
                       onCheckedChange={() => toggle(c.id, i)}
                       aria-label={`${nodeLabel(e.source)} → ${nodeLabel(e.target)}`}
                     />
-                    <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(e.source)} → {nodeLabel(e.target)}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto min-w-0 flex-1 justify-start rounded-md px-1 py-1 text-left text-xs font-normal hover:bg-destructive/10"
+                      onClick={() => toggle(c.id, i)}
+                    >
+                      <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(e.source)} → {nodeLabel(e.target)}</span>
+                    </Button>
                   </div>
                 ))}
               </div>

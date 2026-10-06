@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 import { useRevealCanvasNode } from "./reveal-node";
@@ -63,9 +64,8 @@ function AudioRefCard({
   }, [playing, stop]);
 
   return (
-    <div
-      className={`relative group h-14 w-14 rounded flex items-center justify-center transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
+    <Card
+      className={`group relative flex h-14 w-14 flex-row items-center justify-center rounded-md border-border bg-accent p-0 shadow-none transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
       draggable
       onDoubleClick={() => {
         const s = useCanvasStore.getState();
@@ -155,7 +155,7 @@ function AudioRefCard({
         size="icon-xs"
         variant="ghost"
         aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
@@ -173,7 +173,7 @@ function AudioRefCard({
           if (audioRef.current && audioRef.current.currentTime === 0) setPlaying(false);
         }}
       />
-    </div>
+    </Card>
   );
 }
 

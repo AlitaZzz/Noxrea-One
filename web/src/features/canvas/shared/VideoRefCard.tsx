@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -47,9 +48,8 @@ function VideoRefCard({
   const [dragging, setDragging] = useState(false);
 
   return (
-    <div
-      className={`relative group h-14 w-14 rounded transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
-      style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
+    <Card
+      className={`group relative flex h-14 w-14 flex-row rounded-md border-border bg-accent p-0 shadow-none transition-shadow cursor-grab active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}
       draggable
       onDoubleClick={() => {
         const n = findReferenceNode(nodeId, NODE_TYPE.VIDEO, src);
@@ -97,10 +97,10 @@ function VideoRefCard({
       onMouseLeave={onMouseLeave}
     >
       {/* 静态缩略：用视频元素渲染首帧（#t=0.1 避开开头黑场，preload=metadata 不预载全片） */}
-      <video src={`${src}#t=0.1`} className="w-full h-full object-cover rounded pointer-events-none" muted preload="metadata" playsInline draggable={false} />
+      <video src={`${src}#t=0.1`} className="size-full rounded-md object-cover pointer-events-none" muted preload="metadata" playsInline draggable={false} />
       {hovered && !dragging && !dragActive && !dragOver && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <video src={src} className="max-w-[240px] max-h-[240px] rounded-lg shadow-2xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }} autoPlay muted loop playsInline />
+          <video src={src} className="max-h-[240px] max-w-[240px] rounded-lg border border-border bg-card shadow-2xl" autoPlay muted loop playsInline />
         </div>
       )}
       {/* 底部半透明编号条：与卡片下缘齐平，仿播放器字幕条 */}
@@ -110,7 +110,7 @@ function VideoRefCard({
         size="icon-xs"
         variant="ghost"
         aria-label={t("common.delete")}
-        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
+        className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
         onClick={() => {
           // 删除参考 = 断开连线（与图片 / 音频参考一致），显示顺序随后自动派生
           const store = useCanvasStore.getState();
@@ -124,7 +124,7 @@ function VideoRefCard({
       >
         <CloseOutlined className="size-3" />
       </Button>
-    </div>
+    </Card>
   );
 }
 

@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, TextIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
@@ -31,9 +32,8 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
 
   return (
     <Tooltip><TooltipTrigger asChild>
-        <div
-          className="relative group h-14 w-14 rounded flex items-center justify-center"
-          style={{ background: "var(--accent)", border: "1px solid var(--border)" }}
+        <Card
+          className="group relative flex size-14 flex-row items-center justify-center rounded-md border-border bg-accent p-0 shadow-none"
           onDoubleClick={() => {
             const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
             if (n) reveal(n);
@@ -45,7 +45,7 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
             size="icon-xs"
             variant="ghost"
             aria-label={t("common.delete")}
-            className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/70 hover:text-white"
+            className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
             onClick={() => {
               const store = useCanvasStore.getState();
               const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
@@ -54,7 +54,7 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
           >
             <CloseOutlined className="size-3" />
           </Button>
-        </div>
+        </Card>
       </TooltipTrigger><TooltipContent>{<div style={{ maxWidth: 280, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {content}
         </div>}</TooltipContent></Tooltip>
