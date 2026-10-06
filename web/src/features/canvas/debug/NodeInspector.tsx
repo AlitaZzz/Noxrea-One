@@ -28,11 +28,11 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>{(node.data as { label?: string })?.label || node.id}</DialogTitle>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:max-w-[520px]">
+        <DialogHeader className="min-w-0 pr-10">
+          <DialogTitle className="line-clamp-2 break-words">{(node.data as { label?: string })?.label || node.id}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto overscroll-contain">
           <Descriptions column={1} size="sm" bordered items={[
             { key: "id", label: "ID", children: node.id },
             { key: "type", label: "Type", children: node.type },
@@ -43,14 +43,7 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
           <div className="text-xs text-muted-foreground">Raw JSON:</div>
           <Paragraph
             copyable={{ text: jsonStr }}
-            className="text-xs whitespace-pre-wrap"
-            style={{
-              background: "var(--popover, #353535)",
-              padding: 8,
-              borderRadius: 6,
-              maxHeight: 300,
-              overflow: "auto",
-            }}
+            className="mb-0 max-h-[300px] min-w-0 overflow-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap"
           >{jsonStr}</Paragraph>
         </div>
       </DialogContent>
