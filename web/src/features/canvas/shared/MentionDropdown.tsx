@@ -20,9 +20,10 @@ interface Props {
   selectedIndex: number;
   onHover: (index: number) => void;
   onSelect: (item: ReferenceItem) => void;
+  onClose: () => void;
 }
 
-const MentionDropdown = memo(function MentionDropdown({ items, position, selectedIndex, onHover, onSelect }: Props) {
+const MentionDropdown = memo(function MentionDropdown({ items, position, selectedIndex, onHover, onSelect, onClose }: Props) {
   const { t } = useTranslation();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +36,13 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
   if (items.length === 0) return null;
 
   return (
-    <Popover open modal={false}>
+    <Popover
+      open
+      modal={false}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
       <PopoverAnchor asChild>
         <span
           aria-hidden="true"
@@ -53,6 +60,15 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
         className="max-h-[300px] w-[220px] overflow-x-hidden p-1"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          // Keep the editor focused when the user clicks back into it. Other
+          // controls must retain the shared Popover's normal focus handoff.
+          const target = event.target;
+          if (target instanceof HTMLElement && target.closest(".mention-editable")) {
+            event.preventDefault();
+          }
+          onClose();
+        }}
       >
       {items.map((item, i) => (
         <Button
@@ -62,9 +78,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
           data-selected={i === selectedIndex ? "true" : undefined}
           className="h-auto min-h-14 w-full justify-start gap-3 rounded-sm px-3 py-2 text-left data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
           onPointerMove={() => onHover(i)}
-          onPointerDown={(e) => {
-            // 阻止默认行为，避免抢走编辑器焦点导致 suggestion 提前退出
-            e.preventDefault();
+          onClick={() => {
             onSelect(item);
           }}
         >

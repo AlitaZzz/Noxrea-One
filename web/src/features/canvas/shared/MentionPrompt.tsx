@@ -17,6 +17,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { SuggestionProps } from "@tiptap/suggestion";
+import { exitSuggestion } from "@tiptap/suggestion";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -50,6 +51,8 @@ interface SuggestionBridge {
   onChange: (text: string) => void;
   translate: (key: string, options?: Record<string, unknown>) => string;
   mention: MentionState | null;
+  /** 当前 @ 查询被用户主动关闭；直到再次输入内容前，Suggestion 不应重开。 */
+  dismissed: boolean;
   selectedIndex: number;
   command: ((item: ReferenceItem) => void) | null;
 }
@@ -170,8 +173,7 @@ function handleSuggestionKeyDown(
       return true;
     }
     case "Escape":
-      bridge.mention = null;
-      setMention(null);
+      dismissMention(bridge, setMention);
       return true;
     default:
       return false;
@@ -180,8 +182,14 @@ function handleSuggestionKeyDown(
 
 function closeMention(bridge: SuggestionBridge, setMention: (state: MentionState | null) => void) {
   bridge.mention = null;
-  bridge.command = null;
+  // Tiptap may deliver the old onExit after a new onStart; the next onStart
+  // replaces this reference, so clearing it here would create a command race.
   setMention(null);
+}
+
+function dismissMention(bridge: SuggestionBridge, setMention: (state: MentionState | null) => void) {
+  bridge.dismissed = true;
+  closeMention(bridge, setMention);
 }
 
 const MentionPrompt = ({ references, value, onChange, placeholder, style }: Props) => {
@@ -239,6 +247,12 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
           char: "@",
           // 不限制 @ 前的字符（默认仅允许空格前缀），输入即唤起候选
           allowedPrefixes: null,
+          allow: ({ editor, state, range }) => {
+            if (bridges.get(editor.view.dom)?.dismissed) return false;
+            const mentionType = state.schema.nodes.mention;
+            if (!mentionType) return false;
+            return Boolean(state.doc.resolve(range.from).parent.type.contentMatch.matchType(mentionType));
+          },
           items: ({ editor, query }) => filterItems(bridges.get(editor.view.dom), query),
           render: () => ({
             onStart: (props) => {
@@ -269,6 +283,26 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
     },
     editorProps: {
       attributes: { class: "mention-editable nodrag" },
+      handleDOMEvents: {
+        mousedown: (view) => {
+          const bridge = bridges.get(view.dom);
+          if (bridge?.mention) {
+            dismissMention(bridge, setMention);
+            exitSuggestion(view);
+          }
+          return false;
+        },
+      },
+      handleTextInput: (view) => {
+        const bridge = bridges.get(view.dom);
+        if (bridge) bridge.dismissed = false;
+        return false;
+      },
+      handlePaste: (view) => {
+        const bridge = bridges.get(view.dom);
+        if (bridge) bridge.dismissed = false;
+        return false;
+      },
     },
     immediatelyRender: false,
   });
@@ -281,6 +315,7 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
       onChange,
       translate: t as SuggestionBridge["translate"],
       mention: null,
+      dismissed: false,
       selectedIndex: 0,
       command: null,
     };
@@ -389,6 +424,19 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
             onSelect={(item) => {
               const target = editor ? bridges.get(editor.view.dom) : undefined;
               target?.command?.(item);
+            }}
+            onClose={() => {
+              if (editor && !editor.isDestroyed) {
+                const bridge = bridges.get(editor.view.dom);
+                if (bridge) {
+                  dismissMention(bridge, setMention);
+                } else {
+                  setMention(null);
+                }
+                exitSuggestion(editor.view);
+                return;
+              }
+              setMention(null);
             }}
           />,
           document.body,
