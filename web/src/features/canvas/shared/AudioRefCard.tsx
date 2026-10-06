@@ -112,7 +112,7 @@ function AudioRefCard({
         if (playing) stop();
       }}
     >
-      <WaveIcon className="pointer-events-none" style={{ color: "var(--foreground)", width: 16, height: 16 }} />
+      <WaveIcon className="pointer-events-none size-4 text-foreground" />
       <ReferenceIndexBadge>{t("common.refAudioLabel", { index: index + 1 })}</ReferenceIndexBadge>
       {/* 悬停时覆盖中央的播放/停止图标，点击可播放 */}
       {hovered && (

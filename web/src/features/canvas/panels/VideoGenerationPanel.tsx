@@ -408,7 +408,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderVideo")}
-          style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
           <ModelSelector

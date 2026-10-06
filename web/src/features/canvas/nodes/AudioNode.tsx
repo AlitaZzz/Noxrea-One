@@ -218,23 +218,23 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
+          bg-card
         `}
-        style={{ background: "var(--card)" }}
         onContextMenu={(e) => e.preventDefault()}
       >
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
-          <div className="w-full h-full relative flex flex-col items-center justify-center gap-2 px-8" style={{ background: "var(--card)", borderRadius: 8 }}>
+          <div className="relative h-full w-full rounded-lg bg-card flex flex-col items-center justify-center gap-2 px-8">
             {data.upload?.progress != null ? (
-              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
               </div>
             ) : (
-              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div className="h-full bg-[var(--primary)] rounded-full animate-pulse" style={{ width: "60%" }} />
               </div>
             )}
-            <span className="text-sm text-white/70 font-medium tabular-nums">
+            <span className="text-sm text-muted-foreground font-medium tabular-nums">
               {t("common.uploading")}
               {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
             </span>
@@ -252,7 +252,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             onReady={handleAudioReady}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
+          <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
             <WaveIcon className="text-5xl" />
             <span className="text-base text-center">{t("drop.upload")}</span>
             <Button

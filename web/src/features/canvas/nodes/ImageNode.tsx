@@ -371,8 +371,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
             ${isMulti ? "overflow-visible" : "overflow-hidden"}
             ${selected ? "node-selected" : ""}
+            ${hasImage ? "bg-transparent" : "bg-card"}
           `}
-          style={{ background: hasImage ? "transparent" : "var(--card)" }}
         >
           {agentGhost && <AgentGhostOverlay />}
           {isMulti && !expanded && (
@@ -545,7 +545,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           : hasImage ? (
             <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
           ) : (
-            <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
+            <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
               <PictureOutlined className="text-5xl" />
               <span className="text-base text-center">{t("drop.upload")}</span>
               <Button

@@ -52,7 +52,7 @@ export function ModelSelector({
           type="button"
           size="sm"
           variant="ghost"
-          className={cn("max-w-[180px] justify-between gap-1.5 text-muted-foreground", className)}
+          className={cn("max-w-[180px] justify-between gap-1 text-foreground", className)}
           aria-label={ariaLabel}
           disabled={disabled}
         >

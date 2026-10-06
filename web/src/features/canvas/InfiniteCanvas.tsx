@@ -1138,12 +1138,10 @@ export default function InfiniteCanvas() {
               ) : (
                 /* 编辑入口对齐节点标题：双击文字或点悬停铅笔（样式见 NodeTitle） */
                 <div
-                  className="flex items-center flex-1 min-w-0 group/name"
-                  style={{ height: 24 }}
+                  className="group/name flex h-6 min-w-0 flex-1 items-center"
                 >
                   <div
-                    className="text-sm min-w-0 truncate"
-                    style={{ color: "var(--foreground)", height: 24, lineHeight: "24px", cursor: "default", userSelect: "none" }}
+                    className="h-6 min-w-0 cursor-default select-none truncate text-sm leading-6 text-foreground"
                     onDoubleClick={() => setIsEditingName(true)}
                   >
                     {editName || "Untitled"}
@@ -1437,18 +1435,15 @@ export default function InfiniteCanvas() {
       {/* 拖入文件时的全屏模糊遮罩 + 释放提示 */}
       {isFileDragging && (
         <div
-          className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md"
-          style={{ background: "color-mix(in srgb, var(--card) 55%, transparent)", pointerEvents: "none" }}
+          className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-card/55 backdrop-blur-md"
         >
           <div
-            className="flex flex-col items-center gap-4 rounded-2xl px-16 py-12"
-            style={{ border: "2px dashed var(--input)", background: "color-mix(in srgb, var(--card) 40%, transparent)" }}
+            className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-input bg-card/40 px-16 py-12"
           >
             <DirUploadIcon
-              className="animate-bounce"
-              style={{ width: 56, height: 56, color: "var(--primary)" }}
+              className="size-14 animate-bounce text-primary"
             />
-            <div className="text-lg font-medium" style={{ color: "var(--foreground)" }}>
+            <div className="text-lg font-medium text-foreground">
               {t("file.dropToAdd")}
             </div>
           </div>

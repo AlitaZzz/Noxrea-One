@@ -387,7 +387,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholder")}
-          style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
           <ModelSelector

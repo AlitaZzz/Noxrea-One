@@ -37,7 +37,6 @@ interface Props {
   value: string;
   onChange: (text: string) => void;
   placeholder: string;
-  style?: React.CSSProperties;
 }
 
 interface MentionState {
@@ -192,7 +191,7 @@ function dismissMention(bridge: SuggestionBridge, setMention: (state: MentionSta
   closeMention(bridge, setMention);
 }
 
-const MentionPrompt = ({ references, value, onChange, placeholder, style }: Props) => {
+const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
   const { t } = useTranslation();
 
   const [mention, setMention] = useState<MentionState | null>(null);
@@ -392,21 +391,8 @@ const MentionPrompt = ({ references, value, onChange, placeholder, style }: Prop
   }, [references, editor]);
 
   return (
-    <div style={{ position: "relative" }}>
-      <div
-        className="mention-scroll"
-        style={{
-          width: "100%",
-          minHeight: 100,
-          maxHeight: 240,
-          overflowY: "auto",
-          padding: 0,
-          borderRadius: 6,
-          background: "transparent",
-          border: "none",
-          ...style,
-        }}
-      >
+    <div className="relative">
+      <div className="mention-scroll w-full min-h-[100px] max-h-[240px] overflow-y-auto rounded-md border-0 bg-transparent p-0">
         <EditorContent editor={editor} />
       </div>
       {mention && mention.items.length > 0 &&

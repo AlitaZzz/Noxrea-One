@@ -433,8 +433,7 @@ export default function OrbitScene3D({ src, color, intensity, azimuth, elevation
   return (
     <div
       ref={hostRef}
-      className="h-full w-full rounded-lg"
-      style={{ background: "var(--card)", border: "1px solid var(--border)" }}
+      className="h-full w-full rounded-lg border border-border bg-card"
     />
   );
 }

@@ -277,7 +277,7 @@ function CanvasElementsView() {
             {/* 未分组节点：按类型分组 */}
             {visible.ungroupedGroups.map((group) => (
               <div key={group.type} className="mb-3">
-                <div className="text-xs mb-1 px-2" style={{ color: "var(--muted-foreground)" }}>
+                <div className="mb-1 px-2 text-xs text-muted-foreground">
                   {NODE_TYPE_I18N[group.type] ? t(NODE_TYPE_I18N[group.type]) : group.type}
                 </div>
                 {group.nodes.map((node) => (
@@ -386,6 +386,9 @@ function ElementItemImpl(props: ElementItemProps) {
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
   const { thumb, loading } = useVideoThumbnail(node.type === NODE_TYPE.VIDEO ? (node.data as { src?: string }).src : undefined);
   const sourceUrl = (node.data as { src?: string }).src;
+  const hasPreview = Boolean(
+    (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb),
+  );
 
   // 状态点：生成/处理中转圈，失败（任务失败或上传失败）红点，其余不显示
   const { taskBinding, upload, createdAt, fileSize } = node.data as {
@@ -464,16 +467,10 @@ function ElementItemImpl(props: ElementItemProps) {
       <span className="shrink-0" style={{ width: ROW_INDENT, height: 24 }} />
       {/* 缩略图/图标：等高正方形卡片（高度 = 标题 20 + 元数据 16 + 时间 16 三行） */}
       <div
-        className="relative w-[52px] h-[52px] rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-        style={{
-          minWidth: 52,
-          background: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
-            ? "var(--popover)"
-            : `${getNodeTypeColor(nodeType)}18`,
-          border: (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb)
-            ? "1px solid var(--border)"
-            : undefined,
-        }}
+        className={`relative flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded ${
+          hasPreview ? "border border-border bg-popover" : ""
+        }`}
+        style={hasPreview ? undefined : { background: `${getNodeTypeColor(nodeType)}18` }}
       >
         {nodeType === NODE_TYPE.IMAGE && src ? (
           <img src={src + "?w=64"} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
@@ -490,16 +487,13 @@ function ElementItemImpl(props: ElementItemProps) {
           </>
         ) : nodeType === NODE_TYPE.TEXT && plainText ? (
           /* 文本节点：内容预览小卡（与参考排版一致，正文片段替代类型图标） */
-          <div
-            className="w-full h-full px-1 py-0.5 overflow-hidden"
-            style={{ background: "var(--popover)", border: "1px solid var(--border)" }}
-          >
-            <span className="text-[8px] leading-[1.4] break-all line-clamp-4" style={{ color: "var(--muted-foreground)" }}>
+          <div className="h-full w-full overflow-hidden border border-border bg-popover px-1 py-0.5">
+            <span className="break-all text-[8px] leading-[1.4] text-muted-foreground line-clamp-4">
               {plainText.slice(0, 64)}
             </span>
           </div>
         ) : nodeType === NODE_TYPE.VIDEO && loading ? (
-          <LoadingOutlined style={{ fontSize: 14, color: "var(--muted-foreground)" }} />
+          <LoadingOutlined className="size-3.5 text-muted-foreground" />
         ) : (
           getNodeTypeIcon(nodeType)
         )}

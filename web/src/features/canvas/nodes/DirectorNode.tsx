@@ -35,10 +35,9 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
 
       {/* Body */}
       <div className={`node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-        ${selected ? "node-selected" : ""}`}
-        style={{ background: "var(--card)" }}>
+        ${selected ? "node-selected" : ""} bg-card`}>
         {agentGhost && <AgentGhostOverlay />}
-        <div className="flex flex-col items-center justify-center gap-3 p-4 text-white/40">
+        <div className="flex flex-col items-center justify-center gap-3 p-4 text-muted-foreground">
           <PartitionOutlined className="text-5xl" />
           <span className="text-base text-center">{t("node.directorDesc")}</span>
           <Button

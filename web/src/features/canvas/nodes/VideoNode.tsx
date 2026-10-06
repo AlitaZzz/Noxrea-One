@@ -676,8 +676,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
+          ${hasVideo ? "bg-transparent" : "bg-card"}
         `}
-        style={{ background: hasVideo ? "transparent" : "var(--card)" }}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -813,7 +813,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-2 p-4 text-white/40">
+          <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
             <VideoCameraOutlined className="text-5xl" />
             <span className="text-base text-center">{t("drop.video")}</span>
             <Button

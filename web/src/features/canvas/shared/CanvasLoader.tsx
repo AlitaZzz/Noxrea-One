@@ -23,7 +23,7 @@ export default function CanvasLoader({ failed = false, onRetry }: Props) {
       <Spinner className="size-8 text-primary" />
       {failed && onRetry && (
         <div className="flex flex-col items-center gap-2">
-          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          <span className="text-sm text-muted-foreground">
             {t("canvas.loadFailed")}
           </span>
           <Button size="sm" onClick={onRetry}>

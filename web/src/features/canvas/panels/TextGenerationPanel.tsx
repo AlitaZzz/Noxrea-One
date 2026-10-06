@@ -415,7 +415,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderText")}
-          style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
           <ModelSelector

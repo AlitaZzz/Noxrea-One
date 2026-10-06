@@ -112,14 +112,14 @@ export default function NodeTitle({
 
   return (
     <div
-      className={`ui-select-none group/title cursor-grab active:cursor-grabbing flex items-center justify-between px-3 py-1 text-[13px] font-medium text-white/80 ${className ?? ""}`}
+      className={`ui-select-none group/title cursor-grab active:cursor-grabbing flex items-center justify-between px-3 py-1 text-[13px] font-medium text-foreground ${className ?? ""}`}
       style={{ height: NODE_TITLE_HEIGHT, flexShrink: 0 }}
     >
       {editing ? (
         <span className="flex items-center gap-0.5 flex-1 min-w-0">
           {icon}
           <Input
-            className="nodrag border-0 bg-transparent text-[13px] font-medium text-white/80 shadow-none focus-visible:ring-0"
+            className="nodrag h-5 w-full min-w-0 rounded border border-border bg-card px-1 py-px text-[13px] font-medium text-foreground shadow-none outline-none focus-visible:border-border focus-visible:ring-0"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={handleSave}
@@ -127,16 +127,6 @@ export default function NodeTitle({
             autoFocus
             // 进入编辑即全选：改名比追加更常见，全选便于一键替换
             onFocus={(e) => e.target.select()}
-            style={{
-              padding: "1px 4px",
-              height: 20,
-              background: "var(--card)",
-              border: "1px solid var(--border, #525252)",
-              borderRadius: 4,
-              outline: "none",
-              boxShadow: "none",
-              width: "100%",
-            }}
           />
         </span>
       ) : (
@@ -144,8 +134,7 @@ export default function NodeTitle({
           {icon}
           {/* 盒模型与编辑态 Input 一致（1px 边框 + 1px 4px 内边距），进入编辑时文字原点不跳动 */}
           <MidTruncate
-            className="flex-1 min-w-0"
-            style={{ padding: "1px 4px", border: "1px solid transparent", borderRadius: 4 }}
+            className="min-w-0 flex-1 rounded border border-transparent px-1 py-px"
           >
             {display ?? title}
           </MidTruncate>
@@ -162,7 +151,7 @@ export default function NodeTitle({
         </span>
       )}
       {trailing != null && trailing !== false && (
-        <span className="ml-2 whitespace-nowrap text-xs text-white/30">{trailing}</span>
+        <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">{trailing}</span>
       )}
     </div>
   );

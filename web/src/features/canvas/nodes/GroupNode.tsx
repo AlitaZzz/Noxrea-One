@@ -65,7 +65,7 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
           用户一改名就永远走 label 分支，成员增减后计数不再更新 */}
       <NodeTitle
         nodeId={id}
-        icon={<GroupIcon className="shrink-0" style={{ color: "#ffffff" }} />}
+        icon={<GroupIcon className="shrink-0" />}
         title={data.label}
         display={
           data.label
