@@ -27,7 +27,10 @@ describe("MediaPreviewOverlay", () => {
     );
 
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Next media" }).className).toContain("active:!-translate-y-1/2");
+    const nextButton = screen.getByRole("button", { name: "Next media" });
+    expect(nextButton.className).not.toContain("active:!");
+    expect(nextButton.parentElement?.className).toContain("top-1/2");
+    expect(nextButton.parentElement?.className).toContain("-translate-y-1/2");
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(onIndexChange).toHaveBeenCalledWith(1);
   });

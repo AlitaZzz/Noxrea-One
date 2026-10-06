@@ -216,14 +216,14 @@
 
 /* Shared node body styles — selected / unselected border */
 .node-body {
-  outline: 1px solid rgba(255, 255, 255, 0.1);
+  outline: 1px solid var(--border);
 }
 .node-body.node-selected {
   outline: 1px solid var(--ring);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 .node-body.node-drag-over {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline: 2px solid var(--ring);
 }
 
 /* Text node rich text editor — 局部排版：补回 preflight 抹掉的块级默认样式 */

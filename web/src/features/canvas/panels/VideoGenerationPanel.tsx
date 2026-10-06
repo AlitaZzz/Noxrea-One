@@ -441,17 +441,30 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
                     : m === "image" ? <VideoCameraIcon className="size-3.5 shrink-0" />
                     : m === "text" ? <TextToVideoIcon className="size-3.5 shrink-0" />
                     : undefined;
-                  return (
+                  const disabledReason = !allowed ? refModeDisabledReason(m) : undefined;
+                  const item = (
                     <DropdownMenuItem
-                      key={m}
-                      disabled={!allowed}
-                      title={!allowed ? refModeDisabledReason(m) : undefined}
-                      className={m === refMode ? "bg-accent text-accent-foreground" : undefined}
-                      onSelect={() => setRefMode(m)}
+                      aria-disabled={!allowed || undefined}
+                      className={`${m === refMode ? "bg-accent text-accent-foreground" : ""} ${!allowed ? "cursor-not-allowed opacity-50" : ""}`}
+                      onSelect={(event) => {
+                        if (!allowed) {
+                          event.preventDefault();
+                          return;
+                        }
+                        setRefMode(m);
+                      }}
                     >
                       {modeIcon}
                       {t(`video.refMode.${m}`)}
                     </DropdownMenuItem>
+                  );
+                  return disabledReason ? (
+                    <Tooltip key={m}>
+                      <TooltipTrigger asChild>{item}</TooltipTrigger>
+                      <TooltipContent side="right">{disabledReason}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Fragment key={m}>{item}</Fragment>
                   );
                 })}
               </DropdownMenuContent>

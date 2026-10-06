@@ -243,7 +243,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
             else dispatchNodeAction(nodeId, "save-asset");
           }}
         >
-          {isInAssets ? <StarFilled style={{ color: "var(--chart-4)" }} /> : <StarOutlined />}
+          {isInAssets ? <StarFilled className="text-chart-4" /> : <StarOutlined />}
         </Button>
       </TooltipTrigger><TooltipContent>{isInAssets ? t("node.unsaveAsset") : t("node.addToAssets")}</TooltipContent></Tooltip>
   );

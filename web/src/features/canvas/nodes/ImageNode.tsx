@@ -413,11 +413,11 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 px-8">
                 {data.upload?.progress != null ? (
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
                   </div>
                 ) : (
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--primary)] rounded-full animate-pulse" style={{ width: "60%" }} />
+                    <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
                   </div>
                 )}
                 <span className="text-sm text-white/60 tabular-nums">

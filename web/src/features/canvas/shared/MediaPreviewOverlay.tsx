@@ -97,16 +97,18 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
         </Button>
 
         {count > 1 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className="absolute left-5 top-1/2 -translate-y-1/2 active:!-translate-y-1/2 rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
-            onClick={(event) => { event.stopPropagation(); go(-1); }}
-            aria-label="Previous media"
-          >
-            <LeftOutlined />
-          </Button>
+          <div className="absolute left-5 top-1/2 -translate-y-1/2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              className="rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
+              onClick={(event) => { event.stopPropagation(); go(-1); }}
+              aria-label="Previous media"
+            >
+              <LeftOutlined />
+            </Button>
+          </div>
         )}
 
         {current?.url && (
@@ -128,16 +130,18 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
         )}
 
         {count > 1 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            className="absolute right-5 top-1/2 -translate-y-1/2 active:!-translate-y-1/2 rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
-            onClick={(event) => { event.stopPropagation(); go(1); }}
-            aria-label="Next media"
-          >
-            <RightOutlined />
-          </Button>
+          <div className="absolute right-5 top-1/2 -translate-y-1/2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              className="rounded-full text-foreground hover:bg-foreground/10 hover:text-foreground"
+              onClick={(event) => { event.stopPropagation(); go(1); }}
+              aria-label="Next media"
+            >
+              <RightOutlined />
+            </Button>
+          </div>
         )}
 
         {count > 1 && (
