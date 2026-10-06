@@ -78,7 +78,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       aria-busy={loading || undefined}
       {...props}
     >
-      {loading ? <LoadingOutlined aria-hidden="true" /> : children}
+      {loading ? <LoadingOutlined spin aria-hidden="true" /> : children}
     </Comp>
   )
 })

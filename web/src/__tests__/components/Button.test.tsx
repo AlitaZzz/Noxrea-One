@@ -22,7 +22,7 @@ describe("Button", () => {
 
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(button.getAttribute("aria-busy")).toBe("true");
-    expect(button.querySelector("svg")).toBeTruthy();
+    expect(button.querySelector("svg")).toHaveClass("animate-spin");
   });
 
   it("keeps icon-only buttons square at the selected size", () => {
