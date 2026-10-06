@@ -40,7 +40,7 @@ import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
-import { useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
+import { swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
 import { useGenerationSubmit } from "./use-generation-submit";
@@ -167,35 +167,20 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
   } = useVideoGenPanel({ nodeId, prompt });
 
-  // 同类内拖拽排序（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
+  // 同类内拖放交换（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
   const handleAudioReorder = useCallback((dragged: string, target: string) => {
-    const list = [...audioOrder];
-    const fromIdx = list.indexOf(dragged);
-    const toIdx = list.indexOf(target);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-    writeOrderPref(nodeId, { refAudioOrder: list });
+    const next = swapOrderItems(audioOrder, dragged, target);
+    if (next) writeOrderPref(nodeId, { refAudioOrder: next });
   }, [audioOrder, nodeId]);
 
   const handleImageReorder = useCallback((dragged: string, target: string) => {
-    const list = [...refOrder];
-    const fromIdx = list.indexOf(dragged);
-    const toIdx = list.indexOf(target);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-    writeOrderPref(nodeId, { refOrder: list });
+    const next = swapOrderItems(refOrder, dragged, target);
+    if (next) writeOrderPref(nodeId, { refOrder: next });
   }, [refOrder, nodeId]);
 
   const handleVideoReorder = useCallback((dragged: string, target: string) => {
-    const list = [...refVideoOrder];
-    const fromIdx = list.indexOf(dragged);
-    const toIdx = list.indexOf(target);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-    writeOrderPref(nodeId, { refVideoOrder: list });
+    const next = swapOrderItems(refVideoOrder, dragged, target);
+    if (next) writeOrderPref(nodeId, { refVideoOrder: next });
   }, [refVideoOrder, nodeId]);
 
   // 参考模式可用范围（与画布 Agent 参数校验共用 shared/ref-modes 的推导规则）：

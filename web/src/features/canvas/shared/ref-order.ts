@@ -7,7 +7,8 @@
  *   写者是拖拽排序事件（writeOrderPref）与手动连线事件（bumpRefOrderToTail），
  *   断开连线不触碰偏好；
  * - 参考区按类型分组展示（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，
- *   跨类型拖放一律禁止；文本参考不可拖动，按连线顺序展示；
+ *   同类型拖放交换源与目标位置，其他项不动；跨类型拖放一律禁止；
+ *   文本参考不可拖动，按连线顺序展示；
  * - 「重连 = 重新入列」：用户手动（重新）连线时对应参考一律置尾（bumpRefOrderToTail），
  *   断开再连排到最后；
  * - 撤销/重做整体恢复快照（含排序偏好），精确回到操作前状态——被断开的参考
@@ -52,13 +53,42 @@ const KIND_BY_TYPE: Record<string, string> = {
  * 1. 偏好序中仍存活的项按用户排序在前；
  * 2. 实时列表中未被偏好覆盖的新增项按连线顺序追加在后；
  * 3. 偏好中的失效引用（已断开连线 / 节点已删除）被自动过滤。
+ * 4. 按 src 去重，同一资源只占一个排序位置。
  */
 export function mergeOrder(pref: readonly string[], live: readonly string[]): string[] {
   const liveSet = new Set(live);
   const prefSet = new Set(pref);
-  const alive = pref.filter((u) => liveSet.has(u));
-  const added = live.filter((u) => !prefSet.has(u));
-  return [...alive, ...added];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of pref) {
+    if (!liveSet.has(value) || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  for (const value of live) {
+    if (prefSet.has(value) || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+/**
+ * 交换拖拽源与目标的位置，其余参考的顺序保持不变。
+ * 返回 null 表示拖拽源或目标不存在，或两者相同。
+ */
+export function swapOrderItems(
+  order: readonly string[],
+  dragged: string,
+  target: string,
+): string[] | null {
+  const fromIndex = order.indexOf(dragged);
+  const targetIndex = order.indexOf(target);
+  if (fromIndex === -1 || targetIndex === -1 || fromIndex === targetIndex) return null;
+
+  const next = [...order];
+  [next[fromIndex], next[targetIndex]] = [next[targetIndex], next[fromIndex]];
+  return next;
 }
 
 /**

@@ -44,7 +44,7 @@ import {
   usePromptTemplateCatalog,
 } from "../shared/prompt-presets";
 import { applyRatioToNode } from "../shared/ratio-size";
-import { EMPTY_ORDER, mergeOrder, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
+import { EMPTY_ORDER, mergeOrder, swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import TextRefChip from "../shared/TextRefChip";
 import { spawnPromptDerivedNode } from "../upload/derived-node";
@@ -183,15 +183,10 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
     return [...upstreamTexts.map((t) => t.content), prompt.trim()].filter(Boolean).join("\n");
   }, [upstreamTexts, prompt]);
 
-  // 同类内拖拽排序（图↔图）：事件驱动写入排序偏好并即时持久化
+  // 同类内拖放交换（图↔图）：事件驱动写入排序偏好并即时持久化
   const handleImageReorder = useCallback((dragged: string, target: string) => {
-    const list = [...refOrder];
-    const fromIdx = list.indexOf(dragged);
-    const toIdx = list.indexOf(target);
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-    writeOrderPref(nodeId, { refOrder: list });
+    const next = swapOrderItems(refOrder, dragged, target);
+    if (next) writeOrderPref(nodeId, { refOrder: next });
   }, [refOrder, nodeId]);
 
   // 构建 @ 提及的参考图列表（基于 refOrder，保证图1图2编号稳定）

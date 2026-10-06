@@ -12,7 +12,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { bumpRefOrderToTail, mergeOrder } from "@/features/canvas/shared/ref-order";
+import { bumpRefOrderToTail, mergeOrder, swapOrderItems } from "@/features/canvas/shared/ref-order";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
@@ -58,6 +58,40 @@ describe("mergeOrder 纯函数", () => {
 
   it("偏好为空时退化为连线序", () => {
     expect(mergeOrder([], ["a", "b"])).toEqual(["a", "b"]);
+  });
+
+  it("按 src 身份去重，避免重复卡片导致拖拽无法区分", () => {
+    expect(mergeOrder(["b", "b", "a"], ["a", "b", "b", "c", "c"])).toEqual(["b", "a", "c"]);
+  });
+});
+
+describe("swapOrderItems", () => {
+  it("第 1 项和第 3 项交换时中间项保持不动", () => {
+    expect(swapOrderItems(["1", "2", "3"], "1", "3")).toEqual(["3", "2", "1"]);
+  });
+
+  it("反向拖动得到相同的交换结果", () => {
+    expect(swapOrderItems(["1", "2", "3"], "3", "1")).toEqual(["3", "2", "1"]);
+  });
+
+  it("相邻项向左或向右拖动都可以交换", () => {
+    expect(swapOrderItems(["1", "2", "3"], "1", "2")).toEqual(["2", "1", "3"]);
+    expect(swapOrderItems(["1", "2", "3"], "2", "1")).toEqual(["2", "1", "3"]);
+    expect(swapOrderItems(["1", "2", "3"], "2", "3")).toEqual(["1", "3", "2"]);
+  });
+
+  it("交换不修改输入，再次交换恢复原顺序", () => {
+    const original = ["1", "2", "3"];
+    const swapped = swapOrderItems(original, "1", "3")!;
+    expect(original).toEqual(["1", "2", "3"]);
+    expect(swapOrderItems(swapped, "1", "3")).toEqual(original);
+  });
+
+  it("无效项目或目标相同时不产生排序写入", () => {
+    expect(swapOrderItems(["1", "2"], "1", "1")).toBeNull();
+    expect(swapOrderItems(["1", "2"], "x", "2")).toBeNull();
+    expect(swapOrderItems(["1", "2"], "1", "x")).toBeNull();
+    expect(swapOrderItems([], "1", "2")).toBeNull();
   });
 });
 
