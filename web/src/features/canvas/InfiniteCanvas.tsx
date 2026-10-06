@@ -1203,6 +1203,7 @@ export default function InfiniteCanvas() {
               type="button"
               variant="outline"
               size="lg"
+              className="agent-flow-button bg-background dark:bg-background"
               onClick={() => setChatOpen(true)}
             >
               <AgentIcon style={{ width: 22, height: 22 }} />

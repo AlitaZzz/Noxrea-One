@@ -588,6 +588,58 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   }
 }
 
+@property --agent-flow-border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Agent 入口的品牌流光描边：两道相隔 180° 的高光保持对称绕行。 */
+.agent-flow-button {
+  position: relative;
+  isolation: isolate;
+  border-color: transparent;
+}
+.agent-flow-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--agent-flow-border-angle),
+    rgba(199, 244, 61, 0.22) 0deg,
+    rgba(199, 244, 61, 0.22) 150deg,
+    #c7f43d 168deg,
+    #c7f43d 180deg,
+    rgba(199, 244, 61, 0.22) 180deg,
+    rgba(199, 244, 61, 0.22) 330deg,
+    #c7f43d 348deg,
+    #c7f43d 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: agent-flow-border 4s linear infinite;
+  pointer-events: none;
+}
+.agent-flow-button > * {
+  position: relative;
+  z-index: 1;
+}
+@keyframes agent-flow-border {
+  to {
+    --agent-flow-border-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-flow-button::before {
+    animation: none;
+  }
+}
+
 /* ===== 生成中浮层动画（GeneratingOverlay）=====
    「黑暗中浮现」构图：一条青柠×深青渐变光带斜贯画面缓慢流转（大模糊让它读作
    极光而非图形），辅以两团低幅呼吸柔光。青柠与画布强调色（波形进度/选中态）同源；
