@@ -16,6 +16,7 @@ import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
 
@@ -192,17 +193,21 @@ export default function AssetCard({
             <div className="mt-0.5 text-[10px] text-white/70">{formatDate(asset.createdAt)}</div>
           </div>
           {isAudio && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={playing ? t("common.stop") : t("common.play")}
-              title={playing ? t("common.stop") : t("common.play")}
-              className="pointer-events-auto shrink-0 text-white hover:bg-white/15 hover:text-white"
-              onClick={togglePlay}
-            >
-              {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={playing ? t("common.stop") : t("common.play")}
+                  className="pointer-events-auto shrink-0 text-white hover:bg-white/15 hover:text-white"
+                  onClick={togglePlay}
+                >
+                  {playing ? <PauseCircleFilled /> : <PlayCircleFilled />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{playing ? t("common.stop") : t("common.play")}</TooltipContent>
+            </Tooltip>
           )}
         </div>
 

@@ -25,7 +25,6 @@ function SliderRow({ label, min, max, step = 1, value, disabled, format, onChang
       <div className="flex items-center gap-3">
         <Slider min={min} max={max} step={step} value={[value]} disabled={disabled}
           className="flex-1"
-          title={format ? format(value) : String(value)}
           onValueChange={([next]) => onChange(next)} />
         <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">
           {format ? format(value) : value}

@@ -178,7 +178,6 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
         <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{t("director.fovAngle")} <Tooltip><TooltipTrigger asChild><span className="cursor-help text-muted-foreground">ⓘ</span></TooltipTrigger><TooltipContent>{t("director.fovTip")}</TooltipContent></Tooltip></span><span>{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
           <Slider min={20} max={90} step={1} className="flex-1" value={[ent.cam?.fov || 40]}
-            title={`${Math.round(ent.cam?.fov || 40)}°`}
             onValueChange={([next]) => { ent.setFov(next); refreshPreview(); }} />
           <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
@@ -348,7 +347,6 @@ export default function Inspector() {
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} className="flex-1"
                 value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
-                title={(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}
                 onValueChange={([next]) => { const s = (entBaseScale || 1) * next; ent.root.scale.set(s, s, s); bumpInspector(); }} />
               <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
@@ -381,7 +379,6 @@ export default function Inspector() {
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} className="flex-1"
                 value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
-                title={(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}
                 onValueChange={([next]) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * next; ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
               <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
