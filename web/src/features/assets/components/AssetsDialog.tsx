@@ -795,11 +795,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
               <DialogClose asChild>
                 <Button variant="outline" disabled={batchTypeSaving}>{t("common.cancel")}</Button>
               </DialogClose>
-              <Tooltip><TooltipTrigger asChild>
-                  <span>
-                    <Button variant="default" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</Button>
-                  </span>
-                </TooltipTrigger><TooltipContent>{!batchTypeValue ? t("asset.typeTip") : ""}</TooltipContent></Tooltip>
+              <Button variant="default" loading={batchTypeSaving} disabled={!batchTypeValue} onClick={() => handleBatchType(batchTypeValue!)}>{t("common.save")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

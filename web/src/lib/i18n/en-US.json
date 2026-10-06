@@ -321,7 +321,6 @@
     "nameRequired": "Please enter asset name",
     "type": "Asset Type",
     "typePlaceholder": "Please select a type",
-    "typeTip": "Please select the asset type to change to",
     "cover": "Cover Image",
     "description": "Description",
     "descPlaceholder": "Enter asset description...",

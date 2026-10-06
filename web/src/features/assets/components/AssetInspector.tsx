@@ -14,11 +14,15 @@ import {
   CheckOutlined,
   CloseOutlined,
   CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
+  FolderOutlined,
   LoadingOutlined,
   PictureOutlined,
   PlusOutlined,
   SelectOutlined,
+  SwapOutlined,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
@@ -534,21 +538,54 @@ export default function AssetInspector({
         ) : null}
       </div>
 
-      {/* 单项操作按钮固定在检查器底部，不随上方内容滚动；多选时批量操作在网格上方批量条 */}
+      {/* 单项操作固定在检查器底部：主操作突出，次要操作收敛为图标工具，危险操作独立隔离。 */}
       {single && (
-        <div className="shrink-0 px-3 pt-1 pb-4">
-          <div className="flex flex-col gap-2">
-            <Button variant="default" className="w-full" onClick={() => onInsert(single)}>
-              {t("asset.addToCanvas")}
-            </Button>
-            <div className="flex gap-2">
-              <Button className="w-full" onClick={() => downloadAsset(single)}>{t("common.download")}</Button>
-              <Button className="w-full" onClick={onBatchMove}>{t("asset.moveTo")}</Button>
-              <Button className="w-full" onClick={onBatchType}>{t("asset.changeType")}</Button>
-            </div>
-            <Button variant="destructive" className="w-full" onClick={() => onSingleDelete(single)}>
-              {t("common.delete")}
-            </Button>
+        <div className="shrink-0 border-t border-border bg-card/95 px-3 py-3">
+          <Button type="button" variant="default" className="w-full" onClick={() => onInsert(single)}>
+            <PlusOutlined className="size-3.5" />
+            {t("asset.addToCanvas")}
+          </Button>
+          <div className="mt-2 flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" aria-label={t("common.download")} onClick={() => downloadAsset(single)}>
+                  <DownloadOutlined />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("common.download")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" aria-label={t("asset.moveTo")} onClick={onBatchMove}>
+                  <FolderOutlined />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("asset.moveTo")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" aria-label={t("asset.changeType")} onClick={onBatchType}>
+                  <SwapOutlined />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("asset.changeType")}</TooltipContent>
+            </Tooltip>
+            <div className="flex-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("common.delete")}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => onSingleDelete(single)}
+                >
+                  <DeleteOutlined />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("common.delete")}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )}

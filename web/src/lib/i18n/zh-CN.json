@@ -323,7 +323,6 @@
     "nameRequired": "请输入资产名称",
     "type": "资产类型",
     "typePlaceholder": "请选择类型",
-    "typeTip": "请选择要修改成的资产类型",
     "cover": "封面图片",
     "description": "描述信息",
     "descPlaceholder": "输入资产描述...",
