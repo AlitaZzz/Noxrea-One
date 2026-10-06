@@ -220,7 +220,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               </TooltipTrigger>
               <TooltipContent side="bottom">{t("agent.historyTitle")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="end" className="z-[1050] w-[320px] p-0">
+            <PopoverContent side="bottom" align="end" className="w-[320px] p-0">
               <div className="flex flex-col overflow-hidden">
                 <div className="px-4 pb-2 pt-3.5 text-base font-semibold leading-5 text-foreground">{t("agent.historyTitle")}</div>
                 <div className="max-h-[260px] overflow-y-auto px-2 pb-2 pt-1">

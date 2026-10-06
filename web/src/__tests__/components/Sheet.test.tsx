@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import {
   Sheet,
   SheetClose,
@@ -88,6 +89,36 @@ describe("Sheet", () => {
     );
 
     expect(document.activeElement).toBe(screen.getByRole("dialog"));
+  });
+
+  it("provides the derived layer to nested popovers", () => {
+    render(
+      <Sheet open>
+        <SheetContent showOverlay={false}>
+          <SheetTitle>Settings</SheetTitle>
+          <Popover open>
+            <PopoverContent>Nested menu</PopoverContent>
+          </Popover>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    expect(document.querySelector('[data-slot="sheet-content"]')).toHaveStyle({ zIndex: "1000" });
+    expect(screen.getByText("Nested menu").closest("[data-slot='popover-content']")).toHaveStyle({ zIndex: "1001" });
+    expect(document.querySelector("[data-layer-overlay-root]")).toHaveAttribute("data-layer-depth", "1");
+  });
+
+  it("keeps content styles off the overlay", () => {
+    render(
+      <Sheet open>
+        <SheetContent style={{ width: "480px" }}>
+          <SheetTitle>Settings</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    expect(document.querySelector('[data-slot="sheet-content"]')).toHaveStyle({ width: "480px", zIndex: "1000" });
+    expect(document.querySelector('[data-slot="sheet-overlay"]')).not.toHaveStyle({ width: "480px" });
   });
 
   it("can keep a non-modal side panel open while interacting outside", () => {

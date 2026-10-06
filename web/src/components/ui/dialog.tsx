@@ -56,7 +56,6 @@ function DialogContent({
   showCloseButton = true,
   showOverlay = true,
   global = false,
-  zIndex,
   style,
   onOpenAutoFocus,
   ...props
@@ -64,12 +63,10 @@ function DialogContent({
   showCloseButton?: boolean
   showOverlay?: boolean
   global?: boolean
-  zIndex?: number
 }) {
   const { parentContainer, overlayRef, overlayRoot, depth, zIndex: layerZIndex } = useLayerParent()
   const container = global ? undefined : parentContainer
-  const resolvedZIndex = zIndex ?? layerZIndex
-  const layerStyle = { zIndex: resolvedZIndex }
+  const layerStyle = { zIndex: layerZIndex }
   const content = (
     <div
       data-slot="dialog-positioner"
@@ -90,7 +87,7 @@ function DialogContent({
         }}
         {...props}
       >
-        <LayerContext.Provider value={{ overlayRoot, depth, zIndex: resolvedZIndex }}>
+        <LayerContext.Provider value={{ overlayRoot, depth, zIndex: layerZIndex }}>
           <div data-layer-scope className="contents">
             {children}
             <div ref={overlayRef} data-layer-overlay-root data-layer-depth={depth} className="fixed inset-0 pointer-events-none" />

@@ -23,18 +23,16 @@ interface Props {
   hideCancel?: boolean;
   onOk: () => void;
   onCancel: () => void;
-  /** 显式指定 zIndex（默认由 layer depth 推导）。Drawer 等非 layer 容器内使用时传更高值（如 1050）。 */
-  zIndex?: number;
   /** 挂到 body 呈现全屏遮罩，打断底层上下文；默认跟随父 layer 嵌套挂载。 */
   global?: boolean;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, confirmVariant = "default", hideCancel, onOk, onCancel, zIndex, global: isGlobal = false }: Props) {
+export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, confirmVariant = "default", hideCancel, onOk, onCancel, global: isGlobal = false }: Props) {
   const { t } = useTranslation();
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}>
-      <DialogContent global={isGlobal} zIndex={zIndex} className="sm:max-w-sm">
+      <DialogContent global={isGlobal} className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{content}</DialogDescription>

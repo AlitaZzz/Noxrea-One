@@ -349,36 +349,35 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
               </div>
             )}
           </div>
+          </div>
         </div>
-        </div>
-        </SheetContent>
-      </Sheet>
-      <ConfirmModal
-        open={deleteOpen}
-        zIndex={1050}
-        title={t("modelConfig.deleteProvider")}
-        content={t("modelConfig.deleteProviderConfirm", {
-          name: provider?.name ?? "",
-          count: provider?.models.length ?? 0,
-        })}
-        okText={t("common.delete")}
-        cancelText={t("common.cancel")}
-        confirmVariant="destructive"
-        onOk={async () => {
-          if (!providerId) return;
-          try {
-            // 删除失败时不关闭确认框、不重置选择，用户可重试
-            if (await deleteProvider(providerId)) {
-              const rest = useModelStore.getState().providers;
-              setProviderId(rest[0]?.id ?? null);
-              setDeleteOpen(false);
+        <ConfirmModal
+          open={deleteOpen}
+          title={t("modelConfig.deleteProvider")}
+          content={t("modelConfig.deleteProviderConfirm", {
+            name: provider?.name ?? "",
+            count: provider?.models.length ?? 0,
+          })}
+          okText={t("common.delete")}
+          cancelText={t("common.cancel")}
+          confirmVariant="destructive"
+          onOk={async () => {
+            if (!providerId) return;
+            try {
+              // 删除失败时不关闭确认框、不重置选择，用户可重试
+              if (await deleteProvider(providerId)) {
+                const rest = useModelStore.getState().providers;
+                setProviderId(rest[0]?.id ?? null);
+                setDeleteOpen(false);
+              }
+            } catch {
+              // 异常已由全局流程处理（清 token + 跳登录）
             }
-          } catch {
-            // 异常已由全局流程处理（清 token + 跳登录）
-          }
-        }}
-        onCancel={() => setDeleteOpen(false)}
-      />
+          }}
+          onCancel={() => setDeleteOpen(false)}
+        />
+      </SheetContent>
+      </Sheet>
     </>
   );
 }

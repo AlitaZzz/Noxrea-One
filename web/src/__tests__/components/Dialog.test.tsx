@@ -31,6 +31,7 @@ describe("Dialog", () => {
     expect(dialog.className).toContain("relative");
     expect(dialog.className).not.toContain("-translate-x-1/2");
     expect(document.querySelector('[data-slot="dialog-positioner"]')).toHaveClass("fixed", "place-items-center");
+    expect(document.querySelector('[data-slot="dialog-positioner"]')).toHaveStyle({ zIndex: "1000" });
     const closeButton = screen.getByRole("button", { name: "Close" });
     expect(closeButton.dataset.slot).toBe("dialog-close");
     expect(closeButton.dataset.variant).toBe("ghost");
@@ -56,20 +57,6 @@ describe("Dialog", () => {
     );
 
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
-  });
-
-  it("applies explicit z-index to the full dialog layer", () => {
-    render(
-      <Dialog open>
-        <DialogContent zIndex={1050}>
-          <DialogTitle>Confirm</DialogTitle>
-        </DialogContent>
-      </Dialog>,
-    );
-
-    expect(document.querySelector('[data-slot="dialog-positioner"]')).toHaveStyle({ zIndex: "1050" });
-    expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveStyle({ zIndex: "1050" });
-    expect(document.querySelector('[data-slot="dialog-content"]')).toHaveStyle({ zIndex: "1050" });
   });
 
   it("focuses the first editable control instead of an action button", () => {

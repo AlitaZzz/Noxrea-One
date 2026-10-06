@@ -8,6 +8,7 @@ import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 import { focusSheetSurface } from "@/components/ui/focus-management"
+import { LayerContext, useLayerParent } from "@/components/ui/modal/layer-context"
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -54,15 +55,20 @@ function SheetContent({
   showCloseButton = true,
   showOverlay = true,
   onOpenAutoFocus,
+  style,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
   showOverlay?: boolean
 }) {
+  const { parentContainer, overlayRef, overlayRoot, depth, zIndex } = useLayerParent()
+  const layerStyle = { zIndex }
+  const contentStyle = { ...style, zIndex }
+
   return (
-    <SheetPortal>
-      {showOverlay && <SheetOverlay />}
+    <SheetPortal container={parentContainer}>
+      {showOverlay && <SheetOverlay style={layerStyle} />}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}
@@ -71,6 +77,7 @@ function SheetContent({
           className
         )}
         tabIndex={-1}
+        style={contentStyle}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event);
           if (event.defaultPrevented) return;
@@ -78,7 +85,12 @@ function SheetContent({
         }}
         {...props}
       >
-        {children}
+        <LayerContext.Provider value={{ overlayRoot, depth, zIndex }}>
+          <div data-layer-scope className="contents">
+            {children}
+            <div ref={overlayRef} data-layer-overlay-root data-layer-depth={depth} className="fixed inset-0 pointer-events-none" />
+          </div>
+        </LayerContext.Provider>
         {showCloseButton && (
           <SheetPrimitive.Close data-slot="sheet-close" asChild>
             <Button
