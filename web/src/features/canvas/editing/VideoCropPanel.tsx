@@ -296,7 +296,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
 
         {/* Cutout for crop area (clear the dark overlay) */}
         <div
-          className="absolute pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+          className="absolute pointer-events-none shadow-[0_0_0_9999px_rgb(0_0_0_/_50%)]"
           style={{
             left: `${crop.x * 100}%`,
             top: `${crop.y * 100}%`,
@@ -307,10 +307,10 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
         >
           {/* Rule of thirds */}
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-1/3 left-0 right-0 h-px" style={{ background: "rgba(255,255,255,0.3)" }} />
-            <div className="absolute top-2/3 left-0 right-0 h-px" style={{ background: "rgba(255,255,255,0.3)" }} />
-            <div className="absolute left-1/3 top-0 bottom-0 w-px" style={{ background: "rgba(255,255,255,0.3)" }} />
-            <div className="absolute left-2/3 top-0 bottom-0 w-px" style={{ background: "rgba(255,255,255,0.3)" }} />
+            <div className="absolute top-1/3 left-0 right-0 h-px bg-white/30" />
+            <div className="absolute top-2/3 left-0 right-0 h-px bg-white/30" />
+            <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/30" />
+            <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/30" />
           </div>
         </div>
 

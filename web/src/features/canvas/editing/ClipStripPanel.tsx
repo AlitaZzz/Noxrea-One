@@ -740,8 +740,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         {ready && !operable && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
             <span
-              className="rounded-md px-3 py-1 text-xs text-white/85"
-              style={{ background: "rgba(0,0,0,0.65)" }}
+              className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
             >
               {proxyState === "failed"
                 ? t("clip.proxyFailed")
@@ -756,8 +755,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         {operable && playbackBlocked && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
             <span
-              className="rounded-md px-3 py-1 text-xs text-white/85"
-              style={{ background: "rgba(0,0,0,0.65)" }}
+              className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
             >
               {t("clip.autoplayBlocked")}
             </span>

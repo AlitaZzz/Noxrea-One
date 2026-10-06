@@ -13,19 +13,20 @@
  */
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PauseIcon, PlayIcon } from "@/components/ui/AppIcon";
 import { VolumeMuteIcon } from "@/components/ui/AppIcon";
 import { VolumeUpIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/format";
 
 interface Props {
   src: string;
   /** 只用于外层容器的阴影 / 缩放等，尺寸上限由内部 video 自己控制 */
-  style?: CSSProperties;
+  className?: string;
   autoPlay?: boolean;
   loop?: boolean;
   /** 初始音量 0~1，默认 1（有声） */
@@ -34,7 +35,7 @@ interface Props {
   fill?: boolean;
 }
 
-export default function VideoPlayer({ src, style, autoPlay = true, loop = true, defaultVolume = 1, fill = false }: Props) {
+export default function VideoPlayer({ src, className, autoPlay = true, loop = true, defaultVolume = 1, fill = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -89,7 +90,7 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
   }, [autoPlay, src]);
 
   return (
-    <div className={`relative${fill ? " w-full h-full" : ""}`} style={style} onClick={(e) => e.stopPropagation()}>
+    <div className={cn("relative", fill && "h-full w-full", className)} onClick={(e) => e.stopPropagation()}>
       <video
         ref={videoRef}
         src={src}
@@ -97,8 +98,10 @@ export default function VideoPlayer({ src, style, autoPlay = true, loop = true, 
         muted={volume === 0}
         playsInline
         preload="metadata"
-        className={fill ? "block w-full h-full object-contain" : "block max-h-[88vh] max-w-[90vw]"}
-        style={{ borderRadius: 8, background: "#000" }}
+        className={cn(
+          "rounded-lg bg-black",
+          fill ? "block h-full w-full object-contain" : "block max-h-[88vh] max-w-[90vw]",
+        )}
         onTimeUpdate={() => { const v = videoRef.current; if (v) setProgress(v.currentTime); }}
         onLoadedMetadata={() => { const v = videoRef.current; if (v) setDuration(v.duration || 0); }}
         onPlay={() => setPlaying(true)}

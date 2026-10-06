@@ -114,7 +114,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
             <VideoPlayer
               key={current.url}
               src={current.url}
-              style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}
+              className="shadow-[0_8px_40px_rgb(0_0_0_/_50%)]"
             />
           ) : (
             <img
@@ -122,13 +122,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
               alt=""
               draggable={false}
               onClick={(event) => event.stopPropagation()}
-              style={{
-                maxWidth: "90vw",
-                maxHeight: "88vh",
-                objectFit: "contain",
-                borderRadius: 8,
-                boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
-              }}
+              className="block max-h-[88vh] max-w-[90vw] rounded-lg object-contain shadow-[0_8px_40px_rgb(0_0_0_/_50%)]"
             />
           )
         )}

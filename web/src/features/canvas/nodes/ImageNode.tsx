@@ -410,7 +410,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               {data.upload?.previewUrl && (
                 <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
               )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8" style={{ background: "rgba(0,0,0,0.35)" }}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 px-8">
                 {data.upload?.progress != null ? (
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div className="h-full bg-[var(--primary)] rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
