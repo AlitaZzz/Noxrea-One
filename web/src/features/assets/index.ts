@@ -6,10 +6,7 @@
 export { default as AssetCard } from "./components/AssetCard";
 export { default as AssetCreateDialog } from "./components/AssetCreateDialog";
 export { default as AssetGrid } from "./components/AssetGrid";
-export {
-  AssetHoverPreview,
-  useAssetHoverPreview,
-} from "./components/AssetHoverPreview";
+export { AssetHoverPreview } from "./components/AssetHoverPreview";
 export { default as AssetsDialog } from "./components/AssetsDialog";
 export { default as AssetToolbar } from "./components/AssetToolbar";
 export { default as CreateFolderDialog } from "./components/CreateFolderDialog";

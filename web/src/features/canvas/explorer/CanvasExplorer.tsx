@@ -40,7 +40,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetGrid from "@/features/assets/components/AssetGrid";
-import { AssetHoverPreview, useAssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
+import { AssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
@@ -385,7 +385,6 @@ function ElementItemImpl(props: ElementItemProps) {
   const label: string = rawLabel || typeLabel || nodeType;
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
   const { thumb, loading } = useVideoThumbnail(node.type === NODE_TYPE.VIDEO ? (node.data as { src?: string }).src : undefined);
-  const preview = useAssetHoverPreview(DRAWER_WIDTH);
   const sourceUrl = (node.data as { src?: string }).src;
 
   // 状态点：生成/处理中转圈，失败（任务失败或上传失败）红点，其余不显示
@@ -433,7 +432,19 @@ function ElementItemImpl(props: ElementItemProps) {
   }, [node, centerNode]);
 
   return (
-    <Button
+    <AssetHoverPreview
+      asset={{
+        name: label,
+        mediaType: nodeType === NODE_TYPE.TEXT ? "text" : nodeType === NODE_TYPE.VIDEO ? "video" : "image",
+        sourceUrl,
+        plainText,
+      }}
+      enabled={Boolean(
+        (sourceUrl && (nodeType === NODE_TYPE.IMAGE || nodeType === NODE_TYPE.VIDEO))
+        || (plainText && nodeType === NODE_TYPE.TEXT),
+      )}
+    >
+      <Button
       type="button"
       onClick={handleClick}
       aria-label={label || `Node ${node.id}`}
@@ -444,10 +455,6 @@ function ElementItemImpl(props: ElementItemProps) {
         paddingLeft: 8 + depth * ROW_INDENT,
         paddingRight: 8,
       }}
-      onMouseEnter={(e) => {
-        if (sourceUrl) preview.onEnter(node as unknown as AssetItem, e);
-      }}
-      onMouseLeave={() => preview.onLeave()}
     >
       {/* 选中竖条：与画布节点 --ring 选中描边同色（约定同 ApiSettingsDrawer） */}
       {selected && (
@@ -529,8 +536,8 @@ function ElementItemImpl(props: ElementItemProps) {
           )}
         </span>
       )}
-      <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-    </Button>
+      </Button>
+    </AssetHoverPreview>
   );
 }
 
@@ -734,7 +741,6 @@ function AssetsView() {
           showHoverPreview
           showInsertButton
           draggable
-          hoverPreviewAnchorX={DRAWER_WIDTH}
           onInsertCanvas={handleInsertCanvas}
           onEnterFolder={(folder) => { setSearch(""); setTypeFilter([]); setActiveFolderId(folder.id); }}
           loading={loading}

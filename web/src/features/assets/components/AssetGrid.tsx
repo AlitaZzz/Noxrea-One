@@ -30,8 +30,6 @@ interface Props {
   showInsertButton?: boolean;
   /** 资产卡片可拖拽到画布插入（抽屉传入）。 */
   draggable?: boolean;
-  /** 悬浮预览的水平锚点，透传给资产卡片。 */
-  hoverPreviewAnchorX?: number;
   selectedIds?: Set<string>;
   /** 多选模式：透传给卡片使勾选框常驻。 */
   selectMode?: boolean;
@@ -52,7 +50,7 @@ interface Props {
 }
 
 export default function AssetGrid({
-  assets, folders, folderCounts, compact, showHoverPreview = false, showInsertButton = false, draggable = false, hoverPreviewAnchorX = 0, selectedIds, selectMode = false,
+  assets, folders, folderCounts, compact, showHoverPreview = false, showInsertButton = false, draggable = false, selectedIds, selectMode = false,
   onSelect, onToggleSelect, onInsertCanvas,
   onEnterFolder, onDeleteFolder, onRenameFolder,
   loading, hasMore, loadingMore, onLoadMore,
@@ -139,7 +137,6 @@ export default function AssetGrid({
             showHoverPreview={showHoverPreview}
             showInsertButton={showInsertButton}
             draggable={draggable}
-            hoverPreviewAnchorX={hoverPreviewAnchorX}
             selected={selectedIds?.has(asset.id)}
             selectMode={selectMode}
             onSelect={onSelect}

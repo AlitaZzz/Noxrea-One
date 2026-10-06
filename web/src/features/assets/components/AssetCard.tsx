@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
 
-import { AssetHoverPreview, useAssetHoverPreview } from "./AssetHoverPreview";
+import { AssetHoverPreview } from "./AssetHoverPreview";
 
 interface Props {
   asset: AssetItem;
@@ -31,8 +31,6 @@ interface Props {
   showInsertButton?: boolean;
   /** 允许拖拽到画布插入（抽屉场景传入）；拖拽数据为 ASSET_DRAG_TYPE + AssetItem JSON。 */
   draggable?: boolean;
-  /** 悬浮预览的水平锚点；窄侧栏传入抽屉右缘，让预览显示到侧栏外。 */
-  hoverPreviewAnchorX?: number;
   selected?: boolean;
   /** 多选模式：勾选框常驻显示（不再仅悬停出现）。 */
   selectMode?: boolean;
@@ -49,7 +47,6 @@ export default function AssetCard({
   showHoverPreview = false,
   showInsertButton = false,
   draggable = false,
-  hoverPreviewAnchorX = 0,
   selected,
   selectMode = false,
   onSelect,
@@ -57,7 +54,6 @@ export default function AssetCard({
   onInsertCanvas,
 }: Props) {
   const { t } = useTranslation();
-  const preview = useAssetHoverPreview(hoverPreviewAnchorX);
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -98,7 +94,6 @@ export default function AssetCard({
   };
 
   const handleCardLeave = () => {
-    preview.onLeave();
     if (playing) stopAudio();
   };
 
@@ -121,12 +116,12 @@ export default function AssetCard({
 
   return (
     <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>
-      {/* 封面区：Card 只负责容器布局，主选择 / 插入行为由独立 Button 承担。 */}
-      <div
-        className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
-        onMouseLeave={handleCardLeave}
-        onMouseEnter={(event) => { if (showHoverPreview && sourceUrl && !dragging) preview.onEnter(asset, event); }}
-      >
+      <AssetHoverPreview asset={asset} enabled={showHoverPreview && !dragging && Boolean(sourceUrl)}>
+        {/* 封面区：Card 只负责容器布局，主选择 / 插入行为由独立 Button 承担。 */}
+        <div
+          className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
+          onMouseLeave={handleCardLeave}
+        >
         <Button
           type="button"
           variant="ghost"
@@ -146,7 +141,6 @@ export default function AssetCard({
             e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
             e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
             setDragging(true);
-            preview.onLeave();
             const cover = e.currentTarget.parentElement?.querySelector("img");
             if (cover instanceof HTMLImageElement) {
               e.dataTransfer.setDragImage(cover, cover.offsetWidth / 2, cover.offsetHeight / 2);
@@ -154,7 +148,7 @@ export default function AssetCard({
               e.dataTransfer.setDragImage(audioGhostRef.current, 28, 28);
             }
           }}
-          onDragEnd={() => { setDragging(false); preview.onLeave(); }}
+          onDragEnd={() => setDragging(false)}
           onClick={(e) => {
             if (selectable) onSelect?.(asset, e.ctrlKey || e.metaKey);
           }}
@@ -244,10 +238,8 @@ export default function AssetCard({
           </div>
         )}
 
-        {showHoverPreview && (
-          <AssetHoverPreview asset={preview.asset} visible={preview.visible} x={preview.x} y={preview.y} />
-        )}
-      </div>
+        </div>
+      </AssetHoverPreview>
 
       {/* 音频拖拽图像：仅作为 setDragImage 快照源，固定在视口外不影响布局 */}
       {draggable && isAudio && (
