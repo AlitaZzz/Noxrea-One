@@ -125,11 +125,25 @@ export default function SettingsModal({ open, onClose }: Props) {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="settings-current-password" className="text-xs text-muted-foreground">{t("auth.currentPassword")}</Label>
-                <PasswordInput id="settings-current-password" placeholder={t("auth.oldPwRequired")} value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
+                <PasswordInput
+                  id="settings-current-password"
+                  placeholder={t("auth.oldPwRequired")}
+                  value={oldPw}
+                  onChange={(e) => setOldPw(e.target.value)}
+                  showLabel={t("auth.login.showPassword")}
+                  hideLabel={t("auth.login.hidePassword")}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="settings-new-password" className="text-xs text-muted-foreground">{t("auth.newPassword")}</Label>
-                <PasswordInput id="settings-new-password" placeholder={t("auth.keepBlank")} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+                <PasswordInput
+                  id="settings-new-password"
+                  placeholder={t("auth.keepBlank")}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  showLabel={t("auth.login.showPassword")}
+                  hideLabel={t("auth.login.hidePassword")}
+                />
               </div>
             </div>
           </section>

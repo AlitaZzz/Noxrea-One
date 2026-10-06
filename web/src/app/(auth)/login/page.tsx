@@ -11,13 +11,12 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { EyeIcon } from "@/components/ui/AppIcon";
-import { EyeOffIcon } from "@/components/ui/AppIcon";
 import { SpinnerIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
@@ -278,7 +277,6 @@ function RightPanel({
   errors: { username?: string; password?: string };
 }) {
   const isSignin = mode === "signin";
-  const [showPw, setShowPw] = useState(false);
 
   return (
     <div
@@ -342,33 +340,16 @@ function RightPanel({
 
             <div>
             <Label htmlFor="login-password" className="mb-2 text-foreground">{i18n.t("auth.login.password")}</Label>
-            <div className="relative">
-              <Input
-                id="login-password"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={i18n.t("auth.login.passwordPlaceholder")}
-                aria-invalid={errors.password ? true : undefined}
-                aria-describedby={errors.password ? "login-password-error" : undefined}
-                className="pr-11"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                iconOnly
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? i18n.t("auth.login.hidePassword") : i18n.t("auth.login.showPassword")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-              >
-                {showPw ? (
-                  <EyeIcon className="w-5 h-5" />
-                ) : (
-                  <EyeOffIcon className="w-5 h-5" />
-                )}
-              </Button>
-            </div>
+            <PasswordInput
+              id="login-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={i18n.t("auth.login.passwordPlaceholder")}
+              aria-invalid={errors.password ? true : undefined}
+              aria-describedby={errors.password ? "login-password-error" : undefined}
+              showLabel={i18n.t("auth.login.showPassword")}
+              hideLabel={i18n.t("auth.login.hidePassword")}
+            />
             {errors.password && (
               <p id="login-password-error" className="mt-1.5 text-sm text-destructive">{errors.password}</p>
             )}

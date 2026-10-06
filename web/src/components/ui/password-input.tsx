@@ -14,11 +14,15 @@ import {
 export interface PasswordInputProps extends Omit<InputProps, "type"> {
   visible?: boolean;
   onVisibleChange?: (visible: boolean) => void;
+  showLabel: string;
+  hideLabel: string;
 }
 
 export function PasswordInput({
   visible,
   onVisibleChange,
+  showLabel,
+  hideLabel,
   disabled,
   className,
   ...props
@@ -38,7 +42,7 @@ export function PasswordInput({
       <InputGroupInput {...props} disabled={disabled} type={isVisible ? "text" : "password"} />
       <InputGroupAddon align="inline-end">
         <InputGroupButton
-          aria-label={isVisible ? "Hide password" : "Show password"}
+          aria-label={isVisible ? hideLabel : showLabel}
           aria-pressed={isVisible}
           disabled={disabled}
           onMouseDown={(event) => event.preventDefault()}

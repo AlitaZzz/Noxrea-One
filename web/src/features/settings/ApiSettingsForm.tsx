@@ -192,6 +192,8 @@ export default function ApiSettingsForm({ mode, provider, presets, onDone, onCan
                 }}
                 visible={keyVisible}
                 onVisibleChange={handleKeyVisibleChange}
+                showLabel={t("auth.login.showPassword")}
+                hideLabel={t("auth.login.hidePassword")}
               />
               {mode === "edit" && (
                 <Button size="sm" variant="ghost" iconOnly onClick={handleCopyKey} loading={fetchingKey} aria-label={t("modelConfig.copy")}>
