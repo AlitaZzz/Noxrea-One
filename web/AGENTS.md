@@ -124,6 +124,8 @@ Radix UI primitives、样式与图标实现
 - 悬停隐藏的交互控件必须保留 `focus-visible` 状态，确保键盘操作时可见且可用。
 - 选中态使用主题 token，并明确检查官方 hover、focus 和 disabled 样式是否覆盖业务状态。
 - 全选、部分选中等选择状态统一使用 `components/ui/checkbox`；部分选中必须传递 `checked="indeterminate"`，不得手绘横杠或勾选框。
+- Checkbox、Switch 及其 FieldLabel 外层状态统一读取 Radix 的 `data-state`（`checked`、`unchecked`、`indeterminate`）；禁止使用不会匹配的 `data-checked`、`data-unchecked` 或 `has-data-checked` 选择器。
+- 可折叠内容统一使用 `components/ui/collapsible`；需要动画时读取 Radix 的 `--radix-collapsible-content-height`，不得用 `inert`、常驻隐藏节点或 `grid-template-rows` 伪造折叠状态。
 - 业务语义色可以保留在标准控件上：例如 API 模型能力按钮用文字、图片、视频的颜色区分模型类型；迁移控件时保留该语义色，不要为追求统一而改成无差别的主题色。
 
 ### 3. UI 基础层规范
