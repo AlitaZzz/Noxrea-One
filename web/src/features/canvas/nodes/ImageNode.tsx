@@ -7,7 +7,6 @@
 
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -188,14 +187,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     setPreviewIndex(idx < 0 ? 0 : idx);
     setPreviewOpen(true);
   }, [src, isMulti, data.multiResultUrls]);
-
-  // 预览浮层：Esc 关闭
-  useEffect(() => {
-    if (!previewOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPreviewOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [previewOpen]);
 
   /** 多图模式：把某张结果图设为主图（更新 src 与真实尺寸，并收起网格） */
   const handleSetMain = useCallback((url: string) => {
@@ -594,15 +585,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" zIndex={999} />}
         <ConnectionSideRail side="right" type="source" zIndex={999} />
       </div>
-      {previewOpen && createPortal(
-        <MediaPreviewOverlay
-          items={previewList}
-          index={previewIndex}
-          onIndexChange={setPreviewIndex}
-          onClose={() => setPreviewOpen(false)}
-        />,
-        document.body
-      )}
+      <MediaPreviewOverlay
+        open={previewOpen}
+        items={previewList}
+        index={previewIndex}
+        onIndexChange={setPreviewIndex}
+        onClose={() => setPreviewOpen(false)}
+      />
     </>
   );
 }

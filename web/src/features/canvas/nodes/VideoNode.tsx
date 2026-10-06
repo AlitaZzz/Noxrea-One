@@ -8,7 +8,6 @@
 
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect,useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -860,13 +859,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
       {acceptsInput(NODE_TYPE.VIDEO, data.source) && <ConnectionSideRail side="left" type="target" />}
       <ConnectionSideRail side="right" type="source" />
-      {previewOpen && src && createPortal(
+      {src && (
         <MediaPreviewOverlay
+          open={previewOpen}
           items={[{ url: src, mediaType: "video" }]}
           index={0}
           onClose={() => setPreviewOpen(false)}
-        />,
-        document.body
+        />
       )}
     </div>
   );
