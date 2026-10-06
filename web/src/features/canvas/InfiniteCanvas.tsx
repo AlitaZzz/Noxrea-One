@@ -97,7 +97,7 @@ import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/ty
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
-import { EDGE_BASE_COLOR, GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -1064,7 +1064,6 @@ export default function InfiniteCanvas() {
         defaultEdgeOptions={{
           type: "deletable",
           animated: false,
-          style: { stroke: EDGE_BASE_COLOR, strokeWidth: 2 },
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />

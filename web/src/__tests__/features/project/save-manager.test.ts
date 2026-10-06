@@ -1,356 +1,212 @@
-/**
- * 保存链路安全网测试：stripRuntimeFields / takeCanvasSnapshot。
- *
- * 覆盖：
- *   - stripRuntimeFields 删除 selected / dragging / positionAbsolute
- *   - takeCanvasSnapshot 的深拷贝行为
- *   - 边界情况：空节点/边列表、缺失字段
- */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { describe, expect,it } from "vitest";
+import { syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AnyEdge, GroupNode, ImageNode, TextNode } from "@/features/canvas/types";
+import { resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
+import { saveManager } from "@/features/project/save-manager";
+import type { CanvasData } from "@/features/project/types";
+import { NODE_TYPE } from "@/lib/constants";
 
-// ════════════════════════════════════════════════════════════════════
-// 测试辅助：匹配 save-manager.ts stripRuntimeFields 实现
-// ════════════════════════════════════════════════════════════════════
+const mocks = vi.hoisted(() => ({
+  saveProjectRaw: vi.fn(),
+  revision: 7,
+}));
 
-interface HistorySnapshot {
-  nodes: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
-  viewport: { x: number; y: number; zoom: number };
-  minimapVisible: boolean;
-  snapToGrid: boolean;
-}
+vi.mock("@/features/project/api", () => ({
+  projectApi: { saveProjectRaw: mocks.saveProjectRaw },
+}));
 
-/**
- * 匹配 save-manager.ts L63-75 的 stripRuntimeFields。
- * 深拷贝 snapshot，从中剔除 React Flow 运行时字段。
- */
-function stripRuntimeFields(snapshot: HistorySnapshot): HistorySnapshot {
+vi.mock("@/features/project/store", () => ({
+  useProjectStore: {
+    getState: () => ({
+      projects: [{ id: "p1", revision: mocks.revision }],
+      updateProjectRevision: (_id: string, revision: number) => { mocks.revision = revision; },
+    }),
+  },
+}));
+
+function textNode(id: string): TextNode {
   return {
-    ...snapshot,
-    nodes: snapshot.nodes.map((n) => {
-      const { selected, dragging, positionAbsolute, ...rest } = n;
-      return rest;
-    }),
-    edges: snapshot.edges.map((e) => {
-      const { selected, markerEnd, ...rest } = e;
-      return rest;
-    }),
+    id,
+    type: NODE_TYPE.TEXT,
+    position: { x: 100, y: 200 },
+    data: { label: id, content: "", plainText: "" },
   };
 }
 
-/**
- * 匹配 canvas-store.ts L178-189 的 takeCanvasSnapshot。
- * 深拷贝 nodes/edges，浅拷贝其他字段。
- */
-function takeCanvasSnapshot(state: {
-  nodes: Record<string, unknown>[];
-  edges: Record<string, unknown>[];
-  viewport: { x: number; y: number; zoom: number };
-  minimapVisible: boolean;
-  snapToGrid: boolean;
-}): HistorySnapshot {
-  return {
-    nodes: JSON.parse(JSON.stringify(state.nodes)),
-    edges: JSON.parse(JSON.stringify(state.edges)),
-    viewport: { ...state.viewport },
-    minimapVisible: state.minimapVisible,
-    snapToGrid: state.snapToGrid,
-  };
-}
-
-// ════════════════════════════════════════════════════════════════════
-// stripRuntimeFields 测试
-// ════════════════════════════════════════════════════════════════════
-
-describe("stripRuntimeFields", () => {
-  it("从节点中移除 selected / dragging / positionAbsolute", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [
-        { id: "n1", type: "image-node", position: { x: 0, y: 0 }, data: { src: "a.png" }, selected: true, dragging: false, positionAbsolute: { x: 10, y: 20 } },
-      ],
-      edges: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.nodes[0].id).toBe("n1");
-    expect(cleaned.nodes[0]).not.toHaveProperty("selected");
-    expect(cleaned.nodes[0]).not.toHaveProperty("dragging");
-    expect(cleaned.nodes[0]).not.toHaveProperty("positionAbsolute");
-    expect(cleaned.nodes[0].position).toEqual({ x: 0, y: 0 });
-    expect((cleaned.nodes[0] as unknown as { data: { src: string } }).data.src).toBe("a.png");
-  });
-
-  it("从边中移除 selected", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [],
-      edges: [
-        { id: "e1", source: "n1", target: "n2", selected: true, type: "deletable" },
-      ],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.edges[0].id).toBe("e1");
-    expect(cleaned.edges[0]).not.toHaveProperty("selected");
-    expect(cleaned.edges[0].type).toBe("deletable");
-  });
-
-  it("主动剔除已废弃的 markerEnd 箭头字段", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [],
-      edges: [
-        { id: "e1", source: "n1", target: "n2", type: "deletable", markerEnd: { type: "arrowclosed", color: "#888" } },
-      ],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.edges[0].id).toBe("e1");
-    expect(cleaned.edges[0].type).toBe("deletable");
-    expect(cleaned.edges[0]).not.toHaveProperty("markerEnd");
-  });
-
-  it("保留非运行时字段", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [
-        { id: "n1", position: { x: 100, y: 200 }, data: { label: "test" }, style: { width: 600 }, type: "text-node", selected: true },
-      ],
-      edges: [
-        { id: "e1", source: "n1", target: "n2", sourceHandle: "a", targetHandle: "b", selected: false },
-      ],
-      viewport: { x: 50, y: 100, zoom: 1.5 },
-      minimapVisible: false,
-      snapToGrid: true,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    const node = cleaned.nodes[0];
-    expect(node.id).toBe("n1");
-    expect(node.position).toEqual({ x: 100, y: 200 });
-    expect((node as unknown as { data: { label: string } }).data.label).toBe("test");
-    expect(node.style).toEqual({ width: 600 });
-    expect(node.type).toBe("text-node");
-
-    const edge = cleaned.edges[0];
-    expect(edge.source).toBe("n1");
-    expect(edge.target).toBe("n2");
-    expect(edge.sourceHandle).toBe("a");
-    expect(edge.targetHandle).toBe("b");
-  });
-
-  it("快照顶层字段保持不变", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [{ id: "n1", selected: true }],
-      edges: [{ id: "e1", selected: true }],
-      viewport: { x: -100, y: -200, zoom: 0.5 },
-      minimapVisible: false,
-      snapToGrid: true,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.viewport).toEqual(snapshot.viewport);
-    expect(cleaned.minimapVisible).toBe(false);
-    expect(cleaned.snapToGrid).toBe(true);
-  });
-
-  it("空节点/边列表不会出错", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [],
-      edges: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.nodes).toEqual([]);
-    expect(cleaned.edges).toEqual([]);
-  });
-
-  it("没有运行时字段的节点不会被改变", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [{ id: "n1", position: { x: 10, y: 20 }, data: {} }],
-      edges: [{ id: "e1", source: "n1", target: "n2" }],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.nodes).toEqual([{ id: "n1", position: { x: 10, y: 20 }, data: {} }]);
-    expect(cleaned.edges).toEqual([{ id: "e1", source: "n1", target: "n2" }]);
-  });
-
-  it("只移除 selected/dragging/positionAbsolute，保留其他布尔字段", () => {
-    const snapshot: HistorySnapshot = {
-      nodes: [
-        { id: "n1", deletable: false, connectable: true, selected: true, dragging: false, positionAbsolute: { x: 1, y: 2 } },
-      ],
-      edges: [
-        { id: "e1", deletable: true, selected: false },
-      ],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const cleaned = stripRuntimeFields(snapshot);
-    expect(cleaned.nodes[0].deletable).toBe(false);
-    expect(cleaned.nodes[0].connectable).toBe(true);
-    expect(cleaned.nodes[0]).not.toHaveProperty("selected");
-    expect(cleaned.nodes[0]).not.toHaveProperty("dragging");
-    expect(cleaned.nodes[0]).not.toHaveProperty("positionAbsolute");
-
-    expect(cleaned.edges[0].deletable).toBe(true);
-    expect(cleaned.edges[0]).not.toHaveProperty("selected");
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.clearAllMocks();
+  mocks.revision = 7;
+  mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
+  saveManager.resetForProjectSwitch();
+  resetCanvasLease();
+  setCanvasLease("p1", 42);
+  useCanvasStore.getState().restoreFromProject("p1", {
+    nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 },
+    minimapVisible: true, snapToGrid: false,
   });
 });
 
-// ════════════════════════════════════════════════════════════════════
-// takeCanvasSnapshot 测试
-// ════════════════════════════════════════════════════════════════════
+afterEach(() => {
+  saveManager.resetForProjectSwitch();
+  resetCanvasLease();
+  vi.useRealTimers();
+});
+
+async function saveCanvas(): Promise<CanvasData> {
+  saveManager.markDirty();
+  await saveManager.flushAndWait();
+  expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1);
+  return (JSON.parse(mocks.saveProjectRaw.mock.calls[0][1] as string) as { canvasData: CanvasData }).canvasData;
+}
+
+describe("SaveManager snapshot serialization", () => {
+  it("removes runtime fields and edge appearance without mutating canvas state", async () => {
+    const node = {
+      ...textNode("n1"),
+      style: { width: 600, height: 366 },
+      selected: true, dragging: true, positionAbsolute: { x: 100, y: 200 },
+      deletable: false, connectable: true,
+    };
+    const edge: AnyEdge = {
+      id: "e1", source: "n1", target: "n2", type: "deletable",
+      sourceHandle: "output", targetHandle: "input", selected: true, deletable: false,
+      data: { purpose: "reference" },
+      style: { stroke: "var(--canvas-text-muted)", strokeWidth: 0, opacity: 0 },
+      markerEnd: "arrow",
+    };
+    useCanvasStore.setState({ nodes: [node, textNode("n2")], edges: [edge] });
+    const before = takeCanvasSnapshot();
+
+    const saved = await saveCanvas();
+
+    expect(saved.nodes[0]).toEqual({
+      ...textNode("n1"), style: { width: 600, height: 366 }, deletable: false, connectable: true,
+    });
+    expect(saved.edges).toEqual([{
+      id: "e1", source: "n1", target: "n2", type: "deletable",
+      sourceHandle: "output", targetHandle: "input", deletable: false,
+      data: { purpose: "reference" },
+    }]);
+    expect(takeCanvasSnapshot()).toEqual(before);
+  });
+
+  it("omits unresolved upload nodes and their incoming and outgoing edges", async () => {
+    const failed: ImageNode = {
+      id: "failed", type: NODE_TYPE.IMAGE, position: { x: 0, y: 0 },
+      data: {
+        label: "failed", src: "", lockAspectRatio: true, naturalWidth: 100, naturalHeight: 100,
+        upload: { uploading: false, version: 1, error: { category: "unknown", message: "Upload failed", retryable: true } },
+      },
+    };
+    useCanvasStore.setState({
+      nodes: [textNode("n1"), failed, textNode("n2")],
+      edges: [
+        { id: "in", source: "n1", target: "failed" },
+        { id: "out", source: "failed", target: "n2" },
+        { id: "kept", source: "n1", target: "n2" },
+      ],
+    });
+
+    const saved = await saveCanvas();
+
+    expect(saved.nodes.map((n) => n.id)).toEqual(["n1", "n2"]);
+    expect(saved.edges).toEqual([{ id: "kept", source: "n1", target: "n2" }]);
+    expect(useCanvasStore.getState().nodes).toHaveLength(3);
+    expect(useCanvasStore.getState().edges).toHaveLength(3);
+  });
+
+  it("keeps an existing resource when a replacement upload fails", async () => {
+    const image: ImageNode = {
+      id: "image", type: NODE_TYPE.IMAGE, position: { x: 0, y: 0 },
+      data: {
+        label: "image", src: "/api/files/image.png", lockAspectRatio: true,
+        naturalWidth: 100, naturalHeight: 100,
+        upload: { uploading: false, version: 1, error: { category: "unknown", message: "Upload failed", retryable: true } },
+      },
+    };
+    useCanvasStore.setState({
+      nodes: [image, textNode("n2")],
+      edges: [{ id: "e1", source: "image", target: "n2" }],
+    });
+
+    const saved = await saveCanvas();
+
+    expect(saved.nodes).toEqual([image, textNode("n2")]);
+    expect(saved.edges).toEqual([{ id: "e1", source: "image", target: "n2" }]);
+  });
+
+  it("saves empty canvas data and the latest viewport and settings", async () => {
+    useCanvasStore.setState({ minimapVisible: false, snapToGrid: true, agentModel: "test-model" });
+    const viewport = { x: -50, y: -100, zoom: 1.5 };
+    syncLiveViewport(viewport);
+
+    expect(await saveCanvas()).toEqual({
+      nodes: [], edges: [], viewport, minimapVisible: false, snapToGrid: true, agentModel: "test-model",
+    });
+  });
+
+  it("preserves parentId and relative coordinates through load, save and reload", async () => {
+    const group: GroupNode = {
+      id: "g1", type: NODE_TYPE.GROUP, position: { x: 10000, y: -3000 },
+      data: { label: "Group" }, style: { width: 1000, height: 800 },
+    };
+    const child: TextNode = { ...textNode("n1"), parentId: group.id, position: { x: 40, y: 60 } };
+    const nodes = [group, child, textNode("n2")];
+    const edges = [{ id: "e1", type: "deletable", source: "n1", target: "n2" }];
+    const original = structuredClone({ nodes, edges });
+    useCanvasStore.getState().restoreFromProject("p1", { nodes, edges });
+
+    const saved = await saveCanvas();
+    expect(saved.nodes).toEqual(original.nodes);
+    expect(saved.edges).toEqual(original.edges);
+
+    useCanvasStore.getState().restoreFromProject("p1", saved);
+    expect(takeCanvasSnapshot()).toMatchObject(original);
+    expect({ nodes, edges }).toEqual(original);
+  });
+});
 
 describe("takeCanvasSnapshot", () => {
-  it("返回对象的 viewport/minimapVisible/snapToGrid 字段正确", () => {
-    const state = {
-      nodes: [],
-      edges: [],
-      viewport: { x: -200, y: -300, zoom: 2 },
-      minimapVisible: false,
-      snapToGrid: true,
+  it("isolates nested node and edge data and appearance from subsequent edits", () => {
+    const node: TextNode = {
+      ...textNode("n1"), style: { width: 600, height: 366 },
+      data: { ...textNode("n1").data, genSettings: {
+        kind: "text", prompt: "before", modelKey: "model", refOrder: ["ref1"],
+      } },
     };
+    const edge = {
+      id: "e1", source: "n1", target: "n2", data: { nested: { label: "before" } },
+      style: { stroke: "#abcdef" },
+    };
+    useCanvasStore.setState({ nodes: [node], edges: [edge] });
 
-    const snap = takeCanvasSnapshot(state);
-    expect(snap.viewport).toEqual({ x: -200, y: -300, zoom: 2 });
-    expect(snap.minimapVisible).toBe(false);
-    expect(snap.snapToGrid).toBe(true);
+    const snapshot = takeCanvasSnapshot();
+    node.data.genSettings!.refOrder.push("ref2");
+    node.style!.width = 200;
+    edge.data.nested.label = "after";
+    edge.style.stroke = "none";
+
+    expect(snapshot.nodes[0].data).toMatchObject({ genSettings: { refOrder: ["ref1"] } });
+    expect(snapshot.nodes[0].style).toEqual({ width: 600, height: 366 });
+    expect(snapshot.edges[0].data).toEqual({ nested: { label: "before" } });
+    expect(snapshot.edges[0].style).toEqual({ stroke: "#abcdef" });
+    expect(snapshot.nodes[0]).not.toBe(node);
+    expect(snapshot.edges[0]).not.toBe(edge);
   });
 
-  it("nodes 和 edges 是深拷贝（修改副本不影响原数据）", () => {
-    const originalNode = { id: "n1", data: { src: "a.png" } };
-    const state = {
-      nodes: [originalNode],
-      edges: [{ id: "e1", source: "n1", target: "n2" }],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
+  it("captures the live viewport and settings without sharing viewport references", () => {
+    const viewport = { x: -200, y: -300, zoom: 2 };
+    syncLiveViewport(viewport);
+    useCanvasStore.setState({ minimapVisible: false, snapToGrid: true });
 
-    const snap = takeCanvasSnapshot(state);
-    expect(snap.nodes).toEqual(state.nodes);
-    expect(snap.edges).toEqual(state.edges);
-    expect(snap.nodes).not.toBe(state.nodes);         // 不同数组
-    expect(snap.nodes[0]).not.toBe(originalNode);      // 不同对象
-    expect(snap.edges[0]).not.toBe(state.edges[0]);   // 不同对象
-  });
+    const snapshot = takeCanvasSnapshot();
+    viewport.x = 500;
 
-  it("viewport 是浅拷贝（生产代码一致）", () => {
-    const viewport = { x: 10, y: 20, zoom: 1 };
-    const state = {
-      nodes: [],
-      edges: [],
-      viewport,
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const snap = takeCanvasSnapshot(state);
-    expect(snap.viewport).toEqual(viewport);
-    // 浅拷贝意味着 snap.viewport !== viewport
-    expect(snap.viewport).not.toBe(viewport);
-  });
-
-  it("深拷贝确保嵌套数据不被引用共享", () => {
-    const data = { nested: { deep: true } };
-    const state = {
-      nodes: [{ id: "n1", data }],
-      edges: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const snap = takeCanvasSnapshot(state);
-    expect((snap.nodes[0] as unknown as { data: { nested: { deep: boolean } } }).data.nested.deep).toBe(true);
-    // 修改原数据不应影响快照
-    data.nested.deep = false;
-    expect((snap.nodes[0] as unknown as { data: { nested: { deep: boolean } } }).data.nested.deep).toBe(true);
-  });
-
-  it("空状态的快照", () => {
-    const state = {
-      nodes: [],
-      edges: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const snap = takeCanvasSnapshot(state);
-    expect(snap.nodes).toEqual([]);
-    expect(snap.edges).toEqual([]);
-  });
-
-  it("快照包含完整的节点数据（包括 style 等非必需字段）", () => {
-    const state = {
-      nodes: [{
-        id: "n1", type: "image-node", position: { x: 100, y: 200 },
-        data: { src: "http://img.png", naturalWidth: 800, naturalHeight: 600, label: "test" },
-        style: { width: 480, height: 360 },
-      }],
-      edges: [{
-        id: "e1", source: "n1", target: "n2", type: "deletable",
-        style: { stroke: "#666" },
-      }],
-      viewport: { x: 0, y: 0, zoom: 1 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const snap = takeCanvasSnapshot(state);
-    expect(snap.nodes[0].style).toEqual({ width: 480, height: 360 });
-    expect(snap.edges[0].style).toEqual({ stroke: "#666" });
-  });
-});
-
-// ════════════════════════════════════════════════════════════════════
-// 组合测试：stripRuntimeFields(takeCanvasSnapshot(state)) 行为
-// ════════════════════════════════════════════════════════════════════
-
-describe("stripRuntimeFields(takeCanvasSnapshot(state)) 完整管线", () => {
-  it("生产中的实际调用顺序：快照 → 剥离运行时字段", () => {
-    const state = {
-      nodes: [
-        { id: "n1", type: "image-node", position: { x: 100, y: 200 }, data: { src: "a.png" }, selected: true, dragging: false, positionAbsolute: { x: 100, y: 200 } },
-      ],
-      edges: [
-        { id: "e1", source: "n1", target: "n2", selected: false, type: "deletable" },
-      ],
-      viewport: { x: -50, y: -100, zoom: 1.5 },
-      minimapVisible: true,
-      snapToGrid: false,
-    };
-
-    const snap = takeCanvasSnapshot(state);
-    const clean = stripRuntimeFields(snap);
-
-    // 深拷贝 + 剥离：修改原数据不应影响 cleaned
-    state.nodes[0].data.src = "modified.png";
-    state.edges[0].type = "straight";
-
-    expect((clean.nodes[0] as unknown as { data: { src: string } }).data.src).toBe("a.png");
-    expect(clean.nodes[0]).not.toHaveProperty("selected");
-    expect(clean.nodes[0]).not.toHaveProperty("dragging");
-    expect(clean.edges[0].type).toBe("deletable"); // 原始值，没被修改影响
-    expect(clean.edges[0]).not.toHaveProperty("selected");
-    expect(clean.viewport).toEqual({ x: -50, y: -100, zoom: 1.5 });
+    expect(snapshot).toEqual({
+      nodes: [], edges: [], viewport: { x: -200, y: -300, zoom: 2 },
+      minimapVisible: false, snapToGrid: true,
+    });
   });
 });

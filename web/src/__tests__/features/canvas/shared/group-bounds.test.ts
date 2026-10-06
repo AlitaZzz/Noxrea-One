@@ -1,6 +1,6 @@
 /**
  * group-bounds 测试：Sub Flow 模型（parentId + 相对坐标）下的组框自适应几何、
- * 成员判定、拖入归属判定、轨道钳制与旧数据迁移。
+ * 成员判定、拖入归属判定与轨道钳制。
  */
 
 import { describe, expect, it } from "vitest";
@@ -13,7 +13,6 @@ import {
   groupMembers,
   isGroupMember,
   memberRailWidth,
-  migrateCanvasNodes,
   nodeAbsolutePosition,
   pruneEmptyGroups,
   refitGroupRects,
@@ -324,76 +323,5 @@ describe("refitGroupRects", () => {
     const g1 = group("g1", 50, 50, 200, 200);
     const out = refitGroupRects([g1, m], ["g1"]);
     expect(out.find((n) => n.id === "g1")).toBe(g1);
-  });
-});
-
-describe("migrateCanvasNodes（旧数据一次性迁移，幂等）", () => {
-  it("A 形态：data.groupId + 绝对坐标 → parentId + 组内相对坐标", () => {
-    const g = group("g", 100, 200, 500, 400);
-    const a = {
-      id: "a", type: "text-node",
-      position: { x: 160, y: 260 },
-      data: { label: "a", groupId: "g" },
-    } as unknown as AnyNode;
-    const out = migrateCanvasNodes([g, a]);
-    const aOut = out.find((n) => n.id === "a")!;
-    expect(aOut.parentId).toBe("g");
-    expect(aOut.position).toEqual({ x: 60, y: 60 });
-    expect((aOut.data as { groupId?: string }).groupId).toBeUndefined();
-    expect(aOut.extent).toBeUndefined();
-  });
-
-  it("B 形态：parentId + extent:'parent' → 保留结构，仅剥 extent", () => {
-    const g = group("g", 100, 200, 500, 400);
-    const m = {
-      id: "m", type: "text-node",
-      position: { x: 60, y: 60 },
-      parentId: "g",
-      extent: "parent" as const,
-      data: { label: "m" },
-    } as unknown as AnyNode;
-    const out = migrateCanvasNodes([g, m]);
-    const mOut = out.find((n) => n.id === "m")!;
-    expect(mOut.parentId).toBe("g");
-    expect(mOut.position).toEqual({ x: 60, y: 60 });
-    expect(mOut.extent).toBeUndefined();
-  });
-
-  it("C 形态：悬空 groupId / parentId 剥离为顶层", () => {
-    const a = {
-      id: "a", type: "text-node",
-      position: { x: 10, y: 20 },
-      data: { groupId: "ghost" },
-    } as unknown as AnyNode;
-    const b = {
-      id: "b", type: "text-node",
-      position: { x: 10, y: 20 },
-      parentId: "ghost2",
-      data: {},
-    } as unknown as AnyNode;
-    const out = migrateCanvasNodes([a, b]);
-    expect(out.find((n) => n.id === "a")!.parentId).toBeUndefined();
-    expect((out.find((n) => n.id === "a")!.data as { groupId?: string }).groupId).toBeUndefined();
-    expect(out.find((n) => n.id === "b")!.parentId).toBeUndefined();
-  });
-
-  it("组节点剥除 parentId / extent（组恒为顶层）", () => {
-    const g = { ...group("g", 0, 0, 100, 100), parentId: "outer", extent: "parent" } as unknown as AnyNode;
-    const out = migrateCanvasNodes([g]);
-    expect(out[0].parentId).toBeUndefined();
-    expect(out[0].extent).toBeUndefined();
-  });
-
-  it("幂等：新格式数据二次迁移零变化", () => {
-    const g = group("g", 100, 200, 500, 400);
-    const m = member("m", 60, 60, 100, 50, "g");
-    const once = migrateCanvasNodes([g, m]);
-    const twice = migrateCanvasNodes(once);
-    expect(twice).toEqual([g, m]);
-  });
-
-  it("无组数据走快路径：无悬空引用时返回原引用", () => {
-    const nodes = [node("a", 0, 0, 50, 50, { type: "text-node" })];
-    expect(migrateCanvasNodes(nodes)).toBe(nodes);
   });
 });

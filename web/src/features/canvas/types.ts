@@ -91,8 +91,7 @@ export interface MediaGenFields {
 /**
  * 分组采用 React Flow 官方 Sub Flow 模型：父子关系由节点顶层字段
  * `parentId` 表达（唯一结构关系），子节点 position 为组内相对坐标。
- * data 层不再携带任何归属字段（旧数据在 restoreFromProject 入口由
- * migrateCanvasNodes 一次性迁移）。
+ * data 层不携带归属字段。
  */
 export type TextNodeData = {
   /** 展示标题。文本无资源文件名语义（导出文件名直接用 label），故不设 alt 字段 */

@@ -86,7 +86,7 @@ function isUnresolvedUploadNode(node: unknown): boolean {
   return Boolean(upload?.error) && !data?.src;
 }
 
-/** 深拷贝并剔除 React Flow 运行时字段（selected/dragging/positionAbsolute） */
+/** 剔除 React Flow 运行时字段与连线外观；保留节点尺寸等项目数据。 */
 function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
   // 悬空边（任一端指向被剔除的失败节点）一并剔除，避免存下指向空节点的连线
   const removed = new Set(
@@ -108,6 +108,8 @@ function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
       .map((e) => {
         const rest = { ...(e as Record<string, unknown>) };
         delete rest.selected;
+        // 连线外观由渲染组件与当前主题管理，不属于项目数据。
+        delete rest.style;
         // 已废弃的箭头字段：新版连线不渲染箭头，保存时主动剔除旧数据残留
         delete rest.markerEnd;
         return rest;

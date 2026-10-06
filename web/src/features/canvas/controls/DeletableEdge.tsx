@@ -4,7 +4,7 @@
  * 即达节点边缘（见 constants.ts 的注释）。
  * 交互三态：
  * - 常态：2px 中性灰
- * - 强调（hover / 选中 / 关联节点选中）：提亮加粗 + 管道流光。hover 服务于辨认
+ * - 强调（hover / 选中 / 关联节点选中）：加粗 + 管道流光。hover 服务于辨认
  *   连线走向，选中是它的驻留版。
  * - 删除按钮：跟随 hover 指针，指针停稳约 1s 后出现在指针在连线上的投影位置
  *   （不脱离连线），指针在连线或按钮上移动都持续跟随；沿线移动会重置驻留计时
@@ -53,7 +53,6 @@ export default function DeletableEdge(props: EdgeProps) {
     sourcePosition,
     targetPosition,
     selected,
-    style = {},
   } = props;
   const { t } = useTranslation();
   const { screenToFlowPosition } = useReactFlow();
@@ -190,13 +189,8 @@ export default function DeletableEdge(props: EdgeProps) {
           id={id}
           path={edgePath}
           style={{
-            ...style,
             strokeWidth: emphasized ? 2.5 : 2,
-            // 底线恒为中性灰（强调时提亮一档），彩色只留给流光：
-            // 两者同色会糊成一片，流光的水滴形状就看不见了
-            stroke: emphasized
-              ? "var(--muted-foreground)"
-              : (style.stroke as string || EDGE_BASE_COLOR),
+            stroke: EDGE_BASE_COLOR,
           }}
         />
 

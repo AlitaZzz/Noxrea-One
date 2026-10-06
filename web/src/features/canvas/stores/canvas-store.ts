@@ -10,7 +10,6 @@ import { create } from "zustand";
 import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
 import {
   buildNodeIndex,
-  migrateCanvasNodes,
   nodeAbsolutePosition,
   pruneEmptyGroups,
 } from "@/features/canvas/shared/group-bounds";
@@ -539,22 +538,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const vp = data.viewport || DEFAULT_VIEWPORT;
     _liveViewport = vp;
     // 边界归一化：服务端数据在进画布的唯一入口清洗一次。
-    // 1. 旧数据迁移：历史落库的 groupId + 绝对坐标 / 更早的 parentId + extent
-    //    存档，统一规范化为「parentId + 相对坐标」单一模型（幂等，见 group-bounds）；
-    // 2. 空组清洗：落库数据可能产生于「空组即删」不变量确立之前（旧规则
-    //    允许空壳组收缩存活），清洗后全库可依赖「组必有成员」前置条件；
-    // 3. className 剥离：渲染挂钩类随 type 由 React Flow 自动派生
-    //    （group-node → .react-flow__node-group-node），不属于持久化数据；
-    //    旧数据曾借 xyflow 库存保留类 react-flow__node-group 挂样式钩，
-    //    会把库存 text-align/padding 泄漏进节点。
-    // 4. 边能力清洗：落库数据可能包含「连线能力规则（acceptsInput）确立之前」
-    //    拖到上传素材上建出的边；target 无输入轨，渲染时 xyflow 找不到 Handle
-    //    会抛 error #008。清洗后全库可依赖「边的 target 必可接受输入」前置条件
-    //    （见 connection-rules 的 pruneEdgesToCapability）。
+    // 分组直接使用 parentId + 相对坐标，不进行格式转换。
+    // 1. 空组清洗：保证组必有成员。
+    // 2. className 剥离：渲染挂钩类随 type 由 React Flow 自动派生，属于运行时外观。
+    // 3. 边能力清洗：保证 target 可接受输入，避免 xyflow 找不到 Handle（error #008）。
     const nodes = pruneEmptyGroups(
-      migrateCanvasNodes(
-        (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
-      ),
+      (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
     );
     const edges = pruneEdgesToCapability(nodes, (data.edges || []) as Edge[]);
     set({

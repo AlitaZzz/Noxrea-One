@@ -1,6 +1,6 @@
 /**
  * 组框几何与成员判定工具：React Flow 官方 Sub Flow 模型（parentId + 相对坐标）下的
- * 组框自适应、归属判定、坐标换算与数据迁移。
+ * 组框自适应、归属判定与坐标换算。
  *
  * 模型约定（全库唯一口径）：
  * - 父子关系唯一表达是节点顶层字段 `parentId`；子节点 position 为组内相对坐标。
@@ -293,88 +293,4 @@ export function memberRailWidth(
       : member.position.x;
   if (clearance <= 0) return RAIL_WIDTH;
   return Math.min(RAIL_WIDTH, clearance);
-}
-
-// ============================================================
-// 旧数据迁移（restoreFromProject 单入口调用；幂等）
-// ============================================================
-
-/** 剥除单节点的全部遗留归属引用（悬空 parentId / extent / data.groupId） */
-function stripLegacyGroupRefs(n: AnyNode): AnyNode {
-  const data = n.data as Record<string, unknown> | undefined;
-  const { groupId: _legacy, ...restData } = data ?? {};
-  return {
-    ...n,
-    parentId: undefined,
-    extent: undefined,
-    data: data && "groupId" in data ? restData : data,
-  } as AnyNode;
-}
-
-/**
- * 把历史落库数据一次性规范化为「parentId + 相对坐标」单一模型：
- *
- * - A 形态（现行旧数据）：`data.groupId` + 绝对坐标 → parentId 指向该组，
- *   position 换算为组内相对坐标，删除 data.groupId；
- * - B 形态（2026-08 前的官方 parentId 旧存档）：已是 parentId + 相对坐标，
- *   仅剥 extent（"parent" 会禁止成员拖出组，不再使用）；
- * - C 形态（脏数据）：groupId / parentId 指向不存在的组 → 剥离悬空引用
- *   （与全库孤儿兜底同语义：按未分组处理）；
- * - groupId 与 parentId 并存（理论不出现）→ 以 groupId 为准：其几何语义
- *   （绝对坐标）是用户实际看到的位置，parentId 是未被清理的陈旧残留；
- * - 组节点：剥除 parentId / extent（组恒为顶层）。
- *
- * 幂等：新格式数据（parentId + 相对坐标，无 groupId/extent）二次迁移零变化。
- */
-export function migrateCanvasNodes(nodes: AnyNode[]): AnyNode[] {
-  const groupIds = new Set(
-    nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
-  );
-  if (groupIds.size === 0) {
-    // 无组数据：仅需剥除悬空引用（防御），绝大多数画布走此快路径
-    const clean = nodes.every(
-      (n) =>
-        !n.parentId &&
-        !n.extent &&
-        !((n.data as { groupId?: string } | undefined)?.groupId),
-    );
-    if (clean) return nodes;
-    return nodes.map(stripLegacyGroupRefs);
-  }
-  const byId = buildNodeIndex(nodes);
-  return nodes.map((n) => {
-    if (n.type === NODE_TYPE.GROUP) {
-      return n.parentId || n.extent
-        ? ({ ...n, parentId: undefined, extent: undefined } as AnyNode)
-        : n;
-    }
-    const data = (n.data ?? {}) as Record<string, unknown>;
-    const legacyGroupId = data.groupId;
-    let parentId: string | undefined;
-    let position = n.position;
-    if (typeof legacyGroupId === "string" && groupIds.has(legacyGroupId)) {
-      // A 形态：position 是绝对坐标，换算为组内相对坐标
-      parentId = legacyGroupId;
-      const parent = byId.get(legacyGroupId);
-      if (parent) {
-        position = {
-          x: n.position.x - parent.position.x,
-          y: n.position.y - parent.position.y,
-        };
-      }
-    } else if (n.parentId && groupIds.has(n.parentId)) {
-      // B 形态 / 新格式：position 已是组内相对坐标，原样保留
-      parentId = n.parentId;
-    }
-    // C 形态（悬空引用）与无归属节点：parentId 保持 undefined
-    const { groupId: _legacy, ...restData } = data;
-    const next = {
-      ...n,
-      parentId,
-      extent: undefined,
-      position,
-      data: Object.keys(restData).length === Object.keys(data).length ? data : restData,
-    } as AnyNode;
-    return next;
-  });
 }

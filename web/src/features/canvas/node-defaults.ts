@@ -30,7 +30,6 @@ import {
   DEFAULT_NODE_WIDTH,
   DIRECTOR_NODE_DEFAULT_HEIGHT,
   DIRECTOR_NODE_DEFAULT_WIDTH,
-  EDGE_BASE_COLOR,
   TEXT_NODE_DEFAULT_HEIGHT,
   TEXT_NODE_DEFAULT_WIDTH,
   TEXT_NODE_MIN_HEIGHT,
@@ -220,11 +219,11 @@ export function duplicateNode(
   };
 }
 
-/** 创建统一样式的连接线（deletable、静态、中性灰；不画箭头，方向由流光表达） */
+/** 创建连接线；外观由连线组件和当前主题统一管理。 */
 export function createEdge(
   source: string,
   target: string,
-  options?: { id?: string; type?: string; style?: Record<string, unknown> }
+  options?: { id?: string; type?: string }
 ) {
   const edgeId = options?.id || uid("e");
   return {
@@ -233,6 +232,5 @@ export function createEdge(
     target,
     type: options?.type || "deletable",
     animated: false,
-    style: { stroke: EDGE_BASE_COLOR, strokeWidth: 2, ...(options?.style || {}) },
   };
 }

@@ -19,6 +19,7 @@
 import type { Edge } from "@xyflow/react";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
@@ -444,10 +445,10 @@ describe("removeNodes 级联：空组即删与删组连带成员（容器型）"
     expect(restored!.nodes.map((n: AnyNode) => n.id)).toEqual(["g", "a"]);
   });
 
-  it("restoreFromProject 归一化落库数据：历史遗留空组在加载时清除，有成员的组保留", () => {
+  it("restoreFromProject 保持空组即删的不变量，有成员的组保留", () => {
     useCanvasStore.getState().restoreFromProject("p1", {
       nodes: [
-        group("legacy-empty"),
+        group("empty"),
         group("kept"),
         member("a", "kept"),
       ],
@@ -456,6 +457,27 @@ describe("removeNodes 级联：空组即删与删组连带成员（容器型）"
     const nodes = useCanvasStore.getState().nodes;
     expect(nodes.map((n) => n.id)).toEqual(["kept", "a"]);
     expect(useCanvasStore.getState().viewportSyncCount).toBeGreaterThan(0);
+  });
+
+  it("restoreFromProject 保留 parentId、成员相对坐标及连线，重复加载不改变位置", () => {
+    const groupNode = { ...group("g"), position: { x: 10000, y: -3000 } };
+    const child = { ...member("child", "g"), position: { x: 40, y: 60 } };
+    const data = {
+      nodes: [groupNode, child, member("top")],
+      edges: [{ id: "e1", type: "deletable", source: "child", target: "top" }],
+    };
+    const original = structuredClone(data);
+
+    for (let i = 0; i < 2; i++) {
+      useCanvasStore.getState().restoreFromProject("p1", data);
+
+      const loaded = useCanvasStore.getState();
+      expect(loaded.nodes).toEqual(original.nodes);
+      expect(loaded.edges).toEqual(original.edges);
+      expect(nodeAbsolutePosition(loaded.nodes[1], buildNodeIndex(loaded.nodes))).toEqual({ x: 10040, y: -2940 });
+      expect(loaded.nodes[1].data).not.toBe(child.data);
+    }
+    expect(data).toEqual(original);
   });
 });
 

@@ -8,8 +8,18 @@ vi.mock("@/lib/i18n/config", () => ({
   default: { t: (k: string) => k, exists: () => false },
 }));
 
-import { createGroupNode, createImageNode, duplicateNode } from "@/features/canvas/node-defaults";
+import { createEdge, createGroupNode, createImageNode, duplicateNode } from "@/features/canvas/node-defaults";
 import type { GroupNode, ImageNode } from "@/features/canvas/types";
+
+describe("createEdge", () => {
+  it("creates connections without persisted appearance", () => {
+    const edge = createEdge("source-node", "target-node");
+
+    expect(edge).toMatchObject({ source: "source-node", target: "target-node", type: "deletable" });
+    expect(edge.id).toBeTruthy();
+    expect(edge).not.toHaveProperty("style");
+  });
+});
 
 describe("duplicateNode", () => {
   it("清除生成中与上传中的瞬时状态，保留已完成的静态内容", () => {
