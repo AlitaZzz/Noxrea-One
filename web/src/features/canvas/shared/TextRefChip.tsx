@@ -2,7 +2,7 @@
  * 参考区「文本」缩略卡片（图片 / 视频 / 文本生成面板共用）。
  *
  * 文本参考不参与拖拽排序（不可拖动），按连线顺序展示：
- * 悬停用 Tooltip 显示全文，双击定位到源节点，✕ 断开连线。
+ * 悬停用 Hover Card 阅读全文，双击定位到源节点，✕ 断开连线。
  */
 "use client";
 
@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { CloseOutlined, TextIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
@@ -31,21 +32,40 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
   const reveal = useRevealCanvasNode();
 
   return (
-    <Tooltip><TooltipTrigger asChild>
-        <Card
-          className="group relative flex size-14 flex-row items-center justify-center rounded-md border-border bg-accent p-0 shadow-none"
-          onDoubleClick={() => {
-            const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
-            if (n) reveal(n);
-          }}
+    <Card className="group relative flex size-14 shrink-0 flex-row items-center justify-center gap-0 rounded-md border-border bg-accent p-0 shadow-none">
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t("node.text")}
+            className="size-full"
+            onDoubleClick={() => {
+              const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
+              if (n) reveal(n);
+            }}
+          >
+            <TextIcon className="size-4" />
+          </Button>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="top"
+          align="start"
+          collisionPadding={16}
+          className="nodrag nopan nowheel w-96 max-w-[calc(100vw-2rem)] max-h-[min(20rem,var(--radix-hover-card-content-available-height))] overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm"
         >
-          <TextIcon className="pointer-events-none" style={{ color: "var(--foreground)", width: 14, height: 15 }} />
+          {content}
+        </HoverCardContent>
+      </HoverCard>
+      <Tooltip>
+        <TooltipTrigger asChild>
           <Button
             type="button"
             size="icon-xs"
             variant="ghost"
             aria-label={t("common.delete")}
-            className="absolute -top-1.5 -right-1.5 rounded-full bg-black/50 p-0 text-white/70 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-black/70 hover:text-white"
+            className="absolute -top-1.5 -right-1.5 rounded-full bg-background text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
             onClick={() => {
               const store = useCanvasStore.getState();
               const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
@@ -54,10 +74,10 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
           >
             <CloseOutlined className="size-3" />
           </Button>
-        </Card>
-      </TooltipTrigger><TooltipContent>{<div style={{ maxWidth: 280, maxHeight: 240, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {content}
-        </div>}</TooltipContent></Tooltip>
+        </TooltipTrigger>
+        <TooltipContent>{t("common.delete")}</TooltipContent>
+      </Tooltip>
+    </Card>
   );
 }
 

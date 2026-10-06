@@ -88,6 +88,9 @@ export function useCanvasKeyboard() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // Focused controls and floating layers own the keys they have consumed.
+      if (e.defaultPrevented) return;
+
       // Skip canvas shortcuts when a modal or director overlay is open,
       // or when a media editor panel (标注/裁剪/选帧/片段截取) owns the keyboard
       const state = useCanvasStore.getState();
