@@ -339,8 +339,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
   const gridShowFolders = categories.length === 0 && !appliedSearch.trim();
 
   // 移动弹窗的目标树：与上传弹窗共用 useFolderTree（个人资产库为根 + 普通文件夹递归），
-  // 当前所在位置禁选（待分类视作根目录）。TreeSelect 自带折叠 / 搜索，目录再多也可扩展。
-  // title 始终返回元素：rc-tree 对字符串 title 会写原生 title 属性，悬停弹浏览器提示
+  // 当前所在位置禁选（待分类视作根目录）。项目 TreeSelect 提供折叠与搜索，目录再多也可扩展。
   const renderMoveTitle = useCallback((name: string) => {
     const m = splitMatch(name, moveTreeQuery);
     if (!m) return <>{name}</>;
@@ -749,7 +748,6 @@ export default function AssetsDialog({ open, onClose }: Props) {
             </DialogHeader>
             <div className="space-y-2">
               <TreeSelect
-                className="folder-tree-select"
                 value={batchMoveTarget}
                 onChange={(v) => setBatchMoveTarget(v)}
                 placeholder={t("asset.folderPickerPlaceholder")}

@@ -403,9 +403,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                         <CircularProgress
                           value={f.uploadProgress}
                           size={48}
-                          color="#fff"
-                          trackColor="rgb(var(--on-media-rgb) / 0.2)"
-                          status="active"
+                          className="text-white"
                         />
                       </div>
                     )}
@@ -448,7 +446,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
               {t("asset.saveLocation")} <span className="text-destructive">*</span>
             </Label>
           <TreeSelect
-              className="folder-tree-select"
               value={saveFolderId}
               onChange={(v) => setSaveFolderId(v ?? null)}
               placeholder={t("asset.saveLocationPlaceholder")}

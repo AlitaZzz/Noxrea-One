@@ -33,7 +33,7 @@ function Progress({
 
 export { Progress }
 
-function CircularProgress({ value, size = 40, color, trackColor, status }: { value: number; size?: number; color?: string; trackColor?: string; status?: "active" | "success" | "exception" }) {
+function CircularProgress({ value, size = 40, className }: { value: number; size?: number; className?: string }) {
   const bounded = Math.max(0, Math.min(100, value))
   const radius = 18
   const circumference = 2 * Math.PI * radius
@@ -44,12 +44,12 @@ function CircularProgress({ value, size = 40, color, trackColor, status }: { val
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={bounded}
-      className="relative inline-flex items-center justify-center"
+      className={cn("relative inline-flex items-center justify-center text-primary", className)}
       style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 40 40" className="size-full -rotate-90">
-        <circle cx="20" cy="20" r={radius} fill="none" stroke={trackColor ?? "var(--muted)"} strokeWidth="4" />
-        <circle cx="20" cy="20" r={radius} fill="none" stroke={color ?? (status === "exception" ? "var(--destructive)" : "var(--primary)")} strokeWidth="4" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - bounded / 100)} strokeLinecap="round" />
+        <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="4" opacity="0.2" />
+        <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - bounded / 100)} strokeLinecap="round" />
       </svg>
       <span className="absolute text-[10px]">{bounded}%</span>
     </div>

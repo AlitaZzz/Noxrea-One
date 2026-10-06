@@ -160,6 +160,8 @@ UI 基础层：
 
 `components/ui/icons` 是运行时图标的唯一实现层，图标以 React 组件形式提供，并遵循项目图标契约：使用 `currentColor`，支持 `className`、`style` 和尺寸控制；新增或替换图标时应支持标准 SVG 属性。原始 `.svg` 文件可以作为设计源或组件生成输入，但不得由业务层直接导入；不得通过 `public` 路径或资源 URL 绕过 UI 出口使用图标。图标的具体存储方式可以调整，但对业务层暴露的始终是项目定义的 UI 组件契约。
 
+`components/ui/AppIcon` 中的 `*Outlined` / `*Filled` 导出是历史命名，底层统一映射到 Lucide 实现；它们属于现有 UI 出口契约。业务代码继续使用已有导出，新代码不直接引入图标库；批量改名需单独评估，不通过别名或兼容层扩展命名。
+
 `ParamFields` / `ParamSummary` 只消费已解析的展示描述。模型默认值、提交字段判断、翻译约定与自适应比例语义由 `features/model/param-fields.ts` 处理，UI 层不反向依赖领域适配器。
 
 ### 4. 第三方 UI 库使用规范

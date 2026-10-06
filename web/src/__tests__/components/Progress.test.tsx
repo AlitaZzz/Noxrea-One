@@ -17,12 +17,13 @@ describe("Progress", () => {
   });
 
   it("renders a bounded circular value with the project UI contract", () => {
-    render(<CircularProgress value={140} size={48} color="#fff" trackColor="#333" status="success" />);
+    render(<CircularProgress value={140} size={48} className="text-white" />);
     const progress = screen.getByRole("progressbar");
 
     expect(progress).toHaveAttribute("data-slot", "circular-progress");
     expect(progress).toHaveAttribute("aria-valuenow", "100");
     expect(screen.getByText("100%")).toBeTruthy();
     expect(progress).toHaveStyle({ width: "48px", height: "48px" });
+    expect(progress).toHaveClass("text-white");
   });
 });

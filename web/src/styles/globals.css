@@ -108,12 +108,9 @@
      UI 控件通过 var() 引用这里，保持单一来源。
      注：MiSans 自托管方案实测小字号发虚（网络字体无小字号 hinting），已移除。 */
   --font-ui: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  /* 媒体表面上的恒白前景不随主题切换。 */
-  --on-media-rgb: 255 255 255;
   /* 画布框选是领域状态，不属于 shadcn 控件主题。 */
   --marquee-bg: rgba(231, 231, 236, 0.06);
   --marquee-border: rgba(231, 231, 236, 0.38);
-  --toolbar-shadow: 0 10px 34px rgba(0,0,0,.55);
 }
 
 /* Tailwind v4 names used by shadcn-style components. */
