@@ -547,34 +547,16 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 ::-webkit-scrollbar-thumb { background: var(--input); border-radius: 3px; }
 
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
-@property --agent-ring-angle {
+@property --connection-ring-angle {
   syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
 }
 
-.canvas-agent-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-  background: var(--card);
-  border: none;
-  color: var(--foreground);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  /* 刻意不含 transform：按下时尺寸保持不变，只靠背景变化给反馈 */
-  transition: background 0.12s;
-}
 /* 流动描边：conic-gradient 绕圈旋转，mask 挖空中间只留 1.5px 一圈，无需额外 DOM。
    底色淡青柠保证静止时也有轮廓；高光有两颗，相隔 180° 同步绕行
    （一颗在右侧时另一颗正好在左侧）。两颗的爬升/回落角度刻意等宽，亮度才一致。
-   画布拖线时可连目标节点（.node-connect-ok）复用同一描边。 */
-.canvas-agent-btn::before,
+   画布拖线时可连目标节点（.node-connect-ok）使用该描边。 */
 .node-body.node-connect-ok::before {
   content: "";
   position: absolute;
@@ -582,7 +564,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   padding: 1.5px;
   border-radius: inherit;
   background: conic-gradient(
-    from var(--agent-ring-angle),
+    from var(--connection-ring-angle),
     color-mix(in srgb, var(--primary) 25%, transparent) 0deg,
     color-mix(in srgb, var(--primary) 25%, transparent) 150deg,
     var(--primary) 168deg,
@@ -597,12 +579,12 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: agent-ring-flow 4s linear infinite;
+  animation: connection-ring-flow 4s linear infinite;
   pointer-events: none;
 }
-@keyframes agent-ring-flow {
+@keyframes connection-ring-flow {
   to {
-    --agent-ring-angle: 360deg;
+    --connection-ring-angle: 360deg;
   }
 }
 
@@ -702,50 +684,6 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   .gen-ribbon,
   .gen-blob-1,
   .gen-blob-2 {
-    animation: none;
-  }
-}
-/* ===== 画布加载动画（/canvas/[projectId] 项目未恢复完成时的整页 Loading）=====
-   四叶草：四片青柠叶瓣绕中心依次呼吸，整体缓慢旋转。加载是一次性短状态，
-   动画只走 opacity/scale/rotate。 */
-.canvas-clover {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  animation: canvas-clover-spin 2.4s linear infinite;
-}
-.canvas-clover-petal {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 19px;
-  height: 19px;
-  margin: -9.5px 0 0 -9.5px;
-  border-radius: 50% 50% 50% 0;
-  background: var(--primary);
-  box-shadow: 0 0 6px rgba(199, 244, 61, 0.45);
-  animation: canvas-clover-pulse 0.8s ease-in-out infinite;
-}
-@keyframes canvas-clover-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes canvas-clover-pulse {
-  0%, 100% { opacity: 0.3; scale: 0.78; }
-  50% { opacity: 1; scale: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .canvas-clover,
-  .canvas-clover-petal {
-    animation: none;
-  }
-}
-
-.canvas-agent-btn:hover {
-  background: var(--accent);
-}
-/* 系统开启「减弱动态效果」时停掉流光，只保留静态描边 */
-@media (prefers-reduced-motion: reduce) {
-  .canvas-agent-btn::before {
     animation: none;
   }
 }
@@ -909,8 +847,8 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 /* ===== 连线拖动目标节点反馈（connection-tilt）=====
    状态类由 controls/connection-tilt.ts 命令式写在与维护，只加在节点 body 上
    （不含标题栏）；整卡倾斜由 .node-tilt 的内联 transform 承担：
-   - .node-connect-ok：可连目标——整卡倾斜 + body 叠 agent 按钮同款流动描边
-     （描边本体规则在 .canvas-agent-btn::before 处共享）；
+   - .node-connect-ok：可连目标——整卡倾斜 + body 叠流动描边
+     （描边本体规则在 .node-body.node-connect-ok::before 处定义）；
    - .node-connect-no：不可连目标——整卡保持平整，body 覆盖毛玻璃蒙层。 */
 .node-tilt {
   /* 不加 will-change: transform——它会常驻给每个节点开独立合成层，节点多时白吃显存；

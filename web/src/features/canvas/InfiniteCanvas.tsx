@@ -1202,14 +1202,15 @@ export default function InfiniteCanvas() {
         <Panel position="top-right" style={{ margin: 0, paddingRight: 30, paddingTop: 30, pointerEvents: "none" }}>
           <div className="flex items-center gap-2" style={{ pointerEvents: "auto" }}>
             <OfflineIndicator />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="lg"
               onClick={() => setChatOpen(true)}
-              className="canvas-agent-btn"
             >
               <AgentIcon style={{ width: 22, height: 22 }} />
               <span className="text-base font-medium">{t("agent.title")}</span>
-            </button>
+            </Button>
           </div>
         </Panel>
 
