@@ -205,7 +205,8 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
       >
         <SheetContent
           side="right"
-          className="w-[min(780px,100vw)] !max-w-[min(780px,100vw)] gap-0 border-l border-border p-0"
+          width="min(780px, 100vw)"
+          className="gap-0 border-l border-border p-0"
         >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">

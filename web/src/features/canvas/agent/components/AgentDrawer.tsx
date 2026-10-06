@@ -154,7 +154,8 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
       <SheetContent
         side="right"
         showOverlay={false}
-        className="w-[min(420px,100vw)] !max-w-[min(420px,100vw)] gap-0 border-l border-border p-0"
+        width="min(420px, 100vw)"
+        className="gap-0 border-l border-border p-0"
       >
         <SheetHeader className="h-16 shrink-0 flex-row items-center gap-2 border-0 py-0 pl-3 pr-14">
           <SheetTitle className="min-w-0 flex-1">

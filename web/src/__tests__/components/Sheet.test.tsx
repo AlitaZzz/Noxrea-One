@@ -121,6 +121,20 @@ describe("Sheet", () => {
     expect(document.querySelector('[data-slot="sheet-overlay"]')).not.toHaveStyle({ width: "480px" });
   });
 
+  it("uses the width prop as the content size contract", () => {
+    render(
+      <Sheet open>
+        <SheetContent width="480px">
+          <SheetTitle>Settings</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    const content = document.querySelector('[data-slot="sheet-content"]');
+    expect(content).toHaveStyle({ width: "480px", maxWidth: "480px" });
+    expect(content).not.toHaveClass("data-[side=right]:sm:max-w-sm");
+  });
+
   it("can keep a non-modal side panel open while interacting outside", () => {
     const onOpenChange = vi.fn();
     render(
