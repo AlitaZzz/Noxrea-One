@@ -14,9 +14,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowUpOutlined, CloseOutlined, DeleteOutlined } from "@/components/ui/AppIcon";
 import { HistoryIcon } from "@/components/ui/AppIcon";
 import { NewChatIcon } from "@/components/ui/AppIcon";
-import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -29,6 +27,7 @@ import { groupSections } from "@/features/canvas/agent/utils/group-sections";
 import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-edit-actions";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
+import { ModelSelector } from "@/features/model/components/ModelSelector";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
@@ -50,7 +49,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const modelOptions = providers.flatMap((c) =>
     c.models
       .filter((m) => m.capabilities?.includes("text"))
-      .map((m) => ({ value: `${c.id}/${m.name}`, label: `${c.name}/${m.name}`, providerId: c.id, name: m.name }))
+      .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, name: m.name, providerName: c.name }))
   );
 
   const agentModel = useCanvasStore((s) => s.agentModel);
@@ -118,7 +117,6 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
     setDraft("");
   }, [isStreaming, sendChat]);
 
-  const [modelOpen, setModelOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -346,34 +344,15 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   <span className="truncate">{t("agent.modelLoadFailed")}</span>
                 </Button>
               ) : (
-                <DropdownMenu
-                  open={modelOpen}
-                  onOpenChange={setModelOpen}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="max-w-[180px] justify-between text-muted-foreground"
-                      aria-label={t("agent.selectModelAria")}
-                    >
-                      <span className="truncate">{activeOption?.label ?? activeOption?.value}</span>
-                      <ChevronDownIcon />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent side="top" align="end">
-                    {modelOptions.map((option) => (
-                      <DropdownMenuItem
-                        key={option.value}
-                        className={option.value === activeOption?.value ? "bg-accent text-accent-foreground" : undefined}
-                        onSelect={() => setAgentModel(option.value)}
-                      >
-                        {option.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <ModelSelector
+                  models={modelOptions}
+                  value={activeOption?.value}
+                  onValueChange={setAgentModel}
+                  placeholder={t("modelConfig.selectModel")}
+                  ariaLabel={t("agent.selectModelAria")}
+                  side="top"
+                  align="end"
+                />
               )}
               <Button
                 type="button"

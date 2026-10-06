@@ -14,7 +14,6 @@ import { ParamsIcon } from "@/components/ui/AppIcon";
 import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
 import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -27,7 +26,7 @@ import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import { ModelIcon } from "@/features/model/ModelIcon";
+import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
@@ -96,7 +95,6 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const { data: promptTemplateCatalog } = usePromptTemplateCatalog("image");
   const presets = useMemo(() => promptTemplateCatalog?.entries ?? [], [promptTemplateCatalog]);
 
-  const [modelOpen, setModelOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
   const [isRefDragging, setIsRefDragging] = useState(false);
@@ -392,29 +390,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
           style={{ minHeight: 100, outline: "none", boxShadow: "none" }}
         />
         <div className="flex items-center gap-2">
-          <DropdownMenu open={modelOpen} onOpenChange={setModelOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="max-w-[180px] gap-1.5">
-                <ModelIcon model={allModels.find((m) => m.value === modelKey)?.name ?? modelKey} className="size-3.5 shrink-0" />
-                <span className="truncate">
-                  {allModels.find((m) => m.value === modelKey)?.name ?? t("modelConfig.selectModel")}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="bottom" align="start">
-              {allModels.map((model) => (
-                <DropdownMenuItem
-                  key={model.value}
-                  className={model.value === modelKey ? "bg-accent text-accent-foreground" : undefined}
-                  onSelect={() => { setModelKey(model.value); recordLastModel("image", model.value); }}
-                >
-                  <ModelIcon model={model.name} className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{model.name}</span>
-                  {model.providerName && <span className="ml-auto max-w-24 truncate text-xs opacity-50">{model.providerName}</span>}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ModelSelector
+            models={allModels}
+            value={modelKey}
+            onValueChange={(value) => { setModelKey(value); recordLastModel("image", value); }}
+            placeholder={t("modelConfig.selectModel")}
+          />
           <Separator orientation="vertical" className="h-7 self-center" />
           <Popover>
             <PopoverTrigger asChild>
