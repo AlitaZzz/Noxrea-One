@@ -16,7 +16,7 @@ import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
-import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
+import { isGroupMember, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -183,7 +183,7 @@ export function pasteClipboard(
 }
 
 /**
- * 从系统剪贴板文本还原节点并粘贴：识别 copySelection 写入的带标记 JSON。
+ * 从系统剪贴板文本还原节点并粘贴：只接受 copySelection 写入的带标记 { nodes, edges } JSON。
  * 同时把解析结果同步进内部剪贴板，使右键菜单「粘贴」与后续行为保持一致。
  * @returns 是否识别并粘贴成功（非标记文本 / 解析失败返回 false）
  */
@@ -195,26 +195,56 @@ export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: nu
   } catch {
     return false;
   }
-  // 兼容两种载荷：新格式 { nodes, edges } 与旧格式纯节点数组（跨标签页旧数据）
-  const payload = Array.isArray(parsed) ? { nodes: parsed, edges: [] } : (parsed as { nodes?: unknown; edges?: unknown });
-  if (!Array.isArray(payload.nodes)) return false;
-  const nodes = payload.nodes.filter(
-    (n): n is AnyNode =>
-      !!n &&
-      typeof n === "object" &&
-      typeof (n as { id?: unknown }).id === "string" &&
-      !!(n as { position?: { x?: unknown; y?: unknown } }).position
-  );
-  if (nodes.length === 0) return false;
-  const edges = Array.isArray(payload.edges)
-    ? payload.edges.filter(
-        (e): e is AnyEdge =>
-          !!e &&
-          typeof e === "object" &&
-          typeof (e as { source?: unknown }).source === "string" &&
-          typeof (e as { target?: unknown }).target === "string",
-      )
-    : [];
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    !("nodes" in parsed) ||
+    !Array.isArray(parsed.nodes) ||
+    !("edges" in parsed) ||
+    !Array.isArray(parsed.edges)
+  ) return false;
+  const nodes = parsed.nodes;
+  if (
+    nodes.length === 0 ||
+    !nodes.every(
+      (n): n is AnyNode =>
+        !!n &&
+        typeof n === "object" &&
+        typeof n.id === "string" &&
+        n.id.length > 0 &&
+        Object.values(NODE_TYPE).some((type) => type === n.type) &&
+        !!n.position &&
+        typeof n.position === "object" &&
+        Number.isFinite(n.position.x) &&
+        Number.isFinite(n.position.y) &&
+        !!n.data &&
+        typeof n.data === "object" &&
+        !Array.isArray(n.data) &&
+        typeof n.data.label === "string" &&
+        (n.parentId === undefined || (typeof n.parentId === "string" && n.parentId.length > 0)),
+    )
+  ) return false;
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  if (nodeById.size !== nodes.length) return false;
+  if (nodes.some((n) => {
+    if (n.parentId === undefined) return false;
+    const parent = nodeById.get(n.parentId);
+    return !isGroupMember(n, n.parentId) || (parent !== undefined && parent.type !== NODE_TYPE.GROUP);
+  })) return false;
+
+  const edges = parsed.edges;
+  if (!edges.every(
+    (e): e is AnyEdge =>
+      !!e &&
+      typeof e === "object" &&
+      typeof e.id === "string" &&
+      e.id.length > 0 &&
+      typeof e.source === "string" &&
+      e.source.length > 0 &&
+      typeof e.target === "string" &&
+      e.target.length > 0 &&
+      e.source !== e.target,
+  )) return false;
   useSelectionStore.getState().copySelected(nodes, edges);
   return pasteNodes(nodes, edges, at);
 }
