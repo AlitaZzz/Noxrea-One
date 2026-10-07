@@ -418,7 +418,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   用负 margin 居中（不用 translate），transform 完全交给 JS 做跟随与缩放，
   初始内联样式为静止位（贴节点边缘偏移 RAIL_REST_OFFSET） */
 .connection-rail-dot {
-  --handle-color: rgba(255, 255, 255, 0.55);
+  --handle-color: color-mix(in srgb, var(--foreground) 55%, transparent);
   position: absolute;
   top: 50%;
   left: 50%;
