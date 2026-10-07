@@ -306,6 +306,7 @@
     "spaceReusable": "系统资产库",
     "search": "搜索资产...",
     "uncategorized": "待分类资产",
+    "showParentFolders": "显示父级文件夹",
     "create": "新建",
     "batchDelete": "批量删除",
     "deleteConfirm": "删除「{{name}}」后将永久删除该资产，且不可恢复。确定要删除吗？",

@@ -33,6 +33,7 @@ import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
 import { downloadAsset } from "../download";
+import AssetBreadcrumb from "./AssetBreadcrumb";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
 import AssetInspector from "./AssetInspector";
@@ -485,47 +486,20 @@ export default function AssetsDialog({ open, onClose }: Props) {
           <div className="flex-1 flex flex-col pt-3 pb-4 min-w-0">
             {/* Breadcrumb + toolbar：同一行，面包屑在左、搜索/筛选/新建在右 */}
             <div className="flex items-center gap-2 mb-3 flex-shrink-0 px-3">
-              <div className="flex items-center gap-1 flex-1 min-w-0">
-                {/* 根：个人资产库（根视图为当前项不可点，进入文件夹后可点击返回） */}
-                {activeFolderId === null ? (
-                  <span className="cursor-default whitespace-nowrap px-2 py-0.5 text-sm text-foreground">
-                    {t("asset.spacePersonal")}
-                  </span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(null); }}
-                    className="whitespace-nowrap text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    {t("asset.spacePersonal")}
-                  </Button>
-                )}
-                {breadCrumb.map((f) => {
-                  const isLast = f.id === activeFolderId;
-                  return (
-                    <span key={f.id} className="flex items-center gap-1">
-                      <span className="text-muted-foreground">/</span>
-                      {isLast ? (
-                        <span className="cursor-default whitespace-nowrap px-2 py-0.5 text-sm text-foreground">
-                          {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-                        </span>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => { clearSelection(); setSearch(""); setActiveFolderId(f.id); }}
-                          className="whitespace-nowrap text-sm text-muted-foreground hover:text-foreground"
-                        >
-                          {f.kind === "uncategorized" ? t("asset.uncategorized") : f.name}
-                        </Button>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
+              <AssetBreadcrumb
+                rootLabel={t("asset.spacePersonal")}
+                folders={breadCrumb}
+                activeFolderId={activeFolderId}
+                onNavigate={(folderId) => {
+                  clearSelection();
+                  setSearch("");
+                  setActiveFolderId(folderId);
+                }}
+                getFolderLabel={(folder) => folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name}
+                collapsedLabel={t("asset.showParentFolders")}
+                className="min-w-0 flex-1"
+                itemClassName="whitespace-nowrap text-sm"
+              />
 
               {/* 单选时工具条行显示「已选 1 项」chip；多选由批量条承接，避免两处重复 */}
               {selectedIds.size === 1 && (

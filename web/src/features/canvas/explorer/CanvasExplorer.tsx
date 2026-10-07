@@ -39,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
+import AssetBreadcrumb from "@/features/assets/components/AssetBreadcrumb";
 import AssetGrid from "@/features/assets/components/AssetGrid";
 import { AssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
@@ -679,47 +680,20 @@ function AssetsView() {
       {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。
           text-xs 提到行容器：否则 "/" 与层级包装 span 继承 14px 行高(21px)，
           比根视图的 12px 文字(20px)高 1px，进入文件夹后下方网格整体偏移 */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1 px-4 pb-2 text-xs">
-        {/* 根：个人资产库（根视图为当前项，进入文件夹后可点击返回，位置保持一致不加箭头） */}
-        {activeFolderId === null ? (
-          <span className="inline-flex h-6 items-center whitespace-nowrap px-1 text-xs font-medium text-foreground">
-            {t("asset.spacePersonal")}
-          </span>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(null); }}
-            className="h-6 rounded px-1 text-xs font-normal text-muted-foreground whitespace-nowrap"
-          >
-            {t("asset.spacePersonal")}
-          </Button>
-        )}
-        {breadcrumb.map((crumb) => {
-          const isLast = crumb.id === activeFolderId;
-          return (
-            <span key={crumb.id} className="flex items-center gap-1">
-              <span className="text-muted-foreground">/</span>
-              {isLast ? (
-                <span className="inline-flex h-6 items-center whitespace-nowrap px-1 text-xs font-medium text-foreground">
-                  {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => { setSearch(""); setTypeFilter([]); setActiveFolderId(crumb.id); }}
-                  className="h-6 rounded px-1 text-xs font-normal text-muted-foreground whitespace-nowrap"
-                >
-                  {crumb.kind === "uncategorized" ? t("asset.uncategorized") : crumb.name}
-                </Button>
-              )}
-            </span>
-          );
-        })}
-      </div>
+      <AssetBreadcrumb
+        rootLabel={t("asset.spacePersonal")}
+        folders={breadcrumb}
+        activeFolderId={activeFolderId}
+        onNavigate={(folderId) => {
+          setSearch("");
+          setTypeFilter([]);
+          setActiveFolderId(folderId);
+        }}
+        getFolderLabel={(folder) => folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name}
+        collapsedLabel={t("asset.showParentFolders")}
+        className="shrink-0 px-4 pb-2 text-xs"
+        itemClassName="whitespace-nowrap text-xs"
+      />
 
       {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理。
           首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}

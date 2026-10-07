@@ -304,6 +304,7 @@
     "spaceReusable": "System Library",
     "search": "Search assets...",
     "uncategorized": "Uncategorized",
+    "showParentFolders": "Show parent folders",
     "create": "New",
     "batchDelete": "Batch Delete",
     "deleteConfirm": "Deleting \"{{name}}\" will permanently delete this asset, and this cannot be undone. Continue?",
