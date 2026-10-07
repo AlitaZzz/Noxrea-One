@@ -26,6 +26,8 @@ export default function AssetBreadcrumb({
   className,
   itemClassName,
 }: AssetBreadcrumbProps) {
+  // Asset creation currently caps folder depth at two levels. Keep the collapsed
+  // branch for deeper folder data so the breadcrumb remains valid if that limit changes.
   const hasCollapsedFolders = folders.length > 2;
   const visibleFolders = hasCollapsedFolders ? [folders[0], folders[folders.length - 1]] : folders;
   const collapsedFolders = hasCollapsedFolders ? folders.slice(1, -1) : [];
@@ -50,7 +52,7 @@ export default function AssetBreadcrumb({
             <BreadcrumbItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" size="icon-sm" variant="ghost" aria-label={collapsedLabel}>
+                  <Button type="button" size="icon" variant="ghost" aria-label={collapsedLabel}>
                     <BreadcrumbEllipsis />
                   </Button>
                 </DropdownMenuTrigger>

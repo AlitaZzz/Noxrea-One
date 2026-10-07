@@ -677,9 +677,8 @@ function AssetsView() {
         </DropdownMenu>
       </div>
 
-      {/* 面包屑：完整祖先层级，逐级可点击（根视图也显示「个人资产库」）。
-          text-xs 提到行容器：否则 "/" 与层级包装 span 继承 14px 行高(21px)，
-          比根视图的 12px 文字(20px)高 1px，进入文件夹后下方网格整体偏移 */}
+      {/* 面包屑：完整祖先层级，逐级可点击；根视图也显示「个人资产库」。
+          统一使用 Breadcrumb 的 Chevron 分隔符，保持层级和主题样式一致。 */}
       <AssetBreadcrumb
         rootLabel={t("asset.spacePersonal")}
         folders={breadcrumb}
