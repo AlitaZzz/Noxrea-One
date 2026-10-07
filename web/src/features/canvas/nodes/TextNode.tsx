@@ -193,11 +193,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         icon={<TextIcon className="shrink-0" />}
         title={data.label}
         display={data.label || t("node.text")}
-        trailing={
-          charCount > 0 ? (
-            <span style={charCount > 500 ? { color: "var(--chart-4)" } : undefined}>{charCount}</span>
-          ) : null
-        }
+        trailing={charCount > 0 ? String(charCount) : null}
       />
 
       {/* Body */}
