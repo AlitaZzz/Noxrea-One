@@ -1052,7 +1052,9 @@ export default function InfiniteCanvas() {
         zoomOnDoubleClick={false}
         minZoom={0.1}
         maxZoom={5}
-        elevateNodesOnSelect={false}
+        // React Flow owns selected-node stacking so NodeToolbar can derive its
+        // layer from the selected node instead of relying on a global override.
+        elevateNodesOnSelect
         proOptions={{ hideAttribution: true }}
         colorMode={user?.theme === "light" ? "light" : "dark"}
         // 连线吸附半径：xyflow 的吸附判定取「指针到 Handle 中心」的距离，Handle 中心
@@ -1214,27 +1216,27 @@ export default function InfiniteCanvas() {
 
         {/* Generation panel — follows selected empty image node */}
         {genTargetId && (
-          <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12}>
             <ImageGenerationPanel key={genTargetId} nodeId={genTargetId} />
           </RfNodeToolbar>
         )}
 
         {/* Generation panel — follows selected video node */}
         {genTargetVideoId && (
-          <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12}>
             <VideoGenerationPanel key={genTargetVideoId} nodeId={genTargetVideoId} />
           </RfNodeToolbar>
         )}
 
         {textTarget && (
-          <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12}>
             <TextGenerationPanel nodeId={textTarget.id} />
           </RfNodeToolbar>
         )}
 
         {/* 帧序列面板 — 跟随选中视频节点，不随画布缩放，轨道尺寸恒定 */}
         {frameStripNode && (
-          <RfNodeToolbar nodeId={frameStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={frameStripNode.id} position={Position.Bottom} align="center" offset={12}>
             <FrameStripPanel
               // key 带 src：换源（替换/生成回填）时面板整体重挂，播放头与
               // 代理状态对新源重新初始化，而不是拿旧选区比例套新视频
@@ -1248,7 +1250,7 @@ export default function InfiniteCanvas() {
 
         {/* 片段截取面板 — 与帧序列面板同构互斥：打开其一时先关掉另一个 */}
         {clipStripNode && (
-          <RfNodeToolbar nodeId={clipStripNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={clipStripNode.id} position={Position.Bottom} align="center" offset={12}>
             <ClipStripPanel
               // key 带 src（与音频截取面板一致）：换源时面板重挂，选区与代理
               // 对新源重新初始化——否则旧区间比例会被静默套在新视频时长上
@@ -1262,7 +1264,7 @@ export default function InfiniteCanvas() {
 
         {/* 图片打光面板 — 跟随选中图片节点，不随画布缩放，尺寸恒定 */}
         {lightingNode && (
-          <RfNodeToolbar nodeId={lightingNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={lightingNode.id} position={Position.Bottom} align="center" offset={12}>
             <LightingPanel
               key={lightingNode.id}
               src={(lightingNode.data as ImageNodeData).src ?? ""}
@@ -1274,7 +1276,7 @@ export default function InfiniteCanvas() {
 
         {/* 多视角编辑面板 — 与打光面板同形态，悬浮于选中图片节点下方 */}
         {angleEditorNode && (
-          <RfNodeToolbar nodeId={angleEditorNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={angleEditorNode.id} position={Position.Bottom} align="center" offset={12}>
             <MultiAngleEditor
               key={angleEditorNode.id}
               nodeId={angleEditorNode.id}
@@ -1286,7 +1288,7 @@ export default function InfiniteCanvas() {
 
         {/* 音频片段截取面板 — 与视频片段截取面板同构互斥：选区操作全部在下方悬浮面板内 */}
         {audioClipNode && (
-          <RfNodeToolbar nodeId={audioClipNode.id} position={Position.Bottom} align="center" offset={12} style={{ zIndex: 9999 }}>
+          <RfNodeToolbar nodeId={audioClipNode.id} position={Position.Bottom} align="center" offset={12}>
             <AudioClipStripPanel
               key={`${audioClipNode.id}:${(audioClipNode.data as { src?: string }).src ?? ""}`}
               nodeId={audioClipNode.id}
