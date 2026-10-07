@@ -41,7 +41,65 @@ function findRoundWithCall(sections: ChatSection[], toolCallId: string): ChatRou
   return null;
 }
 
-export function groupSections(messages: ChatMessage[]): ChatSection[] {
+function sameCalls(a: ToolCallView[], b: ToolCallView[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((call, index) => {
+    const other = b[index];
+    return call.id === other.id && call.name === other.name && call.args === other.args && call.label === other.label;
+  });
+}
+
+function sameResults(a: Map<string, ChatMessage>, b: Map<string, ChatMessage>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [id, message] of a) if (b.get(id) !== message) return false;
+  return true;
+}
+
+function sameRound(a: ChatRound, b: ChatRound): boolean {
+  return a.key === b.key && sameCalls(a.calls, b.calls) && sameResults(a.results, b.results);
+}
+
+function sameConfirmResult(
+  a: ChatSection["confirmResult"],
+  b: ChatSection["confirmResult"],
+): boolean {
+  return a === b || (
+    !!a && !!b &&
+    a.approved === b.approved &&
+    a.executedCount === b.executedCount &&
+    a.skippedCount === b.skippedCount
+  );
+}
+
+function reuseUnchangedSections(next: ChatSection[], previous: ChatSection[]): ChatSection[] {
+  const previousByKey = new Map(previous.map((section) => [section.key, section]));
+  return next.map((section) => {
+    const old = previousByKey.get(section.key);
+    if (!old || old.turnId !== section.turnId || old.userMsg !== section.userMsg || old.thinking !== section.thinking) {
+      return section;
+    }
+    const rounds = old.rounds.length === section.rounds.length && old.rounds.every((round, index) => sameRound(round, section.rounds[index]))
+      ? old.rounds
+      : section.rounds.map((round, index) => {
+          const oldRound = old.rounds[index];
+          return oldRound && sameRound(oldRound, round) ? oldRound : round;
+        });
+    const texts = old.texts.length === section.texts.length && old.texts.every((message, index) => message === section.texts[index])
+      ? old.texts
+      : section.texts;
+    if (rounds === old.rounds && texts === old.texts && sameConfirmResult(old.confirmResult, section.confirmResult)) return old;
+    return {
+      ...section,
+      rounds,
+      texts,
+      confirmResult: sameConfirmResult(old.confirmResult, section.confirmResult) ? old.confirmResult : section.confirmResult,
+    };
+  });
+}
+
+export function groupSections(messages: ChatMessage[], previous: ChatSection[] = []): ChatSection[] {
   const sections: ChatSection[] = [];
   let current: ChatSection | null = null;
 
@@ -90,5 +148,14 @@ export function groupSections(messages: ChatMessage[]): ChatSection[] {
     }
   }
 
-  return sections;
+  return reuseUnchangedSections(sections, previous);
+}
+
+/** Create an isolated grouper so each drawer reuses only its own previous sections. */
+export function createSectionGrouper(): (messages: ChatMessage[]) => ChatSection[] {
+  let previous: ChatSection[] = [];
+  return (messages) => {
+    previous = groupSections(messages, previous);
+    return previous;
+  };
 }

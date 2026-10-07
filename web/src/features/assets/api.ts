@@ -86,7 +86,7 @@ export const assetApi = {
     }),
 
   // Assets
-  listAssets: (params: { folderId?: number; type?: string; search?: string; scope?: string; cursor?: string; limit?: number }) => {
+  listAssets: (params: { folderId?: number; type?: string; search?: string; scope?: string; cursor?: string; limit?: number; signal?: AbortSignal }) => {
     const sp = new URLSearchParams();
     if (params.folderId !== undefined) sp.set("folder_id", String(params.folderId));
     if (params.type) sp.set("type", params.type);
@@ -95,7 +95,7 @@ export const assetApi = {
     if (params.cursor) sp.set("cursor", params.cursor);
     if (params.limit !== undefined) sp.set("limit", String(params.limit));
     const qs = sp.toString();
-    return api<{ items: AssetItemDto[]; total: number; nextCursor: string | null }>(`/api/assets/items?${qs}`);
+    return api<{ items: AssetItemDto[]; total: number; nextCursor: string | null }>(`/api/assets/items?${qs}`, { signal: params.signal });
   },
 
   createAsset: (data: {

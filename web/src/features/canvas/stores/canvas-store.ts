@@ -13,9 +13,11 @@ import {
   nodeAbsolutePosition,
   pruneEmptyGroups,
 } from "@/features/canvas/shared/group-bounds";
+import { assertUniqueNodeIds } from "@/features/canvas/shared/node-identity";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ViewportState } from "@/features/canvas/types";
 import type { AnyNode } from "@/features/canvas/types";
+import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
 import { DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
@@ -120,11 +122,9 @@ interface CanvasState {
   addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
   updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean; forceHistory?: boolean }) => void;
   /**
-   * 节点视觉态单写通道（position/style/data 一次性合并写入）。
-   * 取代已拆除的 NODE_UPDATE_DATA window 事件总线：此前节点组件经事件总线
-   * 转译回 store，store 写入存在两条通道。position 存在时单次 setNodes 合并
-   * （分两次 set 触发两轮全画布重渲染，缩放逐帧操作下掉帧），否则走
-   * updateNodeData（含历史压栈语义）。
+   * 节点视觉态单写通道（position/style/data 一次性合并写入）。position 存在时
+   * 单次 setNodes 合并（分两次 set 触发两轮全画布重渲染，缩放逐帧操作下掉帧），
+   * 否则走 updateNodeData（含历史压栈语义）。
    */
   updateNodeVisual: (
     nodeId: string,
@@ -344,6 +344,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   edges: [],
   viewportSyncCount: 0,
   setNodes: (nodes) => {
+    assertUniqueNodeIds(nodes);
     set({ nodes });
   },
   getNodes: () => get().nodes,
@@ -352,8 +353,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ edges });
   },
   addNodes: (nodes, options) => {
+    const currentNodes = get().nodes;
+    const nextNodes = [...currentNodes, ...nodes];
+    assertUniqueNodeIds(nextNodes);
     maybePushHistory(options);
-    set((s) => ({ nodes: [...s.nodes, ...nodes] }));
+    set((s) => {
+      const latestNodes = [...s.nodes, ...nodes];
+      assertUniqueNodeIds(latestNodes);
+      return { nodes: latestNodes };
+    });
     saveManager.markDirtyImmediate();
   },
   updateNodeData: (nodeId, data, style, options) => {
@@ -394,6 +402,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
   removeNodes: (nodeIds, options) => {
     maybePushHistory(options);
+    let removedProgressIds = new Set(nodeIds);
     set((s) => {
       const toDelete = new Set(nodeIds);
       // 容器型语义：删父连带子（组是唯一有子节点的容器——组不嵌套组，单遍即可；
@@ -413,6 +422,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       for (const n of stripped) {
         if (n.type === NODE_TYPE.GROUP && !nodes.includes(n)) removedIds.add(n.id);
       }
+      removedProgressIds = removedIds;
       const patch: Partial<CanvasState> = {
         nodes,
         edges: s.edges.filter(
@@ -427,6 +437,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (s.dragOverGroupId && removedIds.has(s.dragOverGroupId)) patch.dragOverGroupId = null;
       return patch;
     });
+    for (const nodeId of removedProgressIds) useUploadProgressStore.getState().clear(nodeId);
     saveManager.markDirtyImmediate();
   },
   removeEdges: (edgeIds, options) => {
@@ -528,15 +539,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   /** 从项目恢复画布状态（内容所有者随之切换；未落库的尾部编辑不随新内容派发保存） */
   restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
-    // 过期态只在「真正的项目切换」时随切换清除；同项目 / 首次加载的服务端数据
-    // 恢复保留过期态——加载在途时收到的 evict 不能被恢复完成冲掉
-    // （过期弹窗唯一出口是刷新，同项目恢复并不重新取得编辑权）
-    const previousOwner = _canvasProjectId;
-    const isProjectSwitch = previousOwner !== null && previousOwner !== projectId;
-    saveManager.resetForProjectSwitch({ clearExpired: isProjectSwitch });
-    _canvasProjectId = projectId;
     const vp = data.viewport || DEFAULT_VIEWPORT;
-    _liveViewport = vp;
     // 边界归一化：服务端数据在进画布的唯一入口清洗一次。
     // 分组直接使用 parentId + 相对坐标，不进行格式转换。
     // 1. 空组清洗：保证组必有成员。
@@ -545,7 +548,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const nodes = pruneEmptyGroups(
       (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
     );
+    assertUniqueNodeIds(nodes);
     const edges = pruneEdgesToCapability(nodes, (data.edges || []) as Edge[]);
+
+    // 过期态只在「真正的项目切换」时随切换清除；同项目 / 首次加载的服务端数据
+    // 恢复保留过期态——加载在途时收到的 evict 不能被恢复完成冲掉
+    // （过期弹窗唯一出口是刷新，同项目恢复并不重新取得编辑权）。校验通过后再切换
+    // 内容所有者，非法快照不会留下“项目已切换但画布仍是旧内容”的半状态。
+    const previousOwner = _canvasProjectId;
+    const isProjectSwitch = previousOwner !== null && previousOwner !== projectId;
+    saveManager.resetForProjectSwitch({ clearExpired: isProjectSwitch });
+    _canvasProjectId = projectId;
+    _liveViewport = vp;
     set({
       nodes,
       edges,
@@ -562,10 +576,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 export function takeCanvasSnapshot(): HistorySnapshot {
   const s = useCanvasStore.getState();
   return {
-    // 节点 data 为纯 JSON 数据，用 structuredClone 深拷贝，比 JSON.parse(JSON.stringify())
-    // 更快且能正确处理 Date/Map/Set/Blob 等类型（若有）。
-    nodes: structuredClone(s.nodes),
-    edges: structuredClone(s.edges),
+    // Canvas state is immutable at the store boundary: edits replace the
+    // changed node/edge objects and retain untouched references. History can
+    // therefore use structural sharing instead of cloning the whole document.
+    nodes: s.nodes,
+    edges: s.edges,
     viewport: { ..._liveViewport },
     minimapVisible: s.minimapVisible,
     snapToGrid: s.snapToGrid,

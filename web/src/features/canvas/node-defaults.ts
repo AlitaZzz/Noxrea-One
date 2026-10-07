@@ -4,6 +4,7 @@
  * 并提供节点再制（duplicate）与连线创建函数。
  */
 import { resolveModelDefaultField } from "@/features/canvas/shared/model-defaults";
+import { createNodeId } from "@/features/canvas/shared/node-id-registry";
 import { ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import {
   type AnyNode,
@@ -39,18 +40,7 @@ import { NODE_TYPE } from "@/lib/constants";
 
 // id 形如 "t-3xK9qP2mAbZc1"：单字母类型前缀便于一眼识别归属，
 // 随机段不泄露创建时间；会话内去重守卫兜底极小概率的随机碰撞。
-const ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const usedIds = new Set<string>();
-function uid(prefix: string) {
-  const bytes = new Uint8Array(13);
-  let id: string;
-  do {
-    crypto.getRandomValues(bytes);
-    id = `${prefix}-${Array.from(bytes, (b) => ID_ALPHABET[b % ID_ALPHABET.length]).join("")}`;
-  } while (usedIds.has(id));
-  usedIds.add(id);
-  return id;
-}
+const uid = createNodeId;
 
 /**
  * 空媒体节点占位框尺寸：跟随当前默认模型的默认比例（model-ui.json 为唯一
@@ -196,7 +186,7 @@ export function duplicateNode(
   if (cloned.data) {
     delete cloned.data.taskBinding;
     const upload = cloned.data.upload as
-      | { uploading?: boolean; progress?: number; previewUrl?: string; error?: unknown }
+      | { uploading?: boolean; previewUrl?: string; error?: unknown }
       | undefined;
     if (upload) {
       if (upload.error === undefined) {
@@ -207,7 +197,6 @@ export function duplicateNode(
         // 但丢弃原节点的 blob 预览与进度（重试上下文已失效，预览也可能已被回收）
         delete upload.previewUrl;
         upload.uploading = false;
-        upload.progress = 0;
       }
     }
   }

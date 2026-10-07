@@ -67,6 +67,7 @@ describe("SaveManager snapshot serialization", () => {
       ...textNode("n1"),
       style: { width: 600, height: 366 },
       selected: true, dragging: true, positionAbsolute: { x: 100, y: 200 },
+      measured: { width: 600, height: 366 }, resizing: true,
       deletable: false, connectable: true,
     };
     const edge: AnyEdge = {
@@ -183,17 +184,18 @@ describe("takeCanvasSnapshot", () => {
     useCanvasStore.setState({ nodes: [node], edges: [edge] });
 
     const snapshot = takeCanvasSnapshot();
-    node.data.genSettings!.refOrder.push("ref2");
-    node.style!.width = 200;
-    edge.data.nested.label = "after";
-    edge.style.stroke = "none";
+    expect(snapshot.nodes[0]).toBe(node);
+    expect(snapshot.edges[0]).toBe(edge);
+
+    useCanvasStore.getState().updateNodeData("n1", {
+      genSettings: { ...node.data.genSettings!, refOrder: ["ref1", "ref2"] },
+    }, { width: 200, height: 366 }, { skipHistory: true });
+    useCanvasStore.getState().setEdges([{ ...edge, data: { nested: { label: "after" } }, style: { stroke: "none" } }]);
 
     expect(snapshot.nodes[0].data).toMatchObject({ genSettings: { refOrder: ["ref1"] } });
     expect(snapshot.nodes[0].style).toEqual({ width: 600, height: 366 });
     expect(snapshot.edges[0].data).toEqual({ nested: { label: "before" } });
     expect(snapshot.edges[0].style).toEqual({ stroke: "#abcdef" });
-    expect(snapshot.nodes[0]).not.toBe(node);
-    expect(snapshot.edges[0]).not.toBe(edge);
   });
 
   it("captures the live viewport and settings without sharing viewport references", () => {

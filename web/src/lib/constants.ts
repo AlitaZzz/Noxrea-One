@@ -108,7 +108,7 @@ export function isGenerating(binding: TaskBinding | undefined): boolean {
 export const UPLOAD_KEY = "upload" as const;
 
 /** 初始上传状态 */
-export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, progress: undefined, version: 0 };
+export const EMPTY_UPLOAD_STATE: UploadState = { uploading: false, version: 0 };
 
 // ── Node colors（原 node-colors.ts，合并至此） ──
 // 节点类型对应的语义色，用于类型图标与 handle 着色（小地图不再按类型区分颜色）。
@@ -126,7 +126,7 @@ export const NODE_TYPE_COLOR: Record<string, string> = {
 
 // ── 连接轨道（Handle）与连线端点 ──
 // 连接轨道悬浮于节点边缘外侧：宽 RAIL_WIDTH（组内成员按组边界夹窄，见
-// group-bounds.memberRailWidth）、高 min(节点高, 80px)（globals.css），
+// canvas-derived 轨道投影）、高 min(节点高, 80px)（globals.css），
 // 圆点（直径 RAIL_DOT）静止于贴节点边缘的偏移位（RAIL_REST_OFFSET），hover 时
 // 在 ±RAIL_FOLLOW_LIMIT 屏幕像素内二维跟随鼠标——纯视觉反馈，连线锚点恒为
 // 节点边缘垂直正中（参考 open-ai-canvas：按鼠标落点比例取 Y 会让多线沿边散开，

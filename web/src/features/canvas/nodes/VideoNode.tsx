@@ -7,7 +7,7 @@
 "use client";
 
 import { type NodeProps } from "@xyflow/react";
-import { memo, useCallback, useEffect,useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -48,6 +48,7 @@ import {
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
+import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
@@ -59,10 +60,122 @@ import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
+interface VideoControlsProps {
+  videoRef: { current: HTMLVideoElement | null };
+  source: string;
+  visible: boolean;
+  panelOpen: boolean;
+  playing: boolean;
+  volume: number;
+  hasAudio: boolean;
+  togglePlay: () => void;
+  toggleMute: () => void;
+  applyVolume: (value: number) => void;
+}
+
+const VideoControls = memo(function VideoControls({
+  videoRef,
+  source,
+  visible,
+  panelOpen,
+  playing,
+  volume,
+  hasAudio,
+  togglePlay,
+  toggleMute,
+  applyVolume,
+}: VideoControlsProps) {
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const sync = () => setProgress(video.currentTime || 0);
+    const syncDuration = () => {
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+      sync();
+    };
+    syncDuration();
+    video.addEventListener("timeupdate", sync);
+    video.addEventListener("seeked", sync);
+    video.addEventListener("loadedmetadata", syncDuration);
+    return () => {
+      video.removeEventListener("timeupdate", sync);
+      video.removeEventListener("seeked", sync);
+      video.removeEventListener("loadedmetadata", syncDuration);
+    };
+  }, [source, videoRef]);
+
+  const seekTo = useCallback((value: number) => {
+    const video = videoRef.current;
+    if (!video || !duration) return;
+    const time = Math.max(0, Math.min(duration, value));
+    video.currentTime = time;
+    setProgress(time);
+  }, [duration, videoRef]);
+
+  return (
+    <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${visible || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
+      <Slider
+        min={0}
+        max={duration || 1}
+        step={0.01}
+        value={[Math.min(progress, duration || 1)]}
+        disabled={!duration}
+        aria-label="Video progress"
+        className="h-3 w-full"
+        onPointerDown={(event) => event.stopPropagation()}
+        onValueChange={([value]) => seekTo(value)}
+      />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="video-control-btn shrink-0 text-white hover:text-white/80"
+            onClick={(event) => { event.stopPropagation(); togglePlay(); }}
+            aria-label={playing ? "pause" : "play"}
+          >
+            {playing ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
+          </Button>
+          <span className="text-sm text-white flex-shrink-0 tabular-nums">
+            {formatTime(progress)} / {formatTime(duration)}
+          </span>
+        </div>
+        {hasAudio && <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="video-control-btn shrink-0 text-white hover:text-white/80"
+            onClick={(event) => { event.stopPropagation(); toggleMute(); }}
+            aria-label={volume === 0 ? "unmute" : "mute"}
+          >
+            {volume === 0 ? <VolumeMuteIcon /> : <VolumeUpIcon />}
+          </Button>
+          <Slider
+            min={0}
+            max={1}
+            step={0.01}
+            value={[volume]}
+            aria-label="Volume"
+            className="h-3 w-20"
+            onPointerDown={(event) => event.stopPropagation()}
+            onValueChange={([value]) => applyVolume(value)}
+          />
+        </div>}
+      </div>
+    </div>
+  );
+});
+
 function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
+  const uploadProgress = useUploadProgress(id);
   // 画布交互状态（连线 / 拖动让位 hover 预览用，真相源在 store 状态机）
   const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = useAppFeedback();
@@ -94,8 +207,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * state 而非直接改 el.muted：muted 受控于 React，绕过 state 会在重渲染后被回写。
    */
   const [autoplayMuted, setAutoplayMuted] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
@@ -148,7 +259,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     if (!hoverPlayingRef.current) return;
     hoverPlayingRef.current = false;
     const v = videoRef.current;
-    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
+    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); }
   }, [interactionBusy]);
 
   const handleMouseEnter = useCallback(() => {
@@ -178,7 +289,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     hoverPlayingRef.current = false;
     if (capturingFrame() || busy) return;
     const v = videoRef.current;
-    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); setProgress(0); }
+    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); }
   }, [capturingFrame, busy]);
 
   /**
@@ -214,7 +325,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const onTimeUpdate = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    setProgress(v.currentTime);
     // 选帧期间播放器被临时切到代理视频（转码产物，音轨已重编码为 aac），
     // 探测结论只代表代理、且换源期间元数据不稳定，不能据此给原视频下结论，
     // 否则可能错误启用 / 禁用「分离音频」入口，必须跳过
@@ -235,7 +345,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const onLoadedMeta = useCallback(() => {
     const v = videoRef.current;
     if (v) {
-      setDuration(v.duration || 0);
       // 时长回填节点数据（skipHistory，探测属渲染副产物），供资源管理器等列表展示；
       // 选帧期间播放器是代理视频，同音轨结论一样不能据此写入
       const d = v.duration;
@@ -252,14 +361,6 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     if (capturingFrame()) return;
     resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame, data.duration, id]);
-
-  const seekTo = useCallback((value: number) => {
-    const v = videoRef.current;
-    if (!v || !duration) return;
-    const time = Math.max(0, Math.min(duration, value));
-    v.currentTime = time;
-    setProgress(time);
-  }, [duration]);
 
   const captureFrame = useCallback(async (time: number | null) => {
     const v = videoRef.current;
@@ -704,9 +805,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               <video src={data.upload.previewUrl} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 px-8">
-              {data.upload?.progress != null ? (
+              {uploadProgress != null ? (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                  <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                 </div>
               ) : (
                 <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -715,7 +816,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               )}
               <span className="text-sm text-white/70 font-medium tabular-nums">
                 {t("common.uploading")}
-                {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
+                {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
               </span>
             </div>
           </div>
@@ -746,70 +847,18 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             />
             {/* 底部渐变遮罩：与控件栏同步显隐，静止时保持画面纯净 */}
             <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-24 z-[5] video-controls-scrim transition-opacity ${playing || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"}`} />
-            {/* Controls bar */}
-            <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${playing || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
-              {/* 第一行：进度条横跨整行（已播放部分用品牌色，与图片一致） */}
-              <Slider
-                min={0}
-                max={duration || 1}
-                step={0.01}
-                value={[Math.min(progress, duration || 1)]}
-                disabled={!duration}
-                aria-label="Video progress"
-                className="h-3 w-full"
-                onPointerDown={(e) => e.stopPropagation()}
-                onValueChange={([value]) => seekTo(value)}
-              />
-
-              {/* 第二行：左 play+时间 ｜ 右 volume+slider */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="video-control-btn shrink-0 text-white hover:text-white/80"
-                    onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                    aria-label={playing ? "pause" : "play"}
-                  >
-                    {playing ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
-                  </Button>
-                  <span className="text-sm text-white flex-shrink-0 tabular-nums">
-                    {formatTime(progress)} / {formatTime(duration)}
-                  </span>
-                </div>
-                {/* 确认无音轨时隐藏音量控件（图标+滑块），与浏览器原生行为一致，避免“可拖动但无效果”的误导 */}
-                {data.hasAudio !== false && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="video-control-btn shrink-0 text-white hover:text-white/80"
-                      onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                      aria-label={volume === 0 ? "unmute" : "mute"}
-                    >
-                      {volume === 0 ? (
-                        <VolumeMuteIcon />
-                      ) : (
-                        <VolumeUpIcon />
-                      )}
-                    </Button>
-                    {/* 音量滑块：80px，定长避免占据底部控件太多空间 */}
-                    <Slider
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={[volume]}
-                      aria-label="Volume"
-                      className="h-3 w-20"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onValueChange={([value]) => applyVolume(value)}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+            <VideoControls
+              videoRef={videoRef}
+              source={src}
+              visible={playing}
+              panelOpen={panelOpen}
+              playing={playing}
+              volume={volume}
+              hasAudio={data.hasAudio !== false}
+              togglePlay={togglePlay}
+              toggleMute={toggleMute}
+              applyVolume={applyVolume}
+            />
 
           </div>
         ) : (

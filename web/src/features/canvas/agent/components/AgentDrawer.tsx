@@ -23,7 +23,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ChatSectionView from "@/features/canvas/agent/components/ChatSectionView";
 import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
 import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
-import { groupSections } from "@/features/canvas/agent/utils/group-sections";
+import { createSectionGrouper } from "@/features/canvas/agent/utils/group-sections";
 import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-edit-actions";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -65,7 +65,8 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const composerRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState("");
 
-  const sections = useMemo(() => groupSections(messages), [messages]);
+  const [groupSectionsForDrawer] = useState(() => createSectionGrouper());
+  const sections = useMemo(() => groupSectionsForDrawer(messages), [groupSectionsForDrawer, messages]);
 
   // 「撤销此轮」仅在最后一个回合且其历史记录仍然有效（版本号未变）时可用
   const lastSectionIndex = sections.length - 1;

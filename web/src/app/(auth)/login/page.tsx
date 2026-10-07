@@ -1,6 +1,6 @@
 /**
  * 登录 / 注册页面。
- * 左侧为品牌展示区（自动扫描 public/login-bg 下的视频做轮播背景，叠加青柠极光带
+ * 左侧为品牌展示区（使用应用内置视频做轮播背景，叠加青柠极光带
  * 与逐字入场标题），右侧为登录/注册表单：自定义字段校验、密码可见切换、聚光卡片，
  * 提交后调用 auth store 完成登录或注册并跳转回根路由分流。
  * 视觉统一到应用品牌色（石墨深色 + 青柠 #c7f43d），动效均为纯 CSS/轻量 JS 自实现。
@@ -61,101 +61,44 @@ function SplitText({ text, delay = 0, stagger = 55, className, style }: {
 // ── 视频轮播 ──
 
 function VideoCarousel({ onReady }: { onReady: () => void }) {
-  const [videos, setVideos] = useState<string[]>([]);
+  // Login backgrounds are application-owned static assets. Discovering them with
+  // four HEAD requests delayed the first frame and made every visit pay the cost.
+  const videos = ["login-bg/bg-v1", "login-bg/bg-v2", "login-bg/bg-v3", "login-bg/bg-v4"];
   const [current, setCurrent] = useState(0);
-
-  // 探测 bg-v1..v4 中实际存在的文件做轮播（编号允许断档）；探测完才起播，
-  // 范围只到 4 个请求，避免拖慢首屏
-  useEffect(() => {
-    let cancelled = false;
-    const probe = async (seq: number) => {
-      try {
-        const res = await fetch(`/login-bg/bg-v${seq}.mp4`, { method: "HEAD" });
-        return res.ok;
-      } catch {
-        return false;
-      }
-    };
-
-    (async () => {
-      const results = await Promise.all(Array.from({ length: 4 }, (_, i) => probe(i + 1)));
-      if (cancelled) return;
-      const found = results.map((ok, i) => (ok ? `login-bg/bg-v${i + 1}` : "")).filter(Boolean);
-      setVideos(found);
-    })();
-
-    return () => { cancelled = true; };
-  }, []);
-
-  const prevVideo = videos.length > 0 ? videos[(current - 1 + videos.length) % videos.length] : "";
-  const currVideo = videos.length > 0 ? videos[current] : "";
-  const nextVideo = videos.length > 0 ? videos[(current + 1) % videos.length] : "";
-
-  if (videos.length === 0) {
-    // 探测期间不渲染任何覆盖层：露出面板的点阵底，与右侧完全一致
-    return null;
-  }
+  const currVideo = videos[current];
+  const nextVideo = videos[(current + 1) % videos.length];
 
   // 视频先出：遮罩、极光与文字由 LeftPanel 在视频可播放（onReady）后才渲染
   return (
     <>
-      {videos.length === 1 ? (
-        <video
-          key={videos[0]}
+      <video
+          key={currVideo}
           className="login-anim absolute inset-0 w-full h-full object-cover opacity-0"
           style={{ animation: "loginFadeIn 0.6s ease-out 0.1s forwards" }}
           autoPlay
           muted
-          loop
           playsInline
           disablePictureInPicture
           disableRemotePlayback
           preload="auto"
-          src={`/${videos[0]}.mp4`}
+          src={`/${currVideo}.mp4`}
           onCanPlay={onReady}
+          onError={() => {
+            onReady();
+            setCurrent((c) => (c + 1) % videos.length);
+          }}
+          onEnded={() => setCurrent((c) => (c + 1) % videos.length)}
         />
-      ) : (
-        <>
-          {/* 上一段视频（底层，循环常驻，做交叉过渡） */}
-          <video
-            key={`prev-${prevVideo}`}
-            className="absolute inset-0 w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            disablePictureInPicture
-            disableRemotePlayback
-            preload="auto"
-            src={`/${prevVideo}.mp4`}
-          />
-          {/* 当前视频（顶层，播完即切下一段） */}
-          <video
-            key={`curr-${currVideo}`}
-            className="absolute inset-0 w-full h-full object-cover"
-            autoPlay
-            muted
-            playsInline
-            disablePictureInPicture
-            disableRemotePlayback
-            preload="auto"
-            src={`/${currVideo}.mp4`}
-            onCanPlay={onReady}
-            onEnded={() => setCurrent((c) => (c + 1) % videos.length)}
-          />
-        </>
-      )}
-      {/* 下一段预加载（隐藏不播放）：切段时数据已在缓存，避免卡顿黑屏 */}
-      {videos.length > 1 && (
-        <video
-          key={`next-${nextVideo}`}
-          className="absolute w-px h-px opacity-0 pointer-events-none"
-          muted
-          playsInline
-          preload="auto"
-          src={`/${nextVideo}.mp4`}
-        />
-      )}
+      {/* The next clip is fetched only as metadata; the active clip remains the
+          only decoder until the carousel is close to switching. */}
+      <video
+        key={`next-${nextVideo}`}
+        className="absolute h-px w-px opacity-0 pointer-events-none"
+        muted
+        playsInline
+        preload="metadata"
+        src={`/${nextVideo}.mp4`}
+      />
     </>
   );
 }

@@ -10,6 +10,7 @@ export class NavGizmo {
   camera: THREE.Camera;
   private C = 37;
   private R = 25;
+  private readonly onReset: () => void;
   private axes: [number, number, number, string, string][] = [
     [1, 0, 0, "#ff5a5a", "X"],
     [0, 1, 0, "#5ad86a", "Y"],
@@ -24,7 +25,8 @@ export class NavGizmo {
   ) {
     this.svg = svgEl;
     this.camera = camera;
-    (svgEl.parentElement as HTMLElement).addEventListener("click", onReset);
+    this.onReset = onReset;
+    svgEl.parentElement?.addEventListener("click", this.onReset);
   }
 
   update() {
@@ -39,5 +41,10 @@ export class NavGizmo {
       s += `<text x="${x}" y="${y + 2.6}" font-size="6.5" fill="#0a0a0c" text-anchor="middle" font-weight="700">${a[4]}</text>`;
     }
     this.svg.innerHTML = s;
+  }
+
+  dispose() {
+    this.svg.parentElement?.removeEventListener("click", this.onReset);
+    this.svg.replaceChildren();
   }
 }

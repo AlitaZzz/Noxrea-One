@@ -100,6 +100,7 @@ export async function fetchAssetPage(
   filters: { category?: string | string[]; search?: string; folderId?: string; scope?: AssetScope },
   cursor?: string | null,
   limit: number = ASSET_PAGE_SIZE,
+  signal?: AbortSignal,
 ): Promise<{ items: AssetItem[]; total: number; nextCursor: string | null }> {
   const session = captureSession();
   let typeParam: string | undefined;
@@ -114,6 +115,7 @@ export async function fetchAssetPage(
     scope: filters.scope || "personal",
     cursor: cursor || undefined,
     limit,
+    signal,
   }));
   session.assertCurrent();
   return {

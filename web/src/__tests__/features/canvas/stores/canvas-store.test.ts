@@ -23,6 +23,7 @@ import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/g
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
+import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import type { HistorySnapshot } from "@/features/project/types";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -43,6 +44,7 @@ function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unkn
 beforeEach(() => {
   useHistoryStore.getState().clear();
   useCanvasStore.setState({ nodes: [], edges: [] });
+  useUploadProgressStore.getState().clearAll();
 });
 
 describe("undo：弹出即应用（栈顶 = 最近一次改动前的状态）", () => {
@@ -225,7 +227,7 @@ describe("异步上传竞态", () => {
 
     // 上传开始：写入版本标记（内部状态，skipHistory，与生产一致）
     const uploadVersion = 1001;
-    canvasStore.updateNodeData("img1", { upload: { uploading: false, progress: undefined, version: uploadVersion } }, undefined, { skipHistory: true });
+    canvasStore.updateNodeData("img1", { upload: { uploading: false, version: uploadVersion } }, undefined, { skipHistory: true });
     expect((useCanvasStore.getState().nodes[0].data as ImageNodeData).upload?.version).toBe(1001);
 
     // 构造飞行中的上传
@@ -478,6 +480,43 @@ describe("removeNodes 级联：空组即删与删组连带成员（容器型）"
       expect(loaded.nodes[1].data).not.toBe(child.data);
     }
     expect(data).toEqual(original);
+  });
+
+  it("restoreFromProject 拒绝重复节点 ID，避免静默破坏边和父子关系", () => {
+    const duplicate = { id: "i-duplicate", position: { x: 0, y: 0 }, data: { label: "copy" } } as unknown as AnyNode;
+    expect(() => useCanvasStore.getState().restoreFromProject("p1", {
+      nodes: [
+        { ...duplicate, data: { label: "first" } } as AnyNode,
+        duplicate,
+      ],
+      edges: [{ id: "e1", source: "i-duplicate", target: "i-duplicate" }],
+    })).toThrow('duplicate node id "i-duplicate"');
+    expect(useCanvasStore.getState().nodes).toHaveLength(0);
+  });
+
+  it("运行时写入口拒绝重复节点 ID，避免把非法状态交给 React Flow", () => {
+    const node = { id: "n1", position: { x: 0, y: 0 }, data: { label: "node" } } as AnyNode;
+    useCanvasStore.getState().setNodes([node]);
+
+    expect(() => useCanvasStore.getState().setNodes([{ ...node }, { ...node }])).toThrow(
+      'duplicate node id "n1"',
+    );
+    expect(() => useCanvasStore.getState().addNodes([{ ...node }])).toThrow(
+      'duplicate node id "n1"',
+    );
+    expect(useCanvasStore.getState().nodes).toHaveLength(1);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(0);
+  });
+
+  it("删除组时清理成员的运行时上传进度", () => {
+    const groupNode = group("g");
+    const child = member("child", "g");
+    useCanvasStore.setState({ nodes: [groupNode, child] });
+    useUploadProgressStore.getState().begin("child", 1);
+
+    useCanvasStore.getState().removeNodes(["g"], { skipHistory: true });
+
+    expect(useUploadProgressStore.getState().byNodeId.has("child")).toBe(false);
   });
 });
 

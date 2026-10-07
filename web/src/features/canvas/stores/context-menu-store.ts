@@ -13,18 +13,18 @@ export type CanvasMenuKind = "create" | "canvas" | "node";
 
 interface CtxState {
   x: number; y: number; visible: boolean;
-  /** 上下文类型；缺省 create 以兼容既有的双击调用 */
+  /** 上下文类型，决定渲染哪些菜单项 */
   kind: CanvasMenuKind;
   /** kind 为 node 时的目标节点 id */
   nodeId: string | null;
-  show: (x: number, y: number, kind?: CanvasMenuKind, nodeId?: string) => void;
+  show: (x: number, y: number, kind: CanvasMenuKind, nodeId?: string) => void;
   hide: () => void;
 }
 
 /** 画布菜单状态（独立于组件，hooks 和组件均可使用） */
 export const useContextMenuStore = create<CtxState>((set) => ({
   x: 0, y: 0, visible: false, kind: "create", nodeId: null,
-  show: (x, y, kind = "create", nodeId) =>
+  show: (x, y, kind, nodeId) =>
     set({ x, y, visible: true, kind, nodeId: nodeId ?? null }),
   hide: () => set({ visible: false }),
 }));

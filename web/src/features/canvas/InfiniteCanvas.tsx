@@ -28,6 +28,7 @@ import {
   SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -60,15 +61,10 @@ import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
-import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
-import ClipStripPanel from "@/features/canvas/editing/ClipStripPanel";
-import FrameStripPanel from "@/features/canvas/editing/FrameStripPanel";
-import LightingPanel from "@/features/canvas/editing/LightingPanel";
-import MultiAngleEditor from "@/features/canvas/editing/MultiAngleEditor";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
-import { computeAlignment,isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
+import { computeAlignment, isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
@@ -85,11 +81,21 @@ import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
+import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
-import { buildNodeIndex, findGroupAtPoint, nodeAbsolutePosition, pruneEmptyGroups, refitGroupRects, resolveDropGroupId } from "@/features/canvas/shared/group-bounds";
+import {
+  buildGroupHitIndex,
+  buildNodeIndex,
+  findGroupAtPoint,
+  type GroupHitIndex,
+  nodeAbsolutePosition,
+  pruneEmptyGroups,
+  refitGroupRects,
+  resolveDropGroupId,
+} from "@/features/canvas/shared/group-bounds";
+import { selectCanvasStateChanges } from "@/features/canvas/shared/node-changes";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
-import { computeSelectionFrame } from "@/features/canvas/shared/selection-frame";
 import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -100,6 +106,12 @@ import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 import { GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
+
+const AudioClipStripPanel = dynamic(() => import("@/features/canvas/editing/AudioClipStripPanel"), { ssr: false });
+const ClipStripPanel = dynamic(() => import("@/features/canvas/editing/ClipStripPanel"), { ssr: false });
+const FrameStripPanel = dynamic(() => import("@/features/canvas/editing/FrameStripPanel"), { ssr: false });
+const LightingPanel = dynamic(() => import("@/features/canvas/editing/LightingPanel"), { ssr: false });
+const MultiAngleEditor = dynamic(() => import("@/features/canvas/editing/MultiAngleEditor"), { ssr: false });
 
 // nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
 // 组件内的 useMemo 在热更新等「重挂载」场景下仍会重新求值，产生新对象。
@@ -118,7 +130,11 @@ const RF_EDGE_TYPES = {
 
 export default function InfiniteCanvas() {
   const router = useRouter();
-  const { screenToFlowPosition, fitView, setViewport: setRfViewport } = useReactFlow();
+  const {
+    screenToFlowPosition,
+    fitView,
+    setViewport: setRfViewport,
+  } = useReactFlow<AnyNode, Edge>();
   const user = useCurrentUser();
   const { message, notification: notif } = useAppFeedback();
   useSseTaskMonitor(notif);
@@ -144,11 +160,11 @@ export default function InfiniteCanvas() {
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
-  // Selection — computed from node.selected (React Flow's source of truth)
-  const selectedNodeIds = useMemo(
-    () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
-    [nodes]
-  );
+  // Position updates replace the nodes array every drag frame. Keep all
+  // cross-node projections in one cached derivation so rail and edge consumers
+  // do not independently scan the full canvas.
+  const canvasDerived = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges));
+  const selectedNodeIds = canvasDerived.selectedNodeIds;
 
   // 画布交互状态机：空闲 / 框选 / 拖动节点 / 拖线，四种状态互斥且由事件驱动。
   // handle、节点工具栏、生成面板的可见性与光标全部由此派生，不再各自维护布尔量。
@@ -177,8 +193,8 @@ export default function InfiniteCanvas() {
   }, [nodes]);
 
   // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle。
-  // bbox 计算的唯一口径在 shared/selection-frame（同时用于成员轨道钳制）
-  const selectionFrame = useMemo(() => computeSelectionFrame(nodes), [nodes]);
+  // bbox 与成员轨道钳制统一由 canvas-derived 几何投影提供
+  const selectionFrame = canvasDerived.selectionFrame;
 
   // 组节点批量输出轨道不再由这里渲染：它渲染在 GroupNode 的节点 DOM 内
   // （GroupConnectRail），显隐才能走标准 Handle 规则（hover/选中/按住），
@@ -189,11 +205,9 @@ export default function InfiniteCanvas() {
   // 否则会触发 onViewportChange -> setViewport -> 重渲染 -> defaultViewport 变 -> ∞
   const defaultViewport = useMemo(() => useCanvasStore.getState().viewport, []);
 
-  // Edges connected to any selected node → trigger multi-dot flow animation
-  const highlightedEdgeIds = useMemo(
-    () => new Set(edges.filter((e) => selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target)).map((e) => e.id)),
-    [edges, selectedNodeIds]
-  );
+  // Edges connected to selected nodes are part of the same stable projection;
+  // position-only updates keep this Set reference unchanged.
+  const highlightedEdgeIds = canvasDerived.highlightedEdgeIds;
 
   // History
   const pushHistory = useHistoryStore((s) => s.push);
@@ -273,6 +287,7 @@ export default function InfiniteCanvas() {
     setGridMenuNodeId(open ? nodeId : null);
   }, []);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
+  const dragGroupIndexRef = useRef<GroupHitIndex | null>(null);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
   // 帧序列面板的宿主节点：节点被删除、取消选中或类型变化后立即关闭面板
@@ -370,8 +385,7 @@ export default function InfiniteCanvas() {
     croppingNodeId, cropNode,
   ]);
 
-  // 面板 onClose 提升为稳定引用：InfiniteCanvas 拖动节点时每帧重渲染，
-  // 内联箭头会让各面板（useEscapeToClose deps [onClose]）每帧重挂 window 监听
+  // 面板 onClose 使用稳定引用，避免交互面板因画布状态同步重复挂载 window 监听
   const closeFrameStripPanel = useCallback(() => useCanvasStore.getState().setFrameCaptureNodeId(null), []);
   const closeClipStripPanel = useCallback(() => useCanvasStore.getState().setClipCaptureNodeId(null), []);
   const closeLightingPanel = useCallback(() => useCanvasStore.getState().setLightingNodeId(null), []);
@@ -385,24 +399,29 @@ export default function InfiniteCanvas() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<AnyNode>[]) => {
-      const currentNodes = useCanvasStore.getState().nodes;
+      // Zustand is the controlled React Flow source of truth. User interaction
+      // and measured dimensions must be applied here so the renderer's node
+      // lookup stays initialized while structural changes remain owned by
+      // canvas actions.
+      const stateChanges = selectCanvasStateChanges(changes);
+      if (stateChanges.length === 0) return;
 
-      const applied = applyNodeChanges(changes, currentNodes);
+      const positionChanges = stateChanges.filter(
+        (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> =>
+          c.type === "position" && c.dragging === true,
+      );
+
+      if (isTidyAnimating() && positionChanges.length > 0) {
+        cancelTidy();
+      }
+
+      const currentNodes = useCanvasStore.getState().nodes;
+      const applied = applyNodeChanges(stateChanges, currentNodes);
 
       // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附共用）。
       // 组移动带动成员由 React Flow Sub Flow 原生处理（成员相对坐标不变、
       // 绝对位置随父重算），这里只处理单个被拖节点的吸附。
-      const positionChanges = changes.filter(
-        (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> =>
-          c.type === "position" && c.dragging === true,
-      );
       const draggedNodeIds = new Set(positionChanges.map((c) => c.id));
-
-      // 整理动画播放期间用户开始拖拽：立即取消动画，
-      // 否则动画每帧写入的位置会与 React Flow 的拖拽状态互相覆盖
-      if (isTidyAnimating() && positionChanges.length > 0) {
-        cancelTidy();
-      }
 
       let appliedNodes: AnyNode[];
       let newGuides: AlignmentGuide[] = [];
@@ -492,10 +511,7 @@ export default function InfiniteCanvas() {
 
       setNodes(appliedNodes);
       setAlignmentGuides(newGuides);
-
-      // Only mark dirty for position changes (user drag).
-      // Exclude select (pure UI) and dimensions (React Flow internal DOM measurement).
-      if (changes.some((c) => c.type === "position")) {
+      if (stateChanges.some((change) => change.type === "position")) {
         markDirty();
       }
     },
@@ -527,7 +543,7 @@ export default function InfiniteCanvas() {
   );
 
   const handleConnect = useCallback(
-    (connection: Connection) => {
+    (connection: Pick<Connection, "source" | "target">) => {
       if (!connection.source || !connection.target) return;
       // 扇出语义、类型校验与自连排除统一在 buildConnectionPairs（见 shared/connection-rules）
       const pairs = buildConnectionPairs(
@@ -611,8 +627,8 @@ export default function InfiniteCanvas() {
       if (hit) {
         const connection =
           direction === "output"
-            ? { source: sourceNode.id, target: hit.id, sourceHandle: null, targetHandle: null }
-            : { source: hit.id, target: sourceNode.id, sourceHandle: null, targetHandle: null };
+            ? { source: sourceNode.id, target: hit.id }
+            : { source: hit.id, target: sourceNode.id };
         if (connectionWouldCreate(connection.source, connection.target, state)) {
           handleConnect(connection);
         }
@@ -766,6 +782,7 @@ export default function InfiniteCanvas() {
 
   const handleNodeDragStart = useCallback(() => {
     pushHistory(takeCanvasSnapshot());
+    dragGroupIndexRef.current = buildGroupHitIndex(useCanvasStore.getState().nodes);
     canvasInteraction.onNodeDragStart();
     // 拖入高亮随每次拖拽重新开始计算（上一轮残留即刻清空）
     useCanvasStore.getState().setDragOverGroup(null);
@@ -776,29 +793,44 @@ export default function InfiniteCanvas() {
   // 只在归属「将变化」时高亮：悬停在自己当前组内归属不变，高亮即噪音
   const handleNodeDrag = useCallback((_: unknown, rawNode: AnyNode) => {
     if (rawNode.type === NODE_TYPE.GROUP) return;
-    const { nodes, setDragOverGroup } = useCanvasStore.getState();
-    const next = resolveDropGroupId(nodes, rawNode);
+    const { setDragOverGroup } = useCanvasStore.getState();
+    const index = dragGroupIndexRef.current;
+    if (!index) return;
+    const next = resolveDropGroupId(rawNode, index);
     setDragOverGroup(next && next !== rawNode.parentId ? next : null);
   }, []);
 
   const handleNodeDragStop = useCallback(
     (_: unknown, rawNode: AnyNode) => {
       canvasInteraction.onNodeDragStop();
-      markDirtyImmediate();
       setAlignmentGuides([]);
       useCanvasStore.getState().setDragOverGroup(null);
 
       const allNodes = useCanvasStore.getState().nodes;
-      // 以 store 中的最终位置为准：React Flow 回调里的快照可能滞后
-      const draggedNode = allNodes.find((n) => n.id === rawNode.id) ?? rawNode;
-      if (draggedNode.type === NODE_TYPE.GROUP) return;
+      // 受控模式下每次位置变更都已提交到 store，拖拽停止只负责处理最终
+      // 归属和组几何，不再从 React Flow 内部复制第二份节点数组。
+      const draggedNode = allNodes.find((n) => n.id === rawNode.id);
+      if (!draggedNode) {
+        dragGroupIndexRef.current = null;
+        return;
+      }
+      if (draggedNode.type === NODE_TYPE.GROUP) {
+        dragGroupIndexRef.current = null;
+        markDirtyImmediate();
+        return;
+      }
 
       // 统一判定归属（resolveDropGroupId，与拖入高亮共用同一口径；
       // 成员中心以绝对坐标判定）
       const oldParentId = draggedNode.parentId;
-      const nextParentId = resolveDropGroupId(allNodes, draggedNode);
+      const dragIndex = dragGroupIndexRef.current ?? buildGroupHitIndex(allNodes);
+      const nextParentId = resolveDropGroupId(draggedNode, dragIndex);
+      dragGroupIndexRef.current = null;
 
-      if (nextParentId === oldParentId) return;
+      if (nextParentId === oldParentId) {
+        markDirtyImmediate();
+        return;
+      }
 
       // 不在此处 pushHistory：拖拽开始（handleNodeDragStart）已压入拖拽前快照，
       // 否则会把"拖动前"状态重复压栈，导致撤销/重做丢失真正的组外状态。
@@ -826,6 +858,7 @@ export default function InfiniteCanvas() {
       const finalNodes = refitGroupRects(pruneEmptyGroups(withMembership), touchedGroupIds);
 
       setNodes(finalNodes);
+      markDirtyImmediate();
     },
     [canvasInteraction, setAlignmentGuides, setNodes]
   );

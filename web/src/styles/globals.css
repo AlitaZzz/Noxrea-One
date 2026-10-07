@@ -377,8 +377,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 /* ── 节点连接轨道（ConnectionSideRail）──
    轨道本体是 React Flow 的 Handle：透明的命中区贴在节点边缘外侧（高
    min(节点高, 80px)，宽 var(--rail-width, 80px)——组内成员按所属组边界、
-   框选成员按外框边界夹窄，见 ConnectionSideRail / group-bounds /
-   selection-frame），圆点是轨道内的子元素，静止于贴节点边缘的偏移位，
+   框选成员按外框边界夹窄，见 ConnectionSideRail / canvas-derived），圆点是轨道内的子元素，静止于贴节点边缘的偏移位，
    hover 轨道时在条带界限内二维跟随鼠标（纯视觉反馈，连线锚点恒为节点
    边缘垂直正中，见 ConnectionSideRail 与 constants.ts）。transform 由
    JS 内联驱动（跟随位移 + focus 缩放），CSS 不参与定位。

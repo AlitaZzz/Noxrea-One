@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ChatMessage } from "@/features/canvas/agent/types";
-import { groupSections } from "@/features/canvas/agent/utils/group-sections";
+import { createSectionGrouper, groupSections } from "@/features/canvas/agent/utils/group-sections";
 
 function user(id: string, content: string, turnId?: string): ChatMessage {
   return { id, role: "user", content, ...(turnId ? { turnId } : {}) };
@@ -107,5 +107,20 @@ describe("groupSections", () => {
     ];
     const sections = groupSections(messages);
     expect(sections[0].thinking).toBe(true);
+  });
+
+  it("流式更新只替换当前 section，历史 section 保持引用", () => {
+    const group = createSectionGrouper();
+    const firstMessages: ChatMessage[] = [
+      user("u1", "first", "t1"),
+      assistant("a1", "done", undefined, "t1"),
+      user("u2", "second", "t2"),
+      assistant("a2", "partial", undefined, "t2"),
+    ];
+    const first = group(firstMessages);
+    const second = group([...firstMessages.slice(0, -1), assistant("a2", "complete", undefined, "t2")]);
+
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).not.toBe(first[1]);
   });
 });

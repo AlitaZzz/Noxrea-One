@@ -28,7 +28,7 @@ export interface AssetLibraryState {
   hasMore: boolean;
   reload: () => void;
   loadMore: () => void;
-  /** 加载失败重试：已有首页结果时重拉下一页，否则重拉首页。 */
+  /** 按失败阶段重试：分页失败重拉下一页，首页或补页失败重拉首页。 */
   retry: () => void;
   /** 实际生效的搜索词：输入经防抖，清空立即生效。渲染层据此与查询保持同一信号。 */
   appliedSearch: string;
@@ -53,15 +53,37 @@ interface AssetListState {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+function cancelAssetRequest(
+  versionRef: { current: number },
+  requestAbortRef: { current: AbortController | null },
+): void {
+  requestAbortRef.current?.abort();
+  requestAbortRef.current = null;
+  versionRef.current += 1;
+}
+
+function isCurrentAssetRequest(
+  controller: AbortController,
+  version: number,
+  versionRef: { current: number },
+): boolean {
+  return !controller.signal.aborted && version === versionRef.current;
+}
+
 export function useAssetLibrary({ enabled, scope, folderId, search, categories }: Options): AssetLibraryState {
   const [listState, setListState] = useState<AssetListState>({ key: "", items: [], totalCount: 0, nextCursor: null });
   const [loadingMoreKey, setLoadingMoreKey] = useState<string | null>(null);
-  /** 最近一次首页请求失败的条件及当时的刷新令牌；retry 自增令牌后旧错误自动失效。 */
-  const [errorState, setErrorState] = useState<{ key: string; token: number } | null>(null);
+  /** 最近一次请求失败的条件、阶段及刷新令牌；retry 自增令牌后旧错误自动失效。 */
+  const [errorState, setErrorState] = useState<{
+    key: string;
+    token: number;
+    phase: "initial" | "more" | "refill";
+  } | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
 
   const versionRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
   const listStateRef = useRef(listState);
   const categoriesKey = useMemo(() => [...categories].sort().join(","), [categories]);
   const stableCategories = useMemo<AssetType[]>(
@@ -119,7 +141,7 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
 
   // 条件变化即请求；搜索已在进入 query key 前完成防抖，这里不再二次延迟。
   useEffect(() => {
-    versionRef.current += 1;
+    cancelAssetRequest(versionRef, requestAbortRef);
     if (!enabled) {
       return;
     }
@@ -133,17 +155,24 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     }
 
     const version = ++versionRef.current;
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
 
-    void fetchAssetPage(requestArgs, null)
+    void fetchAssetPage(requestArgs, null, ASSET_PAGE_SIZE, controller.signal)
       .then((result) => {
-        if (version !== versionRef.current) return;
+        if (!isCurrentAssetRequest(controller, version, versionRef)) return;
         setErrorState(null);
         setListState({ key: queryKey, items: result.items, totalCount: result.total, nextCursor: result.nextCursor });
       })
       .catch(() => {
-        if (version !== versionRef.current) return;
-        setErrorState({ key: queryKey, token: refreshToken });
+        if (controller.signal.aborted) return;
+        if (!isCurrentAssetRequest(controller, version, versionRef)) return;
+        setErrorState({ key: queryKey, token: refreshToken, phase: "initial" });
+      })
+      .finally(() => {
+        if (requestAbortRef.current === controller) requestAbortRef.current = null;
       });
+    return () => controller.abort();
   }, [enabled, isRootBrowse, queryKey, refreshToken, requestArgs]);
 
   /** 追加下一页；游标由服务端返回，keyset 顺序稳定，无需客户端去重或补拉。 */
@@ -152,18 +181,22 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
       !enabled ||
       isRootBrowse ||
       listState.key !== queryKey ||
+      requestAbortRef.current !== null ||
       loadingMoreKey === queryKey ||
       listState.nextCursor === null
     ) {
       return;
     }
+    cancelAssetRequest(versionRef, requestAbortRef);
     const version = ++versionRef.current;
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     setLoadingMoreKey(queryKey);
 
     const cursor = listState.nextCursor;
-    void fetchAssetPage(requestArgs, cursor)
+    void fetchAssetPage(requestArgs, cursor, ASSET_PAGE_SIZE, controller.signal)
       .then((result) => {
-        if (version !== versionRef.current) return;
+        if (!isCurrentAssetRequest(controller, version, versionRef)) return;
         setErrorState(null);
         setListState((state) => {
           if (state.key !== queryKey || state.nextCursor !== cursor) return state;
@@ -176,9 +209,13 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
         });
       })
       .catch(() => {
-        if (version === versionRef.current) setErrorState({ key: queryKey, token: refreshToken });
+        if (controller.signal.aborted) return;
+        if (isCurrentAssetRequest(controller, version, versionRef)) {
+          setErrorState({ key: queryKey, token: refreshToken, phase: "more" });
+        }
       })
       .finally(() => {
+        if (requestAbortRef.current === controller) requestAbortRef.current = null;
         setLoadingMoreKey((current) => (current === queryKey ? null : current));
       });
   }, [enabled, isRootBrowse, listState, loadingMoreKey, queryKey, refreshToken, requestArgs]);
@@ -200,42 +237,54 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
     const remaining = listState.items.filter((item) => !idSet.has(item.id));
     const nextTotal = Math.max(0, listState.totalCount - removedInView);
     const previousCursor = listState.nextCursor;
+    // The local deletion supersedes any in-flight page request. Abort it before
+    // refilling so an older response cannot consume bandwidth or race the new window.
+    cancelAssetRequest(versionRef, requestAbortRef);
     setListState({ key: queryKey, items: remaining, totalCount: nextTotal, nextCursor: previousCursor });
 
     // 游标为 null（原本就到末页）且剩余数量已等于总数，没有可补的内容。
     if (remaining.length >= nextTotal) return;
 
     const version = ++versionRef.current;
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     try {
       // 窗口删空：没有可用锚点，重拉首页。
       // 否则以剩余窗口最后一条为锚点，向后补回被删的条数。
       const anchor = remaining.length > 0 ? encodeAssetCursor(remaining[remaining.length - 1]) : null;
       const result = anchor
-        ? await fetchAssetPage(requestArgs, anchor, removedInView)
-        : await fetchAssetPage(requestArgs, null, ASSET_PAGE_SIZE);
-      if (version !== versionRef.current) return;
+        ? await fetchAssetPage(requestArgs, anchor, removedInView, controller.signal)
+        : await fetchAssetPage(requestArgs, null, ASSET_PAGE_SIZE, controller.signal);
+      if (!isCurrentAssetRequest(controller, version, versionRef)) return;
       setErrorState(null);
       setListState((state) => {
         if (state.key !== queryKey) return state;
         const known = new Set(state.items.map((item) => item.id));
         const appended = result.items.filter((item) => !known.has(item.id));
-        // 补页返回了新游标则推进；补取数小于一页时服务端可能返回 null，沿用原游标。
+        // 补页结果完整决定下一页游标；null 表示服务端已经确认到达末页。
         return {
           ...state,
           items: [...state.items, ...appended],
           totalCount: nextTotal,
-          nextCursor: result.nextCursor ?? state.nextCursor,
+          nextCursor: result.nextCursor,
         };
       });
     } catch {
-      if (version === versionRef.current) setErrorState({ key: queryKey, token: refreshToken });
+      if (isCurrentAssetRequest(controller, version, versionRef)) {
+        setErrorState({ key: queryKey, token: refreshToken, phase: "refill" });
+      }
+    } finally {
+      if (requestAbortRef.current === controller) requestAbortRef.current = null;
     }
   }, [listState, queryKey, requestArgs, refreshToken]);
 
   const retry = useCallback(() => {
-    if (listState.key === queryKey && listState.items.length > 0) loadMore();
+    const failedPhase = errorState?.key === queryKey && errorState.token === refreshToken
+      ? errorState.phase
+      : null;
+    if (failedPhase === "more" && listState.key === queryKey) loadMore();
     else reload();
-  }, [listState.key, listState.items.length, queryKey, loadMore, reload]);
+  }, [errorState, listState.key, queryKey, refreshToken, loadMore, reload]);
 
   // 新首页到达前 listState 仍是上一份结果，直接沿用展示；key 不匹配时只当占位，
   // hasMore 等交互状态仍只认当前 key。这样条件切换的第一帧也不会闪空态。
@@ -246,11 +295,13 @@ export function useAssetLibrary({ enabled, scope, folderId, search, categories }
   // 当前 key 请求失败后解除，转入错误/重试态。
   const visibleLoading = isQueryable && mismatched && !failedCurrent;
   const visibleLoadingMore = isQueryable && loadingMoreKey === queryKey;
-  // 失败且无任何列表可展示时才进入整页错误/重试态；有旧列表则保留浏览。
-  const visibleLoadError = isQueryable && failedCurrent && listState.items.length === 0;
+  // 失败时保留已有列表；AssetGrid 会在列表底部显示重试入口，首页无列表时显示整页重试态。
+  const visibleLoadError = isQueryable && failedCurrent;
   const visibleItems = isQueryable ? listState.items : [];
   const visibleTotalCount = isQueryable ? listState.totalCount : 0;
-  const visibleHasMore = !mismatched && listState.nextCursor !== null;
+  // A failed next-page request must stop the sentinel from immediately issuing
+  // the same request again while the user is deciding whether to retry.
+  const visibleHasMore = !mismatched && !failedCurrent && listState.nextCursor !== null;
 
   return {
     items: visibleItems,

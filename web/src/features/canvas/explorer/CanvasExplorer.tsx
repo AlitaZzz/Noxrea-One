@@ -45,8 +45,8 @@ import { AssetHoverPreview } from "@/features/assets/components/AssetHoverPrevie
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
-import { useVideoThumbnail } from "@/features/canvas/hooks/use-video-thumbnail";
-import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N, NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
+import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N } from "@/features/canvas/NodeTypeDisplayMeta";
+import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
@@ -120,78 +120,13 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
 }
 // ── 元素视图 ──
 
-/** 按 NODE_TYPE_ORDER 对节点按类型分组（未分组节点使用） */
-function groupNodesByType(nodes: AnyNode[]): { type: string; nodes: AnyNode[] }[] {
-  const groups: { type: string; nodes: AnyNode[] }[] = [];
-  const byType = new Map<string, AnyNode[]>();
-  for (const n of nodes) {
-    const list = byType.get(n.type || "");
-    if (list) list.push(n);
-    else byType.set(n.type || "", [n]);
-  }
-  for (const type of NODE_TYPE_ORDER) {
-    const list = byType.get(type);
-    if (list && list.length > 0) groups.push({ type, nodes: list.reverse() });
-    byType.delete(type);
-  }
-  // Remaining types (uncategorized)
-  for (const [type, list] of byType) {
-    if (list.length > 0) groups.push({ type, nodes: list.reverse() });
-  }
-  return groups;
-}
-
-/** 组内成员按类型稳定排序（同类型聚合，不打散原相对顺序） */
-function sortMembersByType(nodes: AnyNode[]): AnyNode[] {
-  const order = new Map(NODE_TYPE_ORDER.map((type, i) => [type, i]));
-  const rank = (n: AnyNode) => order.get(n.type || "") ?? NODE_TYPE_ORDER.length;
-  return [...nodes].sort((a, b) => rank(a) - rank(b));
-}
-
 function CanvasElementsView() {
   const { t } = useTranslation();
-  const nodes = useCanvasStore((s) => s.nodes);
+  const outline = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges).outline);
+  const selectedNodeIds = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges).selectedNodeIds);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-
-  const selectedNodeIds = useMemo(
-    () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
-    [nodes],
-  );
-
-  // 构建大纲树：组节点作为可折叠容器，成员嵌套在内；未分组节点按类型分组。
-  // 成员归属唯一口径是 parentId（Sub Flow 结构关系）
-  const tree = useMemo(() => {
-    const groupNodes: AnyNode[] = [];
-    const membersByGroup = new Map<string, AnyNode[]>();
-    const ungrouped: AnyNode[] = [];
-    const groupIds = new Set<string>();
-
-    for (const n of nodes) {
-      if (n.type === NODE_TYPE.GROUP) {
-        groupNodes.push(n);
-        groupIds.add(n.id);
-      }
-    }
-    for (const n of nodes) {
-      if (n.type === NODE_TYPE.GROUP) continue;
-      const pid = n.parentId;
-      if (pid && groupIds.has(pid)) {
-        const list = membersByGroup.get(pid);
-        if (list) list.push(n);
-        else membersByGroup.set(pid, [n]);
-      } else {
-        // 孤儿节点（parentId 指向不存在的组）按未分组兜底
-        ungrouped.push(n);
-      }
-    }
-
-    return {
-      groupNodes,
-      membersByGroup,
-      ungroupedGroups: groupNodesByType(ungrouped),
-    };
-  }, [nodes]);
+  const tree = outline;
 
   // 搜索过滤：命中标题 / 正文 / 生成 prompt / 类型名；组名命中保留全部成员，
   // 否则只保留命中的成员，无命中的组整体隐藏。
@@ -250,7 +185,7 @@ function CanvasElementsView() {
         />
       </div>
       <div className="scrollbar-ui scrollbar-ui-compact flex-1 overflow-y-auto min-h-0" style={{ padding: "0 16px 12px", scrollbarGutter: "stable" }}>
-        {nodes.length === 0 ? (
+        {tree.nodeCount === 0 ? (
           <Empty role="status" className="min-h-[120px] p-6 text-muted-foreground">
             <EmptyMedia variant="icon" />
             <EmptyDescription>{t("canvas.empty")}</EmptyDescription>
@@ -267,7 +202,7 @@ function CanvasElementsView() {
               <GroupItem
                 key={group.id}
                 group={group}
-                members={sortMembersByType(visible.membersByGroup.get(group.id) ?? [])}
+                members={visible.membersByGroup.get(group.id) ?? []}
                 selected={selectedNodeIds.has(group.id)}
                 collapsed={collapsedGroups.has(group.id)}
                 onToggle={() => toggleGroup(group.id)}
@@ -297,7 +232,7 @@ function CanvasElementsView() {
         className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
       >
         <AppstoreOutlined />
-        <span>{nodes.length} {t("canvas.nodesCount")}</span>
+        <span>{tree.nodeCount} {t("canvas.nodesCount")}</span>
       </SheetFooter>
     </div>
   );
@@ -309,7 +244,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
   selected: boolean;
   collapsed: boolean;
   onToggle: () => void;
-  selectedNodeIds: Set<string>;
+  selectedNodeIds: ReadonlySet<string>;
 }) {
   const { t } = useTranslation();
   const centerNode = useCenterNode();
@@ -347,7 +282,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
           onClick={() => {
             const s = useCanvasStore.getState();
             s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
-            centerNode(group);
+            centerNode(s.nodes.find((n) => n.id === group.id) ?? group);
           }}
           className={`h-auto min-w-0 flex-1 justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground hover:bg-accent${selected ? " bg-accent" : ""}`}
         >
@@ -385,8 +320,10 @@ function ElementItemImpl(props: ElementItemProps) {
   // 下方 `label || ...` 的右支永不可达，从而把 node 收窄成 never
   const label: string = rawLabel || typeLabel || nodeType;
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
-  const { thumb, loading } = useVideoThumbnail(node.type === NODE_TYPE.VIDEO ? (node.data as { src?: string }).src : undefined);
   const sourceUrl = (node.data as { src?: string }).src;
+  const thumb = nodeType === NODE_TYPE.VIDEO && sourceUrl?.includes("/api/files/")
+    ? `${sourceUrl}?w=64`
+    : sourceUrl;
   const hasPreview = Boolean(
     (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb),
   );
@@ -432,7 +369,7 @@ function ElementItemImpl(props: ElementItemProps) {
     // 与画布点选节点同一语义：单选该节点（列表选中态来自 nodes 的 selected 标记）并定位居中
     const s = useCanvasStore.getState();
     s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
-    centerNode(node);
+    centerNode(s.nodes.find((n) => n.id === node.id) ?? node);
   }, [node, centerNode]);
 
   return (
@@ -477,7 +414,7 @@ function ElementItemImpl(props: ElementItemProps) {
           <img src={src + "?w=64"} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
         ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
           <>
-            <img src={thumb} alt={label} className="w-full h-full object-cover" />
+            <img src={thumb} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
             {/* 视频类型角标：复用全局视频图标，避免把类型识别和播放操作混为一谈 */}
             <span className="pointer-events-none absolute left-1 top-1 flex size-4 items-center justify-center rounded-sm border border-border/60 bg-background/85 text-foreground shadow-sm">
               <VideoCameraOutlined
@@ -493,8 +430,6 @@ function ElementItemImpl(props: ElementItemProps) {
               {plainText.slice(0, 64)}
             </span>
           </div>
-        ) : nodeType === NODE_TYPE.VIDEO && loading ? (
-          <LoadingOutlined className="size-3.5 text-muted-foreground" />
         ) : (
           getNodeTypeIcon(nodeType)
         )}

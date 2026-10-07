@@ -5,6 +5,7 @@
 "use client";
 
 import type { Schema } from "hast-util-sanitize";
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
@@ -31,7 +32,7 @@ export const sanitizeSchema: Schema = {
   ],
 };
 
-export default function Markdown({ children }: { children: string }) {
+const Markdown = memo(function Markdown({ children }: { children: string }) {
   return (
     <div className="cortex-markdown">
       <ReactMarkdown
@@ -42,4 +43,6 @@ export default function Markdown({ children }: { children: string }) {
       </ReactMarkdown>
     </div>
   );
-}
+});
+
+export default Markdown;

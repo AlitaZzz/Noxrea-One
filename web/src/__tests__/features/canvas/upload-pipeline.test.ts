@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { retryNodeUpload, runMediaUpload } from "@/features/canvas/upload";
+import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import { changeSession } from "@/lib/session-lifecycle";
 import { type UploadErrorInfo, uploadWithRetry } from "@/lib/utils/upload";
 
@@ -52,6 +53,7 @@ function dataOf(nodeId: string) {
 describe("上传管道的失败与落库行为", () => {
   beforeEach(() => {
     useCanvasStore.setState({ nodes: [], edges: [] });
+    useUploadProgressStore.getState().clearAll();
     vi.mocked(uploadWithRetry).mockReset();
   });
 
@@ -72,6 +74,7 @@ describe("上传管道的失败与落库行为", () => {
     expect(data).toBeTruthy();
     expect(data?.upload?.error).toBeTruthy();
     expect(data?.upload?.error?.retryable).toBe(true);
+    expect(useUploadProgressStore.getState().byNodeId.size).toBe(0);
   });
 
   it("多文件并发：先完成的立即落库，不等待整批结束", async () => {
@@ -141,5 +144,6 @@ describe("上传管道的失败与落库行为", () => {
     expect(summary.failed).toBe(1);
     expect(dataOf(nodeIds[0])?.upload?.error).toBeTruthy();
     expect(dataOf(nodeIds[1])?.src).toBe("https://cdn/good.png");
+    expect(useUploadProgressStore.getState().byNodeId.size).toBe(0);
   });
 });

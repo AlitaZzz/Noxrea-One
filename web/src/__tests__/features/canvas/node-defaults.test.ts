@@ -25,7 +25,7 @@ describe("duplicateNode", () => {
   it("清除生成中与上传中的瞬时状态，保留已完成的静态内容", () => {
     const node = createImageNode({ x: 0, y: 0 }, "/api/files/abc.png");
     node.data.taskBinding = { taskId: "task-1", status: "pending", startedAt: Date.now() };
-    node.data.upload = { uploading: true, progress: 40, version: 1, previewUrl: "blob:preview" };
+    node.data.upload = { uploading: true, version: 1, previewUrl: "blob:preview" };
 
     const copy = duplicateNode(node, { x: 20, y: 20 }) as ImageNode;
 
@@ -53,7 +53,6 @@ describe("duplicateNode", () => {
     const node = createImageNode({ x: 0, y: 0 });
     node.data.upload = {
       uploading: true,
-      progress: 60,
       version: 1,
       previewUrl: "blob:preview",
       error: { category: "network" as const, message: "网络错误", retryable: true },
@@ -64,7 +63,7 @@ describe("duplicateNode", () => {
     expect(copy.data.upload?.error).toBeTruthy();
     expect(copy.data.upload?.previewUrl).toBeUndefined();
     expect(copy.data.upload?.uploading).toBe(false);
-    expect(copy.data.upload?.progress).toBe(0);
+    expect(copy.data.upload?.version).toBe(1);
   });
 
   it("组节点没有 taskBinding/upload 时复制仍然安全", () => {

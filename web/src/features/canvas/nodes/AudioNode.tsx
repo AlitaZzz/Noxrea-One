@@ -7,6 +7,7 @@
 "use client";
 
 import { type NodeProps } from "@xyflow/react";
+import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,21 +27,24 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromUrl } from "@/features/canvas/upload";
 import { useNodeUpload } from "@/features/canvas/upload";
+import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
-import AudioWaveform from "./AudioWaveform";
 import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
+const AudioWaveform = dynamic(() => import("./AudioWaveform"), { ssr: false });
+
 function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
+  const uploadProgress = useUploadProgress(id);
   const { notification } = useAppFeedback();
   // src / duration 唯一真相是 data（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
@@ -225,9 +229,9 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
           <div className="relative h-full w-full rounded-lg bg-card flex flex-col items-center justify-center gap-2 px-8">
-            {data.upload?.progress != null ? (
+            {uploadProgress != null ? (
               <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
               </div>
             ) : (
               <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -236,7 +240,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             )}
             <span className="text-sm text-muted-foreground font-medium tabular-nums">
               {t("common.uploading")}
-              {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
+              {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
             </span>
           </div>
         ) : data.upload?.error ? (

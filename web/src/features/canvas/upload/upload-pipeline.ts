@@ -24,6 +24,7 @@ import { createAudioNode, createEdge, createImageNode, createVideoNode } from "@
 import { absoluteNodeOf, buildNodeIndex, nodeAbsolutePosition, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
+import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import {
   AUDIO_NODE_HEIGHT,
   AUDIO_NODE_WIDTH,
@@ -57,6 +58,43 @@ import type { MediaKind, UploadHandle, UploadItem, UploadPlan, UploadSummary } f
 let _versionSeq = Date.now();
 function nextVersion(): number {
   return ++_versionSeq;
+}
+
+interface ProgressReporter {
+  report: (progress: number) => void;
+  flush: () => void;
+  cancel: () => void;
+}
+
+/** Coalesce transport progress so the canvas document is never updated per XHR event. */
+function createProgressReporter(nodeId: string, version: number): ProgressReporter {
+  let pending: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const flush = () => {
+    if (pending === null) return;
+    useUploadProgressStore.getState().update(nodeId, version, pending);
+    pending = null;
+    timer = null;
+  };
+
+  return {
+    report(progress) {
+      pending = progress;
+      if (progress === 0 || progress >= 100) {
+        if (timer !== null) clearTimeout(timer);
+        flush();
+        return;
+      }
+      if (timer === null) timer = setTimeout(flush, 100);
+    },
+    flush,
+    cancel() {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      pending = null;
+    },
+  };
 }
 
 /**
@@ -255,7 +293,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
   // 上传管道是程序化写回：占位节点 / 进度 / 结果都不算用户操作，不进动作历史
   runSuppressed(() => {
     for (const p of prepared) {
-      const upload: UploadState = { uploading: true, progress: 0, version: p.version, previewUrl: p.previewUrl };
+      const upload: UploadState = { uploading: true, version: p.version, previewUrl: p.previewUrl };
 
       if (sink.kind === "replace-node") {
         const target = store.getNodes().find((n) => n.id === sink.nodeId);
@@ -381,6 +419,7 @@ interface RetryContext {
 const retryStore = new Map<string, RetryContext>();
 onSessionChange(() => {
   for (const nodeId of retryStore.keys()) releaseRetryContext(nodeId);
+  useUploadProgressStore.getState().clearAll();
 });
 
 /**
@@ -402,9 +441,10 @@ function retryContextOf(p: Prepared, source: "upload" | "derived"): RetryContext
 
 /** 把节点标记为上传失败：保留本地预览，UI 依此渲染失败遮罩与重试入口 */
 function markUploadFailed(nodeId: string, version: number, error: UploadErrorInfo, previewUrl?: string) {
+  useUploadProgressStore.getState().clear(nodeId, version);
   runSuppressed(() => useCanvasStore.getState().updateNodeData(
     nodeId,
-    { upload: { uploading: false, progress: 0, version, previewUrl, error } },
+    { upload: { uploading: false, version, previewUrl, error } },
     undefined,
     { skipHistory: true },
   ));
@@ -430,6 +470,7 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
     style = computeNodeSize(nw, nh);
   }
   runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, data, style, { skipHistory: true }));
+  useUploadProgressStore.getState().clear(nodeId);
   if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
 }
 
@@ -565,30 +606,31 @@ async function runUploads(
 
   await runWithConcurrency(
     prepared.map((p) => async () => {
+      const targetId = p.node?.id ?? p.replaceId;
+      const reporter = targetId ? createProgressReporter(targetId, p.version) : null;
+      if (targetId) useUploadProgressStore.getState().begin(targetId, p.version);
       try {
         const value = await uploadWithRetry(
           p.file,
           (pct) => {
             if (session.signal.aborted) return;
             plan.onProgress?.(p.itemIndex, pct);
-            const targetId = p.node?.id ?? p.replaceId;
-            if (!targetId) return;
-            if (!isCurrentUpload(findNode(targetId), p.version)) return;
-            runSuppressed(() => useCanvasStore.getState().updateNodeData(
-              targetId,
-              { upload: { uploading: true, progress: pct, version: p.version, previewUrl: p.previewUrl } },
-              undefined,
-              { skipHistory: true },
-            ));
+            if (!targetId || !isCurrentUpload(findNode(targetId), p.version)) return;
+            reporter?.report(pct);
           },
           UPLOAD_MAX_RETRIES,
           source,
         );
+        reporter?.flush();
         settleOne(p, { status: "fulfilled", value });
         return value;
       } catch (err) {
+        reporter?.flush();
         settleOne(p, { status: "rejected", reason: err });
         throw err;
+      } finally {
+        reporter?.cancel();
+        if (targetId) useUploadProgressStore.getState().clear(targetId, p.version);
       }
     }),
     plan.concurrency ?? UPLOAD_CONCURRENCY,
@@ -654,29 +696,27 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
   }
 
   const version = nextVersion();
+  useUploadProgressStore.getState().begin(nodeId, version);
   runSuppressed(() => useCanvasStore.getState().updateNodeData(
     nodeId,
-    { upload: { uploading: true, progress: 0, version, previewUrl: ctx.previewUrl } },
+    { upload: { uploading: true, version, previewUrl: ctx.previewUrl } },
     undefined,
     { skipHistory: true },
   ));
 
+  const reporter = createProgressReporter(nodeId, version);
   try {
     const result = await uploadWithRetry(
       toFile(ctx.item),
       (pct) => {
         if (session.signal.aborted) return;
         if (!isCurrentUpload(findNode(nodeId), version)) return;
-        runSuppressed(() => useCanvasStore.getState().updateNodeData(
-          nodeId,
-          { upload: { uploading: true, progress: pct, version, previewUrl: ctx.previewUrl } },
-          undefined,
-          { skipHistory: true },
-        ));
+        reporter.report(pct);
       },
       UPLOAD_MAX_RETRIES,
       ctx.source,
     );
+    reporter.flush();
     if (session.signal.aborted) return false;
     if (isCurrentUpload(findNode(nodeId), version)) {
       applyUploadResult(nodeId, result, ctx);
@@ -696,6 +736,9 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
       releaseRetryContext(nodeId);
     }
     return false;
+  } finally {
+    reporter.cancel();
+    useUploadProgressStore.getState().clear(nodeId, version);
   }
 }
 

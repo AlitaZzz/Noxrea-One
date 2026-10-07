@@ -7,9 +7,9 @@
  * hover 轨道的圆点二维跟随（纯视觉反馈）抽到 use-rail-dot-follow，
  * 与组节点的批量输出轨道（GroupConnectRail，不走 Handle 机制）共用。
  *
- * 成员条带宽度受两个容器钳制取小（同一规则：容器边缘即成员条带外界）：
- * - 所属组（memberRailWidth，口径在 group-bounds）——与组自身轨道命中区分区；
- * - 框选外框（frameRailWidth，口径在 selection-frame）——≥2 非组节点选中时，
+ * 成员条带宽度受所属组和框选外框两个容器钳制（同一规则：容器边缘即成员条带外界）：
+ * - 两个容器统一由 canvas-derived 一次性几何投影计算；
+ * - ≥2 非组节点选中时，
  *   最贴框缘成员的条带不得越过框缘，否则盖住外框批量轨道（BatchConnectHandle）
  *   的命中区接管 hover 链，成员轨道连锁亮起（选中节点 zIndex 高于批量轨道）。
  * 宽度经 --rail-width 注入 CSS（基样式 width 为 !important，内联样式无法直接覆盖）。
@@ -19,9 +19,9 @@
 import { Handle, Position, useNodeId } from "@xyflow/react";
 import type { CSSProperties } from "react";
 
-import { memberRailWidth } from "@/features/canvas/shared/group-bounds";
-import { frameRailWidth } from "@/features/canvas/shared/selection-frame";
+import { canvasRailKey, getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { RAIL_WIDTH } from "@/lib/constants";
 
 import { type RailSide, useRailDotFollow } from "./use-rail-dot-follow";
 
@@ -32,11 +32,12 @@ interface Props {
 }
 
 export default function ConnectionSideRail({ side, type, zIndex }: Props) {
-  // 宽度全量从 store 现取（含成员与组双方最新位置），不依赖节点快照
+  // 宽度来自 canvas store 的一次性几何投影；每个轨道只做 Map 读取。
   const id = useNodeId();
-  const width = useCanvasStore((s) =>
-    Math.min(memberRailWidth(s.nodes, id, side), frameRailWidth(s.nodes, id, side))
-  );
+  const width = useCanvasStore((s) => {
+    const key = canvasRailKey(id, side);
+    return key ? (getCanvasDerived(s.nodes, s.edges).railWidths.get(key) ?? RAIL_WIDTH) : RAIL_WIDTH;
+  });
   const { dotRef, restTransform, onPointerEnter, onPointerMove, onPointerLeave } =
     useRailDotFollow(side, width);
 

@@ -3,6 +3,7 @@
  */
 "use client";
 
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { UndoTurnIcon } from "@/components/ui/AppIcon";
@@ -20,7 +21,7 @@ interface Props {
   onUndo: () => void;
 }
 
-export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props) {
+export const ChatSectionView = memo(function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props) {
   const { t } = useTranslation();
   return (
     <div className="mb-4 flex flex-col text-sm leading-[1.55]">
@@ -80,6 +81,6 @@ export function ChatSectionView({ section, isStreaming, canUndo, onUndo }: Props
       )}
     </div>
   );
-}
+});
 
 export default ChatSectionView;

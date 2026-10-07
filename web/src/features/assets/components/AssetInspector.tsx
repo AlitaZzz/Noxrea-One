@@ -7,6 +7,7 @@
 
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -33,7 +34,6 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 import { MOD_KEY } from "@/lib/platform";
@@ -42,6 +42,8 @@ import { copyText } from "@/lib/utils/text-export";
 
 import { downloadAsset } from "../download";
 import type { AssetItem } from "../types";
+
+const AudioWaveform = dynamic(() => import("@/features/canvas/nodes/AudioWaveform"), { ssr: false });
 
 interface Props {
   /** 当前选中且仍在列表中的素材；1 项为详情态，多项时检查器留空（批量操作在网格上方批量条）。 */

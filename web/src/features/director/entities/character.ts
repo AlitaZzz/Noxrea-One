@@ -1,7 +1,7 @@
 /**
  * 角色实体。
  * 加载带骨骼的 GLB 素体并归一化身高体型，构建骨骼映射，
- * 支持全身 FK 关节摆姿与姿态预设应用。
+ * 支持全身 FK 关节摆姿与姿态预设。
  */
 import * as THREE from "three";
 import { type GLTF,GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -28,8 +28,8 @@ export interface CharacterOpts {
 }
 
 /**
- * 角色：带骨骼 GLB 加载 + 全身 FK 摆姿 + 预设动画。
- * 每个 Character 各自独立持有 bones / restQ / values / mixer。
+ * 角色：带骨骼 GLB 加载 + 全身 FK 摆姿 + 姿态预设。
+ * 每个 Character 各自独立持有 bones / restQ / values。
  */
 export class Character extends Entity {
   model: THREE.Object3D;
@@ -52,9 +52,6 @@ export class Character extends Entity {
   /** 识别出的语义骨 token -> Bone(供 _inferAxisOverrides 用)。 */
   private boneMap: Map<string, THREE.Bone> = new Map();
 
-  mixer: THREE.AnimationMixer | null;
-  clips: Record<string, THREE.AnimationClip> = {};
-  currentClip: string | null = null;
   currentPreset: string | null = null;
   poseMode: "preset" | "manual" = "preset";
 
@@ -102,11 +99,6 @@ export class Character extends Entity {
     }
 
     for (const j of JOINTS) this.values[j.key] = 0;
-
-    this.mixer = new THREE.AnimationMixer(this.model);
-    (gltf.animations || []).forEach((a: THREE.AnimationClip) => {
-      this.clips[a.name] = a;
-    });
 
     this.boneMap = boneMap;
 
@@ -214,10 +206,6 @@ export class Character extends Entity {
     return ref;
   }
 
-  get clipNames(): string[] {
-    return Object.keys(this.clips);
-  }
-
   _normalize() {
     const root = this.root;
     root.updateMatrixWorld(true);
@@ -290,9 +278,7 @@ export class Character extends Entity {
   }
 
   enterManual() {
-    if (this.poseMode === "preset" && this.mixer) this.mixer.stopAllAction();
     this.poseMode = "manual";
-    this.currentClip = null;
   }
 
   setRest() {
@@ -303,41 +289,9 @@ export class Character extends Entity {
 
   resetPose() {
     for (const j of JOINTS) this.values[j.key] = 0;
-    if (this.mixer) this.mixer.stopAllAction();
     this.setRest();
     this.poseMode = "preset";
-    this.currentClip = null;
     this.currentPreset = null;
-  }
-
-  playClip(name: string) {
-    const clip = this.clips[name];
-    if (!clip || !this.mixer) return;
-    for (const j of JOINTS) this.values[j.key] = 0;
-    this.pivot.quaternion.identity();
-    this.pivot.position.set(0, 0, 0);
-    this.mixer.stopAllAction();
-    const act = this.mixer.clipAction(clip);
-    act.reset();
-    const isPose = clip.duration <= 0.25 || /pose/i.test(name);
-    act.setLoop(isPose ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
-    act.clampWhenFinished = isPose;
-    act.play();
-    this.poseMode = "preset";
-    this.currentClip = name;
-  }
-
-  stopClip() {
-    if (this.mixer) this.mixer.stopAllAction();
-    this.setRest();
-    this.poseMode = "preset";
-    this.currentClip = null;
-  }
-
-  update(dt: number) {
-    if (this.mixer && this.poseMode === "preset" && this.currentClip) {
-      this.mixer.update(dt);
-    }
   }
 
   setColor(hex: number) {
@@ -355,7 +309,6 @@ export class Character extends Entity {
   }
 
   dispose() {
-    if (this.mixer) this.mixer.stopAllAction();
     super.dispose();
   }
 }

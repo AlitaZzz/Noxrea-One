@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AssetsIcon } from "@/components/ui/AppIcon";
@@ -38,7 +38,7 @@ interface Props {
   /** 单击卡片勾选框（多选增减）。 */
   onToggleSelect?: (asset: AssetItem) => void;
   onInsertCanvas?: (asset: AssetItem) => void;
-  onEnterFolder?: (folder: AssetFolder) => void;
+  onEnterFolder: (folder: AssetFolder) => void;
   onDeleteFolder?: (folder: AssetFolder) => void;
   onRenameFolder?: (folder: AssetFolder) => void;
   loading?: boolean;
@@ -58,6 +58,8 @@ export default function AssetGrid({
 }: Props) {
   const { t } = useTranslation();
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0, scrollTop: 0 });
 
   // IntersectionObserver for infinite scroll
   const handleIntersect = useCallback(() => {
@@ -67,16 +69,50 @@ export default function AssetGrid({
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || !hasMore) return;
+    const root = el.parentElement?.parentElement ?? null;
     const io = new IntersectionObserver(
       ([entry]) => { if (entry.isIntersecting) handleIntersect(); },
-      { rootMargin: "100px" },
+      { root, rootMargin: "100px" },
     );
     io.observe(el);
     return () => io.disconnect();
   }, [handleIntersect, hasMore]);
 
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    // AssetGrid 的根包装层不滚动；真正的滚动容器是其父元素。
+    const scrollParent = grid?.parentElement?.parentElement;
+    if (!grid || !scrollParent) return;
+    const update = () => setViewport({ width: grid.clientWidth, height: scrollParent.clientHeight, scrollTop: scrollParent.scrollTop });
+    update();
+    const onScroll = () => setViewport((current) => ({ ...current, scrollTop: scrollParent.scrollTop }));
+    const ro = new ResizeObserver(update);
+    ro.observe(grid);
+    ro.observe(scrollParent);
+    scrollParent.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      scrollParent.removeEventListener("scroll", onScroll);
+    };
+  }, [assets.length, folders?.length]);
+
   const hasContent = assets.length > 0 || (folders && folders.length > 0);
   const selectable = !!onSelect || !!onToggleSelect;
+  const minCellWidth = compact ? 110 : 150;
+  const columns = viewport.width > 0 ? Math.max(1, Math.floor((viewport.width + 12) / (minCellWidth + 12))) : 1;
+  const entries = useMemo(
+    () => [
+      ...(folders ?? []).map((folder) => ({ kind: "folder" as const, key: `folder-${folder.id}`, folder })),
+      ...assets.map((asset) => ({ kind: "asset" as const, key: `asset-${asset.id}`, asset })),
+    ],
+    [assets, folders],
+  );
+  const cellWidth = viewport.width > 0 ? (viewport.width - (columns - 1) * 12) / columns : minCellWidth;
+  const rowHeight = cellWidth + 16;
+  const rowCount = Math.ceil(entries.length / columns);
+  const firstRow = viewport.width > 0 ? Math.max(0, Math.floor(viewport.scrollTop / rowHeight) - 2) : 0;
+  const lastRow = viewport.width > 0 ? Math.min(rowCount, Math.ceil((viewport.scrollTop + viewport.height) / rowHeight) + 2) : Math.min(rowCount, 4);
+  const visibleEntries = entries.slice(firstRow * columns, lastRow * columns);
 
   if (loading && !hasContent) {
     return (
@@ -113,37 +149,43 @@ export default function AssetGrid({
           <Spinner className="size-6 text-primary" />
         </div>
       )}
-      <div
-        className="grid gap-x-3 gap-y-4 pb-2"
-        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 110 : 150}px, 1fr))` }}
-      >
-        {/* Folders first */}
-        {folders?.map((folder) => (
-          <FolderCard
-            key={`folder-${folder.id}`}
-            folder={folder}
-            count={folderCounts?.[folder.id] || 0}
-            onClick={onEnterFolder || (() => {})}
-            onDelete={folder.kind === "uncategorized" ? undefined : onDeleteFolder}
-            onRename={folder.kind === "uncategorized" ? undefined : onRenameFolder}
-          />
-        ))}
-        {/* Then assets */}
-        {assets.map((asset) => (
-          <AssetCard
-            key={`asset-${asset.id}`}
-            asset={asset}
-            selectable={selectable}
-            showHoverPreview={showHoverPreview}
-            showInsertButton={showInsertButton}
-            draggable={draggable}
-            selected={selectedIds?.has(asset.id)}
-            selectMode={selectMode}
-            onSelect={onSelect}
-            onToggleSelect={onToggleSelect}
-            onInsertCanvas={onInsertCanvas}
-          />
-        ))}
+      <div ref={gridRef} className="relative pb-2" style={{ height: Math.max(rowCount * rowHeight, rowHeight) }}>
+        {Array.from({ length: Math.max(0, lastRow - firstRow) }, (_, rowOffset) => {
+          const row = firstRow + rowOffset;
+          const rowEntries = visibleEntries.slice(rowOffset * columns, (rowOffset + 1) * columns);
+          return (
+            <div
+              key={row}
+              className="absolute left-0 right-0 grid gap-x-3"
+              style={{ top: row * rowHeight, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+            >
+              {rowEntries.map((entry) => entry.kind === "folder" ? (
+                <FolderCard
+                  key={entry.key}
+                  folder={entry.folder}
+                  count={folderCounts?.[entry.folder.id] || 0}
+                  onClick={onEnterFolder}
+                  onDelete={entry.folder.kind === "uncategorized" ? undefined : onDeleteFolder}
+                  onRename={entry.folder.kind === "uncategorized" ? undefined : onRenameFolder}
+                />
+              ) : (
+                <AssetCard
+                  key={entry.key}
+                  asset={entry.asset}
+                  selectable={selectable}
+                  showHoverPreview={showHoverPreview}
+                  showInsertButton={showInsertButton}
+                  draggable={draggable}
+                  selected={selectedIds?.has(entry.asset.id)}
+                  selectMode={selectMode}
+                  onSelect={onSelect}
+                  onToggleSelect={onToggleSelect}
+                  onInsertCanvas={onInsertCanvas}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
       {/* Sentinel + loading indicator */}
       <div ref={sentinelRef} className="flex items-center justify-center py-3">

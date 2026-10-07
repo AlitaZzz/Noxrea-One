@@ -18,7 +18,7 @@
  * - 尺寸取值链与 tidy-layout 一致：measured > style > 兜底。
  */
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
 
 import { measureNode } from "./tidy-layout";
 
@@ -225,14 +225,42 @@ export function groupContainsPoint(group: AnyNode, point: { x: number; y: number
   );
 }
 
+export interface GroupHitIndex {
+  nodeById: Map<string, AnyNode>;
+  groups: Array<{ node: AnyNode; x: number; y: number; width: number; height: number }>;
+}
+
+/** Build the immutable group geometry used during one node drag interaction. */
+export function buildGroupHitIndex(nodes: AnyNode[]): GroupHitIndex {
+  const nodeById = buildNodeIndex(nodes);
+  const groups = nodes
+    .filter((node) => node.type === NODE_TYPE.GROUP)
+    .map((node) => {
+      const size = measureNode(node);
+      return { node, x: node.position.x, y: node.position.y, width: size.width, height: size.height };
+    });
+  return { nodeById, groups };
+}
+
+function indexedGroupContainsPoint(
+  group: GroupHitIndex["groups"][number],
+  point: { x: number; y: number },
+): boolean {
+  return point.x >= group.x && point.x <= group.x + group.width &&
+    point.y >= group.y && point.y <= group.y + group.height;
+}
+
 /**
  * 拖拽节点落组的归属判定（拖入高亮与 drag stop 共用的唯一口径）：
  * 以节点中心点（绝对坐标）做「包含即归属」——中心仍在原组内则归属不变；
  * 离开原组 / 原组已不存在时按落点重新判定（一次拖拽完成跨组换组或脱离）。
  * node 传拖拽中的实时节点（成员的 position 是相对坐标，由本函数换算绝对值）。
  */
-export function resolveDropGroupId(nodes: AnyNode[], node: AnyNode): string | undefined {
-  const nodeById = buildNodeIndex(nodes);
+export function resolveDropGroupId(
+  node: AnyNode,
+  index: GroupHitIndex,
+): string | undefined {
+  const nodeById = index.nodeById;
   const abs = nodeAbsolutePosition(node, nodeById);
   const size = measureNode(node);
   const center = {
@@ -244,7 +272,7 @@ export function resolveDropGroupId(nodes: AnyNode[], node: AnyNode): string | un
   if (oldGroup && oldGroup.type === NODE_TYPE.GROUP && groupContainsPoint(oldGroup, center)) {
     return oldParentId;
   }
-  return findGroupAtPoint(nodes, center);
+  return findIndexedGroupAtPoint(index, center);
 }
 
 /**
@@ -254,7 +282,7 @@ export function resolveDropGroupId(nodes: AnyNode[], node: AnyNode): string | un
  */
 export function findGroupAtPoint(
   nodes: AnyNode[],
-  point: { x: number; y: number }
+  point: { x: number; y: number },
 ): string | undefined {
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
@@ -263,34 +291,14 @@ export function findGroupAtPoint(
   return undefined;
 }
 
-/**
- * 成员轨道不伸出所属组边界：返回成员节点在指定侧的轨道条带宽度。
- * 组边缘即成员条带的外界——成员圆点永远在组内侧、组圆点永远在组外侧，
- * 两者命中区天然分区、互不遮挡（此前成员条带一律外伸 80px，最贴边成员的
- * 条带越过组边缘，把组圆点的命中区整个盖住，导致组轨道「点不中」）。
- * 条带宽度 = 成员边缘到组边缘的净距（组框 refit 保证成员不出框，但贴边
- * 距离可小于 GROUP_NODE_PADDING——用户可在组内自由摆放），夹到 [0, RAIL_WIDTH]。
- * 无组归属 / 组已被删（幽灵 parentId）/ 组被手动缩小到成员之外（净距 ≤ 0，
- * 无外界可守）时返回 RAIL_WIDTH 不夹取。数据一律从传入 nodes 现取。
- */
-export function memberRailWidth(
-  nodes: AnyNode[],
-  memberId: string | null,
-  side: "left" | "right",
-): number {
-  const member = memberId == null ? undefined : nodes.find((n) => n.id === memberId);
-  if (!member || member.type === NODE_TYPE.GROUP) return RAIL_WIDTH;
-  const gid = member.parentId;
-  if (!gid) return RAIL_WIDTH;
-  const group = nodes.find((n) => n.id === gid && n.type === NODE_TYPE.GROUP);
-  if (!group) return RAIL_WIDTH;
-  // 成员 position 是组内相对坐标，与组边界同基准，可直接作差
-  const mSize = measureNode(member);
-  const gSize = measureNode(group);
-  const clearance =
-    side === "right"
-      ? gSize.width - (member.position.x + mSize.width)
-      : member.position.x;
-  if (clearance <= 0) return RAIL_WIDTH;
-  return Math.min(RAIL_WIDTH, clearance);
+/** Indexed lookup used exclusively during an active drag interaction. */
+export function findIndexedGroupAtPoint(
+  index: GroupHitIndex,
+  point: { x: number; y: number },
+): string | undefined {
+  for (let i = index.groups.length - 1; i >= 0; i--) {
+    const group = index.groups[i];
+    if (indexedGroupContainsPoint(group, point)) return group.node.id;
+  }
+  return undefined;
 }

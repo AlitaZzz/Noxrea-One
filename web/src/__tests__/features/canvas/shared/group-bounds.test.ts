@@ -6,13 +6,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildGroupHitIndex,
   buildNodeIndex,
   computeFittedGroupRect,
   findGroupAtPoint,
   groupContainsPoint,
   groupMembers,
   isGroupMember,
-  memberRailWidth,
   nodeAbsolutePosition,
   pruneEmptyGroups,
   refitGroupRects,
@@ -20,7 +20,7 @@ import {
   toAbsoluteNodes,
 } from "@/features/canvas/shared/group-bounds";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
 
 function node(id: string, x: number, y: number, w: number, h: number, extra?: Record<string, unknown>): AnyNode {
   return {
@@ -197,50 +197,6 @@ describe("pruneEmptyGroups（空组即删）", () => {
   });
 });
 
-describe("memberRailWidth（成员轨道不伸出组边界）", () => {
-  // 组 (0,0) 400×300；成员一律 100×50，position 为组内相对坐标
-  const g = group("g", 0, 0, 400, 300);
-  const memberAt = (id: string, x: number, gid?: string) =>
-    node(id, x, 0, 100, 50, { type: "text-node", parentId: gid ?? "g" });
-
-  it("无组归属的节点不夹取，返回全宽", () => {
-    const nodes = [g, memberAt("free", 100, undefined)];
-    expect(memberRailWidth(nodes, "free", "right")).toBe(RAIL_WIDTH);
-    expect(memberRailWidth(nodes, "free", "left")).toBe(RAIL_WIDTH);
-  });
-
-  it("幽灵 parentId（组已被删）不夹取", () => {
-    const nodes = [g, memberAt("orphan", 100, "missing")];
-    expect(memberRailWidth(nodes, "orphan", "right")).toBe(RAIL_WIDTH);
-  });
-
-  it("贴边成员（净距恰为 GROUP_NODE_PADDING）条带夹到 40", () => {
-    // 右缘相对 360，组右缘 400 → 净距 40
-    const nodes = [g, memberAt("flush", 260)];
-    expect(memberRailWidth(nodes, "flush", "right")).toBe(GROUP_NODE_PADDING);
-    // 左侧净距 260 → 上限夹取
-    expect(memberRailWidth(nodes, "flush", "left")).toBe(RAIL_WIDTH);
-  });
-
-  it("净距介于 padding 与全宽之间时条带精确到净距；超出全宽夹到上限", () => {
-    // 右缘相对 340 → 净距 60
-    expect(memberRailWidth([g, memberAt("mid", 240)], "mid", "right")).toBe(60);
-    // 右缘相对 200 → 净距 200，不夹
-    expect(memberRailWidth([g, memberAt("far", 100)], "far", "right")).toBe(RAIL_WIDTH);
-  });
-
-  it("组被手动缩小到成员之外（净距 ≤ 0，无外界可守）不夹取", () => {
-    // 组右缘 350，成员右缘相对 360 → 净距 -10
-    const shrunk = group("shrunk", 250, 0, 100, 300);
-    const nodes = [shrunk, memberAt("out", 260, "shrunk")];
-    expect(memberRailWidth(nodes, "out", "right")).toBe(RAIL_WIDTH);
-  });
-
-  it("成员不存在（id 幽灵）不夹取", () => {
-    expect(memberRailWidth([g], "ghost", "right")).toBe(RAIL_WIDTH);
-  });
-});
-
 describe("resolveDropGroupId（拖入归属判定：高亮与 drag stop 共用口径）", () => {
   // 组 g (0,0) 400×300，组 h (1000,0) 400×300；成员 100×50
   const g = group("g", 0, 0, 400, 300);
@@ -250,29 +206,29 @@ describe("resolveDropGroupId（拖入归属判定：高亮与 drag stop 共用�
 
   it("成员中心（绝对坐标）仍在原组内：归属不变", () => {
     const m = memberAt("a", 100, 100, "g");
-    expect(resolveDropGroupId([g, h, m], m)).toBe("g");
+    expect(resolveDropGroupId(m, buildGroupHitIndex([g, h, m]))).toBe("g");
   });
 
   it("拖出原组到空白：返回 undefined（脱离）", () => {
     const m = memberAt("a", 600, 0, "g");
-    expect(resolveDropGroupId([g, h, m], m)).toBeUndefined();
+    expect(resolveDropGroupId(m, buildGroupHitIndex([g, h, m]))).toBeUndefined();
   });
 
   it("拖入另一组：返回目标组 id（拖入高亮宿主）", () => {
     const m = memberAt("a", 1150, 100, "g");
-    expect(resolveDropGroupId([g, h, m], m)).toBe("h");
+    expect(resolveDropGroupId(m, buildGroupHitIndex([g, h, m]))).toBe("h");
   });
 
   it("节点大部分面积在组内但中心在外：不归属（中心点口径）", () => {
     const onEdge = memberAt("a", 350, 100, undefined);
-    expect(resolveDropGroupId([g, onEdge], onEdge)).toBe("g");
+    expect(resolveDropGroupId(onEdge, buildGroupHitIndex([g, onEdge]))).toBe("g");
     const outside = memberAt("a", 355, 100, undefined);
-    expect(resolveDropGroupId([g, outside], outside)).toBeUndefined();
+    expect(resolveDropGroupId(outside, buildGroupHitIndex([g, outside]))).toBeUndefined();
   });
 
   it("原组已删（幽灵 parentId）：按落点重新判定，不因幽灵 id 兜底", () => {
     const m = memberAt("a", 1150, 100, "ghost");
-    expect(resolveDropGroupId([g, h, m], m)).toBe("h");
+    expect(resolveDropGroupId(m, buildGroupHitIndex([g, h, m]))).toBe("h");
   });
 });
 

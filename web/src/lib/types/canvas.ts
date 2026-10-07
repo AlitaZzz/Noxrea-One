@@ -33,8 +33,6 @@ export interface TaskBinding {
 
 export interface UploadState {
   uploading: boolean;
-  /** 上传进度 0-100 */
-  progress?: number;
   /** 防竞态版本号：每次重新上传自增，回调按版本号丢弃过期结果 */
   version: number;
   /** 上传期间的本地预览 URL（blob:或 data:），用于模糊背景渲染 */

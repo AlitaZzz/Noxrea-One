@@ -55,6 +55,7 @@ export interface DirectorRuntime {
   captureShot: () => Promise<{ url: string; name: string; cameraId: string } | null>;
   sendShotToCanvas: (shotId: string) => Promise<void>;
   resetView: () => void;
+  requestRender: () => void;
   captureState: () => DirectorStateData;
   restoreState: (data: DirectorStateData) => Promise<void>;
   // ---- 内部/私有辅助（由 DirectorViewport 实现，供自身与 Inspector 调用）----

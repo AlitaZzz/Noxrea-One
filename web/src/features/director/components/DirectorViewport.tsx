@@ -59,14 +59,23 @@ export default function DirectorViewport() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const { notification } = useAppFeedback();
+  const translateRef = useRef(t);
+  const notificationRef = useRef(notification);
+  translateRef.current = t;
+  notificationRef.current = notification;
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
+    const translate = (...args: Parameters<typeof t>) => translateRef.current(...args);
+    const feedback = notificationRef.current;
+
     // ---- Three.js core ----
     const stage = new Stage(viewport);
     const rig = new CameraRig(stage.camera, stage.renderer.domElement, viewport, frameRef.current);
+    const wakeForCameraChange = () => stage.requestRender();
+    rig.controls.addEventListener("change", wakeForCameraChange);
 
     const entities: DirectorEntity[] = [];
     let _selectedId: string | null = null;
@@ -140,7 +149,7 @@ export default function DirectorViewport() {
 
     // 推算下一个可用角色名（角色A..角色Z），跳过现有角色名与本次已分配字母
     const _nextCharName = (reserved: Set<string> = new Set()) => {
-      const prefix = t("director.characterNamePrefix");
+      const prefix = translate("director.characterNamePrefix");
       _forEachEntity((e: DirectorEntity) => {
         if (e.type === "character" && typeof e.name === "string" && e.name.startsWith(prefix)) {
           const letter = e.name.slice(prefix.length);
@@ -215,12 +224,15 @@ export default function DirectorViewport() {
       root.position.set(Math.cos(n * 0.95) * Math.min(0.9 + n * 0.4, 3.2), 0,
         Math.sin(n * 0.95) * Math.min(0.9 + n * 0.4, 3.2));
     };
-    const _sync = () => useDirectorStore.getState().setEntities(
-      entities.map((e: DirectorEntity) => ({
-        id: e.id, type: e.type, name: e.name, visible: e.visible,
-        ...(e instanceof Crowd ? { _members: e.members.map((m: Character) => ({ id: m.id, name: m.name, type: m.type, visible: m.visible })) } : {}),
-      })) as DirectorEntityMeta[]
-    );
+    const _sync = () => {
+      useDirectorStore.getState().setEntities(
+        entities.map((e: DirectorEntity) => ({
+          id: e.id, type: e.type, name: e.name, visible: e.visible,
+          ...(e instanceof Crowd ? { _members: e.members.map((m: Character) => ({ id: m.id, name: m.name, type: m.type, visible: m.visible })) } : {}),
+        })) as DirectorEntityMeta[],
+      );
+      stage.requestRender();
+    };
 
     // 搜索任意实体(含群众成员)
     const _findById = (id: string | null) => {
@@ -245,13 +257,18 @@ export default function DirectorViewport() {
       if (ent && !_cameraView) { gizmo.attach(ent.root); }
       else { gizmo.detach(); }
       selection.highlight(_cameraView ? null : ent);
+      stage.requestRender();
     });
     selection.setSkipPredicate(() => gizmo.dragging || gizmo.overAxis);
-    gizmo.onObjectChange(() => { useDirectorStore.getState().bumpInspector(); _cameraAttrChangeCb?.(); });
+    gizmo.onObjectChange(() => {
+      useDirectorStore.getState().bumpInspector();
+      _cameraAttrChangeCb?.();
+      stage.requestRender();
+    });
 
     // Nav gizmo
     const navSvg = viewport.parentElement?.querySelector<SVGElement>("#navsvg");
-    const navGizmo = navSvg ? new NavGizmo(navSvg, stage.camera, () => rig.resetView()) : null;
+    const navGizmo = navSvg ? new NavGizmo(navSvg, stage.camera, () => { rig.resetView(); stage.requestRender(); }) : null;
 
     // 搜索角色(含群众成员)
     const _findChar = (id: string) => {
@@ -278,14 +295,14 @@ export default function DirectorViewport() {
       addProp: (kind = "box") => {
         const pk = kind as "box"|"cylinder"|"sphere"|"mannequin";
         _propCount[kind] = (_propCount[kind] || 0) + 1;
-        const name = (PROP_KINDS as readonly string[]).includes(kind) ? t(`director.prop.${kind}`) : t("director.propFallback");
+        const name = (PROP_KINDS as readonly string[]).includes(kind) ? translate(`director.prop.${kind}`) : translate("director.propFallback");
         const prop = new Prop(pk, name);
         _placeNew(prop.root); stage.add(prop.root); entities.push(prop);
         _sync(); selection.onSelect(prop.id);
         return prop;
       },
       addCamera: (presetKey = "front_mid") => {
-        const name = t("director.cameraNamePrefix") + ++_camCount;
+        const name = translate("director.cameraNamePrefix") + ++_camCount;
         const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
         const preset = CAMERA_PRESETS.find((p) => p.key === presetKey) || CAMERA_PRESETS[1]; // 默认正面中景
 
@@ -346,7 +363,7 @@ export default function DirectorViewport() {
           }
         }
         if (!members.length) return null;
-        const crowd = new Crowd(t("director.crowdName", { r: rows, c: cols }), group, members, { rows, cols, spacing });
+        const crowd = new Crowd(translate("director.crowdName", { r: rows, c: cols }), group, members, { rows, cols, spacing });
         for (const m of members) m.root.userData.entityId = crowd.id;
         stage.add(group);
         entities.push(crowd);
@@ -376,6 +393,7 @@ export default function DirectorViewport() {
         if (ent && !_cameraView) { gizmo.attach(ent.root); }
         else { gizmo.detach(); }
         selection.highlight(_cameraView ? null : ent);
+        stage.requestRender();
       },
       toggleSelect: (id: string) => {
         useDirectorStore.getState().toggleSelectedId(id);
@@ -383,6 +401,7 @@ export default function DirectorViewport() {
         const ent = _findById(_selectedId);
         if (ent && !_cameraView) { gizmo.attach(ent.root); selection.highlight(ent); }
         else { gizmo.detach(); selection.highlight(null); }
+        stage.requestRender();
       },
       setTransformMode: (mode: string) => {
         const m = mode as "translate"|"rotate"|"scale"; gizmo.setMode(m); useDirectorStore.getState().setTransformMode(m);
@@ -426,10 +445,12 @@ export default function DirectorViewport() {
           if (selection.selectedEntity) { gizmo.attach(selection.selectedEntity.root); selection.ring.visible = true; }
           useDirectorStore.getState().setCameraView(false);
         }
+        stage.requestRender();
       },
       setRatio: (r: string) => {
         rig.setRatio(r);
         useDirectorStore.getState().setRatio(r);
+        stage.requestRender();
       },
       setSceneScale: (s: number) => {
         stage.setWorldScale(s);
@@ -471,11 +492,20 @@ export default function DirectorViewport() {
       },
       applyPosePreset: (characterId: string, presetKey: string) => {
         const ent = _findChar(characterId);
-        if (ent instanceof Character) ent.applyPosePreset(presetKey);
+        if (ent instanceof Character) {
+          ent.applyPosePreset(presetKey);
+          stage.requestRender();
+        }
       },
       setJointValue: (characterId: string, jointKey: string, value: number) => {
         const ent = _findChar(characterId);
-        if (ent instanceof Character) { ent.values[jointKey] = value; ent.enterManual(); ent.applyPose(); ent.currentPreset = null; }
+        if (ent instanceof Character) {
+          ent.values[jointKey] = value;
+          ent.enterManual();
+          ent.applyPose();
+          ent.currentPreset = null;
+          stage.requestRender();
+        }
       },
       // ---- Screenshot helpers (对齐参考项目 ShotManager) ----
       _resolveShotCamera: () => {
@@ -538,7 +568,7 @@ export default function DirectorViewport() {
             n[camEnt.id] = (n[camEnt.id] || 0) + 1;
             resolve({
               url,
-              name: t("director.shotName", { camera: camEnt.name, n: String(n[camEnt.id]).padStart(2, "0") }),
+              name: translate("director.shotName", { camera: camEnt.name, n: String(n[camEnt.id]).padStart(2, "0") }),
               cameraId: camEnt.id,
             });
           }).catch((err: unknown) => {
@@ -564,12 +594,13 @@ export default function DirectorViewport() {
             i.src = shot.url;
           });
           await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
-          notification.success({ title: t("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
+          feedback.success({ title: translate("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
         } catch {
-          notification.error({ title: t("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });
+          feedback.error({ title: translate("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });
         }
       },
-      resetView: () => rig.resetView(),
+      resetView: () => { rig.resetView(); stage.requestRender(); },
+      requestRender: () => stage.requestRender(),
       toggleVisible: (id: string) => {
         const ent = entities.find((e: DirectorEntity) => e.id === id);
         if (!ent) return;
@@ -584,7 +615,10 @@ export default function DirectorViewport() {
       },
       setEntityColor: (id: string, hex: string) => {
         const ent = entities.find((e: DirectorEntity) => e.id === id);
-        if (ent instanceof Character || ent instanceof Prop) ent.setColor(parseInt(hex.replace("#", ""), 16));
+        if (ent instanceof Character || ent instanceof Prop) {
+          ent.setColor(parseInt(hex.replace("#", ""), 16));
+          stage.requestRender();
+        }
       },
       _getEntity: (id: string) => {
         const ent = entities.find((e: DirectorEntity) => e.id === id);
@@ -616,6 +650,7 @@ export default function DirectorViewport() {
         }
         const ll = document.getElementById("dirLabelLayer");
         if (ll) ll.style.display = _labelsVisible ? "block" : "none";
+        stage.requestRender();
       },
       _getPoseValues: (id: string) => {
         const ent = entities.find((e: DirectorEntity) => e.id === id);
@@ -659,15 +694,17 @@ export default function DirectorViewport() {
         const crowd = entities.find((e: DirectorEntity) => e.id === crowdId);
         if (!(crowd instanceof Crowd)) return;
         crowd.members.forEach((m: Character) => { if (m.type === "character") m.applyPosePreset(presetKey); });
+        stage.requestRender();
       },
       _broadcastResetPose: (crowdId: string) => {
         const crowd = entities.find((e: DirectorEntity) => e.id === crowdId);
         if (!(crowd instanceof Crowd)) return;
-        crowd.members.forEach((m: Character) => { if (m.type === "character") { m.resetPose(); m.currentPreset = null; } });
+        crowd.members.forEach((m: Character) => { if (m.type === "character") m.resetPose(); });
+        stage.requestRender();
       },
       groupCharacters: (ids: string[]) => {
-        // 只允许角色打组：Crowd 的成员契约是 Character（渲染循环逐帧 update、
-        // 姿态广播调 applyPosePreset / resetPose），相机与道具没有这些方法，
+        // 只允许角色打组：Crowd 的成员契约是 Character（姿态广播调
+        // applyPosePreset / resetPose），相机与道具没有这些方法，
         // 混进去会被强转后每帧抛错并跳过该帧剩余更新。
         const members = ids.map((id) => entities.find((e: DirectorEntity) => e.id === id))
           .filter((e): e is Character => e instanceof Character);
@@ -678,7 +715,7 @@ export default function DirectorViewport() {
         const group = new THREE.Group(); group.position.copy(centroid);
         stage.add(group); group.updateMatrixWorld(true);
         for (const m of members) group.attach(m.root);
-        const crowd = new Crowd(t("director.newGroup") + (Math.random() * 100 | 0), group, members);
+        const crowd = new Crowd(translate("director.newGroup") + (Math.random() * 100 | 0), group, members);
         for (const m of members) m.root.userData.entityId = crowd.id;
         // Remove members from top-level, add crowd
         for (const m of members) {
@@ -697,7 +734,7 @@ export default function DirectorViewport() {
           if (ent instanceof Character) {
             if (!ent._srcUrl) continue;
             let c: Character;
-            try { c = await Character.load(t("director.copyName", { name: ent.name }), ent._srcUrl, ent._opts || {}); }
+            try { c = await Character.load(translate("director.copyName", { name: ent.name }), ent._srcUrl, ent._opts || {}); }
             catch { continue; }
             if (_cancelled) { c.dispose(); return; }
             c._srcUrl = ent._srcUrl; c._opts = ent._opts;
@@ -712,7 +749,7 @@ export default function DirectorViewport() {
             c.applyPose();
             stage.add(c.root); _makeLabel(c); entities.push(c); last = c;
           } else if (ent instanceof Prop) {
-            const p = new Prop(ent.kind as "box"|"cylinder"|"sphere"|"mannequin", t("director.copyName", { name: ent.name }));
+            const p = new Prop(ent.kind as "box"|"cylinder"|"sphere"|"mannequin", translate("director.copyName", { name: ent.name }));
             p.root.position.copy(ent.root.position).add(OFF);
             p.root.quaternion.copy(ent.root.quaternion);
             p.root.scale.copy(ent.root.scale);
@@ -720,7 +757,7 @@ export default function DirectorViewport() {
             stage.add(p.root); entities.push(p); last = p;
           } else if (ent instanceof CameraEntity) {
             const W = stage.viewport.clientWidth, H = stage.viewport.clientHeight;
-            const cam = new CameraEntity(t("director.copyName", { name: ent.name }), { fov: ent.fov, aspect: W / Math.max(1, H), scene: stage.scene });
+            const cam = new CameraEntity(translate("director.copyName", { name: ent.name }), { fov: ent.fov, aspect: W / Math.max(1, H), scene: stage.scene });
             cam.root.position.copy(ent.root.position).add(OFF);
             cam.root.quaternion.copy(ent.root.quaternion);
             cam.lookTarget.copy(ent.lookTarget);
@@ -823,20 +860,14 @@ export default function DirectorViewport() {
     useDirectorStore.getState().setRuntime(runtime);
 
     // ---- Loop ----
-    const tick = (dt: number) => {
+    const tick = () => {
       for (const ent of entities) {
-        if (ent instanceof Character) ent.update(dt);
-        else if (ent instanceof CameraEntity) ent.update();
-        else if (ent instanceof Crowd) {
-          // Crowd.members 契约是 Character（groupCharacters 入队时已过滤），
-          // 直接多态分发；混入相机/道具会在打组前被拒
-          for (const m of ent.members) m.update(dt);
-        }
+        if (ent instanceof CameraEntity) ent.update();
       }
       rig.update(); selection.update(); navGizmo?.update();
       _updateLabels();
     };
-    stage.startLoop(tick);
+    stage.setFrameCallback(tick);
 
     // ---- Seed or Restore ----
     const restore = useDirectorStore.getState().restoreState;
@@ -846,7 +877,7 @@ export default function DirectorViewport() {
       })();
     } else {
       (async () => {
-        const c = await Character.load(t("director.defaultCharacter"), XBOT, { height: 1.75, girth: 1.0 });
+        const c = await Character.load(translate("director.defaultCharacter"), XBOT, { height: 1.75, girth: 1.0 });
         if (_cancelled) { c.dispose(); return; }
         c._srcUrl = XBOT; c._opts = { height: 1.75, girth: 1.0 };
         c.bodyType = "standard";
@@ -876,6 +907,8 @@ export default function DirectorViewport() {
       // 统一释放：变换手柄 / 拾取监听 / 轨道控制，以及 Stage 的地面与全景资源
       gizmo.dispose();
       selection.dispose();
+      navGizmo?.dispose();
+      rig.controls.removeEventListener("change", wakeForCameraChange);
       rig.dispose();
       stage.dispose(); useDirectorStore.getState().setRuntime(null);
       // 重置模块级计数器，避免跨会话泄露

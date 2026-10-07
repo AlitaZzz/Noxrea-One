@@ -6,6 +6,7 @@
 "use client";
 
 import { type NodeProps } from "@xyflow/react";
+import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,7 +24,6 @@ import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
-import PanoramaPanel from "@/features/canvas/editing/PanoramaPanel";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
@@ -31,6 +31,7 @@ import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canvas/types";
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
+import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -39,6 +40,8 @@ import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
+
+const PanoramaPanel = dynamic(() => import("@/features/canvas/editing/PanoramaPanel"), { ssr: false });
 
 /**
  * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
@@ -70,6 +73,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t, i18n } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
+  const uploadProgress = useUploadProgress(id);
   // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选。
   // 返回布尔原语，Zustand 默认 Object.is 比较，仅在选择数跨过阈值时才重渲染；
   // 用循环累加避免每次 nodes 变更都分配 filter 临时数组。
@@ -411,9 +415,9 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 px-8">
-                {data.upload?.progress != null ? (
+                {uploadProgress != null ? (
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${data.upload.progress}%` }} />
+                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                   </div>
                 ) : (
                   <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -422,7 +426,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 )}
                 <span className="text-sm text-white/60 tabular-nums">
                   {t("common.uploading")}
-                  {data.upload?.progress != null ? ` ${Math.round(data.upload.progress)}%` : ""}
+                  {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
                 </span>
               </div>
             </div>

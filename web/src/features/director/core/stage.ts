@@ -1,13 +1,13 @@
 /**
  * 三维舞台。
  * 封装 Three.js 场景、渲染器、默认相机、光照、地面与网格、全景天空球，
- * 并驱动渲染循环与视口 resize。
+ * 并按需驱动渲染与视口 resize。
  */
 import * as THREE from "three";
 
 import { DIRECTOR_SCENE_BG } from "../theme";
 
-// 场景 / 渲染器 / 光照 / 地面 / 网格 / 渲染循环 / resize
+// 场景 / 渲染器 / 光照 / 地面 / 网格 / 按需渲染 / resize
 export class Stage {
   viewport: HTMLElement;
   scene: THREE.Scene;
@@ -15,12 +15,14 @@ export class Stage {
   camera: THREE.PerspectiveCamera;
   activeCamera: THREE.PerspectiveCamera | null = null;
   world: THREE.Group;
-  clock: THREE.Timer;
-  private _tick: ((dt: number) => void) | null = null;
+  private _frameCallback: (() => void) | null = null;
   private _panoTex: THREE.Texture | null = null;
   private _panoRotDeg: number = 0;
   private _panoRadius: number = 60;
   private _fogSaved?: { near: number; far: number };
+  private _rafId = 0;
+  private _frameQueued = false;
+  private _disposed = false;
 
   groundGroup: THREE.Group;
   ground: THREE.Mesh;
@@ -58,8 +60,6 @@ export class Stage {
     this.groundGroup = built.groundGroup;
     this.ground = built.ground;
     this.grid = built.grid;
-
-    this.clock = new THREE.Timer();
 
     this.onResize = this.onResize.bind(this);
     window.addEventListener("resize", this.onResize);
@@ -133,6 +133,7 @@ export class Stage {
 
   // ---- 全景背景 ----
   setPanorama(texture: THREE.Texture) {
+    this.requestRender();
     texture.mapping = THREE.EquirectangularReflectionMapping;
     if (this._panoTex && this._panoTex !== texture) this._panoTex.dispose();
     this._panoTex = texture;
@@ -161,6 +162,7 @@ export class Stage {
   }
 
   clearPanorama(skyHex?: number) {
+    this.requestRender();
     if (this.panoSphere) {
       this.panoSphere.visible = false;
       (this.panoSphere.material as THREE.MeshBasicMaterial).map = null;
@@ -183,48 +185,60 @@ export class Stage {
   }
 
   setPanoramaRotation(deg: number) {
+    this.requestRender();
     this._panoRotDeg = deg;
     if (this.panoSphere) this.panoSphere.rotation.y = THREE.MathUtils.degToRad(deg);
   }
 
   setPanoramaRadius(r: number) {
+    this.requestRender();
     this._panoRadius = r;
     if (this.panoSphere) this.panoSphere.scale.setScalar(r);
   }
 
   // ---- scene-level controls ----
   setSkyColor(hex: number | string) {
+    this.requestRender();
     this.scene.background = new THREE.Color(hex);
     if (this.scene.fog) this.scene.fog.color = new THREE.Color(hex);
   }
   setGroundVisible(v: boolean) {
+    this.requestRender();
     this.groundGroup.visible = v;
   }
   setGroundOpacity(v: number) {
+    this.requestRender();
     (this.ground.material as THREE.MeshStandardMaterial).opacity = v;
   }
   setGroundHeight(y: number) {
+    this.requestRender();
     this.groundGroup.position.y = y;
   }
 
   setWorldScale(s: number) {
+    this.requestRender();
     this.world.scale.setScalar(s);
   }
   setWorldPos(x: number, y: number, z: number) {
+    this.requestRender();
     this.world.position.set(x, y, z);
   }
   setWorldRot(x: number, y: number, z: number) {
+    this.requestRender();
     this.world.rotation.set(x, y, z);
   }
 
   add(obj: THREE.Object3D) {
+    this.requestRender();
     this.world.add(obj);
   }
   remove(obj: THREE.Object3D) {
+    this.requestRender();
     this.world.remove(obj);
   }
 
   onResize() {
+    this.requestRender();
     const W = this.viewport.clientWidth;
     const H = this.viewport.clientHeight;
     this.renderer.setSize(W, H);
@@ -238,28 +252,37 @@ export class Stage {
   }
 
   render() {
+    if (this._disposed) return;
     this.renderer.render(this.scene, this.activeCamera || this.camera);
   }
 
-  private _rafId = 0;
-
-  startLoop(tick: (dt: number) => void) {
-    this._tick = tick;
-    const loop = () => {
-      this._rafId = requestAnimationFrame(loop);
-      const dt = this.clock.getDelta();
+  requestRender() {
+    if (this._disposed || this._frameQueued) return;
+    this._frameQueued = true;
+    this._rafId = requestAnimationFrame(() => {
+      this._frameQueued = false;
+      if (this._disposed) return;
       try {
-        this._tick && this._tick(dt);
+        this._frameCallback?.();
       } catch (e) {
         console.error(e);
       }
       this.render();
-    };
-    loop();
+    });
+  }
+
+  setFrameCallback(callback: () => void) {
+    if (this._disposed) return;
+    this._frameCallback = callback;
+    this.requestRender();
   }
 
   dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
     if (this._rafId) cancelAnimationFrame(this._rafId);
+    this._frameQueued = false;
+    this._frameCallback = null;
     window.removeEventListener("resize", this.onResize);
 
     // 地面组（地面 / 网格 / 坐标轴）与全景球都是 Stage 自建资源，

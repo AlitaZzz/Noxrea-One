@@ -101,6 +101,11 @@ function stripRuntimeFields(snapshot: ReturnType<typeof takeCanvasSnapshot>) {
         delete rest.selected;
         delete rest.dragging;
         delete rest.positionAbsolute;
+        // React Flow measures DOM geometry at runtime. It is required by the
+        // controlled renderer but is not project data and must be recomputed
+        // after loading the canvas.
+        delete rest.measured;
+        delete rest.resizing;
         return rest;
       }),
     edges: snapshot.edges

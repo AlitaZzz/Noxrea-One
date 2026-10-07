@@ -4,37 +4,14 @@
 
 /**
  * 复制文本到剪贴板。
- * 优先使用 Clipboard API；在 http 等非安全上下文（如局域网直连 NAS）下该 API 不可用，
- * 回退到临时 textarea + execCommand，保证功能不失效。
  * @returns 是否复制成功
  */
 export async function copyText(text: string): Promise<boolean> {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // 权限被拒或 API 调用失败，继续走兜底方案
-    }
-  }
-  return legacyCopy(text);
-}
-
-/** 兜底复制：临时 textarea + execCommand，兼容非安全上下文 */
-function legacyCopy(text: string): boolean {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
   try {
-    return document.execCommand("copy");
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
     return false;
-  } finally {
-    document.body.removeChild(textarea);
   }
 }
 

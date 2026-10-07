@@ -152,7 +152,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
           </Select>
         </div>
       )}
-      <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); refreshPreview(); } }))} />
+      <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; ent.update(); runtime.requestRender(); refreshPreview(); } }))} />
       <div className="mb-4">
         <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.aimTarget")}</label>
         <Select value={aimMode} onValueChange={(val) => {
@@ -163,6 +163,7 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
                 const box = worldBox(target.root, { useBones: target.type === "character" });
                 const center = box.isEmpty() ? target.root.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
                 ent.aimAt(center);
+                runtime.requestRender();
                 schedulePreview();
               }
             }
@@ -173,12 +174,12 @@ function CameraAttr({ entity, ent, entities, runtime }: CameraAttrProps) {
           </SelectContent>
         </Select>
       </div>
-      <TripleRow label={t("director.aimCoords")} step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); refreshPreview(); } }))} />
+      <TripleRow label={t("director.aimCoords")} step={0.05} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.lookTarget[k], set: (v: number) => { ent.lookTarget[k] = v; ent.aimAt(ent.lookTarget); runtime.requestRender(); refreshPreview(); } }))} />
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{t("director.fovAngle")} <Tooltip><TooltipTrigger asChild><span className="cursor-help text-muted-foreground">ⓘ</span></TooltipTrigger><TooltipContent>{t("director.fovTip")}</TooltipContent></Tooltip></span><span>{Math.round(ent.cam?.fov || 40)}°</span></div>
         <div className="flex items-center gap-3">
           <Slider min={20} max={90} step={1} className="flex-1" value={[ent.cam?.fov || 40]}
-            onValueChange={([next]) => { ent.setFov(next); refreshPreview(); }} />
+            onValueChange={([next]) => { ent.setFov(next); runtime.requestRender(); refreshPreview(); }} />
           <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{Math.round(ent.cam?.fov || 40)}°</div>
         </div>
       </div>
@@ -339,15 +340,15 @@ export default function Inspector() {
             <Input className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
-          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
-          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
-          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
+          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; runtime.requestRender(); } }))} />
+          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; runtime.requestRender(); } }))} />
+          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); runtime.requestRender(); } }))} />
           <div className="mb-4">
             <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} className="flex-1"
                 value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
-                onValueChange={([next]) => { const s = (entBaseScale || 1) * next; ent.root.scale.set(s, s, s); bumpInspector(); }} />
+                onValueChange={([next]) => { const s = (entBaseScale || 1) * next; ent.root.scale.set(s, s, s); bumpInspector(); runtime.requestRender(); }} />
               <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
@@ -371,15 +372,15 @@ export default function Inspector() {
               <Input className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={ent.name} onChange={(e) => runtime.rename?.(entity.id, e.target.value)} />
             </div>
           </div>
-          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; } }))} />
-          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; } }))} />
-          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); } }))} />
+          <TripleRow label={t("director.position")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.position[k], set: (v: number) => { ent.root.position[k] = v; runtime.requestRender(); } }))} />
+          <TripleRow label={t("director.rotation")} step={1} deg keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.rotation[k] * R2D, set: (v: number) => { ent.root.rotation[k] = v * D2R; runtime.requestRender(); } }))} />
+          <TripleRow label={t("director.scale")} step={0.01} keys={(["x","y","z"] as const).map((k) => ({ k, get: () => ent.root.scale[k], set: (v: number) => { ent.root.scale[k] = Math.max(0.05, v); runtime.requestRender(); } }))} />
           <div className="mb-4">
             <label className="mb-2 block select-none text-xs text-muted-foreground">{t("director.uniformScale")}</label>
             <div className="flex items-center gap-3">
               <Slider min={0.2} max={3} step={0.01} className="flex-1"
                 value={[entBaseScale ? ent.root.scale.y / entBaseScale : 1]}
-                onValueChange={([next]) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * next; ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); }} />
+                onValueChange={([next]) => { const girth = (ent as { _girth?: number })._girth || 1; const s = (entBaseScale || 1) * next; ent.root.scale.set(s * girth, s, s * girth); bumpInspector(); runtime.requestRender(); }} />
               <div className="min-w-14 rounded-md bg-muted px-2.5 py-1.5 text-center text-xs tabular-nums text-muted-foreground">{(entBaseScale ? ent.root.scale.y / entBaseScale : 1).toFixed(1)}</div>
             </div>
           </div>
@@ -419,7 +420,12 @@ export default function Inspector() {
                 variant={posePresetKey === p.key ? "secondary" : "outline"}
                 aria-pressed={posePresetKey === p.key}
                 className="h-auto min-h-8 w-full justify-center px-1.5 py-1.5 text-[13px]"
-                onClick={() => { isCrowd ? runtime._broadcastPosePreset(entity.id, p.key) : runtime.applyPosePreset(entity.id, p.key); setPosePresetKey(p.key); poseSyncRef.current?.(); }}
+                onClick={() => {
+                  if (isCrowd) runtime._broadcastPosePreset(entity.id, p.key);
+                  else runtime.applyPosePreset(entity.id, p.key);
+                  setPosePresetKey(p.key);
+                  poseSyncRef.current?.();
+                }}
               >
                 {t(`director.${p.label}`)}
               </Button>
@@ -430,7 +436,15 @@ export default function Inspector() {
             size="sm"
             variant="secondary"
             className="mb-3 w-full justify-center gap-1.5"
-            onClick={() => { isCrowd ? runtime._broadcastResetPose(entity.id) : (ent instanceof Character ? ent.resetPose() : undefined); setPosePresetKey(null); poseSyncRef.current?.(); }}
+            onClick={() => {
+              if (isCrowd) runtime._broadcastResetPose(entity.id);
+              else if (ent instanceof Character) {
+                ent.resetPose();
+                runtime.requestRender();
+              }
+              setPosePresetKey(null);
+              poseSyncRef.current?.();
+            }}
           >
             <RotateRightOutlined className="size-4" />
             {t("director.resetPose")}
