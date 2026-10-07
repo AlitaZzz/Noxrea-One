@@ -10,7 +10,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TestFeedbackProvider } from "@/test-utils/TestFeedbackProvider";
+import { TestFeedbackProvider } from "@/__tests__/test-utils/TestFeedbackProvider";
 
 const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),

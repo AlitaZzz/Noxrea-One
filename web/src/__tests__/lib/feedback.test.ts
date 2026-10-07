@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createTestFeedback } from "@/test-utils/TestFeedbackProvider";
+import { createTestFeedback } from "@/__tests__/test-utils/TestFeedbackProvider";
 
 beforeEach(() => vi.resetModules());
 
