@@ -6,6 +6,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -91,11 +92,6 @@ export default function ProjectListPage() {
   }, [editingId]);
 
   // 鉴权由 (app)/layout.tsx 统一完成；项目列表由本页拉取（唯一消费方）。
-
-  const handleOpen = (p: ProjectSummary) => {
-    setActiveProject(p.id);
-    router.push(`/canvas/${p.id}`);
-  };
 
   // 改封面入口：点击记录目标卡片并弹浏览器文件选择框
   const handlePickCover = (id: string) => {
@@ -217,19 +213,18 @@ export default function ProjectListPage() {
               className="group relative flex h-full flex-col gap-0 overflow-hidden border-border bg-card p-0"
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
-              <Button
-                type="button"
-                variant="ghost"
+              <Link
+                href={`/canvas/${p.id}`}
+                onClick={() => setActiveProject(p.id)}
                 aria-label={p.name}
-                onClick={() => handleOpen(p)}
-                className="relative flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0"
+                className="relative flex aspect-video h-auto w-full shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {p.thumbnail ? (
                   <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}
-              </Button>
+              </Link>
 
               {/* Info */}
               <CardContent className={PROJECT_CARD_INFO_CLASS}>
@@ -244,15 +239,14 @@ export default function ProjectListPage() {
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                     />
                   ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
+                    <Link
+                      href={`/canvas/${p.id}`}
+                      onClick={() => setActiveProject(p.id)}
                       aria-label={p.name}
-                      onClick={() => handleOpen(p)}
-                      className="h-auto min-w-0 flex-1 justify-start rounded-none px-0 py-0 text-left text-sm font-medium"
+                      className="inline-flex h-auto min-w-0 flex-1 cursor-pointer items-center justify-start rounded-none px-0 py-0 text-left text-sm font-medium text-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                       <span className="truncate">{p.name}</span>
-                    </Button>
+                    </Link>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
