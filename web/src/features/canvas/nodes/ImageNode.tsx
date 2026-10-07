@@ -353,6 +353,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [id, src, setCroppingNodeId, setAnnotateOpen, setPanoramaOpen, handleApplyTemplate]);
 
   const hasImage = src && src.length > 0;
+  const generating = isGenerating(data.taskBinding);
 
   // 烘焙模式：图片本身就是旋转/翻转后的成品，无需 CSS transform
 
@@ -394,7 +395,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 </TooltipTrigger><TooltipContent>{t("common.expand")}</TooltipContent></Tooltip>
             </div>
           )}
-          {data.source === "upload" && hasImage && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
+          {data.source === "upload" && hasImage && !data.upload?.uploading && !generating && (
             <div className="absolute top-2 right-2 z-20 nodrag">
               <Tooltip><TooltipTrigger asChild>
                   <Button
@@ -432,8 +433,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             </div>
           ) : data.upload?.error ? (
             <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
-          ) : isGenerating(data.taskBinding) ? (
-            <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />
+          ) : generating ? (
+            <GeneratingOverlay absolute startedAt={data.taskBinding?.startedAt} />
           ) : isMulti && hasImage ? (
               expanded ? (
                 // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）

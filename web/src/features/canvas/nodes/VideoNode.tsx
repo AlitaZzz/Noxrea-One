@@ -762,6 +762,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     if (el) el.volume = 0.5;
     if (el) videoCleanupRef.current = registerVideoElement(id, el);
   }, [id]);
+  const generating = isGenerating(data.taskBinding);
 
   return (
     <div className="group relative w-full h-full flex flex-col node-tilt">
@@ -784,7 +785,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         onMouseLeave={handleMouseLeave}
       >
         {agentGhost && <AgentGhostOverlay />}
-        {data.source === "upload" && hasVideo && !data.upload?.uploading && !isGenerating(data.taskBinding) && (
+        {data.source === "upload" && hasVideo && !data.upload?.uploading && !generating && (
           <div className="absolute top-2 right-2 z-20 nodrag">
             <Tooltip><TooltipTrigger asChild>
                 <Button
@@ -822,7 +823,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           </div>
         ) : data.upload?.error ? (
           <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
-        ) : isGenerating(data.taskBinding) ? (
+        ) : generating ? (
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasVideo ? (
           <div className="w-full h-full relative">

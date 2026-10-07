@@ -581,43 +581,41 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 }
 
 /* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
-@property --connection-ring-angle {
+@property --lime-flow-ring-angle {
   syntax: "<angle>";
   initial-value: 0deg;
   inherits: false;
 }
 
-/* 流动描边：conic-gradient 绕圈旋转，mask 挖空中间只留 1.5px 一圈，无需额外 DOM。
-   底色淡青柠保证静止时也有轮廓；高光有两颗，相隔 180° 同步绕行
-   （一颗在右侧时另一颗正好在左侧）。两颗的爬升/回落角度刻意等宽，亮度才一致。
-   画布拖线时可连目标节点（.node-connect-ok）使用该描边。 */
-.node-body.node-connect-ok::before {
-  content: "";
+/* 统一青柠流光描边：conic-gradient 绕圈旋转，mask 挖空中间只留 1.5px 一圈。
+   连接目标和 Agent 使用伪元素，生成浮层使用 .generation-border 元素；三者共享同一套节奏和颜色。
+   底色淡青柠保证静止时也有轮廓；高光有两颗，相隔 180° 同步绕行。 */
+.node-body.node-connect-ok::before,
+.agent-flow-button::before,
+.generation-border {
   position: absolute;
   inset: 0;
   padding: 1.5px;
   border-radius: inherit;
   background: conic-gradient(
-    from var(--connection-ring-angle),
+    from var(--lime-flow-ring-angle),
     var(--brand-lime-flow-stops)
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: connection-ring-flow 4s linear infinite;
+  animation: lime-flow-ring 4s linear infinite;
   pointer-events: none;
 }
-@keyframes connection-ring-flow {
-  to {
-    --connection-ring-angle: 360deg;
-  }
+.node-body.node-connect-ok::before,
+.agent-flow-button::before {
+  content: "";
 }
-
-@property --agent-flow-border-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
+@keyframes lime-flow-ring {
+  to {
+    --lime-flow-ring-angle: 360deg;
+  }
 }
 
 /* Agent 入口的品牌流光描边：两道相隔 180° 的高光保持对称绕行。 */
@@ -627,34 +625,22 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   border-color: transparent;
 }
 .agent-flow-button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
   z-index: 0;
-  padding: 1.5px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--agent-flow-border-angle),
-    var(--brand-lime-flow-stops)
-  );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  animation: agent-flow-border 4s linear infinite;
-  pointer-events: none;
 }
 .agent-flow-button > * {
   position: relative;
   z-index: 1;
 }
-@keyframes agent-flow-border {
-  to {
-    --agent-flow-border-angle: 360deg;
-  }
+.generating-overlay {
+  isolation: isolate;
+}
+.generation-border {
+  z-index: 2;
 }
 @media (prefers-reduced-motion: reduce) {
-  .agent-flow-button::before {
+  .node-body.node-connect-ok::before,
+  .agent-flow-button::before,
+  .generation-border {
     animation: none;
   }
 }

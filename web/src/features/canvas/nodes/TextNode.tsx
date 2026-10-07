@@ -223,7 +223,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         >
           <EditorContent editor={editor} />
         </div>
-        {generating && <GeneratingOverlay absolute rounded startedAt={data.taskBinding?.startedAt} />}
+        {generating && <GeneratingOverlay absolute startedAt={data.taskBinding?.startedAt} />}
       </div>
 
       {/* 富文本编辑工具条：定位在节点上方，counter-scale 保持视觉大小恒定 */}

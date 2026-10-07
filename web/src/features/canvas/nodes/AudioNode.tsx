@@ -200,6 +200,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   }, [id, handleDownload, handleApplyAudioSpeed, handleExtractAudioClip]);
 
   const hasAudio = src && src.length > 0;
+  const generating = isGenerating(data.taskBinding);
 
   return (
     <div
@@ -245,7 +246,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           </div>
         ) : data.upload?.error ? (
           <UploadFailedOverlay nodeId={id} error={data.upload.error} previewUrl={data.upload.previewUrl} />
-        ) : isGenerating(data.taskBinding) ? (
+        ) : generating ? (
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasAudio ? (
           <AudioWaveform

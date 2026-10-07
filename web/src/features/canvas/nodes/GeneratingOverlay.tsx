@@ -1,9 +1,9 @@
 /**
  * 生成中占位浮层（GeneratingOverlay）。
- * 图片 / 文本 / 视频节点共用：极光带流转 + 两团呼吸柔光（青柠×深青）+ 实时耗时。
+ * 图片 / 文本 / 视频 / 音频节点共用：极光带流转 + 两团呼吸柔光（青柠×深青）+ 实时耗时。
  * 相位去同步：各光斑用 startedAt 对各自周期取模做负 animation-delay，
  * 多节点同时生成时不会齐刷刷同频齐动。
- * 通过 absolute / rounded 参数适配不同节点的容器布局。
+ * 通过 absolute 参数适配不同节点的容器布局。
  */
 "use client";
 
@@ -15,15 +15,12 @@ import { formatElapsed } from "@/lib/utils/format-elapsed";
 function GeneratingOverlay({
   text,
   absolute = true,
-  rounded = false,
   startedAt,
 }: {
   /** 自定义文案；缺省时使用通用「生成中」 */
   text?: string;
-  /** 是否 absolute 定位铺满容器（Image/Text 用）；false 则用 w-full h-full（Video 用） */
+  /** 是否 absolute 定位铺满容器（Image/Text 用）；false 则用 w-full h-full（Video/Audio 用） */
   absolute?: boolean;
-  /** 是否带圆角 */
-  rounded?: boolean;
   /** 任务开始时间戳（ms）；传入时在文案后追加实时耗时，并用于动画相位去同步 */
   startedAt?: number;
 }) {
@@ -46,8 +43,7 @@ function GeneratingOverlay({
     <div
       className={
         (absolute ? "absolute inset-0" : "w-full h-full relative") +
-        (rounded ? " rounded-lg overflow-hidden" : "") +
-        " gen-stage flex flex-col items-center justify-center gap-2.5 overflow-hidden"
+        " rounded-lg gen-stage generating-overlay flex flex-col items-center justify-center gap-2.5 overflow-hidden"
       }
     >
       {/* 极光带：斜贯画面的紫蓝渐变缓慢流转 */}
@@ -57,6 +53,7 @@ function GeneratingOverlay({
       <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 7000}ms` }} aria-hidden />
       {/* 噪点抖动：打散渐变色带 */}
       <div className="gen-noise" aria-hidden />
+      <div className="generation-border" aria-hidden />
       {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
       <span className="text-xs text-foreground/[0.72]">
         {text ?? t("common.generating")}
