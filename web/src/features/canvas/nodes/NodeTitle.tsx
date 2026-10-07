@@ -119,7 +119,7 @@ export default function NodeTitle({
         <span className="flex items-center gap-0.5 flex-1 min-w-0">
           {icon}
           <Input
-            className="nodrag h-5 w-full min-w-0 rounded border border-border bg-card px-1 py-px text-[13px] font-medium text-foreground shadow-none outline-none focus-visible:border-border focus-visible:ring-0"
+            className="nodrag h-5 w-full min-w-0 rounded border border-border bg-card px-1 py-px text-[13px] font-medium text-foreground shadow-none outline-none focus-visible:border-border focus-visible:ring-0 dark:bg-card"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={handleSave}
