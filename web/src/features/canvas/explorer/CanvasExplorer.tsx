@@ -284,7 +284,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
             s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
             centerNode(s.nodes.find((n) => n.id === group.id) ?? group);
           }}
-          className={`h-auto min-w-0 flex-1 justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground hover:bg-accent${selected ? " bg-accent" : ""}`}
+          className={`h-auto min-w-0 flex-1 justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground${selected ? " bg-accent text-accent-foreground" : " hover:bg-muted dark:hover:bg-muted"}`}
         >
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded"
@@ -391,7 +391,7 @@ function ElementItemImpl(props: ElementItemProps) {
       aria-label={label || `Node ${node.id}`}
       aria-current={selected ? "true" : undefined}
       variant="ghost"
-      className={`relative h-auto w-full justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground hover:bg-accent${selected ? " bg-accent" : ""}`}
+      className={`relative h-auto w-full justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground${selected ? " bg-accent text-accent-foreground" : " hover:bg-muted dark:hover:bg-muted"}`}
       style={{
         paddingLeft: 8 + depth * ROW_INDENT,
         paddingRight: 8,

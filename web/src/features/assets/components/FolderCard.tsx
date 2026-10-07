@@ -61,7 +61,7 @@ export default function FolderCard({ folder, count, onClick, onDelete, onRename 
           type="button"
           variant="ghost"
           aria-label={folder.name}
-          className="h-full w-full flex-col gap-2 rounded-lg p-3 text-center font-normal"
+          className="h-full w-full flex-col gap-2 rounded-lg p-3 text-center font-normal hover:bg-muted dark:hover:bg-muted"
           onClick={() => onClick(folder)}
         >
           <FolderOutlined className="size-10 text-muted-foreground/40" aria-hidden="true" />

@@ -257,7 +257,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                       variant="ghost"
                       aria-pressed={active}
                       onClick={() => selectProvider(c.id)}
-                      className="relative h-auto w-full justify-start rounded-md px-3 py-2 text-left aria-pressed:bg-muted aria-pressed:text-foreground"
+                      className="relative h-auto w-full justify-start rounded-md px-3 py-2 text-left hover:bg-muted dark:hover:bg-muted aria-pressed:bg-accent aria-pressed:text-accent-foreground"
                     >
                       {active && (
                         <span
@@ -266,7 +266,7 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
                         />
                       )}
                       <div
-                        className={`truncate text-[13px] ${active ? "text-foreground" : "text-muted-foreground"}`}
+                        className={`truncate text-[13px] ${active ? "text-accent-foreground" : "text-muted-foreground"}`}
                       >
                         {c.name}
                       </div>
