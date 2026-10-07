@@ -108,6 +108,17 @@
      UI 控件通过 var() 引用这里，保持单一来源。
      注：MiSans 自托管方案实测小字号发虚（网络字体无小字号 hinting），已移除。 */
   --font-ui: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --brand-lime: #c7f43d;
+  --brand-lime-flow-stops:
+    color-mix(in srgb, var(--brand-lime) 25%, transparent) 0deg,
+    color-mix(in srgb, var(--brand-lime) 25%, transparent) 150deg,
+    var(--brand-lime) 168deg,
+    #fff 178deg,
+    color-mix(in srgb, var(--brand-lime) 25%, transparent) 180deg,
+    color-mix(in srgb, var(--brand-lime) 25%, transparent) 330deg,
+    var(--brand-lime) 348deg,
+    #fff 358deg,
+    color-mix(in srgb, var(--brand-lime) 25%, transparent) 360deg;
   /* 画布框选是领域状态，不属于 shadcn 控件主题。 */
   --marquee-bg: rgba(231, 231, 236, 0.06);
   --marquee-border: rgba(231, 231, 236, 0.38);
@@ -588,15 +599,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   border-radius: inherit;
   background: conic-gradient(
     from var(--connection-ring-angle),
-    color-mix(in srgb, var(--primary) 25%, transparent) 0deg,
-    color-mix(in srgb, var(--primary) 25%, transparent) 150deg,
-    var(--primary) 168deg,
-    #fff 178deg,
-    color-mix(in srgb, var(--primary) 25%, transparent) 180deg,
-    color-mix(in srgb, var(--primary) 25%, transparent) 330deg,
-    var(--primary) 348deg,
-    #fff 358deg,
-    color-mix(in srgb, var(--primary) 25%, transparent) 360deg
+    var(--brand-lime-flow-stops)
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -632,14 +635,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   border-radius: inherit;
   background: conic-gradient(
     from var(--agent-flow-border-angle),
-    rgba(199, 244, 61, 0.22) 0deg,
-    rgba(199, 244, 61, 0.22) 150deg,
-    #c7f43d 168deg,
-    #c7f43d 180deg,
-    rgba(199, 244, 61, 0.22) 180deg,
-    rgba(199, 244, 61, 0.22) 330deg,
-    #c7f43d 348deg,
-    #c7f43d 360deg
+    var(--brand-lime-flow-stops)
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
