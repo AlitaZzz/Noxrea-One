@@ -174,7 +174,7 @@ interface ProjectState {
   createProject: (name?: string) => Promise<CanvasProject>;
   renameProject: (id: string, name: string) => void;
   updateCover: (id: string, coverUrl: string | null) => void;
-  deleteProject: (id: string) => void;
+  deleteProject: (id: string) => Promise<boolean>;
   deleteProjects: (ids: string[]) => void;
   updateProjectRevision: (id: string, revision: number) => void;
   setActiveProject: (id: string) => void;
@@ -293,9 +293,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     })();
   },
 
-  deleteProject: (id) => {
+  deleteProject: async (id) => {
     const session = captureSession();
-    if (rejectOffline()) return;
+    if (rejectOffline()) return false;
     // 失败回滚用：删除是破坏性操作，不能「假删成功」
     const snapshot = get().projects;
     const snapshotActiveId = get().activeProjectId;
@@ -306,13 +306,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         ? (s.projects.find((p) => p.id !== id)?.id ?? null)
         : s.activeProjectId,
     }));
-    void (async () => {
-      const { ok, message } = await apiDeleteProject(id);
-      if (session.signal.aborted) return;
-      if (ok) return;
-      notifyError(message ?? resolveApiError(null, undefined, "project.delete_failed"));
-      set({ projects: snapshot, activeProjectId: snapshotActiveId });
-    })();
+    const { ok, message } = await apiDeleteProject(id);
+    if (session.signal.aborted) return false;
+    if (ok) return true;
+    notifyError(message ?? resolveApiError(null, undefined, "project.delete_failed"));
+    set({ projects: snapshot, activeProjectId: snapshotActiveId });
+    return false;
   },
 
   deleteProjects: (ids) => {

@@ -21,7 +21,7 @@ import {
 import { EyeIcon } from "@/components/ui/AppIcon";
 import { EyeOffIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import ConfirmModal from "@/components/ui/ConfirmModal";
+import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -349,28 +349,23 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
           </div>
           </div>
         </div>
-        <ConfirmModal
+        <DestructiveConfirmModal
           open={deleteOpen}
           title={t("modelConfig.deleteProvider")}
-          content={t("modelConfig.deleteProviderConfirm", {
+          description={t("modelConfig.deleteProviderConfirm", {
             name: provider?.name ?? "",
             count: provider?.models.length ?? 0,
           })}
-          okText={t("common.delete")}
+          confirmText={t("common.delete")}
           cancelText={t("common.cancel")}
-          confirmVariant="destructive"
-          onOk={async () => {
-            if (!providerId) return;
-            try {
-              // 删除失败时不关闭确认框、不重置选择，用户可重试
-              if (await deleteProvider(providerId)) {
-                const rest = useModelStore.getState().providers;
-                setProviderId(rest[0]?.id ?? null);
-                setDeleteOpen(false);
-              }
-            } catch {
-              // 异常已由全局流程处理（清 token + 跳登录）
-            }
+          onConfirm={async () => {
+            if (!providerId) return false;
+            // 删除失败时不关闭确认框、不重置选择，用户可重试。
+            const deleted = await deleteProvider(providerId);
+            if (!deleted) return false;
+            const rest = useModelStore.getState().providers;
+            setProviderId(rest[0]?.id ?? null);
+            return true;
           }}
           onCancel={() => setDeleteOpen(false)}
         />

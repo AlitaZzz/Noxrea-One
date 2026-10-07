@@ -14,7 +14,7 @@ import AppShell from "@/components/layout/AppShell";
 import { CheckOutlined, ChevronDownIcon, ClockCircleOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import ConfirmModal from "@/components/ui/ConfirmModal";
+import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
@@ -318,14 +318,13 @@ export default function ProjectListPage() {
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <ConfirmModal
+      <DestructiveConfirmModal
         open={!!deleteTarget}
         title={t("project.delete")}
-        content={t("project.deleteConfirm", { name: deleteTarget?.name ?? "" })}
-        okText={t("common.delete")}
-        confirmVariant="destructive"
+        description={t("project.deleteConfirm", { name: deleteTarget?.name ?? "" })}
+        confirmText={t("common.delete")}
         cancelText={t("common.cancel")}
-        onOk={() => { if (deleteTarget) deleteProject(deleteTarget.id); setDeleteTarget(null); }}
+        onConfirm={() => deleteTarget ? deleteProject(deleteTarget.id) : false}
         onCancel={() => setDeleteTarget(null)}
       />
       </div>

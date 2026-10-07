@@ -41,6 +41,7 @@ import { DirUploadIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
@@ -1418,19 +1419,19 @@ export default function InfiniteCanvas() {
         onClose={() => setSettingsOpen(false)}
       />
 
-      <ConfirmModal
+      <DestructiveConfirmModal
         open={deleteConfirmOpen}
         title={t("project.delete")}
-        content={t("project.deleteConfirm", { name: projectName })}
-        okText={t("common.delete")}
-        confirmVariant="destructive"
+        description={t("project.deleteConfirm", { name: projectName })}
+        confirmText={t("common.delete")}
         cancelText={t("common.cancel")}
-        onOk={async () => {
+        onConfirm={async () => {
           await flushAndWait();
           const activeId = useProjectStore.getState().activeProjectId;
-          if (activeId) useProjectStore.getState().deleteProject(activeId);
-          setDeleteConfirmOpen(false);
-          router.push("/project");
+          if (!activeId) return false;
+          const deleted = await useProjectStore.getState().deleteProject(activeId);
+          if (deleted) router.push("/project");
+          return deleted;
         }}
         onCancel={() => setDeleteConfirmOpen(false)}
       />

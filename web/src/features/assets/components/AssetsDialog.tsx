@@ -15,7 +15,7 @@ import { AssetsIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
-import ConfirmModal from "@/components/ui/ConfirmModal";
+import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -79,11 +79,9 @@ export default function AssetsDialog({ open, onClose }: Props) {
   // Delete confirm state —— 单个资产与批量删除各自独立，避免确认文案与实际删除集合不一致。
   const [deleteAsset, setDeleteAsset] = useState<AssetItem | null>(null);
   const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // Delete folder confirm state
   const [deleteFolder, setDeleteFolder] = useState<AssetFolder | null>(null);
-  const [folderDeleting, setFolderDeleting] = useState(false);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -239,22 +237,19 @@ export default function AssetsDialog({ open, onClose }: Props) {
 
   const handleBatchDeleteConfirm = useCallback(async () => {
     const ids = [...selectedIds];
-    setDeleting(true);
+    if (ids.length === 0) return false;
     const result = await removeAssetsBatch(ids);
-    setDeleting(false);
-    if (!result.ok) return;
+    if (!result.ok) return false;
     await removeItems(ids);
     setSelectedIds(new Set());
     setMultiSelectMode(false);
-    setBatchDeleteOpen(false);
+    return true;
   }, [selectedIds, removeAssetsBatch, removeItems]);
 
   const handleSingleDeleteConfirm = useCallback(async () => {
-    if (!deleteAsset) return;
-    setDeleting(true);
+    if (!deleteAsset) return false;
     const result = await removeAssetsBatch([deleteAsset.id]);
-    setDeleting(false);
-    if (!result.ok) return;
+    if (!result.ok) return false;
     await removeItems([deleteAsset.id]);
     setSelectedIds((prev) => {
       if (!prev.has(deleteAsset.id)) return prev;
@@ -262,7 +257,7 @@ export default function AssetsDialog({ open, onClose }: Props) {
       next.delete(deleteAsset.id);
       return next;
     });
-    setDeleteAsset(null);
+    return true;
   }, [deleteAsset, removeAssetsBatch, removeItems]);
 
   const handleBatchMove = useCallback(async (folderId: string) => {
@@ -434,12 +429,10 @@ export default function AssetsDialog({ open, onClose }: Props) {
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
 
   const handleDeleteFolderConfirm = useCallback(async () => {
-    if (!deleteFolder || folderDeleting) return;
+    if (!deleteFolder) return false;
     const deletedId = deleteFolder.id;
-    setFolderDeleting(true);
     const removed = await removeFolder(deletedId);
-    setFolderDeleting(false);
-    if (!removed) return;
+    if (!removed) return false;
     // 只有删除成功才把用户切回根目录；失败原因由 store 统一通知
     if (activeFolderId) {
       let cur: string | null = activeFolderId;
@@ -448,11 +441,11 @@ export default function AssetsDialog({ open, onClose }: Props) {
         if (cur === deletedId) { within = true; break; }
         cur = folders.find((f) => f.id === cur)?.parentId || null;
       }
-      if (within) { setActiveFolderId(null); clearSelection(); setSearch(""); }
+      if (within) { setActiveFolderId(null); setSearch(""); }
     }
     clearSelection();
-    setDeleteFolder(null);
-  }, [deleteFolder, folderDeleting, removeFolder, activeFolderId, folders, clearSelection]);
+    return true;
+  }, [deleteFolder, removeFolder, activeFolderId, folders, clearSelection]);
 
   // Breadcrumb data
   const breadCrumb = useMemo((): AssetFolder[] => {
@@ -671,44 +664,31 @@ export default function AssetsDialog({ open, onClose }: Props) {
           </DialogContent>
         </Dialog>
 
-        <ConfirmModal
+        <DestructiveConfirmModal
           open={!!deleteAsset}
           global
           title={t("asset.delete")}
-          content={t("asset.deleteConfirm", { name: deleteAsset?.name || "" })}
-          okText={t("common.delete")}
-          cancelText={t("common.cancel")}
-          confirmVariant="destructive"
-          confirmLoading={deleting}
-          onOk={handleSingleDeleteConfirm}
-          onCancel={() => { if (!deleting) setDeleteAsset(null); }}
+          description={t("asset.deleteConfirm", { name: deleteAsset?.name || "" })}
+          onConfirm={handleSingleDeleteConfirm}
+          onCancel={() => setDeleteAsset(null)}
         />
 
-        <ConfirmModal
+        <DestructiveConfirmModal
           open={batchDeleteOpen}
           global
           title={t("asset.delete")}
-          content={t("asset.batchDeleteWarn", { count: selectedIds.size })}
-          okText={t("common.delete")}
-          cancelText={t("common.cancel")}
-          confirmVariant="destructive"
-          confirmLoading={deleting}
-          onOk={handleBatchDeleteConfirm}
-          onCancel={() => { if (!deleting) setBatchDeleteOpen(false); }}
+          description={t("asset.batchDeleteWarn", { count: selectedIds.size })}
+          onConfirm={handleBatchDeleteConfirm}
+          onCancel={() => setBatchDeleteOpen(false)}
         />
 
-        <ConfirmModal
+        <DestructiveConfirmModal
           open={!!deleteFolder}
           global
           title={t("asset.folder.delete")}
-          content={t("asset.folder.deleteWarn", { name: deleteFolder?.name || "" })}
-          okText={t("common.delete")}
-          cancelText={t("common.cancel")}
-          confirmVariant="destructive"
-          confirmLoading={folderDeleting}
-          onOk={handleDeleteFolderConfirm}
+          description={t("asset.folder.deleteWarn", { name: deleteFolder?.name || "" })}
+          onConfirm={handleDeleteFolderConfirm}
           onCancel={() => {
-            if (folderDeleting) return;
             setDeleteFolder(null);
             setSelectedIds(new Set());
           }}
