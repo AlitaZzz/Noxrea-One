@@ -7,21 +7,28 @@
 import "@/lib/i18n/config";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppUiProvider from "@/components/ui/AppUiProvider";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
-import { setUnauthorizedHandler } from "@/lib/api/client";
+import { setUnauthorizedHandler, setUnauthorizedNavigationHandler } from "@/lib/api/client";
 import { loadUploadFormats } from "@/lib/upload-formats";
 
 /** 401 的登出动作属于 auth feature，由 app 层注入给 lib/api/client，避免 lib 反向依赖 feature */
 function UnauthorizedHandlerRegistrar() {
   const logout = useAuthStore((s) => s.logout);
+  const router = useRouter();
   useEffect(() => {
     setUnauthorizedHandler(logout);
-  }, [logout]);
+    setUnauthorizedNavigationHandler(() => router.replace("/login"));
+    return () => {
+      setUnauthorizedHandler(null);
+      setUnauthorizedNavigationHandler(null);
+    };
+  }, [logout, router]);
   return null;
 }
 

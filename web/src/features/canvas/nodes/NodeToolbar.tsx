@@ -290,22 +290,13 @@ function NodeToolbar({
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [groupColorOpen, setGroupColorOpen] = useState(false);
-  const dismissFocusRef = useRef(false);
   const previousDismissSignal = useRef(dismissSignal);
-  const resetDismissFocus = useCallback(() => {
-    dismissFocusRef.current = false;
-  }, []);
-  const handleMenuCloseAutoFocus = useCallback((event: Event) => {
-    if (dismissFocusRef.current) {
-      dismissFocusRef.current = false;
-      event.preventDefault();
-    }
-  }, []);
+  const [preserveFocusOnDismiss, setPreserveFocusOnDismiss] = useState(false);
 
   useEffect(() => {
     if (previousDismissSignal.current === dismissSignal) return;
     previousDismissSignal.current = dismissSignal;
-    dismissFocusRef.current = true;
+    setPreserveFocusOnDismiss(true);
     setCreationOpen(false);
     setTransformOpen(false);
     setLayoutOpen(false);
@@ -343,7 +334,7 @@ function NodeToolbar({
             </TooltipTrigger><TooltipContent>{t("node.panorama")}</TooltipContent></Tooltip>
           {/* Edit */}
           <DropdownMenu open={transformOpen} onOpenChange={(open) => {
-            if (open) resetDismissFocus();
+            if (open) setPreserveFocusOnDismiss(false);
             setTransformOpen(open);
           }}>
             <Tooltip><TooltipTrigger asChild>
@@ -351,7 +342,7 @@ function NodeToolbar({
                   <Button size="icon" variant="ghost" disabled={!assetSrc}><RotateRightOutlined /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("node.transform")}</TooltipContent></Tooltip>
-            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss}>
               <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "transform", { op: "rot90" })}>
                 <RotateRightOutlined />{t("node.rotate90")}
               </DropdownMenuItem>
@@ -374,7 +365,7 @@ function NodeToolbar({
           <Popover
             open={gridOpen}
             onOpenChange={(open) => {
-              if (open) resetDismissFocus();
+              if (open) setPreserveFocusOnDismiss(false);
               onGridOpenChange(nodeId, open);
             }}
           >
@@ -392,7 +383,7 @@ function NodeToolbar({
               side="bottom"
               align="center"
               className="w-80 max-w-[calc(100vw-2rem)] p-3"
-              onCloseAutoFocus={handleMenuCloseAutoFocus}
+              restoreFocus={!preserveFocusOnDismiss}
             >
               <GridPicker nodeId={nodeId} onSelect={() => onGridOpenChange(nodeId, false)} />
             </PopoverContent>
@@ -412,7 +403,7 @@ function NodeToolbar({
           <Popover
             open={creationOpen}
             onOpenChange={(open) => {
-              if (open) resetDismissFocus();
+              if (open) setPreserveFocusOnDismiss(false);
               setCreationOpen(open);
             }}
           >
@@ -426,7 +417,7 @@ function NodeToolbar({
               </TooltipTrigger>
               <TooltipContent>{t("node.creation")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1" restoreFocus={!preserveFocusOnDismiss}>
               <PresetMenuContent
                 catalog={templateCatalog}
                 onSelect={(presetId) => { setCreationOpen(false); dispatchNodeAction(nodeId, "create-template", { templateId: presetId }); }}
@@ -452,7 +443,7 @@ function NodeToolbar({
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <DropdownMenu open={captureOpen} onOpenChange={(open) => {
-            if (open) resetDismissFocus();
+            if (open) setPreserveFocusOnDismiss(false);
             setCaptureOpen(open);
           }}>
             <Tooltip><TooltipTrigger asChild>
@@ -460,7 +451,7 @@ function NodeToolbar({
                   <Button size="icon" variant="ghost" disabled={!assetSrc}><FrameCaptureIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("node.captureFrame")}</TooltipContent></Tooltip>
-            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss}>
               <DropdownMenuItem onSelect={() => onOpenFrameStrip(nodeId)}>
                 <FrameCaptureIcon />{t("capture.currentFrame")}
               </DropdownMenuItem>
@@ -571,7 +562,7 @@ function NodeToolbar({
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Popover open={groupColorOpen} onOpenChange={(open) => {
-            if (open) resetDismissFocus();
+            if (open) setPreserveFocusOnDismiss(false);
             setGroupColorOpen(open);
           }}>
             <Tooltip>
@@ -593,12 +584,12 @@ function NodeToolbar({
               </TooltipTrigger>
               <TooltipContent>{t("node.groupColor")}</TooltipContent>
             </Tooltip>
-            <PopoverContent side="bottom" align="center" className="w-auto p-2" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <PopoverContent side="bottom" align="center" className="w-auto p-2" restoreFocus={!preserveFocusOnDismiss}>
               <GroupColorPicker nodeId={nodeId} current={groupColor} />
             </PopoverContent>
           </Popover>
           <DropdownMenu open={layoutOpen} onOpenChange={(open) => {
-            if (open) resetDismissFocus();
+            if (open) setPreserveFocusOnDismiss(false);
             setLayoutOpen(open);
           }}>
             <Tooltip><TooltipTrigger asChild>
@@ -606,7 +597,7 @@ function NodeToolbar({
                   <Button size="icon" variant="ghost"><GroupGridIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("common.layout")}</TooltipContent></Tooltip>
-            <DropdownMenuContent side="bottom" align="center" onCloseAutoFocus={handleMenuCloseAutoFocus}>
+            <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss}>
               <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
                 <GridLayoutIcon />{t("node.gridLayout")}
               </DropdownMenuItem>

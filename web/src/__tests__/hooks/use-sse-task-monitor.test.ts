@@ -60,6 +60,18 @@ function stalledResponse() {
   return { ok: true, body } as unknown as Response;
 }
 
+function deferredResponse() {
+  let close!: () => void;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      close = () => {
+        controller.close();
+      };
+    },
+  });
+  return { response: { ok: true, body } as unknown as Response, close };
+}
+
 const terminalFrame = (evt: TaskStatusEvent) =>
   [`event: status\ndata: ${JSON.stringify({ type: "status", ...evt })}\n\n`];
 
@@ -257,5 +269,32 @@ describe("useSseTaskMonitor", () => {
       });
       expect(mocks.cancelGenerationTask).not.toHaveBeenCalled();
     }, 20_000);
+
+    it("旧连接结束时不会摘掉同 taskId 的新连接", async () => {
+      addWatchedNode("n1", "t1");
+      const first = deferredResponse();
+      const second = deferredResponse();
+      mocks.streamGenerationTask
+        .mockResolvedValueOnce(first.response)
+        .mockResolvedValueOnce(second.response);
+
+      renderHook(() => useSseTaskMonitor(notif));
+      await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(1));
+      const firstSignal = mocks.streamGenerationTask.mock.calls[0][1] as AbortSignal;
+
+      act(() => {
+        useCanvasStore.setState({ nodes: [] });
+      });
+      await waitFor(() => expect(firstSignal.aborted).toBe(true), { timeout: 6_000 });
+
+      act(() => {
+        addWatchedNode("n1", "t1");
+      });
+      await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(2), { timeout: 6_000 });
+
+      first.close();
+      await new Promise((resolve) => setTimeout(resolve, 3_200));
+      expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(2);
+    }, 15_000);
   });
 });

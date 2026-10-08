@@ -54,8 +54,6 @@ interface Props { nodeId: string; }
 const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Props) {
   const { t, i18n } = useTranslation();
   const providers = useModelStore((s) => s.providers);
-  const findModelParams = useModelStore((s) => s.findModelParams);
-  const modelParamsCache = useModelStore((s) => s.modelParamsCache);
   const allModels = useMemo(() => providers.flatMap((c) =>
     c.models.filter((m) => m.capabilities?.includes("image")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
@@ -69,12 +67,11 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const modelKey = resolveModelKey(genSettings?.modelKey, "image", allModels);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
-  // 订阅 modelParamsCache：缓存晚于挂载到达时能触发重算
-  const modelParams = useMemo(() => {
+  // 直接从 store selector 读取，模型参数缓存更新时会重新计算并触发面板重渲染。
+  const modelParams = useModelStore((state) => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.providerId, entry.name, "image") : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelKey, allModels, findModelParams, modelParamsCache]);
+    return entry ? state.findModelParams(entry.providerId, entry.name, "image") : null;
+  });
 
   const defaults = useMemo(
     () => (Array.isArray(modelParams?.fields) ? fieldDefaults(modelParams.fields) : {}),

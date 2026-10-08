@@ -36,7 +36,7 @@ export class TransformGizmo {
     });
 
     this.control.addEventListener("objectChange", () => {
-      this._onObjectChange && this._onObjectChange();
+      this._onObjectChange?.();
     });
   }
 

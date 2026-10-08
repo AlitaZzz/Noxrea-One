@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverAnchorPortal, PopoverContent } from "@/components/ui/popover";
 
 import { type ReferenceItem, refLabelKey } from "./reference";
 
@@ -43,14 +43,16 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
         if (!nextOpen) onClose();
       }}
     >
-      <PopoverAnchor asChild>
-        <span
-          aria-hidden="true"
-          tabIndex={-1}
-          className="fixed size-px pointer-events-none"
-          style={{ left: position.x, top: position.y }}
-        />
-      </PopoverAnchor>
+      <PopoverAnchorPortal>
+        <PopoverAnchor asChild>
+          <span
+            aria-hidden="true"
+            tabIndex={-1}
+            className="fixed size-px pointer-events-none"
+            style={{ left: position.x, top: position.y }}
+          />
+        </PopoverAnchor>
+      </PopoverAnchorPortal>
       <PopoverContent
         ref={listRef}
         side="bottom"
@@ -58,17 +60,9 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
         sideOffset={4}
         collisionPadding={8}
         className="max-h-[300px] w-[220px] overflow-x-hidden p-1"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onCloseAutoFocus={(event) => event.preventDefault()}
-        onInteractOutside={(event) => {
-          // Keep the editor focused when the user clicks back into it. Other
-          // controls must retain the shared Popover's normal focus handoff.
-          const target = event.target;
-          if (target instanceof HTMLElement && target.closest(".mention-editable")) {
-            event.preventDefault();
-          }
-          onClose();
-        }}
+        focusOnOpen={false}
+        restoreFocus={false}
+        preserveFocusOutsideSelector=".mention-editable"
       >
       {items.map((item, i) => (
         <Button

@@ -60,6 +60,7 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
   const notifiedTasksRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    const sseControllers = sseCtrlsRef.current;
     let timer: ReturnType<typeof setInterval> | null = null;
     let cleanupListeners: (() => void) | null = null;
     // 卸载后 reconcile 不再落地：allSettled 期间卸载时，响应仍会回来，
@@ -200,25 +201,25 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
       // 3. 该语义与参考实现 open-ai-canvas-main 一致（其节点删除只清 UI 态，
       //    "A historical taskId is not a lock"）。
       // 语义锁定测试：__tests__/hooks/use-sse-task-monitor.test.ts「GEN-02 语义锁定」组。
-      for (const [id, ctrl] of sseCtrlsRef.current) {
+      for (const [id, ctrl] of sseControllers) {
         if (activeTaskIds.has(id)) continue;
         ctrl.abort();
-        sseCtrlsRef.current.delete(id);
+        sseControllers.delete(id);
       }
       for (const node of allNodes) {
         const binding = (node.data as MediaGenFields).taskBinding;
         if (!binding?.taskId) continue;
         if (binding.status !== "pending" && binding.status !== "processing") continue;
-        if (sseCtrlsRef.current.has(binding.taskId)) continue;
+        if (sseControllers.has(binding.taskId)) continue;
 
         const taskId = binding.taskId;
         const nodeId = node.id;
         const ctrl = new AbortController();
-        sseCtrlsRef.current.set(taskId, ctrl);
+        sseControllers.set(taskId, ctrl);
         /** 收尾：先摘表再中断连接。
          *  只摘表不 abort 的话，未读完的流会一直挂着，且卸载时已无法找到它。 */
         const finish = () => {
-          sseCtrlsRef.current.delete(taskId);
+          if (sseControllers.get(taskId) === ctrl) sseControllers.delete(taskId);
           ctrl.abort();
         };
 
@@ -318,8 +319,8 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
       disposed = true;
       if (timer) clearInterval(timer);
       cleanupListeners?.();
-      for (const ctrl of sseCtrlsRef.current.values()) ctrl.abort();
-      sseCtrlsRef.current.clear();
+      for (const ctrl of sseControllers.values()) ctrl.abort();
+      sseControllers.clear();
     };
   }, []);
 }

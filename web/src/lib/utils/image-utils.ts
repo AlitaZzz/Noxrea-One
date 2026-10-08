@@ -268,14 +268,12 @@ export function findDerivedSlot(
  * 不压已有内容。
  *
  * @param nodes  需要避开的节点（现有画布节点）
- * @param source 源节点（决定基准点，可空）
  * @param layout computeDerivedGrid 的返回值
  * @param count  本批节点总数
  * @returns 无碰撞的网格起点（对应 layout.baseX / baseY 的替换值）
  */
 export function findDerivedBatchOrigin(
   nodes: LayoutNode[],
-  source: LayoutNode | undefined,
   layout: DerivedGridLayout,
   count: number,
 ): { x: number; y: number } {

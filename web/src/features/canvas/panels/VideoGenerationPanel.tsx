@@ -51,7 +51,6 @@ interface Props { nodeId: string; }
 const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
   const { t } = useTranslation();
   const providers = useModelStore((s) => s.providers);
-  const findModelParams = useModelStore((s) => s.findModelParams);
   const allModels = useMemo(() => providers.flatMap((c) =>
     c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
   ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
@@ -64,11 +63,10 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const modelKey = resolveModelKey(genSettings?.modelKey, "video", allModels);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
-  const modelParamsCache = useModelStore((s) => s.modelParamsCache);
-  const modelParams = useMemo(() => {
+  const modelParams = useModelStore((state) => {
     const entry = allModels.find((m) => m.value === modelKey);
-    return entry ? findModelParams(entry.providerId, entry.name, "video") : null;
-  }, [modelKey, allModels, findModelParams, modelParamsCache]);
+    return entry ? state.findModelParams(entry.providerId, entry.name, "video") : null;
+  });
 
   const defaults = useMemo(
     () => (Array.isArray(modelParams?.fields) ? fieldDefaults(modelParams.fields) : {}),
@@ -104,7 +102,10 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   }, [allModels, genSettings?.modelKey, nodeId]);
 
   // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
-  const refModeOptions = modelParams?.capabilities?.refMode?.options ?? [];
+  const refModeOptions = useMemo(
+    () => modelParams?.capabilities?.refMode?.options ?? [],
+    [modelParams?.capabilities?.refMode?.options],
+  );
 
   // fields 为唯一数据源：渲染控件 + 默认值
   const fields = Array.isArray(modelParams?.fields) ? modelParams.fields : [];

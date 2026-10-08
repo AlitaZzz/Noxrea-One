@@ -19,7 +19,6 @@ import StarterKit from "@tiptap/starter-kit";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import { exitSuggestion } from "@tiptap/suggestion";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import MentionChip from "./MentionChip";
@@ -395,38 +394,36 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
       <div className="scrollbar-ui w-full min-h-[100px] max-h-[240px] overflow-y-auto rounded-md border-0 bg-transparent p-0">
         <EditorContent editor={editor} />
       </div>
-      {mention && mention.items.length > 0 &&
-        createPortal(
-          <MentionDropdown
-            items={mention.items}
-            position={mention.position}
-            selectedIndex={selectedIndex}
-            onHover={(index) => {
-              const target = editor ? bridges.get(editor.view.dom) : undefined;
-              if (!target) return;
-              target.selectedIndex = index;
-              setSelectedIndex(index);
-            }}
-            onSelect={(item) => {
-              const target = editor ? bridges.get(editor.view.dom) : undefined;
-              target?.command?.(item);
-            }}
-            onClose={() => {
-              if (editor && !editor.isDestroyed) {
-                const bridge = bridges.get(editor.view.dom);
-                if (bridge) {
-                  dismissMention(bridge, setMention);
-                } else {
-                  setMention(null);
-                }
-                exitSuggestion(editor.view);
-                return;
+      {mention && mention.items.length > 0 && (
+        <MentionDropdown
+          items={mention.items}
+          position={mention.position}
+          selectedIndex={selectedIndex}
+          onHover={(index) => {
+            const target = editor ? bridges.get(editor.view.dom) : undefined;
+            if (!target) return;
+            target.selectedIndex = index;
+            setSelectedIndex(index);
+          }}
+          onSelect={(item) => {
+            const target = editor ? bridges.get(editor.view.dom) : undefined;
+            target?.command?.(item);
+          }}
+          onClose={() => {
+            if (editor && !editor.isDestroyed) {
+              const bridge = bridges.get(editor.view.dom);
+              if (bridge) {
+                dismissMention(bridge, setMention);
+              } else {
+                setMention(null);
               }
-              setMention(null);
-            }}
-          />,
-          document.body,
-        )}
+              exitSuggestion(editor.view);
+              return;
+            }
+            setMention(null);
+          }}
+        />
+      )}
     </div>
   );
 };

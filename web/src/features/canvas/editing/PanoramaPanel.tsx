@@ -275,7 +275,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       const COLS = COUNT <= 4 ? 2 : 4;
       const layout = computeDerivedGrid(origNode, frameW, frameH, COLS);
       // 目标区域被占（上一批截图 / 用户手动摆放）时整批平移到空区域
-      const origin = findDerivedBatchOrigin(absNodes, origNode, layout, COUNT);
+      const origin = findDerivedBatchOrigin(absNodes, layout, COUNT);
       layout.baseX = origin.x;
       layout.baseY = origin.y;
 

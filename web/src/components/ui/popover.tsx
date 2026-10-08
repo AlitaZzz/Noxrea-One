@@ -18,18 +18,36 @@ function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverPrimitiv
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 
+function PopoverAnchorPortal({
+  children,
+  container,
+}: {
+  children: React.ReactNode
+  container?: Element | DocumentFragment | null
+}) {
+  return <PopoverPrimitive.Portal container={container}>{children}</PopoverPrimitive.Portal>
+}
+
+type PopoverContentProps = Omit<
+  React.ComponentProps<typeof PopoverPrimitive.Content>,
+  "onOpenAutoFocus" | "onCloseAutoFocus" | "onInteractOutside" | "onPointerDown"
+> & {
+  focusOnOpen?: boolean
+  restoreFocus?: boolean
+  preserveFocusOutsideSelector?: string
+}
+
 function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
-  onOpenAutoFocus,
-  onCloseAutoFocus,
-  onInteractOutside,
-  onPointerDown,
+  focusOnOpen = true,
+  restoreFocus = true,
+  preserveFocusOutsideSelector,
   style,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
-  // Radix restores the trigger on close; pointer actions should keep the browser's current focus.
+}: PopoverContentProps) {
+  // Radix restores the trigger on keyboard and internal actions; outside pointer actions keep the browser's focus.
   const pointerInteractionRef = React.useRef(false)
   const layerZIndex = useLayerZIndex()
 
@@ -45,25 +63,24 @@ function PopoverContent({
         )}
         onOpenAutoFocus={(event) => {
           pointerInteractionRef.current = false
-          onOpenAutoFocus?.(event)
-        }}
-        onPointerDown={(event) => {
-          onPointerDown?.(event)
-          if (!event.defaultPrevented) pointerInteractionRef.current = true
+          if (!focusOnOpen) event.preventDefault()
         }}
         onInteractOutside={(event) => {
-          onInteractOutside?.(event)
-          if (event.defaultPrevented) return
-
+          if (event.detail.originalEvent.type !== "pointerdown") return
           pointerInteractionRef.current = true
+          const target = event.target
+          const preserveFocus =
+            preserveFocusOutsideSelector &&
+            target instanceof Element &&
+            target.closest(preserveFocusOutsideSelector)
+          if (preserveFocus) return
           const activeElement = document.activeElement
           if (activeElement instanceof HTMLElement) activeElement.blur()
         }}
         onCloseAutoFocus={(event) => {
-          onCloseAutoFocus?.(event)
           const pointerInteraction = pointerInteractionRef.current
           pointerInteractionRef.current = false
-          if (pointerInteraction && !event.defaultPrevented) event.preventDefault()
+          if ((pointerInteraction || !restoreFocus) && !event.defaultPrevented) event.preventDefault()
         }}
         style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}
@@ -72,4 +89,4 @@ function PopoverContent({
   )
 }
 
-export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger }
+export { Popover, PopoverAnchor, PopoverAnchorPortal, PopoverContent, PopoverTrigger }

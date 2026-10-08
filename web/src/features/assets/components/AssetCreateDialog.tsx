@@ -138,13 +138,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     return Promise.resolve();
   }, []);
 
-  // Clear local state — 不删物理文件，去重体系下取消上传时文件继续保留
-  const reset = () => {
-    clearState();
-  };
-
   // Clear local state only — used after save (files are now referenced by asset records)
-  const clearState = () => {
+  const clearState = useCallback(() => {
     // 卡片已全部移除，blob: URL 不再被引用，必须显式回收
     releaseUrls();
     setFiles([]);
@@ -152,7 +147,12 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     setSaveFolderId(normalizeFolderId(folders, defaultFolderId));
     setSaving(false);
     resetTreeSearch();
-  };
+  }, [defaultFolderId, folders, releaseUrls, resetTreeSearch]);
+
+  // Clear local state — 不删物理文件，去重体系下取消上传时文件继续保留
+  const reset = useCallback(() => {
+    clearState();
+  }, [clearState]);
 
   const addFiles = useCallback(async (newFiles: FileList | File[]) => {
     const list = Array.from(newFiles);
@@ -298,7 +298,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
 
     clearState();
     onClose();
-  }, [category, saveFolderId, onCreate, onClose, waitAllDone, message, t]);
+  }, [category, clearState, saveFolderId, onCreate, onClose, waitAllDone, message, t]);
 
   const hasActiveWork = files.some((f) => f.status === "ready" || f.status === "uploading");
   const saveDisabled = files.length === 0 || hasActiveWork || saveFolderId === null;

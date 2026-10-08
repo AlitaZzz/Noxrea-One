@@ -65,7 +65,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         "data-text-editor": "",
       },
       // 粘贴纯文本时按 Markdown 解析；富文本粘贴（含 HTML）仍走默认解析
-      handlePaste: (view, event) => {
+      handlePaste: (_view, event) => {
         const editorInstance = editorRef.current;
         if (!editorInstance) return false;
         if (event.clipboardData?.getData("text/html")) return false;

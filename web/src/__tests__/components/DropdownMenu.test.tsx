@@ -113,7 +113,7 @@ describe("DropdownMenu", () => {
     await waitFor(() => expect(document.activeElement).not.toBe(trigger));
   });
 
-  it("does not restore trigger focus after selecting an item with the pointer", async () => {
+  it("restores trigger focus after selecting an item with the pointer", async () => {
     function MenuHarness() {
       const [open, setOpen] = useState(true);
       return (
@@ -136,6 +136,6 @@ describe("DropdownMenu", () => {
     fireEvent.pointerDown(item);
     fireEvent.click(item);
 
-    await waitFor(() => expect(document.activeElement).not.toBe(trigger));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });

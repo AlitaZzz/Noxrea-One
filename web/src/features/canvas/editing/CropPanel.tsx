@@ -174,7 +174,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
       if (r.h < 0) { r.y += r.h; r.h = -r.h; }
     }
     setCrop(clampRect(r, aspect));
-  }, [getFraction, aspect, clampRect]);
+  }, [getFraction, aspect, clampRect, displaySize.h, displaySize.w]);
 
   const handlePointerUp = useCallback(() => {
     dragRef.current = null;

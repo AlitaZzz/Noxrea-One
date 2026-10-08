@@ -323,7 +323,7 @@ export function isNodeInUiState(ui: NodeUiStateSnapshot, nodeId: string): boolea
 }
 
 /** 互斥写入口：id 非空时清空其余编辑态；id 为空时仅清自身（避免误关别处刚打开的面板） */
-function applyNodeUiState(s: CanvasState, key: NodeUiStateKey, id: string | null): Partial<CanvasState> {
+function applyNodeUiState(key: NodeUiStateKey, id: string | null): Partial<CanvasState> {
   if (id === null) return { [key]: null } as Partial<CanvasState>;
   const patch: Partial<CanvasState> = {};
   for (const k of NODE_UI_STATE_KEYS) {
@@ -466,25 +466,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setModalOpen: (v) => set({ modalOpen: v }),
 
   annotatingNodeId: null,
-  setAnnotatingNodeId: (id) => set((s) => applyNodeUiState(s, "annotatingNodeId", id)),
+  setAnnotatingNodeId: (id) => set(() => applyNodeUiState("annotatingNodeId", id)),
   croppingNodeId: null,
-  setCroppingNodeId: (id) => set((s) => applyNodeUiState(s, "croppingNodeId", id)),
+  setCroppingNodeId: (id) => set(() => applyNodeUiState("croppingNodeId", id)),
   editingTextNodeId: null,
-  setEditingTextNodeId: (id) => set((s) => applyNodeUiState(s, "editingTextNodeId", id)),
+  setEditingTextNodeId: (id) => set(() => applyNodeUiState("editingTextNodeId", id)),
   frameCaptureNodeId: null,
-  setFrameCaptureNodeId: (id) => set((s) => applyNodeUiState(s, "frameCaptureNodeId", id)),
+  setFrameCaptureNodeId: (id) => set(() => applyNodeUiState("frameCaptureNodeId", id)),
   clipCaptureNodeId: null,
-  setClipCaptureNodeId: (id) => set((s) => applyNodeUiState(s, "clipCaptureNodeId", id)),
+  setClipCaptureNodeId: (id) => set(() => applyNodeUiState("clipCaptureNodeId", id)),
   audioClipNodeId: null,
-  setAudioClipNodeId: (id) => set((s) => applyNodeUiState(s, "audioClipNodeId", id)),
+  setAudioClipNodeId: (id) => set(() => applyNodeUiState("audioClipNodeId", id)),
   multiExpandedNodeId: null,
-  setMultiExpandedNodeId: (id) => set((s) => applyNodeUiState(s, "multiExpandedNodeId", id)),
+  setMultiExpandedNodeId: (id) => set(() => applyNodeUiState("multiExpandedNodeId", id)),
   lightingNodeId: null,
-  setLightingNodeId: (id) => set((s) => applyNodeUiState(s, "lightingNodeId", id)),
+  setLightingNodeId: (id) => set(() => applyNodeUiState("lightingNodeId", id)),
   angleEditorNodeId: null,
-  setAngleEditorNodeId: (id) => set((s) => applyNodeUiState(s, "angleEditorNodeId", id)),
+  setAngleEditorNodeId: (id) => set(() => applyNodeUiState("angleEditorNodeId", id)),
   panoramaNodeId: null,
-  setPanoramaNodeId: (id) => set((s) => applyNodeUiState(s, "panoramaNodeId", id)),
+  setPanoramaNodeId: (id) => set(() => applyNodeUiState("panoramaNodeId", id)),
 
   closeForeignNodeEditors: (nodeId) => {
     set((s) => {

@@ -38,7 +38,7 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
         const origNode = absNodes.find((n) => n.id === sourceId);
         const layout = computeDerivedGrid(origNode, pieceW, pieceH, cols);
         // 目标区域被占（上一批切分 / 用户手动摆放）时整批平移到空区域
-        const origin = findDerivedBatchOrigin(absNodes, origNode, layout, rows * cols);
+        const origin = findDerivedBatchOrigin(absNodes, layout, rows * cols);
         layout.baseX = origin.x;
         layout.baseY = origin.y;
 

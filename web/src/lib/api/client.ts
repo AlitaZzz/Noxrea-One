@@ -19,12 +19,17 @@ export const BASE = "";
 // 登出动作属于 auth feature：lib 不得反向依赖 feature，故由上层注入处理函数
 // （注册方见 AppProviders），而非在此 import store。
 type UnauthorizedHandler = () => Promise<void> | void;
+type UnauthorizedNavigationHandler = () => void;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
+let unauthorizedNavigationHandler: UnauthorizedNavigationHandler | null = null;
 
 /** 注入 401 时的登出处理，由 app 层用 auth store 的 logout 注册 */
-export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
   unauthorizedHandler = handler;
+}
+export function setUnauthorizedNavigationHandler(handler: UnauthorizedNavigationHandler | null): void {
+  unauthorizedNavigationHandler = handler;
 }
 export class UnauthorizedError extends Error {
   constructor() {
@@ -65,7 +70,7 @@ async function handleUnauthorized() {
   try {
     sessionStorage.setItem(SESSION_EXPIRED_FLAG, "1");
   } catch { /* sessionStorage 不可用（隐私模式等）时静默跳过提示 */ }
-  window.location.href = "/login";
+  unauthorizedNavigationHandler?.();
 }
 
 /** 检查 HTTP 状态码，401 时触发全局登出流程。返回 true 表示已处理。 */

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const login = vi.hoisted(() => vi.fn());
 vi.mock("@/features/auth/api", () => ({ authApi: { login } }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key }, setAppLanguage: vi.fn() }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ i18n: { language: "zh" } }) }));
 vi.mock("@/lib/upload-formats", () => ({ loadUploadFormats: async () => undefined }));

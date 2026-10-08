@@ -11,6 +11,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -48,6 +49,7 @@ export default function CanvasPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = use(params);
+  const router = useRouter();
   const { t } = useTranslation();
   const shortcutsVisible = useCanvasStore((s) => s.shortcutsVisible);
   const setShortcutsVisible = useCanvasStore((s) => s.setShortcutsVisible);
@@ -68,18 +70,18 @@ export default function CanvasPage({
   // URL 是项目身份的真相源：同步进 store 作为激活会话标记
   useEffect(() => {
     if (!projectId) {
-      window.location.href = "/project";
+      router.replace("/project");
       return;
     }
     useProjectStore.getState().setActiveProject(projectId);
-  }, [projectId]);
+  }, [projectId, router]);
 
   // 会话终态：项目不存在（404）/ 会话无法建立 → 回项目列表
   useEffect(() => {
     if (session === "missing" || session === "error") {
-      window.location.href = "/project";
+      router.replace("/project");
     }
-  }, [session]);
+  }, [router, session]);
 
   const queryClient = useQueryClient();
   // 纯拉取（不碰 React state，结果由调用方决定去向）：模型库 / 素材库 / 预设目录并行拉齐。

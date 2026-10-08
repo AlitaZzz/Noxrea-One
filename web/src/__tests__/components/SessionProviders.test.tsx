@@ -5,6 +5,7 @@ import { type ReactNode, StrictMode, useEffect, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/ui/AppUiProvider", () => ({ default: ({ children }: { children: ReactNode }) => children }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key } }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ i18n: { language: "zh" } }) }));
 vi.mock("@/lib/upload-formats", () => ({ loadUploadFormats: async () => undefined }));

@@ -113,7 +113,7 @@ describe("findDerivedBatchOrigin（批量派生整体找空位）", () => {
   const COUNT = 6; // 2 行 × 3 列
 
   it("区域空闲：起点即基准点（不平移）", () => {
-    const origin = findDerivedBatchOrigin([], SOURCE, layout, COUNT);
+    const origin = findDerivedBatchOrigin([], layout, COUNT);
     expect(origin).toEqual({ x: layout.baseX, y: layout.baseY });
   });
 
@@ -142,7 +142,7 @@ describe("findDerivedBatchOrigin（批量派生整体找空位）", () => {
         ),
       );
     }
-    const origin = findDerivedBatchOrigin(prev, SOURCE, layout, COUNT);
+    const origin = findDerivedBatchOrigin(prev, layout, COUNT);
     // 平移后的整批包围盒不与上一批任何节点重叠
     const rows = Math.ceil(COUNT / layout.cols);
     const bboxW = layout.cols * layout.stepX - 12;
