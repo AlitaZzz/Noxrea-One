@@ -91,7 +91,7 @@ function Preview({ asset }: { asset: AssetItem }) {
 
   return (
     <div
-      className="relative aspect-square max-h-[280px] w-full overflow-hidden rounded-lg bg-black flex items-center justify-center"
+      className="relative aspect-square max-h-[280px] w-full overflow-hidden rounded-lg bg-black text-white flex items-center justify-center"
     >
       {asset.mediaType === "audio" && asset.sourceUrl ? (
         <AudioWaveform

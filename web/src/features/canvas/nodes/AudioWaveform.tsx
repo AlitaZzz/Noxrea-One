@@ -65,18 +65,20 @@ export default function AudioWaveform({
 
   // 初始化 / 切换音源
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     setReady(false);
     setFailed(false);
     setCurrent(0);
     setWsPlaying(false);
 
+    let waveColor = getComputedStyle(container).color;
     const ws = WaveSurfer.create({
-      container: containerRef.current,
+      container,
       height: WAVEFORM_HEIGHT,
-      // 波形用不透明白色绘制，整体透明度交给 CSS（.canvases 层）控制：
+      // 波形用不透明主题前景色绘制，整体透明度交给 CSS（.canvases 层）控制：
       // 进度层是 source-in 叠加，若 waveColor 自带 alpha 会把进度色一并变淡。
-      waveColor: "#ffffff",
+      waveColor,
       progressColor: DEFAULT_NODE_COLOR,
       cursorColor: DEFAULT_NODE_COLOR,
       cursorWidth: 0,
@@ -87,6 +89,14 @@ export default function AudioWaveform({
       interact: false,
     });
     wsRef.current = ws;
+    // Canvas 不会随 CSS 主题自动重绘；只更新颜色，保留音源与播放位置。
+    const themeObserver = new MutationObserver(() => {
+      const nextColor = getComputedStyle(container).color;
+      if (nextColor === waveColor) return;
+      waveColor = nextColor;
+      ws.setOptions({ waveColor });
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     // 注册进共享注册表：音频截取面板（画布层）据此直接暂停节点播放、
     // 读取当前播放位置作为选区起点，无需经 React 状态绕行
     const unregister = nodeId ? registerAudioPlayer(nodeId, ws) : undefined;
@@ -104,6 +114,7 @@ export default function AudioWaveform({
     });
 
     return () => {
+      themeObserver.disconnect();
       unregister?.();
       ws.destroy();
       wsRef.current = null;
@@ -223,7 +234,7 @@ export default function AudioWaveform({
 
         {/* 底部控制栏：时间 + 播放按钮 */}
         <div className="relative mt-2 flex items-center px-3">
-          <div className="whitespace-nowrap text-sm tabular-nums text-white/70">
+          <div className="whitespace-nowrap text-sm tabular-nums opacity-70">
             {formatTime(current)} / {formatTime(duration)}
           </div>
           <Button

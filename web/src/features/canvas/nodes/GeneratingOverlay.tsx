@@ -46,7 +46,7 @@ function GeneratingOverlay({
         " rounded-lg gen-stage generating-overlay flex flex-col items-center justify-center gap-2.5 overflow-hidden"
       }
     >
-      {/* 极光带：斜贯画面的紫蓝渐变缓慢流转 */}
+      {/* 极光带：斜贯画面的青柠与深青渐变缓慢流转 */}
       <div className="gen-ribbon" style={{ animationDelay: `-${phaseMs % 13000}ms` }} aria-hidden />
       {/* 呼吸柔光：光带上下两团错相位（周期与 globals.css 的 gen-drift-* 对应），glow 之上文字保持安静 */}
       <div className="gen-blob gen-blob-1" style={{ animationDelay: `-${phaseMs % 9000}ms` }} aria-hidden />
@@ -55,10 +55,10 @@ function GeneratingOverlay({
       <div className="gen-noise" aria-hidden />
       <div className="generation-border" aria-hidden />
       {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
-      <span className="text-xs text-foreground/[0.72]">
+      <span className="relative text-xs text-white/80">
         {text ?? t("common.generating")}
         {elapsedSeconds !== null && (
-          <span className="tabular-nums text-muted-foreground/[0.75]">
+          <span className="tabular-nums text-white/60">
             {" · "}
             {formatElapsed(elapsedSeconds)}
           </span>

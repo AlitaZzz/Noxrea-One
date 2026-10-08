@@ -223,7 +223,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
-          node-surface
+          node-surface text-foreground
         `}
         onContextMenu={(e) => e.preventDefault()}
       >
