@@ -27,7 +27,7 @@ vi.mock("@/lib/i18n/config", () => ({
   default: { t: (k: string) => k, exists: () => false },
 }));
 
-import { useAssetsStore } from "@/features/assets/store";
+import { selectChildFolders, useAssetsStore } from "@/features/assets/store";
 
 describe("assets store initialize 并发去重", () => {
   beforeEach(() => {
@@ -71,5 +71,20 @@ describe("assets store initialize 并发去重", () => {
     await useAssetsStore.getState().initialize();
 
     expect(mocks.bootstrap).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("资产文件夹选择", () => {
+  it("使用最新文件夹数组计算当前目录的子文件夹", () => {
+    const root = {
+      id: "1", name: "Existing", scope: "personal" as const, kind: "normal" as const,
+      parentId: undefined, createdAt: 0, count: 0,
+    };
+    const added = { ...root, id: "2", name: "Added" };
+    const nested = { ...root, id: "3", name: "Nested", parentId: "1" };
+
+    expect(selectChildFolders([root], "personal")).toEqual([root]);
+    expect(selectChildFolders([root, added, nested], "personal")).toEqual([root, added]);
+    expect(selectChildFolders([root, added, nested], "personal", "1")).toEqual([nested]);
   });
 });

@@ -43,7 +43,7 @@ import AssetBreadcrumb from "@/features/assets/components/AssetBreadcrumb";
 import AssetGrid from "@/features/assets/components/AssetGrid";
 import { AssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
-import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
+import { computeRecursiveFolderCounts, selectChildFolders, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N } from "@/features/canvas/NodeTypeDisplayMeta";
 import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
@@ -478,7 +478,6 @@ function AssetsView() {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const folders = useAssetsStore((s) => s.folders);
-  const getChildFolders = useAssetsStore((s) => s.getChildFolders);
   const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
   const uncategorizedFolder = getUncategorizedFolder("personal");
 
@@ -543,13 +542,13 @@ function AssetsView() {
   );
 
   const gridFolders = useMemo<AssetFolder[]>(() => {
-    const childFolders = getChildFolders("personal", activeFolderId ?? undefined).map((f) => ({
+    const childFolders = selectChildFolders(folders, "personal", activeFolderId ?? undefined).map((f) => ({
       ...f,
       count: recursiveCounts[f.id] ?? f.count ?? 0,
     }));
     if (activeFolderId !== null) return childFolders;
     return uncategorizedFolder ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders] : childFolders;
-  }, [getChildFolders, activeFolderId, uncategorizedFolder, recursiveCounts, t]);
+  }, [activeFolderId, folders, uncategorizedFolder, recursiveCounts, t]);
 
   // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
   const showFolderGrid = typeFilter.length === 0 && !appliedSearch.trim();

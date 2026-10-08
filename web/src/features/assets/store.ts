@@ -86,6 +86,19 @@ export interface AssetListState {
   loadingMore: boolean;
 }
 
+export function selectChildFolders(
+  folders: AssetFolder[],
+  scope: AssetScope,
+  parentId?: string,
+): AssetFolder[] {
+  return folders.filter(
+    (folder) =>
+      folder.scope === scope &&
+      folder.kind === "normal" &&
+      (folder.parentId || undefined) === (parentId || undefined),
+  );
+}
+
 /**
  * 由列表中某条资产构造 keyset 游标，指向该条之后（更旧）的记录。
  * 协议须与服务端 parseAssetCursor 一致：`<createdAt 毫秒>_<id>`。
@@ -165,8 +178,6 @@ interface AssetsState {
   >;
   removeFolder: (id: string) => Promise<boolean>;
 
-  getFoldersByScope: (scope: AssetScope) => AssetFolder[];
-  getChildFolders: (scope: AssetScope, parentId?: string) => AssetFolder[];
   getUncategorizedFolder: (scope?: AssetScope) => AssetFolder | undefined;
 }
 
@@ -499,17 +510,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   // --- Queries ---
-
-  getFoldersByScope: (scope) => get().folders.filter((folder) => folder.scope === scope),
-
-  getChildFolders: (scope, parentId) => {
-    return get().folders.filter(
-      (folder) =>
-        folder.scope === scope &&
-        folder.kind === "normal" &&
-        (folder.parentId || undefined) === (parentId || undefined),
-    );
-  },
 
   getUncategorizedFolder: (scope = "personal") => {
     return get().folders.find((folder) => folder.scope === scope && folder.kind === "uncategorized");

@@ -27,7 +27,7 @@ import { createAssetNode } from "@/features/assets/add-asset";
 import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
-import { computeRecursiveFolderCounts, useAssetsStore } from "@/features/assets/store";
+import { computeRecursiveFolderCounts, selectChildFolders, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
@@ -56,7 +56,6 @@ export default function AssetsDialog({ open, onClose }: Props) {
   const removeAssetsBatch = useAssetsStore((s) => s.removeAssetsBatch);
   const removeFolder = useAssetsStore((s) => s.removeFolder);
   const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
-  const getChildFolders = useAssetsStore((s) => s.getChildFolders);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -323,12 +322,12 @@ export default function AssetsDialog({ open, onClose }: Props) {
   const folderCounts = useMemo(() => computeRecursiveFolderCounts(folders), [folders]);
 
   const gridFolders = useMemo<AssetFolder[]>(() => {
-    const childFolders = getChildFolders(activeScope, activeFolderId ?? undefined);
+    const childFolders = selectChildFolders(folders, activeScope, activeFolderId ?? undefined);
     if (activeFolderId !== null) return childFolders;
     return uncategorizedFolder
       ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders]
       : childFolders;
-  }, [activeFolderId, getChildFolders, uncategorizedFolder, activeScope, t]);
+  }, [activeFolderId, activeScope, folders, uncategorizedFolder, t]);
 
   // 文件夹只在无分类筛选、无搜索词时参与网格。
   // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
