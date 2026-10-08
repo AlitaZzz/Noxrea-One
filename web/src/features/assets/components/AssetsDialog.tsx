@@ -734,12 +734,11 @@ export default function AssetsDialog({ open, onClose }: Props) {
           <DialogContent global className="sm:max-w-[400px]">
             <DialogHeader><DialogTitle>{t("asset.changeType")}</DialogTitle></DialogHeader>
           <Select
-            value={batchTypeValue ?? undefined}
-            onValueChange={(value) => setBatchTypeValue(value === "__clear__" ? undefined : value as AssetType)}
+            value={batchTypeValue ?? ""}
+            onValueChange={(value) => setBatchTypeValue(value as AssetType)}
           >
             <SelectTrigger className="w-full"><SelectValue placeholder={t("asset.typePlaceholder")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__clear__">{t("asset.typePlaceholder")}</SelectItem>
               {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all")
                 .map((category) => <SelectItem key={category.key} value={category.key}>{t(category.labelKey)}</SelectItem>)}
             </SelectContent>

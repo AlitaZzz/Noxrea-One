@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,6 +46,34 @@ describe("Select", () => {
     fireEvent.pointerDown(screen.getByRole("combobox"), { button: 0, pointerType: "mouse" });
     fireEvent.click(screen.getByRole("combobox"));
     expect(screen.getByRole("option", { name: "Image" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps an empty controlled value controlled when an option is selected", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    function ControlledSelect() {
+      const [value, setValue] = useState("");
+      return (
+        <Select value={value} onValueChange={setValue}>
+          <SelectTrigger aria-label="Asset type"><SelectValue placeholder="Choose type" /></SelectTrigger>
+          <SelectContent><SelectItem value="image">Image</SelectItem></SelectContent>
+        </Select>
+      );
+    }
+
+    try {
+      render(<ControlledSelect />);
+      const trigger = screen.getByRole("combobox");
+      expect(trigger).toHaveTextContent("Choose type");
+      fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByRole("option", { name: "Image" }));
+
+      expect(trigger).toHaveTextContent("Image");
+      expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining("uncontrolled"));
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("does not open when the trigger is disabled", () => {
