@@ -198,7 +198,7 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
       {/* Body */}
       <div
-        className={`node-body relative flex-1 flex flex-col overflow-hidden rounded-lg bg-card ${selected ? "node-selected" : ""}`}
+        className={`node-body node-surface relative flex-1 flex flex-col overflow-hidden rounded-lg ${selected ? "node-selected" : ""}`}
         onDoubleClick={(e) => {
           e.stopPropagation();
           useCanvasStore.getState().setEditingTextNodeId(id);

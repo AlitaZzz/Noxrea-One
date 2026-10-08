@@ -376,7 +376,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
             ${isMulti ? "overflow-visible" : "overflow-hidden"}
             ${selected ? "node-selected" : ""}
-            ${hasImage ? "bg-transparent" : "bg-card"}
+            ${hasImage ? "bg-transparent" : "node-surface"}
           `}
         >
           {agentGhost && <AgentGhostOverlay />}

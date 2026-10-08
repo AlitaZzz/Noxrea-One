@@ -223,13 +223,13 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
-          bg-card
+          node-surface
         `}
         onContextMenu={(e) => e.preventDefault()}
       >
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
-          <div className="relative h-full w-full rounded-lg bg-card flex flex-col items-center justify-center gap-2 px-8">
+          <div className="relative h-full w-full flex flex-col items-center justify-center gap-2 px-8">
             {uploadProgress != null ? (
               <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />

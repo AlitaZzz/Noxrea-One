@@ -778,7 +778,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
           ${selected ? "node-selected" : ""}
-          ${hasVideo ? "bg-transparent" : "bg-card"}
+          ${hasVideo ? "bg-transparent" : "node-surface"}
         `}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
