@@ -43,6 +43,18 @@ const SAVE_DELAY_UNDO = 500;
 const MAX_SAVE_WAIT = 10000;
 /** flushAndWait 单次等待当前保存的上限（ms）：宁可超时放行，也不能让项目切换永久挂起 */
 const FLUSH_WAIT_TIMEOUT = 5000;
+/**
+ * 浏览器 keepalive 请求体配额。超过配额的请求会在 fetch 层直接抛 TypeError，
+ * 服务端根本收不到；卸载阶段只能交给此前的普通保存完成。
+ */
+const KEEPALIVE_BODY_LIMIT = 64 * 1024;
+
+class KeepaliveBodyTooLargeError extends Error {
+  constructor(bytes: number) {
+    super(`Keepalive canvas payload is ${bytes} bytes`);
+    this.name = "KeepaliveBodyTooLargeError";
+  }
+}
 
 /** 给等待加超时上限；超时后放行调用方并记录告警 */
 function withTimeout(p: Promise<void>, ms: number): Promise<void> {
@@ -150,6 +162,7 @@ class SaveManager {
    */
   private expired = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private visibilitySaveTimer: ReturnType<typeof setTimeout> | null = null;
   private registered = false;
   private savePromise: Promise<void> = Promise.resolve();
   private resolveSave: (() => void) | null = null;
@@ -208,6 +221,10 @@ class SaveManager {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
+    }
+    if (this.visibilitySaveTimer) {
+      clearTimeout(this.visibilitySaveTimer);
+      this.visibilitySaveTimer = null;
     }
     if (clearExpired) {
       useSessionExpiredStore.getState().resetExpired();
@@ -276,6 +293,10 @@ class SaveManager {
    * 属预期行为——dirty 标记会被保留，下次进入继续保存。
    */
   flushOnUnload(): void {
+    if (this.visibilitySaveTimer) {
+      clearTimeout(this.visibilitySaveTimer);
+      this.visibilitySaveTimer = null;
+    }
     this.flush({ keepalive: true, skipUnauthorized: true });
   }
 
@@ -360,7 +381,11 @@ class SaveManager {
         this.saveToApi(projectId, canvasData, { keepalive, skipUnauthorized }),
       );
     } catch (e) {
-      console.error("[SaveManager] save failed:", e);
+      // 页面卸载时浏览器拒绝超出 keepalive 配额的请求是确定性边界，
+      // 不是网络故障；此前的普通保存仍按 dirty 语义留待下一次页面会话处理。
+      if (!(e instanceof KeepaliveBodyTooLargeError)) {
+        console.error("[SaveManager] save failed:", e);
+      }
       // 失败的对象属于派发时锁定的项目；所有者已切换就不再把 dirty 记到新项目头上
       if (getCanvasProjectId() === projectId) {
         this.dirty = true;
@@ -413,6 +438,10 @@ class SaveManager {
     }
 
     const body = JSON.stringify({ baseRevision, lease, canvasData });
+    if (opts.keepalive) {
+      const bytes = new TextEncoder().encode(body).byteLength;
+      if (bytes > KEEPALIVE_BODY_LIMIT) throw new KeepaliveBodyTooLargeError(bytes);
+    }
 
     const res = await projectApi.saveProjectRaw(
       projectId,
@@ -483,9 +512,25 @@ class SaveManager {
     // 切标签页 / 关闭前会先触发 visibilitychange(hidden)，此时页面仍存活，
     // 用普通请求保存可以承载大画布；pagehide/beforeunload 才是真正的卸载兜底
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") this.flushOnHide();
+      if (document.visibilityState !== "hidden") {
+        if (this.visibilitySaveTimer) {
+          clearTimeout(this.visibilitySaveTimer);
+          this.visibilitySaveTimer = null;
+        }
+        return;
+      }
+      if (this.visibilitySaveTimer) return;
+      // pagehide follows visibilitychange during a real unload. Defer the normal
+      // request one task so pagehide can take ownership before the browser tears
+      // down the document; tab switches still flush through the normal channel.
+      this.visibilitySaveTimer = setTimeout(() => {
+        this.visibilitySaveTimer = null;
+        this.flushOnHide();
+      }, 0);
     });
-    window.addEventListener("pagehide", () => this.flushOnUnload());
+    window.addEventListener("pagehide", (event) => {
+      if (!event.persisted) this.flushOnUnload();
+    });
     window.addEventListener("beforeunload", () => this.flushOnUnload());
 
     // 离线暂停自动保存：清掉已排的定时器，避免离线瞬间再触发一次必失败的请求

@@ -62,6 +62,22 @@ async function saveCanvas(): Promise<CanvasData> {
 }
 
 describe("SaveManager snapshot serialization", () => {
+  it("卸载时跳过超出 keepalive 配额的画布请求", async () => {
+    useCanvasStore.setState({
+      nodes: [{
+        ...textNode("large"),
+        data: { ...textNode("large").data, plainText: "x".repeat(70 * 1024) },
+      }],
+    });
+
+    saveManager.markDirty();
+    saveManager.flushOnUnload();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+  });
+
   it("removes runtime fields and edge appearance without mutating canvas state", async () => {
     const node = {
       ...textNode("n1"),

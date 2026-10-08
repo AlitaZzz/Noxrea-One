@@ -97,7 +97,7 @@ import {
 import { selectCanvasStateChanges } from "@/features/canvas/shared/node-changes";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
-import { findFreePosition, flushAndWait, flushBeforeUnload, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
@@ -991,11 +991,6 @@ export default function InfiniteCanvas() {
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   useCanvasEvents(canvasContainerRef);
   const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);
-
-  // ---- Component unmount: browser back, route change → save current state ----
-  useEffect(() => {
-    return () => { flushBeforeUnload(); };
-  }, []);
 
   // 中键拖拽同样能平移，但 React Flow 的 .draggable 只在 panOnDrag 含左键 0 时挂载，
   // 中键按下不会自动变抓手。这里手动补光标，与按住空格的手感保持一致。

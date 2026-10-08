@@ -86,17 +86,6 @@ export function flushAndWait(): Promise<void> {
   return saveManager.flushAndWait();
 }
 
-/**
- * 组件卸载 / 路由离开时兜底保存（fire-and-forget）。
- *
- * 此时页面仍然存活，必须走普通请求：keepalive 有约 64KB 请求体上限，
- * 大画布会直接抛 TypeError: Failed to fetch，导致编辑内容静默丢失。
- * 真正的页面卸载由 SaveManager 内部监听 pagehide/beforeunload 处理。
- */
-export function flushBeforeUnload(): void {
-  saveManager.flushSave();
-}
-
 /** 自动压栈 throttle 辅助函数 */
 function maybePushHistory(options?: { skipHistory?: boolean; forceHistory?: boolean }) {
   if (options?.skipHistory) return;
