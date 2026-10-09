@@ -24,9 +24,20 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
 }
 
 function TooltipTrigger({
+  onFocus,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      {...props}
+      onFocus={(event) => {
+        onFocus?.(event)
+        // Pointer-driven popup focus restoration should not reopen a tooltip.
+        if (!event.currentTarget.matches(":focus-visible")) event.preventDefault()
+      }}
+    />
+  )
 }
 
 function TooltipContent({

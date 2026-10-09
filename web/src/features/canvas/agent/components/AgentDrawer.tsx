@@ -207,7 +207,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
               if (o) void loadSessions();
             }}
           >
-            <Tooltip open={historyOpen ? false : undefined}>
+            <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
                   <Button
@@ -220,7 +220,7 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent side="bottom">{t("agent.historyTitle")}</TooltipContent>
+              {!historyOpen && <TooltipContent side="bottom">{t("agent.historyTitle")}</TooltipContent>}
             </Tooltip>
             <PopoverContent side="bottom" align="end" className="w-[320px] p-0">
               <div className="flex flex-col overflow-hidden">

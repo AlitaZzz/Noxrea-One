@@ -425,7 +425,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
           />
           <Separator orientation="vertical" className="h-7 self-center" />
           <Popover open={presetOpen} onOpenChange={setPresetOpen}>
-            <Tooltip open={presetOpen ? false : undefined}>
+            <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
                   <Button size="icon-sm" variant="ghost" className="shrink-0">
@@ -433,7 +433,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{t("node.creationPreset")}</TooltipContent>
+              {!presetOpen && <TooltipContent>{t("node.creationPreset")}</TooltipContent>}
             </Tooltip>
             <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1">
               <PresetMenuContent

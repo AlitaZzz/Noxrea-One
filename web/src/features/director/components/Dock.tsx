@@ -151,7 +151,7 @@ export default function Dock() {
   );
 
   const menuTrigger = (icon: string, title: string, open: boolean) => (
-    <Tooltip open={open ? false : undefined}><TooltipTrigger asChild>
+    <Tooltip><TooltipTrigger asChild>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -163,7 +163,7 @@ export default function Dock() {
           {S(icon)}
         </Button>
       </DropdownMenuTrigger>
-    </TooltipTrigger><TooltipContent>{title}</TooltipContent></Tooltip>
+    </TooltipTrigger>{!open && <TooltipContent>{title}</TooltipContent>}</Tooltip>
   );
 
   const closeAddMenu = () => setAddMenuOpen(false);

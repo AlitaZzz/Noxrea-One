@@ -407,7 +407,7 @@ function NodeToolbar({
               setCreationOpen(open);
             }}
           >
-            <Tooltip open={creationOpen ? false : undefined}>
+            <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
                   <Button size="icon" variant="ghost" disabled={!assetSrc}>
@@ -415,7 +415,7 @@ function NodeToolbar({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{t("node.creation")}</TooltipContent>
+              {!creationOpen && <TooltipContent>{t("node.creation")}</TooltipContent>}
             </Tooltip>
             <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1" restoreFocus={!preserveFocusOnDismiss}>
               <PresetMenuContent
