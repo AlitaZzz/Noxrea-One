@@ -105,7 +105,7 @@ function Preview({ asset }: { asset: AssetItem }) {
       ) : thumbUrl ? (
         // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={thumbUrl} alt={asset.name} draggable={false} className="w-full h-full object-cover" />
+        <img src={thumbUrl} alt={asset.name} draggable={false} className="w-full h-full object-contain" />
       ) : (
         asset.mediaType === "video"
           ? <VideoCameraOutlined className="size-10 text-white/25" />
